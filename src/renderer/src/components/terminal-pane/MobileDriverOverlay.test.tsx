@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 
 type OverlayProps = {
+  eyebrow?: string
+  title?: string
+  body?: string
   actionLabel: string
   actionPending: boolean
   allActionLabel?: string
@@ -130,5 +133,23 @@ describe('MobileDriverOverlay', () => {
 
     expect(onAction).not.toHaveBeenCalled()
     expect(onAllAction).toHaveBeenCalledOnce()
+  })
+
+  it('mounts with peer-specific wording when a peer desktop drives, not phone wording', () => {
+    hookRuntime.stateIndex = 0
+    hookRuntime.refIndex = 0
+
+    const overlay = MobileDriverOverlay({
+      driver: { kind: 'peer', clientId: 'peer-1' } as never,
+      hasFitOverride: false,
+      onAction: vi.fn(),
+      onAllAction: vi.fn()
+    }) as OverlayElement
+
+    expect(overlay.props.eyebrow).toBe('From a peer desktop')
+    expect(overlay.props.title).toBe('A peer desktop is in control')
+    expect(overlay.props.body).toContain('this peer controls')
+    expect(overlay.props.eyebrow).not.toContain('phone')
+    expect(overlay.props.title).not.toContain('phone')
   })
 })

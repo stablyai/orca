@@ -69,6 +69,7 @@ import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './Terminal
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay, { type PaneTitleOverlayRect } from './TerminalPaneHeaderOverlay'
+import { TerminalPanePresenceOverlay } from './TerminalPanePresenceOverlay'
 import {
   arePaneTitleOverlayRectsEqual,
   clearPaneTitleOverlayRects
@@ -2586,7 +2587,7 @@ function TerminalPane(
   const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
     const ptyIds = new Set(getMobileFitOverridePtyIds())
     for (const [ptyId, driver] of getAllDrivers()) {
-      if (driver.kind === 'mobile') {
+      if (driver.kind === 'mobile' || driver.kind === 'peer') {
         ptyIds.add(ptyId)
       }
     }
@@ -3216,6 +3217,17 @@ function TerminalPane(
           `mobile-driver-banner-${pane.id}`
         )
       })}
+      {managedPanes.map((pane) =>
+        createPortal(
+          <TerminalPanePresenceOverlay
+            key={`pane-presence-${pane.id}`}
+            tabId={tabId}
+            pane={pane}
+          />,
+          pane.container,
+          `pane-presence-${pane.id}`
+        )
+      )}
       <CloseTerminalDialog
         open={pendingCloseConfirmation !== null}
         copyKind={pendingCloseConfirmation?.copyKind}

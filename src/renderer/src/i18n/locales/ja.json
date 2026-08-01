@@ -793,7 +793,9 @@
         "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、エージェントスキル、プロンプト例。",
         "pluginsTitle": "プラグイン",
         "pluginsDescription": "試験的な Orca プラグインをインストールして管理します。",
-        "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。"
+        "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。",
+        "peerCollabTitle": "ピア共同作業",
+        "peerCollabDescription": "ローカルネットワーク上の他の Orca デスクトップとターミナルを共有します。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -1017,7 +1019,12 @@
           "activity": "アクティビティ",
           "noActivity": "まだアクティビティはありません。"
         },
-        "checkActionRequiredHint": "マージを解除するには、このチェックにGitHub上で手動アクション（例：ワークフロー実行の承認）が必要です。"
+        "checkActionRequiredHint": "マージを解除するには、このチェックにGitHub上で手動アクション（例：ワークフロー実行の承認）が必要です。",
+        "d23bbb6416": "{{value0}} はスキップされました",
+        "18f80e1329": "{{value0}} 保留中",
+        "b1ac991806": "{{value0}} は失敗しました",
+        "checksNeedActionChip": "{{value0}} 件の対応が必要",
+        "311d0cee55": "{{value0}} 通過"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "再度開く",
@@ -1496,7 +1503,12 @@
         "dd5d9a4f17": "{{value0}}に更新",
         "71a3c0f9d2": "ワークスペースを開始",
         "filesUnavailable": "Couldn't load changed files.",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "e6ad0a8d06": "{{value0}} はスキップされました",
+        "88267924d5": "{{value0}} 保留中",
+        "ae2a34c7b8": "{{value0}} は失敗しました",
+        "checksNeedActionChip": "{{value0}} 件の対応が必要",
+        "7c5035931a": "{{value0}} 通過"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -2649,7 +2661,11 @@
             "f2a8b9c1d3": "スマホから",
             "c7e4a2b8f1": "スマホが操作中です",
             "d9f3c6e2a4": "デスクトップのキーボードは一時停止中です。このターミナルを取り戻してここで入力するか、スマホが操作しているすべてのターミナルを取り戻すか、折りたたんで見続けてください。",
-            "a6b1d8f3e2": "スマホのセッションは終了しました。このターミナル、またはスマホが携帯サイズのまま残したすべてのターミナルをデスクトップサイズに復元してください。"
+            "a6b1d8f3e2": "スマホのセッションは終了しました。このターミナル、またはスマホが携帯サイズのまま残したすべてのターミナルをデスクトップサイズに復元してください。",
+            "peerChipLabel": "ピアデスクトップ操作中",
+            "peerEyebrow": "ピアデスクトップから",
+            "peerTitle": "ピアデスクトップが操作中です",
+            "peerBody": "デスクトップのキーボードは一時停止中です。このターミナルを取り戻してここで入力するか、このピアが操作しているすべてのターミナルを取り戻すか、折りたたんで見続けてください。"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "コンテキストをコピーする",
@@ -5049,6 +5065,12 @@
           "3b7ea51793": "検索をクリア",
           "7f1c2e94a5": "検索テキストが長すぎます — ボードは絞り込まれていません",
           "9a4d0f6b21": "長すぎます"
+        },
+        "PeerTerminalsSection": {
+          "dd7ecb3f10": "接続中のホスト",
+          "f966803cfd": "Peers",
+          "d5f6851245": "まだ共有されたターミナルがありません",
+          "4fd5f4c027": "名称未設定のターミナル"
         }
       },
       "shared": {
@@ -6855,7 +6877,9 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、エージェントスキル、プロンプト例。",
-          "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。"
+          "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。",
+          "peerCollabTitle": "ピア共同作業",
+          "peerCollabDescription": "ローカルネットワーク上の他の Orca デスクトップとターミナルを共有します。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -7111,7 +7135,14 @@
           "integrationsHint": "すべてのプロバイダーの認証情報は次の場所でも管理できます：",
           "integrationsLink": "連携",
           "skillHint": "。Linear の接続後、使用例は設定 → Linear で確認できます。",
-          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、エージェントスキル、タスクへの表示が必要です。"
+          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、エージェントスキル、タスクへの表示が必要です。",
+          "3a72b9745e": "[タスク] ページとサイドバーのショートカットに表示するタスク プロバイダーを選択します。",
+          "71644aba56": "[タスク] ページのソース ピッカーとサイドバーのショートカットに表示するタスク プロバイダーを選択します。少なくとも 1 つのプロバイダーが表示されたままでなければなりません。",
+          "93e72ef659": "タスクソース",
+          "8e1305fcc6": "タスクのソース ピッカーとサイドバーのショートカットに Jira を表示します。",
+          "e4170c9615": "タスクのソース ピッカーとサイドバーのショートカットに Linear を表示します。",
+          "dd67a1b6e1": "タスクのソース ピッカーとサイドバーのショートカットに GitLab を表示します。",
+          "1db47236cd": "タスクのソース ピッカーとサイドバーのショートカットに GitHub を表示します。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "ペイン分割線の太さ。",
@@ -8761,7 +8792,8 @@
             "setup": "セットアップ",
             "apiKey": "APIキー",
             "skill": "スキル",
-            "connect": "接続"
+            "connect": "接続",
+            "765f0c544d": "[タスク] ページとサイドバーのショートカットに表示するタスク プロバイダーを選択します。"
           }
         },
         "terminal": {
@@ -9449,7 +9481,8 @@
         "ephemeralVms": {
           "search": {
             "description": "repo 所有のレシピが各ワークスペースに独自のオンデマンドの使い捨て環境を与える方法を学びましょう。",
-            "cloudVmTitle": "クラウド VM"
+            "cloudVmTitle": "クラウド VM",
+            "title": "ワークスペースごとの環境"
           }
         },
         "EphemeralVmsPane": {
@@ -9470,11 +9503,14 @@
           "cloudVmSkillTitle": "クラウド VM セットアップスキル",
           "cloudVmRefresh": "クラウド VM レシピを更新",
           "cloudVmTerminalTitle": "クラウド VM のセットアップ",
-          "cloudVmTerminalAriaLabel": "クラウド VM スキルインストールターミナル"
+          "cloudVmTerminalAriaLabel": "クラウド VM スキルインストールターミナル",
+          "skillTitle": "ワークスペースごとの環境スキル",
+          "refresh": "一時的な VM レシピを更新する"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "repo が所有するオンデマンド環境のセットアップ コントロールとワークスペース実行ターゲットを示します。",
-          "cloudVmToggleLabel": "クラウド VM を切り替える"
+          "cloudVmToggleLabel": "クラウド VM を切り替える",
+          "toggleLabel": "ワークスペースごとの環境を切り替える"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "エージェント",
@@ -9603,7 +9639,8 @@
           "terminalTitle": "Linear スキルのセットアップ",
           "terminalAriaLabel": "Linear スキルのインストールターミナル",
           "manageConnectionHint": "接続済みの Linear ワークスペースと API キーは次の場所で確認できます：",
-          "manageConnectionLink": "連携"
+          "manageConnectionLink": "連携",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca."
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -10026,6 +10063,94 @@
           "setupRecipe": "クラウドプロバイダー用の環境レシピをセットアップします。",
           "createWorkspace": "ワークスペースを作成し、「実行先」でそのレシピを選択します。",
           "openSetup": "環境レシピをセットアップ"
+        },
+        "peer-collab": {
+          "settings": {
+            "search": {
+              "title": "ピア共同作業",
+              "description": "ローカルネットワーク上の他の Orca デスクトップとターミナルを共有します。",
+              "clientTitle": "別の Orca に接続",
+              "clientDescription": "ペアリングコードを使ってホストの Orca にクライアントとして接続します。",
+              "connect": "接続",
+              "pairingCode": "ペアリングコード",
+              "clientRole": "クライアント"
+            }
+          }
+        },
+        "PeerCollabSettingsPane": {
+          "noDevicesWithCode": "ペアリング済みのデバイスはまだありません。もう一方の Orca デスクトップでコードを入力してください。",
+          "qrAlt": "ピアデスクトップのペアリング用 QR コード",
+          "scanDescription": "もう一方の Orca デスクトップでこのコードを入力してください。コードごとに固有のデバイストークンが作成されます。",
+          "pasteDescription": "または、もう一方の Orca デスクトップにこのコードを貼り付けてください:",
+          "scanDialogTitle": "スキャンしてペアリング",
+          "clientConnecting": "接続中",
+          "clientConnected": "接続済み",
+          "clientReconnectWait": "再接続中",
+          "clientClosed": "未接続",
+          "wsNotRunning": "WebSocket トランスポートが実行されていません",
+          "generateFailed": "ペアリングコードを生成できませんでした",
+          "clientConnectFailed": "接続できませんでした: {{reason}}",
+          "deviceRevoked": "デバイスを削除しました",
+          "revokeFailed": "デバイスを削除できませんでした",
+          "disconnectFailed": "クライアントを切断できませんでした",
+          "startTitle": "ピア共有を開始",
+          "startDescription": "コードを生成し、もう一方の Orca デスクトップの「ピア共同作業」で入力してください。接続はローカルネットワーク内のみで行われます。",
+          "addressLabel": "このコンピュータのアドレス",
+          "addressDescription": "もう一方のデスクトップが Wi‑Fi、イーサネット、または Tailscale でこのアドレスに到達できる必要があります。",
+          "regenerate": "コードを再生成",
+          "generate": "コードを生成",
+          "devicesTitle": "ピアデバイス",
+          "devicesDescription": "このコンピュータとペアリングした Orca デスクトップです。",
+          "connectedTitle": "接続中のクライアント",
+          "connectedDescription": "現在あなたのターミナルを見ている Orca デスクトップです。",
+          "noClients": "現在接続中のピアデスクトップはありません。",
+          "connectedAt": "接続",
+          "terminalCount": "ターミナル {{count}} 個",
+          "disconnect": "切断",
+          "disconnectAndBlock": "切断してデバイスを削除",
+          "clientCodeLabel": "ペアリングコード",
+          "clientCodePlaceholder": "もう一方の Orca デスクトップのコードを貼り付けてください",
+          "clientNameLabel": "表示名",
+          "clientDisconnect": "切断",
+          "clientConnect": "接続",
+          "clientHostTerminalsTitle": "ホストのターミナル",
+          "clientNoHostTerminals": "現在ホストに共有できるターミナルがありません。",
+          "clientUntitledTerminal": "名称未設定のターミナル",
+          "clientOpenTerminal": "開く",
+          "exclusiveInputFloorLabel": "誰かの入力中は他の人をブロック",
+          "exclusiveInputFloorDescription": "既定では全員が同時に入力できます。これをオンにすると、直前に入力した人が止めるまでターミナルがその人にロックされます。",
+          "clientNoHostTerminalsShared": "ホストはまだターミナルを共有していません。",
+          "grantTerminals": "ターミナルを共有",
+          "grantTerminalsLabel": "{{name}} と共有中のターミナル",
+          "noHostTerminalsToGrant": "共有できるターミナルがありません。",
+          "untitledTerminal": "名称未設定のターミナル",
+          "grantTerminalsFailed": "共有ターミナルを更新できませんでした",
+          "clientDuplicateConnection": "このペアリングコードは別の Orca が使用中です。ホストで新しいコードを生成してください。",
+          "clientSavedPairingInvalid": "このペアリングは無効になりました。ホストが削除した可能性があります。",
+          "clientForgetHost": "このホストを削除",
+          "clientSavedHost": "保存されたホスト: {{endpoint}}",
+          "clientReconnectSaved": "再接続",
+          "offerConsumed": "そのコードは使用済みのため消去されました。別のデスクトップを追加するには新しいコードを生成してください。",
+          "singleUseCodeNotice": "コード 1 つにつきデスクトップ 1 台のみ接続でき、接続した時点で消去されます。追加するデスクトップごとに新しいコードを生成してください。",
+          "clientTransportError": "接続に失敗しました: {{reason}}",
+          "clientLocalNetworkHint": "macOS では、システム設定 → プライバシーとセキュリティ → ローカルネットワークでこのアプリを許可してください。",
+          "clientEnabledLabel": "他のデスクトップへの接続を許可",
+          "clientEnabledDescription": "このデスクトップを他の Orca にクライアントとして接続する場合はオンにします。",
+          "clientHostDisabled": "ホストが共有を停止したため、接続が切断されました。",
+          "hostEnabledLabel": "他のデスクトップからの接続を許可",
+          "hostEnabledDescription": "オンにすると、他の Orca デスクトップがこのコンピューターとペアリングしてターミナルを表示できます。オフにすると、接続中のデスクトップは即座に切断されます。",
+          "hostGroupTitle": "ホスト",
+          "clientGroupTitle": "クライアント",
+          "clientConnectedCount": "{{count}} 台のホストに接続中",
+          "clientAddHostTitle": "ホストを追加",
+          "renameHostPlaceholder": "このホストの表示名",
+          "renameHost": "ホスト名を変更",
+          "clientHostDisconnected": "ホストがこの接続を終了しました。再参加するには接続してください。"
+        },
+        "MobilePairedDevicesSection": {
+          "connectedNow": "Connected now",
+          "lastSeen": "Last seen {{time}}",
+          "unnamedDevice": "Unnamed device"
         }
       },
       "right": {
@@ -11708,7 +11833,8 @@
             "stable": "安定版"
           },
           "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。",
-          "pairingQrError": "このペアリングコードを QR コードとして表示できませんでした。代わりに Orca Mobile にコピーしてください。"
+          "pairingQrError": "このペアリングコードを QR コードとして表示できませんでした。代わりに Orca Mobile にコピーしてください。",
+          "901c98bb93": "これをペアリングします"
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -13603,7 +13729,10 @@
           "f0202f3a89": "毎日",
           "57e83307d0": "平日",
           "837d902bba": "毎週",
-          "ddba78647e": "カスタム cron"
+          "ddba78647e": "カスタム cron",
+          "b08ccb4d06": "毎時",
+          "8cc026fd73": "毎週",
+          "c3e39e17cf": "カスタム"
         },
         "AutomationSessionField": {
           "f3c76dce51": "再利用",
@@ -14286,6 +14415,49 @@
         "pendingChip": "{{value0}} 保留中",
         "needsActionChip": "{{value0}} 件の対応が必要",
         "unresolvedChip": "{{value0}} 件未解決"
+      },
+      "peer-collab": {
+        "RemoteTerminalDialog": {
+          "connected": "接続済み",
+          "reconnecting": "再接続中",
+          "disconnected": "切断されました",
+          "close": "閉じる"
+        },
+        "RemoteTerminalPanel": {
+          "grantRevoked": "ホストがこのターミナルの共有を停止しました。",
+          "error": "このターミナルを開けませんでした: {{reason}}",
+          "ended": "このターミナルのストリームは終了しました。",
+          "otherSubscribers": "他に見ている人: {{names}}"
+        },
+        "RemoteTerminalPresenceOverlay": {
+          "scrolledUp": "上にスクロール中"
+        }
+      },
+      "peers": {
+        "PeersEmptyState": {
+          "f3a8c1d0e5": "ホストに接続されていません",
+          "b6d2e9f4a7": "まだ共有されたターミナルがありません",
+          "c9e4b7a1d3": "別の Orca デスクトップとペアリングすると、共有されたターミナルをここで確認できます。",
+          "d1f6a3c8e2": "ホストにターミナルを共有するよう依頼するか、設定でペアリング状況を確認してください。",
+          "e2a5d8b9c4": "設定を開く"
+        },
+        "PeersPage": {
+          "a4c1e8f0b7": "接続済み",
+          "b8d3a6c2e9": "再接続中",
+          "c2e9f5a1d8": "未接続",
+          "d7f2a9c4b6": "リモートターミナル",
+          "e5b8c1f3a2": "閉じる",
+          "f9a3d6e2b1": "閉じる · Esc",
+          "untitledTerminal": "名前のないターミナル"
+        },
+        "PeersPageTabStrip": {
+          "splitRightAction": "右に分割",
+          "splitRightTooltip": "右に分割",
+          "untitledTerminal": "名前のないターミナル"
+        },
+        "PeersPanels": {
+          "closePane": "ペインを閉じる"
+        }
       }
     },
     "i18n": {
@@ -14488,6 +14660,16 @@
       "sent": "セッションコンテキストを新しい {{agent}} セッションに送信しました。",
       "deliveryFailed": "新しい {{agent}} セッションは開始しましたが、コンテキストを送信できませんでした。",
       "launchFailed": "新しい {{agent}} セッションを開始できませんでした。"
+    },
+    "terminalPaneViewerBadge": {
+      "viewerCount": "{{count}} viewing this terminal",
+      "disconnect": "Disconnect",
+      "disconnectFailed": "Failed to disconnect client",
+      "shareToggleFailed": "Failed to update shared terminal",
+      "connectedNotWatching": "{{count}} connected, not watching",
+      "shareToggle": "Share this terminal with {{name}}",
+      "grantedCount": "このターミナルへのアクセスを許可された {{count}} 人",
+      "noneGranted": "{{count}} 人が接続中、このターミナルへのアクセス許可なし"
     }
   },
   "dashboardPopout": {

@@ -43,6 +43,7 @@ const SETTINGS_NAV_TARGETS = [
   'servers',
   'mobile',
   'mobile-emulator',
+  'peer-collab',
   'repo'
 ] as const
 

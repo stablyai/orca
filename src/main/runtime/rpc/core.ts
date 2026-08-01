@@ -75,6 +75,18 @@ export type RpcContext = {
   pairedDeviceId?: string
   // Why: lets handlers gate mobile payload truncation to phones only; undefined for in-process callers → treat as full-class (no clip).
   clientKind?: 'mobile' | 'runtime'
+  // Why: a peer desktop's clientKind is 'runtime' (full-fidelity payloads), so
+  // input-floor arbitration needs this separate authoritative signal — set
+  // from device.scope, never from the caller-declared params.client.type.
+  isPeerDevice?: boolean
+  // Why: lets a peer client ask who else is watching a terminal it's subscribed
+  // to; backed by the connection-scoped display names runtime-rpc already
+  // tracks for the host's connected-clients list.
+  listPeerSubscribers?: (terminal: string) => { name: string }[]
+  // Why: a peer device only sees terminals the host granted it; backed by
+  // device-registry's per-device grant list, keyed by the authenticated
+  // device (never a caller-declared field).
+  getGrantedTerminals?: () => readonly string[]
   // Why: negotiation is bound to the authenticated socket, never asserted by a destructive request.
   clientCapabilities?: readonly RuntimeCapability[]
   // Why: Dispatch authority rides in the authenticated RPC envelope, never in user payload fields.

@@ -13,6 +13,7 @@ import {
 } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { isRemoteTerminalDriver } from '../../shared/runtime-types'
 import type { Store } from '../persistence'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
@@ -5867,8 +5868,8 @@ export function registerPtyHandlers(
     !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
-    // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
-    if (runtime?.getDriver(args.id).kind === 'mobile') {
+    // Why: mobile/peer-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
+    if (runtime && isRemoteTerminalDriver(runtime.getDriver(args.id))) {
       return false
     }
     const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
@@ -5889,7 +5890,7 @@ export function registerPtyHandlers(
   }
 
   const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
-    if (runtime?.getDriver(args.id).kind === 'mobile') {
+    if (runtime && isRemoteTerminalDriver(runtime.getDriver(args.id))) {
       return false
     }
     // Why: the ack infers Ctrl+C/Escape reached the local PTY; SSH providers are fire-and-forget relay notifications and can't truthfully acknowledge yet.
@@ -5970,8 +5971,8 @@ export function registerPtyHandlers(
     if (runtime?.isResizeSuppressed()) {
       return
     }
-    // Why: presence-lock defense-in-depth — while a phone or remote-desktop viewer drives the width, host-side resizes must not reach the PTY or its alt-screen grid garbles; load-bearing because the renderer mirror lags one IPC hop. See docs/mobile-presence-lock.md.
-    const mobileOwnsResize = runtime?.getDriver(args.id).kind === 'mobile'
+    // Why: presence-lock defense-in-depth — while a phone, peer, or remote-desktop viewer drives the width, host-side resizes must not reach the PTY or its alt-screen grid garbles; load-bearing because the renderer mirror lags one IPC hop. See docs/mobile-presence-lock.md.
+    const mobileOwnsResize = runtime ? isRemoteTerminalDriver(runtime.getDriver(args.id)) : false
     const remoteDesktopOwnsResize = runtime?.isRemoteDesktopResizeDriven?.(args.id) === true
     if (mobileOwnsResize || remoteDesktopOwnsResize) {
       if (remoteDesktopOwnsResize) {

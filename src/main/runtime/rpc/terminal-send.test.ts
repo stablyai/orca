@@ -16,7 +16,7 @@ import {
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
-    beginMobileInputFloor: vi.fn((ptyId: string, clientId: string) => ({
+    beginInputFloor: vi.fn((ptyId: string, clientId: string) => ({
       commit: async () => {
         await overrides.mobileTookFloor?.(ptyId, clientId)
       },
@@ -199,7 +199,7 @@ describe('terminal send RPC', () => {
       }
     })
     const mobileTookFloor = vi.fn().mockResolvedValue(undefined)
-    const beginMobileInputFloor = vi.fn(() => ({
+    const beginInputFloor = vi.fn(() => ({
       commit: async () => mobileTookFloor('pty-1', 'mobile-1'),
       rollback: vi.fn()
     }))
@@ -207,7 +207,7 @@ describe('terminal send RPC', () => {
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'mobile-1' }),
       sendTerminal,
-      beginMobileInputFloor,
+      beginInputFloor,
       mobileTookFloor
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -238,9 +238,9 @@ describe('terminal send RPC', () => {
       }
     )
     expect(runtime.mobileTookFloor).toHaveBeenCalledWith('pty-1', 'mobile-1')
-    expect(beginMobileInputFloor).toHaveBeenCalledTimes(2)
+    expect(beginInputFloor).toHaveBeenCalledTimes(2)
     expect(runtime.mobileTookFloor).toHaveBeenCalledTimes(2)
-    expect(beginMobileInputFloor.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(beginInputFloor.mock.invocationCallOrder[0]).toBeLessThan(
       write.mock.invocationCallOrder[0]!
     )
     expect(write.mock.invocationCallOrder[0]).toBeLessThan(
@@ -259,7 +259,7 @@ describe('terminal send RPC', () => {
   ])('rolls back a mobile floor claim when the terminal write %s', async (_case, finishWrite) => {
     const commit = vi.fn()
     const rollback = vi.fn()
-    const beginMobileInputFloor = vi.fn(() => ({ commit, rollback }))
+    const beginInputFloor = vi.fn(() => ({ commit, rollback }))
     const sendTerminal = vi.fn().mockImplementation(async (_handle, _action, options) => {
       await options.beforeWrite?.('pty-1')
       options.reserveWrite?.('pty-1')
@@ -269,7 +269,7 @@ describe('terminal send RPC', () => {
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
       sendTerminal,
-      beginMobileInputFloor
+      beginInputFloor
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
@@ -281,8 +281,8 @@ describe('terminal send RPC', () => {
       })
     )
 
-    expect(beginMobileInputFloor).toHaveBeenCalledWith('pty-1', 'mobile-1')
-    expect(beginMobileInputFloor).toHaveBeenCalledOnce()
+    expect(beginInputFloor).toHaveBeenCalledWith('pty-1', 'mobile-1', 'mobile')
+    expect(beginInputFloor).toHaveBeenCalledOnce()
     expect(rollback).toHaveBeenCalledOnce()
     expect(commit).not.toHaveBeenCalled()
   })
@@ -292,7 +292,7 @@ describe('terminal send RPC', () => {
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'mobile-1' }),
-      beginMobileInputFloor: vi.fn().mockReturnValue(null),
+      beginInputFloor: vi.fn().mockReturnValue(null),
       sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
         options.reserveWrite('pty-1')
         write()
@@ -312,11 +312,11 @@ describe('terminal send RPC', () => {
   it('reclaims the mobile floor for a delayed suffix and preserves the earlier commit', async () => {
     const commit = vi.fn()
     const rollback = vi.fn()
-    const beginMobileInputFloor = vi.fn(() => ({ commit: async () => commit(), rollback }))
+    const beginInputFloor = vi.fn(() => ({ commit: async () => commit(), rollback }))
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
-      beginMobileInputFloor,
+      beginInputFloor,
       sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
         await options.beforeWrite?.('pty-1')
         options.reserveWrite('pty-1')
@@ -337,7 +337,7 @@ describe('terminal send RPC', () => {
       })
     )
 
-    expect(beginMobileInputFloor).toHaveBeenCalledTimes(2)
+    expect(beginInputFloor).toHaveBeenCalledTimes(2)
     expect(commit).toHaveBeenCalledOnce()
     expect(rollback).toHaveBeenCalledOnce()
   })
@@ -575,7 +575,7 @@ describe('terminal send RPC', () => {
   })
 
   it('refuses guarded terminal sends when the agent needs permission', async () => {
-    const beginMobileInputFloor = vi.fn()
+    const beginInputFloor = vi.fn()
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
@@ -585,7 +585,7 @@ describe('terminal send RPC', () => {
         status: 'permission'
       }),
       sendTerminal: vi.fn(),
-      beginMobileInputFloor
+      beginInputFloor
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
@@ -612,7 +612,7 @@ describe('terminal send RPC', () => {
     })
     expect(runtime.getTerminalAgentStatus).toHaveBeenCalledWith('terminal-1')
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
-    expect(beginMobileInputFloor).not.toHaveBeenCalled()
+    expect(beginInputFloor).not.toHaveBeenCalled()
   })
 
   it('allows guarded terminal sends when the agent is sendable', async () => {

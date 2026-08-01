@@ -9,6 +9,7 @@ import {
   type AgentHibernationConfirmationState
 } from './agent-hibernation-confirmation'
 import type { AppState } from '@/store/types'
+import { isRemoteTerminalDriver } from '../../../shared/runtime-types'
 import { getAllDrivers } from './pane-manager/mobile-driver-state'
 import {
   getForegroundTerminalTabIds,
@@ -69,7 +70,7 @@ function snapshotFromState(
     runtimeLivePtyIdsByWorktreeId: runtimeLiveness.runtimeLivePtyIdsByWorktreeId,
     runtimeLivenessRequiredWorktreeIds: runtimeLiveness.runtimeLivenessRequiredWorktreeIds,
     mobileLockedPtyIds: [...getAllDrivers()]
-      .filter(([, driver]) => driver.kind === 'mobile')
+      .filter(([, driver]) => isRemoteTerminalDriver(driver))
       .map(([ptyId]) => ptyId),
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,

@@ -30,8 +30,9 @@ export function MobileDriverOverlay({
   rootClassName
 }: Props): ReactElement | null {
   const isMobileDriving = driver.kind === 'mobile'
-  const isHeldAtPhoneFit = !isMobileDriving && hasFitOverride
-  const driverClientId = driver.kind === 'mobile' ? driver.clientId : null
+  const isPeerDriving = driver.kind === 'peer'
+  const isHeldAtPhoneFit = !isMobileDriving && !isPeerDriving && hasFitOverride
+  const driverClientId = isMobileDriving || isPeerDriving ? driver.clientId : null
 
   const [collapseState, setCollapseState] = useState(() =>
     createMobileDriverOverlayCollapseState(driverClientId)
@@ -57,7 +58,7 @@ export function MobileDriverOverlay({
   }
   const collapsed = currentCollapseState.collapsed
 
-  if (!isMobileDriving && !isHeldAtPhoneFit) {
+  if (!isMobileDriving && !isPeerDriving && !isHeldAtPhoneFit) {
     return null
   }
 
@@ -131,24 +132,56 @@ export function MobileDriverOverlay({
         onExpand={() => setCollapseState(createMobileDriverOverlayCollapseState(driverClientId))}
         rootRef={setOverlayRootRef}
         rootClassName={rootClassName}
+        label={
+          isPeerDriving
+            ? translate(
+                'auto.components.terminal.pane.MobileDriverOverlay.peerChipLabel',
+                'Peer driving'
+              )
+            : translate(
+                'auto.components.terminal.pane.MobileDriverOverlay.c44659e09f',
+                'Phone driving'
+              )
+        }
       />
     )
   }
 
   return (
     <LoudOverlay
-      eyebrow={translate(
-        'auto.components.terminal.pane.MobileDriverOverlay.f2a8b9c1d3',
-        'From your phone'
-      )}
-      title={translate(
-        'auto.components.terminal.pane.MobileDriverOverlay.c7e4a2b8f1',
-        'Your phone is in control'
-      )}
-      body={translate(
-        'auto.components.terminal.pane.MobileDriverOverlay.d9f3c6e2a4',
-        'Desktop keyboard is paused. Take back this terminal to type here, take back all terminals your phone controls, or collapse to keep watching.'
-      )}
+      eyebrow={
+        isPeerDriving
+          ? translate(
+              'auto.components.terminal.pane.MobileDriverOverlay.peerEyebrow',
+              'From a peer desktop'
+            )
+          : translate(
+              'auto.components.terminal.pane.MobileDriverOverlay.f2a8b9c1d3',
+              'From your phone'
+            )
+      }
+      title={
+        isPeerDriving
+          ? translate(
+              'auto.components.terminal.pane.MobileDriverOverlay.peerTitle',
+              'A peer desktop is in control'
+            )
+          : translate(
+              'auto.components.terminal.pane.MobileDriverOverlay.c7e4a2b8f1',
+              'Your phone is in control'
+            )
+      }
+      body={
+        isPeerDriving
+          ? translate(
+              'auto.components.terminal.pane.MobileDriverOverlay.peerBody',
+              'Desktop keyboard is paused. Take back this terminal to type here, take back all terminals this peer controls, or collapse to keep watching.'
+            )
+          : translate(
+              'auto.components.terminal.pane.MobileDriverOverlay.d9f3c6e2a4',
+              'Desktop keyboard is paused. Take back this terminal to type here, take back all terminals your phone controls, or collapse to keep watching.'
+            )
+      }
       actionLabel={translate(
         'auto.components.terminal.pane.MobileDriverOverlay.c8f2e1a4b9',
         'Take back this terminal'
@@ -309,6 +342,7 @@ type ChipProps = {
   onExpand: () => void
   rootRef?: (node: HTMLDivElement | null) => void
   rootClassName?: string
+  label: string
 }
 
 function LockChip({
@@ -316,7 +350,8 @@ function LockChip({
   onAction,
   onExpand,
   rootRef,
-  rootClassName
+  rootClassName,
+  label
 }: ChipProps): ReactElement {
   return (
     <div
@@ -334,7 +369,7 @@ function LockChip({
         className="px-1 font-medium"
         onClick={onExpand}
       >
-        {translate('auto.components.terminal.pane.MobileDriverOverlay.c44659e09f', 'Phone driving')}
+        {label}
       </Button>
       <Button type="button" variant="default" size="xs" onClick={onAction} disabled={actionPending}>
         {translate('auto.components.terminal.pane.MobileDriverOverlay.c6460cf584', 'Take back')}

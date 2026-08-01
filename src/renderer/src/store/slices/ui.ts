@@ -133,6 +133,19 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from './repo-host-identity'
+import type { RemoteTerminalTarget } from '../../components/peer-collab/remote-terminal-target'
+import {
+  collectLeaves as collectPeersLeaves,
+  insertSplit,
+  leafKey as peersLeafKey,
+  pruneLeaves as prunePeersLeaves,
+  removeLeaf as removePeersLeaf,
+  replaceLeafTargets as replacePeersLeafTargets,
+  setRatioAtPath as setPeersRatioAtPath,
+  type PeersLayoutNode,
+  type PeersLayoutPathSegment,
+  type PeersSplitSide
+} from '../../components/peers/peers-split-tree'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -617,6 +630,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'peers'
   previousViewBeforeSettings:
     | 'terminal'
     | 'tasks'
@@ -625,6 +639,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'peers'
   previousViewBeforeActivity:
     | 'terminal'
     | 'settings'
@@ -633,6 +648,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'peers'
   previousViewBeforeAutomations:
     | 'terminal'
     | 'settings'
@@ -641,6 +657,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'peers'
   previousViewBeforeSpace:
     | 'terminal'
     | 'settings'
@@ -649,6 +666,7 @@ export type UISlice = {
     | 'automations'
     | 'skills'
     | 'mobile'
+    | 'peers'
   previousViewBeforeSkills:
     | 'terminal'
     | 'settings'
@@ -657,6 +675,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'mobile'
+    | 'peers'
   previousViewBeforeMobile:
     | 'terminal'
     | 'settings'
@@ -665,6 +684,16 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'peers'
+  previousViewBeforePeers:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -745,6 +774,26 @@ export type UISlice = {
   closeSkillsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
+  /** The host terminal currently shown in the Peers page's RemoteTerminalPanel, if any. */
+  peersPageTarget: RemoteTerminalTarget | null
+  /** Per-host user ordering of the Peers tab strip, as terminal handles. */
+  peersTabOrderByHost: Record<string, string[]>
+  setPeersTabOrderForHost: (hostId: string, handles: string[]) => void
+  setPeersPageTarget: (target: RemoteTerminalTarget | null) => void
+  openPeersPage: (target?: RemoteTerminalTarget) => void
+  closePeersPage: () => void
+  /** Pane split tree for the Peers page; null means a single pane (peersPageTarget). */
+  peersLayout: PeersLayoutNode | null
+  splitPeersPane: (
+    atLeafKey: string | null,
+    side: PeersSplitSide,
+    newTarget: RemoteTerminalTarget
+  ) => void
+  closePeersPane: (leafKey: string) => void
+  setPeersPaneRatio: (path: readonly PeersLayoutPathSegment[], ratio: number) => void
+  /** Tab-strip click behavior when split: replaces the focused pane's content, swapping with another pane if the target is already shown. */
+  replaceFocusedPeersPane: (target: RemoteTerminalTarget) => void
+  prunePeersLayout: (isAliveKeys: readonly string[]) => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -1233,6 +1282,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
   previousViewBeforeMobile: 'terminal',
+  previousViewBeforePeers: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -1488,6 +1538,142 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeMobile
     })),
+  peersPageTarget: null,
+  peersTabOrderByHost: {},
+  setPeersTabOrderForHost: (hostId, handles) =>
+    set((state) => ({
+      peersTabOrderByHost: { ...state.peersTabOrderByHost, [hostId]: handles }
+    })),
+  setPeersPageTarget: (target) => set({ peersPageTarget: target }),
+  openPeersPage: (target) =>
+    set((state) => ({
+      activeView: 'peers',
+      previousViewBeforePeers:
+        state.activeView === 'peers' ? state.previousViewBeforePeers : state.activeView,
+      peersPageTarget: target ?? state.peersPageTarget
+    })),
+  closePeersPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforePeers
+    })),
+  peersLayout: null,
+  splitPeersPane: (atLeafKey, side, newTarget) =>
+    set((state) => {
+      if (!state.peersLayout) {
+        const current = state.peersPageTarget
+        if (!current) {
+          return { peersPageTarget: newTarget }
+        }
+        const currentKey = peersLeafKey(current)
+        if (currentKey === peersLeafKey(newTarget)) {
+          return {}
+        }
+        const nextLayout = insertSplit(
+          { type: 'leaf', target: current },
+          currentKey,
+          side,
+          newTarget
+        )
+        return { peersLayout: nextLayout, peersPageTarget: newTarget }
+      }
+      const targetKey =
+        atLeafKey ?? (state.peersPageTarget ? peersLeafKey(state.peersPageTarget) : null)
+      // insertSplit no-ops on a stale/unknown atLeafKey; don't focus a target that never landed in the tree.
+      const leaves = collectPeersLeaves(state.peersLayout)
+      const targetExists = leaves.some((leaf) => peersLeafKey(leaf) === targetKey)
+      if (!targetKey || !targetExists) {
+        return {}
+      }
+      // Why: two leaves must never carry the same key (removeLeaf/replaceLeafTargets/
+      // pruneLeaves address leaves by key) — focus the existing pane instead.
+      if (leaves.some((leaf) => peersLeafKey(leaf) === peersLeafKey(newTarget))) {
+        return { peersPageTarget: newTarget }
+      }
+      return {
+        peersLayout: insertSplit(state.peersLayout, targetKey, side, newTarget),
+        peersPageTarget: newTarget
+      }
+    }),
+  closePeersPane: (leafKeyToClose) =>
+    set((state) => {
+      if (!state.peersLayout) {
+        return {}
+      }
+      const result = removePeersLeaf(state.peersLayout, leafKeyToClose)
+      const wasFocused =
+        !!state.peersPageTarget && peersLeafKey(state.peersPageTarget) === leafKeyToClose
+      if (result === null) {
+        return { peersLayout: null }
+      }
+      if (result.type === 'leaf') {
+        return {
+          peersLayout: null,
+          peersPageTarget: wasFocused ? result.target : state.peersPageTarget
+        }
+      }
+      if (!wasFocused) {
+        return { peersLayout: result }
+      }
+      const remainingFocus = collectPeersLeaves(result)[0] ?? null
+      return { peersLayout: result, peersPageTarget: remainingFocus ?? state.peersPageTarget }
+    }),
+  setPeersPaneRatio: (path, ratio) =>
+    set((state) => {
+      if (!state.peersLayout) {
+        return {}
+      }
+      return { peersLayout: setPeersRatioAtPath(state.peersLayout, path, ratio) }
+    }),
+  replaceFocusedPeersPane: (target) =>
+    set((state) => {
+      if (!state.peersLayout) {
+        return { peersPageTarget: target }
+      }
+      const focused = state.peersPageTarget
+      if (!focused) {
+        return { peersPageTarget: target }
+      }
+      const focusedKey = peersLeafKey(focused)
+      const newKey = peersLeafKey(target)
+      if (focusedKey === newKey) {
+        return { peersPageTarget: target }
+      }
+      const existing = collectPeersLeaves(state.peersLayout).find(
+        (leaf) => peersLeafKey(leaf) === newKey
+      )
+      // Why: two leaves can never carry the same key, so a target already shown elsewhere is swapped in rather than duplicated.
+      const replacements = existing
+        ? new Map([
+            [focusedKey, target],
+            [newKey, focused]
+          ])
+        : new Map([[focusedKey, target]])
+      return {
+        peersLayout: replacePeersLeafTargets(state.peersLayout, replacements),
+        peersPageTarget: target
+      }
+    }),
+  prunePeersLayout: (isAliveKeys) =>
+    set((state) => {
+      if (!state.peersLayout) {
+        return {}
+      }
+      const aliveKeys = new Set(isAliveKeys)
+      const pruned = prunePeersLeaves(state.peersLayout, (target) =>
+        aliveKeys.has(peersLeafKey(target))
+      )
+      if (pruned === null) {
+        return { peersLayout: null }
+      }
+      const collapsed = pruned.type === 'leaf' ? null : pruned
+      const focusedKey = state.peersPageTarget ? peersLeafKey(state.peersPageTarget) : null
+      if (focusedKey && aliveKeys.has(focusedKey)) {
+        return { peersLayout: collapsed }
+      }
+      const remaining =
+        pruned.type === 'leaf' ? pruned.target : (collectPeersLeaves(pruned)[0] ?? null)
+      return { peersLayout: collapsed, peersPageTarget: remaining ?? state.peersPageTarget }
+    }),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
   openSettingsPage: () => {

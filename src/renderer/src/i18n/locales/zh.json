@@ -793,7 +793,9 @@
         "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
         "pluginsTitle": "插件",
         "pluginsDescription": "安装和管理实验性 Orca 插件。",
-        "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。"
+        "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。",
+        "peerCollabTitle": "对等协作",
+        "peerCollabDescription": "在本地网络中与其他 Orca 桌面端共享终端。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -1017,7 +1019,12 @@
           "activity": "活动",
           "noActivity": "暂无活动。"
         },
-        "checkActionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如批准工作流运行）后才能解除合并阻止。"
+        "checkActionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如批准工作流运行）后才能解除合并阻止。",
+        "d23bbb6416": "{{value0}} 已跳过",
+        "18f80e1329": "{{value0}} 待处理",
+        "b1ac991806": "{{value0}} 失败",
+        "checksNeedActionChip": "{{value0}} 个需要操作",
+        "311d0cee55": "{{value0}} 通过"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "重新打开",
@@ -1496,7 +1503,12 @@
         "dd5d9a4f17": "{{value0}}更新",
         "71a3c0f9d2": "启动工作区",
         "filesUnavailable": "Couldn't load changed files.",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "e6ad0a8d06": "{{value0}} 已跳过",
+        "88267924d5": "{{value0}} 待处理",
+        "ae2a34c7b8": "{{value0}} 失败",
+        "checksNeedActionChip": "{{value0}} 个需要操作",
+        "7c5035931a": "{{value0}} 通过"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移动",
@@ -2649,7 +2661,11 @@
             "f2a8b9c1d3": "来自手机",
             "c7e4a2b8f1": "手机正在控制",
             "d9f3c6e2a4": "桌面键盘已暂停。收回此终端以在此输入，收回手机控制的所有终端，或折叠以继续观看。",
-            "a6b1d8f3e2": "手机会话已结束。将此终端或手机留在手机尺寸的所有终端恢复为桌面尺寸。"
+            "a6b1d8f3e2": "手机会话已结束。将此终端或手机留在手机尺寸的所有终端恢复为桌面尺寸。",
+            "peerChipLabel": "对等桌面控制中",
+            "peerEyebrow": "来自对等桌面",
+            "peerTitle": "对等桌面正在控制",
+            "peerBody": "桌面键盘已暂停。收回此终端以在此输入，收回该对等方控制的所有终端，或折叠以继续观看。"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "复制上下文",
@@ -5049,6 +5065,12 @@
           "3b7ea51793": "清除搜索",
           "7f1c2e94a5": "搜索文本过长 — 看板未被筛选",
           "9a4d0f6b21": "过长"
+        },
+        "PeerTerminalsSection": {
+          "dd7ecb3f10": "已连接的主机",
+          "f966803cfd": "Peers",
+          "d5f6851245": "尚未共享任何终端",
+          "4fd5f4c027": "未命名终端"
         }
       },
       "shared": {
@@ -6818,7 +6840,9 @@
           "devDescription": "仅用于调试 UI 状态的开发工具。",
           "linearTitle": "Linear",
           "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
-          "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。"
+          "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。",
+          "peerCollabTitle": "对等协作",
+          "peerCollabDescription": "在本地网络中与其他 Orca 桌面端共享终端。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -7074,7 +7098,14 @@
           "integrationsHint": "所有提供商的凭据也可在此管理：",
           "integrationsLink": "集成",
           "skillHint": "。连接 Linear 后，可在设置 → Linear 中查看使用示例。",
-          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。"
+          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。",
+          "3a72b9745e": "选择要在“任务”页面和侧边栏快捷键中显示的任务提供商。",
+          "71644aba56": "选择要在“任务”页面源选择器和侧边栏快捷键中显示的任务提供商。至少需保留一个可见提供商。",
+          "93e72ef659": "任务来源",
+          "8e1305fcc6": "在任务源选择器和侧边栏快捷方式中显示 Jira。",
+          "e4170c9615": "在任务源选择器和侧边栏快捷方式中显示 Linear。",
+          "dd67a1b6e1": "在任务源选择器和侧边栏快捷方式中显示 GitLab。",
+          "1db47236cd": "在任务源选择器和侧边栏快捷方式中显示 GitHub。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "窗格分隔线的厚度。",
@@ -8724,7 +8755,8 @@
             "setup": "设置",
             "apiKey": "API 密钥",
             "skill": "技能",
-            "connect": "连接"
+            "connect": "连接",
+            "765f0c544d": "选择要在“任务”页面和侧边栏快捷键中显示的任务提供商。"
           }
         },
         "terminal": {
@@ -9449,7 +9481,8 @@
         "ephemeralVms": {
           "search": {
             "description": "了解仓库自带的环境模板如何为每个工作区提供按需创建、可丢弃的独立环境。",
-            "cloudVmTitle": "云虚拟机"
+            "cloudVmTitle": "云虚拟机",
+            "title": "工作区专属环境"
           }
         },
         "EphemeralVmsPane": {
@@ -9470,11 +9503,14 @@
           "cloudVmSkillTitle": "云虚拟机设置技能",
           "cloudVmRefresh": "刷新云虚拟机环境模板",
           "cloudVmTerminalTitle": "云虚拟机设置",
-          "cloudVmTerminalAriaLabel": "云虚拟机技能安装终端"
+          "cloudVmTerminalAriaLabel": "云虚拟机技能安装终端",
+          "skillTitle": "工作区专属环境技能",
+          "refresh": "刷新临时 VM 环境模板"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "显示仓库自带按需环境的设置控件和工作区运行目标。",
-          "cloudVmToggleLabel": "切换云虚拟机"
+          "cloudVmToggleLabel": "切换云虚拟机",
+          "toggleLabel": "切换工作区专属环境"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "智能体",
@@ -9603,7 +9639,8 @@
           "terminalTitle": "Linear 技能设置",
           "terminalAriaLabel": "Linear 技能安装终端",
           "manageConnectionHint": "可在此查看已连接的 Linear 工作区和 API 密钥：",
-          "manageConnectionLink": "集成"
+          "manageConnectionLink": "集成",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca."
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -10026,6 +10063,94 @@
           "setupRecipe": "为你的云提供商设置环境模板。",
           "createWorkspace": "创建工作区，并在“运行于”中选择该模板。",
           "openSetup": "设置环境模板"
+        },
+        "peer-collab": {
+          "settings": {
+            "search": {
+              "title": "对等协作",
+              "description": "在本地网络中与其他 Orca 桌面端共享终端。",
+              "clientTitle": "连接到另一个 Orca",
+              "clientDescription": "使用配对码以客户端身份连接到主机 Orca。",
+              "connect": "连接",
+              "pairingCode": "配对码",
+              "clientRole": "客户端"
+            }
+          }
+        },
+        "PeerCollabSettingsPane": {
+          "noDevicesWithCode": "尚未配对任何设备。请在另一台 Orca 桌面端输入该配对码。",
+          "qrAlt": "用于对等桌面端配对的二维码",
+          "scanDescription": "请在另一台 Orca 桌面端输入此配对码。每个配对码都会创建唯一的设备令牌。",
+          "pasteDescription": "或者将此配对码粘贴到另一台 Orca 桌面端：",
+          "scanDialogTitle": "扫码配对",
+          "clientConnecting": "正在连接",
+          "clientConnected": "已连接",
+          "clientReconnectWait": "正在重新连接",
+          "clientClosed": "未连接",
+          "wsNotRunning": "WebSocket 传输未运行",
+          "generateFailed": "无法生成配对码",
+          "clientConnectFailed": "连接失败：{{reason}}",
+          "deviceRevoked": "已移除设备",
+          "revokeFailed": "无法移除设备",
+          "disconnectFailed": "无法断开该客户端",
+          "startTitle": "开始对等共享",
+          "startDescription": "生成配对码后，在另一台 Orca 桌面端的“对等协作”中输入。连接仅在本地网络内进行。",
+          "addressLabel": "本机地址",
+          "addressDescription": "另一台桌面端必须能通过 Wi‑Fi、以太网或 Tailscale 访问此地址。",
+          "regenerate": "重新生成配对码",
+          "generate": "生成配对码",
+          "devicesTitle": "对等设备",
+          "devicesDescription": "已与本机配对的 Orca 桌面端。",
+          "connectedTitle": "已连接的客户端",
+          "connectedDescription": "当前正在查看你的终端的 Orca 桌面端。",
+          "noClients": "当前没有对等桌面端连接。",
+          "connectedAt": "已连接",
+          "terminalCount": "{{count}} 个终端",
+          "disconnect": "断开连接",
+          "disconnectAndBlock": "断开连接并移除设备",
+          "clientCodeLabel": "配对码",
+          "clientCodePlaceholder": "粘贴另一台 Orca 桌面端的配对码",
+          "clientNameLabel": "你的显示名称",
+          "clientDisconnect": "断开连接",
+          "clientConnect": "连接",
+          "clientHostTerminalsTitle": "主机终端",
+          "clientNoHostTerminals": "主机当前没有可共享的终端。",
+          "clientUntitledTerminal": "未命名终端",
+          "clientOpenTerminal": "打开",
+          "exclusiveInputFloorLabel": "有人输入时阻止其他人",
+          "exclusiveInputFloorDescription": "默认情况下所有人可以同时输入。开启后，终端会锁定给最近输入的人，直到其停止输入。",
+          "clientNoHostTerminalsShared": "主机尚未与你共享任何终端。",
+          "grantTerminals": "共享终端",
+          "grantTerminalsLabel": "与 {{name}} 共享的终端",
+          "noHostTerminalsToGrant": "没有可共享的终端。",
+          "untitledTerminal": "未命名终端",
+          "grantTerminalsFailed": "无法更新共享终端",
+          "clientDuplicateConnection": "该配对码已被另一个 Orca 使用。请在主机上生成新的配对码。",
+          "clientSavedPairingInvalid": "此配对已失效，主机可能已将其移除。",
+          "clientForgetHost": "忘记此主机",
+          "clientSavedHost": "已保存的主机：{{endpoint}}",
+          "clientReconnectSaved": "重新连接",
+          "offerConsumed": "该配对码已被使用并清除。要添加另一台桌面端，请生成新的配对码。",
+          "singleUseCodeNotice": "每个配对码只接纳一台桌面端，该桌面端连接后即被清除。每要添加一台桌面端，就生成一个新配对码。",
+          "clientTransportError": "连接失败：{{reason}}",
+          "clientLocalNetworkHint": "在 macOS 上，请在“系统设置 → 隐私与安全性 → 本地网络”中允许此应用。",
+          "clientEnabledLabel": "允许连接到其他桌面",
+          "clientEnabledDescription": "开启后可将此桌面作为客户端连接到另一台 Orca。",
+          "clientHostDisabled": "主机已关闭共享，因此你已断开连接。",
+          "hostEnabledLabel": "允许其他桌面连接",
+          "hostEnabledDescription": "开启后，其他 Orca 桌面可以与此电脑配对并查看终端。关闭后，当前已连接的桌面会立即断开。",
+          "hostGroupTitle": "主机",
+          "clientGroupTitle": "客户端",
+          "clientConnectedCount": "已连接 {{count}} 台主机",
+          "clientAddHostTitle": "添加主机",
+          "renameHostPlaceholder": "此主机的显示名称",
+          "renameHost": "重命名主机",
+          "clientHostDisconnected": "主机已结束此连接。重新连接即可再次加入。"
+        },
+        "MobilePairedDevicesSection": {
+          "connectedNow": "Connected now",
+          "lastSeen": "Last seen {{time}}",
+          "unnamedDevice": "Unnamed device"
         }
       },
       "right": {
@@ -11708,7 +11833,8 @@
             "stable": "稳定版"
           },
           "relayDegradedNotice": "无法连接 Relay — 此二维码仅在局域网或 Tailscale 内可用。",
-          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。"
+          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。",
+          "901c98bb93": "配对这个"
         },
         "MobilePage": {
           "e17393c6a3": "手机预览",
@@ -13603,7 +13729,10 @@
           "f0202f3a89": "每天",
           "57e83307d0": "工作日",
           "837d902bba": "每周",
-          "ddba78647e": "自定义 cron"
+          "ddba78647e": "自定义 cron",
+          "b08ccb4d06": "每小时",
+          "8cc026fd73": "每周",
+          "c3e39e17cf": "风俗"
         },
         "AutomationSessionField": {
           "f3c76dce51": "重复利用",
@@ -14286,6 +14415,49 @@
         "pendingChip": "{{value0}} 待处理",
         "needsActionChip": "{{value0}} 个需要操作",
         "unresolvedChip": "{{value0}} 个未解决"
+      },
+      "peer-collab": {
+        "RemoteTerminalDialog": {
+          "connected": "已连接",
+          "reconnecting": "正在重新连接",
+          "disconnected": "已断开连接",
+          "close": "关闭"
+        },
+        "RemoteTerminalPanel": {
+          "grantRevoked": "主机已停止共享此终端。",
+          "error": "无法打开此终端：{{reason}}",
+          "ended": "此终端流已结束。",
+          "otherSubscribers": "同时在看：{{names}}"
+        },
+        "RemoteTerminalPresenceOverlay": {
+          "scrolledUp": "已向上滚动"
+        }
+      },
+      "peers": {
+        "PeersEmptyState": {
+          "f3a8c1d0e5": "尚未连接到主机",
+          "b6d2e9f4a7": "尚未共享任何终端",
+          "c9e4b7a1d3": "与另一台 Orca 桌面配对后，即可在此查看其共享的终端。",
+          "d1f6a3c8e2": "请让主机与你共享一个终端，或在设置中检查你的配对状态。",
+          "e2a5d8b9c4": "打开设置"
+        },
+        "PeersPage": {
+          "a4c1e8f0b7": "已连接",
+          "b8d3a6c2e9": "正在重新连接",
+          "c2e9f5a1d8": "未连接",
+          "d7f2a9c4b6": "远程终端",
+          "e5b8c1f3a2": "关闭",
+          "f9a3d6e2b1": "关闭 · Esc",
+          "untitledTerminal": "未命名终端"
+        },
+        "PeersPageTabStrip": {
+          "splitRightAction": "向右拆分",
+          "splitRightTooltip": "向右拆分",
+          "untitledTerminal": "未命名终端"
+        },
+        "PeersPanels": {
+          "closePane": "关闭面板"
+        }
       }
     },
     "i18n": {
@@ -14488,6 +14660,16 @@
       "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
       "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
       "launchFailed": "无法启动新的 {{agent}} 会话。"
+    },
+    "terminalPaneViewerBadge": {
+      "viewerCount": "{{count}} viewing this terminal",
+      "disconnect": "Disconnect",
+      "disconnectFailed": "Failed to disconnect client",
+      "shareToggleFailed": "Failed to update shared terminal",
+      "connectedNotWatching": "{{count}} connected, not watching",
+      "shareToggle": "Share this terminal with {{name}}",
+      "grantedCount": "{{count}} 人已获得此终端的访问权限",
+      "noneGranted": "{{count}} 人已连接，尚未授予此终端的访问权限"
     }
   },
   "dashboardPopout": {

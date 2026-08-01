@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: the remote terminal multiplexer owns one bridged subscription, stream lifecycle, binary frame parsing, and remote lock events as a single transport contract. */
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeTerminalDriverState } from '../../../shared/runtime-types'
 import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime-client-error-classification'
 import {
   TerminalStreamOpcode,
@@ -66,9 +67,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
     cols: number
     rows: number
   }) => void
-  onDriverChanged?: (
-    driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
-  ) => void
+  onDriverChanged?: (driver: RuntimeTerminalDriverState) => void
   onTransportClose?: (event: { recoverable: boolean; retryWithBackoff?: boolean }) => void
 }
 
@@ -1419,9 +1418,7 @@ function decodeSnapshotInfo(
   }
 }
 
-function isTerminalDriverState(
-  value: unknown
-): value is { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string } {
+function isTerminalDriverState(value: unknown): value is RuntimeTerminalDriverState {
   if (!value || typeof value !== 'object' || !('kind' in value)) {
     return false
   }
@@ -1429,6 +1426,6 @@ function isTerminalDriverState(
   return (
     driver.kind === 'idle' ||
     driver.kind === 'desktop' ||
-    (driver.kind === 'mobile' && typeof driver.clientId === 'string')
+    ((driver.kind === 'mobile' || driver.kind === 'peer') && typeof driver.clientId === 'string')
   )
 }

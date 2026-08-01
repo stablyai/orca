@@ -2006,6 +2006,331 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   }, 15_000)
 
+  it('lists a connected peer client and force-disconnects it', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    server.setPeerHostingEnabled(true)
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'peer-test',
+        scope: 'peer'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+
+      const ws = await authenticateMobileWs(offer.pairingUrl)
+      await waitFor(() => server.listConnectedPeerClients().length === 1)
+
+      const [connected] = server.listConnectedPeerClients()
+      expect(connected).toMatchObject({ deviceId: offer.deviceId, name: 'peer-test' })
+      expect(connected?.subscribedTerminals).toEqual([])
+
+      expect(server.disconnectPeerClient(offer.deviceId)).toBe(true)
+      await waitForWsClose(ws)
+      await waitFor(() => server.listConnectedPeerClients().length === 0)
+
+      // Why: disconnect alone must not revoke the pairing — reconnecting with
+      // the same device token should still succeed.
+      expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)).not.toBeNull()
+
+      expect(server.revokePeerDevice(offer.deviceId)).toBe(true)
+      expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  }, 15_000)
+
+  it('updates a peer device lastSeenAt when its connection closes', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    server.setPeerHostingEnabled(true)
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'peer-test',
+        scope: 'peer'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+
+      const ws = await authenticateMobileWs(offer.pairingUrl)
+      await waitFor(() => server.listConnectedPeerClients().length === 1)
+      const lastSeenAtAuth = server.getDeviceRegistry()?.getDevice(offer.deviceId)?.lastSeenAt
+      expect(lastSeenAtAuth).toBeTruthy()
+      // Why: Date.now() has ms resolution — force a gap so the post-close
+      // lastSeenAt is provably later, not coincidentally equal.
+      await new Promise((resolve) => setTimeout(resolve, 5))
+
+      ws.close()
+      await waitForWsClose(ws)
+      await waitFor(() => server.listConnectedPeerClients().length === 0)
+      await waitFor(
+        () =>
+          (server.getDeviceRegistry()?.getDevice(offer.deviceId)?.lastSeenAt ?? 0) >
+          (lastSeenAtAuth ?? 0)
+      )
+    } finally {
+      await server.stop()
+    }
+  }, 15_000)
+
+  it('listPeerNamesForTerminal excludes the caller-side connection but includes other watchers', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const subscriptions = new Map<string, string[]>([
+      ['conn-A', ['terminal-1']],
+      ['conn-B', ['terminal-1']],
+      ['conn-C', ['terminal-2']]
+    ])
+    const stubRuntime = {
+      getSubscriptionIdsForConnection: (connectionId: string) =>
+        subscriptions.get(connectionId) ?? []
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime: stubRuntime, userDataPath })
+    const peerConnections = (
+      server as unknown as {
+        peerConnections: {
+          add: (info: {
+            connectionId: string
+            deviceId: string
+            name: string
+            connectedAt: number
+          }) => void
+        }
+      }
+    ).peerConnections
+    peerConnections.add({
+      connectionId: 'conn-A',
+      deviceId: 'device-A',
+      name: 'Peer A',
+      connectedAt: 1
+    })
+    peerConnections.add({
+      connectionId: 'conn-B',
+      deviceId: 'device-B',
+      name: 'Peer B',
+      connectedAt: 2
+    })
+    peerConnections.add({
+      connectionId: 'conn-C',
+      deviceId: 'device-C',
+      name: 'Peer C',
+      connectedAt: 3
+    })
+
+    // Caller is conn-A itself, watching terminal-1: must see peer B, not itself, not peer C (different terminal).
+    expect(server.listPeerNamesForTerminal('terminal-1', 'conn-A')).toEqual([{ name: 'Peer B' }])
+    // No excludeConnectionId (e.g. legacy caller) — falls back to including every watcher.
+    expect(server.listPeerNamesForTerminal('terminal-1')).toEqual([
+      { name: 'Peer A' },
+      { name: 'Peer B' }
+    ])
+  })
+
+  it('reports only live granted handles and never prunes the stored copy from a read', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    let graphReady = false
+    const stubRuntime = {
+      getStatus: () => ({ graphStatus: graphReady ? 'ready' : 'unavailable' }),
+      getSubscriptionIdsForConnection: () => [],
+      resolveLiveLeafForHandle: (handle: string) =>
+        handle === 'term_live' ? { ptyId: 'pty-1' } : null
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime: stubRuntime, userDataPath })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const device = server['deviceRegistry']!.addDevice('peer-device', 'peer')
+    server['deviceRegistry']!.setGrantedTerminals(device.deviceId, ['term_live', 'term_dead'])
+    const peerConnections = (
+      server as unknown as {
+        peerConnections: {
+          add: (info: {
+            connectionId: string
+            deviceId: string
+            name: string
+            connectedAt: number
+          }) => void
+        }
+      }
+    ).peerConnections
+    peerConnections.add({
+      connectionId: 'conn-A',
+      deviceId: device.deviceId,
+      name: 'Peer A',
+      connectedAt: 1
+    })
+
+    expect(server.listConnectedPeerClients()[0]?.grantedTerminals).toEqual(['term_live'])
+    graphReady = true
+    expect(server.listConnectedPeerClients()[0]?.grantedTerminals).toEqual(['term_live'])
+    // Why: reads report the live subset but must leave the stored grants alone,
+    // so nothing is deleted by merely opening the settings pane.
+    expect(server.getDeviceRegistry()?.getGrantedTerminals(device.deviceId)).toEqual([
+      'term_live',
+      'term_dead'
+    ])
+  })
+
+  it('drops dead handles when grants are written, but not while the graph is unavailable', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    let graphReady = false
+    const stubRuntime = {
+      getStatus: () => ({ graphStatus: graphReady ? 'ready' : 'unavailable' }),
+      getSubscriptionIdsForConnection: () => [],
+      resolveLiveLeafForHandle: (handle: string) =>
+        handle === 'term_live' ? { ptyId: 'pty-1' } : null
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime: stubRuntime, userDataPath })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const device = server['deviceRegistry']!.addDevice('peer-device', 'peer')
+
+    // Why: mid-reload the handle table is briefly empty, so a write must keep
+    // handles that are about to reattach.
+    server.setGrantedTerminals(device.deviceId, ['term_live', 'term_dead'])
+    expect(server.getDeviceRegistry()?.getGrantedTerminals(device.deviceId)).toEqual([
+      'term_live',
+      'term_dead'
+    ])
+
+    graphReady = true
+    server.setGrantedTerminals(device.deviceId, ['term_live', 'term_dead'])
+    expect(server.getDeviceRegistry()?.getGrantedTerminals(device.deviceId)).toEqual(['term_live'])
+  })
+
+  it('gates peer devices to the peer RPC allowlist, not the broader mobile surface', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    server.setPeerHostingEnabled(true)
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'peer-test',
+        scope: 'peer'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+
+      const session = await authenticateMobileWsSession(offer.pairingUrl)
+      const reader = createEncryptedWsResponseReader(session)
+      try {
+        // Why: accounts.list and browser.goto are on the mobile allowlist but
+        // have nothing to do with terminal sharing — a peer must not reach them.
+        sendEncryptedWsRequest(session, { id: 'req-accounts', method: 'accounts.list' })
+        const accountsResponse = await reader.next('req-accounts')
+        expect(accountsResponse.ok).toBe(false)
+        expect((accountsResponse.error as Record<string, unknown> | undefined)?.code).toBe(
+          'forbidden'
+        )
+
+        sendEncryptedWsRequest(session, { id: 'req-browser', method: 'browser.goto' })
+        const browserResponse = await reader.next('req-browser')
+        expect(browserResponse.ok).toBe(false)
+        expect((browserResponse.error as Record<string, unknown> | undefined)?.code).toBe(
+          'forbidden'
+        )
+
+        // Why: terminal.list is one of the 7 methods peer-client-service.ts
+        // actually calls — it must still succeed under the peer-only allowlist.
+        sendEncryptedWsRequest(session, { id: 'req-terminal-list', method: 'terminal.list' })
+        const terminalListResponse = await reader.next('req-terminal-list')
+        expect(terminalListResponse.ok).toBe(true)
+      } finally {
+        reader.dispose()
+      }
+    } finally {
+      await server.stop()
+    }
+  }, 15_000)
+
+  it('rejects the peer-only presence and subscriber-listing methods for mobile-scoped devices', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'phone-test',
+        scope: 'mobile'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+
+      const session = await authenticateMobileWsSession(offer.pairingUrl)
+      const reader = createEncryptedWsResponseReader(session)
+      try {
+        // Why: terminal.presence.* and terminal.listSubscribers exist only for
+        // peer-client-service.ts's participant display — the mobile app never
+        // calls them (grep confirms 0 hits in mobile/src), so they moved off
+        // the mobile allowlist onto the peer-only one.
+        sendEncryptedWsRequest(session, {
+          id: 'req-presence',
+          method: 'terminal.presence.subscribe'
+        })
+        const presenceResponse = await reader.next('req-presence')
+        expect(presenceResponse.ok).toBe(false)
+        expect((presenceResponse.error as Record<string, unknown> | undefined)?.code).toBe(
+          'forbidden'
+        )
+
+        sendEncryptedWsRequest(session, {
+          id: 'req-list-subscribers',
+          method: 'terminal.listSubscribers'
+        })
+        const listSubscribersResponse = await reader.next('req-list-subscribers')
+        expect(listSubscribersResponse.ok).toBe(false)
+        expect((listSubscribersResponse.error as Record<string, unknown> | undefined)?.code).toBe(
+          'forbidden'
+        )
+      } finally {
+        reader.dispose()
+      }
+    } finally {
+      await server.stop()
+    }
+  }, 15_000)
+
   it('caps WebSocket long-polls and aborts them when the socket closes', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()

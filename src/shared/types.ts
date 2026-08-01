@@ -2853,6 +2853,18 @@ export type GlobalSettings = {
   showAutomationsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
+  /** Display name a peer client presents when connecting to another Orca desktop; reused as the default on the next connection. */
+  peerCollabDisplayName?: string
+  /** Gates whether this desktop accepts incoming peer connections as a host; off by default, read with a strict === true check. */
+  peerCollabHostEnabled?: boolean
+  /** Gates whether this desktop may connect out to another Orca as a peer client; off by default, read with a strict === true check. */
+  peerCollabClientEnabled?: boolean
+  /** The pairing code from the last successful peer-client connection, persisted so the app can reconnect after a restart without re-pasting it. Single slot (PeerClientService only ever holds one host connection at a time). Cleared only by explicit "forget this host", never by a plain disconnect. Contains the host-issued device token, so treat it as a credential (same plaintext-at-rest tradeoff as the host's own device registry). */
+  peerCollabSavedPairingCode?: string
+  /** Saved pairing codes for multiple hosts, one entry per hostId (offer publicKeyB64); replaces the single-slot field above for multi-host peer client support. Read paths migrate the legacy single value into this array. */
+  peerCollabSavedPairings?: string[]
+  /** User-assigned display names for paired peer hosts, keyed by hostId. */
+  peerCollabHostNames?: Record<string, string>
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
   showPinnedWorktreesInGroups?: boolean
   /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */
@@ -3318,6 +3330,7 @@ export type TopLevelView =
   | 'space'
   | 'skills'
   | 'mobile'
+  | 'peers'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null

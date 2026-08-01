@@ -40,6 +40,11 @@ describe('pairing offer', () => {
     expect(decodePairingOffer(encodePairingOffer(scopedOffer))).toEqual(scopedOffer)
   })
 
+  it('round-trips the peer desktop scope', () => {
+    const peerOffer: PairingOffer = { ...offer, scope: 'peer' }
+    expect(decodePairingOffer(encodePairingOffer(peerOffer))).toEqual(peerOffer)
+  })
+
   it('round-trips a TLS reverse-proxy endpoint with an explicit port and path', () => {
     const proxiedOffer = {
       ...offer,

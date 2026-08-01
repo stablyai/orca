@@ -385,7 +385,7 @@
   margin-left: -1px;
 }
 
-.pane-title-bar[data-chromeless] .pane-title-split-trigger::before,
+.pane-title-bar[data-chromeless] .pane-title-split-trigger:not(.pane-title-viewer-badge)::before,
 .pane-title-bar[data-chromeless] .pane-title-close::before {
   content: '';
   position: absolute;
@@ -437,6 +437,24 @@
 .pane-title-bar[data-active-pane] .pane-title-close,
 .pane-title-bar:hover .pane-title-split-trigger,
 .pane-title-bar:focus-within .pane-title-split-trigger {
+  opacity: 1;
+}
+
+/* Why: unlike the icon-only split/close controls, this one carries a count, so
+   the chromeless 18px clamp above would crop the digit away. */
+.pane-title-viewer-badge.pane-title-split-trigger,
+.pane-title-bar[data-chromeless] .pane-title-viewer-badge.pane-title-split-trigger {
+  width: auto;
+  min-width: 0;
+  padding: 0 4px;
+  gap: 2px;
+  /* Why: the badge carries its own backing (not the shared ::before circle
+     above) so the count span, which has no stacking context of its own,
+     never paints underneath a positioned backdrop. */
+  background: var(--orca-pane-title-bg, var(--background));
+  border: 1px solid var(--border);
+  /* Why: badges use rounded-full (docs/STYLEGUIDE.md) — match the Badge primitive's radius. */
+  border-radius: 9999px;
   opacity: 1;
 }
 

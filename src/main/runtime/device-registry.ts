@@ -22,6 +22,15 @@ export type DeviceEntry = {
   lastSeenAt: number
   relayBinding?: RelayDeviceBinding
   mobilePairingConnectionMode?: MobilePairingConnectionMode
+  // Why: peer scope has no terminal access until the host explicitly grants
+  // handles; absent/empty means no terminals are visible to that peer.
+  grantedTerminalHandles?: string[]
+  // Why: peer scope only. `name` stays the pairing-offer's auto-generated
+  // "Peer <date>" label so it still works as a fallback (see runtime-rpc.ts's
+  // listConnectedPeerClients name resolution); the client's handshake-carried
+  // display name is kept separately so the paired-devices list can show it
+  // instead without losing that fallback.
+  lastConnectedName?: string
 }
 
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
@@ -149,6 +158,45 @@ export class DeviceRegistry {
     return true
   }
 
+  setGrantedTerminals(deviceId: string, terminals: readonly string[]): boolean {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    if (index < 0 || this.devices[index]?.scope !== 'peer') {
+      return false
+    }
+    // Why: copy at the boundary — a caller mutating its array afterwards must not
+    // change authorization state behind save()'s back.
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, grantedTerminalHandles: [...terminals] } : device
+    )
+    this.save(nextDevices)
+    this.devices = nextDevices
+    return true
+  }
+
+  // Why: called on every peer handshake so the paired-devices list reflects
+  // the name the client is currently presenting, not the one-time pairing name.
+  setLastConnectedName(deviceId: string, name: string): boolean {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    const trimmed = name.trim()
+    if (index < 0 || this.devices[index]?.scope !== 'peer' || !trimmed) {
+      return false
+    }
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, lastConnectedName: trimmed } : device
+    )
+    this.save(nextDevices)
+    this.devices = nextDevices
+    return true
+  }
+
+  getGrantedTerminals(deviceId: string): string[] {
+    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
+    if (!device || device.scope !== 'peer') {
+      return []
+    }
+    return [...(device.grantedTerminalHandles ?? [])]
+  }
+
   getMobilePairingConnectionMode(deviceId: string): MobilePairingConnectionMode | null {
     const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
     if (!device || device.scope !== 'mobile') {
@@ -194,10 +242,17 @@ export class DeviceRegistry {
         ...device,
         // Why: older registries only existed for phone pairing. Treat missing
         // scope as mobile so legacy device tokens do not gain new CLI powers.
-        scope: device.scope === 'runtime' ? 'runtime' : 'mobile',
+        scope: device.scope === 'runtime' || device.scope === 'peer' ? device.scope : 'mobile',
         relayBinding: validRelayBinding(device.relayBinding, device.deviceId),
         mobilePairingConnectionMode:
-          device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
+          device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic',
+        grantedTerminalHandles: Array.isArray(device.grantedTerminalHandles)
+          ? device.grantedTerminalHandles.filter(
+              (handle): handle is string => typeof handle === 'string'
+            )
+          : [],
+        lastConnectedName:
+          typeof device.lastConnectedName === 'string' ? device.lastConnectedName : undefined
       }))
     } catch {
       this.devices = []

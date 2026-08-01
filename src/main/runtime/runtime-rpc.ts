@@ -27,6 +27,16 @@ import {
   type AuthenticatedMobileSocket,
   type MobileSocketTransportMetadata
 } from './rpc/mobile-socket-wiring'
+import { PeerConnectionRegistry } from './peer-connection-registry'
+import {
+  MOBILE_RPC_METHOD_ALLOWLIST,
+  PEER_RPC_METHOD_ALLOWLIST
+} from './rpc/scoped-rpc-method-allowlists'
+import {
+  PEER_DUPLICATE_CONNECTION_CLOSE_CODE,
+  PEER_HOST_DISCONNECTED_CLOSE_CODE,
+  PEER_HOSTING_DISABLED_CLOSE_CODE
+} from '../../shared/peer-connection-close-codes'
 import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import {
@@ -76,6 +86,7 @@ export type PairingOfferUnavailableReason =
   | 'e2ee_key_unavailable'
   | 'invalid_advertised_endpoint'
   | 'relay_mint_failed'
+  | 'peer_hosting_disabled'
 
 export type PairingOfferUnavailable = {
   available: false
@@ -112,6 +123,8 @@ const DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE =
   'The pairing registry is unavailable. Verify that the Orca data directory is writable.'
 const E2EE_KEY_UNAVAILABLE_GUIDANCE =
   'The E2EE identity is unavailable. Verify that the Orca data directory is writable.'
+const PEER_HOSTING_DISABLED_GUIDANCE =
+  'Peer hosting is turned off in Settings. Enable it to let another Orca desktop connect.'
 
 type MobileRelayPairingProvider = {
   createPairingRelay(
@@ -164,268 +177,6 @@ function webClientPathForEndpoint(pathname: string): string {
   return `${pathname.replace(/\/$/, '')}/web-index.html`
 }
 
-const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
-  'accounts.list',
-  'accounts.consumeCodexResetCredit',
-  'accounts.selectClaude',
-  'accounts.selectCodex',
-  'accounts.selectCodexForTarget',
-  'accounts.subscribe',
-  'accounts.unsubscribe',
-  'aiVault.listSessions',
-  'aiVault.prepareSessionResume',
-  'browser.back',
-  'browser.dialogAccept',
-  'browser.dialogDismiss',
-  'browser.forward',
-  'browser.goto',
-  'browser.keyboardInsertText',
-  'browser.keypress',
-  'browser.mouseDown',
-  'browser.mouseClick',
-  'browser.mouseMove',
-  'browser.mouseUp',
-  'browser.mouseWheel',
-  'browser.reload',
-  'browser.screencast',
-  'browser.screencast.unsubscribe',
-  'browser.tabCreate',
-  'browser.viewport',
-  'clipboard.abortImageUpload',
-  'clipboard.appendImageUploadChunk',
-  'clipboard.commitImageUpload',
-  'clipboard.saveImageAsTempFile',
-  'clipboard.startImageUpload',
-  'diagnostics.memory',
-  'files.browseServerDir',
-  'files.createFile',
-  'files.list',
-  'files.open',
-  'files.openDiff',
-  'files.read',
-  'files.readChunk',
-  'files.readDir',
-  'files.readPreview',
-  'files.readTerminalArtifact',
-  'files.readTerminalArtifactPreview',
-  'files.resolveTerminalPath',
-  'files.searchPaths',
-  'files.writeTerminalArtifact',
-  'folderWorkspace.list',
-  'git.abortMerge',
-  'git.abortRebase',
-  'git.bulkStage',
-  'git.bulkUnstage',
-  'git.branchCompare',
-  'git.branchDiff',
-  'git.cancelGenerateCommitMessage',
-  'git.cancelGeneratePullRequestFields',
-  'git.checkout',
-  'git.commit',
-  'git.commitCompare',
-  'git.commitDiff',
-  'git.discard',
-  'git.discoverCommitMessageModels',
-  'git.diff',
-  'git.fetch',
-  'git.forkSync',
-  'git.fastForward',
-  'git.generateCommitMessage',
-  'git.generatePullRequestFields',
-  'git.history',
-  'git.localBranches',
-  'git.pull',
-  'git.push',
-  'git.rebaseFromBase',
-  'git.stage',
-  'git.status',
-  'git.unstage',
-  'git.upstreamStatus',
-  'github.createIssue',
-  'github.addIssueComment',
-  'github.addPRReviewComment',
-  'github.addPRReviewCommentReply',
-  'github.countWorkItems',
-  'github.listAssignableUsers',
-  'github.listLabels',
-  'github.listWorkItems',
-  'github.mergePR',
-  'github.setPRAutoMerge',
-  'github.requestPRReviewers',
-  'github.removePRReviewers',
-  'github.project.listAccessible',
-  'github.project.listAssignableUsersBySlug',
-  'github.project.listIssueTypesBySlug',
-  'github.project.listLabelsBySlug',
-  'github.project.listViews',
-  'github.project.resolveRef',
-  'github.project.addIssueCommentBySlug',
-  'github.project.updateIssueCommentBySlug',
-  'github.project.deleteIssueCommentBySlug',
-  'github.project.clearItemField',
-  'github.project.updateIssueBySlug',
-  'github.project.updateIssueTypeBySlug',
-  'github.project.updateItemField',
-  'github.project.updatePullRequestBySlug',
-  'github.project.viewTable',
-  'github.project.workItemDetailsBySlug',
-  'github.prForBranch',
-  'github.prFileContents',
-  'github.prChecks',
-  'github.prCheckDetails',
-  'github.rerunPRChecks',
-  'github.resolveReviewThread',
-  'github.setPRFileViewed',
-  'github.updateIssue',
-  'github.updatePR',
-  'github.updatePRTitle',
-  'github.updatePRState',
-  'github.repoSlug',
-  'github.workItem',
-  // Cross-repo lookup: lets the mobile Smart picker resolve a pasted github.com URL for a different repo.
-  'github.workItemByOwnerRepo',
-  'github.workItemDetails',
-  'gitlab.createIssue',
-  'gitlab.addIssueComment',
-  'gitlab.addMRComment',
-  'gitlab.listWorkItems',
-  // Mobile Smart picker: resolve a pasted GitLab URL to an exact issue/MR (MR listing reuses gitlab.listWorkItems).
-  'gitlab.workItemByPath',
-  'gitlab.mergeMR',
-  'gitlab.resolveMRDiscussion',
-  'gitlab.todos',
-  'gitlab.updateIssue',
-  'gitlab.updateMR',
-  'gitlab.updateMRState',
-  'gitlab.workItemDetails',
-  'host.gitBash.isAvailable',
-  'host.platform',
-  'host.pwsh.isAvailable',
-  'host.wsl.isAvailable',
-  'host.wsl.listDistros',
-  'hostedReview.create',
-  'hostedReview.forBranch',
-  'hostedReview.getCreationEligibility',
-  'linear.getCustomView',
-  'linear.getIssue',
-  'linear.getProject',
-  'linear.agentSearchIssues',
-  'linear.issueContext',
-  'linear.resolveCurrentIssue',
-  'linear.addIssueComment',
-  'linear.connect',
-  'linear.createIssue',
-  'linear.createProject',
-  'linear.issueComments',
-  'linear.listCustomViewIssues',
-  'linear.listCustomViewProjects',
-  'linear.listCustomViews',
-  'linear.listIssues',
-  'linear.mcpListIssues',
-  'linear.listProjectIssues',
-  'linear.listProjects',
-  'linear.teamLabels',
-  'linear.teamMembers',
-  'linear.listTeams',
-  'linear.searchIssues',
-  'linear.selectWorkspace',
-  'linear.status',
-  'linear.teamStates',
-  'linear.updateIssue',
-  'markdown.readTab',
-  'markdown.saveTab',
-  'notifications.getMissedSince',
-  'notifications.subscribe',
-  'notifications.unsubscribe',
-  'pairing.getEndpoints',
-  'pairing.provisionRelay',
-  'preflight.check',
-  'preflight.detectAgents',
-  'preflight.detectRemoteAgents',
-  'projectGroup.list',
-  'repo.baseRefDefault',
-  'repo.gitAvailable',
-  'repo.hooks',
-  'repo.list',
-  'repo.saveSparsePreset',
-  'repo.searchRefs',
-  'repo.sparsePresets',
-  'repo.update',
-  'runtime.clientEvents.subscribe',
-  'runtime.clientEvents.unsubscribe',
-  'session.tabs.activate',
-  'session.tabs.close',
-  'session.tabs.closeLifecycle',
-  'session.tabs.createTerminal',
-  'session.tabs.list',
-  'session.tabs.listAll',
-  'session.tabs.move',
-  'session.tabs.subscribe',
-  'session.tabs.subscribeAll',
-  'session.tabs.unsubscribe',
-  'session.tabs.unsubscribeAll',
-  'nativeChat.readSession',
-  'nativeChat.subscribe',
-  'nativeChat.unsubscribe',
-  'settings.get',
-  'settings.getTerminalQuickCommands',
-  'settings.update',
-  'settings.updateTerminalQuickCommands',
-  'ssh.connect',
-  'ssh.getState',
-  'ssh.listRemovedTargetLabels',
-  'ssh.listTargets',
-  'ssh.listTargetSummaries',
-  'speech.dictation.cancel',
-  'speech.dictation.chunk',
-  'speech.dictation.finish',
-  'speech.dictation.setup',
-  'speech.dictation.start',
-  'speech.models.delete',
-  'speech.models.download',
-  'speech.models.list',
-  'stats.summary',
-  'status.get',
-  'agentTeams.prepareLaunch',
-  'agentTeams.tmuxCompat',
-  'terminal.clearBuffer',
-  'terminal.close',
-  'terminal.closeTab',
-  'terminal.create',
-  'terminal.createAgentSession',
-  'terminal.ensureAgentSession',
-  'terminal.focus',
-  'terminal.agentStatus',
-  'terminal.adoptOrphans',
-  'terminal.getAutoRestoreFit',
-  'terminal.isRunningAgent',
-  'terminal.list',
-  'terminal.multiplex',
-  'terminal.read',
-  'terminal.rename',
-  'terminal.send',
-  'terminal.setAutoRestoreFit',
-  'terminal.setDisplayMode',
-  'terminal.subscribe',
-  'terminal.unsubscribe',
-  'terminal.updateViewport',
-  'terminal.wait',
-  'ui.get',
-  'ui.recordFeatureInteraction',
-  'ui.set',
-  'worktree.activate',
-  'worktree.create',
-  'worktree.forceDeleteBranch',
-  'worktree.prefetchCreateBase',
-  'worktree.ps',
-  'worktree.show',
-  'worktree.resolveMrBase',
-  'worktree.resolvePrBase',
-  'worktree.rm',
-  'worktree.set',
-  'worktree.sleep'
-])
-
 // Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
 type LongPollClass = 'ask' | 'wait'
 
@@ -447,6 +198,19 @@ function longPollClassOf(request: RpcRequest): LongPollClass | null {
     return params?.wait === true ? 'wait' : null
   }
   return null
+}
+
+// Why: mirrors terminal-presence.ts's `terminal-presence:${terminal}:...` id
+// shape so a grant revoke can find a connection's presence sub for a handle;
+// kept next to setGrantedTerminals' only caller rather than exported broadly.
+function terminalHandleFromPresenceSubscriptionId(subscriptionId: string): string | null {
+  const prefix = 'terminal-presence:'
+  if (!subscriptionId.startsWith(prefix)) {
+    return null
+  }
+  const rest = subscriptionId.slice(prefix.length)
+  const lastColonIndex = rest.lastIndexOf(':')
+  return lastColonIndex === -1 ? null : rest.slice(0, lastColonIndex)
 }
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
@@ -479,6 +243,10 @@ export class OrcaRuntimeRpcServer {
   private readonly metadataOwnershipPollMs: number
   private readonly askLongPollCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
+  private readonly peerConnections = new PeerConnectionRegistry()
+  // Why: default off — peer scope is gated separately from the shared
+  // WebSocket transport, which mobile also depends on and must stay up.
+  private peerHostingEnabled = false
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
   private pairingInitializationFailure: PairingOfferUnavailable | null = null
@@ -628,6 +396,172 @@ export class OrcaRuntimeRpcServer {
     return true
   }
 
+  revokePeerDevice(deviceId: string): boolean {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    if (device?.scope !== 'peer' || !this.deviceRegistry?.removeDevice(deviceId)) {
+      return false
+    }
+    this.runtime.forgetClientNavigationState(deviceId)
+    this.mobileSocketWiring?.terminateDeviceConnections(device.token)
+    return true
+  }
+
+  // Why: host/client on-off toggle backend — flipping to false must drop
+  // every currently-live peer socket immediately, not just block new ones.
+  // The registry's WS close handler removes each entry from peerConnections
+  // itself, so no extra bookkeeping is needed here.
+  setPeerHostingEnabled(enabled: boolean): void {
+    this.peerHostingEnabled = enabled
+    if (!enabled) {
+      this.peerConnections.closeAll(PEER_HOSTING_DISABLED_CLOSE_CODE, 'Peer hosting disabled')
+    }
+  }
+
+  // Why: the WS close (and its onReady/onClose pair above) is the source of
+  // truth for peerConnections; closing the socket here lets that same path
+  // clean up the registry entry instead of duplicating removal logic.
+  disconnectPeerClient(deviceId: string): boolean {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    if (device?.scope !== 'peer') {
+      return false
+    }
+    // Why: graceful close with a dedicated code so the client latches closed
+    // instead of auto-reconnecting; sockets that authenticated but never made
+    // it into the registry still get the hard terminate fallback.
+    const closed = this.peerConnections.closeByDevice(
+      deviceId,
+      PEER_HOST_DISCONNECTED_CLOSE_CODE,
+      'Host disconnected this client'
+    )
+    return (
+      closed > 0 || (this.mobileSocketWiring?.terminateDeviceConnections(device.token) ?? 0) > 0
+    )
+  }
+
+  listConnectedPeerClients(): {
+    connectionId: string
+    deviceId: string
+    name: string
+    connectedAt: number
+    subscribedTerminals: string[]
+    grantedTerminals: string[]
+  }[] {
+    const isLive = (handle: string): boolean =>
+      this.runtime.resolveLiveLeafForHandle(handle) !== null
+    return this.peerConnections.list().map((entry) => {
+      // Why: a restart mints fresh handles, so stored grants can name dead
+      // terminals; report only live ones. Pruning the stored copy happens on
+      // write (setGrantedTerminals), never from this read.
+      const liveGrants = (this.deviceRegistry?.getGrantedTerminals(entry.deviceId) ?? []).filter(
+        isLive
+      )
+      const subscribedTerminals = new Set<string>()
+      for (const subscriptionId of this.runtime.getSubscriptionIdsForConnection(
+        entry.connectionId
+      )) {
+        const handle = this.terminalHandleFromSubscriptionId(subscriptionId, isLive)
+        if (handle) {
+          subscribedTerminals.add(handle)
+        }
+      }
+      return {
+        ...entry,
+        subscribedTerminals: Array.from(subscribedTerminals),
+        grantedTerminals: liveGrants
+      }
+    })
+  }
+
+  // Why: subscription ids are either a bare terminal handle or `${handle}:${clientId}`; only trust the prefix if it resolves to a live terminal, since other subscribe methods mint colon-bearing ids too.
+  private terminalHandleFromSubscriptionId(
+    subscriptionId: string,
+    isLive: (handle: string) => boolean
+  ): string | null {
+    if (isLive(subscriptionId)) {
+      return subscriptionId
+    }
+    const colonIndex = subscriptionId.indexOf(':')
+    if (colonIndex === -1) {
+      return null
+    }
+    const candidate = subscriptionId.slice(0, colonIndex)
+    return isLive(candidate) ? candidate : null
+  }
+
+  // Why: host-side control surface for Phase 1 grant enforcement — the UI
+  // calls this to change which terminals a paired peer device may see/use.
+  // Revocation must end an already-open stream, not just block future
+  // subscribes — see terminatePeerTerminalStreams below.
+  setGrantedTerminals(deviceId: string, terminals: string[]): boolean {
+    const previous = this.deviceRegistry?.getGrantedTerminals(deviceId) ?? []
+    // Why: the write is the one point that may drop dead handles — a mid-reload
+    // empty handle table would otherwise delete grants that are about to
+    // reattach, so skip the prune until the graph reports ready.
+    const next =
+      this.runtime.getStatus().graphStatus === 'ready'
+        ? terminals.filter((handle) => this.runtime.resolveLiveLeafForHandle(handle) !== null)
+        : terminals
+    const ok = this.deviceRegistry?.setGrantedTerminals(deviceId, next) ?? false
+    if (ok) {
+      const revoked = previous.filter((handle) => !next.includes(handle))
+      if (revoked.length > 0) {
+        this.terminatePeerTerminalStreams(deviceId, revoked)
+      }
+    }
+    return ok
+  }
+
+  // Why: a grant revoke must kill the client's live view of that terminal
+  // immediately, not merely stop future subscribes — grant is access to the
+  // terminal, not just write permission. Finds this device's live connection
+  // and tears down every subscription — terminal stream and its presence
+  // sibling — scoped to a revoked handle; the stream's own cleanup
+  // (registered in terminal.ts) notices the missing grant and emits the
+  // peer_terminal_grant_revoked error before ending.
+  private terminatePeerTerminalStreams(deviceId: string, revokedHandles: string[]): void {
+    const connection = this.peerConnections.list().find((entry) => entry.deviceId === deviceId)
+    if (!connection) {
+      return
+    }
+    const revoked = new Set(revokedHandles)
+    const isLive = (handle: string): boolean =>
+      this.runtime.resolveLiveLeafForHandle(handle) !== null
+    for (const subscriptionId of this.runtime.getSubscriptionIdsForConnection(
+      connection.connectionId
+    )) {
+      const handle =
+        this.terminalHandleFromSubscriptionId(subscriptionId, isLive) ??
+        terminalHandleFromPresenceSubscriptionId(subscriptionId)
+      if (handle && revoked.has(handle)) {
+        this.runtime.cleanupSubscription(subscriptionId)
+      }
+    }
+  }
+
+  // Why: reverse-index of listConnectedPeerClients — given a terminal handle,
+  // which connected peers' subscriptions include it. Used by
+  // terminal.listSubscribers so a client can show who else is watching.
+  // excludeConnectionId omits the caller's own connection from the result.
+  listPeerNamesForTerminal(terminal: string, excludeConnectionId?: string): { name: string }[] {
+    return this.peerConnections
+      .list()
+      .filter((entry) => entry.connectionId !== excludeConnectionId)
+      .filter((entry) =>
+        this.runtime
+          .getSubscriptionIdsForConnection(entry.connectionId)
+          .some((id) => id === terminal || id.startsWith(`${terminal}:`))
+      )
+      .map((entry) => ({ name: entry.name }))
+  }
+
+  setPeerInputFloorExclusive(enabled: boolean): void {
+    this.runtime.setPeerInputFloorExclusive(enabled)
+  }
+
+  isPeerInputFloorExclusive(): boolean {
+    return this.runtime.isPeerInputFloorExclusive()
+  }
+
   getWebSocketEndpoint(): string | null {
     const ws = this.transports.find((t) => t.kind === 'websocket')
     return ws?.endpoint ?? null
@@ -649,6 +583,9 @@ export class OrcaRuntimeRpcServer {
       } {
     if (this.pairingInitializationFailure) {
       return this.pairingInitializationFailure
+    }
+    if (args.scope === 'peer' && !this.peerHostingEnabled) {
+      return pairingUnavailable('peer_hosting_disabled', PEER_HOSTING_DISABLED_GUIDANCE)
     }
     const rawEndpoint = this.getWebSocketEndpoint()
     if (!rawEndpoint) {
@@ -1163,7 +1100,26 @@ export class OrcaRuntimeRpcServer {
               )
             },
             onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
-            onReady: () => {
+            onReady: (socket) => {
+              // Why: hosting toggle is peer-scope only — mobile keeps connecting
+              // regardless of this desktop's peer-collab host setting.
+              if (socket.device.scope === 'peer' && !this.peerHostingEnabled) {
+                socket.ws.close(PEER_HOSTING_DISABLED_CLOSE_CODE, 'Peer hosting disabled')
+                return
+              }
+              // Why: a pairing code pasted into a second client reuses the same
+              // deviceId (see PeerConnectionRegistry.findLiveConnectionByDevice);
+              // reject the duplicate here so one deviceId never backs two live
+              // connections, which would make grant/disconnect controls (keyed
+              // by deviceId) affect both at once. Mobile scope keeps its
+              // existing same-device multi-connection behavior untouched.
+              if (
+                socket.device.scope === 'peer' &&
+                this.peerConnections.findLiveConnectionByDevice(socket.device.deviceId)
+              ) {
+                socket.ws.close(PEER_DUPLICATE_CONNECTION_CLOSE_CODE, 'Pairing code already in use')
+                return
+              }
               // Why: first authenticated mobile/remote client (direct WS and
               // cloud relay both attach here) starts path-candidate tracking.
               // Activation is a local-host concern: candidate buffers live on the
@@ -1171,6 +1127,29 @@ export class OrcaRuntimeRpcServer {
               // legitimately lack this method (its own server activates it).
               this.runtime.activateRecentPtyPathCandidateTracking?.()
               this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+              if (socket.device.scope === 'peer') {
+                this.peerConnections.add(
+                  {
+                    connectionId: socket.connectionId,
+                    deviceId: socket.device.deviceId,
+                    // Why: handshake-carried display name (Phase 3) wins over the pairing-offer name.
+                    name:
+                      socket.displayName ??
+                      this.deviceRegistry?.getDevice(socket.device.deviceId)?.name ??
+                      'Peer',
+                    connectedAt: Date.now()
+                  },
+                  socket.ws
+                )
+                // Why: so the paired-devices list (host settings) can show what the
+                // client is calling itself instead of the pairing offer's date-based name.
+                if (socket.displayName) {
+                  this.deviceRegistry?.setLastConnectedName(
+                    socket.device.deviceId,
+                    socket.displayName
+                  )
+                }
+              }
             },
             onClose: (socket, hasOtherConnections) => {
               if (!socket) {
@@ -1181,6 +1160,17 @@ export class OrcaRuntimeRpcServer {
               this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
               this.runtime.cancelMobileDictationForConnection(socket.connectionId)
               this.binaryStreamHandlers.delete(socket.connectionId)
+              const wasLivePeerConnection = this.peerConnections.remove(socket.connectionId)
+              // Why: peer lastSeenAt must reflect when the connection actually died,
+              // not just when it authenticated, so the host can tell a long session
+              // that just ended from one abandoned hours ago. Mobile scope is
+              // untouched — its lastSeenAt semantics predate this and are unrelated.
+              // Guarded on wasLivePeerConnection so a duplicate-pairing-code socket
+              // (rejected in onReady before ever being added) can't overwrite the
+              // real session's lastSeenAt when its async close event lands here.
+              if (socket.device.scope === 'peer' && wasLivePeerConnection) {
+                this.deviceRegistry?.updateLastSeen(socket.device.deviceId)
+              }
               if (!hasOtherConnections) {
                 this.runtime.onClientDisconnected(socket.device.deviceToken)
               }
@@ -1401,13 +1391,23 @@ export class OrcaRuntimeRpcServer {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
       return
     }
-    if (device.scope === 'mobile' && !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
+    // Why: mobile and peer are different trust models — mobile is the same
+    // user's own device, a peer is a different person's desktop admitted only
+    // for terminal sharing — so each scope is checked against its own
+    // allowlist instead of a shared one that would over-grant the peer.
+    const scopedAllowlist =
+      device.scope === 'mobile'
+        ? MOBILE_RPC_METHOD_ALLOWLIST
+        : device.scope === 'peer'
+          ? PEER_RPC_METHOD_ALLOWLIST
+          : null
+    if (scopedAllowlist && !scopedAllowlist.has(request.method)) {
       reply(
         JSON.stringify(
           this.buildError(
             request.id,
             'forbidden',
-            `Method '${request.method}' is not available to mobile clients`
+            `Method '${request.method}' is not available to ${device.scope} clients`
           )
         )
       )
@@ -1464,8 +1464,12 @@ export class OrcaRuntimeRpcServer {
         connectionId,
         clientId: token,
         pairedDeviceId: device.deviceId,
-        // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.
-        clientKind: device.scope,
+        // Why: gates the mobile-only payload diet so full-screen web/desktop
+        // clients aren't truncated; a peer is a full desktop viewer too.
+        clientKind: device.scope === 'mobile' ? 'mobile' : 'runtime',
+        isPeerDevice: device.scope === 'peer',
+        listPeerSubscribers: (terminal) => this.listPeerNamesForTerminal(terminal, connectionId),
+        getGrantedTerminals: () => this.deviceRegistry?.getGrantedTerminals(device.deviceId) ?? [],
         clientCapabilities: authenticatedSocket?.clientCapabilities,
         pairing: pairingContext,
         signal: abortRegistration?.signal,

@@ -21,6 +21,9 @@ import type {
   SleepingAgentLaunchConfig
 } from '../shared/agent-session-resume'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
+import type { PeerClientStatusWithHost, SavedPeerPairing } from '../shared/peer-client-status'
+import type { PeerTerminalStreamEvent } from '../shared/peer-terminal-stream-event'
+import type { PeerPresenceEvent, PeerPresenceState } from '../shared/peer-presence-event'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
@@ -4666,6 +4669,225 @@ const api = {
       const listener = () => callback()
       ipcRenderer.on('mobile:unpairedDeviceAuthFailure', listener)
       return () => ipcRenderer.removeListener('mobile:unpairedDeviceAuthFailure', listener)
+    }
+  },
+
+  peerCollab: {
+    getPairingOffer: (args?: {
+      address?: string
+      rotate?: boolean
+    }): Promise<
+      | { available: false }
+      | {
+          available: true
+          qrDataUrl: string
+          pairingUrl: string
+          endpoint: string
+          deviceId: string
+        }
+    > => ipcRenderer.invoke('peerCollab:getPairingOffer', args),
+
+    listDevices: (): Promise<{
+      devices: {
+        deviceId: string
+        name: string
+        pairedAt: number
+        lastSeenAt: number
+        grantedTerminals: string[]
+      }[]
+    }> => ipcRenderer.invoke('peerCollab:listDevices'),
+
+    listConnectedClients: (): Promise<{
+      clients: {
+        connectionId: string
+        deviceId: string
+        name: string
+        connectedAt: number
+        subscribedTerminals: string[]
+        grantedTerminals: string[]
+      }[]
+    }> => ipcRenderer.invoke('peerCollab:listConnectedClients'),
+
+    disconnectClient: (args: {
+      deviceId: string
+      revokeDevice?: boolean
+    }): Promise<{ disconnected: boolean; revoked: boolean }> =>
+      ipcRenderer.invoke('peerCollab:disconnectClient', args),
+
+    getExclusiveInputFloor: (): Promise<{ enabled: boolean }> =>
+      ipcRenderer.invoke('peerCollab:getExclusiveInputFloor'),
+
+    setExclusiveInputFloor: (args: { enabled: boolean }): Promise<{ enabled: boolean }> =>
+      ipcRenderer.invoke('peerCollab:setExclusiveInputFloor', args),
+
+    listHostTerminals: (): Promise<{
+      terminals: { handle: string; title: string | null; tabId: string }[]
+    }> => ipcRenderer.invoke('peerCollab:listHostTerminals'),
+
+    setGrantedTerminals: (args: {
+      deviceId: string
+      handles: string[]
+    }): Promise<{ ok: boolean }> => ipcRenderer.invoke('peerCollab:setGrantedTerminals', args),
+
+    getHostEnabled: (): Promise<{ enabled: boolean }> =>
+      ipcRenderer.invoke('peerCollab:getHostEnabled'),
+
+    setHostEnabled: (args: { enabled: boolean }): Promise<{ enabled: boolean }> =>
+      ipcRenderer.invoke('peerCollab:setHostEnabled', args)
+  },
+
+  peerClient: {
+    getDefaultDisplayName: (): Promise<{ name: string }> =>
+      ipcRenderer.invoke('peerClient:getDefaultDisplayName'),
+
+    connect: (args: {
+      pairingCode: string
+      displayName: string
+    }): Promise<{ ok: true; hostId: string } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('peerClient:connect', args),
+
+    disconnect: (args: { hostId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('peerClient:disconnect', args),
+
+    disconnectAll: (): Promise<{ ok: true }> => ipcRenderer.invoke('peerClient:disconnectAll'),
+
+    listSavedPairings: (): Promise<SavedPeerPairing[]> =>
+      ipcRenderer.invoke('peerClient:listSavedPairings'),
+    getHostNames: (): Promise<{ names: Record<string, string> }> =>
+      ipcRenderer.invoke('peerClient:getHostNames'),
+    setHostName: (args: {
+      hostId: string
+      name: string
+    }): Promise<{ names: Record<string, string> }> =>
+      ipcRenderer.invoke('peerClient:setHostName', args),
+
+    forgetSavedPairing: (args: { hostId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('peerClient:forgetSavedPairing', args),
+
+    connectSaved: (args: {
+      hostId: string
+    }): Promise<{ ok: true; hostId: string } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('peerClient:connectSaved', args),
+
+    getStatuses: (): Promise<PeerClientStatusWithHost[]> =>
+      ipcRenderer.invoke('peerClient:getStatuses'),
+
+    onStatusChanged: (callback: (status: PeerClientStatusWithHost) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        status: PeerClientStatusWithHost
+      ): void => callback(status)
+      ipcRenderer.on('peerClient:statusChanged', listener)
+      return () => ipcRenderer.removeListener('peerClient:statusChanged', listener)
+    },
+
+    listHostTerminals: (args: {
+      hostId: string
+    }): Promise<{ ok: true; terminals: unknown } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('peerClient:listHostTerminals', args),
+
+    subscribeTerminal: (args: {
+      hostId: string
+      terminal: string
+      cols: number
+      rows: number
+    }): Promise<{ ok: true; requestId: string } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('peerClient:subscribeTerminal', args),
+
+    unsubscribeTerminal: (args: { requestId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('peerClient:unsubscribeTerminal', args),
+
+    sendTerminalInput: (args: { requestId: string; data: string }): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('peerClient:sendTerminalInput', args),
+
+    resizeTerminalStream: (args: {
+      requestId: string
+      cols: number
+      rows: number
+    }): Promise<{ ok: boolean }> => ipcRenderer.invoke('peerClient:resizeTerminalStream', args),
+
+    setTerminalStreamHidden: (args: {
+      requestId: string
+      hidden: boolean
+    }): Promise<{ ok: boolean }> => ipcRenderer.invoke('peerClient:setTerminalStreamHidden', args),
+
+    listTerminalSubscribers: (args: {
+      hostId: string
+      terminal: string
+    }): Promise<{ ok: true; subscribers: { name: string }[] } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('peerClient:listTerminalSubscribers', args),
+
+    onTerminalStreamEvent: (
+      callback: (payload: { requestId: string; event: PeerTerminalStreamEvent }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { requestId: string; event: PeerTerminalStreamEvent }
+      ): void => callback(payload)
+      ipcRenderer.on('peerClient:terminalStreamEvent', listener)
+      return () => ipcRenderer.removeListener('peerClient:terminalStreamEvent', listener)
+    },
+
+    getClientId: (args: { hostId: string }): Promise<{ clientId: string | null }> =>
+      ipcRenderer.invoke('peerClient:getClientId', args),
+
+    subscribePresence: (args: {
+      hostId: string
+      terminal: string
+    }): Promise<{ ok: true; requestId: string } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('peerClient:subscribePresence', args),
+
+    unsubscribePresence: (args: { requestId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('peerClient:unsubscribePresence', args),
+
+    sendPresenceState: (args: {
+      hostId: string
+      terminal: string
+      state: PeerPresenceState
+    }): Promise<{ ok: true }> => ipcRenderer.invoke('peerClient:sendPresenceState', args),
+
+    onPresenceEvent: (
+      callback: (payload: { requestId: string; event: PeerPresenceEvent }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { requestId: string; event: PeerPresenceEvent }
+      ): void => callback(payload)
+      ipcRenderer.on('peerClient:presenceEvent', listener)
+      return () => ipcRenderer.removeListener('peerClient:presenceEvent', listener)
+    },
+
+    getClientEnabled: (): Promise<{ enabled: boolean }> =>
+      ipcRenderer.invoke('peerClient:getClientEnabled'),
+
+    setClientEnabled: (args: { enabled: boolean }): Promise<{ enabled: boolean }> =>
+      ipcRenderer.invoke('peerClient:setClientEnabled', args)
+  },
+
+  terminalHostPresence: {
+    subscribe: (args: {
+      terminal: string
+    }): Promise<{ ok: true; requestId: string } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('terminalHostPresence:subscribe', args),
+
+    unsubscribe: (args: { requestId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('terminalHostPresence:unsubscribe', args),
+
+    send: (args: {
+      requestId: string
+      terminal: string
+      state: PeerPresenceState
+    }): Promise<{ ok: true }> => ipcRenderer.invoke('terminalHostPresence:send', args),
+
+    onEvent: (
+      callback: (payload: { requestId: string; event: PeerPresenceEvent }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { requestId: string; event: PeerPresenceEvent }
+      ): void => callback(payload)
+      ipcRenderer.on('terminalHostPresence:event', listener)
+      return () => ipcRenderer.removeListener('terminalHostPresence:event', listener)
     }
   },
 

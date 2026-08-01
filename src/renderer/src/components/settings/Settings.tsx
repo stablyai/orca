@@ -64,6 +64,7 @@ import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
 import { ComputerUsePane } from './ComputerUsePane'
 import { MobileSettingsPane } from './MobileSettingsPane'
 import { MobileEmulatorSettingsPane } from './MobileEmulatorSettingsPane'
+import { PeerCollabSettingsPane } from './PeerCollabSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { AdvancedPane } from './AdvancedPane'
@@ -1405,6 +1406,24 @@ function Settings(): React.JSX.Element {
                     searchEntries={getSectionSearchEntries('mobile')}
                   >
                     {isSectionMounted('mobile') ? <MobileSettingsPane /> : null}
+                  </SettingsSection>
+                ) : null}
+
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="peer-collab"
+                    title={translate(
+                      'auto.components.settings.Settings.peerCollabTitle',
+                      'Peer Collaboration'
+                    )}
+                    description={translate(
+                      'auto.components.settings.Settings.peerCollabDescription',
+                      'Share terminals with other Orca desktops over your local network.'
+                    )}
+                    searchEntries={getSectionSearchEntries('peer-collab')}
+                    bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
+                  >
+                    {isSectionMounted('peer-collab') ? <PeerCollabSettingsPane /> : null}
                   </SettingsSection>
                 ) : null}
 

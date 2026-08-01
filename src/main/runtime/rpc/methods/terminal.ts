@@ -8,7 +8,10 @@ import {
   type RpcAnyMethod
 } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { assertPeerTerminalGranted, isPeerTerminalGranted } from '../peer-terminal-grant-guard'
+import { PEER_TERMINAL_GRANT_REVOKED_REASON } from '../../../../shared/peer-terminal-stream-event'
 import type { DriverState, OrcaRuntimeService } from '../../orca-runtime'
+import { isRemoteTerminalDriver } from '../../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
@@ -137,7 +140,7 @@ type TerminalMultiplexStream = {
   // Whether THIS stream registered the width driver, so detach won't release a peer stream's floor.
   registeredRemoteDesktopDriver: boolean
   remoteDesktopSubscriptionKey: string
-  pendingRemoteDesktopViewport: { cols: number; rows: number } | null
+  pendingRemoteDesktopViewport: { cols: number; rows: number; hidden?: boolean } | null
   buffering: boolean
   ackPendingOutput: TerminalOutputFrameChunk[]
   ackPendingOutputBytes: number
@@ -285,7 +288,14 @@ function isTerminalInputLockedForClient(
   if (!client) {
     return false
   }
-  return runtime.getDriver(ptyId).kind === 'mobile'
+  const driver = runtime.getDriver(ptyId)
+  if (!isRemoteTerminalDriver(driver)) {
+    return false
+  }
+  // Why: a peer that itself holds the input floor (peerInputFloorExclusive)
+  // must not be locked out by its own claim; every other non-remote client
+  // (including other peers) is locked while someone else drives.
+  return driver.clientId !== client.id
 }
 
 async function assertTerminalSendTextWithinLimit(text: string | undefined): Promise<void> {
@@ -311,32 +321,36 @@ function resolveMobileFloorClientId(
   return null
 }
 
+// Why: floorClientId/floorSource are resolved by the caller (mobile: always
+// claims when a clientId is present; peer: only when the host has turned on
+// exclusive-driver blocking) so this function stays a plain conduit and
+// doesn't need to know either policy.
 async function sendTerminalStreamInput(
   runtime: OrcaRuntimeService,
   args: {
     terminal: string
     text: string
-    client: TerminalViewportClient | undefined
-    isMobile: boolean
+    floorClientId: string | null
+    floorSource: 'mobile' | 'peer'
   }
 ): Promise<void> {
   const action = { text: args.text, enter: false, interrupt: false }
-  const clientId = args.isMobile ? args.client?.id : undefined
-  const floorClaim: MobileInputFloorClaimHolder = { current: null }
+  const floorClaim: InputFloorClaimHolder = { current: null }
   try {
-    if (!clientId) {
+    if (!args.floorClientId) {
       await runtime.sendTerminal(args.terminal, action)
       return
     }
+    const clientId = args.floorClientId
     const result = await runtime.sendTerminal(args.terminal, action, {
       reserveWrite: (writePtyId) => {
-        const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
+        const claim = runtime.beginInputFloor(writePtyId, clientId, args.floorSource)
         if (!claim) {
-          throw new Error('mobile_input_floor_unavailable')
+          throw new Error('input_floor_unavailable')
         }
         floorClaim.current = claim
       },
-      afterWrite: () => commitMobileInputFloorClaim(floorClaim)
+      afterWrite: () => commitInputFloorClaim(floorClaim)
     })
     if (!result.accepted) {
       floorClaim.current?.rollback()
@@ -346,11 +360,11 @@ async function sendTerminalStreamInput(
   }
 }
 
-type MobileInputFloorClaimHolder = {
-  current: ReturnType<OrcaRuntimeService['beginMobileInputFloor']>
+type InputFloorClaimHolder = {
+  current: ReturnType<OrcaRuntimeService['beginInputFloor']>
 }
 
-async function commitMobileInputFloorClaim(claim: MobileInputFloorClaimHolder): Promise<void> {
+async function commitInputFloorClaim(claim: InputFloorClaimHolder): Promise<void> {
   const current = claim.current
   if (!current) {
     return
@@ -761,6 +775,17 @@ async function sendMobileResizeRestream(
   return true
 }
 
+// Why: client.type === 'desktop' is shared by peer-collab, the CLI, and the
+// remote-runtime desktop transport — only device.scope === 'peer'
+// (authenticated at the socket, not caller-declared) tells them apart, so
+// only genuine peer-collab clients feed the axis-wise min-size negotiation.
+function isNegotiatingPeerClient(
+  isPeerDevice: boolean | undefined,
+  client?: { type?: string; id?: string }
+): boolean {
+  return Boolean(isPeerDevice) && client?.type === 'desktop' && Boolean(client?.id)
+}
+
 async function updateViewportForClient(
   runtime: OrcaRuntimeService,
   ptyId: string,
@@ -770,7 +795,8 @@ async function updateViewportForClient(
   defaultType: 'mobile' | 'desktop',
   // Why: the one-shot RPC has no disconnect hook, so 'refresh' only updates a stream-owned floor; stream paths that own cleanup 'register'.
   registration: 'register' | 'refresh' = 'register',
-  claim = false
+  claim = false,
+  negotiate = false
 ): Promise<{ updated: boolean; applied: boolean }> {
   const type = client.type ?? defaultType
   if (type === 'mobile') {
@@ -779,7 +805,9 @@ async function updateViewportForClient(
   // Why: stream attachment observes geometry without taking control; a later claim frame makes it authoritative.
   const updated =
     registration === 'refresh'
-      ? await runtime.refreshRemoteDesktopViewer(
+      ? // Why: refresh only ever mutates an already-registered viewer entry and
+        // spreads its stored `negotiates` flag forward, so it takes no flag here.
+        await runtime.refreshRemoteDesktopViewer(
           ptyId,
           client.id,
           viewport.cols,
@@ -792,7 +820,8 @@ async function updateViewportForClient(
           client.id,
           viewport.cols,
           viewport.rows,
-          claim
+          claim,
+          negotiate
         )
   return { updated, applied: updated }
 }
@@ -1104,11 +1133,45 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.list',
     params: TerminalListParams,
-    handler: async (params, { runtime }) =>
-      runtime.listTerminals(params.worktree, params.limit, {
+    handler: async (params, { runtime, isPeerDevice, getGrantedTerminals }) => {
+      const result = await runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness
       })
+      if (!isPeerDevice) {
+        return result
+      }
+      // Why: a peer only sees terminals the host granted it — filter here
+      // (not by blocking the method) so the existing client polling code
+      // needs no change. visualLayouts/topologyRevisions carry titles and
+      // worktree paths for every terminal in the tree, including ungranted
+      // ones, so peers never receive them.
+      const granted = new Set(getGrantedTerminals?.() ?? [])
+      const terminals = result.terminals
+        .filter((terminal) => granted.has(terminal.handle))
+        .map((terminal) => ({
+          // Why: a peer client can't resolve the tab's display name itself
+          // (no access to the host's renderer store), so send it resolved.
+          ...terminal,
+          title: runtime.getSyncedTabTitle(terminal.tabId) ?? terminal.title
+        }))
+      return {
+        terminals,
+        totalCount: terminals.length,
+        truncated: result.truncated
+      }
+    }
+  }),
+  defineMethod({
+    // Why: lets a peer client show who else is watching the terminal it has
+    // open (Phase 5 participant display); backed by runtime-rpc's connected-
+    // peer display names, keyed by which of their subscriptions matches.
+    name: 'terminal.listSubscribers',
+    params: TerminalHandle,
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { subscribers: ctx.listPeerSubscribers?.(params.terminal) ?? [] }
+    }
   }),
   defineMethod({
     name: 'terminal.resolveActive',
@@ -1138,59 +1201,70 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.show',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      terminal: await runtime.showTerminal(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { terminal: await ctx.runtime.showTerminal(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.read',
     params: TerminalRead,
-    handler: async (params, { runtime }) => ({
-      terminal: await runtime.readTerminal(params.terminal, {
-        cursor: params.cursor,
-        limit: params.limit
-      })
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return {
+        terminal: await ctx.runtime.readTerminal(params.terminal, {
+          cursor: params.cursor,
+          limit: params.limit
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.inspectProcess',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      process: await runtime.inspectTerminalProcess(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { process: await ctx.runtime.inspectTerminalProcess(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.isRunningAgent',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      isRunningAgent: await runtime.isTerminalRunningAgent(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { isRunningAgent: await ctx.runtime.isTerminalRunningAgent(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.agentStatus',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      agentStatus: await runtime.getTerminalAgentStatus(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { agentStatus: await ctx.runtime.getTerminalAgentStatus(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.rename',
     params: TerminalRename,
-    handler: async (params, { runtime }) => ({
-      rename: await runtime.renameTerminal(params.terminal, params.title || null)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { rename: await ctx.runtime.renameTerminal(params.terminal, params.title || null) }
+    }
   }),
   defineMethod({
     name: 'terminal.clearBuffer',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      clear: await runtime.clearTerminalBuffer(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { clear: await ctx.runtime.clearTerminalBuffer(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
-    handler: async (params, { runtime, clientId }) => {
+    handler: async (params, ctx) => {
+      const { runtime, clientId } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
       const queryReplyClientId = clientId ?? params.client?.id
@@ -1315,12 +1389,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
       }
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
-      const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
+      const mobileFloorClaim: InputFloorClaimHolder = { current: null }
       const beforeWrite = assertSendPreconditions
       const reserveWrite =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
-              const claim = runtime.beginMobileInputFloor(ptyId, mobileFloorClientId)
+              const claim = runtime.beginInputFloor(ptyId, mobileFloorClientId, 'mobile')
               if (!claim) {
                 throw new Error('mobile_input_floor_unavailable')
               }
@@ -1340,7 +1414,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             beforeWrite,
             ...(reserveWrite ? { reserveWrite } : {}),
             ...(params.inputKind !== 'query-reply' && mobileFloorClientId
-              ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
+              ? { afterWrite: () => commitInputFloorClaim(mobileFloorClaim) }
               : {})
           }
         )
@@ -1386,13 +1460,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.wait',
     params: TerminalWait,
-    handler: async (params, { runtime, signal }) => ({
-      wait: await runtime.waitForTerminal(params.terminal, {
-        condition: params.for,
-        timeoutMs: params.timeoutMs,
-        signal
-      })
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return {
+        wait: await ctx.runtime.waitForTerminal(params.terminal, {
+          condition: params.for,
+          timeoutMs: params.timeoutMs,
+          signal: ctx.signal
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.create',
@@ -1433,14 +1510,17 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.split',
     params: TerminalSplit,
-    handler: async (params, { runtime }) => ({
-      split: await runtime.splitTerminal(params.terminal, {
-        direction: params.direction,
-        command: params.command,
-        env: params.env,
-        telemetrySource: params.telemetrySource
-      })
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return {
+        split: await ctx.runtime.splitTerminal(params.terminal, {
+          direction: params.direction,
+          command: params.command,
+          env: params.env,
+          telemetrySource: params.telemetrySource
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.stop',
@@ -1464,7 +1544,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.resizeForClient',
     params: TerminalResizeForClient,
-    handler: async (params, { runtime }) => {
+    handler: async (params, ctx) => {
+      const { runtime } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       // Why: a stale handle must fail with terminal_handle_stale, not resize the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
@@ -1488,27 +1570,35 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.focus',
     params: TerminalFocus,
-    handler: async (params, { runtime, clientKind }) => ({
-      focus: await runtime.focusTerminal(params.terminal, {
-        navigateHost: navigationTargetsHost(
-          resolveRuntimeNavigationTarget({ navigation: params.navigation, clientKind })
-        )
-      })
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return {
+        focus: await ctx.runtime.focusTerminal(params.terminal, {
+          navigateHost: navigationTargetsHost(
+            resolveRuntimeNavigationTarget({
+              navigation: params.navigation,
+              clientKind: ctx.clientKind
+            })
+          )
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.close',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      close: await runtime.closeTerminal(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { close: await ctx.runtime.closeTerminal(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.closeTab',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      close: await runtime.closeTerminalTab(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { close: await ctx.runtime.closeTerminalTab(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'agentTeams.tmuxCompat',
@@ -1530,7 +1620,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.setDisplayMode',
     params: TerminalSetDisplayMode,
-    handler: async (params, { runtime }) => {
+    handler: async (params, ctx) => {
+      const { runtime } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       // Why: a stale handle must fail with terminal_handle_stale, not mutate the wrong PTY's display mode/viewport (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
@@ -1551,7 +1643,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.restoreFit',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => {
+    handler: async (params, ctx) => {
+      const { runtime } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       // Why: a stale handle must fail with terminal_handle_stale, not reclaim the wrong PTY to desktop dims (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
@@ -1563,7 +1657,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.getDisplayMode',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => {
+    handler: async (params, ctx) => {
+      const { runtime } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       const leaf = runtime.resolveLeafForHandle(params.terminal)
       const mode = leaf?.ptyId ? runtime.getMobileDisplayMode(leaf.ptyId) : 'auto'
       const isPhoneFitted = leaf?.ptyId ? runtime.isMobileSubscriberActive(leaf.ptyId) : false
@@ -1573,7 +1669,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.updateViewport',
     params: TerminalUpdateViewport,
-    handler: async (params, { runtime }) => {
+    handler: async (params, ctx) => {
+      const { runtime, isPeerDevice } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
+      // Why: client.type defaults to 'mobile' below, so a peer omitting or
+      // spoofing it would reach updateMobileViewport's phone-fit override.
+      if (isPeerDevice && params.client.type !== 'desktop') {
+        throw new Error('peer_terminal_update_viewport_requires_desktop_client')
+      }
       // Why: a stale handle must fail with terminal_handle_stale, not write viewport state to the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
@@ -1599,7 +1702,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalMultiplex,
     handler: async (
       _params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      {
+        runtime,
+        connectionId,
+        sendBinary,
+        registerBinaryStreamHandler,
+        signal,
+        isPeerDevice,
+        getGrantedTerminals
+      },
       emit
     ) => {
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
@@ -2097,6 +2208,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         if (frame.opcode === TerminalStreamOpcode.Input) {
+          // Why: a grant revoked after subscribe must stop input immediately, not just block new subscribes.
+          if (!isPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, stream.terminal)) {
+            return
+          }
           const text = decodeTerminalStreamText(frame.payload)
           if (!text) {
             return
@@ -2107,14 +2222,21 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           // Mobile already has the higher-priority floor, so a rejected desktop claim must not suppress later phone input.
           const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
           void inputClaimTail.then((claimed) => {
-            if (!claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
+            if (
+              !claimed ||
+              isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client) ||
+              !isPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, stream.terminal)
+            ) {
               return
             }
+            // Why: no peer floor claim here on purpose — terminal.multiplex is not
+            // peer-allowlisted, so peers ride the legacy subscribe path where the
+            // exclusive peer floor is claimed; align the two if that ever changes.
             return sendTerminalStreamInput(runtime, {
               terminal: stream.terminal,
               text,
-              client: stream.client,
-              isMobile: stream.isMobile
+              floorClientId: stream.isMobile ? (stream.client?.id ?? null) : null,
+              floorSource: 'mobile'
             })
           })
           return
@@ -2134,19 +2256,28 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         if (frame.opcode === TerminalStreamOpcode.Resize && stream.client) {
-          const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(
-            frame.payload
-          )
+          const viewport = decodeTerminalStreamJson<{
+            cols?: unknown
+            rows?: unknown
+            hidden?: unknown
+          }>(frame.payload)
           if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
             return
           }
           const cols = viewport.cols
           const rows = viewport.rows
+          // Why: a hidden (backgrounded) peer panel keeps streaming but must drop
+          // out of the min-size negotiation, or its stale viewport pins the PTY.
+          const hidden = viewport.hidden === true
           // Why: resize registers stream-scoped geometry so detach can release it; older clients lack explicit claims.
           if (!stream.isMobile && stream.client?.id) {
             stream.registeredRemoteDesktopDriver = true
             if (stream.buffering) {
-              stream.pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows }
+              stream.pendingRemoteDesktopViewport = {
+                cols: viewport.cols,
+                rows: viewport.rows,
+                hidden
+              }
               return
             }
           }
@@ -2160,7 +2291,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 { cols, rows },
                 stream.isMobile ? 'mobile' : 'desktop',
                 'register',
-                !stream.supportsDesktopViewportClaims
+                !stream.supportsDesktopViewportClaims,
+                isNegotiatingPeerClient(isPeerDevice, stream.client) && !hidden
               )
               return stream.supportsDesktopViewportClaims
                 ? priorClaimed && result.applied
@@ -2183,6 +2315,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const cols = viewport.cols
           const rows = viewport.rows
           stream.registeredRemoteDesktopDriver = true
+          const negotiateClaim = isNegotiatingPeerClient(isPeerDevice, stream.client)
           stream.desktopClaimTail = stream.desktopClaimTail
             .then(
               () =>
@@ -2192,7 +2325,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                   stream.client!.id,
                   cols,
                   rows,
-                  true
+                  true,
+                  negotiateClaim
                 ),
               () =>
                 runtime.updateRemoteDesktopViewer(
@@ -2201,7 +2335,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                   stream.client!.id,
                   cols,
                   rows,
-                  true
+                  true,
+                  negotiateClaim
                 )
             )
             .catch(() => false)
@@ -2328,7 +2463,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 viewport,
                 'desktop',
                 'register',
-                !stream.supportsDesktopViewportClaims
+                !stream.supportsDesktopViewportClaims,
+                isNegotiatingPeerClient(isPeerDevice, stream.client) && !viewport.hidden
               ).catch(() => {})
             }
           }
@@ -2341,6 +2477,21 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         const request = parsed.data
+        try {
+          assertPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, request.terminal)
+        } catch {
+          sendStreamError(request.streamId, 'peer_terminal_not_granted')
+          emit({ type: 'end', streamId: request.streamId })
+          return
+        }
+        // Why: client.type is caller-declared; a peer asserting 'mobile' would take
+        // the mobile floor/fit paths below. Unreachable today (terminal.multiplex is
+        // not peer-allowlisted) — kept as defense-in-depth with the subscribe guard.
+        if (isPeerDevice && request.client?.type !== 'desktop') {
+          sendStreamError(request.streamId, 'peer_terminal_subscribe_requires_desktop_client')
+          emit({ type: 'end', streamId: request.streamId })
+          return
+        }
         detachStream(request.streamId, false)
         cancelPendingPtyWaits(request.streamId)
 
@@ -2538,7 +2689,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               viewport,
               'desktop',
               'register',
-              !stream.supportsDesktopViewportClaims
+              !stream.supportsDesktopViewportClaims,
+              isNegotiatingPeerClient(isPeerDevice, request.client)
             )
           }
           if (closed || streams.get(request.streamId) !== stream) {
@@ -2757,7 +2909,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               viewport,
               'desktop',
               'register',
-              !stream.supportsDesktopViewportClaims
+              !stream.supportsDesktopViewportClaims,
+              isNegotiatingPeerClient(isPeerDevice, stream.client)
             ).catch(() => {})
           }
           void runtime
@@ -2806,13 +2959,31 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'terminal.subscribe',
     params: TerminalSubscribe,
-    handler: async (
-      params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
-      emit
-    ) => {
+    handler: async (params, ctx, emit) => {
+      const {
+        runtime,
+        connectionId,
+        sendBinary,
+        registerBinaryStreamHandler,
+        signal,
+        isPeerDevice,
+        getGrantedTerminals
+      } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
+      // Why: without client, subscriptionId falls back to the bare terminal handle below,
+      // so two peer subscribes collide under registerSubscriptionCleanup's same-id reuse
+      // and tear each other down.
+      if (isPeerDevice && !params.client) {
+        throw new Error('peer_terminal_subscribe_requires_client')
+      }
+      // Why: client.type is caller-declared; a peer that asserts 'mobile' would skip
+      // the remote-driver input lock and claim the higher-priority mobile input floor.
+      if (isPeerDevice && params.client?.type !== 'desktop') {
+        throw new Error('peer_terminal_subscribe_requires_desktop_client')
+      }
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
+      const isPeer = isNegotiatingPeerClient(isPeerDevice, params.client)
       const serializerGenerationBeforeAnyMount = isMobile
         ? (runtime.getRendererTerminalSerializerGenerationForHandle?.(params.terminal) ?? 0)
         : 0
@@ -2951,7 +3122,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               params.viewport,
               'desktop',
               'register',
-              !supportsDesktopViewportClaims
+              !supportsDesktopViewportClaims,
+              isPeer
             )
           }
           if (closed || signal?.aborted) {
@@ -3023,7 +3195,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let cursor = 0
       let closed = false
       let buffering = true
-      let pendingRemoteDesktopViewport: { cols: number; rows: number } | null = null
+      let pendingRemoteDesktopViewport: { cols: number; rows: number; hidden?: boolean } | null =
+        null
       // Why: cols the mobile client last rewrapped to; gates the resize re-stream to fire only on an actual width change.
       let lastResizeCols: number | undefined
       let resizeGeneration = 0
@@ -3053,6 +3226,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         () => {
           outputBatcher?.flush()
           outputBatcher?.dispose()
+          // Why: a grant revoked mid-stream (host turned off sharing) must tell the
+          // client why it lost the terminal instead of silently going dark; a normal
+          // unsubscribe/exit still has its grant, so this only fires on revoke. Must
+          // run before `closed = true` below, since sendFrame no-ops once closed.
+          if (
+            isPeer &&
+            !isPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, params.terminal)
+          ) {
+            sendFrame(
+              TerminalStreamOpcode.Error,
+              encodeTerminalStreamText(PEER_TERMINAL_GRANT_REVOKED_REASON)
+            )
+            emit({ type: 'error', message: PEER_TERMINAL_GRANT_REVOKED_REASON })
+          }
           closed = true
           unsubscribeData()
           unsubscribeResize()
@@ -3063,6 +3250,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             runtime.handleMobileUnsubscribe(ptyId, clientId)
           } else if (registeredRemoteDesktopDriver && clientId) {
             runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
+          }
+          if (isPeer && clientId) {
+            runtime.releaseInputFloorIfHeldBy(ptyId, clientId)
           }
           emit({ type: 'end' })
           resolveStream()
@@ -3102,6 +3292,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             return
           }
           if (frame.opcode === TerminalStreamOpcode.Input) {
+            // Why: a grant revoked after subscribe must stop input immediately, not just block new subscribes.
+            if (!isPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, params.terminal)) {
+              return
+            }
             const text = decodeTerminalStreamText(frame.payload)
             if (!text) {
               return
@@ -3110,22 +3304,32 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               return
             }
             void desktopClaimTail.then(async (claimed) => {
-              if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+              if (
+                !claimed ||
+                isTerminalInputLockedForClient(runtime, ptyId, params.client) ||
+                !isPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, params.terminal)
+              ) {
                 return
               }
+              // Why: peers only claim the floor when the host has turned on
+              // exclusive-driver blocking (default is free input for peers).
+              const peerFloorClientId =
+                isPeer && clientId && runtime.isPeerInputFloorExclusive() ? clientId : null
               await sendTerminalStreamInput(runtime, {
                 terminal: params.terminal,
                 text,
-                client: params.client,
-                isMobile
+                floorClientId: isMobile ? (clientId ?? null) : peerFloorClientId,
+                floorSource: isMobile ? 'mobile' : 'peer'
               })
             })
             return
           }
           if (frame.opcode === TerminalStreamOpcode.Resize && params.client) {
-            const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(
-              frame.payload
-            )
+            const viewport = decodeTerminalStreamJson<{
+              cols?: unknown
+              rows?: unknown
+              hidden?: unknown
+            }>(frame.payload)
             if (
               !viewport ||
               typeof viewport.cols !== 'number' ||
@@ -3135,10 +3339,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             }
             const cols = viewport.cols
             const rows = viewport.rows
+            // Why: a hidden (backgrounded) peer panel keeps streaming but must drop
+            // out of the min-size negotiation, or its stale viewport pins the PTY.
+            const hidden = viewport.hidden === true
             if (clientId) {
               registeredRemoteDesktopDriver = true
               if (buffering) {
-                pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows }
+                pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows, hidden }
                 return
               }
             }
@@ -3152,7 +3359,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                   { cols, rows },
                   'desktop',
                   'register',
-                  !supportsDesktopViewportClaims
+                  !supportsDesktopViewportClaims,
+                  isPeer && !hidden
                 )
                 return supportsDesktopViewportClaims
                   ? priorClaimed && result.applied
@@ -3189,7 +3397,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                     clientId,
                     cols,
                     rows,
-                    true
+                    true,
+                    isPeer
                   ),
                 () =>
                   runtime.updateRemoteDesktopViewer(
@@ -3198,7 +3407,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                     clientId,
                     cols,
                     rows,
-                    true
+                    true,
+                    isPeer
                   )
               )
               .catch(() => false)
@@ -3606,7 +3816,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             viewport,
             'desktop',
             'register',
-            !supportsDesktopViewportClaims
+            !supportsDesktopViewportClaims,
+            isPeer && !viewport.hidden
           ).catch(() => {})
         }
 
@@ -3637,11 +3848,22 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.unsubscribe',
     params: TerminalUnsubscribe,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, connectionId, isPeerDevice }) => {
+      // Why: subscription ids are guessable, so a peer may only tear down
+      // subscriptions its own connection registered.
+      const cleanup = (subscriptionId: string): void => {
+        if (isPeerDevice) {
+          if (connectionId) {
+            runtime.cleanupSubscriptionOwnedBy(subscriptionId, connectionId)
+          }
+          return
+        }
+        runtime.cleanupSubscription(subscriptionId)
+      }
       // Why: older builds send a bare-handle subscriptionId, so also try the reconstructed `${terminal}:${clientId}` composite key.
-      runtime.cleanupSubscription(params.subscriptionId)
+      cleanup(params.subscriptionId)
       if (params.client && !params.subscriptionId.includes(':')) {
-        runtime.cleanupSubscription(`${params.subscriptionId}:${params.client.id}`)
+        cleanup(`${params.subscriptionId}:${params.client.id}`)
       }
       return { unsubscribed: true }
     }

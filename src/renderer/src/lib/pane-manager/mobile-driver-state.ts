@@ -9,7 +9,10 @@
 //
 // See docs/mobile-presence-lock.md.
 
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-types'
+import {
+  isRemoteTerminalDriver,
+  type RuntimeTerminalDriverState
+} from '../../../../shared/runtime-types'
 
 export type DriverState = RuntimeTerminalDriverState
 
@@ -64,7 +67,8 @@ export function getAllDrivers(): Map<string, DriverState> {
 }
 
 export function isPtyLocked(ptyId: string): boolean {
-  return driverByPtyId.get(ptyId)?.kind === 'mobile'
+  const driver = driverByPtyId.get(ptyId)
+  return driver !== undefined && isRemoteTerminalDriver(driver)
 }
 
 export function hydrateDrivers(drivers: { ptyId: string; driver: DriverState }[]): void {

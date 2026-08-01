@@ -31,6 +31,7 @@ import {
   SquareTerminal,
   TextCursorInput,
   UserCog,
+  Users,
   Wrench
 } from 'lucide-react'
 import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
@@ -63,6 +64,7 @@ import {
 } from '@/components/settings/runtime-environments-search'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile-settings-search'
+import { getPeerCollabSettingsPaneSearchEntries } from '@/components/settings/peer-collab-settings-search'
 import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
 import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use-search'
 import { getVoicePaneSearchEntries } from '@/components/settings/voice-pane-search'
@@ -493,6 +495,24 @@ export function buildSettingsNavigationMetadata({
       group: 'remote',
       badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'peer-collab',
+            title: translate(
+              'auto.hooks.useSettingsNavigationMetadata.peerCollabTitle',
+              'Peer Collaboration'
+            ),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.peerCollabDescription',
+              'Share terminals with other Orca desktops over your local network.'
+            ),
+            icon: Users,
+            searchEntries: getPeerCollabSettingsPaneSearchEntries(),
+            group: 'remote'
+          }
+        ]
+      : []),
     ...(showDesktopOnlySettings && isMac
       ? [
           {

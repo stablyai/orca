@@ -84,3 +84,30 @@ describe('local-only mobile pairing', () => {
     ).rejects.toThrow('relay_disabled_for_device')
   })
 })
+
+describe('peer devices requesting relay', () => {
+  // Why: peer pairing offers are always minted local-only (createPairingOffer
+  // never runs the relay-provisioning branch), and a peer's non-'mobile' scope
+  // additionally blocks it at requireMobileDevice — relay can never activate
+  // for a peer device even if a caller forged a relay transport context.
+  it('refuses endpoint discovery and provisioning for a peer-scoped device', async () => {
+    const registry = {
+      getDevice: () => ({ deviceId: 'device-1', scope: 'peer' }),
+      getMobilePairingConnectionMode: () => null
+    }
+    const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
+    Object.defineProperty(service, 'runtimeRpc', {
+      value: { getDeviceRegistry: () => registry }
+    })
+
+    await expect(service.getEndpoints(context({ transport: 'direct' }), {})).rejects.toThrow(
+      'mobile_device_not_found'
+    )
+    await expect(
+      service.provisionRelay(context({ transport: 'direct' }), {
+        reqId: 'install-1',
+        newResumeTokenHash: 'A'.repeat(43)
+      })
+    ).rejects.toThrow('mobile_device_not_found')
+  })
+})

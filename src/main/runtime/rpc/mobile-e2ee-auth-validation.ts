@@ -6,6 +6,7 @@ export type MobileE2EEAuth = {
   type: 'e2ee_auth'
   deviceToken: string
   clientCapabilities?: unknown
+  displayName?: unknown
   v?: 2
   transcriptHashB64?: string
 }

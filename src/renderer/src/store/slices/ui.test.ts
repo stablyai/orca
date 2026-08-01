@@ -3421,6 +3421,135 @@ describe('createUISlice space navigation', () => {
   })
 })
 
+describe('createUISlice peers navigation', () => {
+  it('returns to the previous view after opening the Peers page', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage({ preselectedRepoId: 'repo-1' })
+    store.getState().openPeersPage()
+
+    expect(store.getState().activeView).toBe('peers')
+    expect(store.getState().previousViewBeforePeers).toBe('tasks')
+
+    store.getState().closePeersPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('keeps the original return target when Peers is reopened while already visible', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openPeersPage()
+    store.getState().openPeersPage()
+
+    expect(store.getState().previousViewBeforePeers).toBe('tasks')
+
+    store.getState().closePeersPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('selects the target terminal when opening the Peers page with one', () => {
+    const store = createUIStore()
+
+    store.getState().openPeersPage({ hostId: 'host-1', handle: 'term-1', title: 'Term One' })
+
+    expect(store.getState().peersPageTarget).toEqual({
+      hostId: 'host-1',
+      handle: 'term-1',
+      title: 'Term One'
+    })
+  })
+
+  it('restores a persisted peers view on hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'peers' }), 'startup')
+
+    expect(store.getState().activeView).toBe('peers')
+  })
+})
+
+describe('createUISlice peers pane split', () => {
+  const hostA = { hostId: 'h1', handle: 'a', title: 'A' }
+  const hostB = { hostId: 'h2', handle: 'b', title: 'B' }
+  const hostC = { hostId: 'h3', handle: 'c', title: 'C' }
+
+  it('creates the first split from the single-pane target and focuses the new pane', () => {
+    const store = createUIStore()
+    store.getState().openPeersPage(hostA)
+
+    store.getState().splitPeersPane(null, 'right', hostB)
+
+    expect(store.getState().peersLayout).toEqual({
+      type: 'split',
+      direction: 'row',
+      first: { type: 'leaf', target: hostA },
+      second: { type: 'leaf', target: hostB }
+    })
+    expect(store.getState().peersPageTarget).toEqual(hostB)
+  })
+
+  it('focuses the existing pane instead of splitting when the target is already open elsewhere', () => {
+    const store = createUIStore()
+    store.getState().openPeersPage(hostA)
+    store.getState().splitPeersPane(null, 'right', hostB)
+    const layoutBefore = store.getState().peersLayout
+
+    // Why: two leaves must never carry the same key — removeLeaf/replaceLeafTargets/
+    // pruneLeaves address leaves by key, so a duplicate would corrupt later ops.
+    store.getState().splitPeersPane('h2:b', 'bottom', hostA)
+
+    expect(store.getState().peersLayout).toEqual(layoutBefore)
+    expect(store.getState().peersPageTarget).toEqual(hostA)
+  })
+
+  it('returns to a single pane and refocuses the survivor after closing a pane', () => {
+    const store = createUIStore()
+    store.getState().openPeersPage(hostA)
+    store.getState().splitPeersPane(null, 'right', hostB)
+
+    store.getState().closePeersPane('h2:b')
+
+    expect(store.getState().peersLayout).toBeNull()
+    expect(store.getState().peersPageTarget).toEqual(hostA)
+  })
+
+  it('swaps two panes when replacing the focused pane with a target already shown elsewhere', () => {
+    const store = createUIStore()
+    store.getState().openPeersPage(hostA)
+    store.getState().splitPeersPane(null, 'right', hostB)
+    // Focus is on hostB's pane; replacing it with hostA (already in the other pane) should swap.
+    store.getState().replaceFocusedPeersPane(hostA)
+
+    expect(store.getState().peersLayout).toEqual({
+      type: 'split',
+      direction: 'row',
+      first: { type: 'leaf', target: hostB },
+      second: { type: 'leaf', target: hostA }
+    })
+    expect(store.getState().peersPageTarget).toEqual(hostA)
+  })
+
+  it('prunes dead panes and refocuses when the focused pane dies', () => {
+    const store = createUIStore()
+    store.getState().openPeersPage(hostA)
+    store.getState().splitPeersPane(null, 'right', hostB)
+    store.getState().splitPeersPane('h2:b', 'bottom', hostC)
+
+    store.getState().prunePeersLayout(['h1:a', 'h2:b'])
+
+    expect(store.getState().peersLayout).toEqual({
+      type: 'split',
+      direction: 'row',
+      first: { type: 'leaf', target: hostA },
+      second: { type: 'leaf', target: hostB }
+    })
+    expect(store.getState().peersPageTarget).toEqual(hostA)
+  })
+})
+
 describe('openDiffNotesSendMenuForActiveWorktree', () => {
   function stubDiffNotesStore(
     comments: { sentAt?: number }[],

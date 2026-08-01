@@ -191,7 +191,8 @@ const UiUpdateFields = z
         'automations',
         'space',
         'skills',
-        'mobile'
+        'mobile',
+        'peers'
       ])
       .optional(),
     sidebarWidth: z.number().finite().optional(),
