@@ -10,4 +10,8 @@ export type PeerClientStatus = {
   lastErrorReason: string | null
 }
 
-export type SavedPeerPairing = { endpoint: string | null }
+export type SavedPeerPairing = { hostId: string; endpoint: string | null }
+
+// Why: one entry per PeerClientManager-tracked host connection, for the
+// multi-host status list surfaced over IPC (getStatus stays single-host).
+export type PeerClientStatusWithHost = PeerClientStatus & { hostId: string }

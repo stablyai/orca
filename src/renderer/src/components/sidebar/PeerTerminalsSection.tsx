@@ -4,21 +4,18 @@ import { usePeerCollabClientConnection } from '@/components/peer-collab/use-peer
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 
-// Why: a client is paired to exactly one host at a time, so this renders at most one host group.
+// Why: renders one group per connected host — a client can hold several
+// simultaneous host connections, each with its own set of shared terminals.
 function PeerTerminalsSection(): React.JSX.Element | null {
-  const { hostTerminals, clientStatus } = usePeerCollabClientConnection()
+  const { hosts } = usePeerCollabClientConnection()
   const peersPageTarget = useAppStore((s) => s.peersPageTarget)
   const openPeersPage = useAppStore((s) => s.openPeersPage)
 
-  if (clientStatus.state !== 'connected') {
+  const connectedHosts = hosts.filter((host) => host.status.state === 'connected')
+
+  if (connectedHosts.length === 0) {
     return null
   }
-
-  // Why: the host has no display-name field over the pairing wire yet — endpoint
-  // is the only identifier the client side has, same as the Settings pane's usage.
-  const hostLabel =
-    clientStatus.endpoint ??
-    translate('auto.components.sidebar.PeerTerminalsSection.dd7ecb3f10', 'Connected host')
 
   return (
     <div className="mt-3 flex shrink-0 flex-col">
@@ -30,50 +27,64 @@ function PeerTerminalsSection(): React.JSX.Element | null {
           {translate('auto.components.sidebar.PeerTerminalsSection.f966803cfd', 'Peers')}
         </span>
       </div>
-      <div className="flex flex-col gap-0.5 px-2 pb-2">
-        <div className="truncate px-2 pb-1 text-xs font-medium text-worktree-sidebar-foreground/70">
-          {hostLabel}
-        </div>
-        {hostTerminals.length === 0 ? (
-          <p className="px-2 text-xs text-muted-foreground">
-            {translate(
-              'auto.components.sidebar.PeerTerminalsSection.d5f6851245',
-              'No terminals shared yet'
-            )}
-          </p>
-        ) : (
-          hostTerminals.map((terminal) => {
-            const title =
-              terminal.title ||
-              translate(
-                'auto.components.sidebar.PeerTerminalsSection.4fd5f4c027',
-                'Untitled terminal'
-              )
-            const isSelected = peersPageTarget?.handle === terminal.handle
-            return (
-              <button
-                key={terminal.handle}
-                type="button"
-                data-current={isSelected}
-                onClick={() => openPeersPage({ handle: terminal.handle, title })}
-                className={cn(
-                  'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-worktree-sidebar-accent',
-                  isSelected && 'bg-worktree-sidebar-accent'
-                )}
-              >
-                <span
-                  className={cn(
-                    'size-1.5 shrink-0 rounded-full',
-                    isSelected
-                      ? 'bg-worktree-sidebar-foreground'
-                      : 'border border-muted-foreground/50'
+      <div className="flex flex-col gap-2 px-2 pb-2">
+        {connectedHosts.map((host) => {
+          const hostLabel =
+            host.name ||
+            host.endpoint ||
+            translate('auto.components.sidebar.PeerTerminalsSection.dd7ecb3f10', 'Connected host')
+          return (
+            <div key={host.hostId} className="flex flex-col gap-0.5">
+              <div className="truncate px-2 pb-1 text-xs font-medium text-worktree-sidebar-foreground/70">
+                {hostLabel}
+              </div>
+              {host.terminals.length === 0 ? (
+                <p className="px-2 text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.sidebar.PeerTerminalsSection.d5f6851245',
+                    'No terminals shared yet'
                   )}
-                />
-                <span className="truncate">{title}</span>
-              </button>
-            )
-          })
-        )}
+                </p>
+              ) : (
+                host.terminals.map((terminal) => {
+                  const title =
+                    terminal.title ||
+                    translate(
+                      'auto.components.sidebar.PeerTerminalsSection.4fd5f4c027',
+                      'Untitled terminal'
+                    )
+                  const isSelected =
+                    peersPageTarget?.hostId === host.hostId &&
+                    peersPageTarget?.handle === terminal.handle
+                  return (
+                    <button
+                      key={terminal.handle}
+                      type="button"
+                      data-current={isSelected}
+                      onClick={() =>
+                        openPeersPage({ hostId: host.hostId, handle: terminal.handle, title })
+                      }
+                      className={cn(
+                        'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-worktree-sidebar-accent',
+                        isSelected && 'bg-worktree-sidebar-accent'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'size-1.5 shrink-0 rounded-full',
+                          isSelected
+                            ? 'bg-worktree-sidebar-foreground'
+                            : 'border border-muted-foreground/50'
+                        )}
+                      />
+                      <span className="truncate">{title}</span>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

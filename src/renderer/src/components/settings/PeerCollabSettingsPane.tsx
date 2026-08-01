@@ -42,22 +42,23 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
   const [exclusiveInputFloor, setExclusiveInputFloorState] = useState(false)
   const [hostEnabled, setHostEnabledState] = useState(false)
   const [clientEnabled, setClientEnabledState] = useState(false)
-  // Why: distinct from `hostTerminals` in usePeerCollabClientConnection, which is the
-  // *remote* host's terminals seen while connected as a peer client; this is this
+  // Why: distinct from each host's `terminals` in usePeerCollabClientConnection, which are
+  // *remote* hosts' terminals seen while connected as a peer client; this is this
   // desktop's own terminals, used for the grant picker when acting as the host.
   const [ownTerminals, setOwnTerminals] = useState<HostTerminalOption[]>([])
   const {
-    hostTerminals,
+    hosts,
+    hostNames,
+    renameHost,
     clientPairingCode,
     setClientPairingCode,
     clientDisplayName,
     setClientDisplayName,
-    clientStatus,
     clientConnectBusy,
     connectAsClient,
     connectSavedAsClient,
     disconnectAsClient,
-    savedPairing,
+    savedPairings,
     forgetSavedPairing
   } = usePeerCollabClientConnection()
   const openPeersPage = useAppStore((s) => s.openPeersPage)
@@ -409,21 +410,22 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
           {translate('auto.components.settings.PeerCollabSettingsPane.clientGroupTitle', 'Client')}
         </h3>
         <PeerCollabClientConnectSection
+          hostNames={hostNames}
+          onRenameHost={(hostId, name) => void renameHost(hostId, name)}
           clientEnabled={clientEnabled}
           onToggleClientEnabled={() => void toggleClientEnabled()}
           clientPairingCode={clientPairingCode}
           onClientPairingCodeChange={setClientPairingCode}
           clientDisplayName={clientDisplayName}
           onClientDisplayNameChange={setClientDisplayName}
-          clientStatus={clientStatus}
           clientConnectBusy={clientConnectBusy}
           onConnect={() => void connectAsClient()}
-          onDisconnect={() => void disconnectAsClient()}
-          hostTerminals={hostTerminals}
+          hosts={hosts}
+          onDisconnectHost={(hostId) => void disconnectAsClient(hostId)}
           onOpenTerminal={(target) => openPeersPage(target)}
-          savedPairing={savedPairing}
-          onConnectSaved={() => void connectSavedAsClient()}
-          onForgetSavedPairing={() => void forgetSavedPairing()}
+          savedPairings={savedPairings}
+          onConnectSaved={(hostId) => void connectSavedAsClient(hostId)}
+          onForgetSavedPairing={(hostId) => void forgetSavedPairing(hostId)}
         />
       </div>
     </div>

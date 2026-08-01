@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeTerminalListResult } from '../../../../shared/runtime-types'
-import type { PeerClientStatus } from '../../../../shared/peer-client-status'
+import type {
+  PeerClientStatus,
+  PeerClientStatusWithHost
+} from '../../../../shared/peer-client-status'
 import {
   usePeerCollabSavedPairing,
   type SavedPeerPairing
@@ -12,53 +15,66 @@ import { isTerminalListResult } from '../settings/peer-collab-terminal-list-guar
 
 const HOST_TERMINALS_POLL_MS = 3000
 
+export type PeerHostConnection = {
+  hostId: string
+  endpoint: string | null
+  /** User-assigned alias for this host; falls back to the endpoint in UI. */
+  name?: string | null
+  status: PeerClientStatus
+  terminals: RuntimeTerminalListResult['terminals']
+}
+
 export type PeerCollabClientConnectionHook = {
-  hostTerminals: RuntimeTerminalListResult['terminals']
+  hosts: PeerHostConnection[]
+  hostNames: Record<string, string>
+  renameHost: (hostId: string, name: string) => Promise<void>
   clientPairingCode: string
   setClientPairingCode: (code: string) => void
   clientDisplayName: string
   setClientDisplayName: (name: string) => void
-  clientStatus: PeerClientStatus
   clientConnectBusy: boolean
   connectAsClient: () => Promise<void>
-  connectSavedAsClient: () => Promise<void>
-  disconnectAsClient: () => Promise<void>
-  savedPairing: SavedPeerPairing | null
-  forgetSavedPairing: () => Promise<void>
+  connectSavedAsClient: (hostId: string) => Promise<void>
+  disconnectAsClient: (hostId: string) => Promise<void>
+  savedPairings: SavedPeerPairing[]
+  forgetSavedPairing: (hostId: string) => Promise<void>
 }
 
-// Why: isolates the peer-client connect/disconnect flow and its host-terminal poll from any
-// one surface — both the Settings pane's connect form and the Peers page's terminal viewer
-// consume this same live state (client stays paired to exactly one host at a time).
+// Why: isolates the peer-client connect/disconnect flow and its per-host terminal poll
+// from any one surface — both the Settings pane's connect form and the Peers page's
+// terminal viewer consume this same live state. A client can hold several simultaneous
+// host connections, so state here is keyed by hostId rather than assuming exactly one.
 export function usePeerCollabClientConnection(): PeerCollabClientConnectionHook {
   const mountedRef = useMountedRef()
   const {
-    savedPairing,
-    refresh: refreshSavedPairing,
+    savedPairings,
+    refresh: refreshSavedPairings,
     connectSaved,
     forget: forgetSavedPairing
   } = usePeerCollabSavedPairing()
-  const [hostTerminals, setHostTerminals] = useState<RuntimeTerminalListResult['terminals']>([])
+  const [statusesByHost, setStatusesByHost] = useState<Record<string, PeerClientStatus>>({})
+  const [hostNames, setHostNames] = useState<Record<string, string>>({})
+  const [terminalsByHost, setTerminalsByHost] = useState<
+    Record<string, RuntimeTerminalListResult['terminals']>
+  >({})
   const [clientPairingCode, setClientPairingCode] = useState('')
   const [clientDisplayName, setClientDisplayName] = useState('')
-  const [clientStatus, setClientStatus] = useState<PeerClientStatus>({
-    state: 'closed',
-    endpoint: null,
-    reconnectAttempt: 0,
-    lastErrorReason: null
-  })
   const [clientConnectBusy, setClientConnectBusy] = useState(false)
 
-  const loadHostTerminals = useCallback(async () => {
-    try {
-      const result = await window.api.peerClient.listHostTerminals()
-      if (mountedRef.current && result.ok && isTerminalListResult(result.terminals)) {
-        setHostTerminals(result.terminals.terminals)
+  const loadHostTerminals = useCallback(
+    async (hostId: string) => {
+      try {
+        const result = await window.api.peerClient.listHostTerminals({ hostId })
+        if (mountedRef.current && result.ok && isTerminalListResult(result.terminals)) {
+          const { terminals } = result.terminals
+          setTerminalsByHost((prev) => ({ ...prev, [hostId]: terminals }))
+        }
+      } catch {
+        // Silently fail — polled again shortly while connected
       }
-    } catch {
-      // Silently fail — polled again shortly while connected
-    }
-  }, [mountedRef])
+    },
+    [mountedRef]
+  )
 
   const notifyClientConnectFailure = useCallback(
     (reason: string) => {
@@ -76,7 +92,9 @@ export function usePeerCollabClientConnection(): PeerCollabClientConnectionHook 
   )
 
   const runClientConnect = useCallback(
-    async (connectFn: () => Promise<{ ok: true } | { ok: false; reason: string }>) => {
+    async (
+      connectFn: () => Promise<{ ok: true; hostId: string } | { ok: false; reason: string }>
+    ) => {
       setClientConnectBusy(true)
       try {
         const result = await connectFn()
@@ -106,59 +124,121 @@ export function usePeerCollabClientConnection(): PeerCollabClientConnectionHook 
   )
 
   const connectSavedAsClient = useCallback(
-    () => runClientConnect(connectSaved),
+    (hostId: string) => runClientConnect(() => connectSaved(hostId)),
     [runClientConnect, connectSaved]
   )
 
-  const disconnectAsClient = useCallback(async () => {
-    await window.api.peerClient.disconnect()
-    if (mountedRef.current) {
-      setHostTerminals([])
-    }
-  }, [mountedRef])
+  const disconnectAsClient = useCallback(
+    async (hostId: string) => {
+      await window.api.peerClient.disconnect({ hostId })
+      if (mountedRef.current) {
+        setStatusesByHost((prev) => {
+          const next = { ...prev }
+          delete next[hostId]
+          return next
+        })
+        setTerminalsByHost((prev) => {
+          const next = { ...prev }
+          delete next[hostId]
+          return next
+        })
+      }
+    },
+    [mountedRef]
+  )
+
+  const renameHost = useCallback(
+    async (hostId: string, name: string) => {
+      const { names } = await window.api.peerClient.setHostName({ hostId, name })
+      if (mountedRef.current) {
+        setHostNames(names)
+      }
+    },
+    [mountedRef]
+  )
 
   useEffect(() => {
-    void window.api.peerClient.getStatus().then((status) => {
-      if (mountedRef.current) {
-        setClientStatus(status)
+    void window.api.peerClient.getStatuses().then((statuses) => {
+      if (!mountedRef.current) {
+        return
       }
+      setStatusesByHost((prev) => {
+        const next = { ...prev }
+        for (const status of statuses) {
+          next[status.hostId] = status
+        }
+        return next
+      })
     })
     void window.api.peerClient.getDefaultDisplayName().then(({ name }) => {
       if (mountedRef.current) {
         setClientDisplayName(name)
       }
     })
-    return window.api.peerClient.onStatusChanged((status) => setClientStatus(status))
+    void window.api.peerClient.getHostNames().then(({ names }) => {
+      if (mountedRef.current) {
+        setHostNames(names)
+      }
+    })
   }, [mountedRef])
 
   useEffect(() => {
-    if (clientStatus.state !== 'connected') {
-      return
-    }
-    void loadHostTerminals()
-    const timer = window.setInterval(() => void loadHostTerminals(), HOST_TERMINALS_POLL_MS)
-    return () => window.clearInterval(timer)
-  }, [clientStatus.state, loadHostTerminals])
+    return window.api.peerClient.onStatusChanged((status: PeerClientStatusWithHost) => {
+      setStatusesByHost((prev) => ({ ...prev, [status.hostId]: status }))
+    })
+  }, [])
 
   useEffect(() => {
-    if (clientStatus.state === 'connected') {
-      // Why: a fresh success may have just persisted a new saved pairing on the main side.
-      void refreshSavedPairing()
+    const connectedHostIds = Object.entries(statusesByHost)
+      .filter(([, status]) => status.state === 'connected')
+      .map(([hostId]) => hostId)
+    if (connectedHostIds.length === 0) {
+      return
     }
-  }, [clientStatus.state, refreshSavedPairing])
+    const poll = (): void => {
+      for (const hostId of connectedHostIds) {
+        void loadHostTerminals(hostId)
+      }
+    }
+    poll()
+    const timer = window.setInterval(poll, HOST_TERMINALS_POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [statusesByHost, loadHostTerminals])
+
+  useEffect(() => {
+    if (Object.values(statusesByHost).some((status) => status.state === 'connected')) {
+      // Why: a fresh success may have just persisted a new saved pairing on the main side.
+      void refreshSavedPairings()
+    }
+  }, [statusesByHost, refreshSavedPairings])
+
+  // Memoized so consumers depending on `hosts` (e.g. PeersPage's selection-recovery effect)
+  // don't re-run on every render when neither statuses nor terminals actually changed.
+  const hosts: PeerHostConnection[] = useMemo(
+    () =>
+      Object.entries(statusesByHost).map(([hostId, status]) => ({
+        hostId,
+        endpoint: status.endpoint,
+        name: hostNames[hostId] ?? null,
+        status,
+        terminals: terminalsByHost[hostId] ?? []
+      })),
+    [statusesByHost, terminalsByHost, hostNames]
+  )
 
   return {
-    hostTerminals,
+    hosts,
+    hostNames,
+    renameHost,
     clientPairingCode,
     setClientPairingCode,
     clientDisplayName,
     setClientDisplayName,
-    clientStatus,
     clientConnectBusy,
     connectAsClient,
     connectSavedAsClient,
     disconnectAsClient,
-    savedPairing,
+    savedPairings,
     forgetSavedPairing
   }
 }

@@ -21,6 +21,11 @@ type PeerTerminalStreamEntry = {
   snapshotMeta: Record<string, unknown> | null
   snapshotChunks: string[]
   outboundSeq: number
+  // Why: setHidden resends this on a visibility toggle without the caller
+  // having to remeasure — dims don't change while a panel is backgrounded.
+  lastCols: number
+  lastRows: number
+  hidden: boolean
 }
 
 export type PeerClientTerminalStreamsDeps = {
@@ -61,7 +66,10 @@ export class PeerClientTerminalStreams {
       streamId: null,
       snapshotMeta: null,
       snapshotChunks: [],
-      outboundSeq: 0
+      outboundSeq: 0,
+      lastCols: viewport.cols,
+      lastRows: viewport.rows,
+      hidden: false
     }
     const sent = this.deps.rpc.sendEncrypted({
       id,
@@ -121,10 +129,28 @@ export class PeerClientTerminalStreams {
     if (!entry || entry.streamId === null) {
       return false
     }
+    entry.lastCols = cols
+    entry.lastRows = rows
     return this.sendFrame(
       entry,
       TerminalStreamOpcode.Resize,
-      encodeTerminalStreamJson({ cols, rows })
+      encodeTerminalStreamJson({ cols, rows, hidden: entry.hidden })
+    )
+  }
+
+  // Why: toggling hidden must not require the caller to remeasure — a
+  // backgrounded panel's terminal dims are unchanged, only its negotiation
+  // participation flips. Resends the last known viewport tagged accordingly.
+  setHidden(requestId: string, hidden: boolean): boolean {
+    const entry = this.byRequestId.get(requestId)
+    if (!entry || entry.streamId === null) {
+      return false
+    }
+    entry.hidden = hidden
+    return this.sendFrame(
+      entry,
+      TerminalStreamOpcode.Resize,
+      encodeTerminalStreamJson({ cols: entry.lastCols, rows: entry.lastRows, hidden })
     )
   }
 

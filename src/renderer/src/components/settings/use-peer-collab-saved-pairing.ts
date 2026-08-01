@@ -4,32 +4,38 @@ import type { SavedPeerPairing } from '../../../../shared/peer-client-status'
 export type { SavedPeerPairing }
 
 export type PeerCollabSavedPairingHook = {
-  savedPairing: SavedPeerPairing | null
+  savedPairings: SavedPeerPairing[]
   refresh: () => Promise<void>
-  connectSaved: () => Promise<{ ok: true } | { ok: false; reason: string }>
-  forget: () => Promise<void>
+  connectSaved: (
+    hostId: string
+  ) => Promise<{ ok: true; hostId: string } | { ok: false; reason: string }>
+  forget: (hostId: string) => Promise<void>
 }
 
-// Why: isolates the saved-pairing IPC round trips from PeerCollabSettingsPane
-// so that pane stays under the tsx line budget as this feature grows.
+// Why: isolates the saved-pairing IPC round trips from the client-connect surfaces
+// (Settings pane, connection hook) — the IPC layer tracks a saved pairing per host,
+// so this exposes the full list rather than collapsing it to one.
 export function usePeerCollabSavedPairing(): PeerCollabSavedPairingHook {
-  const [savedPairing, setSavedPairing] = useState<SavedPeerPairing | null>(null)
+  const [savedPairings, setSavedPairings] = useState<SavedPeerPairing[]>([])
 
   const refresh = useCallback(async () => {
-    const saved = await window.api.peerClient.getSavedPairing()
-    setSavedPairing(saved)
+    const saved = await window.api.peerClient.listSavedPairings()
+    setSavedPairings(saved)
   }, [])
 
   useEffect(() => {
     void refresh()
   }, [refresh])
 
-  const connectSaved = useCallback(() => window.api.peerClient.connectSaved(), [])
+  const connectSaved = useCallback(
+    (hostId: string) => window.api.peerClient.connectSaved({ hostId }),
+    []
+  )
 
-  const forget = useCallback(async () => {
-    await window.api.peerClient.forgetSavedPairing()
-    setSavedPairing(null)
+  const forget = useCallback(async (hostId: string) => {
+    await window.api.peerClient.forgetSavedPairing({ hostId })
+    setSavedPairings((prev) => prev.filter((pairing) => pairing.hostId !== hostId))
   }, [])
 
-  return { savedPairing, refresh, connectSaved, forget }
+  return { savedPairings, refresh, connectSaved, forget }
 }

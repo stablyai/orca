@@ -10136,7 +10136,11 @@
           "hostEnabledLabel": "Permitir que otros escritorios se conecten",
           "hostEnabledDescription": "Actívalo para que otros escritorios Orca puedan emparejarse y ver terminales en este equipo. Al desactivarlo, cualquier escritorio conectado se desconecta de inmediato.",
           "hostGroupTitle": "Anfitrión",
-          "clientGroupTitle": "Cliente"
+          "clientGroupTitle": "Cliente",
+          "clientConnectedCount": "Conectado a {{count}} anfitrión(es)",
+          "clientAddHostTitle": "Añadir un anfitrión",
+          "renameHostPlaceholder": "Nombre visible de este anfitrión",
+          "renameHost": "Renombrar anfitrión"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
@@ -14438,7 +14442,13 @@
           "c2e9f5a1d8": "Sin conexión",
           "d7f2a9c4b6": "Terminal remota",
           "e5b8c1f3a2": "Cerrar",
-          "f9a3d6e2b1": "Cerrar · Esc"
+          "f9a3d6e2b1": "Cerrar · Esc",
+          "untitledTerminal": "Terminal sin nombre"
+        },
+        "PeersPageTabStrip": {
+          "splitRightAction": "Dividir a la derecha",
+          "splitRightTooltip": "Dividir a la derecha",
+          "untitledTerminal": "Terminal sin nombre"
         }
       }
     },

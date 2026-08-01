@@ -21,7 +21,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../shared/agent-session-resume'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
-import type { PeerClientStatus } from '../shared/peer-client-status'
+import type { PeerClientStatusWithHost, SavedPeerPairing } from '../shared/peer-client-status'
 import type { PeerTerminalStreamEvent } from '../shared/peer-terminal-stream-event'
 import type { PeerPresenceEvent, PeerPresenceState } from '../shared/peer-presence-event'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
@@ -4737,34 +4737,51 @@ const api = {
     connect: (args: {
       pairingCode: string
       displayName: string
-    }): Promise<{ ok: true } | { ok: false; reason: string }> =>
+    }): Promise<{ ok: true; hostId: string } | { ok: false; reason: string }> =>
       ipcRenderer.invoke('peerClient:connect', args),
 
-    disconnect: (): Promise<{ ok: true }> => ipcRenderer.invoke('peerClient:disconnect'),
+    disconnect: (args: { hostId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('peerClient:disconnect', args),
 
-    getSavedPairing: (): Promise<{ endpoint: string | null } | null> =>
-      ipcRenderer.invoke('peerClient:getSavedPairing'),
+    disconnectAll: (): Promise<{ ok: true }> => ipcRenderer.invoke('peerClient:disconnectAll'),
 
-    forgetSavedPairing: (): Promise<{ ok: true }> =>
-      ipcRenderer.invoke('peerClient:forgetSavedPairing'),
+    listSavedPairings: (): Promise<SavedPeerPairing[]> =>
+      ipcRenderer.invoke('peerClient:listSavedPairings'),
+    getHostNames: (): Promise<{ names: Record<string, string> }> =>
+      ipcRenderer.invoke('peerClient:getHostNames'),
+    setHostName: (args: {
+      hostId: string
+      name: string
+    }): Promise<{ names: Record<string, string> }> =>
+      ipcRenderer.invoke('peerClient:setHostName', args),
 
-    connectSaved: (): Promise<{ ok: true } | { ok: false; reason: string }> =>
-      ipcRenderer.invoke('peerClient:connectSaved'),
+    forgetSavedPairing: (args: { hostId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('peerClient:forgetSavedPairing', args),
 
-    getStatus: (): Promise<PeerClientStatus> => ipcRenderer.invoke('peerClient:getStatus'),
+    connectSaved: (args: {
+      hostId: string
+    }): Promise<{ ok: true; hostId: string } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('peerClient:connectSaved', args),
 
-    onStatusChanged: (callback: (status: PeerClientStatus) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, status: PeerClientStatus): void =>
-        callback(status)
+    getStatuses: (): Promise<PeerClientStatusWithHost[]> =>
+      ipcRenderer.invoke('peerClient:getStatuses'),
+
+    onStatusChanged: (callback: (status: PeerClientStatusWithHost) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        status: PeerClientStatusWithHost
+      ): void => callback(status)
       ipcRenderer.on('peerClient:statusChanged', listener)
       return () => ipcRenderer.removeListener('peerClient:statusChanged', listener)
     },
 
-    listHostTerminals: (): Promise<
-      { ok: true; terminals: unknown } | { ok: false; reason: string }
-    > => ipcRenderer.invoke('peerClient:listHostTerminals'),
+    listHostTerminals: (args: {
+      hostId: string
+    }): Promise<{ ok: true; terminals: unknown } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('peerClient:listHostTerminals', args),
 
     subscribeTerminal: (args: {
+      hostId: string
       terminal: string
       cols: number
       rows: number
@@ -4783,7 +4800,13 @@ const api = {
       rows: number
     }): Promise<{ ok: boolean }> => ipcRenderer.invoke('peerClient:resizeTerminalStream', args),
 
+    setTerminalStreamHidden: (args: {
+      requestId: string
+      hidden: boolean
+    }): Promise<{ ok: boolean }> => ipcRenderer.invoke('peerClient:setTerminalStreamHidden', args),
+
     listTerminalSubscribers: (args: {
+      hostId: string
       terminal: string
     }): Promise<{ ok: true; subscribers: { name: string }[] } | { ok: false; reason: string }> =>
       ipcRenderer.invoke('peerClient:listTerminalSubscribers', args),
@@ -4799,10 +4822,11 @@ const api = {
       return () => ipcRenderer.removeListener('peerClient:terminalStreamEvent', listener)
     },
 
-    getClientId: (): Promise<{ clientId: string | null }> =>
-      ipcRenderer.invoke('peerClient:getClientId'),
+    getClientId: (args: { hostId: string }): Promise<{ clientId: string | null }> =>
+      ipcRenderer.invoke('peerClient:getClientId', args),
 
     subscribePresence: (args: {
+      hostId: string
       terminal: string
     }): Promise<{ ok: true; requestId: string } | { ok: false; reason: string }> =>
       ipcRenderer.invoke('peerClient:subscribePresence', args),
@@ -4811,6 +4835,7 @@ const api = {
       ipcRenderer.invoke('peerClient:unsubscribePresence', args),
 
     sendPresenceState: (args: {
+      hostId: string
       terminal: string
       state: PeerPresenceState
     }): Promise<{ ok: true }> => ipcRenderer.invoke('peerClient:sendPresenceState', args),

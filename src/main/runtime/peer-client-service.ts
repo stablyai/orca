@@ -179,6 +179,10 @@ export class PeerClientService {
     return this.terminalStreams.resize(requestId, cols, rows)
   }
 
+  setTerminalStreamHidden(requestId: string, hidden: boolean): boolean {
+    return this.terminalStreams.setHidden(requestId, hidden)
+  }
+
   async listHostTerminals(): Promise<unknown> {
     const result = await this.rpc.sendRequest('terminal.list', {})
     if (!result.ok) {

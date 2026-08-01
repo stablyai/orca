@@ -10136,7 +10136,11 @@
           "hostEnabledLabel": "他のデスクトップからの接続を許可",
           "hostEnabledDescription": "オンにすると、他の Orca デスクトップがこのコンピューターとペアリングしてターミナルを表示できます。オフにすると、接続中のデスクトップは即座に切断されます。",
           "hostGroupTitle": "ホスト",
-          "clientGroupTitle": "クライアント"
+          "clientGroupTitle": "クライアント",
+          "clientConnectedCount": "{{count}} 台のホストに接続中",
+          "clientAddHostTitle": "ホストを追加",
+          "renameHostPlaceholder": "このホストの表示名",
+          "renameHost": "ホスト名を変更"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
@@ -14438,7 +14442,13 @@
           "c2e9f5a1d8": "未接続",
           "d7f2a9c4b6": "リモートターミナル",
           "e5b8c1f3a2": "閉じる",
-          "f9a3d6e2b1": "閉じる · Esc"
+          "f9a3d6e2b1": "閉じる · Esc",
+          "untitledTerminal": "名前のないターミナル"
+        },
+        "PeersPageTabStrip": {
+          "splitRightAction": "右に分割",
+          "splitRightTooltip": "右に分割",
+          "untitledTerminal": "名前のないターミナル"
         }
       }
     },

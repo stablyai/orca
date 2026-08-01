@@ -10136,7 +10136,11 @@
           "hostEnabledLabel": "다른 데스크톱의 접속 허용",
           "hostEnabledDescription": "켜면 다른 Orca 데스크톱이 이 컴퓨터와 페어링하고 터미널을 볼 수 있습니다. 끄면 접속 중인 데스크톱이 즉시 끊어집니다.",
           "hostGroupTitle": "호스트",
-          "clientGroupTitle": "클라이언트"
+          "clientGroupTitle": "클라이언트",
+          "clientConnectedCount": "호스트 {{count}}개에 접속 중",
+          "clientAddHostTitle": "호스트 추가",
+          "renameHostPlaceholder": "이 호스트의 표시 이름",
+          "renameHost": "호스트 이름 변경"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
@@ -14438,7 +14442,13 @@
           "c2e9f5a1d8": "접속 안 됨",
           "d7f2a9c4b6": "원격 터미널",
           "e5b8c1f3a2": "닫기",
-          "f9a3d6e2b1": "닫기 · Esc"
+          "f9a3d6e2b1": "닫기 · Esc",
+          "untitledTerminal": "이름 없는 터미널"
+        },
+        "PeersPageTabStrip": {
+          "splitRightAction": "오른쪽으로 분할",
+          "splitRightTooltip": "오른쪽으로 분할",
+          "untitledTerminal": "이름 없는 터미널"
         }
       }
     },

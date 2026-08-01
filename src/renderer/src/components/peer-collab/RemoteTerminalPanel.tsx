@@ -24,11 +24,10 @@ import type {
 } from '../../../../shared/peer-presence-event'
 import { PEER_TERMINAL_GRANT_REVOKED_REASON } from '../../../../shared/peer-terminal-stream-event'
 import { RemoteTerminalPresenceOverlay } from './RemoteTerminalPresenceOverlay'
+import { usePeerTerminalSubscribers } from './use-peer-terminal-subscribers'
 
 const FALLBACK_COLS = 80
 const FALLBACK_ROWS = 24
-// Why: no push channel for subscriber changes yet, so poll while the panel is open (mirrors PeerCollabSettingsPane's connected-clients poll).
-const SUBSCRIBERS_POLL_MS = 4000
 // Why: gates continuous cursor/scroll sends to ~60Hz without ever queuing
 // them — queuing is what makes remote cursors look choppy.
 const PRESENCE_SEND_THROTTLE_MS = 16
@@ -40,21 +39,31 @@ const PRESENCE_SEND_THROTTLE_MS = 16
  * keystrokes and resizes back to the host over the same stream.
  */
 export function RemoteTerminalPanel({
-  terminalHandle
+  hostId,
+  terminalHandle,
+  hidden = false
 }: {
+  hostId: string
   terminalHandle: string
+  /** Backgrounded by the keep-alive panel stack — stays mounted but tells the host to stop counting this subscriber as an active viewer. */
+  hidden?: boolean
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
+  const requestIdRef = useRef<string | null>(null)
+  const refitRef = useRef<() => void>(() => {})
   const settings = useAppStore((state) => state.settings)
   // Why: presence sends read the name through a ref so a rename never forces
   // the terminal-subscription effect to tear down and resubscribe.
   const ownDisplayNameRef = useRef('Peer')
   ownDisplayNameRef.current = settings?.peerCollabDisplayName?.trim() || 'Peer'
+  // Why: read inside the async subscribe IIFE, which resolves after this render.
+  const hiddenRef = useRef(hidden)
+  hiddenRef.current = hidden
   const systemPrefersDark = useSystemPrefersDark()
   const [ended, setEnded] = useState(false)
   const [errorReason, setErrorReason] = useState<string | null>(null)
   const [remoteCwd, setRemoteCwd] = useState<string | null>(null)
-  const [otherSubscribers, setOtherSubscribers] = useState<string[]>([])
+  const otherSubscribers = usePeerTerminalSubscribers(hostId, terminalHandle, hidden)
   const [remoteParticipants, setRemoteParticipants] = useState<Map<string, PeerPresenceState>>(
     () => new Map()
   )
@@ -77,26 +86,6 @@ export function RemoteTerminalPanel({
     )
     return { terminalTheme: theme, terminalMode: appearance.mode }
   }, [settings, systemPrefersDark])
-
-  useEffect(() => {
-    setOtherSubscribers([])
-    let disposed = false
-    const poll = async (): Promise<void> => {
-      const result = await window.api.peerClient.listTerminalSubscribers({
-        terminal: terminalHandle
-      })
-      if (disposed) {
-        return
-      }
-      setOtherSubscribers(result.ok ? result.subscribers.map((s) => s.name) : [])
-    }
-    void poll()
-    const timer = window.setInterval(() => void poll(), SUBSCRIBERS_POLL_MS)
-    return () => {
-      disposed = true
-      window.clearInterval(timer)
-    }
-  }, [terminalHandle])
 
   useEffect(() => {
     setEnded(false)
@@ -186,6 +175,7 @@ export function RemoteTerminalPanel({
       }
       lastPresenceSendAt = now
       void window.api.peerClient.sendPresenceState({
+        hostId,
         terminal: terminalHandle,
         state: {
           participant: {
@@ -307,20 +297,22 @@ export function RemoteTerminalPanel({
     container.addEventListener('mousemove', handleMouseMove)
     container.addEventListener('mouseleave', handleMouseLeave)
 
-    const resizeObserver = new ResizeObserver(() => {
+    const refit = (): void => {
       proposeFit()
       sendResizeIfChanged()
       updateCellMetrics()
-    })
+    }
+    const resizeObserver = new ResizeObserver(refit)
     resizeObserver.observe(container)
+    refitRef.current = refit
 
     void (async () => {
       const { cols, rows } = proposeFit()
       updateCellMetrics()
-      ownClientId = (await window.api.peerClient.getClientId()).clientId
+      ownClientId = (await window.api.peerClient.getClientId({ hostId })).clientId
       const [terminalResult, presenceResult] = await Promise.all([
-        window.api.peerClient.subscribeTerminal({ terminal: terminalHandle, cols, rows }),
-        window.api.peerClient.subscribePresence({ terminal: terminalHandle })
+        window.api.peerClient.subscribeTerminal({ hostId, terminal: terminalHandle, cols, rows }),
+        window.api.peerClient.subscribePresence({ hostId, terminal: terminalHandle })
       ])
       if (presenceResult.ok) {
         presenceRequestId = presenceResult.requestId
@@ -341,6 +333,10 @@ export function RemoteTerminalPanel({
         return
       }
       requestId = terminalResult.requestId
+      requestIdRef.current = requestId
+      // Sync now: the sibling hidden-negotiation effect may have already run and
+      // found requestIdRef null, so it never told the host this subscriber is hidden.
+      void window.api.peerClient.setTerminalStreamHidden({ requestId, hidden: hiddenRef.current })
       terminal.focus()
     })()
 
@@ -351,6 +347,7 @@ export function RemoteTerminalPanel({
       offPresenceEvent()
       container.removeEventListener('mousemove', handleMouseMove)
       container.removeEventListener('mouseleave', handleMouseLeave)
+      requestIdRef.current = null
       if (presenceRequestId) {
         void window.api.peerClient.unsubscribePresence({ requestId: presenceRequestId })
       }
@@ -359,11 +356,26 @@ export function RemoteTerminalPanel({
       }
       terminal.dispose()
     }
-  }, [terminalHandle, terminalTheme, terminalMode])
+  }, [hostId, terminalHandle, terminalTheme, terminalMode])
+
+  // Why: keep-alive panels stay mounted while backgrounded — tell the host so it
+  // stops billing this subscriber as an active viewer, and refit once shown again
+  // since xterm can't measure a hidden (visibility:hidden) container.
+  const wasHiddenRef = useRef(hidden)
+  useEffect(() => {
+    const requestId = requestIdRef.current
+    if (requestId) {
+      void window.api.peerClient.setTerminalStreamHidden({ requestId, hidden })
+    }
+    if (wasHiddenRef.current && !hidden) {
+      refitRef.current()
+    }
+    wasHiddenRef.current = hidden
+  }, [hidden])
 
   return (
     <div
-      className="relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5"
+      className="relative h-full w-full overflow-hidden bg-background p-1.5"
       style={terminalTheme?.background ? { backgroundColor: terminalTheme.background } : undefined}
     >
       {!ended && !errorReason && (remoteCwd || otherSubscribers.length > 0) ? (

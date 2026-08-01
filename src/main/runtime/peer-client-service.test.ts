@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { WebSocket, WebSocketServer } from 'ws'
+import type { Socket } from 'node:net'
 import { PeerClientService } from './peer-client-service'
 import { generateKeyPair, publicKeyToBase64 } from '../../shared/e2ee-crypto'
 import { encodePairingOffer } from '../../shared/pairing'
@@ -126,6 +127,39 @@ describe('PeerClientService', () => {
     await waitForState(service, 'reconnect-wait')
 
     expect(service.getStatus().lastErrorReason).toMatch(/ECONNREFUSED/)
+  })
+
+  it('survives reconnecting while the previous socket is still establishing', async () => {
+    // Why: a TCP server that accepts but never answers the WS upgrade keeps the
+    // socket in CONNECTING — the state a macOS local-network permission prompt
+    // holds it in. Re-entering a code then tears that socket down, and ws emits
+    // an error from terminate() that must not escape as an uncaught exception.
+    const net = await import('node:net')
+    // Why: the silent server's accepted sockets never close on their own, so
+    // they must be destroyed explicitly or server.close() waits forever.
+    const acceptedSockets: Socket[] = []
+    const tcpServer = net.createServer((socket) => acceptedSockets.push(socket))
+    await new Promise<void>((resolve) => tcpServer.listen(0, '127.0.0.1', resolve))
+    const address = tcpServer.address()
+    if (typeof address === 'string' || address === null) {
+      throw new Error('expected TCP test server')
+    }
+    const serverKeys = generateKeyPair()
+    const code = makePeerOffer(`ws://127.0.0.1:${address.port}`, serverKeys, 'any-token')
+
+    const service = new PeerClientService()
+    services.push(service)
+    expect(service.connect(code)).toEqual({ ok: true })
+    // Why: give the socket a beat to enter CONNECTING against the silent server.
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    expect(() => service.connect(code)).not.toThrow()
+
+    service.destroy()
+    for (const socket of acceptedSockets) {
+      socket.destroy()
+    }
+    await new Promise<void>((resolve) => tcpServer.close(() => resolve()))
   })
 
   it('latches closed with host_disabled on the hosting-disabled close code', async () => {

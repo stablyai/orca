@@ -1613,6 +1613,225 @@ describe('terminal multiplex RPC', () => {
     }
   })
 
+  it('drops a peer resize from negotiation when the viewer flagged itself hidden', async () => {
+    const messages: string[] = []
+    const handlers = new Map<
+      number,
+      (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+    >()
+    const cleanups = new Map<string, () => void>()
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+      serializeTerminalBuffer: vi.fn().mockResolvedValue({ data: 'snapshot', cols: 120, rows: 40 }),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+      getTerminalFitOverride: vi.fn().mockReturnValue(null),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      cleanupSubscription: vi.fn((id: string) => {
+        const cleanup = cleanups.get(id)
+        cleanups.delete(id)
+        cleanup?.()
+      }),
+      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+      sendTerminal: vi.fn().mockResolvedValue({ accepted: true })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.multiplex', {}),
+      (msg) => messages.push(msg),
+      {
+        connectionId: 'conn-peer-hidden',
+        isPeerDevice: true,
+        getGrantedTerminals: () => ['terminal-1'],
+        sendBinary: () => {},
+        registerBinaryStreamHandler: (streamId, handler) => {
+          handlers.set(streamId, handler)
+          return () => handlers.delete(streamId)
+        }
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    handlers.get(0)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          seq: 1,
+          payload: encodeTerminalStreamJson({
+            streamId: 9,
+            terminal: 'terminal-1',
+            client: { id: 'peer-desktop-1', type: 'desktop' },
+            viewport: { cols: 300, rows: 150 },
+            capabilities: { desktopViewportClaims: 1 }
+          })
+        })
+      )!
+    )
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+    )
+    vi.mocked(runtime.updateRemoteDesktopViewer).mockClear()
+
+    // Resize arrives already hidden, negotiate=false is expected immediately.
+    handlers.get(9)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Resize,
+          streamId: 9,
+          seq: 2,
+          payload: encodeTerminalStreamJson({ cols: 88, rows: 33, hidden: true })
+        })
+      )!
+    )
+    await vi.waitFor(() =>
+      expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
+        'pty-1',
+        'multiplex:conn-peer-hidden:9',
+        'peer-desktop-1',
+        88,
+        33,
+        false,
+        false
+      )
+    )
+
+    runtime.cleanupSubscription('terminal-multiplex:conn-peer-hidden')
+    await dispatchPromise
+  })
+
+  it('drops a peer resize from negotiation after a hidden resize parked during buffering flushes', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const handlers = new Map<
+        number,
+        (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+      >()
+      const cleanups = new Map<string, () => void>()
+      const runtime = stubRuntime({
+        resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi
+          .fn()
+          .mockResolvedValue({ data: 'snapshot', cols: 120, rows: 40 }),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+        getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
+        }),
+        cleanupSubscription: vi.fn((id: string) => {
+          const cleanup = cleanups.get(id)
+          cleanups.delete(id)
+          cleanup?.()
+        }),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+        sendTerminal: vi.fn().mockResolvedValue({ accepted: true })
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.multiplex', {}),
+        (msg) => messages.push(msg),
+        {
+          connectionId: 'conn-peer-hidden-buffer',
+          isPeerDevice: true,
+          getGrantedTerminals: () => ['terminal-1'],
+          sendBinary: () => {},
+          registerBinaryStreamHandler: (streamId, handler) => {
+            handlers.set(streamId, handler)
+            return () => handlers.delete(streamId)
+          }
+        }
+      )
+
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+      )
+      handlers.get(0)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Subscribe,
+            streamId: 0,
+            seq: 1,
+            payload: encodeTerminalStreamJson({
+              streamId: 9,
+              terminal: 'terminal-1',
+              client: { id: 'peer-desktop-2', type: 'desktop' },
+              viewport: { cols: 300, rows: 150 },
+              capabilities: { desktopViewportClaims: 1 }
+            })
+          })
+        )!
+      )
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+      )
+      vi.mocked(runtime.updateRemoteDesktopViewer).mockClear()
+
+      // SnapshotRequest opens the buffering window synchronously...
+      handlers.get(9)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.SnapshotRequest,
+            streamId: 9,
+            seq: 2,
+            payload: encodeTerminalStreamJson({ requestId: 3, scrollbackRows: 1000 })
+          })
+        )!
+      )
+      // ...so this hidden resize is parked, not applied inline.
+      handlers.get(9)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Resize,
+            streamId: 9,
+            seq: 3,
+            payload: encodeTerminalStreamJson({ cols: 88, rows: 33, hidden: true })
+          })
+        )!
+      )
+      expect(runtime.updateRemoteDesktopViewer).not.toHaveBeenCalled()
+
+      // Once buffering clears, the flush must still honor the parked hidden flag.
+      await vi.waitFor(() =>
+        expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
+          'pty-1',
+          'multiplex:conn-peer-hidden-buffer:9',
+          'peer-desktop-2',
+          88,
+          33,
+          false,
+          false
+        )
+      )
+
+      runtime.cleanupSubscription('terminal-multiplex:conn-peer-hidden-buffer')
+      await dispatchPromise
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('emits a resize drained after the initial snapshot', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []

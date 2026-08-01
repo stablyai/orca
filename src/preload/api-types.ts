@@ -51,7 +51,7 @@ import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
-import type { PeerClientStatus, SavedPeerPairing } from '../shared/peer-client-status'
+import type { PeerClientStatusWithHost, SavedPeerPairing } from '../shared/peer-client-status'
 import type { PeerTerminalStreamEvent } from '../shared/peer-terminal-stream-event'
 import type { PeerPresenceEvent, PeerPresenceState } from '../shared/peer-presence-event'
 import type {
@@ -3689,22 +3689,32 @@ export type PreloadApi = {
   // peerCollab (the host side) because a desktop can act as either or both.
   peerClient: {
     getDefaultDisplayName: () => Promise<{ name: string }>
+    /** hostId on success is the pairing offer's publicKeyB64 — stable identity for every other peerClient call. */
     connect: (args: {
       pairingCode: string
       displayName: string
-    }) => Promise<{ ok: true } | { ok: false; reason: string }>
-    disconnect: () => Promise<{ ok: true }>
-    /** Endpoint of the last successfully-authenticated pairing, persisted across restarts; null if none is saved. */
-    getSavedPairing: () => Promise<SavedPeerPairing | null>
-    /** Clears the saved pairing without touching a live connection; disconnect() alone never clears it. */
-    forgetSavedPairing: () => Promise<{ ok: true }>
-    connectSaved: () => Promise<{ ok: true } | { ok: false; reason: string }>
-    getStatus: () => Promise<PeerClientStatus>
-    onStatusChanged: (callback: (status: PeerClientStatus) => void) => () => void
-    listHostTerminals: () => Promise<
-      { ok: true; terminals: unknown } | { ok: false; reason: string }
-    >
+    }) => Promise<{ ok: true; hostId: string } | { ok: false; reason: string }>
+    disconnect: (args: { hostId: string }) => Promise<{ ok: true }>
+    disconnectAll: () => Promise<{ ok: true }>
+    /** One entry per host with a saved pairing, persisted across restarts. */
+    listSavedPairings: () => Promise<SavedPeerPairing[]>
+    getHostNames: () => Promise<{ names: Record<string, string> }>
+    setHostName: (args: {
+      hostId: string
+      name: string
+    }) => Promise<{ names: Record<string, string> }>
+    /** Clears one host's saved pairing without touching a live connection; disconnect() alone never clears it. */
+    forgetSavedPairing: (args: { hostId: string }) => Promise<{ ok: true }>
+    connectSaved: (args: {
+      hostId: string
+    }) => Promise<{ ok: true; hostId: string } | { ok: false; reason: string }>
+    getStatuses: () => Promise<PeerClientStatusWithHost[]>
+    onStatusChanged: (callback: (status: PeerClientStatusWithHost) => void) => () => void
+    listHostTerminals: (args: {
+      hostId: string
+    }) => Promise<{ ok: true; terminals: unknown } | { ok: false; reason: string }>
     subscribeTerminal: (args: {
+      hostId: string
       terminal: string
       cols: number
       rows: number
@@ -3716,20 +3726,28 @@ export type PreloadApi = {
       cols: number
       rows: number
     }) => Promise<{ ok: boolean }>
+    /** Excludes/re-includes this stream's viewport from the host's axis-wise min-size negotiation without remeasuring. */
+    setTerminalStreamHidden: (args: {
+      requestId: string
+      hidden: boolean
+    }) => Promise<{ ok: boolean }>
     /** Names of other peers currently subscribed to this host terminal (participant display, Phase 5). */
     listTerminalSubscribers: (args: {
+      hostId: string
       terminal: string
     }) => Promise<{ ok: true; subscribers: { name: string }[] } | { ok: false; reason: string }>
     onTerminalStreamEvent: (
       callback: (payload: { requestId: string; event: PeerTerminalStreamEvent }) => void
     ) => () => void
-    getClientId: () => Promise<{ clientId: string | null }>
+    getClientId: (args: { hostId: string }) => Promise<{ clientId: string | null }>
     /** Cursor/scroll/selection fan-out for the same terminal, separate from the terminal I/O stream above. */
     subscribePresence: (args: {
+      hostId: string
       terminal: string
     }) => Promise<{ ok: true; requestId: string } | { ok: false; reason: string }>
     unsubscribePresence: (args: { requestId: string }) => Promise<{ ok: true }>
     sendPresenceState: (args: {
+      hostId: string
       terminal: string
       state: PeerPresenceState
     }) => Promise<{ ok: true }>

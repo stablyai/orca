@@ -764,9 +764,13 @@ export type UISlice = {
   closeMobilePage: () => void
   /** The host terminal currently shown in the Peers page's RemoteTerminalPanel, if any. */
   peersPageTarget: RemoteTerminalTarget | null
+  /** Per-host user ordering of the Peers tab strip, as terminal handles. */
+  peersTabOrderByHost: Record<string, string[]>
+  setPeersTabOrderForHost: (hostId: string, handles: string[]) => void
   setPeersPageTarget: (target: RemoteTerminalTarget | null) => void
   openPeersPage: (target?: RemoteTerminalTarget) => void
   closePeersPage: () => void
+  /** The secondary pane shown alongside peersPageTarget when a split view is open. */
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -1512,6 +1516,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       activeView: state.previousViewBeforeMobile
     })),
   peersPageTarget: null,
+  peersTabOrderByHost: {},
+  setPeersTabOrderForHost: (hostId, handles) =>
+    set((state) => ({
+      peersTabOrderByHost: { ...state.peersTabOrderByHost, [hostId]: handles }
+    })),
   setPeersPageTarget: (target) => set({ peersPageTarget: target }),
   openPeersPage: (target) =>
     set((state) => ({

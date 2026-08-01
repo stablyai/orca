@@ -139,7 +139,7 @@ type TerminalMultiplexStream = {
   // Whether THIS stream registered the width driver, so detach won't release a peer stream's floor.
   registeredRemoteDesktopDriver: boolean
   remoteDesktopSubscriptionKey: string
-  pendingRemoteDesktopViewport: { cols: number; rows: number } | null
+  pendingRemoteDesktopViewport: { cols: number; rows: number; hidden?: boolean } | null
   buffering: boolean
   ackPendingOutput: TerminalOutputFrameChunk[]
   ackPendingOutputBytes: number
@@ -2247,19 +2247,28 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         if (frame.opcode === TerminalStreamOpcode.Resize && stream.client) {
-          const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(
-            frame.payload
-          )
+          const viewport = decodeTerminalStreamJson<{
+            cols?: unknown
+            rows?: unknown
+            hidden?: unknown
+          }>(frame.payload)
           if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
             return
           }
           const cols = viewport.cols
           const rows = viewport.rows
+          // Why: a hidden (backgrounded) peer panel keeps streaming but must drop
+          // out of the min-size negotiation, or its stale viewport pins the PTY.
+          const hidden = viewport.hidden === true
           // Why: resize registers stream-scoped geometry so detach can release it; older clients lack explicit claims.
           if (!stream.isMobile && stream.client?.id) {
             stream.registeredRemoteDesktopDriver = true
             if (stream.buffering) {
-              stream.pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows }
+              stream.pendingRemoteDesktopViewport = {
+                cols: viewport.cols,
+                rows: viewport.rows,
+                hidden
+              }
               return
             }
           }
@@ -2274,7 +2283,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 stream.isMobile ? 'mobile' : 'desktop',
                 'register',
                 !stream.supportsDesktopViewportClaims,
-                isNegotiatingPeerClient(isPeerDevice, stream.client)
+                isNegotiatingPeerClient(isPeerDevice, stream.client) && !hidden
               )
               return stream.supportsDesktopViewportClaims
                 ? priorClaimed && result.applied
@@ -2446,7 +2455,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 'desktop',
                 'register',
                 !stream.supportsDesktopViewportClaims,
-                isNegotiatingPeerClient(isPeerDevice, stream.client)
+                isNegotiatingPeerClient(isPeerDevice, stream.client) && !viewport.hidden
               ).catch(() => {})
             }
           }
@@ -3158,7 +3167,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let cursor = 0
       let closed = false
       let buffering = true
-      let pendingRemoteDesktopViewport: { cols: number; rows: number } | null = null
+      let pendingRemoteDesktopViewport: { cols: number; rows: number; hidden?: boolean } | null =
+        null
       // Why: cols the mobile client last rewrapped to; gates the resize re-stream to fire only on an actual width change.
       let lastResizeCols: number | undefined
       let resizeGeneration = 0
@@ -3287,9 +3297,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             return
           }
           if (frame.opcode === TerminalStreamOpcode.Resize && params.client) {
-            const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(
-              frame.payload
-            )
+            const viewport = decodeTerminalStreamJson<{
+              cols?: unknown
+              rows?: unknown
+              hidden?: unknown
+            }>(frame.payload)
             if (
               !viewport ||
               typeof viewport.cols !== 'number' ||
@@ -3299,10 +3311,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             }
             const cols = viewport.cols
             const rows = viewport.rows
+            // Why: a hidden (backgrounded) peer panel keeps streaming but must drop
+            // out of the min-size negotiation, or its stale viewport pins the PTY.
+            const hidden = viewport.hidden === true
             if (clientId) {
               registeredRemoteDesktopDriver = true
               if (buffering) {
-                pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows }
+                pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows, hidden }
                 return
               }
             }
@@ -3317,7 +3332,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                   'desktop',
                   'register',
                   !supportsDesktopViewportClaims,
-                  isPeer
+                  isPeer && !hidden
                 )
                 return supportsDesktopViewportClaims
                   ? priorClaimed && result.applied
@@ -3774,7 +3789,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             'desktop',
             'register',
             !supportsDesktopViewportClaims,
-            isPeer
+            isPeer && !viewport.hidden
           ).catch(() => {})
         }
 

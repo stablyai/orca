@@ -636,6 +636,34 @@ describe('peer-collab min-size negotiation', () => {
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
   })
 
+  // Why: a backgrounded (hidden) peer panel keeps its stream and subscription
+  // alive but must stop feeding the min negotiation with a stale viewport —
+  // otherwise it permanently pins the PTY to whatever size it had when hidden.
+  it('drops a negotiating peer from the min when it re-registers as hidden', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 100, 40, true, true)
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-B', 'peer-B', 80, 30, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 30 })
+
+    // peer-B's panel is backgrounded — its stream re-registers with
+    // `negotiate: false` (the hidden signal), not a viewer detach.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-B', 'peer-B', 80, 30, false, false)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+  })
+
+  it('rejoins the min once a hidden peer becomes visible again with its real size', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 100, 40, true, true)
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-B', 'peer-B', 80, 30, true, true)
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-B', 'peer-B', 80, 30, false, false)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+
+    // peer-B's panel becomes visible again and reports its actual (measured)
+    // size, unchanged while hidden — it must re-enter the min negotiation.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-B', 'peer-B', 80, 30, false, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 30 })
+  })
+
   it('legacy non-negotiating viewers (CLI/remote-runtime desktop) keep single-owner sizing', async () => {
     const { runtime } = createRuntime()
     // No `negotiate` argument — mirrors a CLI/remote-runtime-desktop client.

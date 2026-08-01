@@ -2145,6 +2145,7 @@ function Terminal(): React.JSX.Element | null {
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [
+    activeView,
     activeWorktreeId,
     handleNewBrowserTab,
     handleNewSimulatorTab,

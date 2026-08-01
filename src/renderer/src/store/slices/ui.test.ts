@@ -3453,9 +3453,13 @@ describe('createUISlice peers navigation', () => {
   it('selects the target terminal when opening the Peers page with one', () => {
     const store = createUIStore()
 
-    store.getState().openPeersPage({ handle: 'term-1', title: 'Term One' })
+    store.getState().openPeersPage({ hostId: 'host-1', handle: 'term-1', title: 'Term One' })
 
-    expect(store.getState().peersPageTarget).toEqual({ handle: 'term-1', title: 'Term One' })
+    expect(store.getState().peersPageTarget).toEqual({
+      hostId: 'host-1',
+      handle: 'term-1',
+      title: 'Term One'
+    })
   })
 
   it('restores a persisted peers view on hydration', () => {

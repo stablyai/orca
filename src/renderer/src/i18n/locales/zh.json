@@ -10136,7 +10136,11 @@
           "hostEnabledLabel": "允许其他桌面连接",
           "hostEnabledDescription": "开启后，其他 Orca 桌面可以与此电脑配对并查看终端。关闭后，当前已连接的桌面会立即断开。",
           "hostGroupTitle": "主机",
-          "clientGroupTitle": "客户端"
+          "clientGroupTitle": "客户端",
+          "clientConnectedCount": "已连接 {{count}} 台主机",
+          "clientAddHostTitle": "添加主机",
+          "renameHostPlaceholder": "此主机的显示名称",
+          "renameHost": "重命名主机"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
@@ -14438,7 +14442,13 @@
           "c2e9f5a1d8": "未连接",
           "d7f2a9c4b6": "远程终端",
           "e5b8c1f3a2": "关闭",
-          "f9a3d6e2b1": "关闭 · Esc"
+          "f9a3d6e2b1": "关闭 · Esc",
+          "untitledTerminal": "未命名终端"
+        },
+        "PeersPageTabStrip": {
+          "splitRightAction": "向右拆分",
+          "splitRightTooltip": "向右拆分",
+          "untitledTerminal": "未命名终端"
         }
       }
     },

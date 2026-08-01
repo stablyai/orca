@@ -10209,7 +10209,11 @@
           "hostEnabledLabel": "Allow other desktops to connect",
           "hostEnabledDescription": "Turn this on so other Orca desktops can pair with and view terminals on this computer. Turning it off immediately disconnects any desktop currently connected.",
           "hostGroupTitle": "Host",
-          "clientGroupTitle": "Client"
+          "clientGroupTitle": "Client",
+          "clientConnectedCount": "Connected to {{count}} host(s)",
+          "clientAddHostTitle": "Add a host",
+          "renameHostPlaceholder": "Display name for this host",
+          "renameHost": "Rename host"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
@@ -14544,7 +14548,13 @@
           "c2e9f5a1d8": "Disconnected",
           "d7f2a9c4b6": "Remote Terminal",
           "e5b8c1f3a2": "Close",
-          "f9a3d6e2b1": "Close · Esc"
+          "f9a3d6e2b1": "Close · Esc",
+          "untitledTerminal": "Untitled terminal"
+        },
+        "PeersPageTabStrip": {
+          "splitRightAction": "Split right",
+          "splitRightTooltip": "Split right",
+          "untitledTerminal": "Untitled terminal"
         }
       }
     },

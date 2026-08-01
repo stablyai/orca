@@ -63,6 +63,10 @@ export class PeerClientHandshake {
       // Why: strip listeners first so the socket we're replacing can't fire a
       // stale 'close'/'message' event against the connection that supersedes it.
       this.ws.removeAllListeners()
+      // Why: terminate() on a still-CONNECTING socket (e.g. held up by a macOS
+      // local-network prompt) emits an error; with no listener left that emit
+      // becomes an uncaught exception and crashes the main process.
+      this.ws.once('error', () => {})
       this.ws.terminate()
       this.ws = null
     }

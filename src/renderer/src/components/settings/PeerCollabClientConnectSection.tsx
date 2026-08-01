@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { Pencil } from 'lucide-react'
 import { SearchableSetting } from './SearchableSetting'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -5,9 +7,9 @@ import { Badge } from '../ui/badge'
 import { SettingsSwitchRow } from './SettingsFormControls'
 import { getPeerCollabClientSearchEntry } from './peer-collab-settings-search'
 import { translate } from '@/i18n/i18n'
-import type { RuntimeTerminalListResult } from '../../../../shared/runtime-types'
 import type { PeerClientStatus, SavedPeerPairing } from '../../../../shared/peer-client-status'
 import type { RemoteTerminalTarget } from '@/components/peer-collab/remote-terminal-target'
+import type { PeerHostConnection } from '@/components/peer-collab/use-peer-collab-client-connection'
 
 function peerClientStatusLabel(state: PeerClientStatus['state']): string {
   if (state === 'connecting') {
@@ -35,15 +37,191 @@ type PeerCollabClientConnectSectionProps = {
   onClientPairingCodeChange: (value: string) => void
   clientDisplayName: string
   onClientDisplayNameChange: (value: string) => void
-  clientStatus: PeerClientStatus
   clientConnectBusy: boolean
   onConnect: () => void
-  onDisconnect: () => void
-  hostTerminals: RuntimeTerminalListResult['terminals']
+  hosts: PeerHostConnection[]
+  onDisconnectHost: (hostId: string) => void
   onOpenTerminal: (target: RemoteTerminalTarget) => void
-  savedPairing: SavedPeerPairing | null
-  onConnectSaved: () => void
-  onForgetSavedPairing: () => void
+  savedPairings: SavedPeerPairing[]
+  onConnectSaved: (hostId: string) => void
+  onForgetSavedPairing: (hostId: string) => void
+  hostNames: Record<string, string>
+  onRenameHost: (hostId: string, name: string) => void
+}
+
+function SavedHostCard({
+  pairing,
+  host,
+  hostName,
+  clientEnabled,
+  clientConnectBusy,
+  onConnectSaved,
+  onDisconnectHost,
+  onForgetSavedPairing,
+  onOpenTerminal,
+  onRenameHost
+}: {
+  pairing: SavedPeerPairing
+  host: PeerHostConnection | undefined
+  hostName: string | null
+  clientEnabled: boolean
+  clientConnectBusy: boolean
+  onConnectSaved: (hostId: string) => void
+  onDisconnectHost: (hostId: string) => void
+  onForgetSavedPairing: (hostId: string) => void
+  onOpenTerminal: (target: RemoteTerminalTarget) => void
+  onRenameHost: (hostId: string, name: string) => void
+}): React.JSX.Element {
+  const state = host?.status.state ?? 'closed'
+  const rejected = state === 'closed' && host?.status.lastErrorReason === 'unauthorized'
+  const busy = state === 'connected' || state === 'connecting'
+  const [editingName, setEditingName] = useState<string | null>(null)
+
+  const commitRename = (): void => {
+    if (editingName !== null) {
+      onRenameHost(pairing.hostId, editingName)
+      setEditingName(null)
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/60 px-3 py-2">
+      <div className="flex items-center gap-2">
+        {editingName !== null ? (
+          <Input
+            autoFocus
+            value={editingName}
+            onChange={(event) => setEditingName(event.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                commitRename()
+              } else if (event.key === 'Escape') {
+                setEditingName(null)
+              }
+            }}
+            placeholder={translate(
+              'auto.components.settings.PeerCollabSettingsPane.renameHostPlaceholder',
+              'Display name for this host'
+            )}
+            className="h-6 flex-1 text-xs"
+          />
+        ) : (
+          <span className="flex-1 truncate text-xs text-muted-foreground">
+            {hostName ? (
+              <>
+                <span className="font-medium text-foreground">{hostName}</span>
+                <span className="ml-1.5">{pairing.endpoint ?? ''}</span>
+              </>
+            ) : (
+              (pairing.endpoint ?? '?')
+            )}
+          </span>
+        )}
+        {editingName === null ? (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => setEditingName(hostName ?? '')}
+            aria-label={translate(
+              'auto.components.settings.PeerCollabSettingsPane.renameHost',
+              'Rename host'
+            )}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+        ) : null}
+        <Badge variant="outline" className="text-[11px]">
+          {peerClientStatusLabel(state)}
+        </Badge>
+        {busy ? (
+          <Button size="sm" variant="outline" onClick={() => onDisconnectHost(pairing.hostId)}>
+            {translate(
+              'auto.components.settings.PeerCollabSettingsPane.clientDisconnect',
+              'Disconnect'
+            )}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            onClick={() => onConnectSaved(pairing.hostId)}
+            disabled={clientConnectBusy || !clientEnabled}
+          >
+            {translate(
+              'auto.components.settings.PeerCollabSettingsPane.clientReconnectSaved',
+              'Reconnect'
+            )}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => onForgetSavedPairing(pairing.hostId)}
+          disabled={!clientEnabled}
+        >
+          {translate('auto.components.settings.PeerCollabSettingsPane.clientForgetHost', 'Remove')}
+        </Button>
+      </div>
+      {rejected ? (
+        <p className="text-xs text-destructive">
+          {translate(
+            'auto.components.settings.PeerCollabSettingsPane.clientSavedPairingInvalid',
+            'This pairing is no longer valid — the host may have revoked it.'
+          )}
+        </p>
+      ) : null}
+      {state === 'reconnect-wait' && host?.status.lastErrorReason ? (
+        <p className="text-xs text-destructive">
+          {translate(
+            'auto.components.settings.PeerCollabSettingsPane.clientTransportError',
+            'Connection failed: {{reason}}',
+            { reason: host.status.lastErrorReason }
+          )}
+        </p>
+      ) : null}
+      {state === 'connected' && host ? (
+        <div className="space-y-1">
+          {host.terminals.length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              {translate(
+                'auto.components.settings.PeerCollabSettingsPane.clientNoHostTerminalsShared',
+                'The host has not shared a terminal with you yet.'
+              )}
+            </p>
+          ) : (
+            host.terminals.map((terminal) => {
+              const title =
+                terminal.title ||
+                translate(
+                  'auto.components.settings.PeerCollabSettingsPane.clientUntitledTerminal',
+                  'Untitled terminal'
+                )
+              return (
+                <div
+                  key={terminal.handle}
+                  className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1"
+                >
+                  <div className="text-xs font-medium">{title}</div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      onOpenTerminal({ hostId: pairing.hostId, handle: terminal.handle, title })
+                    }
+                  >
+                    {translate(
+                      'auto.components.settings.PeerCollabSettingsPane.clientOpenTerminal',
+                      'Open'
+                    )}
+                  </Button>
+                </div>
+              )
+            })
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 export function PeerCollabClientConnectSection({
@@ -53,22 +231,18 @@ export function PeerCollabClientConnectSection({
   onClientPairingCodeChange,
   clientDisplayName,
   onClientDisplayNameChange,
-  clientStatus,
   clientConnectBusy,
   onConnect,
-  onDisconnect,
-  hostTerminals,
+  hosts,
+  onDisconnectHost,
   onOpenTerminal,
-  savedPairing,
+  savedPairings,
   onConnectSaved,
-  onForgetSavedPairing
+  onForgetSavedPairing,
+  hostNames,
+  onRenameHost
 }: PeerCollabClientConnectSectionProps): React.JSX.Element {
-  const clientBusy = clientStatus.state === 'connected' || clientStatus.state === 'connecting'
-  const savedPairingRejected =
-    clientStatus.state === 'closed' && clientStatus.lastErrorReason === 'unauthorized'
-  const hostDisabledHost =
-    clientStatus.state === 'closed' && clientStatus.lastErrorReason === 'host_disabled'
-  const formDisabled = !clientEnabled || clientBusy
+  const connectedCount = hosts.filter((host) => host.status.state === 'connected').length
 
   return (
     <SearchableSetting
@@ -90,216 +264,85 @@ export function PeerCollabClientConnectSection({
         onChange={onToggleClientEnabled}
       />
 
-      {hostDisabledHost ? (
-        <p className="text-xs text-destructive">
+      {connectedCount > 0 ? (
+        <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.PeerCollabSettingsPane.clientHostDisabled',
-            'The host turned off sharing, so you were disconnected.'
+            'auto.components.settings.PeerCollabSettingsPane.clientConnectedCount',
+            'Connected to {{count}} host(s)',
+            { count: connectedCount }
           )}
         </p>
       ) : null}
 
-      {savedPairing && savedPairingRejected ? (
-        <div className="space-y-1 rounded-lg border border-destructive/40 px-3 py-2">
-          <p className="text-xs text-destructive">
-            {translate(
-              'auto.components.settings.PeerCollabSettingsPane.clientSavedPairingInvalid',
-              'This pairing is no longer valid — the host may have revoked it.'
-            )}
-          </p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onForgetSavedPairing}
-            disabled={!clientEnabled}
-          >
-            {translate(
-              'auto.components.settings.PeerCollabSettingsPane.clientForgetHost',
-              'Forget this host'
-            )}
-          </Button>
+      {savedPairings.length > 0 ? (
+        <div className="space-y-2">
+          {savedPairings.map((pairing) => (
+            <SavedHostCard
+              key={pairing.hostId}
+              pairing={pairing}
+              host={hosts.find((host) => host.hostId === pairing.hostId)}
+              clientEnabled={clientEnabled}
+              clientConnectBusy={clientConnectBusy}
+              onConnectSaved={onConnectSaved}
+              onDisconnectHost={onDisconnectHost}
+              onForgetSavedPairing={onForgetSavedPairing}
+              onOpenTerminal={onOpenTerminal}
+              hostName={hostNames[pairing.hostId] ?? null}
+              onRenameHost={onRenameHost}
+            />
+          ))}
         </div>
       ) : null}
 
-      {savedPairing && !savedPairingRejected ? (
-        <div className="flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2">
-          <span className="flex-1 text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.PeerCollabSettingsPane.clientSavedHost',
-              'Saved host: {{endpoint}}',
-              { endpoint: savedPairing.endpoint ?? '?' }
-            )}
-          </span>
-          {!clientBusy ? (
-            <Button
-              size="sm"
-              onClick={onConnectSaved}
-              disabled={clientConnectBusy || !clientEnabled}
-            >
-              {translate(
-                'auto.components.settings.PeerCollabSettingsPane.clientReconnectSaved',
-                'Reconnect'
-              )}
-            </Button>
-          ) : null}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onForgetSavedPairing}
-            disabled={!clientEnabled}
-          >
-            {translate(
-              'auto.components.settings.PeerCollabSettingsPane.clientForgetHost',
-              'Forget this host'
-            )}
-          </Button>
-        </div>
-      ) : null}
-
-      <div className="space-y-1">
-        <label htmlFor="peer-collab-client-code" className="text-xs font-medium text-foreground">
+      <div className="space-y-2 rounded-lg border border-dashed border-border/60 px-3 py-2">
+        <p className="text-xs font-medium text-foreground">
           {translate(
-            'auto.components.settings.PeerCollabSettingsPane.clientCodeLabel',
-            'Pairing code'
-          )}
-        </label>
-        <Input
-          id="peer-collab-client-code"
-          value={clientPairingCode}
-          onChange={(event) => onClientPairingCodeChange(event.target.value)}
-          placeholder={translate(
-            'auto.components.settings.PeerCollabSettingsPane.clientCodePlaceholder',
-            'Paste the code from the other Orca desktop'
-          )}
-          disabled={formDisabled}
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label htmlFor="peer-collab-client-name" className="text-xs font-medium text-foreground">
-          {translate(
-            'auto.components.settings.PeerCollabSettingsPane.clientNameLabel',
-            'Your display name'
-          )}
-        </label>
-        <Input
-          id="peer-collab-client-name"
-          value={clientDisplayName}
-          onChange={(event) => onClientDisplayNameChange(event.target.value)}
-          disabled={formDisabled}
-        />
-      </div>
-
-      <div className="flex items-center gap-2">
-        {clientStatus.state === 'connected' || clientStatus.state === 'reconnect-wait' ? (
-          <Button size="sm" variant="outline" onClick={onDisconnect}>
-            {translate(
-              'auto.components.settings.PeerCollabSettingsPane.clientDisconnect',
-              'Disconnect'
-            )}
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            onClick={onConnect}
-            disabled={
-              !clientEnabled ||
-              clientConnectBusy ||
-              clientStatus.state === 'connecting' ||
-              !clientPairingCode.trim()
-            }
-          >
-            {translate('auto.components.settings.PeerCollabSettingsPane.clientConnect', 'Connect')}
-          </Button>
-        )}
-        <Badge variant="outline" className="text-[11px]">
-          {peerClientStatusLabel(clientStatus.state)}
-        </Badge>
-        {clientStatus.state === 'connected' && clientStatus.endpoint ? (
-          <span className="text-muted-foreground text-xs">{clientStatus.endpoint}</span>
-        ) : null}
-      </div>
-
-      {clientStatus.state === 'closed' &&
-      clientStatus.lastErrorReason === 'duplicate_connection' ? (
-        <p className="text-xs text-destructive">
-          {translate(
-            'auto.components.settings.PeerCollabSettingsPane.clientDuplicateConnection',
-            'This pairing code is already in use by another Orca. Generate a new code on the host.'
+            'auto.components.settings.PeerCollabSettingsPane.clientAddHostTitle',
+            'Add a host'
           )}
         </p>
-      ) : null}
-
-      {clientStatus.state === 'reconnect-wait' && clientStatus.lastErrorReason ? (
-        <div className="space-y-0.5">
-          <p className="text-xs text-destructive">
+        <div className="space-y-1">
+          <label htmlFor="peer-collab-client-code" className="text-xs font-medium text-foreground">
             {translate(
-              'auto.components.settings.PeerCollabSettingsPane.clientTransportError',
-              'Connection failed: {{reason}}',
-              { reason: clientStatus.lastErrorReason }
+              'auto.components.settings.PeerCollabSettingsPane.clientCodeLabel',
+              'Pairing code'
             )}
-          </p>
-          {/EHOSTUNREACH|ENETUNREACH/.test(clientStatus.lastErrorReason) ? (
-            <p className="text-muted-foreground text-xs">
-              {translate(
-                'auto.components.settings.PeerCollabSettingsPane.clientLocalNetworkHint',
-                'On macOS, allow this app under System Settings → Privacy & Security → Local Network.'
-              )}
-            </p>
-          ) : null}
+          </label>
+          <Input
+            id="peer-collab-client-code"
+            value={clientPairingCode}
+            onChange={(event) => onClientPairingCodeChange(event.target.value)}
+            placeholder={translate(
+              'auto.components.settings.PeerCollabSettingsPane.clientCodePlaceholder',
+              'Paste the code from the other Orca desktop'
+            )}
+            disabled={!clientEnabled}
+          />
         </div>
-      ) : null}
 
-      {clientStatus.state === 'connected' ? (
-        <div className="space-y-1 pt-1">
-          <p className="text-xs font-medium text-foreground">
+        <div className="space-y-1">
+          <label htmlFor="peer-collab-client-name" className="text-xs font-medium text-foreground">
             {translate(
-              'auto.components.settings.PeerCollabSettingsPane.clientHostTerminalsTitle',
-              'Host terminals'
+              'auto.components.settings.PeerCollabSettingsPane.clientNameLabel',
+              'Your display name'
             )}
-          </p>
-          {hostTerminals.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              {translate(
-                'auto.components.settings.PeerCollabSettingsPane.clientNoHostTerminalsShared',
-                'The host has not shared a terminal with you yet.'
-              )}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {hostTerminals.map((terminal) => {
-                const title =
-                  terminal.title ||
-                  translate(
-                    'auto.components.settings.PeerCollabSettingsPane.clientUntitledTerminal',
-                    'Untitled terminal'
-                  )
-                return (
-                  <div
-                    key={terminal.handle}
-                    className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
-                  >
-                    <div>
-                      <div className="text-sm font-medium">{title}</div>
-                      <div className="text-muted-foreground text-xs">{terminal.worktreePath}</div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onOpenTerminal({ handle: terminal.handle, title })}
-                    >
-                      {translate(
-                        'auto.components.settings.PeerCollabSettingsPane.clientOpenTerminal',
-                        'Open'
-                      )}
-                    </Button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          </label>
+          <Input
+            id="peer-collab-client-name"
+            value={clientDisplayName}
+            onChange={(event) => onClientDisplayNameChange(event.target.value)}
+            disabled={!clientEnabled}
+          />
         </div>
-      ) : null}
+
+        <Button
+          size="sm"
+          onClick={onConnect}
+          disabled={!clientEnabled || clientConnectBusy || !clientPairingCode.trim()}
+        >
+          {translate('auto.components.settings.PeerCollabSettingsPane.clientConnect', 'Connect')}
+        </Button>
+      </div>
     </SearchableSetting>
   )
 }
