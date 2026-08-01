@@ -99,6 +99,7 @@ docs/**
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
 !docs/reference/linux-glibc-compatibility.md
+!docs/reference/relay-grace-time-reconfiguration.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

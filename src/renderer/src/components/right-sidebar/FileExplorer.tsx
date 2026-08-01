@@ -42,6 +42,7 @@ import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
+import { decideExpandedDirLoad } from './file-explorer-stale-dir-cache'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 import {
   buildAddProjectFromFolderModalData,
@@ -148,6 +149,7 @@ function FileExplorerFiles(): React.JSX.Element {
     markPathAsDirectory,
     refreshTree,
     refreshDir,
+    isDirStale,
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
   const hasNameFilterQuery = nameFilterQuery.trim().length > 0
@@ -347,11 +349,14 @@ function FileExplorerFiles(): React.JSX.Element {
       return
     }
     for (const dirPath of expanded) {
-      if (!dirCache[dirPath]?.children.length && !dirCache[dirPath]?.loading) {
-        const depth =
-          splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
-        void loadDir(dirPath, depth)
+      // Why: a full refresh (watcher overflow) re-reads only root and the dirs expanded at the time,
+      // so a listing cached while collapsed is unverified — re-read it here instead of trusting it.
+      const decision = decideExpandedDirLoad(dirCache[dirPath], isDirStale(dirPath))
+      if (decision === 'skip') {
+        continue
       }
+      const depth = splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
+      void loadDir(dirPath, depth, decision === 'reload' ? { force: true } : undefined)
     }
   }, [expanded, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 

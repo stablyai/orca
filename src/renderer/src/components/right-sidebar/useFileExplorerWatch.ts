@@ -1,13 +1,21 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { FsChangedPayload } from '../../../../shared/types'
-import type { DirCache, FileExplorerOperationOwner } from './file-explorer-types'
+import type {
+  DirCache,
+  FileExplorerOperationOwner,
+  FileExplorerTreeRefreshOutcome
+} from './file-explorer-types'
 import type { InlineInput } from './FileExplorerRow'
 import { useAppStore } from '@/store'
 import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
+  getFileExplorerOperationOwner,
   getFileExplorerOperationOwnerFromState,
   type FileExplorerOwnerState
 } from './file-explorer-operation-owner'
+import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'
+import { createFileExplorerWatchRefreshScheduler } from './file-explorer-watch-refresh-scheduler'
 import { processFileExplorerFsPayload } from './file-explorer-watch-reconcile'
 
 export {
@@ -30,7 +38,7 @@ type UseFileExplorerWatchParams = {
   expanded: Set<string>
   setSelectedPath: Dispatch<SetStateAction<string | null>>
   refreshDir: (dirPath: string) => Promise<void>
-  refreshTree: () => Promise<void>
+  refreshTree: () => Promise<FileExplorerTreeRefreshOutcome>
   inlineInput: InlineInput | null
   dragSourcePath: string | null
   isNativeDragOver: boolean
@@ -127,6 +135,29 @@ export function useFileExplorerWatch({
 
     const currentWorktreePath = worktreePath
 
+    // Why: one scheduler per subscription covers BOTH remote transports (the
+    // Electron fs:changed bus and the runtime-RPC subscription below), and its
+    // lifetime is tied to the watched worktree so a switch can't refresh the
+    // previous root.
+    const owner = getFileExplorerOperationOwner(worktreeIdRef.current)
+    const scheduler = createFileExplorerWatchRefreshScheduler({
+      refreshTree: () => refreshTreeRef.current(),
+      refreshDir: (dirPath) => refreshDirRef.current(dirPath),
+      // Why exact-match on `expanded`, not a normalized compare: dirPath already arrives as a
+      // resolved dirCache key (resolveCachedDirPath), and refreshTree re-reads dirCache under the
+      // verbatim expanded strings — a differently-spelled key it never wrote would be reported
+      // covered and left stale. Only the root is normalized: it is keyed by worktreePath.
+      isCoveredByFullRefresh: (dirPath) =>
+        normalizeRuntimePathForComparison(dirPath) ===
+          normalizeRuntimePathForComparison(currentWorktreePath) ||
+        expandedRef.current.has(dirPath),
+      dirConcurrency: fileExplorerRefreshConcurrency(owner),
+      // Why: main already coalesced the burst on this same 150/500 window before it reached the
+      // fs:changed bus, so a second debounce here only doubles paint latency. Zero still arms a 0ms
+      // timer, keeping intra-payload dedup and the concurrency cap.
+      ...(owner.kind === 'local' ? { trailingMs: 0, maxWaitMs: 0 } : {})
+    })
+
     function processPayload(payload: FsChangedPayload): void {
       const wtId = worktreeIdRef.current
       if (!wtId) {
@@ -140,12 +171,8 @@ export function useFileExplorerWatch({
         expanded: expandedRef.current,
         setDirCache,
         setSelectedPath,
-        refreshDir: (dirPath) => {
-          void refreshDirRef.current(dirPath)
-        },
-        refreshTree: () => {
-          void refreshTreeRef.current()
-        }
+        refreshDir: scheduler.requestDirRefresh,
+        refreshTree: scheduler.requestFullRefresh
       })
     }
 
@@ -207,6 +234,7 @@ export function useFileExplorerWatch({
     return () => {
       disposed = true
       unsubscribeListener?.()
+      scheduler.cancel()
       deferredRef.current = []
       processPayloadRef.current = null
     }

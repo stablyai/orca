@@ -108,6 +108,57 @@ const WORKING_NODE_PTY_MODULE = `module.exports = { spawn() { return {
   onData() {}, onExit() {}, write() {}, resize() {}, kill() {}, clear() {}
 } } }\n`
 
+// A shell that reports its own exit after a delay, so the relay sees the pool drain on its own.
+function selfExitingNodePtyModule(exitAfterMs: number): string {
+  return `module.exports = { spawn() {
+  const exitHandlers = []
+  setTimeout(() => { for (const cb of exitHandlers) { cb({ exitCode: 0, signal: 0 }) } }, ${exitAfterMs})
+  return {
+    pid: process.pid,
+    process: 'mock-shell',
+    onData() {}, onExit(cb) { exitHandlers.push(cb) }, write() {}, resize() {}, kill() {}, clear() {}
+  }
+} }\n`
+}
+
+// A shell whose first dispose is refused, so ptyHandler.dispose() rejects once before a retry can succeed.
+const KILL_REJECTS_FIRST_DISPOSE_MODULE = `let killAttempts = 0
+module.exports = { spawn() {
+  const exitHandlers = []
+  return {
+    pid: 2147483646,
+    process: 'mock-shell',
+    onData() {}, onExit(cb) { exitHandlers.push(cb) }, write() {}, resize() {}, clear() {},
+    kill() {
+      killAttempts++
+      if (killAttempts <= 2) { throw new Error('kill refused') }
+      setTimeout(() => { for (const cb of exitHandlers) { cb({ exitCode: 0, signal: 0 }) } }, 0)
+    }
+  }
+} }\n`
+
+// Why: an ESM mock with top-level await parks loadPty() in the window where a spawn is admitted but not yet pooled.
+function writeSlowLoadingNodePty(root: string, loadDelayMs: number): void {
+  const nodePtyDir = path.join(root, 'node_modules', 'node-pty')
+  mkdirSync(path.join(nodePtyDir, 'lib'), { recursive: true })
+  writeFileSync(path.join(nodePtyDir, 'package.json'), '{"type":"module","main":"lib/index.js"}\n')
+  writeFileSync(
+    path.join(nodePtyDir, 'lib', 'index.js'),
+    `await new Promise((resolve) => setTimeout(resolve, ${loadDelayMs}))
+export function spawn() {
+  const exitHandlers = []
+  return {
+    pid: process.pid,
+    process: 'mock-shell',
+    onData() {}, onExit(cb) { exitHandlers.push(cb) }, write() {}, resize() {}, clear() {},
+    // Report the exit so relay shutdown can complete instead of parking on waitForPhysicalExit.
+    kill() { setTimeout(() => { for (const cb of exitHandlers) { cb({ exitCode: 0, signal: 0 }) } }, 0) }
+  }
+}
+`
+  )
+}
+
 describe('Subprocess: Relay entry point', () => {
   let relay: RelayProcess | null = null
   let tmpDir: string
@@ -502,6 +553,210 @@ describe('Subprocess: Relay entry point', () => {
       expect(relay.proc.exitCode).toBe(0)
     },
     10_000
+  )
+
+  // Why: a relay holding zero PTYs preserves nothing, so the unlimited default must still be
+  // bounded once a client has come and gone — but an explicitly configured grace is never shortened.
+  function spawnIdleGraceDaemon(
+    nodePtyModule: string,
+    graceTimeSeconds: string,
+    idleGraceMs: string
+  ): { daemon: RelayProcess; sockPath: string } {
+    const daemonEntry = path.join(tmpDir, 'relay.js')
+    copyFileSync(relayEntry, daemonEntry)
+    writeMockNodePty(tmpDir, nodePtyModule)
+    const sockPath = path.join(tmpDir, 'relay.sock')
+    const daemon = spawnRelayEntry(
+      daemonEntry,
+      ['--detached', '--grace-time', graceTimeSeconds, '--sock-path', sockPath],
+      { ...process.env, ORCA_RELAY_IDLE_GRACE_MS: idleGraceMs }
+    )
+    return { daemon, sockPath }
+  }
+
+  async function connectAndDisconnect(
+    sockPath: string,
+    whileConnected?: (bridge: RelayProcess) => Promise<void>
+  ): Promise<void> {
+    const bridge = spawn(['--connect', '--sock-path', sockPath])
+    try {
+      await bridge.sentinelReceived
+      await whileConnected?.(bridge)
+    } finally {
+      bridge.kill('SIGTERM')
+      await bridge.waitForExit().catch(() => {})
+    }
+  }
+
+  it.skipIf(process.platform === 'win32')(
+    'shuts down an idle relay with no PTYs after the idle grace even with --grace-time 0',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-idle-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      relay = spawn(['--detached', '--grace-time', '0', '--sock-path', sockPath], {
+        ...process.env,
+        ORCA_RELAY_IDLE_GRACE_MS: '200'
+      })
+      await relay.sentinelReceived
+
+      // Accepting a client defeats the startup-empty branch, so only the idle cap can end this relay.
+      await connectAndDisconnect(sockPath)
+
+      await relay.waitForExit(2000)
+      expect(relay.proc.exitCode).toBe(0)
+    },
+    15_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a relay with a live PTY alive past the idle grace',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-idle-live-pty-'))
+      const { daemon, sockPath } = spawnIdleGraceDaemon(WORKING_NODE_PTY_MODULE, '0', '200')
+      relay = daemon
+      await relay.sentinelReceived
+
+      await connectAndDisconnect(sockPath, async (bridge) => {
+        const resp = await bridge.waitForResponse(bridge.send('pty.spawn', { cols: 80, rows: 24 }))
+        expect(resp.error).toBeUndefined()
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 1200))
+      expect(relay.proc.exitCode).toBeNull()
+    },
+    15_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    're-arms the idle grace when the last PTY exits during grace',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-idle-rearm-'))
+      const { daemon, sockPath } = spawnIdleGraceDaemon(selfExitingNodePtyModule(1500), '0', '200')
+      relay = daemon
+      await relay.sentinelReceived
+
+      await connectAndDisconnect(sockPath, async (bridge) => {
+        const resp = await bridge.waitForResponse(bridge.send('pty.spawn', { cols: 80, rows: 24 }))
+        expect(resp.error).toBeUndefined()
+      })
+
+      // The live PTY must suppress the idle grace at disconnect; only its own exit re-arms it.
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      expect(relay.proc.exitCode).toBeNull()
+
+      await relay.waitForExit(5000)
+      expect(relay.proc.exitCode).toBe(0)
+    },
+    20_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'honors an explicitly configured grace instead of clamping it to the idle cap',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-idle-configured-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      relay = spawn(['--detached', '--grace-time', '3600', '--sock-path', sockPath], {
+        ...process.env,
+        ORCA_RELAY_IDLE_GRACE_MS: '200'
+      })
+      await relay.sentinelReceived
+
+      await connectAndDisconnect(sockPath)
+
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      expect(relay.proc.exitCode).toBeNull()
+    },
+    15_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps the relay alive when the client drops while a PTY creation is still in flight',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-idle-inflight-'))
+      const daemonEntry = path.join(tmpDir, 'relay.js')
+      copyFileSync(relayEntry, daemonEntry)
+      writeSlowLoadingNodePty(tmpDir, 1500)
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      relay = spawnRelayEntry(
+        daemonEntry,
+        ['--detached', '--grace-time', '0', '--sock-path', sockPath],
+        { ...process.env, ORCA_RELAY_IDLE_GRACE_MS: '200' }
+      )
+      await relay.sentinelReceived
+
+      const bridge = spawn(['--connect', '--sock-path', sockPath])
+      await bridge.sentinelReceived
+      // Revive, not spawn: it has no client-disconnect abort, so it really does produce a live shell
+      // after the parked module load resolves.
+      bridge.send('pty.revive', {
+        state: JSON.stringify([
+          { id: 'pty-restored', pid: process.pid, cols: 80, rows: 24, cwd: tmpDir }
+        ])
+      })
+      // Let the creation park on the module load: it already owns a shell but is not in the pool yet.
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      bridge.kill('SIGTERM')
+      await bridge.waitForExit().catch(() => {})
+
+      // Well past the idle cap and past the point where the parked creation lands in the pool.
+      await new Promise((resolve) => setTimeout(resolve, 2500))
+      expect(relay.proc.exitCode).toBeNull()
+
+      const probe = spawn(['--connect', '--sock-path', sockPath])
+      try {
+        await probe.sentinelReceived
+        const status = await probe.waitForResponse(probe.send('relay.status'))
+        expect((status.result as { ptys: { active: number } }).ptys.active).toBe(1)
+      } finally {
+        probe.kill('SIGTERM')
+        await probe.waitForExit().catch(() => {})
+      }
+    },
+    20_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not extend an explicitly configured grace when the last PTY exits mid-window',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-configured-rearm-'))
+      const { daemon, sockPath } = spawnIdleGraceDaemon(selfExitingNodePtyModule(2500), '3', '200')
+      relay = daemon
+      await relay.sentinelReceived
+
+      await connectAndDisconnect(sockPath, async (bridge) => {
+        const resp = await bridge.waitForResponse(bridge.send('pty.spawn', { cols: 80, rows: 24 }))
+        expect(resp.error).toBeUndefined()
+      })
+
+      // The 3s window keeps governing; re-arming at the ~2.5s PTY exit would push shutdown past 5s.
+      await relay.waitForExit(4200)
+      expect(relay.proc.exitCode).toBe(0)
+    },
+    20_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    're-arms grace after a shutdown deferred by a rejected kill, so the relay still exits',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-shutdown-deferred-'))
+      const { daemon, sockPath } = spawnIdleGraceDaemon(
+        KILL_REJECTS_FIRST_DISPOSE_MODULE,
+        '2',
+        '200'
+      )
+      relay = daemon
+      await relay.sentinelReceived
+
+      await connectAndDisconnect(sockPath, async (bridge) => {
+        const resp = await bridge.waitForResponse(bridge.send('pty.spawn', { cols: 80, rows: 24 }))
+        expect(resp.error).toBeUndefined()
+      })
+
+      // First grace expiry hits the refused kill; only the re-armed window can retry it.
+      await relay.waitForExit(8000)
+      expect(relay.proc.exitCode).toBe(0)
+    },
+    20_000
   )
 
   it('reports relay diagnostics over relay.status', async () => {

@@ -368,9 +368,15 @@ import {
 } from '../../shared/setup-agent-sequencing'
 import { TASK_PROVIDERS } from '../../shared/task-providers'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import {
   applyTerminalQuickCommandMutation,
   MAX_QUICK_COMMANDS,
@@ -1449,6 +1455,9 @@ type RuntimeAgentRowSnapshot = {
   ptyId: string
   worktreeId?: string
   tabId?: string
+  // Transport of the pane's PTY at retain time; null for local. Without it,
+  // OSC rows for SSH panes would lose the remote exemption in worktree.ps.
+  connectionId: string | null
   payload: ParsedAgentStatusPayload
   // When the current payload.state was first observed for this pane (ms).
   stateStartedAt: number
@@ -10056,6 +10065,7 @@ export class OrcaRuntimeService {
             target.paneKey,
             target.worktreeId,
             target.tabId,
+            target.connectionId ?? null,
             payload
           ) || retainedChanged
         if (!this.onTerminalAgentStatus) {
@@ -10086,6 +10096,7 @@ export class OrcaRuntimeService {
     paneKey: string,
     worktreeId: string | undefined,
     tabId: string | undefined,
+    connectionId: string | null,
     payload: ParsedAgentStatusPayload
   ): boolean {
     const now = Date.now()
@@ -10100,6 +10111,7 @@ export class OrcaRuntimeService {
       ptyId,
       worktreeId,
       tabId,
+      connectionId,
       payload,
       stateStartedAt,
       updatedAt: now
@@ -16962,11 +16974,34 @@ export class OrcaRuntimeService {
       }
     }
 
+    // Why: a connected PTY proves a pane is still live even when its tab has
+    // already left every session record (daemon-held terminals, graph gaps).
+    // Deliberately trusts the optimistic connected flag (no freshPtyLiveness
+    // gate, unlike the count loops above): evidence only KEEPS rows.
+    const connectedPtyEvidence = {
+      tabIds: new Set<string>(),
+      paneKeys: new Set<string>(),
+      ptyIds: new Set<string>()
+    }
+    for (const pty of this.ptysById.values()) {
+      if (!pty.connected) {
+        continue
+      }
+      connectedPtyEvidence.ptyIds.add(pty.ptyId)
+      if (pty.tabId) {
+        connectedPtyEvidence.tabIds.add(pty.tabId)
+      }
+      if (pty.paneKey) {
+        connectedPtyEvidence.paneKeys.add(pty.paneKey)
+      }
+    }
+
     this.attachAgentRowsToSummaries(
       summaries,
       runtimeWorktreeSummaryPathIndex,
       missingRuntimeWorktreeIds,
-      mirroredWorktreeIdByTabId
+      mirroredWorktreeIdByTabId,
+      connectedPtyEvidence
     )
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
@@ -16985,7 +17020,12 @@ export class OrcaRuntimeService {
     summaries: Map<string, RuntimeWorktreePsSummary>,
     runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
     missingRuntimeWorktreeIds: Set<string>,
-    mirroredWorktreeIdByTabId: ReadonlyMap<string, string>
+    mirroredWorktreeIdByTabId: ReadonlyMap<string, string>,
+    connectedPtyEvidence: {
+      tabIds: ReadonlySet<string>
+      paneKeys: ReadonlySet<string>
+      ptyIds: ReadonlySet<string>
+    }
   ): void {
     // Why: most agents report via hooks (agent-hooks/server), not OSC, so the
     // hook snapshot is the primary source — same one the desktop sidebar reads.
@@ -16994,8 +17034,10 @@ export class OrcaRuntimeService {
       string,
       {
         paneKey: string
+        ptyId?: string
         tabId?: string
         worktreeId?: string
+        connectionId: string | null
         state: ParsedAgentStatusPayload['state']
         agentType: string | null
         prompt: string
@@ -17011,8 +17053,10 @@ export class OrcaRuntimeService {
       const { payload } = snapshot
       rowSources.set(snapshot.paneKey, {
         paneKey: snapshot.paneKey,
+        ptyId: snapshot.ptyId,
         tabId: snapshot.tabId,
         worktreeId: snapshot.worktreeId,
+        connectionId: snapshot.connectionId,
         state: payload.state,
         agentType: payload.agentType ?? null,
         prompt: payload.prompt,
@@ -17033,8 +17077,12 @@ export class OrcaRuntimeService {
       }
       rowSources.set(entry.paneKey, {
         paneKey: entry.paneKey,
+        // Hook payloads carry no ptyId; keep the OSC-observed one so the
+        // connected-PTY rescue survives a hook row winning the freshness race.
+        ptyId: existing?.ptyId,
         tabId: entry.tabId,
         worktreeId: entry.worktreeId,
+        connectionId: entry.connectionId,
         state: entry.state,
         agentType: entry.agentType ?? null,
         prompt: entry.prompt,
@@ -17055,9 +17103,31 @@ export class OrcaRuntimeService {
     for (const src of rowSources.values()) {
       // Why: hooks retain launch-time attribution across automatic workspace
       // renames; the tab's current mirrored owner is authoritative when present.
-      const tabId = src.tabId ?? parsePaneKey(src.paneKey)?.tabId
-      const worktreeId =
-        (tabId ? mirroredWorktreeIdByTabId.get(tabId) : undefined) ?? src.worktreeId
+      // Legacy numeric pane keys (non-UUID leaves) still name a real tab, so
+      // parse them too — otherwise their rows would bypass the stale filter.
+      const tabId =
+        src.tabId ??
+        parsePaneKey(src.paneKey)?.tabId ??
+        parseLegacyNumericPaneKey(src.paneKey)?.tabId
+      const mirroredWorktreeId = tabId ? mirroredWorktreeIdByTabId.get(tabId) : undefined
+      if (
+        tabId !== undefined &&
+        mirroredWorktreeId === undefined &&
+        (src.connectionId === null || isWslHookRelayConnectionId(src.connectionId)) &&
+        !connectedPtyEvidence.tabIds.has(tabId) &&
+        !connectedPtyEvidence.paneKeys.has(src.paneKey) &&
+        (src.ptyId === undefined || !connectedPtyEvidence.ptyIds.has(src.ptyId))
+      ) {
+        // Why: hook snapshots hydrate from last-status.json for days, so a row
+        // from a local or WSL-relayed pane whose tab left every session and the
+        // live graph, with no connected PTY, is retained history — surfacing it
+        // resurrects closed agents on mobile (#6072). SSH rows are exempt (their
+        // tabs may exist only remotely), as are rows with no resolvable tabId
+        // (staleness unprovable). Session tabs count as existence: headless
+        // serve has no renderer graph, and session.tabs.list serves them.
+        continue
+      }
+      const worktreeId = mirroredWorktreeId ?? src.worktreeId
       if (!worktreeId) {
         continue
       }

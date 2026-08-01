@@ -3,7 +3,7 @@ import type { SetStateAction } from 'react'
 import type { DirEntry } from '../../../../shared/types'
 import type { DirCache } from './file-explorer-types'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
-import { refreshFileExplorerExpandedDirs } from './useFileExplorerTree'
+import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'
 
 type CacheUpdate = SetStateAction<Record<string, DirCache>>
 
@@ -44,7 +44,10 @@ describe('refreshFileExplorerExpandedDirs', () => {
       worktreePath: '/repo',
       dirLoadTracker: createFileExplorerDirLoadTracker(),
       setDirCache,
-      readDirectory
+      readDirectory,
+      // A limit at or above the dir count must stay a single wave, i.e. exactly
+      // today's two batched writes.
+      maxConcurrentReads: 16
     })
 
     expect(refreshed).toBe(true)
@@ -128,7 +131,8 @@ describe('refreshFileExplorerExpandedDirs', () => {
       worktreePath: '/repo',
       dirLoadTracker: tracker,
       setDirCache,
-      readDirectory
+      readDirectory,
+      maxConcurrentReads: 16
     })
 
     // Not every dir was still current, so the refresh reports partial completion.
@@ -172,7 +176,8 @@ describe('refreshFileExplorerExpandedDirs', () => {
       worktreePath: '/repo',
       dirLoadTracker: tracker,
       setDirCache,
-      readDirectory
+      readDirectory,
+      maxConcurrentReads: 16
     })
 
     // Let /repo/src resolve (and pass its resolve-time token check) while
@@ -206,5 +211,138 @@ describe('refreshFileExplorerExpandedDirs', () => {
       loading: false,
       children: [{ name: 'guide.md' }]
     })
+  })
+
+  it('never exceeds maxConcurrentReads in flight and still commits every directory', async () => {
+    const dirs = Array.from({ length: 20 }, (_, index) => ({
+      dirPath: `/repo/d${index}`,
+      depth: 0
+    }))
+    let cache: Record<string, DirCache> = {}
+    const setDirCache = vi.fn((update: CacheUpdate) => {
+      cache = typeof update === 'function' ? update(cache) : update
+    })
+    let inFlight = 0
+    let peakInFlight = 0
+    const readDirectory = vi.fn(async (dirPath: string) => {
+      inFlight++
+      peakInFlight = Math.max(peakInFlight, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      inFlight--
+      return {
+        entries: [entry(`${dirPath.slice('/repo/'.length)}.ts`)],
+        operationOwner: { kind: 'local' as const }
+      }
+    })
+
+    const refreshed = await refreshFileExplorerExpandedDirs({
+      dirs,
+      worktreePath: '/repo',
+      dirLoadTracker: createFileExplorerDirLoadTracker(),
+      setDirCache,
+      readDirectory,
+      maxConcurrentReads: 4
+    })
+
+    expect(refreshed).toBe(true)
+    expect(peakInFlight).toBeLessThanOrEqual(4)
+    expect(readDirectory).toHaveBeenCalledTimes(20)
+    // One up-front loading write plus one result write per wave (five waves).
+    expect(setDirCache).toHaveBeenCalledTimes(6)
+    for (const { dirPath } of dirs) {
+      expect(cache[dirPath]).toMatchObject({
+        loading: false,
+        children: [{ name: expect.any(String) }]
+      })
+    }
+  })
+
+  it('marks queued dirs loading up front so only the first wave reads', async () => {
+    const dirs = Array.from({ length: 9 }, (_, index) => ({
+      dirPath: `/repo/d${index}`,
+      depth: 0
+    }))
+    let cache: Record<string, DirCache> = {}
+    const setDirCache = vi.fn((update: CacheUpdate) => {
+      cache = typeof update === 'function' ? update(cache) : update
+    })
+    let releaseFirstWave!: () => void
+    const firstWaveGate = new Promise<void>((resolve) => {
+      releaseFirstWave = resolve
+    })
+    const readDirectory = vi.fn(async (dirPath: string) => {
+      if (['/repo/d0', '/repo/d1', '/repo/d2'].includes(dirPath)) {
+        await firstWaveGate
+      }
+      return { entries: [], operationOwner: { kind: 'local' as const } }
+    })
+
+    const refreshPromise = refreshFileExplorerExpandedDirs({
+      dirs,
+      worktreePath: '/repo',
+      dirLoadTracker: createFileExplorerDirLoadTracker(),
+      setDirCache,
+      readDirectory,
+      maxConcurrentReads: 3
+    })
+    await Promise.resolve()
+
+    expect(cache['/repo/d0']).toMatchObject({ loading: true })
+    // A queued dir must already advertise loading:true, or FileExplorer's
+    // auto-load effect fans out an unbounded loadDir for it on the next
+    // `expanded` change — the reads this cap exists to bound.
+    expect(cache['/repo/d6']).toMatchObject({ loading: true })
+    expect(readDirectory).toHaveBeenCalledTimes(3)
+
+    releaseFirstWave()
+    await refreshPromise
+
+    expect(cache['/repo/d6']).toMatchObject({ loading: false })
+  })
+
+  it('drops a later-wave directory superseded while an earlier wave was reading', async () => {
+    const tracker = createFileExplorerDirLoadTracker()
+    let cache: Record<string, DirCache> = {}
+    const setDirCache = vi.fn((update: CacheUpdate) => {
+      cache = typeof update === 'function' ? update(cache) : update
+    })
+    let releaseFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const readDirectory = vi.fn(async (dirPath: string) => {
+      if (dirPath === '/repo/a') {
+        await firstGate
+      }
+      return { entries: [entry('x.ts')], operationOwner: { kind: 'local' as const } }
+    })
+
+    const refreshPromise = refreshFileExplorerExpandedDirs({
+      dirs: [
+        { dirPath: '/repo/a', depth: 0 },
+        { dirPath: '/repo/b', depth: 0 }
+      ],
+      worktreePath: '/repo',
+      dirLoadTracker: tracker,
+      setDirCache,
+      readDirectory,
+      maxConcurrentReads: 1
+    })
+    await Promise.resolve()
+
+    // A watcher-driven refreshDir supersedes the queued wave-2 dir before it
+    // ever starts reading; its token was already taken up front.
+    tracker.begin('/repo/b')
+    const newerBCache: DirCache = { loading: false, children: [] }
+    setDirCache((prev) => ({ ...prev, '/repo/b': newerBCache }))
+
+    releaseFirst()
+    const refreshed = await refreshPromise
+
+    expect(refreshed).toBe(false)
+    expect(cache['/repo/a']).toMatchObject({ loading: false, children: [{ name: 'x.ts' }] })
+    // Wave 2 must neither read nor commit the superseded dir.
+    expect(readDirectory).toHaveBeenCalledTimes(1)
+    expect(cache['/repo/b']).toEqual(newerBCache)
   })
 })

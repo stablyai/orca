@@ -32411,6 +32411,8 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
+    // No renderer graph on purpose: headless rename attribution must work from
+    // the persisted session alone.
     const { worktrees } = await runtime.getWorktreePs()
     const oldSummary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
     const renamedSummary = worktrees.find((worktree) => worktree.worktreeId === renamedWorktreeId)
@@ -32502,15 +32504,497 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       })
+      // Why: local rows only project while their tab exists (#6072); freshness
+      // is what varies here, so keep the tab present in the runtime graph.
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Codex',
+            activeLeafId: '33333333-3333-4333-8333-333333333333',
+            layout: null
+          }
+        ],
+        leaves: []
+      })
 
       const { worktrees } = await runtime.getWorktreePs()
 
-      expect(worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)).toMatchObject({
-        hasHostSidebarActivity,
-        status
-      })
+      const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+      expect(summary).toMatchObject({ hasHostSidebarActivity, status })
+      // Why: inactive must mean "projected but not fresh", never "row dropped".
+      expect(summary?.agents).toHaveLength(1)
     }
   )
+
+  it('drops a hydrated done hook row after its local tab is closed', async () => {
+    // Why (#6072): last-status.json hydrates hook rows for days; a closed tab's
+    // agent must not resurface on mobile as current worktree activity.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {}
+    })
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'closed-tab:66666666-6666-4666-8666-666666666666',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'closed-tab',
+          state: 'done',
+          prompt: 'refactor the parser',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 60_000
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({
+      liveTerminalCount: 0,
+      hasHostSidebarActivity: false,
+      status: 'inactive',
+      agents: []
+    })
+  })
+
+  it('keeps a hydrated row while its persisted session tab exists and no renderer graph is attached', async () => {
+    // Why: headless serve has no renderer graph; session.tabs.list serves this
+    // tab to mobile as current, so its agent row must stay (desktop parity).
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: [
+          {
+            id: 'headless-tab',
+            ptyId: null,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Codex',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'headless-tab:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'headless-tab',
+          state: 'done',
+          prompt: 'finished while headless',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 60_000
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ state: 'done', prompt: 'finished while headless' })
+    ])
+  })
+
+  it('resolves legacy numeric pane keys through the stale filter too', async () => {
+    // Why: non-UUID leaves produce `tabId:paneRuntimeId` keys with no tabId
+    // field; they still name a real tab and must not bypass the filter.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: [
+          {
+            id: 'open-tab',
+            ptyId: null,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Codex',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'closed-tab:7',
+          worktreeId: TEST_WORKTREE_ID,
+          state: 'done',
+          prompt: 'stale legacy pane',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 60_000
+        },
+        {
+          paneKey: 'open-tab:9',
+          worktreeId: TEST_WORKTREE_ID,
+          state: 'working',
+          prompt: 'live legacy pane',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ paneKey: 'open-tab:9', prompt: 'live legacy pane' })
+    ])
+  })
+
+  it('keeps a local hook row while a connected PTY still backs its pane', async () => {
+    // Why: daemon-held terminals stay live across renderer graph gaps even when
+    // no session tab records them; a connected PTY is proof the pane exists.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {}
+    })
+    const paneKey = 'daemon-tab:77777777-7777-4777-8777-777777777777'
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'daemon-tab',
+          state: 'working',
+          prompt: 'long-running daemon agent',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    // paneKey-only record: the tabId rescue must not be what keeps this row.
+    runtime['recordPtyWorktree']('daemon-pty', TEST_WORKTREE_ID, {
+      connected: true,
+      paneKey
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ paneKey, state: 'working', prompt: 'long-running daemon agent' })
+    ])
+    expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
+  })
+
+  it('keeps a local hook row when a connected PTY matches only its tab id', async () => {
+    // Split-pane sibling: the PTY's paneKey names another leaf of the same tab,
+    // so only the tabId conjunct can rescue this row.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {}
+    })
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'daemon-tab:88888888-8888-4888-8888-888888888887',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'daemon-tab',
+          state: 'working',
+          prompt: 'sibling pane agent',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    runtime['recordPtyWorktree']('daemon-pty-2', TEST_WORKTREE_ID, {
+      connected: true,
+      tabId: 'daemon-tab',
+      paneKey: 'daemon-tab:99999999-9999-4999-8999-999999999998'
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ prompt: 'sibling pane agent', state: 'working' })
+    ])
+  })
+
+  it('keeps a retained OSC row via its connected PTY after the pane binding is cleared', async () => {
+    // A controller incarnation change nulls pty.tabId/paneKey while the PTY
+    // stays connected (adoptControllerTerminalHandle); the ptyId conjunct is
+    // then the only rescue for the retained OSC row.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {}
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime['recordPtyWorktree']('osc-pty', TEST_WORKTREE_ID, {
+      connected: true,
+      tabId: 'osc-tab',
+      paneKey: 'osc-tab:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    })
+    runtime.onPtyData(
+      'osc-pty',
+      '\x1b]9999;{"state":"working","prompt":"osc reporter","agentType":"codex"}\x07',
+      1
+    )
+    const pty = runtime['ptysById'].get('osc-pty')!
+    pty.tabId = null
+    pty.paneKey = null
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary?.agents).toEqual([expect.objectContaining({ prompt: 'osc reporter' })])
+  })
+
+  it('keeps the connected-PTY rescue when a hook row outraces the OSC row for the same pane', async () => {
+    // Hook payloads carry no ptyId; the OSC-observed one must survive the
+    // hook row winning the freshness race or the ptyId rescue goes dead.
+    const paneKey = 'race-tab:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {}
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'race-tab',
+          state: 'working',
+          prompt: 'hook-fresh agent',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: Date.now() + 60_000,
+          stateStartedAt: Date.now() - 100
+        }
+      ]
+    })
+    runtime['recordPtyWorktree']('race-pty', TEST_WORKTREE_ID, {
+      connected: true,
+      tabId: 'race-tab',
+      paneKey
+    })
+    runtime.onPtyData(
+      'race-pty',
+      '\x1b]9999;{"state":"working","prompt":"osc ping","agentType":"codex"}\x07',
+      1
+    )
+    const pty = runtime['ptysById'].get('race-pty')!
+    pty.tabId = null
+    pty.paneKey = null
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary?.agents).toEqual([expect.objectContaining({ prompt: 'hook-fresh agent' })])
+  })
+
+  it('keeps a retained OSC row from an SSH pane after its PTY disconnects', async () => {
+    // Why: OSC snapshots must carry the pane transport; hardcoding local would
+    // strip the SSH exemption off rows whose freshest update arrived via OSC.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {}
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime['recordPtyWorktree']('ssh-osc-pty', TEST_WORKTREE_ID, {
+      connected: true,
+      connectionId: 'ssh-osc-1',
+      tabId: 'ssh-tab',
+      paneKey: 'ssh-tab:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    })
+    runtime.onPtyData(
+      'ssh-osc-pty',
+      '\x1b]9999;{"state":"working","prompt":"remote osc agent","agentType":"codex"}\x07',
+      1
+    )
+    runtime['recordPtyWorktree']('ssh-osc-pty', TEST_WORKTREE_ID, { connected: false })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary?.agents).toEqual([expect.objectContaining({ prompt: 'remote osc agent' })])
+  })
+
+  it('keeps a hook row with an unresolvable pane key', async () => {
+    // Why: no tabId means staleness is unprovable; the filter must pass it.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {}
+    })
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'opaque-key-without-structure',
+          worktreeId: TEST_WORKTREE_ID,
+          state: 'working',
+          prompt: 'unattributable pane',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary?.agents).toEqual([expect.objectContaining({ prompt: 'unattributable pane' })])
+  })
+
+  it('keeps a WSL hook row while its tab is still in the session', async () => {
+    // Guards the WSL clause against over-filtering: local-tab evidence must
+    // rescue WSL rows exactly like null-connection rows.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: [
+          {
+            id: 'open-wsl-tab',
+            ptyId: null,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Codex',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'open-wsl-tab:99999999-9999-4999-8999-999999999997',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'open-wsl-tab',
+          state: 'working',
+          prompt: 'live in WSL',
+          agentType: 'codex',
+          connectionId: 'wsl:Ubuntu',
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary?.agents).toEqual([expect.objectContaining({ prompt: 'live in WSL' })])
+  })
+
+  it('drops a hydrated WSL hook row after its local tab is closed', async () => {
+    // Why: WSL relay ids are transport provenance; the pane remains local.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {}
+    })
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'closed-wsl-tab:99999999-9999-4999-8999-999999999999',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'closed-wsl-tab',
+          state: 'done',
+          prompt: 'finished in WSL',
+          agentType: 'codex',
+          connectionId: 'wsl:Ubuntu',
+          receivedAt: now,
+          stateStartedAt: now - 60_000
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary?.agents).toEqual([])
+  })
+
+  it('keeps remote hook rows whose tabs are only tracked on the remote host', async () => {
+    // Why: the local session partition for an SSH host can be empty while the
+    // remote host owns the terminals; absence there is not proof of a close.
+    const remoteRepo = {
+      id: 'repo-ssh-6072',
+      path: '/home/me/project',
+      displayName: 'remote-vm',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-6072'
+    }
+    const remoteWorktree = {
+      path: '/home/me/project/.worktrees/feature-agents',
+      head: 'def',
+      branch: 'refs/heads/feature/agents',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const remoteWorktreeId = `${remoteRepo.id}::${remoteWorktree.path}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [remoteWorktreeId]: makeWorktreeMeta({ displayName: 'Remote agents' })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorkspaceSession: () => getDefaultWorkspaceSession()
+    }
+    registerSshGitProvider('ssh-6072', {
+      listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
+    } as never)
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'remote-tab:88888888-8888-4888-8888-888888888888',
+          worktreeId: remoteWorktreeId,
+          tabId: 'remote-tab',
+          state: 'working',
+          prompt: 'remote agent without local tab records',
+          agentType: 'codex',
+          connectionId: 'ssh-6072',
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === remoteWorktreeId)
+
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ prompt: 'remote agent without local tab records' })
+    ])
+  })
 
   it('marks the desktop-active worktree as isActive', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(

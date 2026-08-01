@@ -372,6 +372,8 @@ export class PtyHandler {
   private reloadPtyModuleFromDisk = false
   // Why: single optional slot is intentional — callers compose externally; a throw is swallowed so it can't block cleanup.
   private exitListener: PtyExitListener | null = null
+  private ptyPoolEmptyListener: (() => void) | null = null
+  private ptyPoolActiveListener: (() => void) | null = null
   // Why: env augmenters run on every spawn so each PTY sees live hook coords without the dispatcher knowing about agent hooks.
   private envAugmenters: PtyEnvAugmenter[] = []
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
@@ -462,6 +464,10 @@ export class PtyHandler {
     }
   }
 
+  // Why: this value never reaches the grace *timer* — startGraceTimer's only caller always passes an
+  // explicit timeoutMs — but relay.startGrace reads it back through configuredGraceTimeMs to pick the
+  // grace branch, so a host-sent change does affect shutdown behavior. Callers and the host-sleep
+  // consequence: docs/reference/relay-grace-time-reconfiguration.md.
   setGraceTimeMs(graceTimeMs: number): void {
     this.graceTimeMs = Math.max(0, Math.floor(graceTimeMs))
   }
@@ -492,6 +498,53 @@ export class PtyHandler {
   /** Subscribe to PTY-exit events (relay-hook server uses this to evict per-paneKey caches). */
   setExitListener(listener: PtyExitListener | null): void {
     this.exitListener = listener
+  }
+
+  /** Notified when the last PTY leaves the pool, so the relay can re-arm its idle grace. */
+  onPtyPoolEmpty(listener: () => void): () => void {
+    this.ptyPoolEmptyListener = listener
+    return () => {
+      if (this.ptyPoolEmptyListener === listener) {
+        this.ptyPoolEmptyListener = null
+      }
+    }
+  }
+
+  /**
+   * Notified when a PTY creation is admitted or a PTY joins the pool.
+   *
+   * Why: the relay arms its idle cap on an empty pool, and a spawn/revive that lands after that
+   * decision must disarm it — creation is asynchronous, so the pool-empty edge alone can't see it.
+   */
+  onPtyPoolActive(listener: () => void): () => void {
+    this.ptyPoolActiveListener = listener
+    return () => {
+      if (this.ptyPoolActiveListener === listener) {
+        this.ptyPoolActiveListener = null
+      }
+    }
+  }
+
+  private notifyPoolListener(listener: (() => void) | null, label: string): void {
+    if (!listener) {
+      return
+    }
+    try {
+      listener()
+    } catch (err) {
+      process.stderr.write(
+        `[pty-handler] ${label} listener threw: ${err instanceof Error ? err.message : String(err)}\n`
+      )
+    }
+  }
+
+  // Why: the sole removal path, so the three exit routes can't drift on who announces an empty pool.
+  private removePty(id: string): void {
+    this.ptys.delete(id)
+    if (this.ptys.size > 0) {
+      return
+    }
+    this.notifyPoolListener(this.ptyPoolEmptyListener, 'pty-pool-empty')
   }
 
   /** Register an env augmenter merged into every spawn env *after* process.env and renderer env.
@@ -617,6 +670,8 @@ export class PtyHandler {
   private wireAndStore(managed: ManagedPty): void {
     managed.physicalExit = new PhysicalExitTracker()
     this.ptys.set(managed.id, managed)
+    // Why: a second announce covers any store whose admission window has already closed.
+    this.notifyPoolListener(this.ptyPoolActiveListener, 'pty-pool-active')
     const emitIngressData = (emission: PtyIngressEmission): void => {
       const rawLength = emission.rawEndSeq - emission.rawStartSeq
       this.appendReplayBuffer(managed, emission.data)
@@ -672,7 +727,7 @@ export class PtyHandler {
       this.publishPendingExit(managed.id)
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
-      this.ptys.delete(managed.id)
+      this.removePty(managed.id)
       this.clearPtyInputState(managed.id)
       // Why: release the ptmx fd on natural exit, else the master fd leaks until GC (docs/fix-pty-fd-leak.md).
       disposeManagedPty(managed)
@@ -1157,6 +1212,9 @@ export class PtyHandler {
       throw error
     }
     this.pendingSpawnCount++
+    // Why: announce at admission, not at store — the relay must stop treating itself as idle before
+    // the creation parks on its first await, or an armed idle timer kills the shell it produces.
+    this.notifyPoolListener(this.ptyPoolActiveListener, 'pty-pool-active')
     let finished = false
     return () => {
       if (finished) {
@@ -1171,6 +1229,11 @@ export class PtyHandler {
         this.pendingCreationDrainResolvers.clear()
       }
       finishPtyCreationOperations(finishRemovalOperations)
+      // Why: a creation that failed before wireAndStore still leaves the pool empty, and removePty
+      // can't announce a PTY that was never stored — without this the relay never re-arms its idle cap.
+      if (this.ptys.size === 0 && this.pendingSpawnCount === 0) {
+        this.notifyPoolListener(this.ptyPoolEmptyListener, 'pty-pool-empty')
+      }
     }
   }
 
@@ -1535,7 +1598,7 @@ export class PtyHandler {
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
       disposeManagedPty(managed)
-      this.ptys.delete(id)
+      this.removePty(id)
       this.clearPtyFlowState(id)
       throw new Error(`PTY "${id}" not found`)
     }
@@ -2065,7 +2128,7 @@ export class PtyHandler {
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
       disposeManagedPty(managed)
-      this.ptys.delete(managed.id)
+      this.removePty(managed.id)
       this.clearPtyFlowState(managed.id)
     }
   }
@@ -2103,6 +2166,11 @@ export class PtyHandler {
 
   get activePtyCount(): number {
     return this.ptys.size
+  }
+
+  /** Spawns admitted but not yet in the pool — each already owns a shell the relay must not treat as idle. */
+  get pendingPtyCreationCount(): number {
+    return this.pendingSpawnCount
   }
 
   get retainedStartupCommandCount(): number {
