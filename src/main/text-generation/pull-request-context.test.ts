@@ -2,7 +2,11 @@
 // variants; keeping the table of git command mocks together makes regressions
 // easier to audit than splitting the suite by helper.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getPullRequestDraftContext } from './pull-request-context'
+import {
+  createPullRequestGitFetch,
+  getPullRequestDraftContext,
+  type PullRequestGitFetch
+} from './pull-request-context'
 
 type GitExec = Parameters<typeof getPullRequestDraftContext>[0]
 
@@ -19,11 +23,15 @@ function createContextInput(base = 'main') {
   }
 }
 
+function createFetch(execGit: GitExec): PullRequestGitFetch {
+  return createPullRequestGitFetch(execGit)
+}
+
 describe('getPullRequestDraftContext', () => {
-  it('fetches the resolved remote base before collecting PR context without mutating HEAD', async () => {
+  it('uses the injected fetch authority before collecting PR context without mutating HEAD', async () => {
     const execGit = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
+        throw new Error('generic git.exec must not receive fetch')
       }
       if (args[0] === 'remote') {
         return { stdout: 'origin\nupstream\n', stderr: '' }
@@ -48,8 +56,13 @@ describe('getPullRequestDraftContext', () => {
       }
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
+    const fetchRemoteTrackingRef = vi.fn<PullRequestGitFetch>(async () => undefined)
 
-    const context = await getPullRequestDraftContext(execGit, createContextInput())
+    const context = await getPullRequestDraftContext(
+      execGit,
+      createContextInput(),
+      fetchRemoteTrackingRef
+    )
 
     expect(context).toMatchObject({
       branch: 'feature/pr-details',
@@ -58,10 +71,12 @@ describe('getPullRequestDraftContext', () => {
       commitSummary: '- feat: summarize branch',
       changeSummary: 'M\tsrc/file.ts'
     })
-    expect(execGit).toHaveBeenCalledWith(
-      ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-      expect.any(Object)
+    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      'origin',
+      'main',
+      'refs/remotes/origin/main'
     )
+    expect(execGit.mock.calls.some(([args]) => args[0] === 'fetch')).toBe(false)
     expect(execGit).not.toHaveBeenCalledWith(expect.arrayContaining(['rebase']), expect.anything())
     expect(execGit).not.toHaveBeenCalledWith(
       expect.arrayContaining(['rev-parse']),
@@ -99,7 +114,7 @@ describe('getPullRequestDraftContext', () => {
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
-    await getPullRequestDraftContext(execGit, createContextInput())
+    await getPullRequestDraftContext(execGit, createContextInput(), createFetch(execGit))
 
     expect(execGit).toHaveBeenCalledWith(
       ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
@@ -139,7 +154,9 @@ describe('getPullRequestDraftContext', () => {
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
-    await expect(getPullRequestDraftContext(execGit, createContextInput())).resolves.toMatchObject({
+    await expect(
+      getPullRequestDraftContext(execGit, createContextInput(), createFetch(execGit))
+    ).resolves.toMatchObject({
       branch: 'feature/pr-details'
     })
 
@@ -177,7 +194,7 @@ describe('getPullRequestDraftContext', () => {
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
-    await getPullRequestDraftContext(execGit, createContextInput())
+    await getPullRequestDraftContext(execGit, createContextInput(), createFetch(execGit))
 
     expect(execGit).not.toHaveBeenCalledWith(
       expect.arrayContaining(['contributor-a']),
@@ -216,7 +233,11 @@ describe('getPullRequestDraftContext', () => {
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
-    const context = await getPullRequestDraftContext(execGit, createContextInput())
+    const context = await getPullRequestDraftContext(
+      execGit,
+      createContextInput(),
+      createFetch(execGit)
+    )
 
     expect(context?.branchChangedByPreparation).toBe(false)
     expect(execGit).not.toHaveBeenCalledWith(expect.arrayContaining(['rebase']), expect.anything())
@@ -252,7 +273,11 @@ describe('getPullRequestDraftContext', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await getPullRequestDraftContext(execGit, createContextInput('upstream/main'))
+    await getPullRequestDraftContext(
+      execGit,
+      createContextInput('upstream/main'),
+      createFetch(execGit)
+    )
 
     expect(execGit).toHaveBeenCalledWith(
       ['fetch', '--no-tags', 'upstream', '+refs/heads/main:refs/remotes/upstream/main'],

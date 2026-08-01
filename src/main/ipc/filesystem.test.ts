@@ -194,6 +194,7 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
 }))
 
 vi.mock('../text-generation/pull-request-context', () => ({
+  createPullRequestGitFetch: vi.fn(() => vi.fn()),
   getPullRequestDraftContext: getPullRequestDraftContextMock
 }))
 
@@ -2268,6 +2269,7 @@ describe('registerFilesystemHandlers', () => {
       const worktreeId = 'repo-1::/remote/repo'
       getSshGitProviderMock.mockReturnValue({
         exec: vi.fn(),
+        fetchRemoteTrackingRef: vi.fn(),
         executeCommitMessagePlan: vi.fn()
       })
       const linkedStore = {
@@ -2289,6 +2291,58 @@ describe('registerFilesystemHandlers', () => {
         params,
         expect.objectContaining({ kind: 'remote' })
       )
+    })
+
+    it('routes SSH pull-request base refreshes through the validated provider RPC', async () => {
+      const worktreeId = 'repo-1::/remote/repo'
+      const exec = vi.fn()
+      const fetchRemoteTrackingRef = vi.fn()
+      getSshGitProviderMock.mockReturnValue({
+        exec,
+        fetchRemoteTrackingRef,
+        executeCommitMessagePlan: vi.fn()
+      })
+      getPullRequestDraftContextMock.mockImplementationOnce(
+        async (_exec, _input, fetchRemoteTrackingRefForContext) => {
+          await fetchRemoteTrackingRefForContext('origin', 'main', 'refs/remotes/origin/main')
+          return PULL_REQUEST_CONTEXT
+        }
+      )
+
+      registerFilesystemHandlers(store as never)
+
+      await expect(
+        handlers.get('git:generatePullRequestFields')!(null, {
+          ...PULL_REQUEST_ARGS,
+          worktreePath: '/remote/repo',
+          worktreeId,
+          connectionId: 'conn-1'
+        })
+      ).resolves.toEqual({ success: true, fields: {} })
+
+      expect(fetchRemoteTrackingRef).toHaveBeenCalledWith(
+        '/remote/repo',
+        'origin',
+        'main',
+        'refs/remotes/origin/main'
+      )
+      expect(exec).not.toHaveBeenCalledWith(expect.arrayContaining(['fetch']), expect.anything())
+    })
+
+    it('preserves the explicit error when the SSH Git provider is unavailable', async () => {
+      registerFilesystemHandlers(store as never)
+
+      await expect(
+        handlers.get('git:generatePullRequestFields')!(null, {
+          ...PULL_REQUEST_ARGS,
+          worktreePath: '/remote/repo',
+          worktreeId: 'repo-1::/remote/repo',
+          connectionId: 'conn-1'
+        })
+      ).resolves.toEqual({
+        success: false,
+        error: 'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+      })
     })
 
     it('ignores a pull-request worktree id that does not own the requested path', async () => {

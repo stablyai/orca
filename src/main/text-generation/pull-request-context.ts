@@ -7,6 +7,16 @@ type GitExec = (
   options?: { maxBuffer?: number }
 ) => Promise<{ stdout: string; stderr?: string }>
 
+export type PullRequestGitFetch = (remote: string, branch: string, ref: string) => Promise<void>
+
+export function createPullRequestGitFetch(execGit: GitExec): PullRequestGitFetch {
+  return async (remote, branch, ref) => {
+    await execGit(['fetch', '--no-tags', remote, `+refs/heads/${branch}:${ref}`], {
+      maxBuffer: MAX_PULL_REQUEST_CONTEXT_BYTES
+    })
+  }
+}
+
 export type PullRequestContextInput = {
   base: string
   currentTitle: string
@@ -34,15 +44,6 @@ function summarizeGitError(error: unknown): string {
     }
   }
   return error.message
-}
-
-async function requiredExec(execGit: GitExec, args: string[], label: string): Promise<string> {
-  try {
-    const { stdout } = await execGit(args, { maxBuffer: MAX_PULL_REQUEST_CONTEXT_BYTES })
-    return stdout.trim()
-  } catch (error) {
-    throw new Error(`${label}: ${summarizeGitError(error)}`)
-  }
 }
 
 type RemoteState = {
@@ -179,20 +180,22 @@ function resolveComparisonBase(
   return { comparisonBase: base, fetchTarget: null }
 }
 
-async function fetchComparisonBase(execGit: GitExec, target: RemoteBranch | null): Promise<void> {
+async function fetchComparisonBase(
+  fetchRemoteTrackingRef: PullRequestGitFetch,
+  target: RemoteBranch | null
+): Promise<void> {
   if (!target) {
     return
   }
-  await requiredExec(
-    execGit,
-    [
-      'fetch',
-      '--no-tags',
+  try {
+    await fetchRemoteTrackingRef(
       target.remote,
-      `+refs/heads/${target.branch}:refs/remotes/${target.remote}/${target.branch}`
-    ],
-    'Fetch before generating PR details failed'
-  )
+      target.branch,
+      `refs/remotes/${target.remote}/${target.branch}`
+    )
+  } catch (error) {
+    throw new Error(`Fetch before generating PR details failed: ${summarizeGitError(error)}`)
+  }
 }
 
 type PullRequestBranchPreparation = {
@@ -202,12 +205,13 @@ type PullRequestBranchPreparation = {
 
 async function preparePullRequestBranch(
   execGit: GitExec,
+  fetchRemoteTrackingRef: PullRequestGitFetch,
   base: string
 ): Promise<PullRequestBranchPreparation> {
   const { comparisonBase, fetchTarget } = resolveComparisonBase(base, await getRemoteState(execGit))
   // Why: PR generation only needs the selected base branch. A repo-wide
   // `fetch --all` makes stale contributor fork remotes block unrelated PRs.
-  await fetchComparisonBase(execGit, fetchTarget)
+  await fetchComparisonBase(fetchRemoteTrackingRef, fetchTarget)
   return {
     comparisonBase,
     // Why: Generate must be read-only. Rebasing the live worktree can rewrite
@@ -218,14 +222,19 @@ async function preparePullRequestBranch(
 
 export async function getPullRequestDraftContext(
   execGit: GitExec,
-  input: PullRequestContextInput
+  input: PullRequestContextInput,
+  fetchRemoteTrackingRef: PullRequestGitFetch
 ): Promise<PullRequestDraftContext | null> {
   const base = input.base.trim()
   if (!base || base.startsWith('-')) {
     return null
   }
 
-  const { comparisonBase, branchChanged } = await preparePullRequestBranch(execGit, base)
+  const { comparisonBase, branchChanged } = await preparePullRequestBranch(
+    execGit,
+    fetchRemoteTrackingRef,
+    base
+  )
   const [branch, mergeBase] = await Promise.all([
     safeExec(execGit, ['branch', '--show-current']),
     safeExec(execGit, ['merge-base', comparisonBase, 'HEAD'])

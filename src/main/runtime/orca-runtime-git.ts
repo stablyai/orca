@@ -77,7 +77,10 @@ import type {
   CommitMessageAgentRuntimeTarget
 } from '../text-generation/commit-message-agent-environment'
 import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
-import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
+import {
+  createPullRequestGitFetch,
+  getPullRequestDraftContext
+} from '../text-generation/pull-request-context'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
 import { gitExecFileAsync } from '../git/runner'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
@@ -732,12 +735,17 @@ export class RuntimeGitCommands {
         useTemplate: input.useTemplate
       })
       context = target.connectionId
-        ? await getPullRequestDraftContext((argv) => provider!.exec(argv, target.worktree.path), {
-            base: input.base,
-            currentTitle: input.title,
-            currentBody,
-            currentDraft: input.draft
-          })
+        ? await getPullRequestDraftContext(
+            (argv) => provider!.exec(argv, target.worktree.path),
+            {
+              base: input.base,
+              currentTitle: input.title,
+              currentBody,
+              currentDraft: input.draft
+            },
+            (remote, branch, ref) =>
+              provider!.fetchRemoteTrackingRef(target.worktree.path, remote, branch, ref)
+          )
         : await getPullRequestDraftContext(
             (argv, options) =>
               gitExecFileAsync(argv, {
@@ -750,7 +758,14 @@ export class RuntimeGitCommands {
               currentTitle: input.title,
               currentBody,
               currentDraft: input.draft
-            }
+            },
+            createPullRequestGitFetch((argv, options) =>
+              gitExecFileAsync(argv, {
+                cwd: target.worktree.path,
+                ...localGitOptionsForTarget(target),
+                ...options
+              })
+            )
           )
     } catch (error) {
       return {

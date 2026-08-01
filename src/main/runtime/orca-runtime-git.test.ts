@@ -579,7 +579,8 @@ describe('RuntimeGitCommands', () => {
       expect.any(Function),
       expect.objectContaining({
         currentBody: templateBody
-      })
+      }),
+      expect.any(Function)
     )
   })
 
@@ -820,8 +821,10 @@ describe('RuntimeGitCommands', () => {
     }
     const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
     mocks.generatePullRequestFieldsFromContext.mockResolvedValue({ success: true, fields: {} })
+    const fetchRemoteTrackingRef = vi.fn()
     mocks.getSshGitProvider.mockReturnValue({
       exec: vi.fn(),
+      fetchRemoteTrackingRef,
       executeCommitMessagePlan: vi.fn()
     })
 
@@ -832,7 +835,12 @@ describe('RuntimeGitCommands', () => {
       if (!connectionId) {
         tempDirs.push(worktreePath)
       }
-      mocks.getPullRequestDraftContext.mockResolvedValue(context)
+      mocks.getPullRequestDraftContext.mockImplementation(async (_exec, _input, fetch) => {
+        if (connectionId) {
+          await fetch('origin', 'main', 'refs/remotes/origin/main')
+        }
+        return context
+      })
       const commands = new RuntimeGitCommands({
         resolveRuntimeGitTarget: async () => ({
           worktree: makeWorktree(worktreePath, 55),
@@ -852,6 +860,12 @@ describe('RuntimeGitCommands', () => {
     for (const call of mocks.generatePullRequestFieldsFromContext.mock.calls) {
       expect(call[0]).toEqual({ ...context, linkedIssue: 55 })
     }
+    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      '/home/tester/wt',
+      'origin',
+      'main',
+      'refs/remotes/origin/main'
+    )
   })
 
   it('leaves the pull-request context untouched when no issue is linked', async () => {

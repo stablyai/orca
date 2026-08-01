@@ -895,6 +895,20 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('rethrows fetch RPC errors unchanged', async () => {
+    const error = new Error('fatal: could not read from remote repository')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(
+      provider.fetchRemoteTrackingRef(
+        '/home/user/repo',
+        'origin',
+        'main',
+        'refs/remotes/origin/main'
+      )
+    ).rejects.toBe(error)
+  })
+
   it('fetchGitLabMergeRequestHead sends the durable-ref git.fetchGitLabMergeRequestHeadRef request', async () => {
     mux.request.mockResolvedValueOnce({
       localRef: 'refs/orca/merge-requests/origin-abc/42'

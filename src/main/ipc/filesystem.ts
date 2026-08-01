@@ -73,7 +73,10 @@ import {
   type GenerateCommitMessageResult,
   type GeneratePullRequestFieldsResult
 } from '../text-generation/commit-message-text-generation'
-import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
+import {
+  createPullRequestGitFetch,
+  getPullRequestDraftContext
+} from '../text-generation/pull-request-context'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
@@ -1612,7 +1615,9 @@ export function registerFilesystemHandlers(
               currentTitle: args.title,
               currentBody,
               currentDraft: args.draft
-            }
+            },
+            (remote, branch, ref) =>
+              provider.fetchRemoteTrackingRef(args.worktreePath, remote, branch, ref)
           )
         } catch (error) {
           return {
@@ -1660,7 +1665,10 @@ export function registerFilesystemHandlers(
             currentTitle: args.title,
             currentBody,
             currentDraft: args.draft
-          }
+          },
+          createPullRequestGitFetch((argv, options) =>
+            gitExecFileAsync(argv, { cwd: worktreePath, ...gitOptions, ...options })
+          )
         )
       } catch (error) {
         return {

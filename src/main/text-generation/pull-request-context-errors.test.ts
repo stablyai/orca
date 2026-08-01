@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getPullRequestDraftContext } from './pull-request-context'
+import {
+  createPullRequestGitFetch,
+  getPullRequestDraftContext,
+  type PullRequestGitFetch
+} from './pull-request-context'
 
 type GitExec = Parameters<typeof getPullRequestDraftContext>[0]
 
@@ -14,6 +18,10 @@ function createContextInput(base = 'main') {
     currentBody: 'Existing body',
     currentDraft: false
   }
+}
+
+function createFetch(execGit: GitExec): PullRequestGitFetch {
+  return createPullRequestGitFetch(execGit)
 }
 
 describe('getPullRequestDraftContext error handling', () => {
@@ -48,7 +56,9 @@ describe('getPullRequestDraftContext error handling', () => {
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
-    await expect(getPullRequestDraftContext(execGit, createContextInput())).resolves.toMatchObject({
+    await expect(
+      getPullRequestDraftContext(execGit, createContextInput(), createFetch(execGit))
+    ).resolves.toMatchObject({
       branch: 'feature'
     })
     expect(execGit).not.toHaveBeenCalledWith(expect.arrayContaining(['rebase']), expect.anything())
@@ -73,9 +83,9 @@ describe('getPullRequestDraftContext error handling', () => {
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
-    await expect(getPullRequestDraftContext(execGit, createContextInput())).rejects.toThrow(
-      'Fetch before generating PR details failed: fatal: unable to access origin'
-    )
+    await expect(
+      getPullRequestDraftContext(execGit, createContextInput(), createFetch(execGit))
+    ).rejects.toThrow('Fetch before generating PR details failed: fatal: unable to access origin')
   })
 
   it('handles newline-heavy remote state and fetch errors without line-array splitting', async () => {
@@ -95,9 +105,9 @@ describe('getPullRequestDraftContext error handling', () => {
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
-    await expect(getPullRequestDraftContext(execGit, createContextInput())).rejects.toThrow(
-      'Fetch before generating PR details failed: fatal: unable to access origin'
-    )
+    await expect(
+      getPullRequestDraftContext(execGit, createContextInput(), createFetch(execGit))
+    ).rejects.toThrow('Fetch before generating PR details failed: fatal: unable to access origin')
 
     const usedLineSplit = splitSpy.mock.calls.some(
       ([separator]) =>
@@ -107,12 +117,36 @@ describe('getPullRequestDraftContext error handling', () => {
     expect(usedLineSplit).toBe(false)
   })
 
+  it('propagates provider validation for malformed remote state without generic-exec fallback', async () => {
+    const execGit = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'remote') {
+        return { stdout: 'origin//main\n', stderr: '' }
+      }
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'origin//main\n', stderr: '' }
+      }
+      throw new Error(`Unexpected git args: ${args.join(' ')}`)
+    })
+    const fetchRemoteTrackingRef = vi.fn<PullRequestGitFetch>(async (_remote, branch) => {
+      if (branch.startsWith('/')) {
+        throw new Error("fatal: 'refs/heads//main' is not a valid ref name")
+      }
+    })
+
+    await expect(
+      getPullRequestDraftContext(execGit, createContextInput(), fetchRemoteTrackingRef)
+    ).rejects.toThrow(
+      "Fetch before generating PR details failed: fatal: 'refs/heads//main' is not a valid ref name"
+    )
+    expect(execGit.mock.calls.some(([args]) => args[0] === 'fetch')).toBe(false)
+  })
+
   it('returns null without running git when the base is invalid', async () => {
     const execGit = vi.fn<GitExec>()
 
-    await expect(getPullRequestDraftContext(execGit, createContextInput('--main'))).resolves.toBe(
-      null
-    )
+    await expect(
+      getPullRequestDraftContext(execGit, createContextInput('--main'), createFetch(execGit))
+    ).resolves.toBe(null)
     expect(execGit).not.toHaveBeenCalled()
   })
 })

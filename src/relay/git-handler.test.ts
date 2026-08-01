@@ -1814,6 +1814,15 @@ describe('GitHandler', () => {
           ref: 'refs/remotes/origin/other'
         })
       ).rejects.toThrow('Remote-tracking ref does not match the requested remote and branch.')
+
+      await expect(
+        dispatcher.callRequest('git.fetchRemoteTrackingRef', {
+          worktreePath: tmpDir,
+          remote: 'origin',
+          branch: '-main',
+          ref: 'refs/remotes/origin/-main'
+        })
+      ).rejects.toThrow('Remote-tracking fetch inputs must not start with "-".')
     })
 
     it('fetches GitHub pull request heads through the narrow fetch RPC', async () => {
