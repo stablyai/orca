@@ -29,13 +29,20 @@ export function seedBranchCleanupRepro(repoPath, worktreePath) {
 
 export async function startDelayedFetchServer(delayMs) {
   const sockets = new Set()
+  const timers = new Set()
   const server = net.createServer((socket) => {
     sockets.add(socket)
-    socket.on('close', () => sockets.delete(socket))
-    socket.on('error', () => undefined)
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      timers.delete(timer)
       socket.end('HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n')
     }, delayMs)
+    timers.add(timer)
+    socket.on('close', () => {
+      clearTimeout(timer)
+      timers.delete(timer)
+      sockets.delete(socket)
+    })
+    socket.on('error', () => undefined)
   })
   await new Promise((resolve, reject) => {
     server.once('error', reject)
@@ -49,6 +56,10 @@ export async function startDelayedFetchServer(delayMs) {
     url: `http://127.0.0.1:${address.port}/remote.git`,
     close: () =>
       new Promise((resolve) => {
+        for (const timer of timers) {
+          clearTimeout(timer)
+        }
+        timers.clear()
         for (const socket of sockets) {
           socket.destroy()
         }

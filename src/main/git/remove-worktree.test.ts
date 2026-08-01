@@ -574,6 +574,9 @@ branch refs/heads/main
       'git rev-parse --verify --quiet refs/remotes/origin/main^{commit}': {
         stdout: 'base123\n'
       },
+      'git rev-parse --verify --quiet HEAD^{commit}': {
+        stdout: 'base123\n'
+      },
       'git merge-tree --write-tree base123 refs/heads/feature/test': {
         stdout: 'tree123\n'
       },
@@ -723,9 +726,6 @@ branch refs/heads/main
         stdout: 'base123\n'
       },
       'git merge-tree --write-tree base123 refs/heads/feature/test': {
-        stdout: 'stale-tree\n'
-      },
-      'git merge-tree --write-tree base123 refs/heads/feature/test#2': {
         stdout: 'tree123\n'
       },
       'git rev-parse --verify --quiet base123^{tree}': {
@@ -739,11 +739,12 @@ branch refs/heads/main
     const mergeTreeCall = 'git merge-tree --write-tree base123 refs/heads/feature/test'
     const mergeTreeIndexes = calls.flatMap((call, index) => (call === mergeTreeCall ? [index] : []))
     const fetchIndex = calls.indexOf('git fetch --prune origin')
+    const updateRefIndex = calls.indexOf('git update-ref -d refs/heads/feature/test def456')
     expect(calls).toContain('git fetch --prune origin')
     expect(calls).toContain('git update-ref -d refs/heads/feature/test def456')
-    expect(mergeTreeIndexes).toHaveLength(2)
-    expect(fetchIndex).toBeGreaterThan(mergeTreeIndexes[0])
-    expect(fetchIndex).toBeLessThan(mergeTreeIndexes[1])
+    expect(mergeTreeIndexes).toHaveLength(1)
+    expect(fetchIndex).toBeLessThan(mergeTreeIndexes[0])
+    expect(mergeTreeIndexes[0]).toBeLessThan(updateRefIndex)
     expectGitCallOrder(
       calls,
       'git fetch --prune origin',

@@ -475,16 +475,14 @@ async function benchmarkInstance(instanceConfig, index, options) {
     instanceConfig.repoRoot
   )
   const fixture = createFixture(instanceConfig.label)
-  const delayedFetchServer = await branchFixture.startDelayedFetchServer(options.fetchDelayMs)
-  run('git', ['remote', 'set-url', 'origin', delayedFetchServer.url], fixture.repoPath)
-  const port = await findAvailablePort(CDP_START_PORT + index)
-  const instance = launchDevInstance(instanceConfig, fixture, port)
-  let browser = null
-  console.log(`[${instanceConfig.label}] launching ${instanceConfig.repoRoot}`)
+  let delayedFetchServer, instance, browser
   try {
-    const connection = await connectToOrca(instance)
-    browser = connection.browser
-    const { page } = connection
+    delayedFetchServer = await branchFixture.startDelayedFetchServer(options.fetchDelayMs)
+    run('git', ['remote', 'set-url', 'origin', delayedFetchServer.url], fixture.repoPath)
+    const port = await findAvailablePort(CDP_START_PORT + index)
+    instance = launchDevInstance(instanceConfig, fixture, port)
+    const { browser: connectedBrowser, page } = await connectToOrca(instance)
+    browser = connectedBrowser
     const repoState = await addFixtureRepo(page, fixture.repoPath)
     const iterations = []
     for (let iteration = 1; iteration <= options.iterations; iteration += 1) {
@@ -519,8 +517,10 @@ async function benchmarkInstance(instanceConfig, index, options) {
     }
   } finally {
     await browser?.close().catch(() => undefined)
-    await stopDevInstance(instance)
-    await delayedFetchServer.close()
+    if (instance) {
+      await stopDevInstance(instance)
+    }
+    await delayedFetchServer?.close()
     if (!options.keepFixture) {
       await rm(fixture.root, {
         recursive: true,

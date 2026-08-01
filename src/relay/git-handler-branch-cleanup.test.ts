@@ -191,6 +191,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
         return { stdout: 'base123\n', stderr: '' }
       }
+      if (args[0] === 'rev-parse' && args.includes('HEAD^{commit}')) {
+        return { stdout: 'base123\n', stderr: '' }
+      }
       if (args[0] === 'merge-tree') {
         return { stdout: 'tree123\n', stderr: '' }
       }
@@ -309,7 +312,6 @@ describe('removeWorktreeOp branch cleanup', () => {
   it('refreshes the saved remote base before deleting a safe-delete-rejected SSH branch', async () => {
     const calls: { args: string[]; cwd: string }[] = []
     let zListCount = 0
-    let mergeTreeCount = 0
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push({ args, cwd })
       if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
@@ -347,8 +349,7 @@ describe('removeWorktreeOp branch cleanup', () => {
         return { stdout: 'base123\n', stderr: '' }
       }
       if (args[0] === 'merge-tree') {
-        mergeTreeCount += 1
-        return { stdout: mergeTreeCount === 1 ? 'stale-tree\n' : 'tree123\n', stderr: '' }
+        return { stdout: 'tree123\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('base123^{tree}')) {
         return { stdout: 'tree123\n', stderr: '' }
@@ -371,9 +372,9 @@ describe('removeWorktreeOp branch cleanup', () => {
 
     expect(fetchIndex).toBeGreaterThanOrEqual(0)
     expect(calls[fetchIndex]?.cwd).toBe(resolvedRepoPath())
-    expect(mergeTreeIndexes).toHaveLength(2)
-    expect(fetchIndex).toBeGreaterThan(mergeTreeIndexes[0])
-    expect(fetchIndex).toBeLessThan(mergeTreeIndexes[1])
+    expect(mergeTreeIndexes).toHaveLength(1)
+    expect(fetchIndex).toBeLessThan(mergeTreeIndexes[0])
+    expect(mergeTreeIndexes[0]).toBeLessThan(updateRefIndex)
     expect(fetchIndex).toBeLessThan(updateRefIndex)
   })
 
