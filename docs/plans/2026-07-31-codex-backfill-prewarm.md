@@ -12,8 +12,10 @@ large session history, because Codex 0.146's one-time state-DB index takes longe
 
 **Architecture:** Two independent halves. (A) **Pre-warm (main process):** after the
 existing Codex session migration chain (backfill → index-heal), supervise a hidden headless
-`codex app-server` process against the managed `CODEX_HOME` until the `backfill_state` row
-in `state_<N>.sqlite` reads `complete`, so the one-time index finishes in the background
+`codex app-server` process against **each local Codex home panes actually use** — first the
+system home (`systemCodexHomePath`, what fresh panes run on while the real-home lane is
+selected), then the managed home (used by resume-pinned panes) — until the `backfill_state`
+row in `state_<N>.sqlite` reads `complete`, so the one-time index finishes in the background
 instead of dying in 30s pane slices. (B) **Surfacing (renderer):** detect Codex's
 backfill-timeout failure signature in codex-pane output and overlay an accurate explanation
 via the existing `TerminalErrorToast`, replacing the misleading "damaged database" story.
@@ -25,7 +27,7 @@ via the existing `TerminalErrorToast`, replacing the misleading "damaged databas
 
 - PR targets `main` (explicit user requirement); working branch stays a `danshapiro/...`-style feature branch.
 - Cross-platform (macOS / Linux / Windows): paths via `path.join`; Windows spawns via `getSpawnArgsForWindows` from `src/main/win32-utils.ts` + `windowsHide: true` (AGENTS.md).
-- SSH use case: the pre-warm targets only the **local** managed Codex home (same scope as the existing local-only session backfill); the renderer-side detector works for any pane because it scans pane output. State this in code comments where relevant.
+- SSH use case: the pre-warm targets only **local** Codex homes — the system home and the managed home, the two homes local panes actually use (same scope as the existing local-only session backfill/heal); WSL, SSH, and per-account lanes are out of scope for half A (ledger AD-3) and get only the renderer-side detector, which works for any pane because it scans pane output. State this in code comments where relevant.
 - Comments: concise 1-line `// Why:` for non-obvious decisions only (AGENTS.md).
 - NEVER add a `max-lines` lint disable; budgets are 300 lines per `.ts`, 400 per `.tsx`, 800 per test file — split files instead (AGENTS.md).
 - No vague filenames (`utils`, `helpers`, `common`) — name after the domain concept.
@@ -50,11 +52,44 @@ via the existing `TerminalErrorToast`, replacing the misleading "damaged databas
       updated_at INTEGER NOT NULL
   );
   ```
-  On first launch Codex indexes the entire session history ("state db backfill"). While the
-  row's `status` is not `complete`, a newly launched Codex waits ~30s, prints
-  `timed out waiting for state db backfill ... after 30s (status: running)` and
-  `Codex couldn't start because its local database appears to be damaged.`, then exits.
-  A long-lived Codex process resumes an idle index and completes it — the verified recovery.
+  On first launch Codex indexes the entire session history ("state db backfill").
+- **Verified Codex 0.146 internals** (openai/codex tag `rust-v0.146.0` + live runs; see the
+  Stage-2 assumption ledger `load-bearing-ledger.md` in the workflow logs dir):
+  - `status` is a closed enum: `pending` / `running` / `complete`; Codex's startup gate is
+    exactly `status == 'complete'` on row `id = 1` of the newest `state_<N>.sqlite`
+    (0.146 pins `state_5.sqlite`).
+  - Exactly one process at a time **claims** the backfill via an atomic in-DB lease
+    (`UPDATE ... WHERE status != 'complete' AND (status != 'running' OR updated_at <= now - 900s)`);
+    the lease is renewed at every 200-file checkpoint, which also persists a resume watermark.
+  - The **claimer blocks inside init and runs the whole index with no internal time limit**
+    (a pane whose codex wins the claim looks hung until the index finishes).
+    **Non-claimants** wait ~30s, print
+    `timed out waiting for state db backfill ... after 30s (status: running)` and
+    `Codex couldn't start because its local database appears to be damaged.` to **stderr**
+    (wording stable since 0.129, `rollout/src/state_db.rs:171`), then exit.
+  - Killing a claimer mid-index does **not** corrupt the DB (`integrity_check` verified), but
+    leaves a stale `running` lease: **every** codex start against that home fails at ~30s for
+    up to 900s, after which a new claimer steals the lease and resumes from the watermark.
+  - Headless `codex -s read-only -a untrusted app-server` with a scoped `CODEX_HOME`, stdin
+    held open, and no handshake creates the state DB and drives the backfill to completion
+    (verified live); it exits on stdin EOF, and exits ~30s after start if it fails to claim.
+  - An external read-only SQLite connection can poll `backfill_state` while codex actively
+    writes (verified: hundreds of polls, zero busy errors; only a <1s transient
+    "unable to open database file" at DB-creation instant — the poller must tolerate it).
+  - Measured throughput ~21-27 MB/s ⇒ the reporter-scale 15 GB history indexes in ~10-13 min.
+- **Which home do panes use?** When `isHostSystemDefaultRealHome() === true` (the migration
+  scheduler's eligibility gate, `src/main/index.ts:2082-2089`), **fresh panes run on the real
+  `~/.codex`** — `prepareForCodexLaunch` returns null (`src/main/codex-accounts/runtime-home-service.ts:175-181`);
+  only **resume-pinned** panes (`src/main/codex/codex-pane-launch-account.ts:19-23`) use the
+  managed home. The existing index-heal stage already pins `CODEX_HOME: systemCodexHomePath`
+  for the same reason (`src/main/codex/codex-session-index-heal.ts:261-275`). The prewarm
+  therefore targets **both** homes: system home first, then the managed home. Gate-false
+  lanes (shared managed mirror, per-account, WSL) never run the scheduler and get only the
+  renderer toast (accepted; ledger AD-3).
+- **Binary note:** panes resolve `codex` via the user's login shell (or
+  `settings.agentCmdOverrides`), while the prewarm uses `resolveCodexCommand()`; divergence
+  is accepted (ledger AD-2) — in the common case both resolve the same binary, and a mismatch
+  degrades to a no-op prewarm, never corruption.
 - The existing maintenance hook is `createCodexSessionMigrationScheduler` (`src/main/codex/codex-session-migration-scheduler.ts`, 87 lines), wired in `src/main/index.ts:2082-2103`, which chains `startBackfill` → `startIndexHeal` 15s after startup and on host-system-default selection. We chain the pre-warm as a third stage.
 - The exemplar for spawning the Codex CLI from main is `src/main/rate-limits/codex-fetcher.ts:568-591` (uses `resolveCodexCommand()` from `src/main/codex-cli/command.ts:202`, `getSpawnArgsForWindows`, `windowsHide: true`, scoped `CODEX_HOME` env — never mutates `process.env`).
 - SQLite reads use `SyncDatabase` (`src/main/sqlite/sync-database.ts`):
@@ -394,10 +429,12 @@ git commit -m "feat(codex): add read-only codex state-db backfill status reader"
     options?: CodexSessionBackfillOptions,
     depsOverride?: Partial<CodexStateDbPrewarmDeps>
   ): Promise<CodexStateDbPrewarmSummary>
+  // Prewarms the system home (fresh real-home-lane panes) then the managed home
+  // (resume-pinned panes); returns one summary per home prewarmed.
   export function startCodexStateDbPrewarmInBackground(
     options?: CodexSessionBackfillOptions,
     systemCodexHomePathOverride?: string
-  ): Promise<CodexStateDbPrewarmSummary | null>
+  ): Promise<CodexStateDbPrewarmSummary[] | null>
   ```
 
 - [ ] **Step 1: Smoke-verify the headless command assumption (no code yet)**
@@ -419,6 +456,11 @@ wait; rm -rf "$SMOKE_HOME"
 Expected: a `state_<N>.sqlite` exists and `backfill_state.status` prints `complete`
 (empty sessions index instantly). Record the observed filename and status in the commit
 message body for this task.
+
+> Already verified during plan validation (2026-07-31, codex 0.146.0, live temp-home runs +
+> openai/codex `rust-v0.146.0` source): `state_5.sqlite` created; `pending→running→complete`
+> unattended; `-s read-only -a untrusted` does not block the DB writes; app-server exits on
+> stdin EOF; a non-claimant exits ~30s after start. This step is now a cheap sanity re-run.
 - If no state DB appears, retry with plain `codex app-server` (no `-s`/`-a` flags) and use
   whichever variant works as `PREWARM_CODEX_ARGS`.
 - If neither variant creates the state DB, HALT this task and report the blocker — the
@@ -434,6 +476,7 @@ import type { ChildProcess } from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodexStateDbBackfillStatus } from './codex-state-db'
 import {
+  PREWARM_FAST_EXIT_MS,
   PREWARM_MAX_SPAWNS,
   PREWARM_MIN_SESSION_FILES,
   PREWARM_POLL_INTERVAL_MS,
@@ -531,10 +574,12 @@ describe('runCodexStateDbPrewarm', () => {
     expect(children[0].kill).toHaveBeenCalled()
   })
 
-  it('respawns when the child exits early, and gives up after the spawn budget', async () => {
+  it('respawns on fast child deaths and gives up after the fast-failure budget', async () => {
     const { deps, children, spawnProcess } = createDeps()
     const task = runCodexStateDbPrewarm('/tmp/home', {}, deps)
     for (let i = 0; i < PREWARM_MAX_SPAWNS; i += 1) {
+      // Why < PREWARM_FAST_EXIT_MS: a child dying before codex's own 30s backfill gate
+      // is a real failure and must burn budget.
       await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS)
       children[children.length - 1].emit('exit', 1, null)
       await vi.advanceTimersByTimeAsync(PREWARM_SPAWN_RETRY_DELAY_MS + PREWARM_POLL_INTERVAL_MS)
@@ -542,6 +587,26 @@ describe('runCodexStateDbPrewarm', () => {
     const result = await task
     expect(result.outcome).toBe('gave-up')
     expect(spawnProcess).toHaveBeenCalledTimes(PREWARM_MAX_SPAWNS)
+  })
+
+  it('treats ~30s claim-blocked exits as expected and keeps respawning past the budget', async () => {
+    // Why: verified codex 0.146 behavior — a non-claimant app-server exits ~30s after
+    // start (foreign or stale backfill lease, self-healing within 900s); such exits
+    // must NOT count toward PREWARM_MAX_SPAWNS.
+    const statuses: CodexStateDbBackfillStatus[] = []
+    const readBackfillStatus = vi.fn(() => statuses.shift() ?? incomplete)
+    const { deps, children, spawnProcess } = createDeps({ readBackfillStatus })
+    const task = runCodexStateDbPrewarm('/tmp/home', {}, deps)
+    for (let i = 0; i < PREWARM_MAX_SPAWNS + 2; i += 1) {
+      await vi.advanceTimersByTimeAsync(PREWARM_FAST_EXIT_MS * 3)
+      children[children.length - 1].emit('exit', 1, null)
+      await vi.advanceTimersByTimeAsync(PREWARM_SPAWN_RETRY_DELAY_MS)
+    }
+    expect(spawnProcess.mock.calls.length).toBeGreaterThan(PREWARM_MAX_SPAWNS)
+    statuses.push(complete)
+    await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS)
+    const result = await task
+    expect(result.outcome).toBe('completed')
   })
 
   it('stops and kills the child when shouldStop flips true', async () => {
@@ -598,7 +663,12 @@ export const PREWARM_CODEX_ARGS: readonly string[] = ['-s', 'read-only', '-a', '
 export const PREWARM_MIN_SESSION_FILES = 100
 export const PREWARM_POLL_INTERVAL_MS = 5_000
 export const PREWARM_SPAWN_RETRY_DELAY_MS = 2_000
-export const PREWARM_MAX_SPAWNS = 5
+// Why: verified codex 0.146 — a non-claimant app-server exits ~30s after start (another
+// process holds the backfill lease, or a stale lease <=900s after an unclean kill). Those
+// exits are expected and self-heal; only children dying before codex's own 30s gate
+// (< PREWARM_FAST_EXIT_MS) count as failures.
+export const PREWARM_FAST_EXIT_MS = 10_000
+export const PREWARM_MAX_SPAWNS = 5 // budget for fast failures only; deadline bounds the rest
 // Why: reporter's 15 GB history took ~25 min; 60 min bounds pathological cases.
 export const PREWARM_MAX_TOTAL_MS = 60 * 60_000
 
@@ -680,15 +750,17 @@ export async function runCodexStateDbPrewarm(
   )
   const deadline = startedAt + PREWARM_MAX_TOTAL_MS
   let spawnCount = 0
+  let fastFailureCount = 0
   while (true) {
     if (shouldStop()) return finish('stopped', spawnCount)
-    if (deps.now() >= deadline || spawnCount >= PREWARM_MAX_SPAWNS) {
+    if (deps.now() >= deadline || fastFailureCount >= PREWARM_MAX_SPAWNS) {
       deps.logger.warn(
         `[codex-state-db-prewarm] giving up after ${spawnCount} spawn(s); index still incomplete`
       )
       return finish('gave-up', spawnCount)
     }
     const child = spawnPrewarmCodex(codexHomePath, deps)
+    const spawnedAt = deps.now()
     spawnCount += 1
     let childDown = false
     let spawnFailed = false
@@ -722,12 +794,30 @@ export async function runCodexStateDbPrewarm(
       // Why: first spawn ENOENT means no usable codex binary; retries cannot help.
       return finish('codex-unavailable', spawnCount)
     }
+    // Why: claim-blocked exits (~30s, verified) are expected — respawn until the
+    // deadline; only fast deaths burn the failure budget.
+    if (deps.now() - spawnedAt < PREWARM_FAST_EXIT_MS) {
+      fastFailureCount += 1
+    }
     await deps.sleep(PREWARM_SPAWN_RETRY_DELAY_MS)
   }
 }
 
 function terminate(child: ChildProcess): void {
   try {
+    // Why: app-server exits promptly on stdin EOF once initialized — try that first.
+    child.stdin?.end()
+    if (process.platform === 'win32') {
+      // Why: child.kill() only reaches the .cmd/cmd.exe wrapper on Windows and orphans
+      // codex.exe — kill the tree. Reuse (extract if needed) the existing
+      // killCodexAppServerProcessTree() from src/main/codex/codex-app-server-session.ts:58-91.
+      killCodexAppServerProcessTree(child)
+      return
+    }
+    // Why: a mid-index claimer blocks in init before the stdin transport runs, so EOF
+    // alone may not stop it. SIGTERM never corrupts the DB (verified), but leaves a
+    // stale backfill lease: codex starts against this home fail at ~30s for <=900s,
+    // then the next claimer resumes from the watermark.
     child.kill()
   } catch {
     // Why: the child may exit between the poll and the kill.
@@ -747,15 +837,43 @@ function spawnPrewarmCodex(codexHomePath: string, deps: CodexStateDbPrewarmDeps)
   })
 }
 
-let backgroundPrewarmTask: Promise<CodexStateDbPrewarmSummary | null> | null = null
+/**
+ * Prewarms both local homes panes actually use, in order:
+ * 1. the system home (fresh panes on the real-home lane read it — same target the
+ *    index-heal stage pins; resolve the default exactly the way index-heal does when
+ *    the override is undefined), then
+ * 2. the managed home (resume-pinned panes read it).
+ * Why both: with the real-home lane selected, fresh panes get NO managed CODEX_HOME
+ * (runtime-home-service.ts:175-181 returns null) — see ledger A10/AD-3.
+ */
+async function runDualHomePrewarm(
+  options: CodexSessionBackfillOptions,
+  systemCodexHomePathOverride?: string
+): Promise<CodexStateDbPrewarmSummary[]> {
+  // NOTE: reuse the exact system-home fallback resolution the index-heal stage uses
+  // (see src/main/codex/codex-session-index-heal.ts) when the override is undefined.
+  const systemHome = systemCodexHomePathOverride ?? resolveDefaultSystemCodexHomePath()
+  const managedHome = getOrcaManagedCodexHomePath()
+  const homes = [systemHome, managedHome].filter(
+    (home, index, all): home is string => typeof home === 'string' && all.indexOf(home) === index
+  )
+  const summaries: CodexStateDbPrewarmSummary[] = []
+  for (const home of homes) {
+    if (options.shouldStop?.() === true) break
+    summaries.push(await runCodexStateDbPrewarm(home, options))
+  }
+  return summaries
+}
+
+let backgroundPrewarmTask: Promise<CodexStateDbPrewarmSummary[] | null> | null = null
 
 /** Single-flight background wrapper matching the migration-scheduler MigrationRun shape. */
 export function startCodexStateDbPrewarmInBackground(
   options: CodexSessionBackfillOptions = {},
-  _systemCodexHomePathOverride?: string
-): Promise<CodexStateDbPrewarmSummary | null> {
+  systemCodexHomePathOverride?: string
+): Promise<CodexStateDbPrewarmSummary[] | null> {
   if (backgroundPrewarmTask) return backgroundPrewarmTask
-  const task = runCodexStateDbPrewarm(getOrcaManagedCodexHomePath(), options)
+  const task = runDualHomePrewarm(options, systemCodexHomePathOverride)
     .catch((error: unknown) => {
       console.warn('[codex-state-db-prewarm] Background prewarm failed:', error)
       return null
@@ -775,12 +893,19 @@ Implementation notes (do these while writing, they are part of this step):
 - Confirm `CodexSessionBackfillOptions` in `codex-session-backfill-types.ts` really carries
   `shouldStop?: () => boolean`; if the field name differs, use the actual name everywhere in
   this plan's code (Tasks 2-3).
-- Keep the file under 300 lines (it is ~210 as written).
+- `killCodexAppServerProcessTree` lives in `src/main/codex/codex-app-server-session.ts:58-91`
+  (`taskkill /pid <pid> /t /f`); export it (or extract a shared helper) rather than copying —
+  bare `child.kill()` on Windows only kills the `.cmd`/`cmd.exe` wrapper (repo documents this
+  in `codex-accounts/service.ts:204` and `commit-message-text-generation.ts:493`).
+- Resolve the default system home (when the override is undefined) the same way the
+  index-heal stage does — find and reuse its helper, do not invent a new path.
+- Keep the file under 300 lines; if the dual-home wrapper pushes it over, split the
+  supervisor loop and the wrapper into two domain-named files.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `pnpm test src/main/codex/codex-state-db-prewarm.test.ts`
-Expected: PASS (7 tests).
+Expected: PASS (8 tests).
 
 - [ ] **Step 6: Typecheck and commit**
 
@@ -802,7 +927,7 @@ Include the Step 1 smoke observations in the commit body.
 - Modify: `src/main/index.ts:2082-2103` (the `createCodexSessionMigrationScheduler` call)
 
 **Interfaces:**
-- Consumes (from Task 2): `startCodexStateDbPrewarmInBackground(options, systemCodexHomePathOverride?): Promise<CodexStateDbPrewarmSummary | null>` — already matches the scheduler's `MigrationRun` type `(options: CodexSessionBackfillOptions, systemCodexHomePathOverride?: string) => Promise<unknown>`.
+- Consumes (from Task 2): `startCodexStateDbPrewarmInBackground(options, systemCodexHomePathOverride?): Promise<CodexStateDbPrewarmSummary[] | null>` — matches the scheduler's `MigrationRun` type `(options: CodexSessionBackfillOptions, systemCodexHomePathOverride?: string) => Promise<unknown>`. Unlike the original sketch, the wrapper genuinely uses `systemCodexHomePathOverride`: it prewarms the system home first, then the managed home (ledger A10/AD-3).
 - Produces: `createCodexSessionMigrationScheduler` gains a required arg `startStateDbPrewarm: MigrationRun`; chain order is backfill → index-heal → prewarm, with stop-propagation.
 
 - [ ] **Step 1: Write the failing tests**
@@ -922,6 +1047,14 @@ import { startCodexStateDbPrewarmInBackground } from './codex/codex-state-db-pre
 
 Match the surrounding style exactly; do not reorder existing properties.
 
+Quit behavior (verify while wiring, part of this step): the scheduler's `shouldStop` must
+flip when the app quits (its existing `isQuitting` wiring) so the prewarm's 5s poll
+terminates the child; note that `app.exit(0)` paths skip `before-quit` (`src/main/ipc/app.ts:286`)
+and the repo's explicit quit hooks live at `src/main/index.ts:2810-2831` — if the scheduler
+is not already stopped from that path, add the stop call there. An orphan that survives quit
+self-exits on stdin EOF after init; a mid-index orphan finishes the index then exits
+(benign — verified lease semantics, ledger A11/A2).
+
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `pnpm test src/main/codex/codex-session-migration-scheduler.test.ts`
@@ -1031,7 +1164,10 @@ export const CODEX_BACKFILL_TIMEOUT_SIGNATURE = 'timed out waiting for state db 
 export const CODEX_BACKFILL_INDEXING_NOTICE = [
   'Codex is still indexing your session history and could not start yet.',
   'Codex reports this as a damaged local database, but the database is fine — its one-time session index takes a while on a large history and Codex only waits 30 seconds at startup.',
-  'Orca is finishing the index in the background. Retry this pane in a few minutes.'
+  // Why the hedged phrasing: not every configuration gets the background prewarm
+  // (ledger AD-3); leaving a codex pane open also finishes the index (codex resumes
+  // the claim itself), so the advice must be honest for all lanes.
+  'Orca finishes the index in the background when it can; leaving one Codex pane open also lets Codex finish it. Retry in a few minutes.'
 ].join('\n')
 
 // Why: strip CSI/OSC escapes so a redraw-heavy TUI cannot split the signature text.
@@ -1241,6 +1377,14 @@ if (resolveExpectedLaunchTuiAgent() === 'codex') {
 Keep the observe call cheap-path-first exactly as shown (agent check before observe) so
 non-codex panes pay nothing.
 
+Detection scope (validated; document in a brief comment if natural): this covers **visible,
+Orca-launched** codex panes — `tab.launchAgent` is set at tab creation, pre-spawn, so there
+is no agent-resolution race. Accepted misses (ledger AD-4): hidden/background panes receive
+no renderer bytes (`pty-connection.ts:7405`, hidden-delivery gate `:5875-5904`), flood-dropped
+chunks are restored via snapshot (bypassing `dataCallback`), and manually-typed `codex` in a
+plain shell pane has no `launchAgent`. The prewarm (half A) still fixes those homes whether
+or not the toast fires.
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm test src/renderer/src/components/terminal-pane/pty-connection.test.ts`
@@ -1285,11 +1429,18 @@ sqlite3 "file:$HOME/.local/share/orca/codex-runtime-home/home/state_5.sqlite?mod
   "select status from backfill_state;"
 ```
 
-Expected: `complete` (this machine's index finished on 2026-07-31). This is the
-`already-complete` pre-warm path: launching the built app against real data must NOT spawn
-a codex child. Verify by launching `pnpm dev`, waiting ~30s, and checking
-`pgrep -af 'codex.*app-server'` shows nothing spawned by Orca; console shows no
-`[codex-state-db-prewarm] pre-warming` line. Quit the app.
+Expected: `complete` (this machine's index finished on 2026-07-31). Also check the
+**system home** leg the dual-home prewarm now covers (read-only):
+`sqlite3 "file:$HOME/.codex/state_5.sqlite?mode=ro" "select status from backfill_state;" || true`.
+This is the `already-complete` pre-warm path: with **both** homes reading `complete`,
+launching the built app against real data must NOT spawn a codex child. Verify by launching
+`pnpm dev`, waiting ~30s, and checking `pgrep -af 'codex.*app-server'` shows nothing spawned
+by Orca; console shows no `[codex-state-db-prewarm] pre-warming` line. Quit the app.
+If the real `~/.codex` state DB is NOT complete (or missing with a large history), the
+system-home prewarm leg WILL spawn codex against it — that is exactly the shipped
+production behavior (same class of action as the existing index-heal stage, which already
+spawns codex with `CODEX_HOME: systemCodexHomePath`); record the observation instead of
+treating it as a violation, and let it run to completion.
 
 - [ ] **Step 3: Full repro E2E in a disposable user-data dir (the actual #11828 scenario)**
 
@@ -1299,8 +1450,11 @@ tens of minutes of wall-clock time while the index runs; that is expected.
 ```bash
 E2E_DATA=$(mktemp -d /tmp/orca-e2e-11828.XXXXXX)
 mkdir -p "$E2E_DATA/codex-runtime-home/home"
-# Why cp -al: hardlink the 15 GB history in O(files); originals in ~/.codex are untouched.
-cp -al "$HOME/.codex/sessions" "$E2E_DATA/codex-runtime-home/home/sessions"
+# Why cp -a (real copies, NOT cp -al hardlinks): codex has a compression path that can
+# replace rollout .jsonl files (openai/codex rollout/src/compression.rs — ledger A14);
+# plain copies make it impossible for the E2E to touch ~/.codex originals. The 15 GB copy
+# takes a few minutes and needs the disk space — that is the accepted cost of safety.
+cp -a "$HOME/.codex/sessions" "$E2E_DATA/codex-runtime-home/home/sessions"
 ORCA_USER_DATA_PATH="$E2E_DATA" pnpm dev
 ```
 
@@ -1309,6 +1463,11 @@ Observe and record (in the task's final report) each of:
    `[codex-state-db-prewarm] pre-warming codex session index at ...` and
    `pgrep -af 'app-server'` shows a codex child with `CODEX_HOME` pointing into `$E2E_DATA`
    (check via `tr '\0' '\n' </proc/<pid>/environ | grep CODEX_HOME`).
+   Note: the dual-home prewarm runs its **system-home leg first** (against the real
+   `~/.codex`, expected `already-complete` and instant per Step 2) before the managed-home
+   leg that targets the twin — the log line to watch for is the one whose path is inside
+   `$E2E_DATA`. If a run is interrupted mid-index, expect codex starts against the twin to
+   fail for up to 15 minutes (stale backfill lease, verified behavior) before resuming.
 2. While it runs, open a Codex pane in the app: after ~30s the pane shows Codex's failure
    output AND the amber toast beginning "Codex is still indexing your session history…".
    A plain shell pane shows no toast.
@@ -1326,7 +1485,7 @@ the scheduler eligibility state and HALT with that evidence — do not fake the 
 Cleanup:
 
 ```bash
-rm -rf "$E2E_DATA"   # hardlinks only; ~/.codex originals are unaffected
+rm -rf "$E2E_DATA"   # plain copies; ~/.codex originals are unaffected
 ```
 
 - [ ] **Step 4: Commit any fixes from the verification**
@@ -1345,19 +1504,33 @@ If nothing changed, skip the commit — do not create an empty one.
 
 ## Self-review record
 
-- **Spec coverage:** (a) pre-warm the state DB after the managed home is populated →
-  Tasks 1-3 (chained onto the same scheduler that owns managed-home session maintenance,
-  re-run every app start and on host-default selection, resumable because it keys off
-  `backfill_state` rather than a marker — also covers future `state_<N>` schema bumps via
-  newest-file discovery); (b) surface the real story instead of the misleading error →
-  Tasks 4-6; PR against `main` + repo conventions → Global Constraints; "don't make #11830
-  worse" → read-only DB access everywhere, no spawning against unreadable DBs, bounded
-  respawn budget, graceful `kill()`; WSL2/repro machine specifics → Task 7.
+- **Spec coverage:** (a) pre-warm the state DB for the homes panes actually use →
+  Tasks 1-3 (dual-home: system home first — the home fresh real-home-lane panes read — then
+  the managed home for resume-pinned panes; chained onto the same scheduler, re-run every app
+  start and on host-default selection, resumable because it keys off `backfill_state` rather
+  than a marker — also covers future `state_<N>` schema bumps via newest-file discovery);
+  (b) surface the real story instead of the misleading error → Tasks 4-6; PR against `main`
+  + repo conventions → Global Constraints; "don't make #11830 worse" → read-only DB access
+  everywhere, no spawning against unreadable DBs, fast-failure-only respawn budget +
+  deadline, stdin-EOF-first termination with Windows tree-kill; WSL2/repro machine
+  specifics → Task 7.
 - **No silent deferrals:** both user-facing outcomes are proven against production behavior
-  in Task 7 (real 15 GB history, real codex binary, real panes); mocks exist only in unit
-  tests. The one assumption that can't be unit-tested (headless `app-server` runs the
-  backfill) is verified against the real binary in Task 2 Step 1 with an explicit HALT rule.
+  in Task 7 (real 15 GB history — as safe copies, real codex binary, real panes); mocks exist
+  only in unit tests. The headless `app-server` assumption set was verified against the real
+  binary and openai/codex source during Stage-2 validation; Task 2 Step 1 remains as a cheap
+  sanity re-run with its HALT rule intact.
 - **Type consistency:** `CodexStateDbBackfillStatus` kinds (`complete | incomplete | missing |
   not-tracked | unreadable`) match between Tasks 1-2; `startCodexStateDbPrewarmInBackground`
-  matches the scheduler's `MigrationRun` shape in Task 3; `CODEX_BACKFILL_INDEXING_NOTICE`
-  first line matches `isCodexBackfillIndexingNotice` in Task 5 and the tests in Task 6.
+  (now returning `CodexStateDbPrewarmSummary[] | null`) matches the scheduler's
+  `MigrationRun` shape (`Promise<unknown>`) in Task 3; `CODEX_BACKFILL_INDEXING_NOTICE`
+  first line ('Codex is still indexing your session history') is unchanged by the Stage-2
+  text edit, so `isCodexBackfillIndexingNotice` in Task 5 and the tests in Task 6 still match.
+- **Stage-2 load-bearing validation (2026-07-31):** 15 assumptions validated against live
+  codex 0.146.0 runs, openai/codex `rust-v0.146.0` source, and this repo — 8 verified,
+  6 falsified (A3 stale-lease behavior, A9 pane binary resolution, A10 home-lane targeting,
+  A11 Windows/quit termination, A13 hidden-pane detection scope, A14 rollout-file
+  immutability), 1 accepted (A12 silent background indexing; measured 10-13 min for 15 GB).
+  All falsifications are planned around in this revision: dual-home prewarm, fast-exit-only
+  respawn budget, lease-aware supervision, tree-kill/quit-stop termination, honest toast
+  text, detection-scope note, `cp -a` E2E. Full evidence: `load-bearing-ledger.md` +
+  `reports/` in the workflow logs dir (`.worktrees/.the-usual-logs/codex-backfill-prewarm/`).
