@@ -3491,6 +3491,20 @@ describe('createUISlice peers pane split', () => {
     expect(store.getState().peersPageTarget).toEqual(hostB)
   })
 
+  it('focuses the existing pane instead of splitting when the target is already open elsewhere', () => {
+    const store = createUIStore()
+    store.getState().openPeersPage(hostA)
+    store.getState().splitPeersPane(null, 'right', hostB)
+    const layoutBefore = store.getState().peersLayout
+
+    // Why: two leaves must never carry the same key — removeLeaf/replaceLeafTargets/
+    // pruneLeaves address leaves by key, so a duplicate would corrupt later ops.
+    store.getState().splitPeersPane('h2:b', 'bottom', hostA)
+
+    expect(store.getState().peersLayout).toEqual(layoutBefore)
+    expect(store.getState().peersPageTarget).toEqual(hostA)
+  })
+
   it('returns to a single pane and refocuses the survivor after closing a pane', () => {
     const store = createUIStore()
     store.getState().openPeersPage(hostA)

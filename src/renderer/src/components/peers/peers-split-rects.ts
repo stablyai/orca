@@ -123,5 +123,12 @@ export function ratioFromPointerInSplitBox(
   direction: 'row' | 'column',
   pointer: { x: number; y: number }
 ): number {
-  return direction === 'row' ? (pointer.x - box.x) / box.width : (pointer.y - box.y) / box.height
+  const span = direction === 'row' ? box.width : box.height
+  // Why: a zero-size box would yield NaN/Infinity, and NaN survives the
+  // min/max clamp in clampPeersSplitRatio to corrupt the persisted layout.
+  if (span <= 0) {
+    return 0.5
+  }
+  const offset = direction === 'row' ? pointer.x - box.x : pointer.y - box.y
+  return Math.min(1, Math.max(0, offset / span))
 }

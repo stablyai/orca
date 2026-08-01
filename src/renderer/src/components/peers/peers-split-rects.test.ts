@@ -120,4 +120,16 @@ describe('ratioFromPointerInSplitBox', () => {
     const box = { x: 0, y: 0, width: 100, height: 200 }
     expect(ratioFromPointerInSplitBox(box, 'column', { x: 0, y: 150 })).toBeCloseTo(0.75)
   })
+
+  it('clamps a pointer outside the split box to the 0-1 range', () => {
+    const box = { x: 0, y: 0, width: 200, height: 100 }
+    expect(ratioFromPointerInSplitBox(box, 'row', { x: -50, y: 0 })).toBe(0)
+    expect(ratioFromPointerInSplitBox(box, 'row', { x: 500, y: 0 })).toBe(1)
+  })
+
+  it('returns the midpoint instead of NaN/Infinity for a zero-size box', () => {
+    const box = { x: 0, y: 0, width: 0, height: 0 }
+    expect(ratioFromPointerInSplitBox(box, 'row', { x: 10, y: 0 })).toBe(0.5)
+    expect(ratioFromPointerInSplitBox(box, 'column', { x: 0, y: 10 })).toBe(0.5)
+  })
 })

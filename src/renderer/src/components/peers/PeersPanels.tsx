@@ -203,6 +203,11 @@ export function PeersPanels({
       ? dockZoneOverlayRect(dockPreviewPaneRect, dockPreview.zone)
       : null
 
+  // Why: pointercancel (touch/pen interruption) never fires pointerup, and an
+  // unmount mid-drag would leave the window listeners attached forever.
+  const endDividerDragRef = useRef<(() => void) | null>(null)
+  useEffect(() => () => endDividerDragRef.current?.(), [])
+
   const startDividerDrag =
     (divider: PeersLayoutDivider) =>
     (pointerEvent: React.PointerEvent): void => {
@@ -218,6 +223,7 @@ export function PeersPanels({
       if (!splitBox) {
         return
       }
+      endDividerDragRef.current?.()
       const containerRect = container.getBoundingClientRect()
       const onMove = (moveEvent: PointerEvent): void => {
         const ratio = ratioFromPointerInSplitBox(splitBox, divider.direction, {
@@ -229,9 +235,13 @@ export function PeersPanels({
       const onUp = (): void => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+        endDividerDragRef.current = null
       }
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+      endDividerDragRef.current = onUp
     }
 
   return (

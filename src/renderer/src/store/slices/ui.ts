@@ -1579,11 +1579,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const targetKey =
         atLeafKey ?? (state.peersPageTarget ? peersLeafKey(state.peersPageTarget) : null)
       // insertSplit no-ops on a stale/unknown atLeafKey; don't focus a target that never landed in the tree.
-      const targetExists = collectPeersLeaves(state.peersLayout).some(
-        (leaf) => peersLeafKey(leaf) === targetKey
-      )
+      const leaves = collectPeersLeaves(state.peersLayout)
+      const targetExists = leaves.some((leaf) => peersLeafKey(leaf) === targetKey)
       if (!targetKey || !targetExists) {
         return {}
+      }
+      // Why: two leaves must never carry the same key (removeLeaf/replaceLeafTargets/
+      // pruneLeaves address leaves by key) — focus the existing pane instead.
+      if (leaves.some((leaf) => peersLeafKey(leaf) === peersLeafKey(newTarget))) {
+        return { peersPageTarget: newTarget }
       }
       return {
         peersLayout: insertSplit(state.peersLayout, targetKey, side, newTarget),
