@@ -76,24 +76,6 @@ function createResolvedConfig(
   }
 }
 
-function buildWildcardArgs(
-  proxy: Pick<SystemSshResolvedConfig, 'proxyCommand' | 'proxyJump'>,
-  host = '10.0.0.5'
-): string[] {
-  return buildSshArgs(
-    createTarget({
-      source: 'ssh-config',
-      configHost: 'prod',
-      host,
-      port: 2222,
-      username: 'deploy'
-    }),
-    {
-      resolvedConfig: createResolvedConfig({ hostname: 'prod', port: 22, user: 'ops', ...proxy })
-    }
-  )
-}
-
 function expectNoOrcaControlMasterArgs(args: string[]): void {
   expect(args).not.toContain('ControlMaster=auto')
   expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(false)
@@ -297,26 +279,69 @@ describe('spawnSystemSsh', () => {
 
   it.each([
     ['ProxyCommand', { proxyCommand: 'cloudflared access ssh --hostname %h' }],
-    ['ProxyJump', { proxyJump: 'bastion' }]
-  ] as const)('preserves the stored endpoint for wildcard %s system SSH', (_name, proxy) => {
-    const args = buildWildcardArgs(proxy)
-    expect(args).toEqual(
-      expect.arrayContaining(['-o', 'Hostname=10.0.0.5', '-p', '2222', '-l', 'deploy'])
-    )
-  })
-
-  it('keeps ControlMaster identity bound to the stored wildcard endpoint', () => {
-    if (process.platform === 'win32') {
-      return
-    }
-
-    const paths = ['10.0.0.5', '10.0.0.6'].map((host) =>
-      buildWildcardArgs({ proxyCommand: 'cloudflared access ssh --hostname %h' }, host).find(
-        (arg) => arg.startsWith('ControlPath=')
+    ['ProxyJump', { proxyJump: 'bastion' }],
+    ['ProxyUseFdpass', { proxyUseFdpass: true }]
+  ] as const)(
+    'passes the effective ssh -G endpoint through wildcard %s system SSH',
+    (_name, proxy) => {
+      spawnSystemSshCommand(
+        createTarget({
+          source: 'ssh-config',
+          configHost: 'prod',
+          host: 'stale.example.com',
+          port: 22,
+          username: 'deploy',
+          proxyCommand: 'ssh -W %h:%p stale-bastion'
+        }),
+        'echo ready',
+        {
+          resolvedConfig: createResolvedConfig({
+            hostname: 'resolved.example.com',
+            port: 2222,
+            user: 'vpnuser',
+            ...proxy
+          })
+        }
       )
+
+      const args = spawnMock.mock.calls[0][1] as string[]
+      expect(args).toEqual(
+        expect.arrayContaining([
+          '-o',
+          'Hostname=resolved.example.com',
+          '-p',
+          '2222',
+          '-l',
+          'vpnuser',
+          '--',
+          'prod',
+          'echo ready'
+        ])
+      )
+      expect(args).not.toContain('22')
+      expect(args).not.toContain('deploy')
+    }
+  )
+
+  it('lets fresh wildcard and Match defaults own the default port and imported user', () => {
+    const args = buildSshArgs(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'prod',
+        host: 'stale.example.com',
+        port: 22,
+        username: 'deploy'
+      }),
+      {
+        resolvedConfig: createResolvedConfig({ hostname: 'prod', port: 22, user: 'vpnuser' })
+      }
     )
 
-    expect(paths[1]).not.toBe(paths[0])
+    expect(args).not.toContain('-p')
+    expect(args).not.toContain('22')
+    expect(args).toContain('-l')
+    expect(args).toContain('vpnuser')
+    expect(args).not.toContain('deploy')
   })
 
   it('passes explicit options for manual targets with implicit configHost', () => {

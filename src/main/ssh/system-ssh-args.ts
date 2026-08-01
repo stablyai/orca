@@ -50,22 +50,22 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   }
 
   const useConfigHost = shouldUseOpenSshConfigHost(target)
-  const preserveResolvedEndpoint = shouldPreserveResolvedEndpoint(target, options)
+  const resolvedEndpoint = getResolvedEndpoint(target, options)
   const configHost = target.configHost || target.host
 
   if (
     (!useConfigHost && target.port !== 22) ||
-    (preserveResolvedEndpoint && target.port !== options?.resolvedConfig?.port)
+    (resolvedEndpoint !== undefined && resolvedEndpoint.port !== 22)
   ) {
-    args.push('-p', String(target.port))
+    args.push('-p', String(resolvedEndpoint?.port ?? target.port))
   }
 
-  if (preserveResolvedEndpoint) {
-    if (target.host !== configHost) {
-      args.push('-o', `Hostname=${target.host}`)
+  if (resolvedEndpoint) {
+    if (resolvedEndpoint.hostname && resolvedEndpoint.hostname !== configHost) {
+      args.push('-o', `Hostname=${resolvedEndpoint.hostname}`)
     }
-    if (target.username && target.username !== options?.resolvedConfig?.user) {
-      args.push('-l', target.username)
+    if (resolvedEndpoint.user && resolvedEndpoint.user !== target.username) {
+      args.push('-l', resolvedEndpoint.user)
     }
   }
 
@@ -196,23 +196,17 @@ function shouldUseOpenSshConfigHost(target: SshTarget): boolean {
   return isOpenSshConfigBackedTarget(target)
 }
 
-function shouldPreserveResolvedEndpoint(
+function getResolvedEndpoint(
   target: SshTarget,
   options?: SystemSshBuildArgsOptions
-): boolean {
+): SystemSshResolvedConfig | undefined {
   if (!shouldUseOpenSshConfigHost(target) || !options?.resolvedConfig) {
-    return false
+    return undefined
   }
 
-  // Why: wildcard-only proxy directives are omitted during import, so a fresh
-  // proxy resolution is the signal that the alias would otherwise lose its
-  // stored endpoint fields when OpenSSH reads the wildcard Host block.
-  const hasResolvedProxy =
-    options.resolvedConfig.proxyCommand != null ||
-    options.resolvedConfig.proxyJump != null ||
-    options.resolvedConfig.proxyUseFdpass === true
-  const hasImportedProxy = target.proxyCommand != null || target.jumpHost != null
-  return hasResolvedProxy && !hasImportedProxy
+  // Why: ssh -G is the current OpenSSH authority for config-backed targets;
+  // imported fields may contain schema defaults or stale concrete-block values.
+  return options.resolvedConfig
 }
 
 export function isOpenSshConfigBackedTarget(
