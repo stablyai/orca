@@ -96,6 +96,11 @@ export type {
   WorkerDispatchState
 }
 
+type DispatchFailureSettlement = {
+  dispatch?: DispatchContextRow
+  taskTransitionApplied: boolean
+}
+
 function generateId(prefix: string): string {
   return `${prefix}_${randomBytes(6).toString('hex')}`
 }
@@ -3802,20 +3807,33 @@ export class OrchestrationDb {
   }
 
   updateTaskStatus(id: string, status: TaskStatus, result?: string): TaskRow | undefined {
-    const completedAt =
-      status === 'completed' || status === 'failed' ? new Date().toISOString() : null
-    this.db
-      .prepare(
-        'UPDATE tasks SET status = ?, result = COALESCE(?, result), completed_at = COALESCE(?, completed_at) WHERE id = ?'
-      )
-      .run(status, result ?? null, completedAt, id)
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const task = this.getTask(id)
+      if (!task) {
+        this.db.exec('COMMIT')
+        return undefined
+      }
+      if (status !== 'dispatched') {
+        this.retireActiveDispatchesForTask(id, status === 'completed' ? 'completed' : 'failed')
+      }
+      const completedAt =
+        status === 'completed' || status === 'failed' ? new Date().toISOString() : null
+      this.db
+        .prepare(
+          'UPDATE tasks SET status = ?, result = COALESCE(?, result), completed_at = COALESCE(?, completed_at) WHERE id = ?'
+        )
+        .run(status, result ?? null, completedAt, id)
 
-    if (status === 'completed') {
-      this.promoteReadyTasks(id)
-      this.completeActiveDispatchForTask(id)
+      if (status === 'completed') {
+        this.promoteReadyTasks(id)
+      }
+      this.db.exec('COMMIT')
+      return this.getTask(id)
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
     }
-
-    return this.getTask(id)
   }
 
   // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
@@ -3915,6 +3933,14 @@ export class OrchestrationDb {
         )
       }
 
+      this.retireActiveDispatchesForTask(task.id, 'failed')
+      const prior = this.db
+        .prepare(
+          'SELECT MAX(failure_count) AS max_failures FROM dispatch_contexts WHERE task_id = ?'
+        )
+        .get(task.id) as { max_failures: number | null } | undefined
+      const priorFailures = prior?.max_failures ?? 0
+
       const id = generateId('ctx')
       if (params.mutationReceipt) {
         this.db
@@ -3932,10 +3958,17 @@ export class OrchestrationDb {
       this.db
         .prepare(
           `INSERT INTO dispatch_contexts (
-             id, run_id, task_id, contract_version, launch_token_hash, status, dispatched_at
-           ) VALUES (?, ?, ?, ?, ?, 'pending', datetime('now'))`
+             id, run_id, task_id, contract_version, launch_token_hash, status, failure_count, dispatched_at
+           ) VALUES (?, ?, ?, ?, ?, 'pending', ?, datetime('now'))`
         )
-        .run(id, task.run_id, task.id, CURRENT_CONTRACT_VERSION, params.launchTokenHash ?? null)
+        .run(
+          id,
+          task.run_id,
+          task.id,
+          CURRENT_CONTRACT_VERSION,
+          params.launchTokenHash ?? null,
+          priorFailures
+        )
       this.db
         .prepare(
           `INSERT INTO worker_dispatches (
@@ -4159,12 +4192,14 @@ export class OrchestrationDb {
       if (!dispatch || !worker || worker.state !== 'starting') {
         throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not starting.`)
       }
+      const task = this.getTask(dispatch.task_id)
+      const latest = task ? this.getDispatchContext(task.id) : undefined
       this.db
         .prepare(
           `UPDATE dispatch_contexts
            SET status = 'failed', last_failure = ?, completed_at = datetime('now'),
                capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
-           WHERE id = ?`
+           WHERE id = ? AND status IN ('pending', 'dispatched')`
         )
         .run(reason, dispatchId)
       this.db
@@ -4174,9 +4209,7 @@ export class OrchestrationDb {
            WHERE dispatch_id = ?`
         )
         .run(stage, reason, dispatchId)
-      this.db
-        .prepare("UPDATE tasks SET status = 'failed', completed_at = datetime('now') WHERE id = ?")
-        .run(dispatch.task_id)
+      this.applyCurrentDispatchTaskTransition(task, dispatch, latest, ['dispatched'], 'failed')
       this.closeQuestionsForDispatch(dispatchId)
       this.db.exec('COMMIT')
       return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
@@ -4194,6 +4227,8 @@ export class OrchestrationDb {
       if (!dispatch || !worker || worker.state !== 'starting') {
         throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not starting.`)
       }
+      const task = this.getTask(dispatch.task_id)
+      const latest = task ? this.getDispatchContext(task.id) : undefined
       this.db
         .prepare(
           `UPDATE worker_dispatches
@@ -4208,7 +4243,7 @@ export class OrchestrationDb {
            WHERE id = ?`
         )
         .run(dispatchId)
-      this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(dispatch.task_id)
+      this.applyCurrentDispatchTaskTransition(task, dispatch, latest, ['dispatched'], 'blocked')
       this.closeQuestionsForDispatch(dispatchId)
       this.db.exec('COMMIT')
       return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
@@ -4243,6 +4278,8 @@ export class OrchestrationDb {
         this.db.exec('COMMIT')
         return worker
       }
+      const task = this.getTask(dispatch.task_id)
+      const latest = task ? this.getDispatchContext(task.id) : undefined
 
       if (params.state === 'ready') {
         this.db
@@ -4268,19 +4305,24 @@ export class OrchestrationDb {
             "UPDATE dispatch_contexts SET status = 'dispatched' WHERE id = ? AND status = 'pending'"
           )
           .run(params.dispatchId)
-        this.db
-          .prepare(
-            "UPDATE tasks SET status = 'dispatched', completed_at = NULL WHERE id = ? AND status = 'blocked'"
-          )
-          .run(dispatch.task_id)
+        this.applyCurrentDispatchTaskTransition(task, dispatch, latest, ['blocked'], 'dispatched')
       } else if (params.state === 'start_unknown') {
         this.db
           .prepare(
             `UPDATE worker_dispatches
-             SET stage = ?, last_error = ?, updated_at = datetime('now')
+             SET state = 'start_unknown', stage = ?, last_error = ?,
+                 updated_at = datetime('now')
              WHERE dispatch_id = ? AND state IN ('starting', 'start_unknown')`
           )
           .run(params.stage, params.lastError ?? worker.last_error, params.dispatchId)
+        this.db
+          .prepare(
+            `UPDATE dispatch_contexts
+             SET capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
+             WHERE id = ? AND status IN ('pending', 'dispatched')`
+          )
+          .run(params.dispatchId)
+        this.applyCurrentDispatchTaskTransition(task, dispatch, latest, ['dispatched'], 'blocked')
       } else {
         const reason = params.lastError ?? `The worker server reported ${params.state}.`
         this.db
@@ -4298,11 +4340,13 @@ export class OrchestrationDb {
              WHERE id = ? AND status IN ('pending', 'dispatched')`
           )
           .run(reason, params.dispatchId)
-        this.db
-          .prepare(
-            "UPDATE tasks SET status = 'failed', completed_at = datetime('now') WHERE id = ? AND status IN ('blocked', 'dispatched')"
-          )
-          .run(dispatch.task_id)
+        this.applyCurrentDispatchTaskTransition(
+          task,
+          dispatch,
+          latest,
+          ['dispatched', 'blocked'],
+          'failed'
+        )
         this.closeQuestionsForDispatch(params.dispatchId)
       }
       this.db.exec('COMMIT')
@@ -4350,8 +4394,22 @@ export class OrchestrationDb {
       const activeDispatch = dispatch.status === 'pending' || dispatch.status === 'dispatched'
       const stopWasPending = worker.state === 'stopping' || worker.state === 'stop_unknown'
       if (activeDispatch) {
-        const failureCount = dispatch.failure_count + 1
-        const dispatchStatus: DispatchStatus = failureCount >= 3 ? 'circuit_broken' : 'failed'
+        const task = this.getTask(dispatch.task_id)
+        const latest = task ? this.getDispatchContext(task.id) : undefined
+        const acceptedTaskStatuses: readonly TaskStatus[] = stopWasPending
+          ? []
+          : worker.state === 'start_unknown'
+            ? ['blocked']
+            : ['dispatched']
+        const ownsTask = this.isCurrentDispatchTaskAuthority(
+          task,
+          dispatch,
+          latest,
+          acceptedTaskStatuses
+        )
+        const failureCount = ownsTask ? dispatch.failure_count + 1 : dispatch.failure_count
+        const dispatchStatus: DispatchStatus =
+          ownsTask && failureCount >= 3 ? 'circuit_broken' : 'failed'
         this.db
           .prepare(
             `UPDATE dispatch_contexts
@@ -4361,15 +4419,15 @@ export class OrchestrationDb {
              WHERE id = ? AND status IN ('pending', 'dispatched')`
           )
           .run(dispatchStatus, failureCount, reason, dispatchId)
-        if (!stopWasPending) {
+        if (!stopWasPending && ownsTask) {
           const taskStatus: TaskStatus = dispatchStatus === 'circuit_broken' ? 'failed' : 'ready'
-          this.db
-            .prepare(
-              `UPDATE tasks
-               SET status = ?, completed_at = CASE WHEN ? = 'failed' THEN datetime('now') ELSE NULL END
-               WHERE id = ? AND status IN ('dispatched', 'blocked')`
-            )
-            .run(taskStatus, taskStatus, dispatch.task_id)
+          this.applyCurrentDispatchTaskTransition(
+            task,
+            dispatch,
+            latest,
+            acceptedTaskStatuses,
+            taskStatus
+          )
         }
         this.closeQuestionsForDispatch(dispatchId)
       }
@@ -4380,6 +4438,11 @@ export class OrchestrationDb {
            WHERE dispatch_id = ?`
         )
         .run(stopWasPending ? 'stopped' : 'abandoned', reason, dispatchId)
+      this.db
+        .prepare(
+          "UPDATE dispatch_contexts SET last_failure = COALESCE(last_failure, ?) WHERE id = ? AND status = 'failed'"
+        )
+        .run(reason, dispatchId)
       this.db.exec('COMMIT')
       return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
     } catch (error) {
@@ -5238,7 +5301,15 @@ export class OrchestrationDb {
            WHERE id = ?`
         )
         .run(dispatchId)
-      this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(dispatch.task_id)
+      const task = this.getTask(dispatch.task_id)
+      const latest = task ? this.getDispatchContext(task.id) : undefined
+      this.applyCurrentDispatchTaskTransition(
+        task,
+        dispatch,
+        latest,
+        ['dispatched', 'blocked'],
+        'blocked'
+      )
       this.closeQuestionsForDispatch(dispatchId)
       this.db.exec('COMMIT')
       return {
@@ -5342,9 +5413,9 @@ export class OrchestrationDb {
            WHERE dispatch_id = ? AND state = 'stopping'`
         )
         .run(dispatchId)
-      this.db
-        .prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ? AND status = 'blocked'")
-        .run(dispatch.task_id)
+      const task = this.getTask(dispatch.task_id)
+      const latest = task ? this.getDispatchContext(task.id) : undefined
+      this.applyCurrentDispatchTaskTransition(task, dispatch, latest, ['blocked'], 'dispatched')
       this.db.exec('COMMIT')
       return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
     } catch (error) {
@@ -5406,7 +5477,15 @@ export class OrchestrationDb {
            WHERE id = ?`
         )
         .run(dispatchId)
-      this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(dispatch.task_id)
+      const task = this.getTask(dispatch.task_id)
+      const latest = task ? this.getDispatchContext(task.id) : undefined
+      this.applyCurrentDispatchTaskTransition(
+        task,
+        dispatch,
+        latest,
+        ['dispatched', 'blocked'],
+        'blocked'
+      )
       this.closeQuestionsForDispatch(dispatchId)
       this.db.exec('COMMIT')
       return {
@@ -5434,46 +5513,57 @@ export class OrchestrationDb {
       throw new Error(`Task ${taskId} is ${task.status}; only ready tasks can be dispatched`)
     }
 
-    // Why: lock on pane identity too, so a reminted handle can't open a second concurrent dispatch on the same pane.
-    const existing = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.retireActiveDispatchesForTask(taskId, 'failed')
 
-    if (existing) {
-      throw new Error(
-        `Terminal ${assigneeHandle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
-      )
-    }
+      // Why: lock on pane identity too, so a reminted handle can't open a second concurrent dispatch on the same pane.
+      const existing = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
 
-    // Carry forward failure_count so the circuit breaker accumulates across retries for the same task.
-    const prior = this.db
-      .prepare('SELECT MAX(failure_count) as max_failures FROM dispatch_contexts WHERE task_id = ?')
-      .get(taskId) as { max_failures: number | null } | undefined
-    const priorFailures = prior?.max_failures ?? 0
+      if (existing) {
+        throw new Error(
+          `Terminal ${assigneeHandle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
+        )
+      }
 
-    const id = generateId('ctx')
-    this.db
-      .prepare(
-        `INSERT INTO dispatch_contexts (
+      // Carry forward failure_count so the circuit breaker accumulates across retries for the same task.
+      const prior = this.db
+        .prepare(
+          'SELECT MAX(failure_count) as max_failures FROM dispatch_contexts WHERE task_id = ?'
+        )
+        .get(taskId) as { max_failures: number | null } | undefined
+      const priorFailures = prior?.max_failures ?? 0
+
+      const id = generateId('ctx')
+      this.db
+        .prepare(
+          `INSERT INTO dispatch_contexts (
            id, run_id, task_id, contract_version, launch_token_hash,
            assignee_handle, assignee_pane_key, status, failure_count, dispatched_at
          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
-      )
-      .run(
-        id,
-        task.run_id,
-        taskId,
-        CURRENT_CONTRACT_VERSION,
-        launchTokenHash ?? null,
-        assigneeHandle,
-        assigneePaneKey ?? null,
-        priorFailures
-      )
-    this.hasAnyDispatchContextsCache = true
+        )
+        .run(
+          id,
+          task.run_id,
+          taskId,
+          CURRENT_CONTRACT_VERSION,
+          launchTokenHash ?? null,
+          assigneeHandle,
+          assigneePaneKey ?? null,
+          priorFailures
+        )
+      this.hasAnyDispatchContextsCache = true
 
-    this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
+      this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
 
-    return this.db
-      .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
-      .get(id) as DispatchContextRow
+      this.db.exec('COMMIT')
+      return this.db
+        .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
+        .get(id) as DispatchContextRow
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   getDispatchContext(taskId: string): DispatchContextRow | undefined {
@@ -5749,14 +5839,15 @@ export class OrchestrationDb {
          WHERE id = ? AND status = 'dispatched'`
       )
       .run(expectedDispatchStatus, expectedDispatchStatus, params.result, params.dispatchId)
-    const taskUpdate = this.db
-      .prepare(
-        `UPDATE tasks
-         SET status = ?, result = ?, completed_at = datetime('now')
-         WHERE id = ? AND status = 'dispatched'`
-      )
-      .run(expectedTaskStatus, params.result, params.taskId)
-    if (dispatchUpdate.changes !== 1 || taskUpdate.changes !== 1) {
+    const taskUpdate = this.applyCurrentDispatchTaskTransition(
+      task,
+      dispatch,
+      latest,
+      ['dispatched'],
+      expectedTaskStatus,
+      params.result
+    )
+    if (dispatchUpdate.changes !== 1 || !taskUpdate) {
       this.db.exec('ROLLBACK TO settle_worker_report')
       this.db.exec('RELEASE settle_worker_report')
       return {
@@ -5811,55 +5902,161 @@ export class OrchestrationDb {
       .all(thresholdIso, thresholdIso) as DispatchContextRow[]
   }
 
-  failDispatch(ctxId: string, error: string): DispatchContextRow | undefined {
-    const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
-      | DispatchContextRow
-      | undefined
-    if (!ctx) {
-      return undefined
+  private isCurrentDispatchTaskAuthority(
+    task: TaskRow | undefined,
+    dispatch: DispatchContextRow,
+    latest: DispatchContextRow | undefined,
+    acceptedTaskStatuses: readonly TaskStatus[]
+  ): boolean {
+    return (
+      task !== undefined &&
+      acceptedTaskStatuses.includes(task.status) &&
+      (dispatch.status === 'pending' || dispatch.status === 'dispatched') &&
+      latest?.id === dispatch.id
+    )
+  }
+
+  private applyCurrentDispatchTaskTransition(
+    task: TaskRow | undefined,
+    dispatch: DispatchContextRow,
+    latest: DispatchContextRow | undefined,
+    acceptedTaskStatuses: readonly TaskStatus[],
+    status: TaskStatus,
+    result?: string
+  ): boolean {
+    if (!this.isCurrentDispatchTaskAuthority(task, dispatch, latest, acceptedTaskStatuses)) {
+      return false
     }
-
-    const newFailureCount = ctx.failure_count + 1
-    const newStatus: DispatchStatus = newFailureCount >= 3 ? 'circuit_broken' : 'failed'
-
-    this.db
+    const completedAt =
+      status === 'completed' || status === 'failed' ? new Date().toISOString() : null
+    const update = this.db
       .prepare(
-        `UPDATE dispatch_contexts
-         SET status = ?, failure_count = ?, last_failure = ?,
-             completed_at = COALESCE(completed_at, datetime('now')),
-             capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
-         WHERE id = ?`
+        'UPDATE tasks SET status = ?, result = COALESCE(?, result), completed_at = COALESCE(?, completed_at) WHERE id = ? AND status = ?'
       )
-      .run(newStatus, newFailureCount, error, ctxId)
+      .run(status, result ?? null, completedAt, dispatch.task_id, task!.status)
+    return update.changes === 1
+  }
 
-    // Why: back to 'ready' not 'pending' — 'pending' would strand it since promoteReadyTasks only runs when a dep completes.
-    const taskStatus: TaskStatus = newStatus === 'circuit_broken' ? 'failed' : 'ready'
-    this.db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(taskStatus, ctx.task_id)
+  private retireActiveDispatchesForTask(
+    taskId: string,
+    terminalStatus: 'completed' | 'failed'
+  ): void {
+    const active = this.db
+      .prepare(
+        "SELECT id FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
+      )
+      .all(taskId) as { id: string }[]
+    for (const dispatch of active) {
+      this.db
+        .prepare(
+          `UPDATE dispatch_contexts
+           SET status = ?, completed_at = COALESCE(completed_at, datetime('now')),
+               capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
+           WHERE id = ? AND status IN ('pending', 'dispatched')`
+        )
+        .run(terminalStatus, dispatch.id)
+      this.closeQuestionsForDispatch(dispatch.id)
+    }
+  }
 
-    return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
-      | DispatchContextRow
-      | undefined
+  failDispatchWithDisposition(ctxId: string, error: string): DispatchFailureSettlement {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const dispatch = this.getDispatchContextById(ctxId)
+      if (!dispatch) {
+        this.db.exec('COMMIT')
+        return { taskTransitionApplied: false }
+      }
+
+      const task = this.getTask(dispatch.task_id)
+      const latest = task ? this.getDispatchContext(task.id) : undefined
+      if (!this.isCurrentDispatchTaskAuthority(task, dispatch, latest, ['dispatched'])) {
+        if (
+          dispatch.status === 'completed' ||
+          dispatch.status === 'failed' ||
+          dispatch.status === 'circuit_broken'
+        ) {
+          this.db.exec('COMMIT')
+          return { dispatch, taskTransitionApplied: false }
+        }
+        this.db
+          .prepare(
+            `UPDATE dispatch_contexts
+             SET status = 'failed', last_failure = ?,
+                 completed_at = COALESCE(completed_at, datetime('now')),
+                 capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
+             WHERE id = ? AND status IN ('pending', 'dispatched')`
+          )
+          .run(error, ctxId)
+        this.closeQuestionsForDispatch(ctxId)
+        this.db.exec('COMMIT')
+        return { dispatch: this.getDispatchContextById(ctxId), taskTransitionApplied: false }
+      }
+
+      const failureCount = dispatch.failure_count + 1
+      const dispatchStatus: DispatchStatus = failureCount >= 3 ? 'circuit_broken' : 'failed'
+      this.db
+        .prepare(
+          `UPDATE dispatch_contexts
+           SET status = ?, failure_count = ?, last_failure = ?,
+               completed_at = COALESCE(completed_at, datetime('now')),
+               capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
+           WHERE id = ? AND status IN ('pending', 'dispatched')`
+        )
+        .run(dispatchStatus, failureCount, error, ctxId)
+
+      // Why: back to 'ready' not 'pending' — 'pending' would strand it since promoteReadyTasks only runs when a dep completes.
+      const taskStatus: TaskStatus = dispatchStatus === 'circuit_broken' ? 'failed' : 'ready'
+      const taskTransitionApplied = this.applyCurrentDispatchTaskTransition(
+        task,
+        dispatch,
+        latest,
+        ['dispatched'],
+        taskStatus
+      )
+      this.closeQuestionsForDispatch(ctxId)
+      this.db.exec('COMMIT')
+      return {
+        dispatch: this.getDispatchContextById(ctxId),
+        taskTransitionApplied
+      }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  failDispatch(ctxId: string, error: string): DispatchContextRow | undefined {
+    return this.failDispatchWithDisposition(ctxId, error).dispatch
   }
 
   // ── Decision Gates ──
 
   createGate(gate: { taskId: string; question: string; options?: string[] }): DecisionGateRow {
     const id = generateId('gate')
-    const optionsJson = JSON.stringify(gate.options ?? [])
-    this.db
-      .prepare(
-        'INSERT INTO decision_gates (id, run_id, task_id, question, options) VALUES (?, ?, ?, ?, ?)'
-      )
-      .run(
-        id,
-        this.getTask(gate.taskId)?.run_id ?? LEGACY_RUN_ID,
-        gate.taskId,
-        gate.question,
-        optionsJson
-      )
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const optionsJson = JSON.stringify(gate.options ?? [])
+      this.db
+        .prepare(
+          'INSERT INTO decision_gates (id, run_id, task_id, question, options) VALUES (?, ?, ?, ?, ?)'
+        )
+        .run(
+          id,
+          this.getTask(gate.taskId)?.run_id ?? LEGACY_RUN_ID,
+          gate.taskId,
+          gate.question,
+          optionsJson
+        )
 
-    this.completeActiveDispatchForTask(gate.taskId)
-    this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(gate.taskId)
+      // Why: reaching a decision gate completes the attempt that handed control to the gate.
+      this.retireActiveDispatchesForTask(gate.taskId, 'completed')
+      this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(gate.taskId)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
 
     return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(id) as DecisionGateRow
   }
@@ -5872,14 +6069,22 @@ export class OrchestrationDb {
       return undefined
     }
 
-    this.db
-      .prepare(
-        "UPDATE decision_gates SET status = 'resolved', resolution = ?, resolved_at = datetime('now') WHERE id = ?"
-      )
-      .run(resolution, gateId)
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(
+          "UPDATE decision_gates SET status = 'resolved', resolution = ?, resolved_at = datetime('now') WHERE id = ?"
+        )
+        .run(resolution, gateId)
 
-    // Why: set to 'ready' (not the previous status) so the coordinator re-dispatches the worker with the resolution context.
-    this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(gate.task_id)
+      // Why: set to 'ready' so the coordinator re-dispatches with the resolution context.
+      this.retireActiveDispatchesForTask(gate.task_id, 'failed')
+      this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(gate.task_id)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
 
     return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
       | DecisionGateRow

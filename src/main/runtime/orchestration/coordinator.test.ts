@@ -313,6 +313,23 @@ describe('Coordinator', () => {
     expect(result.failedTasks).toContain(task.id)
   })
 
+  it('does not escalate a superseded dispatch failure', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'superseded exit' })
+    const first = db.createDispatchContext(task.id, 'term_a')
+    db.updateTaskStatus(task.id, 'ready')
+    const replacement = db.createDispatchContext(task.id, 'term_b')
+    db.createCoordinatorRun({ spec: 'observe stale exits', coordinatorHandle: 'coord' })
+
+    expect(db.failDispatchWithDisposition(first.id, 'Agent exited with code -1')).toMatchObject({
+      taskTransitionApplied: false,
+      dispatch: { status: 'failed' }
+    })
+    expect(db.getDispatchContextById(replacement.id)?.status).toBe('dispatched')
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(db.getUnreadMessages('coord')).toEqual([])
+  })
+
   it('reports failed when dispatch send failures circuit-break in the DB', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()

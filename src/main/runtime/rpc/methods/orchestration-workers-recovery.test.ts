@@ -91,7 +91,7 @@ describe('orchestration worker recovery', () => {
     })
   })
 
-  it('stops an exact worker whose start receipt is unknown', async () => {
+  it('workerStop stops an exact worker whose start receipt is unknown', async () => {
     const { task, dispatch } = createWorker(runtime.getRuntimeId(), false)
 
     await expect(
@@ -104,7 +104,58 @@ describe('orchestration worker recovery', () => {
     expect(db.getTask(task.id)?.status).toBe('blocked')
   })
 
-  it('does not adopt or stop a same-looking pane with a new process incarnation', async () => {
+  it('stale worker stop preserves completed replacement (local)', async () => {
+    const { task, dispatch: first } = createWorker()
+    const dependent = db.createTask({ spec: 'dependent', deps: [task.id], runId: task.run_id })
+    db.updateTaskStatus(task.id, 'ready')
+    const replacement = db.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: replacement.dispatch.id,
+      handle: 'term_replacement',
+      paneKey: 'tab_replacement:cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      processIncarnation: 'runtime:pty:2',
+      worktreeId: 'repo::replacement',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    db.markWorkerDispatchReady(replacement.dispatch.id)
+    db.settleWorkerReport({
+      taskId: task.id,
+      dispatchId: replacement.dispatch.id,
+      outcome: 'succeeded',
+      result: 'replacement complete'
+    })
+    const taskBefore = db.getTask(task.id)
+    const replacementBefore = db.getDispatchContextById(replacement.dispatch.id)
+    const dependentBefore = db.getTask(dependent.id)
+
+    await expect(call('orchestration.workerStop', { dispatch: first.id })).resolves.toMatchObject({
+      state: expect.any(String)
+    })
+    expect(db.getWorkerDispatch(first.id)).toMatchObject({
+      state: 'stopped',
+      stage: 'process_stopped'
+    })
+    expect(db.getDispatchContextById(first.id)).toMatchObject({
+      status: 'failed',
+      completed_at: expect.any(String),
+      capability_revoked_at: expect.any(String),
+      failure_count: 0
+    })
+    expect(db.getTask(task.id)).toMatchObject({
+      status: 'completed',
+      result: 'replacement complete',
+      completed_at: taskBefore?.completed_at
+    })
+    expect(db.getDispatchContextById(replacement.dispatch.id)).toMatchObject({
+      status: 'completed',
+      completed_at: replacementBefore?.completed_at
+    })
+    expect(db.getTask(dependent.id)).toEqual(dependentBefore)
+    expect(db.listTasks({ ready: true })).not.toContainEqual(taskBefore)
+  })
+
+  it('workerStop does not adopt or stop a same-looking pane with a new process incarnation', async () => {
     const { task, dispatch } = createWorker()
     vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime:pty:2')
 
@@ -130,7 +181,7 @@ describe('orchestration worker recovery', () => {
     expect(db.getTask(task.id)?.status).toBe('blocked')
   })
 
-  it('labels an exact but disconnected worker as exited and does not close it again', async () => {
+  it('workerStop labels an exact but disconnected worker as exited and does not close it again', async () => {
     const { task, dispatch } = createWorker()
     vi.mocked(runtime.showTerminal).mockResolvedValue({
       handle: 'term_worker',
@@ -181,7 +232,7 @@ describe('orchestration worker recovery', () => {
     expect(db.getTask(task.id)?.status).toBe('blocked')
   })
 
-  it('turns an interrupted stop into unknown after runtime restart', async () => {
+  it('workerStop turns an interrupted stop into unknown after runtime restart', async () => {
     const { task, dispatch } = createWorker('previous_runtime')
     db.beginWorkerStop(dispatch.id)
 

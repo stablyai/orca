@@ -12278,6 +12278,153 @@ describe('OrcaRuntimeService', () => {
     expect(listProcesses).toHaveBeenCalledTimes(3)
   })
 
+  it('preserves completed task state after a superseded dispatch exits (#11499)', async () => {
+    const runtime = createRuntime()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    runtime.registerPty('pty-11499-a', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'pty-11499-a:incarnation'
+    })
+    syncSinglePty(runtime, 'pty-11499-a')
+    const [terminal] = (await runtime.listTerminals()).terminals
+    if (!terminal) {
+      throw new Error('expected the reproduction terminal to be registered')
+    }
+
+    const task = db.createTask({ spec: 'preserve completed task after stale exit' })
+    const first = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: { topology: 'current', agent: 'codex' }
+    })
+    const paneKey = makePaneKey('tab-1', HEADLESS_LEAF_ID)
+    const capability = db.prepareStartingWorkerAuthority({
+      dispatchId: first.dispatch.id,
+      handle: terminal.handle,
+      paneKey,
+      processIncarnation: 'pty-11499-a:incarnation',
+      worktreeId: TEST_WORKTREE_ID,
+      setupState: 'not_applicable',
+      effects: []
+    })
+    db.markWorkerDispatchReady(first.dispatch.id)
+    db.updateTaskStatus(task.id, 'ready')
+
+    const second = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: { topology: 'current', agent: 'codex' }
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: second.dispatch.id,
+      handle: 'term-11499-b',
+      paneKey: makePaneKey('tab-11499-b', HEADLESS_SECOND_LEAF_ID),
+      processIncarnation: 'pty-11499-b:incarnation',
+      worktreeId: TEST_WORKTREE_ID,
+      setupState: 'not_applicable',
+      effects: []
+    })
+    db.markWorkerDispatchReady(second.dispatch.id)
+    db.createCoordinatorRun({
+      spec: 'observe dispatch exits',
+      coordinatorHandle: 'coordinator-11499'
+    })
+
+    expect(
+      db.settleWorkerReport({
+        taskId: task.id,
+        dispatchId: second.dispatch.id,
+        outcome: 'succeeded',
+        result: JSON.stringify({ completedBy: 'term-11499-b' })
+      })
+    ).toMatchObject({ action: 'settled', outcome: 'succeeded' })
+    const completed = db.getTask(task.id)
+    expect(completed).toMatchObject({
+      status: 'completed',
+      result: JSON.stringify({ completedBy: 'term-11499-b' })
+    })
+    expect(completed?.completed_at).toBeTruthy()
+
+    runtime.onPtyExit('pty-11499-a', -1, 'pty-11499-a:incarnation')
+
+    expect(db.getTask(task.id)).toMatchObject({
+      status: 'completed',
+      result: JSON.stringify({ completedBy: 'term-11499-b' }),
+      completed_at: completed?.completed_at
+    })
+    expect(db.listTasks({ ready: true }).some((row) => row.id === task.id)).toBe(false)
+    expect(db.getDispatchContextById(first.dispatch.id)).toMatchObject({
+      status: 'failed',
+      failure_count: 0,
+      capability_revoked_at: expect.any(String)
+    })
+    expect(
+      db.verifyDispatchCapability({
+        dispatchId: first.dispatch.id,
+        capability,
+        paneKey,
+        processIncarnation: 'pty-11499-a:incarnation'
+      })
+    ).toMatchObject({ valid: false })
+    expect(db.getDispatchContextById(second.dispatch.id)).toMatchObject({ status: 'completed' })
+    expect(db.getUnreadMessages('coordinator-11499')).toEqual([])
+
+    db.close()
+  })
+
+  it('authorised dispatch exit preserves retry and escalation behavior', async () => {
+    const runtime = createRuntime()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    runtime.registerPty('pty-11499-current', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'pty-11499-current:incarnation'
+    })
+    syncSinglePty(runtime, 'pty-11499-current')
+    const [terminal] = (await runtime.listTerminals()).terminals
+    if (!terminal) {
+      throw new Error('expected the current-dispatch terminal to be registered')
+    }
+    const task = db.createTask({ spec: 'current exit' })
+    const dispatch = db.createDispatchContext(task.id, terminal.handle)
+    db.createCoordinatorRun({
+      spec: 'observe current exit',
+      coordinatorHandle: 'coordinator-current'
+    })
+
+    runtime.onPtyExit('pty-11499-current', -1, 'pty-11499-current:incarnation')
+
+    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({
+      status: 'failed',
+      failure_count: 1
+    })
+    expect(db.getTask(task.id)?.status).toBe('ready')
+    expect(db.getUnreadMessages('coordinator-current')).toMatchObject([
+      { type: 'escalation', from_handle: terminal.handle }
+    ])
+    db.close()
+  })
+
+  it('dispatch exit without matching terminal leaves orchestration unchanged', () => {
+    const runtime = createRuntime()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    runtime.registerPty('pty-11499-unresolved', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'pty-11499-unresolved:incarnation'
+    })
+    syncSinglePty(runtime, 'pty-11499-unresolved')
+    const task = db.createTask({ spec: 'unresolved exit' })
+
+    runtime.onPtyExit('pty-11499-unresolved', -1, 'pty-11499-unresolved:incarnation')
+
+    expect(db.getTask(task.id)?.status).toBe('ready')
+    expect(db.getDispatchContext(task.id)).toBeUndefined()
+    db.close()
+  })
+
   it('passes cached view colors to background agent spawns for source-owned startup replies', async () => {
     setTerminalViewAttributes({
       foreground: [0xff, 0xff, 0xff],

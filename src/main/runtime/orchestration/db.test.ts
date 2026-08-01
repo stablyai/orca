@@ -508,6 +508,7 @@ describe('OrchestrationDb', () => {
       const updated = d.getTask(task.id)
       expect(updated?.status).toBe('blocked')
       expect(d.getActiveDispatchForTerminal('term_a')).toBeUndefined()
+      expect(d.getDispatchContext(task.id)?.status).toBe('completed')
     })
 
     it('resolves a gate and unblocks the task', () => {

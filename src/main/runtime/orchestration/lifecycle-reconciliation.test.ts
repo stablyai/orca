@@ -51,6 +51,62 @@ describe('lifecycle reconciliation', () => {
     expect(db.getTask(task.id)?.status).toBe('completed')
   })
 
+  it('returns inactive_dispatch after administrative supersession', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'stale report' })
+    const first = db.createDispatchContext(task.id, 'term_a', `tab_a:${LEAF_A}`)
+    db.updateTaskStatus(task.id, 'ready')
+    const replacement = db.createDispatchContext(task.id, 'term_b', `tab_b:${LEAF_B}`)
+    const message = db.insertMessage({
+      from: 'term_a',
+      to: 'term_coordinator',
+      subject: 'Late done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: first.id, outcome: 'succeeded' }),
+      senderPaneKey: `tab_a:${LEAF_A}`
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'inactive_dispatch'
+    })
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(db.getDispatchContextById(replacement.id)?.status).toBe('dispatched')
+  })
+
+  it('returns inactive_dispatch after replacement completion', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'inactive report' })
+    const first = db.createDispatchContext(task.id, 'term_a', `tab_a:${LEAF_A}`)
+    db.updateTaskStatus(task.id, 'ready')
+    const replacement = db.createDispatchContext(task.id, 'term_b', `tab_b:${LEAF_B}`)
+    expect(
+      db.settleWorkerReport({
+        taskId: task.id,
+        dispatchId: replacement.id,
+        outcome: 'succeeded',
+        result: 'replacement complete'
+      })
+    ).toMatchObject({ action: 'settled' })
+
+    const message = db.insertMessage({
+      from: 'term_a',
+      to: 'term_coordinator',
+      subject: 'Late done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: first.id, outcome: 'succeeded' }),
+      senderPaneKey: `tab_a:${LEAF_A}`
+    })
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'inactive_dispatch'
+    })
+    expect(db.getTask(task.id)).toMatchObject({
+      status: 'completed',
+      result: 'replacement complete'
+    })
+  })
+
   it('fails both the dispatch and task from an authenticated failed worker report', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ spec: 'work' })

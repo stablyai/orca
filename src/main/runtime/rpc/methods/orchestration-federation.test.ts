@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Why: federation transition tests share the same task and gate harness so authority and cleanup invariants stay auditable together. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
@@ -682,7 +683,7 @@ describe('orchestration federation', () => {
     )
   })
 
-  it('stops only the exact remote agent terminal', async () => {
+  it('workerStop stops only the exact remote agent terminal', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
     const dispatch = homeDb.getDispatchContext(task.id)!
@@ -722,7 +723,76 @@ describe('orchestration federation', () => {
     })
   })
 
-  it('rejects a re-paired server before show or stop effects', async () => {
+  it('stale worker stop preserves completed replacement (federated)', async () => {
+    const task = createHomeTask()
+    await homeDispatcher.dispatch(startRequest(task.id))
+    const first = homeDb.getDispatchContext(task.id)!
+    const dependent = homeDb.createTask({
+      spec: 'federated dependent',
+      deps: [task.id],
+      runId: task.run_id
+    })
+    homeDb.updateTaskStatus(task.id, 'ready')
+    const replacement = homeDb.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: {}
+    })
+    homeDb.markWorkerDispatchReady(replacement.dispatch.id)
+    homeDb.settleWorkerReport({
+      taskId: task.id,
+      dispatchId: replacement.dispatch.id,
+      outcome: 'succeeded',
+      result: 'federated replacement complete'
+    })
+    const taskBefore = homeDb.getTask(task.id)
+    const replacementBefore = homeDb.getDispatchContextById(replacement.dispatch.id)
+    const dependentBefore = homeDb.getTask(dependent.id)
+    const rawDb = (
+      homeDb as unknown as {
+        db: { prepare(sql: string): { run(...args: unknown[]): void } }
+      }
+    ).db
+    rawDb.prepare("UPDATE dispatch_contexts SET status = 'dispatched' WHERE id = ?").run(first.id)
+    vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer').mockResolvedValue({
+      dispatchId: first.id,
+      state: 'succeeded',
+      alreadySettled: true,
+      processAction: 'none'
+    } as never)
+
+    const stopped = await homeDispatcher.dispatch({
+      id: 'rpc_stale_replacement_stop',
+      authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'request_stale_replacement_stop',
+      method: 'orchestration.workerStop',
+      params: { dispatch: first.id }
+    })
+
+    expect(stopped).toMatchObject({ ok: true, result: { state: 'ready', processAction: 'none' } })
+    expect(homeDb.getWorkerDispatch(first.id)).toMatchObject({
+      state: 'ready',
+      stage: 'remote_report_pending'
+    })
+    expect(homeDb.getDispatchContextById(first.id)).toMatchObject({
+      status: 'dispatched',
+      completed_at: expect.any(String),
+      capability_revoked_at: expect.any(String),
+      failure_count: 0
+    })
+    expect(homeDb.getTask(task.id)).toMatchObject({
+      status: 'completed',
+      result: 'federated replacement complete',
+      completed_at: taskBefore?.completed_at
+    })
+    expect(homeDb.getDispatchContextById(replacement.dispatch.id)).toMatchObject({
+      status: 'completed',
+      completed_at: replacementBefore?.completed_at
+    })
+    expect(homeDb.getTask(dependent.id)).toEqual(dependentBefore)
+  })
+
+  it('workerStop rejects a re-paired server before show or stop effects', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
     const dispatch = homeDb.getDispatchContext(task.id)!
@@ -801,7 +871,7 @@ describe('orchestration federation', () => {
     warn.mockRestore()
   })
 
-  it('returns stop_unknown when the worker server disconnects after the home fence', async () => {
+  it('workerStop returns stop_unknown when the worker server disconnects after the home fence', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
     const dispatch = homeDb.getDispatchContext(task.id)!
@@ -826,7 +896,7 @@ describe('orchestration federation', () => {
     expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('never reads or closes a same-looking replacement process', async () => {
+  it('workerStop never reads or closes a same-looking replacement process', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
     const dispatch = homeDb.getDispatchContext(task.id)!

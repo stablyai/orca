@@ -14608,7 +14608,7 @@ export class OrcaRuntimeService {
   // Why: Section 7.2 — the runtime detects agent exit directly and updates
   // dispatch contexts immediately, rather than waiting for the coordinator's
   // next poll cycle. This catches agent crashes and unexpected exits within
-  // milliseconds. The task is set back to 'pending' so it can be re-dispatched.
+  // milliseconds. The database decides whether the named attempt still owns the task.
   private failActiveDispatchOnExit(leaf: RuntimeLeafRecord, exitCode: number): void {
     if (!this._orchestrationDb) {
       return
@@ -14625,7 +14625,10 @@ export class OrcaRuntimeService {
     }
 
     const errorContext = `Agent exited with code ${exitCode}`
-    this._orchestrationDb.failDispatch(dispatch.id, errorContext)
+    const settlement = this._orchestrationDb.failDispatchWithDisposition(dispatch.id, errorContext)
+    if (!settlement.taskTransitionApplied) {
+      return
+    }
 
     // Why: create an escalation message so the coordinator is notified about
     // the unexpected exit on its next check cycle, even if the circuit breaker
