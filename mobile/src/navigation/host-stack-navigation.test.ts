@@ -12,14 +12,19 @@ const OTHER_TARGET = {
   params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt' }
 } as const
 
+// Removal is modeled for real: a no-op unsubscribe would let `setState` keep
+// calling a canceled listener, testing the `active` guard instead of teardown.
 function navigationHarness(initialState: HostStackNavigationState) {
-  let stateListener = () => {}
+  const stateListeners = new Set<() => void>()
   let state = initialState
   const unsubscribe = vi.fn()
   const navigation = {
     addListener: vi.fn((_event: 'state', listener: () => void) => {
-      stateListener = listener
-      return unsubscribe
+      stateListeners.add(listener)
+      return () => {
+        unsubscribe()
+        stateListeners.delete(listener)
+      }
     }),
     dispatch: vi.fn(),
     getState: () => state
@@ -27,9 +32,12 @@ function navigationHarness(initialState: HostStackNavigationState) {
   return {
     navigation,
     unsubscribe,
+    listenerCount: () => stateListeners.size,
     setState(nextState: HostStackNavigationState) {
       state = nextState
-      stateListener()
+      for (const listener of stateListeners) {
+        listener()
+      }
     }
   }
 }
@@ -88,9 +96,11 @@ describe('host stack navigation', () => {
       'host/one',
       TARGET
     )
+    expect(harness.listenerCount()).toBe(1)
     controller.cancel()
 
     expect(harness.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(harness.listenerCount()).toBe(0)
     expect(controller.isActive()).toBe(false)
 
     harness.setState(committedHostState('host/one'))
@@ -119,6 +129,7 @@ describe('host stack navigation', () => {
 
     expect(retargeted).toBe(pending)
     expect(push).toHaveBeenCalledTimes(1)
+    expect(harness.listenerCount()).toBe(1)
 
     harness.setState(committedHostState('host/one'))
 

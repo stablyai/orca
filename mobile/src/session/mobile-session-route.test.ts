@@ -10,12 +10,12 @@ import {
 const homeSource = readFileSync(new URL('../../app/index.tsx', import.meta.url), 'utf8')
 
 function navigationHarness(initialState: HostStackNavigationState) {
-  let stateListener = () => {}
+  const stateListeners = new Set<() => void>()
   let state = initialState
   const navigation = {
     addListener: vi.fn((_event: 'state', listener: () => void) => {
-      stateListener = listener
-      return vi.fn()
+      stateListeners.add(listener)
+      return () => stateListeners.delete(listener)
     }),
     dispatch: vi.fn(),
     getState: () => state
@@ -24,7 +24,9 @@ function navigationHarness(initialState: HostStackNavigationState) {
     navigation,
     setState(nextState: HostStackNavigationState) {
       state = nextState
-      stateListener()
+      for (const listener of stateListeners) {
+        listener()
+      }
     }
   }
 }
