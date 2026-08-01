@@ -67,9 +67,10 @@ describe('Claude background task status', () => {
       { id: 'task-1', type: 42, status: 'running' },
       { id: 'task-1', type: ' ', status: 'running' }
     ]) {
-      expect(
-        readClaudeBackgroundAgentTasks({ background_tasks: [task] }).hasRunningNonAgentTask
-      ).toBe(true)
+      expect(readClaudeBackgroundAgentTasks({ background_tasks: [task] })).toMatchObject({
+        truncated: true,
+        hasRunningNonAgentTask: true
+      })
     }
 
     for (const backgroundTasks of [
@@ -264,6 +265,26 @@ describe('Claude background task status', () => {
     }
   })
 
+  it('retains live child rows when inventory entries cannot be classified', () => {
+    for (const backgroundTasks of [[{ id: 'child-1', status: 'running' }], [null, 'shell', 42]]) {
+      const state = createHookListenerState()
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'SubagentStart',
+        agent_id: 'child-1'
+      })
+
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Stop',
+          background_tasks: backgroundTasks
+        })
+      ).toMatchObject({
+        state: 'working',
+        subagents: [expect.objectContaining({ id: 'child-1', state: 'working' })]
+      })
+    }
+  })
+
   it('does not fold a Stop inventory attributed to an unknown child', () => {
     const state = createHookListenerState()
     claudeEvent(state, SOURCE_PANE, {
@@ -281,6 +302,27 @@ describe('Claude background task status', () => {
       state: 'working',
       subagents: [expect.objectContaining({ id: 'child-1', state: 'working' })]
     })
+  })
+
+  it('does not let an unknown child interrupt lead-owned background work', () => {
+    const state = createHookListenerState()
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [RUNNING_SHELL]
+    })
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'continue lead work'
+    })
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        agent_id: 'unknown-child',
+        is_interrupt: true
+      })
+    ).toMatchObject({ state: 'working' })
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
   })
 
   it('keeps background gating through an empty child SubagentStop inventory', () => {

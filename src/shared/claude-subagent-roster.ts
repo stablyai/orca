@@ -189,14 +189,20 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   let hasRunningNonAgentTask = false
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
+      truncated = true
       continue
     }
     const obj = item as Record<string, unknown>
     const taskType = typeof obj.type === 'string' ? obj.type.trim().toLowerCase() : ''
     const taskStatus = typeof obj.status === 'string' ? obj.status.trim().toLowerCase() : ''
-    const isAgentTask = taskType === 'subagent' || taskType === 'teammate'
     const isTerminal =
       taskStatus.length > 0 && CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(taskStatus)
+    if (taskType.length === 0) {
+      truncated = true
+      hasRunningNonAgentTask ||= !isTerminal
+      continue
+    }
+    const isAgentTask = taskType === 'subagent' || taskType === 'teammate'
     // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows or explicit terminal states can safely retire work.
     if (!isAgentTask && !isTerminal) {
       hasRunningNonAgentTask = true

@@ -2620,6 +2620,7 @@ function normalizeClaudeEvent(
     eventName === 'TeammateIdle'
   const interrupted =
     ((eventName === 'Stop' || eventName === 'StopFailure') &&
+      eventAgentId === undefined &&
       hookPayload['is_interrupt'] === true) ||
     (previousLead?.interrupted === true && preservesInterruptedBoundary)
       ? true
@@ -2701,12 +2702,8 @@ function normalizeClaudeEvent(
     })
   }
 
-  // Why: lead events never carry agent_id, so a known child's id on a turn-boundary event must not retire/resurrect the pane as if the lead spoke — re-emit as child activity.
-  if (
-    eventAgentId &&
-    !isWaitingInducing &&
-    state.claudeSubagentRosterByPaneKey.get(paneKey)?.has(eventAgentId)
-  ) {
+  // Why: lead events never carry agent_id; even a child missed by lifecycle tracking cannot own the lead turn or its background-work evidence.
+  if (eventAgentId && !isWaitingInducing) {
     return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
@@ -2739,7 +2736,7 @@ function normalizeClaudeEvent(
     ...(stateBeforeWait ? { stateBeforeWait } : {})
   })
 
-  if (interrupted) {
+  if (interrupted && eventAgentId === undefined) {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
 
