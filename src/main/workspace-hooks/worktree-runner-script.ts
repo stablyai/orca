@@ -124,15 +124,16 @@ async function createWorktreeRunnerScript(args: {
   // rename swaps the inode so the running shell keeps its own copy.
   // The suffix is per-call so overlapping preparations do not share one tmp file.
   const tmpRunnerPath = `${runnerScriptPath}.tmp-${process.pid}-${++runnerTmpSequence}`
-  writeFileSync(tmpRunnerPath, runnerContent, 'utf-8')
-  if (runnerShell.family !== 'cmd' && !nativeWindowsWorktree) {
-    chmodSync(tmpRunnerPath, 0o755)
-  }
   try {
+    writeFileSync(tmpRunnerPath, runnerContent, 'utf-8')
+    if (runnerShell.family !== 'cmd' && !nativeWindowsWorktree) {
+      chmodSync(tmpRunnerPath, 0o755)
+    }
     renameSync(tmpRunnerPath, runnerScriptPath)
   } catch {
     try {
-      // Windows can refuse to replace a runner cmd.exe still holds open.
+      // Windows can refuse to replace a runner cmd.exe still holds open. The mode
+      // stays 0644 here, which is fine only while consumers run `bash <path>`.
       writeFileSync(runnerScriptPath, runnerContent, 'utf-8')
     } finally {
       rmSync(tmpRunnerPath, { force: true })
