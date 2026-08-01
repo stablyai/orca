@@ -7,9 +7,9 @@
 
 **Goal:** Move codex backfill-gate enforcement from the renderer to the single main-process pty spawn choke point so that ALL codex launches — renderer-initiated panes, main-initiated worktree-creation panes, and any future entry point — hold the codex startup command while the session-index backfill is pending, show the existing "Indexing Codex session history…" overlay, and auto-launch codex when the index completes.
 
-**Architecture:** At the two `provider.spawn(spawnOptions)` dispatch paths in `src/main/ipc/pty.ts` (the renderer `pty:spawn` IPC handler and the `runtime.setPtyController` controller used by main-initiated worktree creation), a new gate decides — via the branch's existing read-only `codex-state-db.ts` primitives — whether the pane's effective local CODEX_HOME has a pending backfill. When it does, the shell is spawned **immediately with the startup command withheld** (so worktree creation, reveal, and setup sequencing keep their existing timing), a per-pane hold registry polls the state DB and broadcasts per-pane hold state to the renderer over a new `codexBackfill:paneHoldChanged` push channel, and the withheld command is written into the live pty when the backfill completes (or a 15-minute fail-open ceiling elapses). The renderer's existing gate/overlay work is refactored from an enforcement point into a pure consumer of this main-side state: the old renderer polling gate module is deleted and every pane (fresh-spawned OR adopted) subscribes to its own paneKey's hold state to drive the existing `CodexIndexingOverlay`. SSH/remote panes and WSL panes without a host-readable codex home are passed through unchanged (fail-open); the existing backfill-error detector + amber toast remain the fallback net.
+**Architecture:** At the two `provider.spawn(spawnOptions)` dispatch paths in `src/main/ipc/pty.ts` (the renderer `pty:spawn` IPC handler and the `runtime.setPtyController` controller used by main-initiated worktree creation), a new gate decides — via the branch's existing read-only `codex-state-db.ts` primitives — whether the pane's effective local CODEX_HOME has a pending backfill. When it does, the shell is spawned **immediately, with the codex startup command replaced by a release-sentinel gate wrapper** (a one-line poll built by mirroring the existing `src/shared/setup-agent-sequencing.ts` wrapper, posix + win32 `-EncodedCommand` variants): the original command rides in env `ORCA_BACKFILL_GATED_COMMAND`, and the wrapper waits for the release sentinel file named by env `ORCA_BACKFILL_RELEASE_FILE`, then evals the original command — so worktree creation, reveal, and setup sequencing keep their existing timing, and delivery reuses the production-proven argv/shell-ready delivery machinery end to end. **Main never writes into the pty**: a live-pty experiment falsified raw deferred writes (lossy under rc files that read the tty; double-echo/bracketed-paste garbling early; multiline mangling — see `validator-v3-A1.md` in the workflow logs). A per-pane hold registry (module-scope, surviving `registerPtyHandlers` re-registration) polls the state DB, broadcasts per-pane hold state to the renderer over a new `codexBackfill:paneHoldChanged` push channel, and **creates the sentinel file** when the backfill completes (or a 15-minute fail-open ceiling elapses); the wrapper carries its own ~20-minute fail-OPEN deadline as a second net if main dies. The renderer's existing gate/overlay work is refactored from an enforcement point into a pure consumer of this main-side state: the old renderer polling gate module is deleted and every pane (fresh-spawned OR adopted) subscribes to its own paneKey's hold state to drive the existing `CodexIndexingOverlay`. SSH/remote panes, WSL panes without a host-readable codex home, and (on Windows hosts) `\\wsl$`/`\\wsl.localhost` UNC-injected homes are passed through unchanged (fail-open; UNC sqlite reads over 9P are untrustworthy — AD-A10 in the load-bearing ledger); the existing backfill-error detector + amber toast remain the fallback net.
 
-**Why command-withhold instead of holding before `provider.spawn`:** worktree creation `await`s `runtime.createTerminal(...)`; parking the spawn itself would stall the `worktrees:create` IPC round-trip, the setup-terminal sequencing (split mode requires the startup handle), and the 10s reveal timeouts — and no pane would exist to show the overlay in exactly the reporter's primary flow (see `.git/worktrees/codex-backfill-prewarm/sdd/np-task-8-report.md`). Spawning the shell immediately and delivering the command later keeps all existing timing intact and guarantees a live pane that can render the overlay in every flow.
+**Why command-withhold instead of holding before `provider.spawn`:** worktree creation `await`s `runtime.createTerminal(...)`; parking the spawn itself would stall the `worktrees:create` IPC round-trip, the setup-terminal sequencing (split mode requires the startup handle), and the 10s reveal timeouts — and no pane would exist to show the overlay in exactly the reporter's primary flow (see `.git/worktrees/codex-backfill-prewarm/sdd/np-task-8-report.md`). Spawning the shell immediately with the gate wrapper as its startup command keeps all existing timing intact, guarantees a live pane that can render the overlay in every flow, and delivers codex through the same battle-tested startup-command path every pane already uses (the wrapper is a normal command to every provider, so the daemon path needs zero protocol changes).
 
 **Tech Stack:** Electron (main/preload/renderer), TypeScript, `node:sqlite` (read-only, via existing `codex-state-db.ts`), vitest, pnpm.
 
@@ -17,7 +17,7 @@
 
 - Work in the worktree at `/home/dan/code/orca/.orca/worktrees/orca/codex-indexing-issues-11828/.worktrees/codex-backfill-prewarm`, branch `codex-backfill-prewarm` (base_ref `e058429e1`). All paths below are relative to this worktree root.
 - Repo `AGENTS.md` conventions: concise WHY-only comments (1 line if possible); **never add `max-lines` eslint/oxlint disables or per-file bumps** (`pty.ts` and `pty.test.ts` carry pre-existing ones — do not add new ones; keep new logic in the new module, not in `pty.ts`); no vague `util`/`helper`/`common` filenames; cross-platform (macOS/Linux/Windows via runtime platform checks, no POSIX-only assumptions in product code); SSH and folder-workspace use cases must be considered; GitLab-generic review concepts.
-- SSH/remote panes are OUT OF SCOPE and must be left unchanged: the gate applies only when the codex home state DB is locally readable (native host + WSL homes Orca injects). `args.connectionId` set ⇒ passthrough.
+- SSH/remote panes are OUT OF SCOPE and must be left unchanged: the gate applies only when the codex home state DB is readable on a NATIVE local filesystem (native host homes; Orca-injected WSL homes only when they resolve to a native path — on Windows hosts, `\\wsl$`/`\\wsl.localhost` UNC-injected homes are passed through, per AD-A10 in the load-bearing ledger: sqlite over 9P is untrustworthy). `args.connectionId` set ⇒ passthrough.
 - Fail-open everywhere: if backfill state cannot be determined at decision time (unreadable DB, sqlite error, unexpected schema, unresolvable home), launch codex normally. Never brick a pane on gate errors. Once HOLDING, a transient unreadable read keeps the hold (bounded by the 15-minute ceiling) — releasing on a transient read error would defeat the gate under active-writer contention (np-task-8 concern #2).
 - Do not redesign the already-verified branch work: state-DB prewarm, state-first trust-grant ordering with 'pending-index' lane, backfill-error detector + amber toast, commit `5c638031b` (i18n parity sync — KEEP).
 - No new user-facing strings: reuse the existing `auto.components.terminal.pane.CodexIndexingOverlay.*` i18n keys. No locale catalog changes.
@@ -33,9 +33,12 @@
 | File | Status | Responsibility |
 | --- | --- | --- |
 | `src/shared/codex-backfill-status-types.ts` | modify | Add `CodexBackfillPaneHoldPhase` / `CodexBackfillPaneHoldState` shared types |
-| `src/main/codex/codex-backfill-spawn-hold.ts` | create | Pure gate logic: hold decision, poll evaluation, per-pane hold registry (timers, broadcast, delivery callback) |
+| `src/shared/codex-backfill-gate-wrapper.ts` | create | Gate-wrapper builder (posix + win32, mirrors `setup-agent-sequencing.ts`): release-sentinel path scheme + `ORCA_BACKFILL_GATED_COMMAND`/`ORCA_BACKFILL_RELEASE_FILE` env |
+| `src/shared/codex-backfill-gate-wrapper.test.ts` | create | Unit tests for wrapper construction (per-platform shape, single-line, env round-trip) |
+| `src/shared/setup-agent-sequencing.ts` | modify | One-line: `resolveSetupAgentSequenceLaunchCommand` also recognizes the gate wrapper (reads `ORCA_BACKFILL_GATED_COMMAND`) so agent-kind detection keeps working |
+| `src/main/codex/codex-backfill-spawn-hold.ts` | create | Pure gate logic: hold decision, poll evaluation, per-pane hold registry (timers, broadcast, release callback) |
 | `src/main/codex/codex-backfill-spawn-hold.test.ts` | create | Unit tests for the above (fake timers, injected fakes) |
-| `src/main/ipc/pty.ts` | modify | Thin integration: effective-home resolver, command withhold + hold begin at both dispatch paths, `codexBackfill:paneHoldChanged` broadcast, `codexBackfill:paneHoldStatus` handler, teardown wiring |
+| `src/main/ipc/pty.ts` | modify | Thin integration: effective-home resolver (UNC passthrough), command replacement + guarded hold begin at both dispatch paths, sentinel release, module-scope registry + `codexBackfill:paneHoldChanged` broadcast rebind, `codexBackfill:paneHoldStatus` handler, teardown wiring |
 | `src/main/ipc/pty.test.ts` | modify | Choke-point tests: gated launch, auto-launch, fail-open, SSH/WSL passthrough, controller-arm (worktree-creation) coverage |
 | `src/preload/index.ts` | modify | `codexBackfill.paneHoldStatus` + `codexBackfill.onPaneHoldChanged` preload exposure |
 | `src/preload/api-types.ts` | modify | Types for the two new preload members |
@@ -62,7 +65,8 @@ export function isCodexBackfillIndexPending(codexHomePath: string): boolean // f
 ```
 
 `getSystemCodexHomePath()` — same import `src/main/ipc/codex-backfill-status.ts` uses (from `src/main/codex/codex-home-paths.ts`).
-`buildStartupCommandSubmission(startupCommand, { submit, bracketedPasteSafe })` — `src/main/providers/local-pty-shell-ready.ts` (export it if it is not already exported; it is the bracketed-paste-safe interactive submission builder used by `writeStartupCommandWhenShellReady`).
+`setup-agent-sequencing.ts` — the wrapper-construction precedent to mirror: posix one-line `bash -lc` poll wrapper at `:92-128` (single-line to avoid `quote>` prompts, `:103-105`), win32 PowerShell `-EncodedCommand` variant at `:202-254`, nonce-suffixed marker-file scheme `:44`, inner command evaled from env at `:114` (posix) / `Invoke-Expression` at `:235` (win32). NOTE its 2h timeout fail-CLOSED (`exit 124`) — the gate wrapper must diverge to fail-OPEN (exec anyway).
+`toWindowsWslPath`-style shell-view path translation — precedent at `src/main/hooks.ts:484-516` (main writes a file, a WSL shell reads it).
 `registerPaneKeyTeardownListener` — `src/main/ipc/pty.ts:273` (cancellation hook for held panes).
 
 ---
@@ -71,6 +75,8 @@ export function isCodexBackfillIndexPending(codexHomePath: string): boolean // f
 
 **Files:**
 - Modify: `src/shared/codex-backfill-status-types.ts`
+- Create: `src/shared/codex-backfill-gate-wrapper.ts` (+ test `src/shared/codex-backfill-gate-wrapper.test.ts`)
+- Modify: `src/shared/setup-agent-sequencing.ts` (one-line `resolveSetupAgentSequenceLaunchCommand` extension + test)
 - Create: `src/main/codex/codex-backfill-spawn-hold.ts`
 - Test: `src/main/codex/codex-backfill-spawn-hold.test.ts`
 
@@ -78,9 +84,10 @@ export function isCodexBackfillIndexPending(codexHomePath: string): boolean // f
 - Consumes: `readCodexStateDbBackfillStatus`, `isCodexBackfillIndexPending` from `src/main/codex/codex-state-db.ts` (existing).
 - Produces (Tasks 2–5 rely on these exact names):
   - `CodexBackfillPaneHoldPhase = 'indexing' | 'launched'` and `CodexBackfillPaneHoldState { paneKey: string; phase: CodexBackfillPaneHoldPhase; lastWatermark: string | null }` (shared types file).
+  - `buildCodexBackfillGateWrapper(params)`, `ORCA_BACKFILL_GATED_COMMAND_ENV`, `ORCA_BACKFILL_RELEASE_FILE_ENV`, `CODEX_BACKFILL_GATE_WRAPPER_DEADLINE_S` (gate-wrapper module, Step 1b).
   - `shouldHoldCodexSpawnForBackfill(input: CodexBackfillSpawnHoldDecisionInput): boolean`
   - `evaluateCodexBackfillHoldPoll(codexHomePath: string): CodexBackfillHoldPollResult`
-  - `createCodexBackfillPaneHoldRegistry(deps: { broadcast: (state: CodexBackfillPaneHoldState) => void }): CodexBackfillPaneHoldRegistry` with `begin(params): CodexBackfillPaneHoldHandle`, `get(paneKey): CodexBackfillPaneHoldState | null`, `disposeAll(): void`; `CodexBackfillPaneHoldHandle { dispose(): void }`.
+  - `createCodexBackfillPaneHoldRegistry(deps: { broadcast: (state: CodexBackfillPaneHoldState) => void }): CodexBackfillPaneHoldRegistry` with `begin(params): CodexBackfillPaneHoldHandle`, `get(paneKey): CodexBackfillPaneHoldState | null`, `disposeAll(): void`; `CodexBackfillPaneHoldHandle { dispose(): void }`. `begin` takes a `releaseHeldCommand: () => void` callback — in production it CREATES THE RELEASE SENTINEL FILE (it never writes into the pty; a live-pty experiment falsified raw deferred writes, see the load-bearing ledger).
   - `CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS = 5_000`, `CODEX_BACKFILL_SPAWN_HOLD_MAX_WAIT_MS = 15 * 60_000`.
 
 - [ ] **Step 1: Add the shared pane-hold types**
@@ -97,6 +104,48 @@ export interface CodexBackfillPaneHoldState {
   lastWatermark: string | null
 }
 ```
+
+- [ ] **Step 1b: Create the shared gate-wrapper module (tests first)**
+
+Create `src/shared/codex-backfill-gate-wrapper.ts` + `src/shared/codex-backfill-gate-wrapper.test.ts`, mirroring `src/shared/setup-agent-sequencing.ts`'s construction helpers and quoting EXACTLY (posix one-line wrapper `:92-128`; win32 PowerShell `-EncodedCommand` variant `:202-254`; single-line constraint `:103-105` — keeping the wrapper on one line avoids visible `quote>` prompts). Exports (Task 2 relies on these exact names):
+
+```ts
+export const ORCA_BACKFILL_GATED_COMMAND_ENV = 'ORCA_BACKFILL_GATED_COMMAND'
+export const ORCA_BACKFILL_RELEASE_FILE_ENV = 'ORCA_BACKFILL_RELEASE_FILE'
+// Why: second fail-open net if main dies mid-hold; must exceed main's 15-minute release ceiling.
+export const CODEX_BACKFILL_GATE_WRAPPER_DEADLINE_S = 20 * 60
+
+export interface CodexBackfillGateWrapper {
+  command: string // replaces spawnOptions.command
+  env: Record<string, string> // merge into the spawn env (both env vars above)
+  releaseFilePath: string // HOST-view path main touches at release
+}
+
+/** Why: deliver the held codex command through the production-proven startup path (argv/-EncodedCommand/
+ * shell-ready) instead of a raw deferred pty write, which testing proved lossy/garbled (#11828). */
+export function buildCodexBackfillGateWrapper(params: {
+  originalCommand: string
+  codexHomePath: string // gate home; sentinel lives at <home>/.orca/backfill-release-<nonce>
+  shellPlatform: 'posix' | 'win32'
+  toShellViewPath?: (hostPath: string) => string // WSL translation (hooks.ts:484-516 precedent); default identity
+}): CodexBackfillGateWrapper
+```
+
+Posix wrapper `command` (ONE line, built with the setup wrapper's own quoting helpers; nonce-suffixed sentinel like `:44`):
+
+```
+deadline=$((SECONDS+1200)); while [ ! -e "$ORCA_BACKFILL_RELEASE_FILE" ] && [ "$SECONDS" -lt "$deadline" ]; do sleep 1; done; rm -f -- "$ORCA_BACKFILL_RELEASE_FILE" 2>/dev/null; eval " $ORCA_BACKFILL_GATED_COMMAND"
+```
+
+win32: mirror the `-EncodedCommand` builder at `:202-254` (`Test-Path` poll + `Remove-Item` + `Invoke-Expression $env:ORCA_BACKFILL_GATED_COMMAND`). **CRITICAL divergence from the setup wrapper:** on deadline expiry the gate wrapper FAILS OPEN — it evals the command anyway; never the setup wrapper's fail-closed `exit 124`.
+
+Nesting note: in wait-for-setup mode the original command is already the setup polling wrapper — composition is gate wrapper → (sentinel) → evals setup wrapper → (setup marker) → evals codex. The two env vars are distinct by construction and env is inherited at eval time; no re-plumbing needed.
+
+Tests: posix command is a single line and evals the env var; env round-trips a command containing single quotes AND newlines verbatim; `releaseFilePath` is under `<home>/.orca/` and nonce-unique per call; `toShellViewPath` is applied to the `ORCA_BACKFILL_RELEASE_FILE` env value but NOT to the returned host-view `releaseFilePath`; win32 command uses `-EncodedCommand` whose base64/UTF-16LE payload decodes to a Test-Path poll + Invoke-Expression + fail-open exec.
+
+Also modify `resolveSetupAgentSequenceLaunchCommand` (`src/shared/setup-agent-sequencing.ts:17-23`): one-line extension so it also resolves the launch command from env `ORCA_BACKFILL_GATED_COMMAND` when present (agent-kind detection at `pty.ts:1077-1110` keeps recognizing gated codex spawns; a gated setup wrapper resolves through both hops). Add a test beside the function's existing ones.
+
+Run: `pnpm exec vitest run src/shared/codex-backfill-gate-wrapper.test.ts` — write the tests first, watch them fail, implement, watch them pass.
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -166,6 +215,21 @@ describe('shouldHoldCodexSpawnForBackfill', () => {
   it('passes through when the index is not pending', () => {
     expect(shouldHoldCodexSpawnForBackfill({ ...base, isPending: () => false })).toBe(false)
   })
+
+  // Why: cold-restored codex panes spawn BEFORE the prewarm creates the state DB; the real predicate's
+  // >=100-session-files arm must hold them through that window (#11828 validated startup race).
+  it('holds via the real default predicate for a missing DB with >=100 session files', async () => {
+    const real = await vi.importActual<typeof import('./codex-state-db')>('./codex-state-db')
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-home-'))
+    const day = path.join(home, 'sessions', '2026', '07', '01')
+    fs.mkdirSync(day, { recursive: true })
+    for (let i = 0; i < 100; i++) {
+      fs.writeFileSync(path.join(day, `rollout-${i}.jsonl`), '')
+    }
+    expect(
+      shouldHoldCodexSpawnForBackfill({ ...base, codexHomePath: home, isPending: real.isCodexBackfillIndexPending })
+    ).toBe(true)
+  })
 })
 
 describe('evaluateCodexBackfillHoldPoll', () => {
@@ -222,11 +286,11 @@ describe('createCodexBackfillPaneHoldRegistry', () => {
 
   function makeHarness(results: CodexBackfillHoldPollResult[]) {
     const broadcasts: CodexBackfillPaneHoldState[] = []
-    const deliver = vi.fn()
+    const release = vi.fn()
     const registry = createCodexBackfillPaneHoldRegistry({ broadcast: (s) => broadcasts.push(s) })
     let call = 0
     const evaluate = vi.fn(() => results[Math.min(call++, results.length - 1)])
-    return { broadcasts, deliver, registry, evaluate }
+    return { broadcasts, release, registry, evaluate }
   }
 
   const pendingResult: CodexBackfillHoldPollResult = {
@@ -238,7 +302,7 @@ describe('createCodexBackfillPaneHoldRegistry', () => {
 
   it('broadcasts indexing immediately and exposes state via get()', () => {
     const h = makeHarness([pendingResult])
-    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', deliverStartupCommand: h.deliver, evaluate: h.evaluate })
+    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', releaseHeldCommand: h.release, evaluate: h.evaluate })
     expect(h.broadcasts).toEqual([
       { paneKey: 'p1', phase: 'indexing', lastWatermark: 'sessions/2026/07/20/rollout-a.jsonl' }
     ])
@@ -247,30 +311,30 @@ describe('createCodexBackfillPaneHoldRegistry', () => {
       phase: 'indexing',
       lastWatermark: 'sessions/2026/07/20/rollout-a.jsonl'
     })
-    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.release).not.toHaveBeenCalled()
   })
 
   it('releases on pending → false: broadcasts launched, delivers once, clears get()', () => {
     const h = makeHarness([pendingResult, doneResult])
-    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', deliverStartupCommand: h.deliver, evaluate: h.evaluate })
+    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', releaseHeldCommand: h.release, evaluate: h.evaluate })
     vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS)
-    expect(h.deliver).toHaveBeenCalledTimes(1)
+    expect(h.release).toHaveBeenCalledTimes(1)
     expect(h.broadcasts.at(-1)).toEqual({ paneKey: 'p1', phase: 'launched', lastWatermark: null })
     expect(h.registry.get('p1')).toBeNull()
     vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS * 3)
-    expect(h.deliver).toHaveBeenCalledTimes(1)
+    expect(h.release).toHaveBeenCalledTimes(1)
   })
 
   it('keeps holding across unreadable polls (active-writer contention)', () => {
     const unreadable: CodexBackfillHoldPollResult = { pending: true, unreadable: true, lastWatermark: null }
     const h = makeHarness([pendingResult, unreadable, unreadable, doneResult])
-    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', deliverStartupCommand: h.deliver, evaluate: h.evaluate })
+    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', releaseHeldCommand: h.release, evaluate: h.evaluate })
     vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS * 2)
-    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.release).not.toHaveBeenCalled()
     // Why: an unreadable poll must not clobber the last known watermark either.
     expect(h.registry.get('p1')?.lastWatermark).toBe('sessions/2026/07/20/rollout-a.jsonl')
     vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS)
-    expect(h.deliver).toHaveBeenCalledTimes(1)
+    expect(h.release).toHaveBeenCalledTimes(1)
   })
 
   it('re-broadcasts indexing when the watermark advances', () => {
@@ -280,21 +344,21 @@ describe('createCodexBackfillPaneHoldRegistry', () => {
       lastWatermark: 'sessions/2026/07/25/rollout-b.jsonl'
     }
     const h = makeHarness([pendingResult, advanced])
-    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', deliverStartupCommand: h.deliver, evaluate: h.evaluate })
+    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', releaseHeldCommand: h.release, evaluate: h.evaluate })
     vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS)
     expect(h.broadcasts.at(-1)).toEqual({
       paneKey: 'p1',
       phase: 'indexing',
       lastWatermark: 'sessions/2026/07/25/rollout-b.jsonl'
     })
-    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.release).not.toHaveBeenCalled()
   })
 
   it('fails open at the max-wait ceiling while still pending', () => {
     const h = makeHarness([pendingResult])
-    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', deliverStartupCommand: h.deliver, evaluate: h.evaluate })
+    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', releaseHeldCommand: h.release, evaluate: h.evaluate })
     vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_MAX_WAIT_MS + CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS)
-    expect(h.deliver).toHaveBeenCalledTimes(1)
+    expect(h.release).toHaveBeenCalledTimes(1)
     expect(h.broadcasts.at(-1)?.phase).toBe('launched')
   })
 
@@ -303,39 +367,39 @@ describe('createCodexBackfillPaneHoldRegistry', () => {
     const handle = h.registry.begin({
       paneKey: 'p1',
       codexHomePath: '/x',
-      deliverStartupCommand: h.deliver,
+      releaseHeldCommand: h.release,
       evaluate: h.evaluate
     })
     handle.dispose()
     const broadcastCount = h.broadcasts.length
     vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS * 5)
-    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.release).not.toHaveBeenCalled()
     expect(h.broadcasts.length).toBe(broadcastCount)
     expect(h.registry.get('p1')).toBeNull()
   })
 
   it('begin() for an already-held paneKey replaces the previous hold', () => {
     const h = makeHarness([pendingResult])
-    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', deliverStartupCommand: h.deliver, evaluate: h.evaluate })
-    const secondDeliver = vi.fn()
+    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', releaseHeldCommand: h.release, evaluate: h.evaluate })
+    const secondRelease = vi.fn()
     h.registry.begin({
       paneKey: 'p1',
       codexHomePath: '/x',
-      deliverStartupCommand: secondDeliver,
+      releaseHeldCommand: secondRelease,
       evaluate: () => doneResult
     })
     vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS)
-    expect(h.deliver).not.toHaveBeenCalled()
-    expect(secondDeliver).toHaveBeenCalledTimes(1)
+    expect(h.release).not.toHaveBeenCalled()
+    expect(secondRelease).toHaveBeenCalledTimes(1)
   })
 
   it('disposeAll clears every hold silently', () => {
     const h = makeHarness([pendingResult])
-    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', deliverStartupCommand: h.deliver, evaluate: h.evaluate })
-    h.registry.begin({ paneKey: 'p2', codexHomePath: '/x', deliverStartupCommand: h.deliver, evaluate: h.evaluate })
+    h.registry.begin({ paneKey: 'p1', codexHomePath: '/x', releaseHeldCommand: h.release, evaluate: h.evaluate })
+    h.registry.begin({ paneKey: 'p2', codexHomePath: '/x', releaseHeldCommand: h.release, evaluate: h.evaluate })
     h.registry.disposeAll()
     vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS * 5)
-    expect(h.deliver).not.toHaveBeenCalled()
+    expect(h.release).not.toHaveBeenCalled()
     expect(h.registry.get('p1')).toBeNull()
     expect(h.registry.get('p2')).toBeNull()
   })
@@ -410,7 +474,7 @@ export function evaluateCodexBackfillHoldPoll(codexHomePath: string): CodexBackf
 export interface CodexBackfillPaneHoldBeginParams {
   paneKey: string
   codexHomePath: string
-  deliverStartupCommand: () => void
+  releaseHeldCommand: () => void
   evaluate?: (codexHomePath: string) => CodexBackfillHoldPollResult
   repollMs?: number
   maxWaitMs?: number
@@ -460,7 +524,7 @@ export function createCodexBackfillPaneHoldRegistry(deps: {
         if (!result.pending || Date.now() >= deadline) {
           drop(params.paneKey)
           deps.broadcast({ paneKey: params.paneKey, phase: 'launched', lastWatermark: null })
-          params.deliverStartupCommand()
+          params.releaseHeldCommand()
           return
         }
         if (!result.unreadable && result.lastWatermark !== held.state.lastWatermark) {
@@ -488,16 +552,20 @@ export function createCodexBackfillPaneHoldRegistry(deps: {
 }
 ```
 
+(Add `import fs from 'node:fs'`, `import os from 'node:os'`, `import path from 'node:path'` to the test file for the real-predicate case.)
+
+Validated note (documentation, not code): the decision-time fail-open policy is safe under the live backfill writer because codex's state DB runs WAL — 11,020/11,020 stress reads of the real primitive succeeded under an active writer, while a rollback-journal DB fails open ~99.5% (`database is locked`). WAL is persisted in the DB file codex owns; if a future codex changes journal mode, add retry-once-on-locked to the decision/poll reads.
+
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `pnpm exec vitest run src/main/codex/codex-backfill-spawn-hold.test.ts`
+Run: `pnpm exec vitest run src/main/codex/codex-backfill-spawn-hold.test.ts src/shared/codex-backfill-gate-wrapper.test.ts`
 Expected: PASS (all tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/shared/codex-backfill-status-types.ts src/main/codex/codex-backfill-spawn-hold.ts src/main/codex/codex-backfill-spawn-hold.test.ts
-git commit -m "feat(codex): add main-side backfill spawn-hold decision and pane hold registry (#11828)"
+git add src/shared/codex-backfill-status-types.ts src/shared/codex-backfill-gate-wrapper.ts src/shared/codex-backfill-gate-wrapper.test.ts src/shared/setup-agent-sequencing.ts src/main/codex/codex-backfill-spawn-hold.ts src/main/codex/codex-backfill-spawn-hold.test.ts
+git commit -m "feat(codex): add backfill spawn-hold decision, gate wrapper, and pane hold registry (#11828)"
 ```
 
 ---
@@ -509,7 +577,7 @@ git commit -m "feat(codex): add main-side backfill spawn-hold decision and pane 
 - Test: `src/main/ipc/pty.test.ts`
 
 **Interfaces:**
-- Consumes (Task 1): `shouldHoldCodexSpawnForBackfill`, `createCodexBackfillPaneHoldRegistry`, `CodexBackfillPaneHoldState`. Consumes existing: `getSystemCodexHomePath` (same import as `codex-backfill-status.ts`), `buildStartupCommandSubmission` (from `src/main/providers/local-pty-shell-ready.ts` — export it if not already exported), `registerPaneKeyTeardownListener` (`pty.ts:273`).
+- Consumes (Task 1): `shouldHoldCodexSpawnForBackfill`, `createCodexBackfillPaneHoldRegistry`, `CodexBackfillPaneHoldState`, `buildCodexBackfillGateWrapper` + `ORCA_BACKFILL_GATED_COMMAND_ENV` / `ORCA_BACKFILL_RELEASE_FILE_ENV`. Consumes existing: `getSystemCodexHomePath` (same import as `codex-backfill-status.ts`), `registerPaneKeyTeardownListener` (`pty.ts:273`), `node:fs` for the release sentinel.
 - Produces (Task 4 relies on): IPC pull channel `'codexBackfill:paneHoldStatus'` (invoke with `paneKey: string`, returns `CodexBackfillPaneHoldState | null`) and push channel `'codexBackfill:paneHoldChanged'` (payload `CodexBackfillPaneHoldState`), broadcast on the same window webContents the pty handlers already use.
 
 **Placement notes (read before coding):**
@@ -517,7 +585,9 @@ git commit -m "feat(codex): add main-side backfill spawn-hold decision and pane 
 - `selectedCodexHomePath` is currently computed at ~`:3463` / ~`:4638` but **gated behind `isDaemonHostSpawn`**; the gate must recompute it ungated — copy the existing `getCompatibleSelectedCodexHomePath(getCodexSelectionTargetForPty(...), getSelectedCodexHomePath?.(...))` call's arguments verbatim from those lines.
 - The resume-pinned home is available as `codexResumeHome?.codexHomePath` (~`:3411` / ~`:4633`) and takes precedence over lane selection — it is the actual per-pane effective home.
 - Detection MUST use `args.launchAgent === 'codex'`, never command parsing: in wait-for-setup mode the pty command is a polling wrapper and the codex command lives in env `ORCA_SEQUENCED_STARTUP_COMMAND`.
-- Do not add new `max-lines` disables: keep additions to `pty.ts` thin (resolver + two short integration blocks + registry/handler setup); all logic lives in Task 1's module.
+- Hold-begin guard (validated — do not skip): the ensure arm can resolve by ADOPTING a live owner without spawning (`pty.ts:3745-3751` synthesizes `{ id: owner.ptyId, isReattach: true }`), and the daemon can adopt THROUGH the spawn callback too (`disposition: 'adopted'`, `pty.ts:3724-3733` / `claimed-agent-pty-owner.ts:143,169`) — so `providerResult !== null` is an insufficient guard. Begin a hold ONLY when the spawn physically created the pty (`result.isReattach !== true`, and on the ensure arm disposition `'created'`). Adopted resolves never ran the replaced command — skip silently. Adopted paneKeys can also diverge from `spawnOptions.paneKey` (`orca-runtime.ts:23600-23606`); never broadcast a hold for a paneKey the pane doesn't use.
+- Registry lifecycle (validated): `registerPtyHandlers` re-runs on window recreate (`attach-main-window-services.ts:109`; precedent comment `pty.ts:1705`). Keep the registry at MODULE scope (precedent: durable registries at `pty.ts:271-295`) and rebind only the broadcast target per registration — do NOT `disposeAll()` on re-registration (that would drop holds for surviving daemon ptys).
+- Do not add new `max-lines` disables: keep additions to `pty.ts` thin (resolver + two short integration blocks + registry/handler setup); all logic lives in Task 1's modules.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -537,13 +607,14 @@ vi.mock('../codex/codex-state-db', async (importOriginal) => ({
 
 Test cases (each spawns via `handlers.get('pty:spawn')!(null, {...})` with `command: "codex '--flag'"`, `launchAgent: 'codex'`, `env: { ORCA_PANE_KEY: <paneKey built from tabId/leafId> }`, `tabId`/`leafId` args — mirror an existing renderer-path spawn test for the exact arg shape):
 
-1. **Gated launch:** `backfillPendingMock` returns `true`, `backfillStatusMock` returns `kind:'incomplete'` with a watermark. Assert: node-pty `spawnMock` WAS called (shell spawns) but the spawn call carries no startup command (assert via `spawnAndGetCall` that the codex command appears in neither the shell args nor any startup write — and that the fake pty proc's `write` was not called with the codex command); assert `mainWindow.webContents.send` was called with `('codexBackfill:paneHoldChanged', { paneKey, phase: 'indexing', lastWatermark: <watermark> })`; assert the `'codexBackfill:paneHoldStatus'` handler returns that state for the paneKey.
-2. **Auto-launch on completion:** continue from a gated launch; flip `backfillPendingMock` to `false` and `backfillStatusMock` to `complete`; `vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS)`. Assert the fake pty proc's `write` was called with the submission containing `codex '--flag'` (built via `buildStartupCommandSubmission`, i.e. ends with `'\n'` on POSIX) and a `phase: 'launched'` broadcast was sent; `'codexBackfill:paneHoldStatus'` now returns `null`.
-3. **Fail-open on unreadable state at decision time:** `backfillPendingMock` returns `false` (the existing fail-open contract of `isCodexBackfillIndexPending` for unreadable DBs). Assert the spawn proceeds with normal command delivery and no hold broadcast.
-4. **SSH passthrough:** same args plus `connectionId: 'ssh-1'` and `backfillPendingMock` returning `true`. Assert normal delivery, no hold broadcast, and that `backfillPendingMock` was not called at all (SSH is excluded before any DB read).
-5. **WSL passthrough without an injected home:** spawn with a WSL shell/distro arg shape (mirror an existing WSL test in the file for how `terminalWindowsWslDistro`/WSL cwd is passed) and no selected codex home. Assert normal delivery and no hold broadcast.
+1. **Gated launch (wrapper replacement):** `backfillPendingMock` returns `true`, `backfillStatusMock` returns `kind:'incomplete'` with a watermark; point the selected codex home at a temp dir (`fs.mkdtempSync`). Assert: node-pty `spawnMock` WAS called (shell spawns on time) and, via `spawnAndGetCall`, the delivered command is the GATE WRAPPER, not codex — the spawn env carries `ORCA_BACKFILL_GATED_COMMAND === "codex '--flag'"` (verbatim original) and `ORCA_BACKFILL_RELEASE_FILE` under `<tempHome>/.orca/`, and the codex command itself appears in neither the shell args nor any startup write; no release sentinel file exists yet; `mainWindow.webContents.send` was called with `('codexBackfill:paneHoldChanged', { paneKey, phase: 'indexing', lastWatermark: <watermark> })`; the `'codexBackfill:paneHoldStatus'` handler returns that state for the paneKey.
+2. **Auto-release on completion:** continue from a gated launch; flip `backfillPendingMock` to `false` and `backfillStatusMock` to `complete`; `vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS)`. Assert the release sentinel file NOW EXISTS at the exact path from the spawn env (main's only delivery act — the wrapper in the live shell does the exec, proven end-to-end in Task 7 Step 5), a `phase: 'launched'` broadcast was sent, and `'codexBackfill:paneHoldStatus'` now returns `null`. Main performed NO pty write (assert the fake pty proc's `write` was never called with the codex command).
+3. **Fail-open on unreadable state at decision time:** `backfillPendingMock` returns `false` (the existing fail-open contract of `isCodexBackfillIndexPending` for unreadable DBs). Assert the spawn proceeds with the ORIGINAL command untouched and no hold broadcast.
+4. **SSH passthrough:** same args plus `connectionId: 'ssh-1'` and `backfillPendingMock` returning `true`. Assert the original command untouched, no hold broadcast, and that `backfillPendingMock` was not called at all (SSH is excluded before any DB read).
+5. **WSL passthrough without an injected home:** spawn with a WSL shell/distro arg shape (mirror an existing WSL test in the file for how `terminalWindowsWslDistro`/WSL cwd is passed) and no selected codex home. Assert the original command untouched and no hold broadcast. Add a sibling case: a selected codex home shaped as a `\\wsl$` UNC path ⇒ passthrough (AD-A10 resolver clause).
 6. **Non-codex passthrough:** `launchAgent: undefined`, command `'bash'`, pending `true`. Assert untouched.
-7. **Teardown during hold:** gated launch, then trigger the pane teardown path the file already exercises for `registerPaneKeyTeardownListener` (or kill the pty via its exit handler); advance timers past completion. Assert `write` never received the codex command and no `'launched'` broadcast fired.
+7. **Teardown during hold:** gated launch, then trigger the pane teardown path the file already exercises for `registerPaneKeyTeardownListener` (or kill the pty via its exit handler); advance timers past completion. Assert the release sentinel was NEVER created and no `'launched'` broadcast fired.
+8. **Reattach/adoption guard:** make the spawn resolve as a reattach (`isReattach: true` — mirror an existing reattach/adoption-shaped test in the file) with `backfillPendingMock` returning `true`. Assert: no hold broadcast, `'codexBackfill:paneHoldStatus'` returns `null`, and no sentinel was created (an adopted resolve never ran the replaced command; a hold would overlay the wrong pane and later release a command nobody is waiting for).
 
 - [ ] **Step 2: Run the new tests to verify they fail**
 
@@ -552,16 +623,24 @@ Expected: FAIL — no hold behavior exists; command is delivered immediately and
 
 - [ ] **Step 3: Implement the integration in `pty.ts`**
 
-Inside `registerPtyHandlers` (so it closes over `mainWindow`, `getSelectedCodexHomePath`, `ipcMain` mocks in tests), add the registry + pull handler once, near the other handler registrations:
+At MODULE scope in `pty.ts` (precedent: the durable registries at `:271-295`), create the registry ONCE with a rebindable broadcast target:
 
 ```ts
+/** Why: holds must survive registerPtyHandlers re-registration (window recreate) — only the broadcast target changes. */
+let codexBackfillHoldBroadcast: ((state: CodexBackfillPaneHoldState) => void) | null = null
 const codexBackfillPaneHolds = createCodexBackfillPaneHoldRegistry({
-  broadcast: (state) => {
-    if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-      mainWindow.webContents.send('codexBackfill:paneHoldChanged', state)
-    }
-  }
+  broadcast: (state) => codexBackfillHoldBroadcast?.(state)
 })
+```
+
+Inside `registerPtyHandlers` (so it closes over `mainWindow` and the `ipcMain` mocks in tests), rebind the target + register the pull handler, near the other handler registrations (do NOT `disposeAll()` here — surviving daemon ptys keep their holds):
+
+```ts
+codexBackfillHoldBroadcast = (state) => {
+  if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send('codexBackfill:paneHoldChanged', state)
+  }
+}
 ipcMain.removeHandler('codexBackfill:paneHoldStatus')
 ipcMain.handle('codexBackfill:paneHoldStatus', (_event, paneKey: string) => codexBackfillPaneHolds.get(paneKey))
 ```
@@ -579,17 +658,13 @@ function resolveCodexBackfillGateHome(params: {
   if (params.connectionId) {
     return null
   }
-  if (params.resumeCodexHomePath) {
-    return params.resumeCodexHomePath
-  }
-  if (params.selectedCodexHomePath) {
-    return params.selectedCodexHomePath
-  }
-  // Why: a WSL pane without an injected home uses the distro's own ~/.codex, which the host cannot read.
-  if (params.wslDistro) {
-    return null
-  }
-  return getSystemCodexHomePath()
+  const resolved =
+    params.resumeCodexHomePath ??
+    params.selectedCodexHomePath ??
+    // Why: a WSL pane without an injected home uses the distro's own ~/.codex, which the host cannot read.
+    (params.wslDistro ? null : getSystemCodexHomePath())
+  // Why: \\wsl$-style UNC homes ride 9P — sqlite reads over it are untrustworthy (AD-A10); fail open.
+  return resolved != null && resolved.startsWith('\\\\') ? null : resolved
 }
 ```
 
@@ -606,9 +681,11 @@ const codexBackfillGateHome = resolveCodexBackfillGateHome({
   ),
   wslDistro: expectedWslDistro ?? null
 })
-let heldCodexStartupCommand: string | undefined
+let heldCodexReleaseFilePath: string | undefined
 if (
   spawnOptions.paneKey &&
+  spawnOptions.command &&
+  codexBackfillGateHome &&
   shouldHoldCodexSpawnForBackfill({
     launchAgent: args.launchAgent,
     startupCommand: spawnOptions.command,
@@ -616,42 +693,53 @@ if (
     codexHomePath: codexBackfillGateHome
   })
 ) {
-  heldCodexStartupCommand = spawnOptions.command
-  delete spawnOptions.command
+  // Why: deliver via the gate wrapper through the proven startup path — never a raw deferred pty write (#11828).
+  const gate = buildCodexBackfillGateWrapper({
+    originalCommand: spawnOptions.command,
+    codexHomePath: codexBackfillGateHome,
+    shellPlatform: process.platform === 'win32' ? 'win32' : 'posix'
+  })
+  spawnOptions.command = gate.command
+  spawnOptions.env = { ...spawnOptions.env, ...gate.env }
+  heldCodexReleaseFilePath = gate.releaseFilePath
 }
 ```
 
 And immediately after `result = await provider.spawn(spawnOptions)` on the same path:
 
 ```ts
-if (heldCodexStartupCommand && codexBackfillGateHome && spawnOptions.paneKey) {
+// Why: adopted resolves never ran the gate wrapper — a hold would overlay the wrong pane and later
+// release a command nobody is polling for (validated: ensure can adopt without spawning, and the
+// daemon can adopt through the spawn callback).
+const spawnCreatedFreshPty = result.isReattach !== true
+if (heldCodexReleaseFilePath && spawnCreatedFreshPty && codexBackfillGateHome && spawnOptions.paneKey) {
   beginCodexBackfillPaneHold({
     paneKey: spawnOptions.paneKey,
     codexHomePath: codexBackfillGateHome,
-    heldStartupCommand: heldCodexStartupCommand,
-    ptyId: result.id,
-    write: (data) => provider.write(result.id, data)
+    releaseFilePath: heldCodexReleaseFilePath
   })
 }
 ```
 
-with one shared helper inside `registerPtyHandlers` scope:
+with one shared helper at module scope:
 
 ```ts
 function beginCodexBackfillPaneHold(params: {
   paneKey: string
   codexHomePath: string
-  heldStartupCommand: string
-  ptyId: string
-  write: (data: string) => void
+  releaseFilePath: string
 }): void {
   const handle = codexBackfillPaneHolds.begin({
     paneKey: params.paneKey,
     codexHomePath: params.codexHomePath,
-    deliverStartupCommand: () => {
-      // Why: PSReadLine/cmd.exe submit on \r; POSIX treats either as Enter under ICRNL (mirrors writeStartupCommandWhenShellReady).
-      const submit = process.platform === 'win32' ? '\r' : '\n'
-      params.write(buildStartupCommandSubmission(params.heldStartupCommand, { submit }))
+    releaseHeldCommand: () => {
+      // Why: release = create the sentinel the wrapper polls; idempotent and harmless even if the pty died.
+      try {
+        fs.mkdirSync(path.dirname(params.releaseFilePath), { recursive: true })
+        fs.writeFileSync(params.releaseFilePath, '')
+      } catch {
+        // Fail open: the wrapper's own ~20-min deadline launches the command without us.
+      }
     }
   })
   registerPaneKeyTeardownListener(params.paneKey, () => handle.dispose())
@@ -659,11 +747,12 @@ function beginCodexBackfillPaneHold(params: {
 ```
 
 Adaptation notes for the implementer (verify against the real file, keep semantics identical):
-- Match `provider.write`'s exact signature to the write invocation used by the `'pty:write'` handler at ~`:5389` (`LocalPtyProvider.write(id, data)` / `RuntimePtyController.write(ptyId, data)`).
-- Match `registerPaneKeyTeardownListener`'s exact signature at `pty.ts:273`; if it returns an unregister function, keep the returned disposer alongside the hold so a normal release doesn't leak the listener. Also dispose the hold from the pty exit path if the file has a natural per-pty cleanup list (`ptyCleanupCallbacks`-style) — a dead pane must never receive a late write.
-- If `buildStartupCommandSubmission` is not exported from `src/main/providers/local-pty-shell-ready.ts`, export it (do not duplicate its logic). Pass `bracketedPasteSafe` the same way `writeStartupCommandWhenShellReady` does for multiline commands.
-- If `spawnOptions` has `commandDelivery`/`startupCommandDelivery` fields that are invalid without `command`, clear them alongside the `delete spawnOptions.command` (check `PtySpawnOptions` in `src/main/providers/types.ts`).
-- Place the withhold AFTER `reservePaneSpawn` on the renderer path so duplicate spawn requests coalesce onto the held pane.
+- Ensure-arm guard: in the `agentSessionEnsure` arm, additionally require the ensure disposition to be `'created'` (see `claimed-agent-pty-owner.ts:143-149` / the `disposition: 'adopted'` callback path at `pty.ts:3724-3733`) before beginning the hold — `result.isReattach` alone does not cover a daemon-side adopt returned through the spawn callback. Locate the disposition on the ensure result the arm already has in scope.
+- Match `registerPaneKeyTeardownListener`'s exact signature at `pty.ts:273` (it registers a GLOBAL listener — filter by paneKey); keep the returned unregister function alongside the hold so a normal release doesn't leak the listener. Also dispose the hold from the pty exit path if the file has a natural per-pty cleanup list (`ptyCleanupCallbacks`-style). On dispose, best-effort `fs.rmSync(params.releaseFilePath, { force: true })` is optional hygiene (the wrapper deletes the sentinel itself after seeing it).
+- The sentinel lives under the gate home's `.orca/` directory — the same directory family Orca already writes into codex homes (hooks.json injection precedent). Unit tests MUST point the gate home at a temp dir.
+- WSL translation: after the UNC passthrough, a gated home is always a native host path. If a gated spawn can still carry `expectedWslDistro` (win32 host, native-path injected home), pass `toShellViewPath` to `buildCodexBackfillGateWrapper` using the `hooks.ts:484-516` translation so the distro shell can see the sentinel; if translation is unavailable for that shape, skip the hold (fail open) rather than gate a pane that can never see its release file.
+- `commandDelivery`/startup-delivery fields stay VALID (a real command still exists) — do not touch them.
+- Place the replacement AFTER `reservePaneSpawn` on the renderer path so duplicate spawn requests coalesce onto the held pane.
 
 - [ ] **Step 4: Run the new tests to verify they pass**
 
@@ -736,7 +825,7 @@ it('auto-launches the held worktree-creation pane when the backfill completes', 
   backfillPendingMock.mockReturnValue(false)
   backfillStatusMock.mockReturnValue({ kind: 'complete', stateDbPath: '/tmp/state_5.sqlite' })
   vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS)
-  // the withheld command was written into the live pty and 'launched' was broadcast
+  // the release sentinel now exists (read its path from the spawn env) and 'launched' was broadcast
 })
 
 it('holds the agentSessionEnsure controller arm the same way', async () => {
@@ -744,6 +833,14 @@ it('holds the agentSessionEnsure controller arm the same way', async () => {
   // (command: 'codex resume session-a', resumeProviderSession: {...}) and a stubbed
   // prepareCodexSessionResume returning a codexHomePath — assert the hold uses THAT home
   // (resume-pinned home takes precedence over lane selection).
+})
+
+it('does not hold when the ensure arm adopts a live owner instead of spawning', async () => {
+  // same resume-shaped args, but with a live claimed owner so ensure resolves WITHOUT spawning
+  // (adoption: synthesized { id: owner.ptyId, isReattach: true } at pty.ts:3745-3751, or the daemon's
+  // disposition:'adopted' via the callback). Assert: no paneHoldChanged broadcast, paneHoldStatus null,
+  // and no release sentinel exists — the replaced command was never executed by anyone, and a hold
+  // would overlay the wrong pane (adopted paneKey can diverge, orca-runtime.ts:23600-23606).
 })
 
 it('passes a remote controller spawn through untouched', async () => {
@@ -905,7 +1002,8 @@ onPaneHoldChanged: (callback: (state: CodexBackfillPaneHoldState) => void) => ()
 `src/renderer/src/web/web-preload-api.ts` — extend the stub:
 
 ```ts
-// Why: web-client panes run on remote hosts whose codex homes this browser cannot inspect; never held.
+// Why: hold state rides Electron IPC only; web-served panes (incl. orca-serve attaches on the serve host's
+// local runtime) render no overlay — accepted residual AD-A9, bounded by the gate's fail-open ceilings.
 paneHoldStatus: () => Promise.resolve(null),
 onPaneHoldChanged: () => () => {}
 ```
@@ -979,6 +1077,7 @@ git commit -m "feat(codex): expose per-pane backfill hold state to the renderer 
 - Modify: `src/renderer/src/components/terminal-pane/codex-backfill-pane-hold.ts` (take over the `CodexIndexingPaneState` type)
 - Modify: `src/renderer/src/components/terminal-pane/CodexIndexingOverlay.tsx`, `src/renderer/src/components/terminal-pane/TerminalPane.tsx`, `src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts` (import updates only)
 - Delete: `src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.ts`, `src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.test.ts`
+- Modify: `launch-ai-vault-session.ts` (+ its unit tests; locate with `git -C <worktree> grep -ln 'launchAiVaultSessionInNewTab' -- src/renderer`) — Step 6b closes the validated launchAgent detection gap
 - Test: the branch-owned pty-connection gate tests (locate with `git -C <worktree> grep -l 'shouldGateCodexSpawnOnBackfill\|waitForCodexBackfillGate' -- 'src/renderer/**/*.test.ts'`)
 
 **Interfaces:**
@@ -1039,6 +1138,10 @@ git grep -n 'codex-backfill-spawn-gate\|waitForCodexBackfillGate\|shouldGateCode
 Expected: the grep returns no hits in `src/` (docs/plans may still mention the old design). Then run `pnpm typecheck` — exit 0.
 
 Note: keep the existing global `window.api.codexBackfill.status` / `onStatusChanged` surface (other consumers — e.g. the prewarm-completion broadcast — still use it); only the renderer's spawn-gating consumption is removed.
+
+- [ ] **Step 6b: Close the launchAgent detection gap (validated falsification)**
+
+`launchAiVaultSessionInNewTab` (`launch-ai-vault-session.ts:74` at db57146f8) queues `launchAgent` only inside `...(args.launchConfig ? … : {})`, so launchConfig-absent codex resumes (older-serializer drag-drop payloads via `AiVaultSessionDropLayer.tsx:233-243`; the sidebar-resume fallback at `ai-vault-resume-command.ts:205-223`) reach `pty:spawn` WITHOUT `launchAgent` and would bypass the main-side gate entirely. Move `launchAgent: args.agent` out of the conditional so it is queued unconditionally, and add/extend a unit test beside the module's existing ones asserting a launchConfig-ABSENT codex launch still carries `launchAgent: 'codex'` into the queued pane startup. Scope note (keep as a one-line comment at the fix): raw user-authored command strings (quick commands, template tabs, setup/issue splits) remain ungated by design — arbitrary commands cannot be classified as codex; the backfill-error detector + amber toast stay the net for them.
 
 - [ ] **Step 7: Commit**
 
@@ -1122,11 +1225,12 @@ Codex resolves at `/home/dan/.local/bin/codex` — no PATH adjustments needed.
 
 1. **Trust-grant deferral, lane NOT latched** (~T+25s in app.log): `deferring trust grant until codex session index completes`; `grep -c CodexAppServerTimeoutError app.log` → 0; `grep -c 'trust grant unavailable' app.log` → 0.
 2. **Prewarm runs**: `pre-warming codex session index at $E2E_HOME/.codex` line; confirm the prewarm codex child via `/proc/<pid>/environ` containing `CODEX_HOME=$E2E_HOME/.codex`. Poll progress read-only: `sqlite3 "file:$E2E_HOME/.codex/state_5.sqlite?mode=ro" "select status, last_watermark from backfill_state;"`. **LET IT RUN — poll patiently every ~60s; ~10-13 minutes for 15G.**
+3. **Daemon provider active** (validated: dev/E2E select the daemon pty provider, and the fallback to `LocalPtyProvider` is SILENT): confirm the daemon init succeeded in app.log (daemon-init success line / `out/main/daemon-entry.js` startup) so the E2E exercises the provider path production uses.
 
 - [ ] **Step 4: Verify the NEW criterion — main-spawned worktree pane is gated**
 
 WHILE the index is still `running` (do this within the first few minutes): complete onboarding via CDP if needed, create a project, then create a worktree workspace with Agent=Codex — the exact reporter flow that spawns the startup terminal in main. Assert, in order:
-1. The pane does NOT run codex: no `state db backfill is running` / `failed to initialize sqlite local db` / `appears to be damaged` text in the pane DOM; no codex child process whose environ carries the sandbox CODEX_HOME other than the prewarm's (pgrep + `/proc/*/environ` sweep).
+1. The pane does NOT run codex: no `state db backfill is running` / `failed to initialize sqlite local db` / `appears to be damaged` text in the pane DOM; no codex child process whose environ carries the sandbox CODEX_HOME other than the prewarm's (pgrep + `/proc/*/environ` sweep). The pane's shell runs the gate wrapper's quiet poll (like the existing "Waiting for setup…" wrapper) under the overlay; the release sentinel `$E2E_HOME/.codex/.orca/backfill-release-*` does not exist yet.
 2. The "Indexing Codex session history…" overlay IS visible in that pane's DOM (the previously-FAILED criterion).
 3. `app.log` shows no amber backfill-death toast for this pane (the detector net must have nothing to catch).
 4. A plain shell pane created at the same time spawns normally with no overlay (gate scoping).
@@ -1137,7 +1241,7 @@ If the index completes before you reach this step, force the deterministic repro
 
 When `backfill_state.status` flips to `complete`:
 1. `app.log` shows `codex session index complete` and the trust-grant retry (`granted N managed hook entries…`), still zero `trust grant unavailable`.
-2. The held pane's overlay clears and codex auto-starts in that same pane: the codex TUI banner (`>_ OpenAI Codex`) renders. This is the E2E proof of `deliverStartupCommand`.
+2. The held pane's overlay clears and codex auto-starts in that same pane: the codex TUI banner (`>_ OpenAI Codex`) renders. This is the E2E proof of the release chain (main creates the sentinel → the gate wrapper sees it, deletes it, and evals the original command). Verify the sentinel was consumed: `ls "$E2E_HOME/.codex/.orca/"` shows no `backfill-release-*` leftovers.
 3. A NEW codex pane created after completion starts codex immediately, no overlay (steady state).
 
 - [ ] **Step 6: Steady-state relaunch**
@@ -1158,7 +1262,8 @@ SUCCESS requires: criteria in Steps 3, 5, 6 all OBSERVED, and Step 4 (the previo
 
 ## Self-Review (performed against the spec)
 
-1. **Spec coverage:** main-process choke-point gate for ALL flows → Tasks 2–3 (both `pty.ts` dispatch paths, controller arms incl. `agentSessionEnsure`, worktree-creation arg shape). Renderer overlay driven by main-side state with the renderer gate refactored to a consumer and the duplicate enforcement deleted → Tasks 4–5. Local-only scope (native + WSL-injected homes), SSH/remote passthrough → resolver in Task 2 + tests in Tasks 2–3. Fail-open on undeterminable state → Task 1 decision semantics + Task 2 test 3; hold-time contention tolerance (np-task-8 concern #2) → Task 1 `evaluateCodexBackfillHoldPoll` + registry test. Auto-launch on completion → Task 1 registry + Task 2 test 2 + Task 3 + E2E Step 5. Cross-platform → submit-char handling via `buildStartupCommandSubmission` reuse, no POSIX-only paths. Unit-test list from the spec (gated launch, auto-launch, fail-open, SSH/remote passthrough, worktree-creation wiring) → Tasks 1–3. Full gates → Task 6. Reporter-shape E2E with the new criterion, sandbox hygiene, real-home read-only guarantees → Task 7. No known-limitation deferrals; no unresolved coverage gaps.
-2. **No silent deferrals:** the production outcome for every requirement is proven without stubs by Task 7 (real 15G history, real codex binary, real app, main-spawned pane held → overlay → auto-launch). Unit-level mocks (node-pty, codex-state-db) are all superseded by that E2E.
-3. **Placeholder scan:** every code step contains the actual code; the deliberate "verify against the real file" notes (write signature at `pty.ts:5389`, `registerPaneKeyTeardownListener` at `:273`, the verbatim `getCompatibleSelectedCodexHomePath` expression, resume-arm arg shape at `pty.test.ts:3102`) are directed adaptations to anchored existing code, not TBDs.
-4. **Type consistency:** `CodexBackfillPaneHoldState { paneKey, phase, lastWatermark }` and channel names `'codexBackfill:paneHoldChanged'` / `'codexBackfill:paneHoldStatus'` are identical across Tasks 1, 2, 4, 5; `subscribeToCodexBackfillPaneHold(paneKey, onState)` matches between Tasks 4 and 5; `CodexIndexingPaneState` import path changes exactly once (Task 5) with all importers listed.
+1. **Spec coverage:** main-process choke-point gate for ALL flows → Tasks 2–3 (both `pty.ts` dispatch paths, controller arms incl. `agentSessionEnsure` with the created-disposition/`isReattach` hold guard, worktree-creation arg shape). Renderer overlay driven by main-side state with the renderer gate refactored to a consumer and the duplicate enforcement deleted → Tasks 4–5 (incl. the Task 5 `launchAgent` producer hardening that closes the validated `launchAiVaultSessionInNewTab` detection gap). Local-only scope (native-filesystem homes; `\\wsl$` UNC homes passed through per AD-A10), SSH/remote passthrough → resolver in Task 2 + tests in Tasks 2–3. Fail-open on undeterminable state → Task 1 decision semantics + Task 2 test 3; hold-time contention tolerance (np-task-8 concern #2) → Task 1 `evaluateCodexBackfillHoldPoll` + registry test, with the WAL-contention validation note (11,020/11,020 reads under a live writer). Pre-DB startup window (cold-restored codex panes) → the real-predicate ≥100-files test in Task 1 + the cold-restore-shaped expectations in Task 2 test 1. Auto-launch on completion → gate wrapper + Task 1 registry release + Task 2 test 2 + Task 3 + E2E Step 5. Cross-platform → the gate wrapper mirrors `setup-agent-sequencing.ts`'s production posix + win32 `-EncodedCommand` builders, so held delivery rides the same proven startup path on every platform; no POSIX-only product code. Unit-test list from the spec (gated launch, auto-launch, fail-open, SSH/remote passthrough, worktree-creation wiring, adoption guard) → Tasks 1–3. Full gates → Task 6. Reporter-shape E2E with the new criterion, daemon-provider assertion, sandbox hygiene, real-home read-only guarantees → Task 7. Accepted residuals are recorded, not silent (load-bearing ledger AD-A3 win32-wrapper unexercised here, AD-A9 web-attached serve panes hold without an overlay, AD-A10 UNC WSL homes ungated by design).
+2. **No silent deferrals:** the production outcome for every requirement is proven without stubs by Task 7 (real 15G history, real codex binary, real app, main-spawned pane held → overlay → sentinel release → wrapper execs codex). Unit-level mocks (node-pty, codex-state-db) are all superseded by that E2E.
+3. **Placeholder scan:** every code step contains the actual code; the deliberate "verify against the real file" notes (`registerPaneKeyTeardownListener` at `:273`, the verbatim `getCompatibleSelectedCodexHomePath` expression, the ensure-arm disposition guard against `claimed-agent-pty-owner.ts:143-149`, the gate-wrapper mirror of `setup-agent-sequencing.ts:92-128/:202-254`, resume-arm arg shape at `pty.test.ts:3102`) are directed adaptations to anchored existing code, not TBDs.
+4. **Type consistency:** `CodexBackfillPaneHoldState { paneKey, phase, lastWatermark }` and channel names `'codexBackfill:paneHoldChanged'` / `'codexBackfill:paneHoldStatus'` are identical across Tasks 1, 2, 4, 5; `buildCodexBackfillGateWrapper` + `ORCA_BACKFILL_GATED_COMMAND_ENV` / `ORCA_BACKFILL_RELEASE_FILE_ENV` and the `releaseHeldCommand` callback name match between Tasks 1 and 2; `subscribeToCodexBackfillPaneHold(paneKey, onState)` matches between Tasks 4 and 5; `CodexIndexingPaneState` import path changes exactly once (Task 5) with all importers listed.
+5. **Load-bearing validation applied (run 3):** the original raw deferred-pty-write delivery was FALSIFIED by a live-pty experiment (loss under stdin-reading rc files, early double-echo/paste garbling, multiline mangling) and replaced with the release-sentinel gate wrapper, itself validated against the in-repo precedent before adoption; hold-begin is guarded against ensure/daemon adoption (falsified A4); the registry is module-scope with per-registration broadcast rebind (falsified A11); UNC WSL homes fail open (AD-A10); the `launchAgent` producer gap is closed in Task 5 (falsified A12). Full ledger + evidence: the workflow logs' `load-bearing-ledger.md`.
