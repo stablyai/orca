@@ -267,45 +267,35 @@ describe('crushSseEnabledForLaunch', () => {
     }
   })
 
-  it('stop() is idempotent and halts reconnection', async () => {
-    // Why: use fake timers to prove stop() actually prevents a scheduled
-    // reconnect from firing — not just that the stopped flag is set.
+  it('stop() cancels a scheduled reconnect and prevents further connections', async () => {
+    // Why: CodeRabbit asked for proof that reconnection is actually prevented,
+    // not just that the stopped flag is set. Use a bad socket path so the
+    // initial connect fails and schedules a reconnect — then call stop()
+    // before the timer fires and verify no new connection attempt lands.
     vi.useFakeTimers()
-    let connectionCount = 0
-    const stopServer = createServer((req, res) => {
-      if (req.url !== '/v1/workspaces/0/events') {
-        res.writeHead(404)
-        res.end()
-        return
+    let errorCount = 0
+    const badPath = join(tmp, 'no-such-socket.sock')
+    const bridge = startCrushSseBridge(badPath, {
+      paneKey: 'pk',
+      launchToken: 'ltok-reconnect',
+      onEvent: () => {},
+      onError: () => {
+        errorCount++
       }
-      connectionCount++
-      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
-      res.write(
-        'data: {"type":"run_complete","payload":{"payload":{"session_id":"s1","text":"hi"}}}\n\n'
-      )
     })
-    const stopPath = join(tmp, 'halt.sock')
-    stopServer.listen(stopPath)
-    try {
-      const bridge = startCrushSseBridge(stopPath, {
-        paneKey: 'pk',
-        launchToken: 'ltok-halt',
-        onEvent: () => {}
-      })
-      // Why: allow the initial connect to succeed.
-      await vi.advanceTimersByTimeAsync(100)
-      const countAfterFirst = connectionCount
-      bridge.stop()
-      bridge.stop()
-      // Why: advance well past the max backoff window — if stop() didn't
-      // cancel the reconnect timer, a new connection would land here.
-      await vi.advanceTimersByTimeAsync(30_000)
-      expect(connectionCount).toBe(countAfterFirst)
-      expect(bridge.stopped()).toBe(true)
-    } finally {
-      vi.useRealTimers()
-      stopServer.close()
-    }
+    // Why: let the first connect attempt fail and schedule a reconnect.
+    await vi.advanceTimersByTimeAsync(50)
+    const errorsAfterFirst = errorCount
+    expect(errorsAfterFirst).toBeGreaterThanOrEqual(1)
+    // Why: stop() before the backoff timer fires.
+    bridge.stop()
+    bridge.stop()
+    // Why: advance well past the max backoff (10s) — if stop() didn't cancel
+    // the reconnect timer, multiple new attempts would land here.
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(errorCount).toBe(errorsAfterFirst)
+    expect(bridge.stopped()).toBe(true)
+    vi.useRealTimers()
   })
 
   it('routes a connect failure (missing socket) to onError so the retry loop is observable', async () => {
