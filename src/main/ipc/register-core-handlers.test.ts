@@ -54,6 +54,7 @@ const {
   registerHostedReviewHandlersMock,
   registerExportHandlersMock,
   registerCodexConfigSyncHandlersMock,
+  registerCodexBackfillStatusHandlersMock,
   registerOnboardingHandlersMock,
   registerDashboardPopoutHandlersMock,
   registerTerminalPreviewHandlersMock,
@@ -119,6 +120,7 @@ const {
   registerHostedReviewHandlersMock: vi.fn(),
   registerExportHandlersMock: vi.fn(),
   registerCodexConfigSyncHandlersMock: vi.fn(),
+  registerCodexBackfillStatusHandlersMock: vi.fn(),
   registerOnboardingHandlersMock: vi.fn(),
   registerDashboardPopoutHandlersMock: vi.fn(),
   registerTerminalPreviewHandlersMock: vi.fn(),
@@ -148,6 +150,10 @@ vi.mock('./runtime-environment-transport-routing', () => ({
 
 vi.mock('./codex-config-sync', () => ({
   registerCodexConfigSyncHandlers: registerCodexConfigSyncHandlersMock
+}))
+
+vi.mock('./codex-backfill-status', () => ({
+  registerCodexBackfillStatusHandlers: registerCodexBackfillStatusHandlersMock
 }))
 
 vi.mock('./onboarding', () => ({
@@ -500,6 +506,9 @@ describe('registerCoreHandlers', () => {
       getPtyIdForPaneKey: expect.any(Function)
     })
     expect(registerCodexConfigSyncHandlersMock).toHaveBeenCalledWith(
+      codexAccounts.runtimeHomeService
+    )
+    expect(registerCodexBackfillStatusHandlersMock).toHaveBeenCalledWith(
       codexAccounts.runtimeHomeService
     )
     expect(registerPetHandlersMock).toHaveBeenCalled()

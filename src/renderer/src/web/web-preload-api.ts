@@ -811,6 +811,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       status: () =>
         Promise.resolve({ state: 'synced', reason: null, systemConfigPath: '' } as const)
     },
+    // Why: the web client's panes run on remote hosts whose codex homes this
+    // browser cannot inspect; never-pending keeps those spawns ungated.
+    codexBackfill: {
+      status: () => Promise.resolve({ pending: false, lastWatermark: null }),
+      onStatusChanged: () => () => {}
+    },
     developerPermissions: createDeveloperPermissionsApi(),
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),

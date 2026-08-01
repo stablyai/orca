@@ -12,6 +12,7 @@ import type {
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
+import type { CodexBackfillGateStatus } from '../shared/codex-backfill-status-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
@@ -2061,6 +2062,16 @@ const api = {
   codexConfigSync: {
     status: (): Promise<CodexConfigSyncStatus> => ipcRenderer.invoke('codexConfigSync:status')
   },
+  codexBackfill: {
+    /** Go/no-go for launching codex into a fresh local pane (#11828 index gate). */
+    status: (): Promise<CodexBackfillGateStatus> => ipcRenderer.invoke('codexBackfill:status'),
+    onStatusChanged: (callback: (status: CodexBackfillGateStatus) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: CodexBackfillGateStatus): void =>
+        callback(status)
+      ipcRenderer.on('codexBackfill:statusChanged', listener)
+      return () => ipcRenderer.removeListener('codexBackfill:statusChanged', listener)
+    }
+  } satisfies PreloadApi['codexBackfill'],
   agentHooks: {
     claudeStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:claudeStatus'),

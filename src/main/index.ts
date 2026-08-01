@@ -197,6 +197,10 @@ import { setCodexTrustGrantTelemetry } from './codex/codex-trust-grant-telemetry
 import { startCodexSessionBackfillInBackground } from './codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from './codex/codex-session-index-heal'
 import { startCodexStateDbPrewarmInBackground } from './codex/codex-state-db-prewarm'
+import {
+  broadcastCodexBackfillStatusChanged,
+  getCodexBackfillGateStatus
+} from './ipc/codex-backfill-status'
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
 import { prepareLegacySharedCodexSessionResume } from './codex/codex-legacy-session-resume'
 import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
@@ -2098,6 +2102,14 @@ void app.whenReady().then(async () => {
           hooksEnabled: isAgentStatusHooksEnabled(store!.getSettings()),
           userDataPath: app.getPath('userData')
         })
+        // Why: waiting panes auto-start the moment the index completes instead of
+        // waiting out their slow re-poll interval.
+        if (codexRuntimeHome) {
+          broadcastCodexBackfillStatusChanged(
+            () => BrowserWindow.getAllWindows(),
+            getCodexBackfillGateStatus(codexRuntimeHome)
+          )
+        }
         return summaries
       })
   })
