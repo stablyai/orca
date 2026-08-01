@@ -65,6 +65,7 @@ import { getAgentForegroundContextPaths } from '../providers/agent-foreground-co
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import type { TuiAgent } from '../../shared/types'
+import { expandWindowsPathEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 
 const PANE_IDENTITY_ENV_KEYS = [
@@ -582,6 +583,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'
+  expandWindowsPathEnvironmentVariables(env)
 
   // Why: shellOverride must win over env.COMSPEC, or Windows always resolves to cmd.exe/PowerShell regardless of the user's pick.
   const resolvedWslContext = resolveWslSessionContext(opts)
