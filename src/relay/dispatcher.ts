@@ -388,6 +388,28 @@ export class RelayDispatcher {
     )
   }
 
+  // Why: notify() broadcasts the same frame to every client, so a chunked payload must fit the
+  // tightest attached capacity. Undefined means notify() would reach nobody.
+  broadcastProducerFrameCapacity(): number | undefined {
+    if (this.disposed) {
+      return undefined
+    }
+    const clients = this.activeClients()
+    if (clients.length === 0) {
+      return undefined
+    }
+    return Math.min(...clients.map((client) => client.writer.producerFrameCapacity))
+  }
+
+  // Why: callers sizing their own chunks must measure the same envelope admission measures.
+  notificationFrameBytes(method: string, params?: Record<string, unknown>): number {
+    return this.estimateFrameBytes({
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined ? { params } : {})
+    })
+  }
+
   feed(data: Buffer): void {
     this.feedForClient(this.primaryClient, data)
   }
