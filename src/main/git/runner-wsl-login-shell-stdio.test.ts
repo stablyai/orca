@@ -15,6 +15,7 @@ vi.mock('node:child_process', async () => {
 
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitSpawn, gitStreamStdout } from './runner'
 import { _resetOwnerRepoCache, getOwnerRepoForRemote } from '../github/github-repository-identity'
+import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 
 type FakeChild = ChildProcess & { stdin: { end: ReturnType<typeof vi.fn> } }
 
@@ -71,14 +72,51 @@ describe('WSL Git login-shell stdio isolation', () => {
   it('uses the exact wsl.exe argv and preserves production stdin', async () => {
     await withWindows(async () => {
       const child = fakeChild()
+      const expectedPayload = String.raw`exec 3<&0
+exec 4>&1
+exec 5>&2
+exec </dev/null >/dev/null 2>/dev/null
+_orca_wsl_shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)
+if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then
+  _orca_wsl_shell="${'$'}{SHELL:-/bin/bash}"
+fi
+if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then
+  _orca_wsl_shell=/bin/sh
+fi
+_orca_wsl_shell_name=$(basename "$_orca_wsl_shell" | tr "[:upper:]" "[:lower:]")
+case "$_orca_wsl_shell_name" in
+  sh|dash) exec "$_orca_wsl_shell" -lc 'exec 0<&3
+exec 1>&4
+exec 2>&5
+exec 3<&-
+exec 4>&-
+exec 5>&-
+cd '\''/mnt/c/repo'\'' && LANGUAGE=en LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 '\''git'\'' '\''remote'\'' '\''get-url'\'' '\''origin'\''' ;;
+  bash|zsh|ksh|mksh|ash) exec "$_orca_wsl_shell" -ilc 'exec 0<&3
+exec 1>&4
+exec 2>&5
+exec 3<&-
+exec 4>&-
+exec 5>&-
+cd '\''/mnt/c/repo'\'' && LANGUAGE=en LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 '\''git'\'' '\''remote'\'' '\''get-url'\'' '\''origin'\''' ;;
+  *) exec /bin/sh -lc 'exec 0<&3
+exec 1>&4
+exec 2>&5
+exec 3<&-
+exec 4>&-
+exec 5>&-
+cd '\''/mnt/c/repo'\'' && LANGUAGE=en LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 '\''git'\'' '\''remote'\'' '\''get-url'\'' '\''origin'\''' ;;
+esac`
       execFileMock.mockImplementation((binary, args, options, callback) => {
         expect(binary).toBe('wsl.exe')
-        expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c'])
-        expect(args).toHaveLength(6)
-        expect(args[5]).toContain('exec 3<&0')
-        expect(args[5]).toContain('exec 0<&3')
-        expect(args[5]).toContain('exec "\\$_orca_wsl_shell" -ilc')
-        expect(args[5]).toContain('/mnt/c/repo')
+        expect(args).toEqual([
+          '-d',
+          'Ubuntu',
+          '--',
+          'sh',
+          '-c',
+          expectedPayload.replaceAll('$', '\\$')
+        ])
         expect(options.cwd).toBeUndefined()
         queueMicrotask(() => callback(null, 'https://github.com/stablyai/orca.git\n', ''))
         return child
@@ -164,6 +202,25 @@ describe('WSL Git login-shell stdio isolation', () => {
       expect(() => gitSpawn(['status'], { cwd: String.raw`C:\repo`, wslDistro: 'Ubuntu' })).toThrow(
         launchError
       )
+
+      const childError = new Error('wsl child failed')
+      execFileMock.mockImplementation(() => {
+        queueMicrotask(() => child.emit('error', childError))
+        return child
+      })
+      await expect(
+        gitExecFileAsync(['status'], { cwd: String.raw`C:\repo`, wslDistro: 'Ubuntu' })
+      ).rejects.toBe(childError)
+
+      const spawnChildError = new Error('wsl spawn child failed')
+      spawnMock.mockImplementation(() => {
+        queueMicrotask(() => child.emit('error', spawnChildError))
+        return child
+      })
+      const spawned = gitSpawn(['status'], { cwd: String.raw`C:\repo`, wslDistro: 'Ubuntu' })
+      await expect(
+        new Promise<never>((_resolve, reject) => spawned.once('error', reject))
+      ).rejects.toBe(spawnChildError)
     })
   })
 
@@ -190,6 +247,44 @@ describe('WSL Git login-shell stdio isolation', () => {
         })
       ).rejects.toMatchObject({ message: 'git exited with 7: fatal\n', stderr: 'fatal\n' })
       expect(chunks).toEqual(['porcelain\0'])
+
+      const errorChild = fakeChild()
+      spawnMock.mockReturnValue(errorChild)
+      const streamPromise = gitStreamStdout(['status'], {
+        cwd: String.raw`C:\repo`,
+        wslDistro: 'Ubuntu',
+        onStdout: () => {}
+      })
+      const streamError = new Error('stream launch failed')
+      errorChild.emit('error', streamError)
+      await expect(streamPromise).rejects.toBe(streamError)
+    })
+  })
+
+  it('preserves missing cwd and missing Git errors without inventing diagnostics', async () => {
+    await withWindows(async () => {
+      const child = fakeChild()
+      const missingCwd = Object.assign(new Error('cd: /mnt/c/missing: No such file or directory'), {
+        code: 1
+      })
+      execFileMock.mockImplementation((_binary, args, _options, callback) => {
+        expect(args[5]).not.toContain('orca: git executable')
+        callback(missingCwd, '', 'cd: /mnt/c/missing: No such file or directory\n')
+        return child
+      })
+      await expect(
+        gitExecFileAsync(['status'], { cwd: String.raw`C:\missing`, wslDistro: 'Ubuntu' })
+      ).rejects.toBe(missingCwd)
+
+      const missingGit = Object.assign(new Error('git: command not found'), { code: 127 })
+      execFileMock.mockImplementation((_binary, args, _options, callback) => {
+        expect(args[5]).not.toContain('orca: git executable')
+        callback(missingGit, '', 'git: command not found\n')
+        return child
+      })
+      await expect(gitExecFileAsync(['status'], { wslDistro: 'Ubuntu' } as never)).rejects.toBe(
+        missingGit
+      )
     })
   })
 
@@ -214,6 +309,21 @@ describe('WSL Git login-shell stdio isolation', () => {
         cwd: String.raw`C:\repo`,
         wslDistro: 'Ubuntu'
       })
+
+      const providerExec = vi.fn().mockResolvedValue({
+        stdout: 'git@github.com:stablyai/orca.git\n',
+        stderr: ''
+      })
+      registerSshGitProvider('t10917-ssh', { exec: providerExec } as never)
+      try {
+        await expect(
+          getOwnerRepoForRemote('/remote/repo', 'origin', 't10917-ssh')
+        ).resolves.toEqual({ owner: 'stablyai', repo: 'orca' })
+        expect(providerExec).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/remote/repo')
+        expect(execFileMock).toHaveBeenCalledTimes(1)
+      } finally {
+        unregisterSshGitProvider('t10917-ssh')
+      }
     })
   })
 })

@@ -94,6 +94,48 @@ describe('wsl login shell command helpers', () => {
     expectValidShSyntax(command)
   })
 
+  it('isolates startup output and restores caller stdin in a headless POSIX shell', () => {
+    const root = `/tmp/orca-10917-stdio-${process.pid}`
+    const command = buildWslLoginShellCommand(
+      "input=$(cat); printf 'payload:%s' \"$input\"; printf 'payload-error' >&2; exit 7",
+      { isolateStartupStdio: true }
+    )
+    const script = [
+      `rm -rf ${quotePosixShell(root)}`,
+      `mkdir -p ${quotePosixShell(root)}`,
+      `printf '%s\\n' '#!/bin/sh' 'exit 0' > ${quotePosixShell(`${root}/getent`)}`,
+      `printf '%s\\n' '#!/bin/sh' 'printf startup-output' 'printf startup-error >&2' 'exec /bin/sh -c "$2"' > ${quotePosixShell(`${root}/login`)}`,
+      `chmod 755 ${quotePosixShell(`${root}/getent`)} ${quotePosixShell(`${root}/login`)}`,
+      `PATH=${quotePosixShell(root)}:"$PATH" SHELL=${quotePosixShell(`${root}/login`)} sh -c ${quotePosixShell(command)}`,
+      'status=$?',
+      `rm -rf ${quotePosixShell(root)}`,
+      'exit $status'
+    ].join('\n')
+
+    try {
+      execFileSync('sh', ['-c', script], {
+        input: 'caller-input',
+        timeout: WSL_TEST_COMMAND_TIMEOUT_MS
+      })
+      throw new Error('expected the payload to exit with status 7')
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return
+      }
+      const result = error as Error & { status?: number; stdout?: Buffer; stderr?: Buffer }
+      if (result.status === undefined) {
+        throw new Error(
+          `POSIX shell integration failed: ${result.message}; stdout=${result.stdout?.toString()}; stderr=${result.stderr?.toString()}`
+        )
+      }
+      expect(result.status).toBe(7)
+      expect(result.stdout?.toString()).toBe('payload:caller-input')
+      expect(result.stderr?.toString()).toBe('payload-error')
+      expect(result.stdout?.toString()).not.toContain('startup-output')
+      expect(result.stderr?.toString()).not.toContain('startup-error')
+    }
+  })
+
   it.skipIf(process.platform === 'win32')(
     'resolves env-node launchers from the current login-shell PATH on every run',
     () => {
