@@ -28411,9 +28411,6 @@ export class OrcaRuntimeService {
       const retainedAgentStatus = tab.agentStatus
         ? null
         : this.getFreshRetainedAgentStatusForMobileTab(paneKey, liveLeafPty ?? mobileStatusPty, tab)
-      const hookAgentStatus = tab.agentStatus
-        ? this.getHookAgentRowForPane(getHookRowsForPane(paneKey))
-        : null
       const leafTitle = leaf
         ? getLatestAgentCandidateTitle(
             { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
@@ -28431,11 +28428,7 @@ export class OrcaRuntimeService {
       const ownerAgent =
         resolvePaneAgentOwner({
           launchAgent,
-          hookAgent:
-            tab.agentStatus?.agentType ??
-            hookAgentStatus?.agentType ??
-            retainedAgentStatus?.payload.agentType ??
-            null
+          hookAgent: tab.agentStatus?.agentType ?? retainedAgentStatus?.payload.agentType ?? null
         }) ??
         liveLeafPty?.foregroundAgent ??
         pty?.foregroundAgent ??
@@ -28446,39 +28439,21 @@ export class OrcaRuntimeService {
       )
       const liveTitleEvidence = leafTitle ?? ptyTitle
       const liveTitleEvidenceClassification = classifyAgentTitle(liveTitleEvidence)
-      // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
-      const rendererStatusAgent =
-        resolveCompatibleAgentTypeForOwner(tab.agentStatus?.agentType, ownerAgent) ??
-        ownerAgent ??
-        undefined
-      const hookSessionAgent = resolveCompatibleAgentTypeForOwner(
-        hookAgentStatus?.providerSessionAgentType,
-        ownerAgent
-      )
-      const hookSessionMatchesRenderer =
-        !rendererStatusAgent || !hookSessionAgent || rendererStatusAgent === hookSessionAgent
-      const hookProviderSession =
-        hookAgentStatus?.providerSession &&
-        hookSessionMatchesRenderer &&
-        (!tab.agentStatus?.providerSession ||
-          (hookAgentStatus.providerSessionReceivedAt ?? -1) >= tab.agentStatus.updatedAt)
-          ? hookAgentStatus.providerSession
-          : tab.agentStatus?.providerSession
-      const hookConfigDirIsNewer =
-        hookAgentStatus !== null &&
-        hookAgentStatus.agentType === 'claude' &&
-        (!rendererStatusAgent || rendererStatusAgent === 'claude') &&
-        (hookAgentStatus.configDirReceivedAt ?? -1) >= (tab.agentStatus?.updatedAt ?? 0)
       const normalizedTabAgentStatus = tab.agentStatus
-        ? normalizeCompatibleAgentStatusEntryForOwner(
-            {
-              ...tab.agentStatus,
-              ...(hookProviderSession ? { providerSession: hookProviderSession } : {}),
-              ...(hookConfigDirIsNewer ? { configDir: hookAgentStatus.configDir ?? undefined } : {})
-            },
-            ownerAgent
-          )
+        ? normalizeCompatibleAgentStatusEntryForOwner(tab.agentStatus, ownerAgent)
         : null
+      const hookConfigDirRow = normalizedTabAgentStatus
+        ? this.getClaudeHookConfigDirRowForPane(getHookRowsForPane(paneKey))
+        : null
+      if (
+        normalizedTabAgentStatus &&
+        hookConfigDirRow &&
+        (normalizedTabAgentStatus.agentType === undefined ||
+          normalizedTabAgentStatus.agentType === 'claude') &&
+        hookConfigDirRow.receivedAt >= normalizedTabAgentStatus.updatedAt
+      ) {
+        normalizedTabAgentStatus.configDir = hookConfigDirRow.configDir
+      }
       // Why: keep rich hook status on a live prompt/tool (authoritative even under a non-agent title), else interactivePrompt is lost.
       const hasLiveAgentSignal =
         normalizedTabAgentStatus?.interactivePrompt != null ||
@@ -28603,7 +28578,9 @@ export class OrcaRuntimeService {
     // provider session — only the hook payload does, and headless serve has no
     // renderer to publish `tab.agentStatus`. Without it mobile native chat has no
     // transcript to address and sits on the empty state forever.
-    const hookRow = this.getHookAgentRowForPane(getHookRowsForPane(paneKey))
+    const hookRows = getHookRowsForPane(paneKey)
+    const hookRow = this.getHookAgentRowForPane(hookRows)
+    const hookConfigDirRow = this.getClaudeHookConfigDirRowForPane(hookRows)
     // Why: the hook row is evidence in its own right. Returning early on a missing
     // PTY status/retained row put this check ahead of the only headless carrier, so
     // an agent that reported its session but never emitted a recognized title got no
@@ -28614,8 +28591,7 @@ export class OrcaRuntimeService {
     const providerSession = hookRow.providerSession
       ? { providerSession: hookRow.providerSession }
       : {}
-    const hookConfigDir =
-      hookRow.agentType === 'claude' ? { configDir: hookRow.configDir ?? undefined } : {}
+    const hookConfigDir = hookConfigDirRow ? { configDir: hookConfigDirRow.configDir } : {}
     const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
     const ptyTitle = pty
       ? getLatestAgentCandidateTitle(
@@ -28720,11 +28696,7 @@ export class OrcaRuntimeService {
    *  read would keep offering native chat for what is now a plain shell. */
   private getHookAgentRowForPane(rows: readonly AgentStatusIpcPayload[]): {
     providerSession: AgentProviderSessionMetadata | null
-    providerSessionAgentType: string | null
-    providerSessionReceivedAt: number | null
     agentType: string | null
-    configDir: string | null
-    configDirReceivedAt: number | null
   } {
     let session: AgentStatusIpcPayload | null = null
     let agent: AgentStatusIpcPayload | null = null
@@ -28749,12 +28721,28 @@ export class OrcaRuntimeService {
     }
     return {
       providerSession: session?.providerSession ?? null,
-      providerSessionAgentType: session?.agentType ?? null,
-      providerSessionReceivedAt: session?.receivedAt ?? null,
-      agentType: agent?.agentType ?? null,
-      configDir: agent?.configDir ?? null,
-      configDirReceivedAt: agent?.receivedAt ?? null
+      agentType: agent?.agentType ?? null
     }
+  }
+
+  private getClaudeHookConfigDirRowForPane(
+    rows: readonly AgentStatusIpcPayload[]
+  ): { configDir: string | undefined; receivedAt: number } | null {
+    let agent: AgentStatusIpcPayload | null = null
+    const freshAfter = Date.now() - AGENT_STATUS_STALE_AFTER_MS
+    for (const entry of rows) {
+      if (
+        entry.agentType &&
+        entry.providerSessionOnly !== true &&
+        entry.receivedAt >= freshAfter &&
+        (!agent || entry.receivedAt > agent.receivedAt)
+      ) {
+        agent = entry
+      }
+    }
+    return agent?.agentType === 'claude'
+      ? { configDir: agent.configDir ?? undefined, receivedAt: agent.receivedAt }
+      : null
   }
 
   /** Retained OSC 9999 hook row for this mobile tab if still fresh; looked up by pane identity, then PTY ownership (legacy `pane:N` ids can drift). */
