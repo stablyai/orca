@@ -445,7 +445,7 @@ describe('AgentHookServer listener replay', () => {
           tabId: 'tab-1',
           worktreeId: 'wt-1',
           isReplay: true,
-          claudeRunningShellOrMonitor: true,
+          claudeRunningNonAgentTask: true,
           payload: { state: 'working', prompt: 'stale replay', agentType: 'claude' }
         },
         'conn-1'

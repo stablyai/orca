@@ -65,7 +65,7 @@ describe('RelayAgentHookServer', () => {
       expect(envelope.connectionId).toBeNull()
       expect(envelope.payload.state).toBe('working')
       expect(envelope.payload.prompt).toBe('hi')
-      expect(envelope.claudeRunningShellOrMonitor).toBe(false)
+      expect(envelope.claudeRunningNonAgentTask).toBe(false)
       // Why: the relay forwards body env/version so Orca's warn-once
       // protocol diagnostics and remote-location marker survive the wire.
       expect(envelope.env).toBe('remote')
@@ -97,7 +97,7 @@ describe('RelayAgentHookServer', () => {
       })
 
       expect(forward.mock.calls[0][0]).toMatchObject({
-        claudeRunningShellOrMonitor: true,
+        claudeRunningNonAgentTask: true,
         payload: { state: 'working', agentType: 'claude' }
       })
     } finally {

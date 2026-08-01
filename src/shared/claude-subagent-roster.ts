@@ -177,30 +177,32 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   present: boolean
   tasks: ClaudeBackgroundAgentTask[]
   truncated: boolean
-  hasRunningShellOrMonitor: boolean
+  hasRunningNonAgentTask: boolean
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
-    return { present: false, tasks: [], truncated: false, hasRunningShellOrMonitor: false }
+    return { present: false, tasks: [], truncated: false, hasRunningNonAgentTask: false }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
   let truncated = false
-  let hasRunningShellOrMonitor = false
+  let hasRunningNonAgentTask = false
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       continue
     }
     const obj = item as Record<string, unknown>
-    // Why: future nonterminal labels must fail active; only explicit terminal states can safely retire work.
+    const taskType = typeof obj.type === 'string' ? obj.type.trim().toLowerCase() : ''
+    const taskStatus = typeof obj.status === 'string' ? obj.status.trim().toLowerCase() : ''
+    // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows or explicit terminal states can safely retire work.
     if (
-      (obj.type === 'shell' || obj.type === 'monitor') &&
-      (typeof obj.status !== 'string' ||
-        obj.status.length === 0 ||
-        !CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(obj.status))
+      taskType.length > 0 &&
+      taskType !== 'subagent' &&
+      taskType !== 'teammate' &&
+      (taskStatus.length === 0 || !CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(taskStatus))
     ) {
-      hasRunningShellOrMonitor = true
+      hasRunningNonAgentTask = true
     }
-    if (obj.type !== 'subagent' && obj.type !== 'teammate') {
+    if (taskType !== 'subagent' && taskType !== 'teammate') {
       continue
     }
     if (typeof obj.id !== 'string' || obj.id.trim().length === 0) {
@@ -216,11 +218,11 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       id: obj.id,
       agentType: typeof obj.agent_type === 'string' ? obj.agent_type : undefined,
       description: typeof obj.description === 'string' ? obj.description : undefined,
-      running: obj.status === 'running',
-      teammate: obj.type === 'teammate'
+      running: taskStatus === 'running',
+      teammate: taskType === 'teammate'
     })
   }
-  return { present: true, tasks, truncated, hasRunningShellOrMonitor }
+  return { present: true, tasks, truncated, hasRunningNonAgentTask }
 }
 
 /** Fold a lead Stop's `background_tasks` into the lifecycle-tracked roster.

@@ -117,8 +117,8 @@ export type HookListenerState = {
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
   /** Last state from the LEAD session's own events (subagent events carry agent_id, excluded), so a SubagentStop can re-emit pane status; `interrupted` persists so the eventual done still carries it. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
-  /** Panes whose latest complete Claude task inventory still has a running shell or monitor. */
-  claudeRunningShellOrMonitorPaneKeys: Set<string>
+  /** Panes whose latest complete Claude task inventory still has running non-agent work. */
+  claudeRunningNonAgentTaskPaneKeys: Set<string>
   /** Live thread-spawn children per Codex pane. */
   codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
   /** Incremental parent/child rollout cursors for Codex collaboration v2. */
@@ -152,7 +152,7 @@ export function createHookListenerState(): HookListenerState {
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
-    claudeRunningShellOrMonitorPaneKeys: new Set(),
+    claudeRunningNonAgentTaskPaneKeys: new Set(),
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map()
@@ -167,7 +167,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
-  state.claudeRunningShellOrMonitorPaneKeys.delete(paneKey)
+  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
   state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
@@ -212,7 +212,7 @@ export function movePaneCacheState(
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedSetEntries(state.claudeRunningShellOrMonitorPaneKeys, fromPaneKey, toPaneKey)
+  movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
@@ -255,7 +255,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.warnedEnvs.clear()
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
-  state.claudeRunningShellOrMonitorPaneKeys.clear()
+  state.claudeRunningNonAgentTaskPaneKeys.clear()
   state.codexSubagentRosterByPaneKey.clear()
   state.codexSubagentTranscriptByPaneKey.clear()
   state.codexLeadStateByPaneKey.clear()
@@ -318,7 +318,7 @@ export type AgentHookEventPayload = {
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
   /** Transport-only Claude background-work evidence used to reject false input-based interrupts. */
-  claudeRunningShellOrMonitor?: boolean
+  claudeRunningNonAgentTask?: boolean
   payload: ParsedAgentStatusPayload
 }
 
@@ -2428,17 +2428,16 @@ function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
-function updateClaudeRunningShellOrMonitor(
+function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
   paneKey: string,
-  hasRunningShellOrMonitor: boolean,
-  interrupted: boolean,
-  inventoryCanClear: boolean
+  hasRunningNonAgentTask: boolean,
+  interrupted: boolean
 ): void {
-  if (hasRunningShellOrMonitor && !interrupted) {
-    state.claudeRunningShellOrMonitorPaneKeys.add(paneKey)
-  } else if (interrupted || inventoryCanClear) {
-    state.claudeRunningShellOrMonitorPaneKeys.delete(paneKey)
+  if (hasRunningNonAgentTask && !interrupted) {
+    state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+  } else {
+    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
 }
 
@@ -2452,7 +2451,7 @@ function resolveClaudePaneState(
   }
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   return claudeRosterHasWorkingSubagent(roster) ||
-    (!lead.interrupted && state.claudeRunningShellOrMonitorPaneKeys.has(paneKey))
+    (!lead.interrupted && state.claudeRunningNonAgentTaskPaneKeys.has(paneKey))
     ? 'working'
     : 'done'
 }
@@ -2499,7 +2498,7 @@ function normalizeClaudeSubagentLifecycleEvent(
 /** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
 export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
   state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
-  state.claudeRunningShellOrMonitorPaneKeys.delete(paneKey)
+  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
 }
 
 /** Rebuild a pane's working roster from a persisted snapshot; live activity confirms a seed, a complete task inventory may reap an unconfirmed one whose finish hook arrived while Orca was offline. */
@@ -2626,13 +2625,12 @@ function normalizeClaudeEvent(
       ? true
       : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
-  if (backgroundTasks.present) {
-    updateClaudeRunningShellOrMonitor(
+  if (backgroundTasks.present && eventAgentId === undefined) {
+    updateClaudeRunningNonAgentTask(
       state,
       paneKey,
-      backgroundTasks.hasRunningShellOrMonitor,
-      interrupted === true,
-      eventAgentId === undefined
+      backgroundTasks.hasRunningNonAgentTask,
+      interrupted === true
     )
   }
 
@@ -2742,7 +2740,7 @@ function normalizeClaudeEvent(
   })
 
   if (interrupted) {
-    state.claudeRunningShellOrMonitorPaneKeys.delete(paneKey)
+    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
 
   // Why: preserve upstream cron gating while the pane cache carries task evidence across child lifecycle events.
@@ -4143,7 +4141,7 @@ export function normalizeHookPayload(
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
         ...(source === 'claude'
           ? {
-              claudeRunningShellOrMonitor: state.claudeRunningShellOrMonitorPaneKeys.has(paneKey)
+              claudeRunningNonAgentTask: state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
             }
           : {}),
         ...(providerSession ? { providerSession } : {}),

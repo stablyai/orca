@@ -37,7 +37,7 @@ describe('Claude background task status', () => {
       background_tasks: [...agentTasks, { id: 'monitor-1', type: 'monitor', status: 'pending' }]
     })
 
-    expect(result).toMatchObject({ truncated: true, hasRunningShellOrMonitor: true })
+    expect(result).toMatchObject({ truncated: true, hasRunningNonAgentTask: true })
     expect(result.tasks).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
 
     const state = createHookListenerState()
@@ -54,20 +54,26 @@ describe('Claude background task status', () => {
       expect(
         readClaudeBackgroundAgentTasks({
           background_tasks: [{ id: 'shell-1', type: 'shell', status }]
-        }).hasRunningShellOrMonitor
+        }).hasRunningNonAgentTask
       ).toBe(true)
     }
+    expect(
+      readClaudeBackgroundAgentTasks({
+        background_tasks: [{ id: 'task-1', type: 'background_shell', status: 'starting' }]
+      }).hasRunningNonAgentTask
+    ).toBe(true)
 
     for (const backgroundTasks of [
       [{ id: 'shell-1', type: 'shell', status: 'completed' }],
+      [{ id: 'shell-1', type: 'shell', status: ' Completed ' }],
       [{ id: 'shell-1', type: 'shell', status: 'canceled' }],
       [{ id: 'shell-1', type: 'shell', status: 'timed_out' }],
+      [{ id: 'agent-1', type: ' Subagent ', status: 'running' }],
       [null, 'shell'],
       { id: 'shell-1', type: 'shell', status: 'running' }
     ]) {
       expect(
-        readClaudeBackgroundAgentTasks({ background_tasks: backgroundTasks })
-          .hasRunningShellOrMonitor
+        readClaudeBackgroundAgentTasks({ background_tasks: backgroundTasks }).hasRunningNonAgentTask
       ).toBe(false)
     }
   })
@@ -167,7 +173,7 @@ describe('Claude background task status', () => {
         background_tasks: [RUNNING_SHELL]
       })
     ).toMatchObject({ state: 'done', interrupted: true })
-    expect(state.claudeRunningShellOrMonitorPaneKeys.has(SOURCE_PANE)).toBe(false)
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
   it('resumes on task notifications and user slash commands after interruption', () => {
@@ -201,23 +207,28 @@ describe('Claude background task status', () => {
     ).toBe('working')
   })
 
-  it('does not let a child-attributed inventory clear lead-owned background work', () => {
+  it('ignores child-attributed inventories for lead-owned background work', () => {
     const state = createHookListenerState()
     claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'SubagentStart',
-      agent_id: 'child-1'
+      hook_event_name: 'SubagentStop',
+      agent_id: 'child-1',
+      background_tasks: [RUNNING_SHELL]
     })
-    claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'Stop',
-      background_tasks: [RUNNING_SHELL, { id: 'child-1', type: 'subagent', status: 'running' }]
-    })
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
 
     claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
+      background_tasks: [RUNNING_SHELL]
+    })
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'SubagentStop',
       agent_id: 'child-1',
       background_tasks: []
     })
-    expect(state.claudeRunningShellOrMonitorPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [] })
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
   it('keeps background gating through an empty child SubagentStop inventory', () => {
@@ -263,14 +274,14 @@ describe('Claude background task status', () => {
 
     expect(claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop' })?.state).toBe('working')
     clearPaneCacheState(state, SOURCE_PANE)
-    expect(state.claudeRunningShellOrMonitorPaneKeys.size).toBe(0)
+    expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
 
     claudeEvent(state, TARGET_PANE, {
       hook_event_name: 'Stop',
       background_tasks: [RUNNING_SHELL]
     })
     clearAllListenerCaches(state)
-    expect(state.claudeRunningShellOrMonitorPaneKeys.size).toBe(0)
+    expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
   })
 
   it('clears background gating when the server infers an interruption', () => {
@@ -281,6 +292,6 @@ describe('Claude background task status', () => {
     })
 
     markClaudeLeadTurnInterrupted(state, SOURCE_PANE)
-    expect(state.claudeRunningShellOrMonitorPaneKeys.has(SOURCE_PANE)).toBe(false)
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 })
