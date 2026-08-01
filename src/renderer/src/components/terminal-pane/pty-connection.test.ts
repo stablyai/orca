@@ -17,6 +17,7 @@ import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
+import { CODEX_BACKFILL_INDEXING_NOTICE } from './codex-backfill-error-detector'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
@@ -2304,6 +2305,54 @@ describe('connectPanePty', () => {
         number: 42
       })
     )
+  })
+
+  const CODEX_BACKFILL_FAILURE_OUTPUT =
+    "Codex couldn't start because its local database appears to be damaged.\r\n" +
+    'timed out waiting for state db backfill at /x/state_5.sqlite after 30s (status: running)\r\n'
+
+  it('surfaces the codex indexing notice when a codex pane hits the backfill timeout', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-1'
+    })
+    transportFactoryQueue.push(transport)
+    const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(capturedDataCallback.current).toBeTypeOf('function')
+    const onData = capturedDataCallback.current!
+    const onPtyError = deps.onPtyErrorRef.current
+    onData(CODEX_BACKFILL_FAILURE_OUTPUT.slice(0, 40))
+    onData(CODEX_BACKFILL_FAILURE_OUTPUT.slice(40))
+    expect(onPtyError).toHaveBeenCalledWith(expect.anything(), CODEX_BACKFILL_INDEXING_NOTICE)
+    expect(onPtyError).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not surface the notice for non-codex panes', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-1'
+    })
+    transportFactoryQueue.push(transport)
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(capturedDataCallback.current).toBeTypeOf('function')
+    const onData = capturedDataCallback.current!
+    const onPtyError = deps.onPtyErrorRef.current
+    onData(CODEX_BACKFILL_FAILURE_OUTPUT)
+    expect(onPtyError).not.toHaveBeenCalled()
   })
 
   it('drops keystrokes while the replay guard is engaged, then forwards once it releases', async () => {

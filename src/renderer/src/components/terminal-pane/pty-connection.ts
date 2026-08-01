@@ -48,6 +48,7 @@ import {
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
+import { createCodexBackfillErrorDetector } from './codex-backfill-error-detector'
 import {
   shouldReconcileDeadSession,
   shouldReconcileMissingSession,
@@ -3547,6 +3548,7 @@ export function connectPanePty(
         onWorking: seedCommandCodeOutputWorkingStatus,
         onDone: scheduleCommandCodeOutputDoneStatus
       })
+  const codexBackfillErrorDetector = createCodexBackfillErrorDetector()
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
@@ -7306,6 +7308,16 @@ export function connectPanePty(
         commandLifecycle.handlePtyData(data)
       }
       commandCodeOutputStatusDetector?.observe(data)
+      // Why: #11828 — codex exits with a misleading "damaged database" error while its
+      // one-time session index runs; translate it to what is actually happening.
+      // Covers visible, Orca-launched codex panes (launchAgent is set pre-spawn);
+      // hidden/flood-restored/manually-typed codex output never reaches this path (AD-4).
+      if (resolveExpectedLaunchTuiAgent() === 'codex') {
+        const codexBackfillNotice = codexBackfillErrorDetector.observe(data)
+        if (codexBackfillNotice) {
+          reportError(codexBackfillNotice)
+        }
+      }
       // Why: split panes have visible-but-inactive panes the user watches; throttle only when the pane or whole document is hidden.
       const foreground =
         shouldWritePtyOutputForeground(deps.isVisibleRef.current) && meta?.background !== true
