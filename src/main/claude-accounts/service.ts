@@ -593,8 +593,10 @@ export class ClaudeAccountService {
           onUrl: async (url) => {
             try {
               await openWslLoginAuthorizationUrl(url)
-            } catch (error) {
-              openerError = error instanceof Error ? error : new Error(String(error))
+            } catch {
+              openerError = new Error(
+                'Claude sign-in could not open the authorization page. Sign-in was stopped.'
+              )
               loginAbortController.abort()
             }
           },
@@ -1087,7 +1089,7 @@ export class ClaudeAccountService {
                 '--',
                 'bash',
                 '-lc',
-                `${buildWslLoginPathExport(configDir.linuxPath)}export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
+                `${options?.keepStdinOpen ? buildWslLoginPathExport(configDir.linuxPath) : ''}export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
               ],
               env: process.env,
               shell: false,

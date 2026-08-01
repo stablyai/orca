@@ -36,7 +36,7 @@ describe('WSL Claude login browser opener', () => {
     ).toBe('/tmp/new')
     expect(parseWslLoginConfigDirOutput('ORCA_CLAUDE_LOGIN_DIR=relative')).toBeNull()
     expect(buildWslLoginPathExport('/tmp/with space')).toBe(
-      `export PATH="$PATH:'/tmp/with space/orca-opener'"; `
+      `export PATH="$PATH":'/tmp/with space/orca-opener'; `
     )
   })
 
@@ -45,15 +45,48 @@ describe('WSL Claude login browser opener', () => {
     'file:///tmp/x',
     'javascript:alert(1)',
     'not a url',
-    'https://example.com/a\nhttps://evil.example/'
+    'https://example.com/a\nhttps://evil.example/',
+    'https://platform.claude.com.evil.example/callback',
+    'https://platform.claude.com:443/callback',
+    'https://user:pass@platform.claude.com/callback',
+    'https://platform.claude.com/callback#state=b',
+    'https://localhost/callback',
+    'https://evil.example/callback'
   ])('rejects unsafe handoff %s', (value) => {
     expect(parseWslLoginOpenerHandoff(value)).toBeNull()
   })
 
   it('preserves a valid HTTPS authorization URL', () => {
     expect(
-      parseWslLoginOpenerHandoff(' https://platform.claude.com/oauth/code/callback?code=a#state=b ')
-    ).toBe('https://platform.claude.com/oauth/code/callback?code=a#state=b')
+      parseWslLoginOpenerHandoff(' https://platform.claude.com/oauth/code/callback?code=a%2Fb ')
+    ).toBe('https://platform.claude.com/oauth/code/callback?code=a%2Fb')
+    expect(parseWslLoginOpenerHandoff('https://claude.com/callback?x=1')).toBe(
+      'https://claude.com/callback?x=1'
+    )
+    expect(parseWslLoginOpenerHandoff('https://console.anthropic.com/callback')).toBe(
+      'https://console.anthropic.com/callback'
+    )
+    expect(parseWslLoginOpenerHandoff('https://anthropic.com/callback')).toBe(
+      'https://anthropic.com/callback'
+    )
+  })
+
+  it('bounds the handoff read before validation', () => {
+    vi.useFakeTimers()
+    const root = mkdtempSync(join(tmpdir(), 'orca-wsl-opener-limit-'))
+    mkdirSync(join(root, 'orca-opener'))
+    const onUrl = vi.fn()
+    const onInvalid = vi.fn()
+    const watcher = createWslLoginOpenerHandoff({ windowsConfigDir: root, onUrl, onInvalid })
+    writeFileSync(
+      join(root, 'open-url.request'),
+      `https://platform.claude.com/callback?value=${'a'.repeat(9000)}`
+    )
+    vi.advanceTimersByTime(200)
+    expect(onUrl).not.toHaveBeenCalled()
+    expect(onInvalid).toHaveBeenCalledTimes(1)
+    watcher.stop()
+    rmSync(root, { recursive: true, force: true })
   })
 
   it('deletes the handoff before validation and accepts only the first write', () => {

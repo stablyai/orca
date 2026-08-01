@@ -1,13 +1,19 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readSync, renameSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { shell } from 'electron'
-import { normalizeExternalBrowserUrl } from '../../shared/browser-url'
 import { quoteBashString } from '../wsl-bash-command'
 
 export const WSL_LOGIN_OPENER_DIR = 'orca-opener'
 export const WSL_LOGIN_OPENER_HANDOFF = 'open-url.request'
 export const WSL_LOGIN_OPENER_POLL_MS = 200
 export const WSL_LOGIN_OPENER_MAX_URL_CHARS = 2048
+const WSL_LOGIN_OPENER_MAX_URL_BYTES = WSL_LOGIN_OPENER_MAX_URL_CHARS * 4
+const WSL_LOGIN_AUTHORIZATION_HOSTS = new Set([
+  'claude.com',
+  'platform.claude.com',
+  'console.anthropic.com',
+  'anthropic.com'
+])
 
 export function buildWslLoginOpenerShellScript(): string {
   return `#!/bin/sh
@@ -38,7 +44,7 @@ printf 'ORCA_CLAUDE_LOGIN_DIR=%s\\n' "$dir"
 }
 
 export function buildWslLoginPathExport(linuxTempDir: string): string {
-  return `export PATH="$PATH:${quoteBashString(`${linuxTempDir}/${WSL_LOGIN_OPENER_DIR}`)}"; `
+  return `export PATH="$PATH":${quoteBashString(`${linuxTempDir}/${WSL_LOGIN_OPENER_DIR}`)}; `
 }
 
 export function parseWslLoginConfigDirOutput(raw: string): string | null {
@@ -62,18 +68,39 @@ export function parseWslLoginOpenerHandoff(raw: string): string | null {
   if (
     trimmed.length === 0 ||
     trimmed.length > WSL_LOGIN_OPENER_MAX_URL_CHARS ||
+    Buffer.byteLength(trimmed, 'utf8') > WSL_LOGIN_OPENER_MAX_URL_BYTES ||
     hasControlCharacter
   ) {
     return null
   }
-  const normalized = normalizeExternalBrowserUrl(trimmed)
-  if (!normalized) {
-    return null
-  }
   try {
-    return new URL(normalized).protocol === 'https:' ? normalized : null
+    const parsed = new URL(trimmed)
+    const authority = trimmed.slice('https://'.length).split(/[/?#]/, 1)[0]
+    if (
+      parsed.protocol !== 'https:' ||
+      !WSL_LOGIN_AUTHORIZATION_HOSTS.has(parsed.hostname.toLowerCase()) ||
+      parsed.username !== '' ||
+      parsed.password !== '' ||
+      parsed.port !== '' ||
+      authority.toLowerCase() !== parsed.hostname.toLowerCase() ||
+      parsed.hash !== ''
+    ) {
+      return null
+    }
+    return trimmed
   } catch {
     return null
+  }
+}
+
+function readWslLoginOpenerHandoff(path: string): string {
+  const fd = openSync(path, 'r')
+  const buffer = Buffer.allocUnsafe(WSL_LOGIN_OPENER_MAX_URL_BYTES + 1)
+  try {
+    const bytesRead = readSync(fd, buffer, 0, buffer.length, 0)
+    return buffer.subarray(0, bytesRead).toString('utf8')
+  } finally {
+    closeSync(fd)
   }
 }
 
@@ -89,18 +116,21 @@ export function createWslLoginOpenerHandoff(args: {
     if (stopped || !existsSync(handoffPath)) {
       return
     }
-    let raw: string
+    const claimedPath = `${handoffPath}.consumed`
     try {
-      raw = readFileSync(handoffPath, 'utf8')
+      renameSync(handoffPath, claimedPath)
     } catch {
       return
     }
     stopped = true
     clearInterval(timer)
+    let raw: string
     try {
-      rmSync(handoffPath, { force: true })
+      raw = readWslLoginOpenerHandoff(claimedPath)
     } catch {
-      // Temporary-directory cleanup remains authoritative.
+      raw = ''
+    } finally {
+      rmSync(claimedPath, { force: true })
     }
     const url = parseWslLoginOpenerHandoff(raw)
     if (url) {
