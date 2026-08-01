@@ -388,6 +388,26 @@ export class RelayDispatcher {
     )
   }
 
+  // notify() broadcasts one frame, so chunks must fit the smallest attached capacity.
+  broadcastProducerFrameCapacity(): number | undefined {
+    if (this.disposed) {
+      return undefined
+    }
+    const clients = this.activeClients()
+    if (clients.length === 0) {
+      return undefined
+    }
+    return Math.min(...clients.map((client) => client.writer.producerFrameCapacity))
+  }
+
+  notificationFrameBytes(method: string, params?: Record<string, unknown>): number {
+    return this.estimateFrameBytes({
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined ? { params } : {})
+    })
+  }
+
   feed(data: Buffer): void {
     this.feedForClient(this.primaryClient, data)
   }

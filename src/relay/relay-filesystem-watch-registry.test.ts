@@ -64,6 +64,8 @@ function createDispatcher() {
   return {
     notify: vi.fn(),
     notifyClient: vi.fn(),
+    broadcastProducerFrameCapacity: vi.fn(() => Number.MAX_SAFE_INTEGER),
+    notificationFrameBytes: vi.fn(() => 64),
     onClientDetached: vi.fn((listener: (clientId: number) => void) => {
       detached.add(listener)
       return () => detached.delete(listener)
