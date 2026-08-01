@@ -51,6 +51,17 @@ export async function renameDurable(tmpPath: string, finalPath: string): Promise
   await syncDirectory(dirname(finalPath))
 }
 
+/**
+ * Synchronous counterpart to renameDurable. For callers that already fsynced the temp file
+ * asynchronously but must publish it without an await — a generation guard followed by an awaited
+ * rename is not atomic, so a competing synchronous write can publish fresher state in between and
+ * then be clobbered by the stale rename.
+ */
+export function renameDurableSync(tmpPath: string, finalPath: string): void {
+  renameSync(tmpPath, finalPath)
+  syncDirectorySync(dirname(finalPath))
+}
+
 /** Write `payload` to `tmpPath`, fsync it, then rename onto `finalPath` and fsync the directory. */
 export async function writeFileDurable(
   tmpPath: string,

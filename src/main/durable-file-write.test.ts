@@ -2,7 +2,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { writeFileDurable, writeFileDurableSync } from './durable-file-write'
+import {
+  renameDurable,
+  renameDurableSync,
+  writeFileDurable,
+  writeFileDurableSync
+} from './durable-file-write'
 
 describe('durable file write', () => {
   let dir: string
@@ -83,5 +88,37 @@ describe('durable file write', () => {
     await writeFileDurable(`${final}.a.tmp`, final, 'from-async')
     writeFileDurableSync(`${final}.b.tmp`, final, 'from-sync')
     expect(readFileSync(final, 'utf-8')).toBe('from-sync')
+  })
+
+  describe('renameDurableSync', () => {
+    it('publishes an already-written temp file at the final path', () => {
+      const final = join(dir, 'state.json')
+      const tmp = `${final}.tmp`
+      writeFileSync(tmp, 'fresh', 'utf-8')
+      renameDurableSync(tmp, final)
+      expect(readFileSync(final, 'utf-8')).toBe('fresh')
+      expect(() => readFileSync(tmp, 'utf-8')).toThrow()
+    })
+
+    it('replaces existing content and matches the async helper', async () => {
+      const syncTarget = join(dir, 'sync.json')
+      const asyncTarget = join(dir, 'async.json')
+      writeFileSync(syncTarget, 'stale', 'utf-8')
+      writeFileSync(asyncTarget, 'stale', 'utf-8')
+      writeFileSync(`${syncTarget}.tmp`, 'fresh', 'utf-8')
+      writeFileSync(`${asyncTarget}.tmp`, 'fresh', 'utf-8')
+
+      renameDurableSync(`${syncTarget}.tmp`, syncTarget)
+      await renameDurable(`${asyncTarget}.tmp`, asyncTarget)
+
+      expect(readFileSync(syncTarget, 'utf-8')).toBe('fresh')
+      expect(readFileSync(asyncTarget, 'utf-8')).toBe(readFileSync(syncTarget, 'utf-8'))
+    })
+
+    it('throws instead of silently failing when the temp file is missing', () => {
+      const final = join(dir, 'state.json')
+      expect(() => renameDurableSync(join(dir, 'nope.tmp'), final)).toThrow()
+      expect(() => readFileSync(final, 'utf-8')).toThrow()
+    })
   })
 })

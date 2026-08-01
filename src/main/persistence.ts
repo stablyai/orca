@@ -12,7 +12,7 @@ import {
   realpathSync
 } from 'node:fs'
 import { rename, mkdir, rm, copyFile, open } from 'node:fs/promises'
-import { renameDurable, writeFileDurableSync } from './durable-file-write'
+import { renameDurableSync, writeFileDurableSync } from './durable-file-write'
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
@@ -3871,16 +3871,19 @@ export class Store {
       } finally {
         await handle.close()
       }
-      // Why: if flush() bumped writeGeneration mid-write, it already wrote fresher state; don't overwrite it.
+      // Why: keep the generation guard and the swap synchronous (no await between), or a
+      // concurrent flushOrThrow can publish fresher state during the rename await and this
+      // stale rename then lands last, silently reverting the shutdown flush. Only the rename
+      // and the directory fsync are synchronous; the multi-MB payload write above stays async,
+      // so the main thread still does not block on serializing or writing state.
       if (this.writeGeneration !== gen) {
         return
       }
-      await renameDurable(tmpFile, dataFile)
+      renameDurableSync(tmpFile, dataFile)
       renamed = true
-      // Why re-check gen: a sync flush during the rename await may have written fresher state; don't record a stale hash over it.
-      if (this.writeGeneration === gen) {
-        this.lastWrittenStateHash = stateHash
-      }
+      // Safe unconditionally: nothing can run between the guard above and this line, so this
+      // generation is still the one that published dataFile.
+      this.lastWrittenStateHash = stateHash
     } finally {
       if (!renamed) {
         await rm(tmpFile).catch(() => {})
