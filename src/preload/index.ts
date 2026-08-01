@@ -12,7 +12,10 @@ import type {
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
-import type { CodexBackfillGateStatus } from '../shared/codex-backfill-status-types'
+import type {
+  CodexBackfillGateStatus,
+  CodexBackfillPaneHoldState
+} from '../shared/codex-backfill-status-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
@@ -2070,6 +2073,17 @@ const api = {
         callback(status)
       ipcRenderer.on('codexBackfill:statusChanged', listener)
       return () => ipcRenderer.removeListener('codexBackfill:statusChanged', listener)
+    },
+    /** Why: main enforces the #11828 spawn gate; panes only mirror this per-pane hold state for the overlay. */
+    paneHoldStatus: (paneKey: string): Promise<CodexBackfillPaneHoldState | null> =>
+      ipcRenderer.invoke('codexBackfill:paneHoldStatus', paneKey),
+    onPaneHoldChanged: (callback: (state: CodexBackfillPaneHoldState) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        state: CodexBackfillPaneHoldState
+      ): void => callback(state)
+      ipcRenderer.on('codexBackfill:paneHoldChanged', listener)
+      return () => ipcRenderer.removeListener('codexBackfill:paneHoldChanged', listener)
     }
   } satisfies PreloadApi['codexBackfill'],
   agentHooks: {

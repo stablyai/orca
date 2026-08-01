@@ -347,7 +347,10 @@ import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
-import type { CodexBackfillGateStatus } from '../shared/codex-backfill-status-types'
+import type {
+  CodexBackfillGateStatus,
+  CodexBackfillPaneHoldState
+} from '../shared/codex-backfill-status-types'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
@@ -2403,6 +2406,8 @@ export type PreloadApi = {
     /** Go/no-go for launching codex into a fresh local pane (#11828 index gate). */
     status: () => Promise<CodexBackfillGateStatus>
     onStatusChanged: (callback: (status: CodexBackfillGateStatus) => void) => () => void
+    paneHoldStatus: (paneKey: string) => Promise<CodexBackfillPaneHoldState | null>
+    onPaneHoldChanged: (callback: (state: CodexBackfillPaneHoldState) => void) => () => void
   }
   agentHooks: {
     claudeStatus: () => Promise<AgentHookInstallStatus>

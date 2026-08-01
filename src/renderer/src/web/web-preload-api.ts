@@ -815,7 +815,11 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     // browser cannot inspect; never-pending keeps those spawns ungated.
     codexBackfill: {
       status: () => Promise.resolve({ pending: false, lastWatermark: null }),
-      onStatusChanged: () => () => {}
+      onStatusChanged: () => () => {},
+      // Why: hold state rides Electron IPC only; web-served panes (incl. orca-serve attaches on the serve host's
+      // local runtime) render no overlay — accepted residual AD-A9, bounded by the gate's fail-open ceilings.
+      paneHoldStatus: () => Promise.resolve(null),
+      onPaneHoldChanged: () => () => {}
     },
     developerPermissions: createDeveloperPermissionsApi(),
     computerUsePermissions: createComputerUsePermissionsApi(),
