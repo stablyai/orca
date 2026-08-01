@@ -296,6 +296,7 @@ function sanitizeHydratedEntry(
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
+    tmuxPaneRef: typeof record.tmuxPaneRef === 'string' ? record.tmuxPaneRef : undefined,
     providerSession,
     providerSessionOnly: providerSessionOnly ? true : undefined,
     payload,
@@ -1095,10 +1096,12 @@ export class AgentHookServer {
         ? {
             agentType: previous.payload.agentType,
             state: previous.payload.state,
-            updatedAt: previous.receivedAt
+            updatedAt: previous.receivedAt,
+            tmuxPaneRef: previous.tmuxPaneRef
           }
         : undefined,
       incoming: rootContextPreservingPayload.payload.agentType,
+      incomingTmuxPaneRef: rootContextPreservingPayload.tmuxPaneRef,
       now
     })
     if (

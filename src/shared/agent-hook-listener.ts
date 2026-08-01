@@ -305,6 +305,8 @@ export type AgentHookEventPayload = {
   toolAgentId?: string
   /** Agent/subagent type from the source hook payload, when present. */
   toolAgentType?: string
+  /** `<tmux socket>:<pane id>` when the agent runs inside tmux; distinguishes agents sharing one outer pane key. */
+  tmuxPaneRef?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
   providerSession?: AgentProviderSessionMetadata
   /** Session identity update with no turn-state transition; refreshes durable resume metadata without a fake status row. */
@@ -3918,6 +3920,7 @@ export function normalizeHookPayload(
   }
   const worktreeId = readStringField(record, 'worktreeId')
   const launchToken = readStringField(record, 'launchToken')
+  const tmuxPaneRef = readStringField(record, 'tmuxPaneRef')
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
   let promptInteractionKey: string | undefined
@@ -4084,6 +4087,7 @@ export function normalizeHookPayload(
         toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
         toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
+        ...(tmuxPaneRef ? { tmuxPaneRef } : {}),
         ...(providerSession ? { providerSession } : {}),
         ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
         payload: transportPayload
