@@ -12,6 +12,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const projectDir = resolve(import.meta.dirname, '..', '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
@@ -23,7 +24,9 @@ const SURROGATE_END = 0xdfff
 
 async function loadUnicode11Provider() {
   const addonPath = requireFromProject.resolve('@xterm/addon-unicode11')
-  const module = await import(`file://${addonPath.replace(/\\/g, '/')}`)
+  // Why: a hand-built `file://` string mis-parses a Windows drive letter as the
+  // URL host and leaves spaces unencoded; pathToFileURL handles both.
+  const module = await import(pathToFileURL(addonPath).href)
   const Addon = module.Unicode11Addon ?? module.default?.Unicode11Addon ?? module.default
   let provider = null
   new Addon().activate({
