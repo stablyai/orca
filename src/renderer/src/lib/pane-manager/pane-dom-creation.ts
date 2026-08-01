@@ -11,6 +11,7 @@ import { attachPaneDrag } from './pane-drag-pointer'
 import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
 import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
+import { shouldSwallowFocusClick } from './pane-focus-click-suppression'
 import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
 import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
@@ -26,7 +27,8 @@ export function createPaneDOM(
   dragState: DragReorderState,
   dragCallbacks: DragReorderCallbacks,
   onPointerDown: (id: number, options?: { focusTerminal?: boolean }) => void,
-  onMouseEnter: (id: number, event: MouseEvent) => void
+  onMouseEnter: (id: number, event: MouseEvent) => void,
+  isPaneActive: (id: number) => boolean
 ): ManagedPaneInternal {
   const container = document.createElement('div')
   container.className = 'pane'
@@ -101,10 +103,34 @@ export function createPaneDOM(
     }
   )
 
+  // Armed on pointerdown, consumed by the mousedown of the same physical click.
+  let swallowNextMouseDown = false
   const panePointerDownHandler = (event: PointerEvent): void => {
-    onPointerDown(id, {
-      focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
+    const focusTerminal = shouldFocusTerminalFromPanePointerDown(event.target)
+    swallowNextMouseDown = shouldSwallowFocusClick({
+      paneWasActive: isPaneActive(id),
+      focusesTerminal: focusTerminal,
+      mouseTrackingMode: terminal.modes.mouseTrackingMode,
+      pointerType: event.pointerType,
+      isPrimaryPointer: event.isPrimary,
+      button: event.button,
+      modifierHeld: event.shiftKey || event.metaKey || event.ctrlKey || event.altKey
     })
+    onPointerDown(id, { focusTerminal })
+  }
+  // Why disarm here: mousedown precedes pointerup for a mouse, so anything left
+  // armed belongs to a gesture that never produced one and must not outlive it.
+  const paneFocusClickDisarmHandler = (): void => {
+    swallowNextMouseDown = false
+  }
+  const paneFocusClickCaptureHandler = (event: MouseEvent): void => {
+    if (!swallowNextMouseDown) {
+      return
+    }
+    swallowNextMouseDown = false
+    // Why stopPropagation only: the pane still focuses on pointerdown, and
+    // preventDefault would also cancel the browser's own focus handling.
+    event.stopPropagation()
   }
   const paneMouseEnterHandler = (event: MouseEvent): void => onMouseEnter(id, event)
 
@@ -134,6 +160,8 @@ export function createPaneDOM(
     webglAddon: null,
     ligaturesAddon: null,
     panePointerDownHandler,
+    paneFocusClickCaptureHandler,
+    paneFocusClickDisarmHandler,
     paneMouseEnterHandler,
     paneDragCleanup,
     compositionHandler: null,
@@ -149,6 +177,9 @@ export function createPaneDOM(
   }
 
   container.addEventListener('pointerdown', panePointerDownHandler)
+  xtermContainer.addEventListener('mousedown', paneFocusClickCaptureHandler, { capture: true })
+  container.addEventListener('pointerup', paneFocusClickDisarmHandler)
+  container.addEventListener('pointercancel', paneFocusClickDisarmHandler)
   container.addEventListener('mouseenter', paneMouseEnterHandler)
 
   return pane

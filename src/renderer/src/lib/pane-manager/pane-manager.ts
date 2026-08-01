@@ -421,7 +421,8 @@ export class PaneManager {
       },
       (paneId, event) => {
         this.handlePaneMouseEnter(paneId, event)
-      }
+      },
+      (paneId) => this.activePaneId === paneId
     )
     pane.webglAttachmentDeferred = this.renderingSuspended
     this.panes.set(id, pane)

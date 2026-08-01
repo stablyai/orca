@@ -161,6 +161,8 @@ export type ManagedPaneInternal = {
   webLinksAddon: WebLinksAddon
   // Stored so disposePane() can remove pane-local DOM listeners explicitly.
   panePointerDownHandler?: ((event: PointerEvent) => void) | null
+  paneFocusClickCaptureHandler?: ((event: MouseEvent) => void) | null
+  paneFocusClickDisarmHandler?: (() => void) | null
   paneMouseEnterHandler?: ((event: MouseEvent) => void) | null
   paneDragCleanup?: (() => void) | null
   // Stored so disposePane() can remove it and avoid a memory leak.

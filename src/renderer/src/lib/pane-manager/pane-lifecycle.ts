@@ -173,6 +173,17 @@ export function disposePane(
     pane.container.removeEventListener('pointerdown', pane.panePointerDownHandler)
     pane.panePointerDownHandler = null
   }
+  if (pane.paneFocusClickCaptureHandler) {
+    pane.xtermContainer.removeEventListener('mousedown', pane.paneFocusClickCaptureHandler, {
+      capture: true
+    })
+    pane.paneFocusClickCaptureHandler = null
+  }
+  if (pane.paneFocusClickDisarmHandler) {
+    pane.container.removeEventListener('pointerup', pane.paneFocusClickDisarmHandler)
+    pane.container.removeEventListener('pointercancel', pane.paneFocusClickDisarmHandler)
+    pane.paneFocusClickDisarmHandler = null
+  }
   if (pane.paneMouseEnterHandler) {
     pane.container.removeEventListener('mouseenter', pane.paneMouseEnterHandler)
     pane.paneMouseEnterHandler = null
