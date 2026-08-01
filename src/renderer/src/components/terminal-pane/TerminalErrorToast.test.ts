@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { CODEX_BACKFILL_INDEXING_NOTICE } from './codex-backfill-error-detector'
 import {
+  isCodexBackfillIndexingNotice,
   isSshReconnectOwnedTerminalError,
   shouldOfferDaemonRestart,
   stripSshReconnectOwnedErrorLines
@@ -51,6 +53,23 @@ describe('stripSshReconnectOwnedErrorLines', () => {
 
   it('leaves an error with no SSH text untouched', () => {
     expect(stripSshReconnectOwnedErrorLines('Paste failed.')).toBe('Paste failed.')
+  })
+})
+
+describe('isCodexBackfillIndexingNotice', () => {
+  it('recognizes the codex indexing notice', () => {
+    expect(isCodexBackfillIndexingNotice(CODEX_BACKFILL_INDEXING_NOTICE)).toBe(true)
+  })
+
+  it('recognizes it inside an accumulated multi-error string', () => {
+    expect(isCodexBackfillIndexingNotice(`something else\n${CODEX_BACKFILL_INDEXING_NOTICE}`)).toBe(
+      true
+    )
+  })
+
+  it('rejects unrelated errors', () => {
+    expect(isCodexBackfillIndexingNotice('SSH connection is not active')).toBe(false)
+    expect(isCodexBackfillIndexingNotice('node-pty: posix_spawn failed: ENOENT')).toBe(false)
   })
 })
 

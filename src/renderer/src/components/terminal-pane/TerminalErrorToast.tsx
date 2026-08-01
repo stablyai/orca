@@ -30,6 +30,11 @@ export function stripSshReconnectOwnedErrorLines(error: string): string | null {
   return kept.length > 0 ? kept : null
 }
 
+/** True when the pane error is Orca's informational codex-indexing notice (#11828). */
+export function isCodexBackfillIndexingNotice(error: string): boolean {
+  return error.includes('Codex is still indexing your session history')
+}
+
 export function shouldOfferDaemonRestart(error: string): boolean {
   return [STALE_NODE_PTY_DAEMON_MARKERS, STALE_DAEMON_CWD_MARKERS].some((markers) =>
     markers.every((marker) => error.includes(marker))
@@ -46,7 +51,13 @@ export function TerminalErrorToast({
   onRestartDaemon?: () => void
 }): React.JSX.Element {
   const ssh = isSshError(error)
-  const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
+  // Why: the codex-indexing notice is informational, not a failure — reuse the amber SSH treatment.
+  const informational = ssh || isCodexBackfillIndexingNotice(error)
+  const showDaemonRestart =
+    !ssh &&
+    !isCodexBackfillIndexingNotice(error) &&
+    onRestartDaemon &&
+    shouldOfferDaemonRestart(error)
 
   return (
     <div
@@ -58,9 +69,11 @@ export function TerminalErrorToast({
         zIndex: 50,
         padding: '10px 14px',
         borderRadius: 6,
-        background: ssh ? 'rgba(234, 179, 8, 0.12)' : 'rgba(220, 38, 38, 0.15)',
-        border: ssh ? '1px solid rgba(234, 179, 8, 0.35)' : '1px solid rgba(220, 38, 38, 0.4)',
-        color: ssh ? '#fde68a' : '#fca5a5',
+        background: informational ? 'rgba(234, 179, 8, 0.12)' : 'rgba(220, 38, 38, 0.15)',
+        border: informational
+          ? '1px solid rgba(234, 179, 8, 0.35)'
+          : '1px solid rgba(220, 38, 38, 0.4)',
+        color: informational ? '#fde68a' : '#fca5a5',
         fontSize: 12,
         fontFamily: 'monospace',
         whiteSpace: 'pre-wrap',
@@ -78,7 +91,7 @@ export function TerminalErrorToast({
                 'Restart the terminal daemon from here to clear stale daemon state.'
               )}
             </>
-          ) : !ssh ? (
+          ) : !informational ? (
             <>
               {'\n'}
               {translate(
@@ -125,7 +138,7 @@ export function TerminalErrorToast({
           style={{
             background: 'none',
             border: 'none',
-            color: ssh ? '#fde68a' : '#fca5a5',
+            color: informational ? '#fde68a' : '#fca5a5',
             cursor: 'pointer',
             fontSize: 14,
             padding: '0 0 0 8px',
