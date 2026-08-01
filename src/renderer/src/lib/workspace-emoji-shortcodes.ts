@@ -16,18 +16,23 @@ export type WorkspaceEmojiReplacement = {
   value: string
 }
 
-const WORKSPACE_EMOJI_SHORTCODE_ADDITIONS: readonly WorkspaceEmojiSuggestion[] = [
-  { emoji: '🇰🇷', shortcode: 'kr' }
-]
-
-const SHORTCODE_ENTRIES = [
-  ...STANDARD_EMOJI_SHORTCODE_ENTRIES,
-  ...WORKSPACE_EMOJI_SHORTCODE_ADDITIONS
-]
-
 const EXACT_SHORTCODE = new Map(
-  SHORTCODE_ENTRIES.map(({ emoji, shortcode }) => [shortcode, { emoji, shortcode }])
+  STANDARD_EMOJI_SHORTCODE_ENTRIES.map(({ emoji, shortcode }) => [shortcode, { emoji, shortcode }])
 )
+
+// Lower tiers rank first, so `korea` surfaces `south_korea` above `dishwasher`-style incidental hits.
+const MATCH_TIER = { exact: 0, prefix: 1, wordStart: 2, substring: 3 } as const
+
+function matchTier(shortcode: string, query: string): number | null {
+  const index = shortcode.indexOf(query)
+  if (index < 0) {
+    return null
+  }
+  if (index === 0) {
+    return shortcode.length === query.length ? MATCH_TIER.exact : MATCH_TIER.prefix
+  }
+  return /[_-]/.test(shortcode[index - 1]) ? MATCH_TIER.wordStart : MATCH_TIER.substring
+}
 
 export function searchWorkspaceEmojiShortcodes(
   query: string,
@@ -38,11 +43,12 @@ export function searchWorkspaceEmojiShortcodes(
     return []
   }
 
-  const matches = SHORTCODE_ENTRIES.filter(({ shortcode }) =>
-    shortcode.startsWith(normalizedQuery)
-  ).sort(
+  const matches = STANDARD_EMOJI_SHORTCODE_ENTRIES.flatMap((entry) => {
+    const tier = matchTier(entry.shortcode, normalizedQuery)
+    return tier === null ? [] : [{ ...entry, tier }]
+  }).sort(
     (left, right) =>
-      Number(right.shortcode === normalizedQuery) - Number(left.shortcode === normalizedQuery) ||
+      left.tier - right.tier ||
       left.shortcode.length - right.shortcode.length ||
       left.shortcode.localeCompare(right.shortcode)
   )

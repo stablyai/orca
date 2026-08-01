@@ -11,14 +11,37 @@ describe('workspace emoji shortcodes', () => {
     expect(searchWorkspaceEmojiShortcodes('wink', 1)).toEqual([{ emoji: '😉', shortcode: 'wink' }])
   })
 
-  it('finds the Korean flag by kr shortcode', () => {
-    expect(searchWorkspaceEmojiShortcodes('kr', 1)).toEqual([{ emoji: '🇰🇷', shortcode: 'kr' }])
+  it('finds flags by country name and by ISO code fragment', () => {
+    expect(searchWorkspaceEmojiShortcodes('south_korea', 1)).toEqual([
+      { emoji: '🇰🇷', shortcode: 'south_korea' }
+    ])
+    expect(searchWorkspaceEmojiShortcodes('kr', 1)).toEqual([{ emoji: '🇰🇷', shortcode: 'flag_kr' }])
+    expect(searchWorkspaceEmojiShortcodes('germany', 1)).toEqual([
+      { emoji: '🇩🇪', shortcode: 'germany' }
+    ])
   })
 
   it('ranks an exact shortcode before longer aliases', () => {
     expect(searchWorkspaceEmojiShortcodes('heart', 3)[0]).toMatchObject({
       shortcode: 'heart'
     })
+  })
+
+  it('matches inside a shortcode, ranking word starts above incidental substrings', () => {
+    expect(searchWorkspaceEmojiShortcodes('korea', 2)).toEqual([
+      { emoji: '🇰🇵', shortcode: 'north_korea' },
+      { emoji: '🇰🇷', shortcode: 'south_korea' }
+    ])
+    expect(
+      searchWorkspaceEmojiShortcodes('kr', 3).map((suggestion) => suggestion.shortcode)
+    ).toEqual(['flag_kr', 'ukraine', 'cockroach'])
+  })
+
+  it('omits skin-tone aliases from suggestions', () => {
+    expect(searchWorkspaceEmojiShortcodes('wave')).toEqual([
+      { emoji: '👋', shortcode: 'wave' },
+      { emoji: '🌊', shortcode: 'water_wave' }
+    ])
   })
 
   it('deduplicates aliases that resolve to the same emoji', () => {
@@ -43,8 +66,8 @@ describe('workspace emoji shortcodes', () => {
     })
   })
 
-  it('replaces the completed kr shortcode', () => {
-    expect(replaceCompletedWorkspaceEmojiShortcode(':kr:', 4)).toEqual({
+  it('replaces a completed flag shortcode', () => {
+    expect(replaceCompletedWorkspaceEmojiShortcode(':flag_kr:', 9)).toEqual({
       value: '🇰🇷',
       cursor: 4
     })

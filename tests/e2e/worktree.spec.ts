@@ -190,7 +190,7 @@ test.describe('Create Workspace', () => {
     }
   })
 
-  test('enters the Korean flag with the kr shortcode suggestion', async ({ orcaPage }) => {
+  test('enters the Korean flag with the flag_kr shortcode suggestion', async ({ orcaPage }) => {
     try {
       await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
 
@@ -198,11 +198,11 @@ test.describe('Create Workspace', () => {
       const nameInput = dialog.getByPlaceholder(/Type a name/i)
       await expect(nameInput).toBeVisible()
 
-      await nameInput.pressSequentially('Launch :kr', { delay: 100 })
+      await nameInput.pressSequentially('Launch :flag_kr', { delay: 100 })
       const emojiSuggestions = orcaPage.locator('[data-workspace-emoji-suggestions="true"]')
       const sourceSuggestions = orcaPage.locator('[data-workspace-source-suggestions="true"]')
       await expect(emojiSuggestions).toBeVisible()
-      await expect(emojiSuggestions.getByRole('option', { name: ':kr:' })).toBeVisible()
+      await expect(emojiSuggestions.getByRole('option', { name: ':flag_kr:' })).toBeVisible()
       await expect(emojiSuggestions).toHaveAttribute('data-side', 'top')
       await expect(sourceSuggestions).toBeVisible()
       await expect(sourceSuggestions).toHaveAttribute('data-side', 'bottom')
@@ -211,7 +211,7 @@ test.describe('Create Workspace', () => {
 
       await nameInput.pressSequentially(':')
       await expect(nameInput).toHaveValue('Launch 🇰🇷')
-      await expect(orcaPage.getByRole('option', { name: /:kr:/i })).toHaveCount(0)
+      await expect(orcaPage.getByRole('option', { name: /:flag_kr:/i })).toHaveCount(0)
       await nameInput.pressSequentially(' experiment')
       await expect(nameInput).toHaveValue('Launch 🇰🇷 experiment')
       // Keep the asserted result visible in retained proof recordings.

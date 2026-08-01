@@ -2,12 +2,12 @@ import type { LoginPreflightOutcome } from '../providers/macos-tcc-login-shell'
 import type { DaemonFileLog } from './daemon-file-log'
 import type { SystemResolverHealth } from './types'
 
-// Why: three conclusive PAM verdicts spread over recheck intervals keep a transient
-// rejection storm (PAM db reload, OS update) from retiring a daemon whose login
-// session is still alive; a real logout rejects conclusively on every probe.
+// Why: retain count confirmation while the elapsed window below blocks short bursts.
 const REQUIRED_CONSECUTIVE_REJECTIONS = 3
 const PERIODIC_PROBE_MS = 120_000
 const REJECTION_RECHECK_MS = 10_000
+// Why: a full periodic window separates logout from short wake/PAM recovery bursts.
+const MINIMUM_REJECTION_SPAN_MS = PERIODIC_PROBE_MS
 const PTY_EXIT_DEBOUNCE_MS = 2_000
 // Why: a client hello right after login is the fastest death signal for a stale
 // daemon, but steady reconnects must not turn hellos into a PAM probe storm.
@@ -35,6 +35,7 @@ export type MacosLoginSessionDeathWatchOptions = {
   timing?: Partial<{
     periodicProbeMs: number
     rejectionRecheckMs: number
+    minimumRejectionSpanMs: number
     ptyExitDebounceMs: number
     clientActivityMinGapMs: number
     minProbeGapMs: number
@@ -65,6 +66,7 @@ export class MacosLoginSessionDeathWatch {
   private readonly clock: WatchClock
   private readonly periodicProbeMs: number
   private readonly rejectionRecheckMs: number
+  private readonly minimumRejectionSpanMs: number
   private readonly ptyExitDebounceMs: number
   private readonly clientActivityMinGapMs: number
   private readonly minProbeGapMs: number
@@ -73,6 +75,7 @@ export class MacosLoginSessionDeathWatch {
   // a host where the wrapper never worked has no death signal to trust.
   private armed = false
   private consecutiveRejections = 0
+  private firstRejectionAtMs: number | null = null
   private lastProbeStartedAtMs: number | null = null
   private probeInFlight = false
   private stopped = false
@@ -99,6 +102,7 @@ export class MacosLoginSessionDeathWatch {
     }
     this.periodicProbeMs = opts.timing?.periodicProbeMs ?? PERIODIC_PROBE_MS
     this.rejectionRecheckMs = opts.timing?.rejectionRecheckMs ?? REJECTION_RECHECK_MS
+    this.minimumRejectionSpanMs = opts.timing?.minimumRejectionSpanMs ?? MINIMUM_REJECTION_SPAN_MS
     this.ptyExitDebounceMs = opts.timing?.ptyExitDebounceMs ?? PTY_EXIT_DEBOUNCE_MS
     this.clientActivityMinGapMs = opts.timing?.clientActivityMinGapMs ?? CLIENT_ACTIVITY_MIN_GAP_MS
     this.minProbeGapMs = opts.timing?.minProbeGapMs ?? MIN_PROBE_GAP_MS
@@ -169,9 +173,10 @@ export class MacosLoginSessionDeathWatch {
     }
     this.scheduledProbeAtMs = this.clock.now() + delayMs
     this.scheduledProbeTimer = this.clock.setTimeout(() => {
+      const scheduledAtMs = this.scheduledProbeAtMs
       this.scheduledProbeTimer = null
       this.scheduledProbeAtMs = null
-      void this.runProbe(trigger)
+      void this.runProbe(trigger, scheduledAtMs ?? undefined)
     }, delayMs)
   }
 
@@ -181,6 +186,9 @@ export class MacosLoginSessionDeathWatch {
 
   private scheduleProbeNoLaterThan(delayMs: number, trigger: string): void {
     const requestedAtMs = this.clock.now() + delayMs
+    if (this.consecutiveRejections > 0 && this.scheduledProbeAtMs !== null) {
+      return
+    }
     if (this.scheduledProbeAtMs !== null && this.scheduledProbeAtMs <= requestedAtMs) {
       return
     }
@@ -200,7 +208,7 @@ export class MacosLoginSessionDeathWatch {
     }
   }
 
-  private async runProbe(trigger: string): Promise<void> {
+  private async runProbe(trigger: string, scheduledAtMs?: number): Promise<void> {
     if (this.stopped || this.retired) {
       return
     }
@@ -208,6 +216,20 @@ export class MacosLoginSessionDeathWatch {
       // Why: the current probe may describe the pre-logout state; retain one follow-up without polling.
       this.retainPendingProbe(trigger)
       return
+    }
+    if (this.consecutiveRejections > 0 && scheduledAtMs === undefined) {
+      return
+    }
+    const timerGapMs =
+      scheduledAtMs === undefined ? 0 : Math.max(0, this.clock.now() - scheduledAtMs)
+    if (this.consecutiveRejections > 0 && timerGapMs > this.minProbeGapMs * 3) {
+      // Why: sleep/App Nap pauses probes; elapsed wall time is not rejection evidence.
+      this.consecutiveRejections = 0
+      this.firstRejectionAtMs = null
+      this.log.log('login-session-rejection-window-reset', {
+        cause: 'timer-gap',
+        timerGapMs
+      })
     }
     const elapsedSinceProbe =
       this.lastProbeStartedAtMs === null ? null : this.clock.now() - this.lastProbeStartedAtMs
@@ -246,6 +268,7 @@ export class MacosLoginSessionDeathWatch {
         }
         this.armed = true
         this.consecutiveRejections = 0
+        this.firstRejectionAtMs = null
         this.scheduleNextProbe(this.periodicProbeMs)
         return
       }
@@ -254,6 +277,7 @@ export class MacosLoginSessionDeathWatch {
         this.scheduleNextProbe(this.periodicProbeMs)
         return
       }
+      this.firstRejectionAtMs ??= this.clock.now()
       this.consecutiveRejections++
       this.log.log('login-session-probe-rejected', {
         trigger,
@@ -261,6 +285,17 @@ export class MacosLoginSessionDeathWatch {
       })
       if (this.consecutiveRejections < REQUIRED_CONSECUTIVE_REJECTIONS) {
         this.scheduleNextProbe(this.rejectionRecheckMs)
+        return
+      }
+      const rejectionSpanMs = this.clock.now() - this.firstRejectionAtMs
+      if (rejectionSpanMs < this.minimumRejectionSpanMs) {
+        const retryInMs = this.minimumRejectionSpanMs - rejectionSpanMs
+        this.consecutiveRejections = REQUIRED_CONSECUTIVE_REJECTIONS - 1
+        this.log.log('login-session-retire-deferred', {
+          cause: 'pam-rejections',
+          retryInMs
+        })
+        this.scheduleNextProbe(retryInMs)
         return
       }
       await this.retireIfResolverDegraded(() => {
