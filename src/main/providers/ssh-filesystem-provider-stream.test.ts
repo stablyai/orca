@@ -11,11 +11,12 @@ type MockMultiplexer = {
   dispose: ReturnType<typeof vi.fn>
   isDisposed: ReturnType<typeof vi.fn>
   _emitMethod: (method: string, params: Record<string, unknown>) => void
-  _methodHandlerCount: () => number
+  _listenerCount: () => number
 }
 
 function createMockMux(): MockMultiplexer {
   const methodHandlers = new Map<string, Set<(params: Record<string, unknown>) => void>>()
+  const disposeHandlers = new Set<(reason: 'shutdown' | 'connection_lost') => void>()
   return {
     request: vi.fn().mockResolvedValue(undefined),
     notify: vi.fn(),
@@ -31,7 +32,12 @@ function createMockMux(): MockMultiplexer {
         return () => set!.delete(handler)
       }
     ),
-    onDispose: vi.fn(() => () => {}),
+    onDispose: vi.fn((handler: (reason: 'shutdown' | 'connection_lost') => void) => {
+      disposeHandlers.add(handler)
+      return () => {
+        disposeHandlers.delete(handler)
+      }
+    }),
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false),
     _emitMethod: (method, params) => {
@@ -42,7 +48,8 @@ function createMockMux(): MockMultiplexer {
         }
       }
     },
-    _methodHandlerCount: () =>
+    _listenerCount: () =>
+      disposeHandlers.size +
       [...methodHandlers.values()].reduce((count, handlers) => count + handlers.size, 0)
   }
 }
@@ -182,7 +189,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
 
     await rejection
     expect(mux.notify).toHaveBeenCalledWith('fs.cancelStream', { streamId: 9 })
-    expect(mux._methodHandlerCount()).toBe(0)
+    expect(mux._listenerCount()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -216,7 +223,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
       isBinary: true
     })
     expect(mux.notify).not.toHaveBeenCalledWith('fs.cancelStream', expect.anything())
-    expect(mux._methodHandlerCount()).toBe(0)
+    expect(mux._listenerCount()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
 
