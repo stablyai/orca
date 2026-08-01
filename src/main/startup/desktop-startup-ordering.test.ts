@@ -95,6 +95,104 @@ describe('startup ordering', () => {
     )
   })
 
+  it('persists the GPU fallback marker in the same turn as the GPU crash event', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const start = source.indexOf('async function handleGpuChildCrash(')
+    const end = source.indexOf('function recordProcessGoneCrash(', start)
+    const handler = source.slice(start, end)
+    const engageIndex = handler.indexOf('await engageGpuFallback({')
+    const persistIndex = handler.indexOf('persistMarker: () => {')
+
+    expect(start).toBeGreaterThanOrEqual(0)
+    expect(end).toBeGreaterThan(start)
+    expect(engageIndex).toBeGreaterThanOrEqual(0)
+    expect(persistIndex).toBeGreaterThan(engageIndex)
+
+    // Why the dispatch site too: the turn begins at child-process-gone, so an
+    // await introduced there would push the write past the kill just as surely.
+    const listenerStart = source.indexOf("app.on('child-process-gone'")
+    const listenerEnd = source.indexOf('void handleGpuChildCrash(', listenerStart)
+    expect(listenerStart).toBeGreaterThanOrEqual(0)
+    expect(listenerEnd).toBeGreaterThan(listenerStart)
+    const listener = source.slice(listenerStart, listenerEnd)
+    expect(listener).not.toMatch(/\bawait[\s(]/)
+    expect(listener).not.toContain('async (')
+
+    // Why: Chromium fatally CHECKs the browser process on the 6th GPU failure —
+    // ~7ms after the first when it cannot launch. Any await before the marker
+    // write pushes it past that kill and restores the cross-launch crash loop.
+    expect(handler.slice(0, engageIndex)).not.toMatch(/\bawait[\s(]/)
+
+    // Why: pin the write inside persistMarker — asserting only that the source
+    // mentions writeGpuFallbackMarker lets it drift into a later callback.
+    // Why bound on the next dep key, not the next `},` — the write's own object
+    // literal closes with `},` and would truncate the body being asserted.
+    const persistEnd = handler.indexOf('clearMarker:', persistIndex)
+    expect(persistEnd).toBeGreaterThan(persistIndex)
+    const persistBody = handler.slice(persistIndex, persistEnd)
+    expect(persistBody).toContain('writeGpuFallbackMarker(')
+    expect(persistBody).toContain('provisionalGpuFallbackUserDataPath = userDataPath')
+    // Why: an await inside persistMarker defers the write past the kill just as
+    // surely as one before the call. (An `async` callback fails the anchor above.)
+    expect(persistBody).not.toMatch(/\bawait[\s(]/)
+
+    // Why exactly two writers: the pre-prompt persist, plus the re-persist that
+    // recovers a consented restart whose marker a session-end drop already took.
+    expect(handler.split('writeGpuFallbackMarker(')).toHaveLength(3)
+    const confirmedQuittingIndex = handler.indexOf("outcome === 'confirmed-quitting'")
+    expect(confirmedQuittingIndex).toBeGreaterThanOrEqual(0)
+    expect(handler.lastIndexOf('writeGpuFallbackMarker(')).toBeGreaterThan(confirmedQuittingIndex)
+
+    // Why pinned: the outcome -> retry mapping is unit-tested, so the handler must
+    // defer to it rather than re-deriving the outcome list inline.
+    expect(handler).toContain('if (!shouldKeepProvisionalGpuFallbackMarker(outcome)) {')
+  })
+
+  it('drops an unconfirmed GPU fallback marker only once the quit is committed', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    // Why not will-quit: its first pass only means a quit was requested, then defers
+    // teardown for seconds during which Chromium's GPU CHECK can still fire.
+    expect(source).toContain("app.on('quit', dropUnconfirmedGpuFallbackMarker)")
+    // Why session-end too: Windows logoff/shutdown is the driver-update reboot case.
+    expect(source).toContain("window.on('session-end', dropUnconfirmedGpuFallbackMarker)")
+
+    // Why bound on the NEXT listener: bounding on an early statement inside the
+    // handler let a drop reintroduced further down pass unnoticed.
+    const willQuitStart = source.indexOf("app.on('will-quit'")
+    const willQuitEnd = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    expect(willQuitStart).toBeGreaterThanOrEqual(0)
+    expect(willQuitEnd).toBeGreaterThan(willQuitStart)
+    expect(source.slice(willQuitStart, willQuitEnd)).not.toContain(
+      'dropUnconfirmedGpuFallbackMarker'
+    )
+
+    // Why source-wide: the marker may only be dropped by the shutdown helper and
+    // by the explicit "Keep Running" answer.
+    expect(source.split('clearGpuFallbackMarker(')).toHaveLength(3)
+  })
+
+  it('reads and writes the GPU fallback marker through the same userData path', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const readerStart = source.indexOf('function maybeApplyGpuFallbackForThisLaunch()')
+    const readerEnd = source.indexOf('async function handleGpuChildCrash(', readerStart)
+    const writerEnd = source.indexOf('function recordProcessGoneCrash(', readerEnd)
+
+    expect(readerStart).toBeGreaterThanOrEqual(0)
+    expect(readerEnd).toBeGreaterThan(readerStart)
+    expect(writerEnd).toBeGreaterThan(readerEnd)
+
+    // Why: a split between reader and writer paths turns the whole fallback into
+    // a silent no-op — the marker lands somewhere the next launch never looks.
+    expect(source.slice(readerStart, readerEnd)).toContain('getCanonicalUserDataPath()')
+    // Why here: a kill between the marker's write and rename orphans a temp file,
+    // and this is the only launch-time site that reclaims them.
+    expect(source.slice(readerStart, readerEnd)).toContain(
+      'sweepStaleGpuFallbackMarkerTempFiles(userDataPath)'
+    )
+    expect(source.slice(readerEnd, writerEnd)).toContain('getCanonicalUserDataPath()')
+    expect(source.slice(readerStart, writerEnd)).not.toContain("app.getPath('userData')")
+  })
+
   it('reconciles retained Codex homes after authoritative daemon inventory', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const daemonInitIndex = source.indexOf('await initDaemonPtyProvider(signal')
