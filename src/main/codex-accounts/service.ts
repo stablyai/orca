@@ -68,6 +68,7 @@ const WINDOWS_RM_MAX_RETRIES = 8
 const WINDOWS_RM_RETRY_DELAY_MS = 150
 const WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS = 500
 const WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS = 5_000
+const LOGIN_TIMEOUT_CLOSE_GRACE_MS = 5_000
 const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
 
 type CodexOAuthCredentials = {
@@ -82,10 +83,14 @@ type ResolvedCodexIdentity = {
   workspaceAccountId: string | null
 }
 
-type CodexLoginSnapshot = {
-  authJson: string | null | undefined
+type CodexSelectionSnapshot = {
   activeCodexManagedAccountId: GlobalSettings['activeCodexManagedAccountId']
   activeCodexManagedAccountIdsByRuntime: GlobalSettings['activeCodexManagedAccountIdsByRuntime']
+}
+
+// Why: undefined means the auth bytes were never captured, so rollback skips the file; null means captured and absent.
+type CodexLoginSnapshot = CodexSelectionSnapshot & {
+  authJson: string | null | undefined
 }
 
 type CanonicalCodexConfig = {
@@ -859,14 +864,14 @@ export class CodexAccountService {
     const account = this.requireAccount(accountId)
     const managedHomePath = this.ensureManagedHomeForReauthentication(account)
     const accountTarget = getCodexSelectionTargetForAccount(account)
-    const loginSnapshot = this.captureLoginSnapshot(managedHomePath)
+    const selectionSnapshot = this.captureSelectionSnapshot()
     const selectedAccountId = getSelectedCodexAccountIdForTarget(
       this.store.getSettings(),
       accountTarget
     )
 
     this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, undefined, account.id)
-    await this.runCodexLogin(managedHomePath, loginSnapshot)
+    const loginSnapshot = await this.runCodexLogin(managedHomePath, selectionSnapshot)
     let identity: ResolvedCodexIdentity
     try {
       identity = this.readIdentityFromHome(managedHomePath, account.id)
@@ -1643,12 +1648,9 @@ export class CodexAccountService {
     }
   }
 
-  private captureLoginSnapshot(managedHomePath: string): CodexLoginSnapshot {
+  private captureSelectionSnapshot(): CodexSelectionSnapshot {
     const settings = this.store.getSettings()
     return {
-      authJson: parseWslUncPath(managedHomePath)
-        ? undefined
-        : readLoginAuthSnapshot(join(managedHomePath, 'auth.json')),
       activeCodexManagedAccountId: settings.activeCodexManagedAccountId,
       activeCodexManagedAccountIdsByRuntime: structuredClone(
         settings.activeCodexManagedAccountIdsByRuntime
@@ -1708,13 +1710,17 @@ export class CodexAccountService {
 
   private async runCodexLogin(
     managedHomePath: string,
-    snapshot?: CodexLoginSnapshot
-  ): Promise<void> {
+    selectionSnapshot?: CodexSelectionSnapshot
+  ): Promise<CodexLoginSnapshot> {
     const wslInfo = parseWslUncPath(managedHomePath)
     if (wslInfo) {
       this.assertWslCodexCliAvailable(wslInfo)
     }
-    const loginSnapshot = snapshot ?? this.captureLoginSnapshot(managedHomePath)
+    // Why: reading a WSL home over UNC before the distro answers can block the main process and report a dead path as an absent file.
+    const loginSnapshot: CodexLoginSnapshot = {
+      ...(selectionSnapshot ?? this.captureSelectionSnapshot()),
+      authJson: readLoginAuthSnapshot(join(managedHomePath, 'auth.json'))
+    }
     // Why: reauthentication starts with an existing auth.json. Only new auth
     // bytes prove this login completed; existence alone would kill the
     // Windows OAuth flow five seconds after it opened.
@@ -1761,6 +1767,7 @@ export class CodexAccountService {
       let timeout: ReturnType<typeof setTimeout> | null = null
       let authWatchInterval: ReturnType<typeof setInterval> | null = null
       let postAuthExitTimeout: ReturnType<typeof setTimeout> | null = null
+      let forceSettleTimeout: ReturnType<typeof setTimeout> | null = null
       let loginTreeKilledAfterAuth = false
       let failureError: Error | null = null
       const authJsonPath = join(managedHomePath, 'auth.json')
@@ -1768,6 +1775,10 @@ export class CodexAccountService {
         if (timeout) {
           clearTimeout(timeout)
           timeout = null
+        }
+        if (forceSettleTimeout) {
+          clearTimeout(forceSettleTimeout)
+          forceSettleTimeout = null
         }
         if (authWatchInterval) {
           clearInterval(authWatchInterval)
@@ -1792,10 +1803,47 @@ export class CodexAccountService {
         callback()
       }
 
+      // Why: the post-auth kill already secured new credentials, so a later failure must not roll them back.
+      const loginSucceededAfterForcedKill = (): boolean =>
+        loginTreeKilledAfterAuth && existsSync(authJsonPath)
+
+      const settleFailure = (error: Error): void => {
+        settle(() => {
+          try {
+            this.restoreLoginSnapshot(managedHomePath, loginSnapshot)
+            rejectPromise(error)
+          } catch (rollbackError) {
+            rejectPromise(
+              new Error(
+                `${error.message} Credential restoration failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+                { cause: error }
+              )
+            )
+          }
+        })
+      }
+
       const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
+      // Why: a killed login tree can fail to emit close, which would leave the caller waiting past the timeout unbounded.
+      const armForcedSettle = (): void => {
+        if (settled || forceSettleTimeout) {
+          return
+        }
+        forceSettleTimeout = setTimeout(() => {
+          if (loginSucceededAfterForcedKill()) {
+            settle(() => {
+              resolvePromise()
+            })
+            return
+          }
+          settleFailure(failureError ?? timeoutError)
+        }, LOGIN_TIMEOUT_CLOSE_GRACE_MS)
+      }
+
       timeout = setTimeout(() => {
         failureError = timeoutError
         killLoginProcessTree(child)
+        armForcedSettle()
       }, LOGIN_TIMEOUT_MS)
 
       // Why: on Windows the codex login CLI can linger after writing auth.json,
@@ -1828,40 +1876,29 @@ export class CodexAccountService {
             : 'Codex CLI found but could not run — Node.js may not be in your PATH.'
           : error.message
         failureError = new Error(message)
+        // Why: close normally follows a spawn error, but nothing guarantees it.
+        armForcedSettle()
       }
 
       const onClose = (code: number | null): void => {
-        settle(() => {
-          // Why: the post-auth tree kill is a success path — auth.json already
-          // exists and codex only failed to exit on its own, so the forced
-          // non-zero exit must not surface as a login failure.
-          if (
-            !failureError &&
-            (code === 0 || (loginTreeKilledAfterAuth && existsSync(authJsonPath)))
-          ) {
+        // Why: the post-auth tree kill is a success path — auth.json already
+        // exists and codex only failed to exit on its own, so the forced
+        // non-zero exit must not surface as a login failure.
+        if ((!failureError && code === 0) || loginSucceededAfterForcedKill()) {
+          settle(() => {
             resolvePromise()
-            return
-          }
-          const trimmedOutput = output.trim()
-          const error =
-            failureError ??
+          })
+          return
+        }
+        const trimmedOutput = output.trim()
+        settleFailure(
+          failureError ??
             new Error(
               trimmedOutput
                 ? `Codex login failed: ${trimmedOutput}`
                 : `Codex login exited with code ${code ?? 'unknown'}.`
             )
-          try {
-            this.restoreLoginSnapshot(managedHomePath, loginSnapshot)
-            rejectPromise(error)
-          } catch (rollbackError) {
-            rejectPromise(
-              new Error(
-                `${error.message} Credential restoration failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
-                { cause: error }
-              )
-            )
-          }
-        })
+        )
       }
 
       child.stdout.on('data', appendOutput)
@@ -1869,6 +1906,8 @@ export class CodexAccountService {
       child.on('error', onError)
       child.on('close', onClose)
     })
+
+    return loginSnapshot
   }
 
   private assertWslCodexCliAvailable(wslInfo: { distro: string; linuxPath: string }): void {
