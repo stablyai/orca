@@ -917,19 +917,21 @@ export function ResourceUsageStatusSegment({
     [allWorktrees]
   )
 
-  const oldWorkspaceCount = useMemo(() => {
+  const { oldWorkspaceCount, totalWorkspaceCount } = useMemo(() => {
     const now = Date.now()
-    let count = 0
+    let old = 0
+    let total = 0
     for (const worktree of allWorktrees) {
       const repo = repoById.get(worktree.repoId)
       if (!repo || isFolderRepo(repo) || worktree.isMainWorktree) {
         continue
       }
+      total += 1
       if (isWorkspaceOldForCleanup(worktree, now)) {
-        count += 1
+        old += 1
       }
     }
-    return count
+    return { oldWorkspaceCount: old, totalWorkspaceCount: total }
   }, [allWorktrees, repoById])
 
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
@@ -1497,8 +1499,8 @@ export function ResourceUsageStatusSegment({
             <span className="min-w-0 truncate px-4 text-center">
               {translate(
                 'auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3',
-                'Review inactive workspaces ({{value0}})',
-                { value0: oldWorkspaceCount }
+                'Review inactive workspaces ({{value0}} inactive / {{value1}} total)',
+                { value0: oldWorkspaceCount, value1: totalWorkspaceCount }
               )}
             </span>
             <ChevronRight

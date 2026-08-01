@@ -4,11 +4,12 @@ export const WORKSPACE_CLEANUP_IDLE_MS = 30 * 24 * 60 * 60 * 1000
 
 export type WorkspaceCleanupTier = 'ready' | 'review' | 'protected'
 
-export type WorkspaceCleanupReason = 'archived' | 'idle-clean'
+export type WorkspaceCleanupReason = 'archived' | 'idle-clean' | 'git-cost'
 
 export type WorkspaceCleanupInactivityInput = {
   isArchived: boolean
   lastActivityAt: number
+  hasGitCost?: boolean
 }
 
 export type WorkspaceCleanupBlocker =
@@ -217,6 +218,9 @@ export function getWorkspaceCleanupInactivityReasons(
   }
   if (scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS) {
     reasons.push('idle-clean')
+  }
+  if (workspace.hasGitCost) {
+    reasons.push('git-cost')
   }
   return reasons
 }
