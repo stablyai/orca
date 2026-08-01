@@ -496,7 +496,9 @@ export function useAutomationDispatchEvents(): void {
             checkCurrentStatus()
           }
           const dispatchStartedAt = Date.now()
-          if (automation.reuseSession) {
+          // Why: a reused session's launch args cannot be verified, so non-empty
+          // agentArgs must start a fresh session to honor the override.
+          if (automation.reuseSession && !automation.agentArgs?.trim()) {
             const reusableSession = findReusableAutomationSession({
               automationId: automation.id,
               agentId: automation.agentId,

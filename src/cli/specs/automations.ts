@@ -51,7 +51,6 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       ...AUTOMATION_PRECHECK_FLAGS,
       ...AUTOMATION_TARGET_FLAGS,
       ...AUTOMATION_SCHEDULE_FLAGS,
-      'agent-args',
       ...AUTOMATION_STATE_FLAGS
     ],
     notes: [
@@ -85,7 +84,6 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       ...AUTOMATION_PRECHECK_FLAGS,
       ...AUTOMATION_TARGET_FLAGS,
       ...AUTOMATION_SCHEDULE_FLAGS,
-      'agent-args',
       ...AUTOMATION_STATE_FLAGS
     ],
     positionalArgs: ['id'],

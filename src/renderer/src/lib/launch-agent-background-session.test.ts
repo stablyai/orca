@@ -623,7 +623,7 @@ describe('launchAgentBackgroundSession', () => {
     })
   })
 
-  it('keeps global default args when agent args are null or empty', async () => {
+  it('keeps global default args when agent args are null, empty, or whitespace-only', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
     await launchAgentBackgroundSession({
@@ -638,11 +638,20 @@ describe('launchAgentBackgroundSession', () => {
       prompt: 'run the automation',
       agentArgs: ''
     })
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      agentArgs: '   '
+    })
 
     expect(mockSpawn.mock.calls[0]?.[0]).toMatchObject({
       command: "claude '--dangerously-skip-permissions' 'run the automation'"
     })
     expect(mockSpawn.mock.calls[1]?.[0]).toMatchObject({
+      command: "claude '--dangerously-skip-permissions' 'run the automation'"
+    })
+    expect(mockSpawn.mock.calls[2]?.[0]).toMatchObject({
       command: "claude '--dangerously-skip-permissions' 'run the automation'"
     })
   })
