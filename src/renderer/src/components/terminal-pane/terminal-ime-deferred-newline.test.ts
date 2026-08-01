@@ -88,6 +88,35 @@ describe('sendTerminalInputAfterComposition', () => {
     route.dispose()
   })
 
+  it('does not let a composition started after defer hold the newline', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const terminal = { input: vi.fn() }
+    const transport = { getPtyId: () => 'pty-1' } as unknown as PtyTransport
+    const route = installTerminalImeCompositionRoute({
+      terminalElement: el,
+      terminal,
+      capturedTransport: transport,
+      getCurrentTransport: () => transport
+    })
+    const sessionEvent = (type: string, id: number) =>
+      new CustomEvent(type, { detail: { id, data: `commit-${id}` } })
+
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1))
+    sendTerminalInputAfterComposition(el, send, { fallbackMs: 50, maxIdleMs: 1000 })
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 2))
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_END_EVENT, 1))
+    vi.advanceTimersByTime(0)
+
+    expect(send).toHaveBeenCalledTimes(1)
+
+    el.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_END_EVENT, 2))
+    vi.runAllTimers()
+    expect(send).toHaveBeenCalledTimes(1)
+
+    route.dispose()
+  })
+
   it('sends only once and drops the listener after firing', () => {
     const el = document.createElement('div')
     const send = vi.fn()

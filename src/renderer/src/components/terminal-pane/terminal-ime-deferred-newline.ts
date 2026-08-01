@@ -1,4 +1,5 @@
 import {
+  capturePendingTerminalImeCompositionSessions,
   hasPendingTerminalImeComposition,
   XTERM_COMPOSITION_SESSION_END_EVENT
 } from './terminal-ime-composition-route'
@@ -28,6 +29,9 @@ export function sendTerminalInputAfterComposition(
   )
   let done = false
   let idleMs = 0
+  const pendingCompositionSessions = capturePendingTerminalImeCompositionSessions(terminalElement)
+  const hasCapturedPendingComposition = (): boolean =>
+    hasPendingTerminalImeComposition(terminalElement, pendingCompositionSessions)
 
   const finish = (): void => {
     if (done) {
@@ -46,7 +50,7 @@ export function sendTerminalInputAfterComposition(
   }
 
   const finishAfterPendingComposition = (): void => {
-    if (!hasPendingTerminalImeComposition(terminalElement)) {
+    if (!hasCapturedPendingComposition()) {
       finish()
     }
   }
@@ -56,6 +60,9 @@ export function sendTerminalInputAfterComposition(
   // ceiling only ever expires on a composition that is genuinely stuck.
   let sawRecentUpdate = false
   const onCompositionUpdate = (): void => {
+    if (pendingCompositionSessions.size > 0 && !hasCapturedPendingComposition()) {
+      return
+    }
     idleMs = 0
     sawRecentUpdate = true
   }
@@ -70,7 +77,7 @@ export function sendTerminalInputAfterComposition(
     // composition was already in flight never saw that session start, so it has nothing
     // recorded to report as pending.
     const compositionInProgress =
-      hasPendingTerminalImeComposition(terminalElement) || sawRecentUpdate
+      pendingCompositionSessions.size > 0 ? hasCapturedPendingComposition() : sawRecentUpdate
     sawRecentUpdate = false
     if (!compositionInProgress || idleMs >= maxIdleMs) {
       finish()

@@ -129,6 +129,31 @@ describe('installTerminalImeCompositionRoute', () => {
     expect(hasPendingTerminalImeComposition(harness.element)).toBe(false)
   })
 
+  it('keeps a shared session pending until every overlapping route releases it', () => {
+    const element = document.createElement('div')
+    const firstTransport = createTransport('pty-first')
+    const secondTransport = createTransport('pty-second')
+    const firstRoute = installTerminalImeCompositionRoute({
+      terminalElement: element,
+      terminal: { input: vi.fn() },
+      capturedTransport: firstTransport,
+      getCurrentTransport: () => firstTransport
+    })
+    const secondRoute = installTerminalImeCompositionRoute({
+      terminalElement: element,
+      terminal: { input: vi.fn() },
+      capturedTransport: secondTransport,
+      getCurrentTransport: () => secondTransport
+    })
+
+    element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1))
+    firstRoute.dispose()
+    expect(hasPendingTerminalImeComposition(element)).toBe(true)
+
+    secondRoute.dispose()
+    expect(hasPendingTerminalImeComposition(element)).toBe(false)
+  })
+
   it('drops a commit after same-pane PTY replacement', () => {
     const harness = createHarness()
     harness.start(1)
