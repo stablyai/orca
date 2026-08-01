@@ -7,9 +7,14 @@ const RENDERER_SHUTDOWN_CHECKPOINT_CHANNEL = 'app:persist-before-unload-sync'
 const MAX_RENDERER_SHUTDOWN_SESSION_PARTITIONS = 128
 let trustedRendererShutdownCheckpointWebContentsId: number | null = null
 
-type PersistBeforeUnloadSyncArgs = {
-  sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
+type PersistBeforeUnloadSyncEnvelope = {
+  sessions: unknown[]
   ui: Partial<PersistedUIState>
+}
+
+type RendererShutdownSessionPartition = {
+  state: WorkspaceSessionState
+  hostId?: ExecutionHostId
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -20,6 +25,10 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
 }
 
+function isOptionalRecordOf(value: unknown, isEntry: (entry: unknown) => boolean): boolean {
+  return value === undefined || (isPlainRecord(value) && Object.values(value).every(isEntry))
+}
+
 function isWorkspaceSessionCheckpoint(value: unknown): value is WorkspaceSessionState {
   if (!isPlainRecord(value)) {
     return false
@@ -28,15 +37,16 @@ function isWorkspaceSessionCheckpoint(value: unknown): value is WorkspaceSession
     isNullableString(value.activeRepoId) &&
     isNullableString(value.activeWorktreeId) &&
     isNullableString(value.activeTabId) &&
-    isPlainRecord(value.tabsByWorktree) &&
     // Why: one-level container checks so a renderer serialization bug cannot
     // flush scalar garbage where hydration expects tab arrays and layout
     // records; the trusted sender bounds how deep validation needs to go.
-    Object.values(value.tabsByWorktree).every(
+    // Host-split slices legitimately omit a container that has no routed
+    // entries, so an absent container is valid — only a present one is checked.
+    isOptionalRecordOf(
+      value.tabsByWorktree,
       (tabs) => Array.isArray(tabs) && tabs.every(isPlainRecord)
     ) &&
-    isPlainRecord(value.terminalLayoutsByTabId) &&
-    Object.values(value.terminalLayoutsByTabId).every(isPlainRecord)
+    isOptionalRecordOf(value.terminalLayoutsByTabId, isPlainRecord)
   )
 }
 
@@ -46,18 +56,24 @@ function isExecutionHostId(value: unknown): value is ExecutionHostId | undefined
   )
 }
 
-function isPersistBeforeUnloadSyncArgs(value: unknown): value is PersistBeforeUnloadSyncArgs {
-  if (!isPlainRecord(value) || !Array.isArray(value.sessions) || !isPlainRecord(value.ui)) {
-    return false
-  }
-  if (value.sessions.length > MAX_RENDERER_SHUTDOWN_SESSION_PARTITIONS) {
-    return false
-  }
-  return value.sessions.every(
-    (session) =>
-      isPlainRecord(session) &&
-      isWorkspaceSessionCheckpoint(session.state) &&
-      isExecutionHostId(session.hostId)
+function isPersistBeforeUnloadSyncEnvelope(
+  value: unknown
+): value is PersistBeforeUnloadSyncEnvelope {
+  return (
+    isPlainRecord(value) &&
+    Array.isArray(value.sessions) &&
+    value.sessions.length <= MAX_RENDERER_SHUTDOWN_SESSION_PARTITIONS &&
+    isPlainRecord(value.ui)
+  )
+}
+
+function isRendererShutdownSessionPartition(
+  value: unknown
+): value is RendererShutdownSessionPartition {
+  return (
+    isPlainRecord(value) &&
+    isWorkspaceSessionCheckpoint(value.state) &&
+    isExecutionHostId(value.hostId)
   )
 }
 
@@ -86,7 +102,7 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
       event.returnValue = { ok: false }
       return
     }
-    if (!isPersistBeforeUnloadSyncArgs(args)) {
+    if (!isPersistBeforeUnloadSyncEnvelope(args)) {
       event.returnValue = { ok: false }
       return
     }
@@ -95,8 +111,15 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
     // Why: stage both renderer-owned snapshots before synchronously flushing
     // the stores, so an immediate exit cannot outrun either update.
     try {
-      for (const { state, hostId } of args.sessions) {
-        store.setWorkspaceSession(state, hostId)
+      for (const session of args.sessions) {
+        // Why: skip, not reject — one malformed partition must not discard the
+        // other hosts' checkpoints or leave the window unable to quit; the
+        // skipped host keeps its last debounced write instead.
+        if (!isRendererShutdownSessionPartition(session)) {
+          console.error('[app] Skipping malformed renderer shutdown checkpoint partition')
+          continue
+        }
+        store.setWorkspaceSession(session.state, session.hostId)
       }
       store.updateUI(args.ui)
     } catch (error) {

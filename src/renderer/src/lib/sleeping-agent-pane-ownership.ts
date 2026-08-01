@@ -23,9 +23,17 @@ export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessi
 
 // Why: re-leafed adoption may only relaunch sessions that would legitimately
 // auto-resume; completed/interrupted rows must neither relaunch nor block a
-// live sibling's adoption by inflating the candidate count.
+// live sibling's adoption by inflating the candidate count. Only quit/live
+// recovery rows qualify — worktree-sleep and originless legacy captures keep
+// the fork-a-new-tab wake path, which would otherwise race this adoption into
+// a double resume of one provider session.
 function isAdoptableRebuiltPaneRecord(record: SleepingAgentSessionRecord): boolean {
-  return record.state !== 'done' && record.interrupted !== true && isResumableTuiAgent(record.agent)
+  return (
+    (record.origin === 'quit' || record.origin === 'live') &&
+    record.state !== 'done' &&
+    record.interrupted !== true &&
+    isResumableTuiAgent(record.agent)
+  )
 }
 
 /**
@@ -62,6 +70,21 @@ export function findUniqueAdoptableRebuiltPaneRecord(
     )
   })
   if (matches.length === 0) {
+    return null
+  }
+  // Why: a record whose leaf is still bound in the tab's layout belongs to a
+  // pane that restores its own session directly; adoption exists only for lost
+  // leaves. Any bound candidate means the identity is already owned — fail
+  // closed instead of resuming it a second time in another pane.
+  if (
+    matches.some(([paneKey]) => {
+      const parsed = parsePaneKey(paneKey)
+      return (
+        parsed !== null &&
+        hasMatchingStablePaneLayout(parsed.tabId, parsed.leafId, state.terminalLayoutsByTabId)
+      )
+    })
+  ) {
     return null
   }
   // Why: repeated crash/adopt cycles can leave several rows for one provider
@@ -111,7 +134,7 @@ function layoutContainsLeaf(
   )
 }
 
-function hasMatchingStablePaneLayout(
+export function hasMatchingStablePaneLayout(
   tabId: string,
   leafId: string,
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
@@ -208,10 +231,13 @@ export function recordPaneIsOwnedByPreservedPane(
     // activation must keep the old fork-a-new-tab recovery. Worktree-sleep
     // records intentionally keep the old behavior when their layout is gone.
     if (!hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
+      // Why: the O(1) activation gate runs before the O(records) adoption scan;
+      // the resume sweep calls this per record (squared via claim-key checks),
+      // and both operands are pure reads, so the order only changes cost.
       return (
         (record.origin === 'quit' || record.origin === 'live') &&
-        findUniqueAdoptableRebuiltPaneRecord(state, record.worktreeId, tabId)?.record === record &&
-        paneWillConnectOnActivation(record.worktreeId, tabId, state)
+        paneWillConnectOnActivation(record.worktreeId, tabId, state) &&
+        findUniqueAdoptableRebuiltPaneRecord(state, record.worktreeId, tabId)?.record === record
       )
     }
     if (isPassiveCompletedHibernationEvidence(record)) {

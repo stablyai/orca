@@ -180,6 +180,7 @@ import {
 import {
   findUniqueAdoptableRebuiltPaneRecord,
   getProviderSessionClaimKey,
+  hasMatchingStablePaneLayout,
   isPassiveCompletedHibernationEvidence
 } from '@/lib/sleeping-agent-pane-ownership'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
@@ -4910,6 +4911,20 @@ export function connectPanePty(
           )
       )
       if (!allSameSession) {
+        return undefined
+      }
+      // Why: a row whose leaf is still bound in the tab's layout belongs to a
+      // pane that restores its own session directly; adoption exists only for
+      // lost leaves. A bound row means this identity is already owned — fail
+      // closed instead of resuming it a second time in a sibling pane.
+      const anyCandidateLeafStillBound = candidates.some((entry) => {
+        const parsed = parsePaneKey(entry.paneKey)
+        return (
+          parsed !== null &&
+          hasMatchingStablePaneLayout(parsed.tabId, parsed.leafId, state.terminalLayoutsByTabId)
+        )
+      })
+      if (anyCandidateLeafStillBound) {
         return undefined
       }
       const freshest = candidates.reduce((best, entry) =>

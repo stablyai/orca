@@ -9850,7 +9850,8 @@ describe('connectPanePty', () => {
           prompt: 'finish the task',
           state: 'working',
           capturedAt: 1,
-          updatedAt: 1
+          updatedAt: 1,
+          origin: 'live'
         }
       }
     } as StoreState
@@ -10032,7 +10033,8 @@ describe('connectPanePty', () => {
           prompt: 'finish the task',
           state: 'working',
           capturedAt: 1,
-          updatedAt: 1
+          updatedAt: 1,
+          origin: 'live'
         },
         [completedPaneKey]: {
           paneKey: completedPaneKey,
@@ -10251,6 +10253,177 @@ describe('connectPanePty', () => {
     expect(transport.connect).not.toHaveBeenCalledWith(
       expect.objectContaining({ command: expect.stringContaining('resume') })
     )
+  })
+
+  it('fails closed when two live rows name distinct sessions', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transportFactoryQueue.push(transport)
+    const firstPaneKey = makePaneKey('tab-1', LEAF_1)
+    const secondPaneKey = makePaneKey('tab-1', '33333333-3333-4333-8333-333333333333')
+    const makeLiveEntry = (paneKey: string, sessionId: string, updatedAt: number) => ({
+      state: 'working',
+      prompt: 'two live sessions on one tab',
+      agentType: 'codex',
+      paneKey,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      updatedAt,
+      stateStartedAt: updatedAt,
+      stateHistory: [],
+      providerSession: { key: 'session_id', id: sessionId }
+    })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: null }]
+      },
+      ptyIdsByTabId: {
+        'tab-1': []
+      },
+      terminalLayoutsByTabId: {},
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {
+        [firstPaneKey]: makeLiveEntry(firstPaneKey, 'codex-session-a', 1),
+        [secondPaneKey]: makeLiveEntry(secondPaneKey, 'codex-session-b', 2)
+      },
+      sleepingAgentSessionsByPaneKey: {}
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({ restoredLeafId: undefined, restoredPtyIdByLeafId: {} })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(10)
+
+    // Two distinct live sessions are ambiguous; resuming the freshest would
+    // silently bind the wrong conversation to the rebuilt pane.
+    expect(transport.connect).not.toHaveBeenCalledWith(
+      expect.objectContaining({ command: expect.stringContaining('resume') })
+    )
+  })
+
+  it('does not adopt a live row whose leaf is still bound in the tab layout', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transportFactoryQueue.push(transport)
+    const siblingPaneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: null }]
+      },
+      ptyIdsByTabId: {
+        'tab-1': []
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF_1 },
+            second: { type: 'leaf', leafId: LEAF_2 }
+          },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null
+        }
+      },
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {
+        [siblingPaneKey]: {
+          state: 'working',
+          prompt: 'still owned by the sibling pane',
+          agentType: 'codex',
+          paneKey: siblingPaneKey,
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        }
+      },
+      sleepingAgentSessionsByPaneKey: {}
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({ restoredLeafId: undefined, restoredPtyIdByLeafId: {} })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(10)
+
+    // The sibling's leaf survived in the layout, so that pane restores its own
+    // session; adopting its row here would resume the session twice.
+    expect(transport.connect).not.toHaveBeenCalledWith(
+      expect.objectContaining({ command: expect.stringContaining('resume') })
+    )
+  })
+
+  it('does not adopt a sleeping record whose leaf is still bound in the tab layout', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transportFactoryQueue.push(transport)
+    const siblingPaneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: null }]
+      },
+      ptyIdsByTabId: {
+        'tab-1': []
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF_1 },
+            second: { type: 'leaf', leafId: LEAF_2 }
+          },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null
+        }
+      },
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {
+        [siblingPaneKey]: {
+          paneKey: siblingPaneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          prompt: 'still owned by the sibling pane',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'live'
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({ restoredLeafId: undefined, restoredPtyIdByLeafId: {} })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(10)
+
+    expect(transport.connect).not.toHaveBeenCalledWith(
+      expect.objectContaining({ command: expect.stringContaining('resume') })
+    )
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(siblingPaneKey)
   })
 
   it('does not choose a non-exact legacy record when same-tab provider sessions differ', async () => {

@@ -147,5 +147,23 @@ describe('preserved sleeping-agent pane ownership', () => {
       }
     } as never
     expect(recordPaneIsOwnedByPreservedPane(first, withLegacySibling)).toBe(false)
+
+    // Worktree-sleep and originless legacy captures keep the fork-a-new-tab
+    // wake path; adopting them here would race that path into a double resume.
+    const worktreeSleep = makeRecord('11111111-1111-4111-8111-111111111111', {
+      origin: 'worktree-sleep'
+    })
+    const originless = makeRecord('22222222-2222-4222-8222-222222222222', {
+      origin: undefined
+    })
+    const withNonRecoveryOrigins = {
+      ...baseState,
+      sleepingAgentSessionsByPaneKey: {
+        [worktreeSleep.paneKey]: worktreeSleep,
+        [originless.paneKey]: originless
+      }
+    } as never
+    expect(recordPaneIsOwnedByPreservedPane(worktreeSleep, withNonRecoveryOrigins)).toBe(false)
+    expect(recordPaneIsOwnedByPreservedPane(originless, withNonRecoveryOrigins)).toBe(false)
   })
 })

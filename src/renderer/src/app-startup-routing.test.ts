@@ -464,6 +464,8 @@ describe('renderer startup runtime routing', () => {
 
     expect(snapshot).toBeGreaterThanOrEqual(0)
     expect(reconnect).toBeGreaterThan(snapshot)
-    expect(source).toContain('requestAgentStatusStartupSnapshot()')
+    // Both the primary and the degraded startup paths must apply the hook
+    // cache before their reconnect; dropping either regresses cold restore.
+    expect(source.match(/requestAgentStatusStartupSnapshot\(\)/g) ?? []).toHaveLength(2)
   })
 })

@@ -3336,7 +3336,13 @@ export function useIpcEvents(): void {
     unsubs.push(
       registerAgentStatusStartupSnapshotLoader(() => {
         startupSnapshotBarrierStarted = true
-        return loadAgentStatusSnapshot({ allowBeforeWorkspaceReady: true })
+        // Why: a barrier response that loses to a later ready-window request
+        // (e.g. after the 5s fail-open) must not land stale rows on the
+        // replacement workspace.
+        return loadAgentStatusSnapshot({
+          allowBeforeWorkspaceReady: true,
+          requestId: ++snapshotRequestId
+        })
       })
     )
 

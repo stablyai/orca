@@ -400,6 +400,13 @@ test('reconstructs a live session from the main hook cache after renderer force-
     await waitForActiveTerminalManager(secondLaunch.page, 30_000)
 
     await waitForTerminalOutput(secondLaunch.page, PROVIDER_SESSION_ID, 30_000)
+
+    // Hook-cache recovery must reuse the rebuilt tab, not fork a duplicate.
+    const terminalTabCount = await secondLaunch.page.evaluate(
+      (wtId) => (window.__store?.getState().tabsByWorktree[wtId] ?? []).length,
+      worktreeId
+    )
+    expect(terminalTabCount).toBe(1)
   } finally {
     if (secondApp) {
       await session.close(secondApp)

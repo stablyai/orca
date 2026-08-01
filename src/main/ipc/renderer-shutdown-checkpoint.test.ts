@@ -168,26 +168,68 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     expect(store.setWorkspaceSession).not.toHaveBeenCalled()
     expect(store.flushOrThrow).not.toHaveBeenCalled()
     expect(untrustedEvent.returnValue).toEqual({ ok: false })
+  })
 
-    const scalarTabsEvent = makeRendererEvent()
-    handler?.(scalarTabsEvent, {
-      sessions: [{ state: { ...makeSession('worktree-1'), tabsByWorktree: { 'worktree-1': 5 } } }],
-      ui: {}
-    })
-    expect(store.setWorkspaceSession).not.toHaveBeenCalled()
-    expect(store.flushOrThrow).not.toHaveBeenCalled()
-    expect(scalarTabsEvent.returnValue).toEqual({ ok: false })
+  it('skips a malformed partition while persisting the valid ones', () => {
+    const store = {
+      setWorkspaceSession: vi.fn(),
+      updateUI: vi.fn(),
+      flushOrThrow: vi.fn(),
+      flushActiveViewPreferenceOrThrow: vi.fn()
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
 
-    const scalarLayoutEvent = makeRendererEvent()
-    handler?.(scalarLayoutEvent, {
+    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const event = makeRendererEvent()
+    const validSession = makeSession('worktree-1')
+    handler?.(event, {
       sessions: [
-        { state: { ...makeSession('worktree-1'), terminalLayoutsByTabId: { 'tab-1': 'oops' } } }
+        { state: { ...makeSession('worktree-2'), tabsByWorktree: { 'worktree-2': 5 } } },
+        { state: { ...makeSession('worktree-3'), terminalLayoutsByTabId: { 'tab-1': 'oops' } } },
+        { state: validSession, hostId: 'runtime:host-1' }
       ],
-      ui: {}
+      ui: { activeView: 'settings' }
     })
-    expect(store.setWorkspaceSession).not.toHaveBeenCalled()
-    expect(store.flushOrThrow).not.toHaveBeenCalled()
-    expect(scalarLayoutEvent.returnValue).toEqual({ ok: false })
+
+    // One corrupt slice must not discard the other checkpoints or block quit;
+    // the skipped host keeps its last debounced write instead.
+    expect(store.setWorkspaceSession).toHaveBeenCalledTimes(1)
+    expect(store.setWorkspaceSession).toHaveBeenCalledWith(validSession, 'runtime:host-1')
+    expect(store.flushOrThrow).toHaveBeenCalledTimes(1)
+    expect(event.returnValue).toEqual({ ok: true })
+  })
+
+  it('accepts a runtime-host slice that has no tab or layout containers', () => {
+    const store = {
+      setWorkspaceSession: vi.fn(),
+      updateUI: vi.fn(),
+      flushOrThrow: vi.fn(),
+      flushActiveViewPreferenceOrThrow: vi.fn()
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+
+    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const event = makeRendererEvent()
+    // A host slice carries only the cloned global fields when no tabs or
+    // layouts routed to that host — the shape splitWorkspaceSessionByHost
+    // emits for a merely-visited SSH/runtime worktree.
+    const hostSlice = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null
+    }
+    handler?.(event, {
+      sessions: [
+        { state: makeSession('local-worktree') },
+        { state: hostSlice, hostId: 'runtime:host-1' }
+      ],
+      ui: { activeView: 'settings' }
+    })
+
+    expect(store.setWorkspaceSession).toHaveBeenCalledTimes(2)
+    expect(store.setWorkspaceSession).toHaveBeenCalledWith(hostSlice, 'runtime:host-1')
+    expect(store.flushOrThrow).toHaveBeenCalledTimes(1)
+    expect(event.returnValue).toEqual({ ok: true })
   })
 
   it('accepts the latest trusted renderer after the main window is recreated', () => {
