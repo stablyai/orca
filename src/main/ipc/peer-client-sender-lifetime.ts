@@ -4,30 +4,32 @@ import type { WebContents } from 'electron'
 // would leave the upstream host streaming into a destroyed sender forever. One
 // 'destroyed' listener per sender runs every still-registered cleanup.
 export class PeerClientSenderLifetime {
-  private readonly senderCleanups = new Map<WebContents, Set<() => void>>()
-  private readonly releasesByRequestId = new Map<string, () => void>()
+  private readonly cleanupsBySender = new Map<WebContents, Map<string, () => void>>()
+  private readonly senderByRequestId = new Map<string, WebContents>()
 
   bind(sender: WebContents, requestId: string, cleanup: () => void): void {
-    let cleanups = this.senderCleanups.get(sender)
+    let cleanups = this.cleanupsBySender.get(sender)
     if (!cleanups) {
-      const created = new Set<() => void>()
-      this.senderCleanups.set(sender, created)
+      const created = new Map<string, () => void>()
+      this.cleanupsBySender.set(sender, created)
       sender.once('destroyed', () => {
-        this.senderCleanups.delete(sender)
-        for (const run of created) {
+        this.cleanupsBySender.delete(sender)
+        for (const [boundRequestId, run] of created) {
+          this.senderByRequestId.delete(boundRequestId)
           run()
         }
       })
       cleanups = created
     }
-    cleanups.add(cleanup)
-    this.releasesByRequestId.set(requestId, () => {
-      this.senderCleanups.get(sender)?.delete(cleanup)
-      this.releasesByRequestId.delete(requestId)
-    })
+    cleanups.set(requestId, cleanup)
+    this.senderByRequestId.set(requestId, sender)
   }
 
   release(requestId: string): void {
-    this.releasesByRequestId.get(requestId)?.()
+    const sender = this.senderByRequestId.get(requestId)
+    this.senderByRequestId.delete(requestId)
+    if (sender) {
+      this.cleanupsBySender.get(sender)?.delete(requestId)
+    }
   }
 }
