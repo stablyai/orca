@@ -68,7 +68,7 @@ describe('resolveContextPressure', () => {
     })
   })
 
-  it('uses the minimum of soft cap, provider max, and model table', () => {
+  it('caps with the soft limit, trusts the provider max, and never lets the table override it', () => {
     const base = {
       usage: { usedTokens: 90_000, maxTokens: 200_000 } as const,
       model: 'claude-sonnet-4-5'
@@ -88,14 +88,23 @@ describe('resolveContextPressure', () => {
         config: { ...CONFIG, softLimits: { 'model:claude-sonnet-4-5': 500_000 } }
       })
     ).toMatchObject({ limitTokens: 120_000, limitSource: 'provider' })
-    // Model table binds when the provider max is larger and no soft cap exists.
+    // Provider truth wins over a lower curated-table entry: a stale table must
+    // never inflate pressure against a live provider-reported window (#11225).
     expect(
       resolveContextPressure({
         usage: { usedTokens: 90_000, maxTokens: 900_000 },
         model: 'claude-sonnet-4-5',
         config: CONFIG
       })
-    ).toMatchObject({ limitTokens: 200_000, limitSource: 'model' })
+    ).toMatchObject({ limitTokens: 900_000, limitSource: 'provider' })
+    // The table fills in only when the provider reports no max of its own.
+    expect(
+      resolveContextPressure({
+        usage: { usedTokens: 150_000 },
+        model: 'claude-sonnet-4-5',
+        config: CONFIG
+      })
+    ).toMatchObject({ limitTokens: 200_000, limitSource: 'model', level: 'warning' })
   })
 
   it('reports model metadata when an equal soft cap does not lower the limit', () => {

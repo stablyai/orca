@@ -1,7 +1,8 @@
 // ─── Agent context-window pressure ───────────────────────────────────────────
 // Provider-reported context usage carried on an agent-session status entry,
 // plus the traffic-light computation (green/yellow/red) against the effective
-// limit: min(user soft cap, provider-reported max, model-table fallback).
+// limit: min(user soft cap, provider-reported max), with the curated model
+// table filling in only when the provider reports no max of its own.
 // No data → null; the UI must show "unknown", never an invented value.
 
 import { getModelContextWindowTokens } from './model-context-windows'
@@ -290,6 +291,9 @@ export function resolveContextPressure(input: {
 
   // Why this order: on ties the earlier source is reported — provider data is
   // ground truth, and a soft cap only "binds" when it actually lowers the limit.
+  // The curated table is a fallback for a silent provider, never a competitor:
+  // a stale entry must not override a live provider-reported window (contract
+  // in model-context-windows.ts and issue #11225).
   const candidates: LimitCandidate[] = []
   if (
     typeof usage.maxTokens === 'number' &&
@@ -297,10 +301,11 @@ export function resolveContextPressure(input: {
     usage.maxTokens >= 1
   ) {
     candidates.push({ limitTokens: Math.floor(usage.maxTokens), limitSource: 'provider' })
-  }
-  const modelWindow = input.model ? getModelContextWindowTokens(input.model) : undefined
-  if (modelWindow !== undefined) {
-    candidates.push({ limitTokens: modelWindow, limitSource: 'model' })
+  } else {
+    const modelWindow = input.model ? getModelContextWindowTokens(input.model) : undefined
+    if (modelWindow !== undefined) {
+      candidates.push({ limitTokens: modelWindow, limitSource: 'model' })
+    }
   }
   const softCap = resolveSoftCap(
     input.config.softLimits,
