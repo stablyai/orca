@@ -854,7 +854,6 @@
         "7b1d20f4c8": "Keep current session"
       },
       "ContextPressureIndicator": {
-        "ariaLabel": "Context window {{value0}}% used",
         "usageDetail": "Context window: {{value0}}{{value1}} of {{value2}} tokens ({{value3}}%)",
         "usagePercent": "Context window: {{value0}}% used",
         "limitSource": "Effective context limit: {{value0}}",

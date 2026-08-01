@@ -3044,7 +3044,8 @@ export type GlobalSettings = {
   contextPressureWarnPercent?: number
   /** Percent of the effective context limit at which the pressure indicator turns red. */
   contextPressureCriticalPercent?: number
-  /** Token caps keyed by `global`, `provider:`, `agent:`, or `model:` scope; unprefixed legacy keys remain supported. */
+  /** Token caps keyed by `global`, `provider:<id>`, `agent:<type>`, or `model:<id>`.
+   *  Every key requires an explicit scope; unprefixed keys are dropped at sanitation. */
   contextPressureSoftLimits?: Record<string, number>
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean

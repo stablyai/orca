@@ -818,7 +818,6 @@
         "6133594b12": "以前のアカウントを保持"
       },
       "ContextPressureIndicator": {
-        "ariaLabel": "コンテキストウィンドウ使用率 {{value0}}%",
         "usageDetail": "コンテキストウィンドウ: {{value0}}{{value1}} / {{value2}}トークン（{{value3}}%）",
         "usagePercent": "コンテキストウィンドウ: {{value0}}% 使用中",
         "limitSource": "有効なコンテキスト上限: {{value0}}",

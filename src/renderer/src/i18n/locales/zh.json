@@ -818,7 +818,6 @@
         "6133594b12": "保留旧账户"
       },
       "ContextPressureIndicator": {
-        "ariaLabel": "上下文窗口已使用 {{value0}}%",
         "usageDetail": "上下文窗口：{{value0}}{{value1}} / {{value2}} 个令牌（{{value3}}%）",
         "usagePercent": "上下文窗口：已使用 {{value0}}%",
         "limitSource": "有效上下文上限：{{value0}}",

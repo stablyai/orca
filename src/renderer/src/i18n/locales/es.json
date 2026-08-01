@@ -818,7 +818,6 @@
         "6133594b12": "Mantener cuenta anterior"
       },
       "ContextPressureIndicator": {
-        "ariaLabel": "Ventana de contexto al {{value0}}% de uso",
         "usageDetail": "Ventana de contexto: {{value0}}{{value1}} de {{value2}} tokens ({{value3}}%)",
         "usagePercent": "Ventana de contexto: {{value0}}% en uso",
         "limitSource": "Límite de contexto efectivo: {{value0}}",

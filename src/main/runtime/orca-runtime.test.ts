@@ -11307,6 +11307,39 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('drops the retained context reading when the runtime row changes agentType', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    const paneKey = makePaneKey('tab-ret', leafId)
+    runtime.registerPty('pty-ret', TEST_WORKTREE_ID, null, { tabId: 'tab-ret', leafId })
+    const internals = runtime as unknown as {
+      latestAgentStatusByPaneKey: Map<string, { payload: { contextUsage?: unknown } }>
+    }
+    const reading = { usedTokens: 150_000, maxTokens: 200_000 }
+    runtime.onPtyData(
+      'pty-ret',
+      `\x1b]9999;{"state":"working","prompt":"p","agentType":"claude","contextUsage":${JSON.stringify(reading)}}\x07`,
+      1
+    )
+    expect(internals.latestAgentStatusByPaneKey.get(paneKey)?.payload.contextUsage).toEqual(reading)
+
+    // Same agent, reading omitted from the ping: carried.
+    runtime.onPtyData(
+      'pty-ret',
+      '\x1b]9999;{"state":"working","prompt":"p","agentType":"claude"}\x07',
+      2
+    )
+    expect(internals.latestAgentStatusByPaneKey.get(paneKey)?.payload.contextUsage).toEqual(reading)
+
+    // Agent change: the successor session must not wear the predecessor's reading.
+    runtime.onPtyData(
+      'pty-ret',
+      '\x1b]9999;{"state":"working","prompt":"p","agentType":"codex"}\x07',
+      3
+    )
+    expect(internals.latestAgentStatusByPaneKey.get(paneKey)?.payload.contextUsage).toBeUndefined()
+  })
+
   it('uses strong provider confirmation to authorize fresh hook state over a shell foreground', async () => {
     const getForegroundProcess = vi.fn(async () => 'powershell.exe')
     const confirmForegroundProcess = vi.fn(async () => 'claude')

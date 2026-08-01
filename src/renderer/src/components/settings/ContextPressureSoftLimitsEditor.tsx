@@ -117,7 +117,7 @@ export function ContextPressureSoftLimitsEditor({
             )}
             aria-label={translate(
               'auto.components.settings.ExperimentalPane.contextPressure.softLimitKeyAriaLabel',
-              'Soft limit model ID or agent type'
+              'Soft limit key: global, provider, model, or agent type'
             )}
             className="flex-1 font-mono text-xs"
             onChange={(e) => {
@@ -268,7 +268,7 @@ function SoftLimitRow({
         maxLength={CONTEXT_PRESSURE_SOFT_LIMIT_KEY_MAX_LENGTH}
         aria-label={translate(
           'auto.components.settings.ExperimentalPane.contextPressure.softLimitKeyAriaLabel',
-          'Soft limit model ID or agent type'
+          'Soft limit key: global, provider, model, or agent type'
         )}
         className="flex-1 font-mono text-xs"
         onChange={(e) => setKeyDraft(e.target.value)}

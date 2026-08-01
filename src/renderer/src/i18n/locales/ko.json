@@ -818,7 +818,6 @@
         "6133594b12": "이전 계정 유지"
       },
       "ContextPressureIndicator": {
-        "ariaLabel": "컨텍스트 창 {{value0}}% 사용됨",
         "usageDetail": "컨텍스트 창: {{value0}}{{value1}} / {{value2}}토큰 ({{value3}}%)",
         "usagePercent": "컨텍스트 창: {{value0}}% 사용됨",
         "limitSource": "유효 컨텍스트 한도: {{value0}}",

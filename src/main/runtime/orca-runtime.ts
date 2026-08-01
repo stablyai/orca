@@ -10143,8 +10143,13 @@ export class OrcaRuntimeService {
     // updatedAt) — mirrors AgentStatusEntry.stateStartedAt on the desktop side.
     const stateStartedAt =
       previous && previous.payload.state === payload.state ? previous.stateStartedAt : now
+    // Why: an agentType change means a new session whose reading no longer applies —
+    // mirrors the hook server's preservation guard so a successor agent never wears
+    // the predecessor's stale reading.
     const retainedPayload =
-      payload.contextUsage === undefined && previous
+      payload.contextUsage === undefined &&
+      previous &&
+      previous.payload.agentType === payload.agentType
         ? { ...payload, contextUsage: previous.payload.contextUsage }
         : payload
     this.latestAgentStatusByPaneKey.set(paneKey, {

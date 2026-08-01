@@ -12,7 +12,9 @@ const STATUSLINE_CLEANUP_LABEL = 'orca_statusline_cleanup'
 const STATUSLINE_MATCH_LABEL = 'orca_statusline_match'
 const STATUSLINE_PROBE_LABEL = 'orca_statusline_probe'
 
-// Forwards Claude's live usage fields without consuming the OAuth endpoint budget.
+// Why: Claude Code pipes `rate_limits`/`context_window` to the statusLine command on every
+// turn; forwarding them gives Orca live usage without spending the OAuth usage endpoint's
+// tight budget. Emits no stdout so the in-terminal status line stays visually unchanged.
 export function getManagedStatusLineScript(
   target: 'local' | 'posix' = 'local',
   contextPressureEnabled = true
@@ -44,6 +46,7 @@ export function getManagedStatusLineScript(
       `if %ORCA_STATUSLINE_ELAPSED% GEQ 0 if %ORCA_STATUSLINE_ELAPSED% LSS ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS} goto :${STATUSLINE_CLEANUP_LABEL}`,
       `:${STATUSLINE_PROBE_LABEL}`,
       // Separate probes avoid findstr's unreliable multi-literal matching.
+      // Why: \" is the MSVC argv escape — findstr sees the quoted JSON key, so a cwd containing rate_limits can't false-match (POSIX guard parity).
       `"%SystemRoot%\\System32\\findstr.exe" /c:\\"rate_limits\\" "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul`,
       `if not errorlevel 1 goto :${STATUSLINE_MATCH_LABEL}`,
       ...(contextPressureEnabled

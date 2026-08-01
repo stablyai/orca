@@ -634,7 +634,8 @@ export class AgentHookServer {
     }
     let changed = false
     for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
-      if (entry.providerSessionOnly || entry.payload.contextUsage === undefined) {
+      // == null: rows already explicitly cleared need no re-emit/re-persist on toggle-off.
+      if (entry.providerSessionOnly || entry.payload.contextUsage == null) {
         continue
       }
       const enriched = entry as EnrichedAgentHookEventPayload

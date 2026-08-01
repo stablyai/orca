@@ -11,13 +11,14 @@ const LEVEL_COLORS: Record<RuntimeWorktreeAgentContextPressure['level'], string>
   critical: colors.statusRed
 }
 
+const numberFormat = new Intl.NumberFormat()
+
 export function ContextPressureDot({
   pressure
 }: {
   pressure: RuntimeWorktreeAgentContextPressure
 }) {
   const copy = CONTEXT_PRESSURE_COPY
-  const numberFormat = new Intl.NumberFormat()
   const percent = formatContextPressurePercent(pressure.usedPercent)
   const levelLabel = copy.levels[pressure.level]
   const approximate = pressure.usedTokensSource === 'derived-percent' ? `${copy.approximate} ` : ''
