@@ -525,6 +525,63 @@ describe('Store', () => {
     })
   })
 
+  it('preserves a project Linear default across the repo-backed projection on load', async () => {
+    // Why: repo-backed projects are re-derived from repos on every load; persisted-only fields must be carried back or they vanish.
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [makeRepo({ id: 'r1', path: '/repo', displayName: 'Repo' })],
+      projects: [
+        makeProject({
+          id: 'repo:r1',
+          displayName: 'Repo',
+          sourceRepoIds: ['r1'],
+          defaultLinearProjectId: 'lin-proj-1',
+          defaultLinearProjectWorkspaceId: 'ws-1'
+        })
+      ],
+      projectHostSetups: []
+    })
+
+    const store = await createStore()
+
+    const projected = store.getProjects().find((project) => project.id === 'repo:r1')
+    expect(projected?.defaultLinearProjectId).toBe('lin-proj-1')
+    expect(projected?.defaultLinearProjectWorkspaceId).toBe('ws-1')
+  })
+
+  it('updates, persists, and clears a project Linear issue default', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [makeRepo({ id: 'r1', path: '/repo', displayName: 'Repo' })],
+      projects: [makeProject({ id: 'repo:r1', displayName: 'Repo', sourceRepoIds: ['r1'] })],
+      projectHostSetups: []
+    })
+    const store = await createStore()
+
+    const updated = store.updateProject('repo:r1', {
+      defaultLinearProjectId: 'lin-proj-2',
+      defaultLinearProjectWorkspaceId: 'ws-2'
+    })
+
+    expect(updated?.defaultLinearProjectId).toBe('lin-proj-2')
+    expect(updated?.defaultLinearProjectWorkspaceId).toBe('ws-2')
+    store.flush()
+    const reloaded = await createStore()
+    const reloadedProject = reloaded.getProjects().find((project) => project.id === 'repo:r1')
+    expect(reloadedProject?.defaultLinearProjectId).toBe('lin-proj-2')
+    expect(reloadedProject?.defaultLinearProjectWorkspaceId).toBe('ws-2')
+
+    reloaded.updateProject('repo:r1', {
+      defaultLinearProjectId: null,
+      defaultLinearProjectWorkspaceId: null
+    })
+    reloaded.flush()
+    const cleared = await createStore()
+    const clearedProject = cleared.getProjects().find((project) => project.id === 'repo:r1')
+    expect(clearedProject?.defaultLinearProjectId).toBeUndefined()
+    expect(clearedProject?.defaultLinearProjectWorkspaceId).toBeUndefined()
+  })
+
   it('migrates legacy WSL agent settings into the global Windows runtime default', async () => {
     writeDataFile({
       schemaVersion: 1,

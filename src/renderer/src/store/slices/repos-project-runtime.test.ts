@@ -322,4 +322,66 @@ describe('repo slice project runtime updates', () => {
     expect(store.getState().projects[0]?.sourceRepoIds).toEqual(['local-repo', 'remote-repo'])
     expect(store.getState().projects[0]?.localWindowsRuntimePreference).toBeUndefined()
   })
+
+  it('updates a project Linear issue default through the projects API', async () => {
+    const project: Project = {
+      id: 'project-1',
+      displayName: 'Project',
+      badgeColor: '#000',
+      sourceRepoIds: ['local-repo'],
+      createdAt: 1,
+      updatedAt: 1
+    }
+    projectsUpdate.mockResolvedValue({
+      ...project,
+      defaultLinearProjectId: 'lin-proj-1',
+      defaultLinearProjectWorkspaceId: 'ws-1'
+    })
+    const store = createTestStore()
+    store.setState({ projects: [project] })
+
+    await store.getState().updateProject(project.id, {
+      defaultLinearProjectId: 'lin-proj-1',
+      defaultLinearProjectWorkspaceId: 'ws-1'
+    })
+
+    expect(store.getState().projects[0]?.defaultLinearProjectId).toBe('lin-proj-1')
+    expect(store.getState().projects[0]?.defaultLinearProjectWorkspaceId).toBe('ws-1')
+    expect(projectsUpdate).toHaveBeenCalledWith({
+      projectId: project.id,
+      updates: { defaultLinearProjectId: 'lin-proj-1', defaultLinearProjectWorkspaceId: 'ws-1' }
+    })
+  })
+
+  it('clears a project Linear issue default without dropping shared source repos', async () => {
+    const project: Project = {
+      id: 'github:stablyai/orca',
+      displayName: 'Orca',
+      badgeColor: '#000',
+      sourceRepoIds: ['local-repo', 'remote-repo'],
+      defaultLinearProjectId: 'lin-proj-1',
+      defaultLinearProjectWorkspaceId: 'ws-1',
+      createdAt: 1,
+      updatedAt: 2
+    }
+    projectsUpdate.mockResolvedValue({
+      id: project.id,
+      displayName: project.displayName,
+      badgeColor: project.badgeColor,
+      sourceRepoIds: ['local-repo'],
+      createdAt: project.createdAt,
+      updatedAt: 3
+    })
+    const store = createTestStore()
+    store.setState({ projects: [project] })
+
+    await store.getState().updateProject(project.id, {
+      defaultLinearProjectId: null,
+      defaultLinearProjectWorkspaceId: null
+    })
+
+    expect(store.getState().projects[0]?.sourceRepoIds).toEqual(['local-repo', 'remote-repo'])
+    expect(store.getState().projects[0]?.defaultLinearProjectId).toBeUndefined()
+    expect(store.getState().projects[0]?.defaultLinearProjectWorkspaceId).toBeUndefined()
+  })
 })

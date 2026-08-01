@@ -3088,6 +3088,8 @@ export default function TaskPage(): React.JSX.Element {
   const allWorktrees = useAllWorktrees()
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const projects = useAppStore((s) => s.projects)
+  const updateProject = useAppStore((s) => s.updateProject)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
@@ -3458,6 +3460,24 @@ export default function TaskPage(): React.JSX.Element {
       .find((context): context is TaskSourceContext => context !== null)
     return firstRepoContext?.projectId ?? 'account-backed-task-source'
   }, [selectedRepos])
+  // Why: the Linear-project default is only meaningful when a real Orca project is in scope; the sentinel marks account-backed mode with no project.
+  const activeOrcaProjectId =
+    fallbackTaskSourceProjectId === 'account-backed-task-source'
+      ? null
+      : fallbackTaskSourceProjectId
+  const activeOrcaLinearDefault = useMemo(() => {
+    if (!activeOrcaProjectId) {
+      return null
+    }
+    const project = projects.find((entry) => entry.id === activeOrcaProjectId)
+    if (!project?.defaultLinearProjectId) {
+      return null
+    }
+    return {
+      projectId: project.defaultLinearProjectId,
+      workspaceId: project.defaultLinearProjectWorkspaceId ?? null
+    }
+  }, [activeOrcaProjectId, projects])
   const linearTaskSourceContext = useMemo(
     () =>
       normalizeTaskSourceContext({
@@ -5651,6 +5671,7 @@ export default function TaskPage(): React.JSX.Element {
   const [newLinearIssuePriority, setNewLinearIssuePriority] = useState<number>(0)
   const [newLinearIssueProjectId, setNewLinearIssueProjectId] = useState<string | null>(null)
   const [newLinearIssueLabelIds, setNewLinearIssueLabelIds] = useState<string[]>([])
+  const [newLinearIssueRememberProject, setNewLinearIssueRememberProject] = useState(false)
 
   const newLinearIssueTargetTeam = useMemo(
     () => availableTeams.find((t) => t.id === newLinearIssueTeamId) ?? availableTeams[0] ?? null,
@@ -5706,11 +5727,22 @@ export default function TaskPage(): React.JSX.Element {
       selectedLinearProject.workspaceId === newLinearIssueTargetTeam?.workspaceId
     ) {
       setNewLinearIssueProjectId(selectedLinearProject.id)
+    } else if (
+      activeOrcaLinearDefault &&
+      newLinearIssueTargetTeam?.workspaceId != null &&
+      newLinearIssueTargetTeam?.workspaceId === activeOrcaLinearDefault.workspaceId
+    ) {
+      setNewLinearIssueProjectId(activeOrcaLinearDefault.projectId)
     } else {
       setNewLinearIssueProjectId(null)
     }
     setNewLinearIssueLabelIds([])
-  }, [newLinearIssueTargetTeam?.id, newLinearIssueTargetTeam?.workspaceId, selectedLinearProject])
+  }, [
+    newLinearIssueTargetTeam?.id,
+    newLinearIssueTargetTeam?.workspaceId,
+    selectedLinearProject,
+    activeOrcaLinearDefault
+  ])
 
   const newLinearStates = useTeamStates(
     linearConnected ? newLinearIssueTargetTeam?.id || null : null,
@@ -5807,6 +5839,7 @@ export default function TaskPage(): React.JSX.Element {
       setNewLinearIssuePriority(0)
       setNewLinearIssueProjectId(null)
       setNewLinearIssueLabelIds([])
+      setNewLinearIssueRememberProject(false)
       setNewLinearIssueProjects([])
       setNewLinearIssueProjectsLoading(false)
       setNewLinearIssueSubmitting(false)
@@ -6968,6 +7001,14 @@ export default function TaskPage(): React.JSX.Element {
             : undefined
         }
       )
+      if (newLinearIssueRememberProject && activeOrcaProjectId) {
+        // Why: fire-and-forget; the toggle only shows when an Orca project is in scope, so persisting links that project to the chosen Linear project for next time.
+        void updateProject(activeOrcaProjectId, {
+          defaultLinearProjectId: newLinearIssueProjectId ?? null,
+          defaultLinearProjectWorkspaceId:
+            (newLinearIssueProjectId && newLinearIssueTargetTeam?.workspaceId) || null
+        })
+      }
       setNewLinearIssueOpen(false)
       setNewLinearIssueTitle('')
       setNewLinearIssueBody('')
@@ -6976,6 +7017,7 @@ export default function TaskPage(): React.JSX.Element {
       setNewLinearIssuePriority(0)
       setNewLinearIssueProjectId(null)
       setNewLinearIssueLabelIds([])
+      setNewLinearIssueRememberProject(false)
       setLinearRefreshNonce((n) => n + 1)
       useAppStore.getState().recordFeatureInteraction('linear-tasks')
 
@@ -7009,6 +7051,9 @@ export default function TaskPage(): React.JSX.Element {
     newLinearIssueAssigneeId,
     newLinearIssueProjectId,
     newLinearIssueLabelIds,
+    newLinearIssueRememberProject,
+    activeOrcaProjectId,
+    updateProject,
     providerRuntimeContextKey,
     selectedLinearProject,
     setSelectedLinearIssue,
@@ -8529,16 +8574,27 @@ export default function TaskPage(): React.JSX.Element {
                                 }
                                 setNewLinearIssueTitle('')
                                 setNewLinearIssueBody('')
+                                const defaultLinearWorkspaceId =
+                                  activeOrcaLinearDefault?.workspaceId ?? null
                                 const projectTeamId =
                                   selectedLinearProject?.teams?.[0]?.id ??
                                   availableTeams.find(
                                     (team) =>
-                                      team.workspaceId === selectedLinearProject?.workspaceId
+                                      team.workspaceId === selectedLinearProject?.workspaceId ||
+                                      (defaultLinearWorkspaceId != null &&
+                                        team.workspaceId === defaultLinearWorkspaceId)
                                   )?.id
                                 setNewLinearIssueTeamId(
                                   projectTeamId ?? availableTeams[0]?.id ?? null
                                 )
-                                setNewLinearIssueProjectId(selectedLinearProject?.id ?? null)
+                                setNewLinearIssueProjectId(
+                                  selectedLinearProject?.id ??
+                                    activeOrcaLinearDefault?.projectId ??
+                                    null
+                                )
+                                setNewLinearIssueRememberProject(
+                                  activeOrcaProjectId != null && activeOrcaLinearDefault != null
+                                )
                                 setNewLinearIssueOpen(true)
                               }}
                               disabled={availableTeams.length === 0}
@@ -11984,6 +12040,35 @@ export default function TaskPage(): React.JSX.Element {
                       ))}
                     </div>
                   )}
+                  {activeOrcaProjectId ? (
+                    <>
+                      <div className="my-1 h-px bg-border/60" />
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={newLinearIssueRememberProject}
+                        disabled={newLinearIssueSubmitting}
+                        onClick={() => setNewLinearIssueRememberProject((v) => !v)}
+                        className="w-full flex items-center gap-2 text-left px-2 py-1.5 text-xs rounded-sm hover:bg-muted transition-colors text-foreground/80 disabled:opacity-50"
+                      >
+                        <span
+                          className={`flex size-3.5 flex-shrink-0 items-center justify-center rounded-[3px] border transition-colors ${
+                            newLinearIssueRememberProject
+                              ? 'border-foreground bg-foreground text-background'
+                              : 'border-border/80'
+                          }`}
+                        >
+                          {newLinearIssueRememberProject ? <Check className="size-3" /> : null}
+                        </span>
+                        <span>
+                          {translate(
+                            'auto.components.TaskPage.linearRememberProject',
+                            'Remember for this Orca project'
+                          )}
+                        </span>
+                      </button>
+                    </>
+                  ) : null}
                 </PopoverContent>
               </Popover>
 

@@ -117,6 +117,12 @@ export type Project = {
   gitRemoteIdentity?: GitRemoteIdentity
   /** Local Windows projects inherit the global runtime default unless this override is set. */
   localWindowsRuntimePreference?: LocalWindowsRuntimePreference
+  /**
+   * Linear project pre-selected by default when filing a new Linear issue from this Orca project.
+   * `null` clears an existing default; absence leaves it untouched.
+   */
+  defaultLinearProjectId?: string | null
+  defaultLinearProjectWorkspaceId?: string | null
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number
@@ -124,7 +130,12 @@ export type Project = {
 
 export type ProjectUpdateArgs = {
   projectId: string
-  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>>
+  updates: Partial<
+    Pick<
+      Project,
+      'localWindowsRuntimePreference' | 'defaultLinearProjectId' | 'defaultLinearProjectWorkspaceId'
+    >
+  >
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'

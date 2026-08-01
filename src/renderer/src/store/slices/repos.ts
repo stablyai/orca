@@ -533,6 +533,30 @@ function mergeUpdatedProjectCompatibilityProject(
       project.localWindowsRuntimePreference = localWindowsRuntimePreference
     }
   }
+  if ('defaultLinearProjectId' in updates) {
+    const value =
+      'defaultLinearProjectId' in updated
+        ? updated.defaultLinearProjectId
+        : updates.defaultLinearProjectId
+    // Why: a clear (null) must win over a stale default preserved from another host by the compatibility merge.
+    if (value == null) {
+      delete project.defaultLinearProjectId
+      delete project.defaultLinearProjectWorkspaceId
+    } else {
+      project.defaultLinearProjectId = value
+    }
+  }
+  if ('defaultLinearProjectWorkspaceId' in updates) {
+    const value =
+      'defaultLinearProjectWorkspaceId' in updated
+        ? updated.defaultLinearProjectWorkspaceId
+        : updates.defaultLinearProjectWorkspaceId
+    if (value == null) {
+      delete project.defaultLinearProjectWorkspaceId
+    } else {
+      project.defaultLinearProjectWorkspaceId = value
+    }
+  }
   return project
 }
 

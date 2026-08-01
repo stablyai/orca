@@ -2287,13 +2287,29 @@ function mergeProjectHostSetupCompatibilityState(
     }))
   const projectedProjects = projection.projects.map((project) => {
     const existingProject = existingProjectsById.get(project.id)
-    return existingProject?.localWindowsRuntimePreference
-      ? {
-          ...project,
-          localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
-          updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
-        }
-      : project
+    // Why: repo-backed projects are re-derived from repos on every load, so persisted-only fields must be copied back onto the fresh projection or they vanish from in-memory state.
+    if (!existingProject) {
+      return project
+    }
+    const hasRuntimePref = Boolean(existingProject.localWindowsRuntimePreference)
+    const hasLinearDefault = Boolean(existingProject.defaultLinearProjectId)
+    if (!hasRuntimePref && !hasLinearDefault) {
+      return project
+    }
+    const merged: Project = {
+      ...project,
+      updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
+    }
+    if (hasRuntimePref) {
+      merged.localWindowsRuntimePreference = existingProject.localWindowsRuntimePreference
+    }
+    if (hasLinearDefault) {
+      merged.defaultLinearProjectId = existingProject.defaultLinearProjectId
+      if (existingProject.defaultLinearProjectWorkspaceId != null) {
+        merged.defaultLinearProjectWorkspaceId = existingProject.defaultLinearProjectWorkspaceId
+      }
+    }
+    return merged
   })
   return {
     projects: [...projectedProjects, ...independentProjects],
@@ -3717,6 +3733,28 @@ export class Store {
         project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
           updates.localWindowsRuntimePreference
         )
+      }
+    }
+    if ('defaultLinearProjectId' in updates) {
+      const value = updates.defaultLinearProjectId
+      if (value == null) {
+        delete project.defaultLinearProjectId
+        delete project.defaultLinearProjectWorkspaceId
+      } else {
+        project.defaultLinearProjectId = value
+        const workspaceId = updates.defaultLinearProjectWorkspaceId ?? null
+        if (workspaceId) {
+          project.defaultLinearProjectWorkspaceId = workspaceId
+        } else {
+          delete project.defaultLinearProjectWorkspaceId
+        }
+      }
+    } else if ('defaultLinearProjectWorkspaceId' in updates) {
+      const workspaceId = updates.defaultLinearProjectWorkspaceId
+      if (workspaceId == null) {
+        delete project.defaultLinearProjectWorkspaceId
+      } else {
+        project.defaultLinearProjectWorkspaceId = workspaceId
       }
     }
     project.updatedAt = Date.now()
