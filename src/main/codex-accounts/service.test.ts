@@ -1728,6 +1728,9 @@ describe('CodexAccountService config sync', () => {
       await expect(service.reauthenticateAccount('account-1')).rejects.toThrow('Codex login')
       expect(readFileSync(wslAuthPath, 'utf-8')).toBe(originalAuthJson)
     } finally {
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../../shared/wsl-paths')
+      vi.doUnmock('../wsl')
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform
@@ -1837,6 +1840,9 @@ describe('CodexAccountService config sync', () => {
       expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
     } finally {
       warnSpy.mockRestore()
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../../shared/wsl-paths')
+      vi.doUnmock('../wsl')
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform
