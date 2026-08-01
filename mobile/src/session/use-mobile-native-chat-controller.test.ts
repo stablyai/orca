@@ -35,6 +35,8 @@ vi.mock('./use-mobile-native-chat-drafts', () => ({
       setComposerText: vi.fn(),
       pending: [],
       captureSendOrigin,
+      readSeededLaunchDraft: () => null,
+      readSeededLaunchDraftSeed: () => null,
       clearDraftForSend,
       restoreRejectedDraft,
       acceptSend,
@@ -327,6 +329,7 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
     terminal: 'term-1',
     launchAgent: 'claude',
     launchDraft: 'https://github.com/o/r/issues/12',
+    launchDraftCreatedAt: 7,
     isActive: true
   }
 
@@ -385,6 +388,7 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
     expect(draftsArgs.at(-1)).toMatchObject({
       tabId: 'tab-1',
       launchDraft: 'https://github.com/o/r/issues/12',
+      launchDraftCreatedAt: 7,
       chatActive: true,
       transcriptLoading: false
     })

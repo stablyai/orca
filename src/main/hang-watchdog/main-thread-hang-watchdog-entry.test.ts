@@ -12,7 +12,11 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
 
-import { recordHangObservation } from './main-thread-hang-watchdog-entry'
+import {
+  isHangWatchdogWorkerData,
+  recordHangObservation,
+  runWatchdog
+} from './main-thread-hang-watchdog-entry'
 
 describe('recordHangObservation', () => {
   let dir: string
@@ -67,10 +71,8 @@ describe('recordHangObservation', () => {
     })
   })
 
-  // Why: this is the safety contract of the whole PR. Observing a hang must never kill, relaunch,
-  // or exit — a false positive would SIGKILL a live main thread mid-write. If a future change
-  // reintroduces recovery, this test must fail loudly rather than ship silently.
   it('never spawns, signals, or exits', () => {
+    // Why: a false positive must never kill a live main thread while writes may be in flight.
     recordHangObservation({
       parentPid: 4242,
       markerPath: join(dir, 'marker.json'),
@@ -102,5 +104,77 @@ describe('recordHangObservation', () => {
         selfRecovered: false
       })
     ).not.toThrow()
+  })
+})
+
+describe('watchdog worker entry', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('accepts only complete positive worker data', () => {
+    expect(
+      isHangWatchdogWorkerData({
+        parentPid: 42,
+        markerPath: '/tmp/marker',
+        timeoutMs: 100,
+        checkIntervalMs: 25
+      })
+    ).toBe(true)
+    for (const value of [
+      null,
+      {},
+      { parentPid: 0, markerPath: '/tmp/marker', timeoutMs: 100, checkIntervalMs: 25 },
+      { parentPid: 42, markerPath: 7, timeoutMs: 100, checkIntervalMs: 25 },
+      { parentPid: 42, markerPath: '/tmp/marker', timeoutMs: 0, checkIntervalMs: 25 },
+      { parentPid: 42, markerPath: '/tmp/marker', timeoutMs: 100, checkIntervalMs: Infinity }
+    ]) {
+      expect(isHangWatchdogWorkerData(value)).toBe(false)
+    }
+  })
+
+  it('routes heartbeats and shuts down its timer and port', () => {
+    const markerPath = join(tmpdir(), `hang-watchdog-entry-${process.pid}.json`)
+    let onMessage: ((message: { type: 'heartbeat' | 'shutdown' }) => void) | undefined
+    const port = {
+      on: vi.fn(
+        (_event: 'message', listener: (message: { type: 'heartbeat' | 'shutdown' }) => void) => {
+          onMessage = listener
+        }
+      ),
+      close: vi.fn()
+    }
+    try {
+      runWatchdog(
+        {
+          parentPid: process.pid,
+          markerPath,
+          timeoutMs: 100,
+          checkIntervalMs: 25
+        },
+        port
+      )
+      vi.advanceTimersByTime(75)
+      onMessage?.({ type: 'heartbeat' })
+      vi.advanceTimersByTime(75)
+      expect(consumeHangDetectionMarker(markerPath)).toBeNull()
+      vi.advanceTimersByTime(50)
+      expect(consumeHangDetectionMarker(markerPath)).toMatchObject({ selfRecovered: false })
+
+      onMessage?.({ type: 'heartbeat' })
+      expect(consumeHangDetectionMarker(markerPath)).toMatchObject({ selfRecovered: true })
+      onMessage?.({ type: 'shutdown' })
+      expect(port.close).toHaveBeenCalledOnce()
+      vi.advanceTimersByTime(1_000)
+      expect(port.close).toHaveBeenCalledOnce()
+      expect(consumeHangDetectionMarker(markerPath)).toBeNull()
+    } finally {
+      rmSync(markerPath, { force: true })
+    }
   })
 })

@@ -121,6 +121,12 @@ export async function sendRemoteRuntimeRequest<TResult>(
     let state: HandshakeState = 'awaiting_ready'
     let settled = false
     let ws: WebSocket | null = null
+    const getPairingStage = (): 'connect' | 'host-identity' | 'runtime' =>
+      state === 'awaiting_ready'
+        ? 'connect'
+        : state === 'awaiting_authenticated'
+          ? 'host-identity'
+          : 'runtime'
 
     const cleanupSocketListeners = (): void => {
       const socket = ws
@@ -145,7 +151,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
         ok: false,
         error: new RemoteRuntimeClientError(
           'runtime_timeout',
-          'Timed out waiting for the remote Orca runtime to respond.'
+          'Timed out waiting for the remote Orca runtime to respond.',
+          { pairingStage: getPairingStage() }
         )
       })
     }
@@ -210,7 +217,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
         ok: false,
         error: new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          'Could not connect to the remote Orca runtime.'
+          'Could not connect to the remote Orca runtime.',
+          { pairingStage: getPairingStage() }
         )
       })
     }
@@ -221,7 +229,11 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
-            formatRemoteRuntimeCloseMessage(code, reason)
+            formatRemoteRuntimeCloseMessage(code, reason),
+            {
+              pairingStage: getPairingStage(),
+              closeCode: code
+            }
           )
         })
       }
@@ -236,7 +248,10 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an unexpected binary frame.'
+            'Remote Orca runtime returned an unexpected binary frame.',
+            {
+              pairingStage: state === 'awaiting_ready' ? 'host-identity' : getPairingStage()
+            }
           )
         })
         return
@@ -254,7 +269,10 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an undecryptable frame.'
+            'Remote Orca runtime returned an undecryptable frame.',
+            {
+              pairingStage: state === 'awaiting_authenticated' ? 'host-identity' : getPairingStage()
+            }
           )
         })
         return
@@ -282,7 +300,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid E2EE handshake frame.'
+            'Remote Orca runtime returned an invalid E2EE handshake frame.',
+            { pairingStage: 'host-identity' }
           )
         })
         return
@@ -296,7 +315,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an unexpected E2EE handshake frame.'
+            'Remote Orca runtime returned an unexpected E2EE handshake frame.',
+            { pairingStage: 'host-identity' }
           )
         })
         return
@@ -314,7 +334,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid E2EE auth frame.'
+            'Remote Orca runtime returned an invalid E2EE auth frame.',
+            { pairingStage: 'host-identity' }
           )
         })
         return
@@ -331,7 +352,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             code,
-            'Remote Orca runtime rejected the pairing token.'
+            'Remote Orca runtime rejected the pairing token.',
+            { pairingStage: code === 'unauthorized' ? 'access-grant' : 'host-identity' }
           )
         })
         return
@@ -361,7 +383,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid response frame.'
+            'Remote Orca runtime returned an invalid response frame.',
+            { pairingStage: 'runtime' }
           )
         })
         return
@@ -376,7 +399,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid response frame.'
+            'Remote Orca runtime returned an invalid response frame.',
+            { pairingStage: 'runtime' }
           )
         })
         return
@@ -387,7 +411,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned a mismatched response id.'
+            'Remote Orca runtime returned a mismatched response id.',
+            { pairingStage: 'runtime' }
           )
         })
         return

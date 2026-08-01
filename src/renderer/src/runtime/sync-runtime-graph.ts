@@ -25,6 +25,7 @@ import type {
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { isClaudeManagementTitle } from '../../../shared/agent-detection'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type {
   Tab,
   TabGroup,
@@ -40,6 +41,7 @@ import {
 } from '../components/tab-bar/group-tab-order'
 import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { applyNativeChatLaunchDraftResolved } from './native-chat-launch-draft-runtime-resolution'
 
 type RegisteredTerminalTab = {
   tabId: string
@@ -246,6 +248,7 @@ export type RuntimeMobileSessionSyncKey = {
   terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   nativeChatLaunchDraftByTabId: AppState['nativeChatLaunchDraftByTabId']
+  folderWorkspaces: AppState['folderWorkspaces']
   groupsByWorktree: AppState['groupsByWorktree']
   activeGroupIdByWorktree: AppState['activeGroupIdByWorktree']
   layoutByWorktree: AppState['layoutByWorktree']
@@ -302,6 +305,7 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
     state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId &&
     state.nativeChatLaunchDraftByTabId === previousState.nativeChatLaunchDraftByTabId &&
+    state.folderWorkspaces === previousState.folderWorkspaces &&
     state.agentStatusEpoch === previousState.agentStatusEpoch &&
     state.agentStatusByPaneKey === previousState.agentStatusByPaneKey
   )
@@ -339,6 +343,7 @@ export function getRuntimeMobileSessionSyncKey(
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
     nativeChatLaunchDraftByTabId: state.nativeChatLaunchDraftByTabId,
+    folderWorkspaces: state.folderWorkspaces,
     groupsByWorktree: state.groupsByWorktree,
     activeGroupIdByWorktree: state.activeGroupIdByWorktree,
     layoutByWorktree: state.layoutByWorktree ?? EMPTY_LAYOUT_BY_WORKTREE,
@@ -584,6 +589,7 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.terminalLayoutsByTabId === b.terminalLayoutsByTabId &&
     a.runtimePaneTitlesByTabId === b.runtimePaneTitlesByTabId &&
     a.nativeChatLaunchDraftByTabId === b.nativeChatLaunchDraftByTabId &&
+    a.folderWorkspaces === b.folderWorkspaces &&
     a.groupsByWorktree === b.groupsByWorktree &&
     a.activeGroupIdByWorktree === b.activeGroupIdByWorktree &&
     a.layoutByWorktree === b.layoutByWorktree &&
@@ -734,9 +740,16 @@ async function syncRuntimeGraph(): Promise<void> {
 
   try {
     const result = await window.api.runtime.syncWindowGraph(graph)
-    getStoreState()?.setRuntimeAgentOrchestrationByPaneKey?.(
-      result?.agentOrchestrationByPaneKey ?? {}
-    )
+    const currentState = getStoreState()
+    currentState?.setRuntimeAgentOrchestrationByPaneKey?.(result?.agentOrchestrationByPaneKey ?? {})
+    for (const resolution of result?.nativeChatLaunchDraftResolutions ?? []) {
+      if (currentState) {
+        applyNativeChatLaunchDraftResolved(currentState, {
+          type: 'nativeChatLaunchDraftResolved',
+          ...resolution
+        })
+      }
+    }
   } catch (error) {
     console.error('[runtime] Failed to sync renderer graph:', error)
   }
@@ -749,6 +762,9 @@ export function buildMobileSessionTabSnapshots(
   // Why: high-frequency title ticks fire mobile sync; cache indexes/hashes by store-slice ref to skip rescanning editor state.
   const openFileIndexes = getOpenFileIndexes(state.openFiles)
   const editorDraftVersionByFileId = getEditorDraftVersionByFileId(state.editorDrafts)
+  const liveFolderWorkspaceIds = new Set(
+    (state.folderWorkspaces ?? []).map((workspace) => workspace.id)
+  )
   const worktreeIds = new Set<string>([
     ...Object.keys(state.tabsByWorktree),
     ...Object.keys(state.groupsByWorktree),
@@ -759,6 +775,14 @@ export function buildMobileSessionTabSnapshots(
 
   const snapshots: RuntimeMobileSessionTabsSnapshot[] = []
   for (const worktreeId of worktreeIds) {
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (
+      workspaceScope?.type === 'folder' &&
+      !liveFolderWorkspaceIds.has(workspaceScope.folderWorkspaceId)
+    ) {
+      mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
+      continue
+    }
     const activeGroupId = state.activeGroupIdByWorktree[worktreeId] ?? null
     const terminalTabByIdForWorktree = new Map(
       (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
@@ -1371,8 +1395,12 @@ function buildMobileTerminalSurfaceTabs(
   // tab id, so an unmatched seed would prefill the new agent's chat with stale text.
   const seededLaunchDraft = state.nativeChatLaunchDraftByTabId?.[terminal.id]
   const launchDraftEntry =
-    seededLaunchDraft && seededLaunchDraft.agent === terminal.launchAgent ? seededLaunchDraft : null
-  const launchDraftText = launchDraftEntry?.text.trim() ? launchDraftEntry.text : null
+    seededLaunchDraft &&
+    !seededLaunchDraft.resolved &&
+    seededLaunchDraft.agent === terminal.launchAgent
+      ? seededLaunchDraft
+      : null
+  const publishedLaunchDraft = launchDraftEntry?.text.trim() ? launchDraftEntry : null
   const container = registered?.getContainer()
   const firstChild = container?.firstElementChild
   const liveLayoutRoot = serializePaneTree(
@@ -1435,7 +1463,12 @@ function buildMobileTerminalSurfaceTabs(
       ...(terminal.launchAgent ? { launchAgent: terminal.launchAgent } : {}),
       // Launch context that exists only as an unsent TUI-input draft; mobile
       // prefills its chat composer from it (desktop keeps its own seed store).
-      ...(launchDraftText ? { launchDraft: launchDraftText } : {}),
+      ...(publishedLaunchDraft
+        ? {
+            launchDraft: publishedLaunchDraft.text,
+            launchDraftCreatedAt: publishedLaunchDraft.createdAt
+          }
+        : {}),
       parentLayout,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }

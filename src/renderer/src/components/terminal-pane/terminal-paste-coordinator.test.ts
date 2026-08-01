@@ -40,6 +40,17 @@ function terminalTarget(overrides: Partial<TerminalPasteTarget> = {}): TerminalP
   }
 }
 
+function bracketedChunkedPlan() {
+  return planTerminalPaste({
+    text: '0123456789abcdef',
+    source: 'keyboard',
+    target: terminalTarget(),
+    terminalBracketedPasteMode: true,
+    maxDirectBytes: 4,
+    maxChunkBytes: 4
+  })
+}
+
 function getPastePayloadCorpusText(name: string): string {
   const entry = PASTE_PAYLOAD_CORPUS.find((item) => item.name === name)
   if (!entry) {
@@ -649,6 +660,133 @@ describe('terminal paste coordinator', () => {
       BRACKETED_PASTE_START,
       BRACKETED_PASTE_END
     ])
+  })
+
+  it('closes an opened bracketed paste when a payload write is rejected', async () => {
+    const writes: string[] = []
+    const writePty = vi.fn<(data: string) => boolean>((data) => {
+      writes.push(data)
+      return data === BRACKETED_PASTE_START
+    })
+
+    const result = await executeTerminalPastePlan(bracketedChunkedPlan(), {
+      pasteText: vi.fn(),
+      writePty,
+      isTargetCurrent: () => true,
+      canContinue: () => true,
+      yieldToEventLoop: async () => {}
+    })
+
+    expect(result).toMatchObject({ status: 'cancelled', reason: 'target-disconnected' })
+    expect(writes).toEqual([BRACKETED_PASTE_START, '0123', BRACKETED_PASTE_END])
+  })
+
+  it('closes an opened bracketed paste when a payload write exceeds the safety timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const writePty = vi.fn((data: string) => {
+        writes.push(data)
+        return data === BRACKETED_PASTE_START ? true : new Promise<boolean>(() => {})
+      })
+
+      const execution = executeTerminalPastePlan(bracketedChunkedPlan(), {
+        pasteText: vi.fn(),
+        writePty,
+        isTargetCurrent: () => true,
+        canContinue: () => true,
+        yieldToEventLoop: async () => {},
+        operationTimeoutMs: 25
+      })
+      // Why: the payload write and the best-effort close each burn their own budget.
+      await vi.advanceTimersByTimeAsync(25)
+      await vi.advanceTimersByTimeAsync(25)
+
+      await expect(execution).resolves.toMatchObject({
+        status: 'cancelled',
+        reason: 'operation-timeout'
+      })
+      expect(writes).toEqual([BRACKETED_PASTE_START, '0123', BRACKETED_PASTE_END])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports a timed-out bracketed close on a stale target as an operation timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      let current = true
+      const writes: string[] = []
+      const writePty = vi.fn((data: string) => {
+        writes.push(data)
+        return data === BRACKETED_PASTE_END ? new Promise<boolean>(() => {}) : true
+      })
+
+      const execution = executeTerminalPastePlan(bracketedChunkedPlan(), {
+        pasteText: vi.fn(),
+        writePty,
+        isTargetCurrent: () => current,
+        canContinue: () => true,
+        yieldToEventLoop: async () => {
+          current = false
+        },
+        operationTimeoutMs: 25
+      })
+      await vi.advanceTimersByTimeAsync(25)
+      await vi.advanceTimersByTimeAsync(25)
+
+      await expect(execution).resolves.toMatchObject({
+        status: 'cancelled',
+        reason: 'operation-timeout'
+      })
+      expect(writes).toEqual([BRACKETED_PASTE_START, BRACKETED_PASTE_END])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips the bracketed close when the paste target is already gone', async () => {
+    // Why: canContinue false means the pane/PTY is unmounted, so an end marker has
+    // nowhere to land — the frame dies with the target.
+    let writable = true
+    const writes: string[] = []
+
+    const result = await executeTerminalPastePlan(bracketedChunkedPlan(), {
+      pasteText: vi.fn(),
+      writePty: (data) => {
+        writes.push(data)
+        writable = false
+        return true
+      },
+      isTargetCurrent: () => true,
+      canContinue: () => writable,
+      yieldToEventLoop: async () => {}
+    })
+
+    expect(result).toMatchObject({ status: 'cancelled', reason: 'target-disconnected' })
+    expect(writes).toEqual([BRACKETED_PASTE_START])
+  })
+
+  it('closes an opened bracketed paste when the PTY writer throws', async () => {
+    const writes: string[] = []
+    const writePty = vi.fn<(data: string) => boolean>((data) => {
+      writes.push(data)
+      if (data !== BRACKETED_PASTE_START && data !== BRACKETED_PASTE_END) {
+        throw new Error('writer gone')
+      }
+      return true
+    })
+
+    await expect(
+      executeTerminalPastePlan(bracketedChunkedPlan(), {
+        pasteText: vi.fn(),
+        writePty,
+        isTargetCurrent: () => true,
+        canContinue: () => true,
+        yieldToEventLoop: async () => {}
+      })
+    ).rejects.toThrow('writer gone')
+    expect(writes).toEqual([BRACKETED_PASTE_START, '0123', BRACKETED_PASTE_END])
   })
 
   it('rejects oversized payloads before touching xterm or the PTY', async () => {

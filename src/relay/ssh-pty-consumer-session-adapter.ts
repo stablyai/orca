@@ -217,6 +217,12 @@ export class SshPtyConsumerSessionAdapter {
     return this.sourceCredit.snapshot(identity)
   }
 
+  sourceDeliverySnapshotIfKnown(
+    identity: PtySourceDeliveryIdentity
+  ): PtySourceDeliverySnapshot | null {
+    return this.sourceCredit.snapshotIfKnown(identity)
+  }
+
   cancelDelivery(identity: PtySourceDeliveryIdentity, reason: string): void {
     this.clearPausedIdentity(identity)
     this.sourceCredit.cancelIdentity(identity, reason)

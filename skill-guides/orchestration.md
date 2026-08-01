@@ -62,6 +62,8 @@ Treat the authority label on injected or formatted messages as definitive:
 - `[LEGACY READ-ONLY]` is inspection-only. It has no reply, acknowledgment, or lifecycle action.
 - An unlabeled current message uses the current guide and current grammar.
 
+An explicitly selected current Run, attested current Run binding, current Dispatch, or federated attachment takes precedence over legacy fallback. A retained adoption record alone never turns a current command into a legacy call.
+
 Database provenance, an old-looking terminal, or a legacy Run ID does not prove mutation authority. If the runtime cannot prove liveness, principal ownership, capability, or the exact legacy contract, it degrades to read-only inspection and must not fall back to local execution. Exact recovery may restore the already-live PTY once in its original inactive background tab. It must not spawn, write, signal, stop, switch, focus, split, or inject a terminal. Loss of lifecycle authority does not invalidate the existing assignment, process, or filesystem work.
 
 Compatibility retries have narrow guarantees. A pending ask, a reply, a final Dispatch settlement, and a consuming check have durable recovery identities. A-era heartbeat and escalation calls remain at-least-once across a manual A-to-B retry because identical later signals may be intentional. If an A-era ask may already have been answered, run the exact non-consuming recovery check printed by the runtime first; after its answer is printed and acknowledged, a new invocation with the same question creates a new question. Never guess among multiple identical question threads.

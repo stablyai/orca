@@ -501,11 +501,10 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
-  // A draft opens in chat only when the composer can actually show it; the
-  // multi-line case would otherwise be an empty composer beside a filled TUI.
   it.each([
     ['mirrorable', 'https://github.com/o/r/issues/12', { viewMode: 'chat' }],
-    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', {}]
+    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['unsupported-separator', 'Review this\u2028https://github.com/o/r/issues/12', {}]
   ])('opens a %s draft startup payload accordingly', (_label, draftPrompt, expectedViewMode) => {
     const store = createMockStore({
       settings: {
@@ -538,7 +537,8 @@ describe('ensureWorktreeHasInitialTerminal', () => {
   // nothing mirrored — an empty composer beside a filled TUI input.
   it.each([
     ['mirrorable', 'https://github.com/o/r/issues/12', { viewMode: 'chat' }],
-    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', {}]
+    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['unsupported-separator', 'Review this\u2028https://github.com/o/r/issues/12', {}]
   ])(
     'gates a %s argv-prefill draft on launchDraftText alone',
     (_label, launchDraftText, expectedViewMode) => {
@@ -599,7 +599,8 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
   it.each([
     ['mirrorable', 'https://github.com/o/r/issues/12', { viewMode: 'chat' }],
-    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', {}]
+    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['unsupported-separator', 'Review this\u2028https://github.com/o/r/issues/12', {}]
   ])(
     'opens a %s draft startup default tab accordingly',
     (_label, draftPrompt, expectedViewMode) => {

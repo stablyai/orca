@@ -57,6 +57,7 @@ import { buildValidWorktreeIdsForSessionHydration } from './degraded-repo-worktr
 type CreateBrowserTabOptions = {
   activate?: boolean
   title?: string
+  allowWindowClose?: boolean
   sessionProfileId?: string | null
   sessionPartition?: string | null
   // Place the new tab in a specific group (e.g. "Open Preview to the Side"); defaults to the worktree's active group.
@@ -69,6 +70,7 @@ type CreateBrowserTabOptions = {
 type CreateBrowserPageOptions = {
   activate?: boolean
   title?: string
+  allowWindowClose?: boolean
   browserRuntimeEnvironmentId?: string | null
 }
 
@@ -341,7 +343,8 @@ function buildBrowserPage(
   worktreeId: string,
   url: string,
   title?: string,
-  browserRuntimeEnvironmentId?: string | null
+  browserRuntimeEnvironmentId?: string | null,
+  allowWindowClose?: boolean
 ): BrowserPage {
   const normalizedUrl = normalizeUrl(url)
   return {
@@ -357,6 +360,7 @@ function buildBrowserPage(
     canGoForward: false,
     loadError: null,
     createdAt: Date.now(),
+    ...(allowWindowClose !== undefined ? { allowWindowClose } : {}),
     ...(browserRuntimeEnvironmentId !== undefined ? { browserRuntimeEnvironmentId } : {})
   }
 }
@@ -554,7 +558,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       worktreeId,
       url,
       options?.title,
-      options?.browserRuntimeEnvironmentId
+      options?.browserRuntimeEnvironmentId,
+      options?.allowWindowClose
     )
     // Why: with no explicit profile, inherit the user's default so a Settings preference applies to new tabs.
     const sessionProfileId =
@@ -902,13 +907,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       activate: true,
       sessionProfileId,
       sessionPartition,
-      browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId
+      browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId,
+      allowWindowClose: firstPage.allowWindowClose
     })
 
     for (const p of restPages) {
       get().createBrowserPage(restored.id, p.url, {
         activate: false,
         title: p.title,
+        allowWindowClose: p.allowWindowClose,
         browserRuntimeEnvironmentId: p.browserRuntimeEnvironmentId
       })
     }
@@ -987,7 +994,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       workspace.worktreeId,
       url,
       options?.title,
-      options?.browserRuntimeEnvironmentId
+      options?.browserRuntimeEnvironmentId,
+      options?.allowWindowClose
     )
 
     set((s) => {
@@ -1169,6 +1177,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     return get().createBrowserPage(workspaceId, pageToRestore.url, {
       title: pageToRestore.title,
       activate: true,
+      allowWindowClose: pageToRestore.allowWindowClose,
       browserRuntimeEnvironmentId: pageToRestore.browserRuntimeEnvironmentId
     })
   },

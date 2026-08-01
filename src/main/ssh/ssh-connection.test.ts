@@ -16,6 +16,7 @@ let execBehavior: 'callback' | 'pending' = 'callback'
 let pendingExecCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
 let sftpBehavior: 'callback' | 'pending' = 'callback'
 let pendingSftpCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
+let notifyClientCreated: (() => void) | undefined
 
 type MockSshClient = {
   setNoDelay: ReturnType<typeof vi.fn>
@@ -45,6 +46,8 @@ vi.mock('ssh2', () => {
     lastConnectConfig?: unknown
     constructor() {
       clientInstances.push(this)
+      notifyClientCreated?.()
+      notifyClientCreated = undefined
     }
     on(event: string, handler: (...args: unknown[]) => void) {
       const handlers = eventHandlers?.get(event) ?? new Set<(...args: unknown[]) => void>()
@@ -168,6 +171,10 @@ import {
 } from './ssh-system-fallback'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
+import {
+  createOpenSshPrivateKeyFixture,
+  createOpenSshPublicKeyFixture
+} from './ssh-security-key-identity.test-fixture'
 
 function createTarget(overrides?: Partial<SshTarget>): SshTarget {
   return {
@@ -278,6 +285,7 @@ describe('SshConnection', () => {
     pendingExecCallback = null
     sftpBehavior = 'callback'
     pendingSftpCallback = null
+    notifyClientCreated = undefined
     clientInstances = []
     getOrcaControlSocketPathMock.mockReset()
     getOrcaControlSocketPathMock.mockReturnValue(null)
@@ -462,10 +470,11 @@ describe('SshConnection', () => {
     const callbacks = createCallbacks()
     const conn = new SshConnection(createTarget(), callbacks)
 
+    const clientCreated = new Promise<void>((resolve) => {
+      notifyClientCreated = resolve
+    })
     const connectResult = conn.connect().catch((error: Error) => error)
-    for (let i = 0; i < 5 && clientInstances.length === 0; i++) {
-      await Promise.resolve()
-    }
+    await clientCreated
     expect(clientInstances).toHaveLength(1)
     await conn.disconnect()
 
@@ -485,10 +494,11 @@ describe('SshConnection', () => {
     const callbacks = createCallbacks()
     const conn = new SshConnection(createTarget(), callbacks)
 
+    const clientCreated = new Promise<void>((resolve) => {
+      notifyClientCreated = resolve
+    })
     const connectResult = conn.connect().catch((error: Error) => error)
-    for (let i = 0; i < 5 && clientInstances.length === 0; i++) {
-      await Promise.resolve()
-    }
+    await clientCreated
     expect(clientInstances).toHaveLength(1)
     await conn.disconnect()
 
@@ -1165,6 +1175,29 @@ describe('SshConnection', () => {
     expect(conn.usesSystemSshTransport()).toBe(true)
   })
 
+  it('uses fresh OpenSSH user for imported GitHub targets', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: 'git' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'stale-user'
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
   it('accepts GitHub restricted-shell SSH probes with resolved host and target username', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(
       createResolvedConfig({ hostname: 'github.com', user: undefined })
@@ -1439,6 +1472,47 @@ describe('SshConnection', () => {
     )
   })
 
+  it('uses system SSH before ssh2 parses a security-key private key', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-security-key-connect-'))
+    const keyPath = join(directory, 'id_ed25519_sk')
+    writeFileSync(
+      keyPath,
+      createOpenSshPrivateKeyFixture(['sk-ssh-ed25519@openssh.com'], { encrypted: true })
+    )
+    const conn = new SshConnection(createTarget({ identityFile: keyPath }), createCallbacks())
+
+    try {
+      await conn.connect()
+
+      expect(conn.getState().status).toBe('connected')
+      expect(conn.usesSystemSshTransport()).toBe(true)
+      expect(clientInstances).toHaveLength(0)
+      expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
+    } finally {
+      rmSync(directory, { recursive: true })
+    }
+  })
+
+  it('uses system SSH for an agent-backed security-key public identity', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-security-key-agent-connect-'))
+    const identityPath = join(directory, 'id_ed25519_sk')
+    writeFileSync(
+      `${identityPath}.pub`,
+      createOpenSshPublicKeyFixture('sk-ssh-ed25519@openssh.com')
+    )
+    const conn = new SshConnection(createTarget({ identityFile: identityPath }), createCallbacks())
+
+    try {
+      await conn.connect()
+
+      expect(conn.usesSystemSshTransport()).toBe(true)
+      expect(clientInstances).toHaveLength(0)
+      expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
+    } finally {
+      rmSync(directory, { recursive: true })
+    }
+  })
+
   it('falls back to system SSH when ssh2 hits a local network policy reachability error', async () => {
     connectBehavior = 'error'
     connectErrorMessage = 'connect EHOSTUNREACH 192.168.0.210:22 - Local (192.168.0.2:52112)'
@@ -1528,6 +1602,26 @@ describe('SshConnection', () => {
         wrapCommand: false
       }
     )
+  })
+
+  it('ignores stale imported GSSAPI when fresh OpenSSH config disables it', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: false })
+    )
+    const conn = new SshConnection(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'krb-host',
+        gssapiAuthentication: true
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    expect(spawnSystemSshCommandMock).not.toHaveBeenCalled()
   })
 
   it('falls back to system SSH after an ssh2 auth failure when resolved config enables GSSAPI', async () => {
@@ -2086,6 +2180,22 @@ describe('shouldUseSystemSshTransport', () => {
   it('allows an environment override for e2e coverage', () => {
     vi.stubEnv('ORCA_SSH_FORCE_SYSTEM_TRANSPORT', '1')
     expect(shouldUseSystemSshTransport(createTarget(), null)).toBe(true)
+    vi.unstubAllEnvs()
+  })
+
+  it('ignores stale imported proxy fields when fresh OpenSSH config has no proxy', () => {
+    expect(
+      shouldUseSystemSshTransport(
+        createTarget({
+          source: 'ssh-config',
+          configHost: 'workbox',
+          proxyCommand: 'ssh -W %h:%p stale-bastion'
+        }),
+        {
+          proxyUseFdpass: false
+        }
+      )
+    ).toBe(false)
   })
 })
 

@@ -270,7 +270,7 @@ describe('project group store routing', () => {
           { projectGroupId: projectGroup.id, name: 'Runtime folder' },
           { runtimeEnvironmentId: 'env-1' }
         )
-    ).resolves.toEqual(folderWorkspace)
+    ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'runtime:env-1' })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -350,7 +350,7 @@ describe('project group store routing', () => {
         name: 'Refund fix',
         linkedTask
       })
-    ).resolves.toEqual(folderWorkspace)
+    ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'local' })
     await expect(
       store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
     ).resolves.toBe(true)
@@ -805,9 +805,13 @@ describe('project group store routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-ambient' } as never })
 
-    await expect(store.getState().scanNestedRepos('/platform')).resolves.toEqual({
+    await expect(
+      store.getState().scanNestedRepos('/platform', undefined, {
+        runtimeEnvironmentId: 'env-selected'
+      })
+    ).resolves.toEqual({
       selectedPath: '/platform',
       selectedPathKind: 'non_git_folder',
       repos: [{ path: '/platform/api', displayName: 'api', depth: 1 }],
@@ -821,7 +825,7 @@ describe('project group store routing', () => {
     })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
+      selector: 'env-selected',
       method: 'projectGroup.scanNested',
       params: { path: '/platform' },
       timeoutMs: 20_000

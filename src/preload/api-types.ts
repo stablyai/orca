@@ -9,6 +9,7 @@ import type {
   HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
+import type { BrowserFindSource } from '../shared/browser-find-source'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -27,6 +28,7 @@ import type {
 } from '../shared/local-log-tail-types'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
+import type { ReleaseChannel } from '../shared/release-channel'
 import type {
   HostQualifiedDetectedWorktreeResult,
   LegacyDetectedWorktreeRequest,
@@ -47,6 +49,8 @@ import type {
 } from '../shared/terminal-render-desync-evidence'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
 import type {
   SshMutationExpectation,
   SshConnectionState,
@@ -252,6 +256,7 @@ import type {
   StatsSummary,
   MemorySnapshot,
   TuiAgent,
+  ReleaseBuildListResult,
   UpdateCheckOptions,
   UpdateStatus,
   Worktree,
@@ -1555,7 +1560,7 @@ export type PreloadApi = {
     listSessions: () => Promise<PtyListedSession[]>
     getAuthoritativeBufferSnapshotCapabilities?: (
       ids: string[]
-    ) => { id: string; authoritative: boolean | null }[]
+    ) => Promise<{ id: string; authoritative: boolean | null }[]>
     hasPty: (id: string) => Promise<boolean | null>
     getMainBufferSnapshot: (
       id: string,
@@ -2374,10 +2379,14 @@ export type PreloadApi = {
       wslDistro?: string | null
     }) => Promise<CodexRateLimitAccountsState>
     /** Live PTYs whose baked CODEX_HOME still points at a deselected account. */
-    listStalePanes: (args: {
-      ptyIds: string[]
-    }) => Promise<
-      { ptyId: string; launchAccountId: string | null; activeAccountId: string | null }[]
+    listStalePanes: (args: { ptyIds: string[] }) => Promise<
+      {
+        ptyId: string
+        launchAccountId: string | null
+        activeAccountId: string | null
+        /** Optional for compatibility with a pre-reason main process. */
+        reason?: 'account-change' | 'home-route-change'
+      }[]
     >
     /** The selection lane each PTY launched from, keyed by pty id; unrecorded panes are absent. */
     listRecordedPaneLanes: (args: { ptyIds: string[] }) => Promise<Record<string, string>>
@@ -2669,6 +2678,7 @@ export type PreloadApi = {
     quitAndInstall: () => Promise<void>
     dismissNudge: () => Promise<void>
     dismissAvailableUpdate: () => Promise<void>
+    listBuilds: (channel: ReleaseChannel) => Promise<ReleaseBuildListResult>
     onStatus: (callback: (status: UpdateStatus) => void) => () => void
     onClearDismissal: (callback: () => void) => () => void
   }
@@ -3111,7 +3121,7 @@ export type PreloadApi = {
     replyTabClose: (reply: { requestId: string; error?: string }) => void
     onNewTerminalTab: (callback: () => void) => () => void
     onFocusBrowserAddressBar: (callback: () => void) => () => void
-    onFindInBrowserPage: (callback: () => void) => () => void
+    onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
     onReloadBrowserPage: (callback: () => void) => () => void
     onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
@@ -3156,6 +3166,7 @@ export type PreloadApi = {
         activate?: boolean
         focus?: boolean
         presentation?: RuntimeTerminalPresentation
+        surfaceOwner?: false
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -3304,6 +3315,9 @@ export type PreloadApi = {
     onTerminalDriverChanged: (
       callback: (event: { ptyId: string; driver: RuntimeTerminalDriverState }) => void
     ) => () => void
+    onNativeChatLaunchDraftResolved?: (
+      callback: (event: { tabId: string; text: string; createdAt: number }) => void
+    ) => () => void
     onBrowserDriverChanged: (
       callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ) => () => void
@@ -3314,6 +3328,11 @@ export type PreloadApi = {
       name: string
       pairingCode: string
     }) => Promise<{ environment: PublicKnownRuntimeEnvironment }>
+    verifyAndAddFromPairingCode: (args: {
+      name: string
+      pairingCode: string
+      allowLoopback?: boolean
+    }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
     remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
     disconnect: (args: {
@@ -3566,7 +3585,12 @@ export type PreloadApi = {
       connectionMode?: MobilePairingConnectionMode
       rotate?: boolean
     }) => Promise<
-      | { available: false }
+      | {
+          available: false
+          reason?: string
+          guidance?: string
+          relayFailure?: MobileRelayMintFailure
+        }
       | {
           available: true
           qrDataUrl: string | null
@@ -3574,7 +3598,7 @@ export type PreloadApi = {
           pairingUrl: string
           endpoint: string
           deviceId: string
-          /** Mode the QR actually encodes; 'local-only' when Relay could not be attached. */
+          /** Mode the QR actually encodes. */
           connectionMode: MobilePairingConnectionMode
         }
     >

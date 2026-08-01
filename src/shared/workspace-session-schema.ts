@@ -18,6 +18,7 @@ import type {
   WorkspaceSessionState
 } from './types'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { isWorkspaceKey } from './workspace-scope'
@@ -224,6 +225,7 @@ const browserPageSchema = z.object({
   canGoForward: z.boolean(),
   loadError: browserLoadErrorSchema.nullable(),
   createdAt: z.number(),
+  allowWindowClose: z.boolean().optional(),
   // Why: explicit null marks a browser page as client-local even when its
   // worktree is remote-owned; older sessions omit it and keep inferred runtime.
   browserRuntimeEnvironmentId: z.string().nullable().optional(),
@@ -250,6 +252,12 @@ const browserHistoryEntriesSchema = z
 export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.object({
   activeRepoId: z.string().nullable(),
   activeWorkspaceKey: workspaceKeySchema.nullable().optional(),
+  activeWorkspaceExecutionHostId: z
+    .custom<ExecutionHostId>(
+      (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
+    )
+    .nullable()
+    .optional(),
   activeWorktreeId: z.string().nullable(),
   activeTabId: z.string().nullable(),
   tabsByWorktree: z.record(z.string(), z.array(terminalTabSchema)),

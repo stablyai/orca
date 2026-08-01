@@ -1035,6 +1035,29 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
         output = output.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
       }
 
+      const authError = extractCodexAuthError(output)
+      if (authError) {
+        resolved = true
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        if (settleTimer) {
+          clearTimeout(settleTimer)
+          settleTimer = null
+        }
+        cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
+        resolve({
+          provider: 'codex',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error: authError,
+          status: 'error'
+        })
+        return
+      }
+
       armStatusNudge()
 
       // Wait for prompt, then send /status

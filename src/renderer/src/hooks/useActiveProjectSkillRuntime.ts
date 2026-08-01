@@ -1,7 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../shared/skills'
+import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
+import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getProjectAgentSkillRuntime,
@@ -19,11 +21,30 @@ type ActiveProjectSkillRuntime = {
   agentRuntime?: ProjectAgentSkillRuntime
   terminalShellOverride?: string
   installDisabledReason: string | null
+  canUseLocalSkillFreshness: boolean
 }
 
 const EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME: ActiveProjectSkillRuntime = Object.freeze({
-  installDisabledReason: null
+  installDisabledReason: null,
+  canUseLocalSkillFreshness: false
 })
+
+export function shouldUseLocalSkillFreshness(
+  runtimeTarget: RuntimeClientTarget | null,
+  agentRuntime?: ProjectAgentSkillRuntime
+): boolean {
+  return runtimeTarget?.kind === 'local' && agentRuntime?.runtime !== 'wsl'
+}
+
+// Why: on Windows the runtime resolution is rebuilt from scratch on every
+// worktree-store change, so a same-runtime result still arrives with a fresh
+// identity. Downstream skill discovery keys effects off `discoveryTarget`, so
+// that churn would re-run a scan (and blink its loading state) per store update.
+// Serializing the whole value (rather than picking fields) keeps the comparison
+// honest if the resolution grows a field the runtime cache keys do not encode.
+function activeProjectSkillRuntimeIdentity(runtime: ActiveProjectSkillRuntime): string {
+  return JSON.stringify(runtime)
+}
 
 export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
   const runtimeState = useAppStore(
@@ -38,8 +59,9 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
   )
   const currentPlatform = getCurrentPlatform()
   const windowsCapabilities = useWindowsTerminalCapabilities(currentPlatform === 'win32')
+  const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
 
-  return useMemo(() => {
+  const resolved = useMemo(() => {
     const projectRuntime = getLocalProjectExecutionRuntimeContext(
       runtimeState,
       undefined,
@@ -57,9 +79,11 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
         runtimeState.settings,
         undefined
       )
-      return terminalShellOverride
-        ? { installDisabledReason: null, terminalShellOverride }
-        : EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME
+      const canUseLocalSkillFreshness = shouldUseLocalSkillFreshness(runtimeTarget)
+      if (!terminalShellOverride && !canUseLocalSkillFreshness) {
+        return EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME
+      }
+      return { installDisabledReason: null, terminalShellOverride, canUseLocalSkillFreshness }
     }
 
     const agentRuntime = getProjectAgentSkillRuntime(projectRuntime, currentPlatform)
@@ -72,9 +96,20 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
         runtimeState.settings,
         agentRuntime
       ),
-      installDisabledReason: getProjectSkillInstallDisabledReason(projectRuntime)
+      installDisabledReason: getProjectSkillInstallDisabledReason(projectRuntime),
+      canUseLocalSkillFreshness: shouldUseLocalSkillFreshness(runtimeTarget, agentRuntime)
     }
-  }, [currentPlatform, runtimeState, windowsCapabilities])
+  }, [currentPlatform, runtimeState, runtimeTarget, windowsCapabilities])
+
+  // Content-equal runtimes keep one reference so effect keys do not thrash.
+  // Adjust during render (not a ref write) when serialized identity changes.
+  const [stable, setStable] = useState(resolved)
+  const stableIdentity = activeProjectSkillRuntimeIdentity(stable)
+  const resolvedIdentity = activeProjectSkillRuntimeIdentity(resolved)
+  if (stableIdentity !== resolvedIdentity) {
+    setStable(resolved)
+  }
+  return stableIdentity === resolvedIdentity ? stable : resolved
 }
 
 function getCurrentPlatform(): NodeJS.Platform {

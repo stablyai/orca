@@ -142,6 +142,27 @@ export function stopClaudeSubagent(roster: ClaudeSubagentRoster, id: string): vo
   tracked.state = 'idle'
 }
 
+/** Shell tasks and session crons outlive a lead Stop but do not belong in the agent roster. */
+export function hasActiveClaudeNonAgentBackgroundWork(
+  hookPayload: Record<string, unknown>
+): boolean {
+  const sessionCrons = hookPayload['session_crons']
+  if (Array.isArray(sessionCrons) && sessionCrons.length > 0) {
+    return true
+  }
+  const backgroundTasks = hookPayload['background_tasks']
+  return (
+    Array.isArray(backgroundTasks) &&
+    backgroundTasks.some((item) => {
+      if (typeof item !== 'object' || item === null) {
+        return false
+      }
+      const task = item as Record<string, unknown>
+      return task.status === 'running' && task.type !== 'subagent' && task.type !== 'teammate'
+    })
+  )
+}
+
 /** Read the agent-typed entries of a hook payload's `background_tasks` field.
  *  `present: false` means the field was absent/malformed (older Claude builds),
  *  so callers must keep their tracked roster instead of clearing it. */

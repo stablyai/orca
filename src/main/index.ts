@@ -28,14 +28,20 @@ import {
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
   getSshPtyProvider,
-  registerHeadlessPtyRuntime
+  registerHeadlessPtyRuntime,
+  type CodexHomeLaunchContext
 } from './ipc/pty'
 import {
   initDaemonPtyProvider,
   disconnectDaemon,
   getDaemonProvider,
+  listLiveDaemonPtyIds,
   shutdownDaemon
 } from './daemon/daemon-init'
+import {
+  hasRecordedLegacySharedCodexPane,
+  reconcileCodexPaneAccountsWithLivePtys
+} from './codex/codex-pane-account-registry'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
@@ -87,6 +93,7 @@ import {
   registerAppMenu,
   rebuildAppMenu
 } from './menu/register-app-menu'
+import { createGpuAccelerationAboutPanelOptions } from './menu/gpu-acceleration-about-panel'
 import {
   checkForRemoteServerUpdate,
   checkForUpdatesFromMenu,
@@ -97,7 +104,7 @@ import {
   resolveUpdateInstallMode
 } from './updater'
 import { configureRemoteServerUpdater } from './runtime/remote-server-updater'
-import type { TuiAgent, UpdateCheckOptions } from '../shared/types'
+import type { UpdateCheckOptions } from '../shared/types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
   installServeSupervisorDisconnectQuit,
@@ -127,6 +134,7 @@ import {
   type GpuFallbackEnvironment,
   type WindowsGpuFallbackEnvironment
 } from './startup/gpu-fallback-marker'
+import { applyGpuFallbackCommandLineSwitches } from './startup/gpu-fallback-switches'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
@@ -358,10 +366,30 @@ const gpuCrashFallbackTracker = new GpuCrashFallbackTracker({
   threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD
 })
 let gpuFallbackActiveThisLaunch = false
+let gpuFeatureStatus: Electron.GPUFeatureStatus | null = null
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
+
+function updateGpuAccelerationAboutPanel(): void {
+  app.setAboutPanelOptions(
+    createGpuAccelerationAboutPanelOptions({
+      appName: app.name,
+      appVersion: app.getVersion(),
+      platform: process.platform,
+      gpuFallbackActive: gpuFallbackActiveThisLaunch,
+      gpuFeatureStatus
+    })
+  )
+}
+
+app.on('gpu-info-update', () => {
+  gpuFeatureStatus = app.getGPUFeatureStatus()
+  if (app.isReady()) {
+    updateGpuAccelerationAboutPanel()
+  }
+})
 if (isServeMode) {
   reserveServeStdoutForReadiness()
 }
@@ -821,6 +849,14 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
       await initDaemonPtyProvider(signal, {
         macosLoginSessionWatch: process.platform === 'darwin' && !isServeMode
       })
+      if (codexRuntimeHome?.isHostSystemDefaultRealHome() && hasRecordedLegacySharedCodexPane()) {
+        const livePtyIds = await listLiveDaemonPtyIds()
+        if (livePtyIds) {
+          reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
+        }
+      }
+      // Why: retained shells can invoke Codex immediately after the startup gate.
+      codexRuntimeHome?.reconcileLegacySharedHomeForRetainedPanes()
       logStartupMilestone('startup-service-done', { service: 'daemon-pty-provider' })
     },
     // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from live server state, so the renderer awaits this before restored terminals reconnect.
@@ -868,7 +904,7 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
 function prepareCodexRuntimeHomeForLaunch(
   target?: CodexAccountSelectionTarget,
   launchEnv?: NodeJS.ProcessEnv,
-  launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+  launchContext?: CodexHomeLaunchContext
 ): string | null {
   if (
     target?.runtime !== 'wsl' &&
@@ -900,14 +936,18 @@ function prepareCodexRuntimeHomeForLaunch(
     return true
   }
   let realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
-  let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv)
+  let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
+    unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+  })
   if (runtimeHomePath === null && !realHomeHooksPrepared) {
-    // Why: a managed home can lose auth during launch prep, which clears its
-    // selection and falls through to real home. Establish hook capability for
-    // that newly selected lane, then re-resolve if the capability gate rejects it.
+    // Why: launch prep can reject an untrusted managed home and clear its
+    // selection. Establish hook capability for that newly selected lane, then
+    // re-resolve if the capability gate rejects it.
     realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
     if (realHomeHooksPrepared) {
-      runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv)
+      runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
+        unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+      })
     }
   }
   if (runtimeHomePath === null && target?.runtime !== 'wsl') {
@@ -1518,10 +1558,13 @@ function maybeApplyGpuFallbackForThisLaunch(): void {
     return
   }
   app.disableHardwareAcceleration()
-  app.commandLine.appendSwitch('disable-gpu')
+  const appliedSwitches = applyGpuFallbackCommandLineSwitches(app.commandLine, process.platform)
   gpuFallbackActiveThisLaunch = true
+  // Why: with no GPU child left, child-process-gone can't report a GPU fault, so
+  // name the applied switches in the trail any later crash report carries.
   recordCrashBreadcrumb('gpu_fallback_applied', {
-    crashesInWindow: marker.crashesInWindow
+    crashesInWindow: marker.crashesInWindow,
+    switches: appliedSwitches.join(',')
   })
 }
 
@@ -1541,23 +1584,6 @@ async function handleGpuChildCrash(reason: string, exitCode: number | null): Pro
     crashesInWindow: result.crashesInWindow
   })
   const engagedAt = Date.now()
-  const environment = getWindowsGpuFallbackEnvironment()
-  if (!environment) {
-    return
-  }
-  try {
-    writeGpuFallbackMarker(
-      app.getPath('userData'),
-      {
-        engagedAt,
-        crashesInWindow: result.crashesInWindow
-      },
-      environment
-    )
-  } catch (error) {
-    console.warn('[gpu-fallback] failed to persist marker:', error)
-    return
-  }
   const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
   let restartDecision: GpuFallbackRestartDecision
   try {
@@ -1576,6 +1602,23 @@ async function handleGpuChildCrash(reason: string, exitCode: number | null): Pro
   }
   if (restartDecision !== 'restart') {
     recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData)
+    return
+  }
+  const environment = getWindowsGpuFallbackEnvironment()
+  if (!environment) {
+    return
+  }
+  try {
+    writeGpuFallbackMarker(
+      app.getPath('userData'),
+      {
+        engagedAt,
+        crashesInWindow: result.crashesInWindow
+      },
+      environment
+    )
+  } catch (error) {
+    console.warn('[gpu-fallback] failed to persist marker:', error)
     return
   }
   isQuitting = true
@@ -1964,6 +2007,7 @@ void app.whenReady().then(async () => {
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
   // Why: setName drives the macOS safeStorage Keychain item name; use the stable appName (not per-branch `name`) so dev branches share one key and don't re-prompt.
   app.setName(devInstanceIdentity.appName)
+  updateGpuAccelerationAboutPanel()
 
   // Why: managed WSL launchers live outside the Windows app bundle, so keep their launcher/bridge contract synced across app updates.
   managedWslCliReconciliationStatus = 'pending'

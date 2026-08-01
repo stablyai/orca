@@ -51,8 +51,14 @@ export const WorktreeDetectedListParams = z.object({
     .pipe(z.string().min(1, 'Missing repo selector'))
 })
 
+export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams.extend({
+  worktreeIds: z.array(z.string().min(1)).max(10_000),
+  connectionId: z.string().nullable().optional()
+})
+
 export const WorktreePsParams = z.object({
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  afterSnapshotId: z.string().min(1).max(128).nullable().optional()
 })
 
 export const WorktreeSortOrder = z.object({

@@ -273,6 +273,9 @@ describe('SSH IPC handlers', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mockStore = {
     getRepos: () => [],
+    getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
+    upsertSshPtyConsumerRecovery: vi.fn(),
+    removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn(),

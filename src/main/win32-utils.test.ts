@@ -8,7 +8,8 @@ import {
   getSpawnArgsForWindows,
   isPermissionError,
   isWindowsBatchScript,
-  resolveWindowsCommand
+  resolveWindowsCommand,
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from './win32-utils'
 
 function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
@@ -119,9 +120,11 @@ describe('getSpawnArgsForWindows', () => {
 
   it('rejects unsafe args for .cmd scripts on win32', () => {
     withPlatform('win32', () => {
-      expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['hello & goodbye'])).toThrow(
-        'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
-      )
+      for (const argument of ['hello & goodbye', 'a | b', 'x > y', '%PATH%', 'a\nb']) {
+        expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', [argument])).toThrow(
+          'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+        )
+      }
     })
   })
 
@@ -130,6 +133,56 @@ describe('getSpawnArgsForWindows', () => {
       expect(() => getSpawnArgsForWindows('C:\\bad&path\\agent.cmd', ['login'])).toThrow(
         'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
       )
+    })
+  })
+
+  it('allows punctuation that is not a cmd command operator', () => {
+    withPlatform('win32', () => {
+      expect(
+        getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['package,name;version']).spawnArgs
+      ).toEqual(['/d', '/c', 'C:\\tools\\agent.cmd', 'package,name;version'])
+    })
+  })
+
+  // Why: parentheses only group commands and cannot chain one without a separator
+  // the guard already rejects, so paren-bearing paths must stay spawnable.
+  it('spawns .cmd shims under Program Files (x86) and paren-bearing worktrees', () => {
+    withPlatform('win32', () => {
+      const npx = 'C:\\Program Files (x86)\\nodejs\\npx.cmd'
+      expect(getSpawnArgsForWindows(npx, ['C:\\dev\\app (fork)'])).toEqual({
+        spawnCmd: getCmdExePath(),
+        spawnArgs: ['/d', '/c', npx, 'C:\\dev\\app (fork)']
+      })
+      expect(getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['close)', '(open']).spawnArgs).toEqual(
+        ['/d', '/c', 'C:\\tools\\agent.cmd', 'close)', '(open']
+      )
+    })
+  })
+
+  it('still rejects a paren-wrapped command chain', () => {
+    withPlatform('win32', () => {
+      expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['(x & calc.exe)'])).toThrow(
+        'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+      )
+    })
+  })
+
+  it('rejects exactly the characters the message advertises', () => {
+    withPlatform('win32', () => {
+      const advertised = WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL.split(' ')
+      expect(advertised.length).toBeGreaterThan(0)
+      for (const character of advertised) {
+        expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', [`a${character}b`])).toThrow(
+          'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+        )
+      }
+      // Why: anything not advertised must pass, or the message misleads the user.
+      for (const character of ['(', ')', ',', ';', '@', '#', '$', "'", '~', '=']) {
+        expect(advertised).not.toContain(character)
+        expect(() =>
+          getSpawnArgsForWindows('C:\\tools\\agent.cmd', [`a${character}b`])
+        ).not.toThrow()
+      }
     })
   })
 })

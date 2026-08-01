@@ -151,7 +151,6 @@ describe('registerMobileHandlers', () => {
       pairingUrl: 'orca://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
       deviceId: 'mobile-1',
-      // The encoded mode passes through so the UI can flag a degraded mint.
       connectionMode: 'automatic'
     })
 
@@ -160,6 +159,32 @@ describe('registerMobileHandlers', () => {
       connectionMode: undefined,
       rotate: undefined,
       name: expect.stringMatching(/^Mobile /)
+    })
+  })
+
+  it('forwards structured Relay mint failures to the renderer', async () => {
+    networkInterfacesMock.mockReturnValue({
+      en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
+    })
+    const relayFailure = {
+      code: 'relay_mint_failed',
+      stage: 'create_pairing_relay',
+      message: 'Relay pairing invite request failed'
+    }
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: false,
+      reason: 'relay_mint_failed',
+      guidance: 'Use LAN or retry Relay.',
+      relayFailure
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+
+    await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toEqual({
+      available: false,
+      reason: 'relay_mint_failed',
+      guidance: 'Use LAN or retry Relay.',
+      relayFailure
     })
   })
 

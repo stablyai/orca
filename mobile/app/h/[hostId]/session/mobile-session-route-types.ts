@@ -28,6 +28,7 @@ export type MobileSessionTab =
       launchAgent?: TuiAgent
       /** Host-provided launch context still parked as an unsent TUI-input draft. */
       launchDraft?: string
+      launchDraftCreatedAt?: number
       terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }

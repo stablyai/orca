@@ -6,11 +6,14 @@ import { describe, expect, it } from 'vitest'
 import {
   createRelayInstallMarkerCommand,
   createRelayInstallNamespace,
+  createRelayUploadStageNamespace,
   makeRelayInstallDirectoryCommand,
+  makeRelayUploadStageDirectoryCommand,
   relayHomeRelativeDir,
   relayInstallMarkerShellPath,
   relayRemoteDirSegments,
-  relaySftpNamespaceMapping
+  relaySftpNamespaceMapping,
+  relayUploadStageSftpNamespaceMapping
 } from './ssh-relay-install-namespace'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { computeRemoteRelayDir } from './ssh-relay-versioned-install'
@@ -87,6 +90,7 @@ describe('relaySftpNamespaceMapping', () => {
     const mapping = relaySftpNamespaceMapping(namespace, LINUX, SHELL_RELAY_DIR)
 
     expect(mapping.homeRelativePath).toBe(`.orca-remote/relay-${VERSION}`)
+    expect(mapping.homeRelativeNamespaceRoot).toBe(`.orca-remote/relay-${VERSION}`)
     expect(mapping.homeRelativeProbePath).toBe(
       `.orca-remote/relay-${VERSION}/.install-lock/${namespace.markerFileName}`
     )
@@ -117,6 +121,37 @@ describe('relaySftpNamespaceMapping', () => {
       ).toThrow('Unsafe remote path segment')
     }
   )
+})
+
+describe('relay upload stage namespace', () => {
+  const stageSuffix = `.orca-remote/relay-${VERSION}.upload-123e4567-e89b-12d3-a456-426614174000`
+  const shellStageDir = `/var/services/homes/alice/${stageSuffix}`
+  const namespace = createRelayUploadStageNamespace(stageSuffix)
+
+  it('maps only the attempt-owned payload subtree', () => {
+    const payload = relayUploadStageSftpNamespaceMapping(namespace, LINUX, shellStageDir)
+    const version = relayUploadStageSftpNamespaceMapping(
+      namespace,
+      LINUX,
+      shellStageDir,
+      '.version'
+    )
+
+    expect(payload.homeRelativeNamespaceRoot).toBe(stageSuffix)
+    expect(payload.homeRelativePath).toBe(`${stageSuffix}/payload`)
+    expect(version.homeRelativePath).toBe(`${stageSuffix}/payload/.version`)
+    expect(payload.shellProbePath).toBe(`${shellStageDir}/${namespace.markerFileName}`)
+    expect(payload.shellProbePath).toBe(version.shellProbePath)
+  })
+
+  it('creates the payload and marker without touching the shared install lock', () => {
+    const command = makeRelayUploadStageDirectoryCommand(namespace, LINUX, shellStageDir)
+
+    expect(command).toContain(`${shellStageDir}/payload`)
+    expect(command).toContain(`${shellStageDir}/${namespace.markerFileName}`)
+    expect(command).toContain('umask 077')
+    expect(command).not.toContain('.install-lock')
+  })
 })
 
 describe('install directory command', () => {

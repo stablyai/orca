@@ -5,8 +5,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/pairing'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
+import {
+  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+} from '../../shared/protocol-version'
 import * as environmentStore from '../../shared/runtime-environment-store'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 
 const {
   handleMock,
@@ -79,6 +83,18 @@ function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
   })
 }
 
+function runtimeStatus(): Record<string, unknown> {
+  return {
+    runtimeId: 'runtime-a',
+    rendererGraphEpoch: 1,
+    graphStatus: 'ready',
+    authoritativeWindowId: 1,
+    liveTabCount: 0,
+    liveLeafCount: 0,
+    protocolVersion: 999_999
+  }
+}
+
 function handler<TArgs, TResult>(
   channel: string
 ): (_event: unknown, args: TArgs) => TResult | Promise<TResult> {
@@ -132,6 +148,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(handleMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
       'runtimeEnvironments:addFromPairingCode',
+      'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
@@ -153,6 +170,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(removeHandlerMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
       'runtimeEnvironments:addFromPairingCode',
+      'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
@@ -209,6 +227,173 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
+  })
+
+  it('blocks loopback before verification unless an SSH tunnel is declared', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string; allowLoopback?: boolean },
+      { ok: boolean; kind?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, { name: 'desk', pairingCode: pairingCode() })
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'host-unreachable'
+    })
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it('verifies identity, access, status, and compatibility before saving', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string; allowLoopback?: boolean },
+      { ok: boolean; environment?: { name: string; connectionDependency?: string } }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    const result = await verifyAndAdd(null, {
+      name: 'desk',
+      pairingCode: pairingCode(),
+      allowLoopback: true
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      environment: { name: 'desk', connectionDependency: 'ssh-tunnel' }
+    })
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'ws://127.0.0.1:6768' }),
+      'status.get',
+      undefined,
+      15_000
+    )
+    expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
+  })
+
+  it('does not mark non-loopback hosts as SSH-tunnel dependent', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string; allowLoopback?: boolean },
+      { ok: boolean; environment?: { connectionDependency?: string } }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    const result = await verifyAndAdd(null, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768'),
+      allowLoopback: true
+    })
+
+    expect(result).toMatchObject({ ok: true })
+    expect(result.environment).not.toHaveProperty('connectionDependency')
+  })
+
+  it.each([
+    [{ protocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1 }, 'protocol-incompatible'],
+    [{ protocolVersion: 999_999, deviceScope: 'mobile' }, 'access-link-invalid'],
+    [null, 'connection-interrupted']
+  ])('does not save a host with rejected status %o', async (status, expectedKind) => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: status,
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string },
+      { ok: boolean; kind?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, {
+        name: 'desk',
+        pairingCode: pairingCode('ws://100.76.32.125:6768')
+      })
+    ).resolves.toMatchObject({ ok: false, kind: expectedKind })
+    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it.each([
+    [
+      new RemoteRuntimeClientError('remote_runtime_unavailable', 'closed', {
+        pairingStage: 'host-identity',
+        closeCode: 4001
+      }),
+      'host-identity-mismatch'
+    ],
+    [
+      new RemoteRuntimeClientError('unauthorized', 'rejected', {
+        pairingStage: 'access-grant'
+      }),
+      'access-link-invalid'
+    ],
+    [
+      new RemoteRuntimeClientError('remote_runtime_unavailable', 'offline', {
+        pairingStage: 'connect'
+      }),
+      'host-unreachable'
+    ],
+    [new Error('Invalid public key: expected 32 bytes, got 3'), 'access-link-invalid']
+  ] as const)('returns a structured pairing failure for %s', async (error, expectedKind) => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockRejectedValue(error)
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string },
+      { ok: boolean; kind?: string; message?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    const result = await verifyAndAdd(null, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768')
+    })
+
+    expect(result).toMatchObject({ ok: false, kind: expectedKind })
+    expect(result.message).not.toContain('4001')
+    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it('returns a structured failure when a verified host cannot be persisted', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768')
+    })
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string },
+      { ok: boolean; kind?: string; message?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, {
+        name: 'desk',
+        pairingCode: pairingCode('ws://100.76.32.125:6768')
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'environment-save-failed',
+      message: 'A server named "desk" already exists.'
+    })
+    expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
   })
 
   it('requires an explicit Advanced selection before removing the Active Server', async () => {

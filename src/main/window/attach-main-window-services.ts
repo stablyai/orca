@@ -6,9 +6,11 @@ import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
 import type {
   CreateWorktreeResult,
+  ReleaseBuildListResult,
   UpdateCheckOptions,
   WorktreeStartupLaunch
 } from '../../shared/types'
+import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import {
   acknowledgePendingTccPromptNotice,
   consumePendingTccPromptNotice,
@@ -38,6 +40,7 @@ import {
   setupAutoUpdater,
   dismissAvailableUpdate,
   dismissNudge,
+  listAvailableReleaseBuilds,
   type UpdateInstallMode
 } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history-gc'
@@ -175,6 +178,7 @@ export function attachMainWindowServices(
       setDismissedUpdateNudgeId: (id) => {
         store.updateUI({ dismissedUpdateNudgeId: id })
       },
+      getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
       installMode: options?.updateInstallMode
     })
     logStartupMilestone('updater-setup-done')
@@ -402,6 +406,7 @@ function registerRuntimeWindowLifecycle(
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           activate: opts.activate !== false,
           ...(opts.presentation ? { presentation: opts.presentation } : {}),
+          ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {}),
           // Why: pre-minted tabId aligns the renderer tab id with the paneKey baked into the PTY env, so hook events route right.
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
           ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
@@ -472,6 +477,8 @@ function registerRuntimeWindowLifecycle(
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>
       send('runtime:terminalDriverChanged', { ptyId, driver }),
+    nativeChatLaunchDraftResolved: (tabId, resolution) =>
+      send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
     browserDriverChanged: (browserPageId, driver) =>
       send('runtime:browserDriverChanged', { browserPageId, driver })
   })
@@ -523,6 +530,7 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:quitAndInstall')
   ipcMain.removeHandler('updater:dismissNudge')
   ipcMain.removeHandler('updater:dismissAvailableUpdate')
+  ipcMain.removeHandler('updater:listBuilds')
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
@@ -534,4 +542,19 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
+  ipcMain.handle(
+    'updater:listBuilds',
+    async (_event, channel: ReleaseChannel): Promise<ReleaseBuildListResult> => {
+      if (!RELEASE_CHANNELS.includes(channel)) {
+        return { ok: false, channel, message: `Unknown release channel "${channel}".` }
+      }
+      try {
+        return { ok: true, channel, builds: await listAvailableReleaseBuilds(channel) }
+      } catch (error) {
+        // Why: a network/rate-limit failure is expected here; return it as data so
+        // the picker can render the reason instead of rejecting the invoke.
+        return { ok: false, channel, message: String((error as Error)?.message ?? error) }
+      }
+    }
+  )
 }

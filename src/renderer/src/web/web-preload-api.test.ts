@@ -5,6 +5,7 @@ import type { PreloadApi } from '../../../preload/api-types'
 import type { FeatureInteractionState } from '../../../shared/feature-interactions'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../../shared/protocol-version'
 
 const TEST_COMMIT_OID = '0123456789abcdef0123456789abcdef01234567'
 
@@ -200,6 +201,7 @@ describe('web before-unload persistence', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
   })
 
   it('persists final UI and host-partitioned sessions synchronously', async () => {
@@ -531,6 +533,187 @@ describe('web runtime environment identity', () => {
       )
     }
   )
+  it('keeps the current host when verification rejects an incompatible replacement', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: 'status',
+            ok: true,
+            result: { runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1 },
+            _meta: { runtimeId: 'runtime-old' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const previousStored = globals.storage.getItem('orca.web.runtimeEnvironment.v1')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Incompatible server',
+        pairingCode: encodePairingCode()
+      })
+    ).resolves.toMatchObject({ ok: false, kind: 'protocol-incompatible' })
+    expect(globals.storage.getItem('orca.web.runtimeEnvironment.v1')).toBe(previousStored)
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
+      { id: 'web-server-a' }
+    ])
+  })
+
+  it('keeps the current host when browser storage rejects a verified replacement', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: 'status',
+            ok: true,
+            result: {
+              runtimeId: 'runtime-new',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: 1,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
+            },
+            _meta: { runtimeId: 'runtime-new' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    vi.spyOn(globals.storage, 'setItem').mockImplementation(() => {
+      throw new Error('Browser storage is full.')
+    })
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Verified replacement',
+        pairingCode: encodePairingCode()
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'environment-save-failed',
+      message: 'Orca verified the host but could not save it. Check browser storage and try again.'
+    })
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
+      { id: 'web-server-a' }
+    ])
+  })
+
+  it('requires an explicit loopback override and persists the SSH dependency', async () => {
+    const call = vi.fn().mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: {
+        runtimeId: 'runtime-new',
+        rendererGraphEpoch: 1,
+        graphStatus: 'ready',
+        authoritativeWindowId: 1,
+        liveTabCount: 0,
+        liveLeafCount: 0,
+        runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
+      },
+      _meta: { runtimeId: 'runtime-new' }
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call = call
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const pairingCode = encodePairingCode({ endpoint: 'ws://127.0.0.1:6768' })
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Tunnel server',
+        pairingCode
+      })
+    ).resolves.toMatchObject({ ok: false, kind: 'host-unreachable' })
+    expect(call).not.toHaveBeenCalled()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Tunnel server',
+        pairingCode,
+        allowLoopback: true
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      environment: { connectionDependency: 'ssh-tunnel' }
+    })
+    expect(call).toHaveBeenCalledOnce()
+    expect(
+      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
+    ).toMatchObject({ connectionDependency: 'ssh-tunnel' })
+  })
+
+  it('returns a structured failure when the browser client cannot be constructed', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        constructor() {
+          throw new Error('Invalid public key: expected 32 bytes, got 3')
+        }
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Broken server',
+        pairingCode: encodePairingCode()
+      })
+    ).resolves.toMatchObject({ ok: false, kind: 'access-link-invalid' })
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
+      { id: 'web-server-a' }
+    ])
+  })
+
+  it('classifies coded browser authorization failures without relying on copy', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.reject(
+            Object.assign(new Error('Access grant rejected.'), { code: 'unauthorized' })
+          )
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Expired server',
+        pairingCode: encodePairingCode()
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'access-link-invalid',
+      message: 'Access grant rejected.'
+    })
+  })
 })
 
 describe('web browser-local port capability', () => {

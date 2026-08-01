@@ -12,6 +12,7 @@ import {
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { Store } from '../persistence'
+import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 import { closeRemoteRuntimeRequestConnection } from './runtime-environment-request-connections'
 import {
   callRuntimeEnvironment,
@@ -62,6 +63,16 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       const environment = addEnvironmentFromPairingCode(getUserDataPath(), args)
       manuallyDisconnectedEnvironmentIds.delete(environment.id)
       return { environment: redactRuntimeEnvironment(environment) }
+    }
+  )
+  ipcMain.handle(
+    'runtimeEnvironments:verifyAndAddFromPairingCode',
+    async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
+      const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
+      if (result.ok) {
+        manuallyDisconnectedEnvironmentIds.delete(result.environment.id)
+      }
+      return result
     }
   )
   ipcMain.handle('runtimeEnvironments:resolve', (_event, args: { selector: string }) =>

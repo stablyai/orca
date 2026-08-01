@@ -76,6 +76,15 @@ function installAnimationFrameController(): {
   }
 }
 
+async function flushPortalFramesUntil(
+  frames: ReturnType<typeof installAnimationFrameController>,
+  settled: () => boolean
+): Promise<void> {
+  for (let frame = 0; frame < 4 && !settled(); frame += 1) {
+    await frames.flush()
+  }
+}
+
 // Models the tab-root DOM and sibling hiding emitted by a portaled TerminalPane.
 function renderPortaledTerminalPane(target: HTMLElement, tabId: string, leafIds: string[]): void {
   const isolatedLeafId = leafIds[0]
@@ -307,6 +316,7 @@ describe('Activity portal pane switching', () => {
   })
 
   it('releases a latched readiness once the terminal attaches', async () => {
+    const frames = installAnimationFrameController()
     const target = document.createElement('div')
     document.body.append(target)
     const buildRoot = (mode: 'hidden' | 'sibling' | 'ready'): void => {
@@ -332,35 +342,36 @@ describe('Activity portal pane switching', () => {
     }
     buildRoot('hidden')
 
-    let churning = true
-    let churns = 0
     const statuses: ActivityPortalReadinessStatus[] = []
 
     function ActivityTerminalSlot(): null {
       const status = useActivityTerminalPortalStatus(target, PANE_A.paneKey)
       statuses.push(status)
-      useLayoutEffect(() => {
-        if (!churning || churns > 30) {
-          return
-        }
-        churns += 1
-        buildRoot(status === 'unavailable' ? 'sibling' : 'hidden')
-      })
       return null
     }
 
     root = createRoot(document.createElement('div'))
     await act(async () => {
       root.render(<ActivityTerminalSlot />)
-      await new Promise((resolve) => setTimeout(resolve, 180))
     })
+    await flushPortalFramesUntil(frames, () => statuses.at(-1) === 'unavailable')
     expect(statuses.at(-1)).toBe('unavailable')
 
-    churning = false
+    // Feed each observed DOM state separately so MutationObserver cannot coalesce the flips.
+    for (let flip = 0; flip < 9; flip += 1) {
+      await act(async () => {
+        buildRoot(flip % 2 === 0 ? 'sibling' : 'hidden')
+        await Promise.resolve()
+      })
+      await frames.flush()
+    }
+    expect(statuses.at(-1)).toBe('unavailable')
+
     await act(async () => {
       buildRoot('ready')
-      await new Promise((resolve) => setTimeout(resolve, 40))
+      await Promise.resolve()
     })
+    await flushPortalFramesUntil(frames, () => statuses.at(-1) === 'ready')
     expect(statuses.at(-1)).toBe('ready')
   })
 })

@@ -231,6 +231,13 @@ import {
   validateTaskPageGitHubDuplicateTarget,
   type TaskPageGitHubCloseAction
 } from '@/components/task-page-github-status-actions'
+import { sortChecksBySeverity } from '../../../shared/pr-check-severity-order'
+import {
+  getCheckConclusion,
+  getCheckCountChips,
+  getCheckCounts,
+  getChecksSummaryLabel
+} from '@/components/pr-check-counts'
 
 // Why: the dialog lacks repository context, so recover its host-aware identity from the canonical item URL.
 function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
@@ -4320,21 +4327,6 @@ function CommentReplyForm({
   )
 }
 
-const CHECK_SORT_ORDER: Record<string, number> = {
-  failure: 0,
-  timed_out: 0,
-  action_required: 0,
-  cancelled: 1,
-  pending: 2,
-  neutral: 3,
-  skipped: 4,
-  success: 5
-}
-
-function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
-  return check.conclusion ?? 'pending'
-}
-
 function getCheckStatusLabel(check: PRCheckDetail): string {
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {
@@ -4365,57 +4357,6 @@ function getCheckStatusLabel(check: PRCheckDetail): string {
     return 'In progress'
   }
   return 'Pending'
-}
-
-function getCheckCounts(checks: PRCheckDetail[]): {
-  passing: number
-  failing: number
-  needsAction: number
-  pending: number
-  skipped: number
-  neutral: number
-} {
-  return checks.reduce(
-    (counts, check) => {
-      const conclusion = getCheckConclusion(check)
-      if (conclusion === 'success') {
-        counts.passing += 1
-      } else if (conclusion === 'action_required') {
-        counts.needsAction += 1
-      } else if (['failure', 'cancelled', 'timed_out'].includes(conclusion)) {
-        counts.failing += 1
-      } else if (conclusion === 'skipped') {
-        counts.skipped += 1
-      } else if (conclusion === 'neutral') {
-        counts.neutral += 1
-      } else {
-        counts.pending += 1
-      }
-      return counts
-    },
-    { passing: 0, failing: 0, needsAction: 0, pending: 0, skipped: 0, neutral: 0 }
-  )
-}
-
-function getChecksSummaryLabel(checks: PRCheckDetail[]): string {
-  const counts = getCheckCounts(checks)
-  if (checks.length === 0) {
-    return 'No checks found'
-  }
-  if (counts.failing > 0) {
-    return `${counts.failing} ${counts.failing === 1 ? 'check' : 'checks'} failing`
-  }
-  // Why: action_required blocks merge but isn't a failure; surface it distinctly so users know a manual step is needed.
-  if (counts.needsAction > 0) {
-    return `${counts.needsAction} ${counts.needsAction === 1 ? 'check needs' : 'checks need'} action`
-  }
-  if (counts.pending > 0) {
-    return `${counts.pending} ${counts.pending === 1 ? 'check' : 'checks'} pending`
-  }
-  if (counts.passing === checks.length) {
-    return 'All checks passing'
-  }
-  return `${counts.passing} of ${checks.length} checks passing`
 }
 
 function getCheckDetailsKey(check: PRCheckDetail): string {
@@ -4474,14 +4415,12 @@ function ChecksTab({
   const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
   const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  const sorted = [...list].sort(
-    (a, b) =>
-      (CHECK_SORT_ORDER[getCheckConclusion(a)] ?? 3) -
-      (CHECK_SORT_ORDER[getCheckConclusion(b)] ?? 3)
-  )
+  const sorted = sortChecksBySeverity(list)
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
   const summaryLabel = getChecksSummaryLabel(list)
+  // Why: keying the green tick off `list.length` painted an all-neutral PR green above the words
+  // "0 of N checks passing"; nothing passed, so it reads unresolved like the checks pill does.
   const SummaryIcon =
     counts.failing > 0
       ? CHECK_ICON.failure
@@ -4489,7 +4428,7 @@ function ChecksTab({
         ? CHECK_ICON.action_required
         : counts.pending > 0
           ? CHECK_ICON.pending
-          : list.length > 0
+          : counts.passing > 0
             ? CHECK_ICON.success
             : CircleDashed
   const summaryColor =
@@ -4499,7 +4438,7 @@ function ChecksTab({
         ? CHECK_COLOR.action_required
         : counts.pending > 0
           ? CHECK_COLOR.pending
-          : list.length > 0
+          : counts.passing > 0
             ? CHECK_COLOR.success
             : 'text-muted-foreground'
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
@@ -5185,51 +5124,7 @@ function ChecksTab({
     )
   }
   if (variant === 'page') {
-    const countChips: { label: string; className: string }[] = []
-    if (counts.passing > 0) {
-      countChips.push({
-        label: translate('auto.components.GitHubItemDialog.311d0cee55', '{{value0}} passing', {
-          value0: counts.passing
-        }),
-        className: CHECK_COLOR.success
-      })
-    }
-    if (counts.failing > 0) {
-      countChips.push({
-        label: translate('auto.components.GitHubItemDialog.b1ac991806', '{{value0}} failing', {
-          value0: counts.failing
-        }),
-        className: CHECK_COLOR.failure
-      })
-    }
-    if (counts.needsAction > 0) {
-      countChips.push({
-        label: translate(
-          'auto.components.GitHubItemDialog.checksNeedActionChip',
-          '{{value0}} action required',
-          {
-            value0: counts.needsAction
-          }
-        ),
-        className: CHECK_COLOR.action_required
-      })
-    }
-    if (counts.pending > 0) {
-      countChips.push({
-        label: translate('auto.components.GitHubItemDialog.18f80e1329', '{{value0}} pending', {
-          value0: counts.pending
-        }),
-        className: CHECK_COLOR.pending
-      })
-    }
-    if (counts.skipped + counts.neutral > 0) {
-      countChips.push({
-        label: translate('auto.components.GitHubItemDialog.d23bbb6416', '{{value0}} skipped', {
-          value0: counts.skipped + counts.neutral
-        }),
-        className: 'text-muted-foreground'
-      })
-    }
+    const countChips = getCheckCountChips(counts)
     return (
       <div className="flex flex-col gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -5245,9 +5140,9 @@ function ChecksTab({
             {countChips.length > 1 && (
               <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 {countChips.map((chip, i) => (
-                  <React.Fragment key={chip.label}>
+                  <React.Fragment key={chip.tone}>
                     {i > 0 && <span className="opacity-40">·</span>}
-                    <span className={chip.className}>{chip.label}</span>
+                    <span className={CHECK_COLOR[chip.tone]}>{chip.label}</span>
                   </React.Fragment>
                 ))}
               </span>
