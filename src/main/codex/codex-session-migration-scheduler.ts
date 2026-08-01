@@ -16,6 +16,7 @@ export function createCodexSessionMigrationScheduler(args: {
   resolveSystemCodexHomePathOverride: () => string | undefined
   startBackfill: MigrationRun
   startIndexHeal: MigrationRun
+  startStateDbPrewarm: MigrationRun
   initialDelayMs?: number
 }): CodexSessionMigrationScheduler {
   let initialTimer: ReturnType<typeof setTimeout> | null = null
@@ -48,7 +49,18 @@ export function createCodexSessionMigrationScheduler(args: {
         if (stoppedBackfill || shouldStop()) {
           return
         }
-        return args.startIndexHeal({ shouldStop }, systemCodexHomePathOverride)
+        return args
+          .startIndexHeal({ shouldStop }, systemCodexHomePathOverride)
+          .then((healResult) => {
+            if (isStoppedMigrationResult(healResult) || shouldStop()) {
+              return
+            }
+            // Why: prewarm last — it babysits a codex process for minutes and must never
+            // delay the session backfill/heal walks it depends on.
+            return args
+              .startStateDbPrewarm({ shouldStop }, systemCodexHomePathOverride)
+              .then(() => undefined)
+          })
       })
       .catch((error: unknown) => {
         console.warn('[codex-session-migration] Background session migration failed:', error)

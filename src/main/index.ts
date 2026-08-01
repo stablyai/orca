@@ -195,6 +195,7 @@ import {
 import { setCodexTrustGrantTelemetry } from './codex/codex-trust-grant-telemetry'
 import { startCodexSessionBackfillInBackground } from './codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from './codex/codex-session-index-heal'
+import { startCodexStateDbPrewarmInBackground } from './codex/codex-state-db-prewarm'
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
 import { prepareLegacySharedCodexSessionResume } from './codex/codex-legacy-session-resume'
 import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
@@ -2085,7 +2086,10 @@ void app.whenReady().then(async () => {
     resolveSystemCodexHomePathOverride: () =>
       resolveHostCodexSessionSourceHome(store!.getSettings()),
     startBackfill: startCodexSessionBackfillInBackground,
-    startIndexHeal: startCodexSessionIndexHealInBackground
+    startIndexHeal: startCodexSessionIndexHealInBackground,
+    // Why: #11828 — finish Codex's one-time session index in the background so panes
+    // don't die in 30s slices against a large managed-home history.
+    startStateDbPrewarm: startCodexStateDbPrewarmInBackground
   })
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome, {
     onHostSystemDefaultSelected: codexSessionMigration.requestRun

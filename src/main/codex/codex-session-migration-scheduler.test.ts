@@ -15,7 +15,8 @@ describe('createCodexSessionMigrationScheduler', () => {
       isQuitting: () => false,
       resolveSystemCodexHomePathOverride: () => undefined,
       startBackfill,
-      startIndexHeal
+      startIndexHeal,
+      startStateDbPrewarm: vi.fn(async () => null)
     })
 
     scheduler.scheduleInitialRun()
@@ -43,7 +44,8 @@ describe('createCodexSessionMigrationScheduler', () => {
       isQuitting: () => false,
       resolveSystemCodexHomePathOverride: () => '/custom/history',
       startBackfill,
-      startIndexHeal
+      startIndexHeal,
+      startStateDbPrewarm: vi.fn(async () => null)
     })
 
     scheduler.requestRun()
@@ -76,7 +78,8 @@ describe('createCodexSessionMigrationScheduler', () => {
       isQuitting: () => false,
       resolveSystemCodexHomePathOverride: () => undefined,
       startBackfill,
-      startIndexHeal
+      startIndexHeal,
+      startStateDbPrewarm: vi.fn(async () => null)
     })
 
     scheduler.requestRun()
@@ -89,5 +92,61 @@ describe('createCodexSessionMigrationScheduler', () => {
 
     await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(startIndexHeal).toHaveBeenCalledOnce())
+  })
+
+  it('runs the state-db prewarm after backfill and index-heal complete', async () => {
+    const order: string[] = []
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      startBackfill: vi.fn(async () => {
+        order.push('backfill')
+        return null
+      }),
+      startIndexHeal: vi.fn(async () => {
+        order.push('heal')
+        return null
+      }),
+      startStateDbPrewarm: vi.fn(async () => {
+        order.push('prewarm')
+        return null
+      }),
+      initialDelayMs: 0
+    })
+    scheduler.requestRun()
+    await vi.waitFor(() => expect(order).toEqual(['backfill', 'heal', 'prewarm']))
+  })
+
+  it('skips the prewarm when the backfill run was stopped', async () => {
+    const startStateDbPrewarm = vi.fn(async () => null)
+    const startIndexHeal = vi.fn(async () => null)
+    // Why a deferred first result: the scheduler auto-reruns after a stopped backfill
+    // (`rerunRequested || stoppedBackfill`), so an always-stopped mock would rerun forever.
+    let releaseBackfill: ((result: { stopped: boolean }) => void) | undefined
+    const startBackfill = vi.fn(
+      () =>
+        new Promise<{ stopped: boolean }>((resolve) => {
+          releaseBackfill = resolve
+        })
+    )
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      startBackfill,
+      startIndexHeal,
+      startStateDbPrewarm,
+      initialDelayMs: 0
+    })
+    scheduler.requestRun()
+    await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledOnce())
+    // Why { stopped: true }: the exact shape isStoppedMigrationResult() recognizes.
+    releaseBackfill?.({ stopped: true })
+    // Why wait for the rerun's second call: it only fires after the first run's whole
+    // chain settles via .finally, proving no later stage ran before the negatives below.
+    await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledTimes(2))
+    expect(startIndexHeal).not.toHaveBeenCalled()
+    expect(startStateDbPrewarm).not.toHaveBeenCalled()
   })
 })
