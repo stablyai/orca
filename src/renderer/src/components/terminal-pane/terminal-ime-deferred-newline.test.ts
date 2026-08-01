@@ -325,6 +325,7 @@ describe('isTerminalImeProcessEnter', () => {
   const event = (overrides: Partial<KeyboardEvent> = {}) =>
     ({
       key: 'Process',
+      code: 'Enter',
       keyCode: 229,
       metaKey: false,
       ctrlKey: false,
@@ -348,6 +349,28 @@ describe('isTerminalImeProcessEnter', () => {
     { altKey: true }
   ])('rejects a non-IME or ambiguous Process key', (override) => {
     expect(isTerminalImeProcessEnter(event(override))).toBe(false)
+  })
+
+  it.each([
+    { code: 'KeyQ' },
+    { code: 'KeyT' },
+    { code: 'KeyO' },
+    { code: 'KeyP' },
+    { code: 'KeyI', shiftKey: false, ctrlKey: true }
+  ])(
+    // Why: the IME consumes Shift+ㅃ (Shift+KeyQ) and Ctrl chords as Process/229 too; only code proves Enter.
+    'rejects Process/229 for a non-Enter physical key',
+    (override) => {
+      expect(isTerminalImeProcessEnter(event(override))).toBe(false)
+    }
+  )
+
+  it.each([
+    { code: 'Enter', shiftKey: true },
+    { code: 'NumpadEnter', shiftKey: true },
+    { code: 'Enter', shiftKey: false, ctrlKey: true }
+  ])('accepts a physical modified Enter', (override) => {
+    expect(isTerminalImeProcessEnter(event(override))).toBe(true)
   })
 })
 
