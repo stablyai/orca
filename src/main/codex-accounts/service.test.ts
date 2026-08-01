@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  unlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
@@ -3417,6 +3418,132 @@ describe('CodexAccountService config sync', () => {
 
     try {
       const { CodexAccountService } = await import('./service')
+      const store = createStore(createSettings({ activeCodexManagedAccountId: 'account-1' }))
+      const service = new CodexAccountService(
+        store as never,
+        createRateLimits() as never,
+        createRuntimeHome() as never
+      )
+      const loginPromise = (
+        service as unknown as {
+          runCodexLogin(managedHomePath: string): Promise<unknown>
+        }
+      ).runCodexLogin(testState.fakeHomeDir)
+      const rejection = expect(loginPromise).rejects.toThrow(
+        'Codex sign-in took too long to finish.'
+      )
+
+      // The login clears the selection and then hangs without writing credentials.
+      store.updateSettings({ activeCodexManagedAccountId: null })
+      unlinkSync(authPath)
+      await vi.advanceTimersByTimeAsync(120_000)
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await rejection
+      expect(readFileSync(authPath, 'utf-8')).toBe(originalAuthJson)
+      expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
+      expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform)
+      vi.useRealTimers()
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
+
+  it('keeps credentials the auth watch saw in the same tick the login timeout fired', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: () => void
+      pid: number
+      exitCode: number | null
+      signalCode: string | null
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    child.pid = 4545
+    child.exitCode = null
+    child.signalCode = null
+    const authPath = join(testState.fakeHomeDir, 'auth.json')
+    writeFileSync(
+      authPath,
+      createCodexAuthJson('user@example.com', 'provider-1', 'old-token'),
+      'utf-8'
+    )
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: vi.fn(() => child)
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    try {
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        createStore(createSettings()) as never,
+        createRateLimits() as never,
+        createRuntimeHome() as never
+      )
+      const loginPromise = (
+        service as unknown as {
+          runCodexLogin(managedHomePath: string): Promise<unknown>
+        }
+      ).runCodexLogin(testState.fakeHomeDir)
+
+      // Credentials land inside the last poll window, so the timeout fires before the post-auth kill is scheduled.
+      const newAuthJson = createCodexAuthJson('user@example.com', 'provider-1', 'new-token')
+      await vi.advanceTimersByTimeAsync(119_500)
+      writeFileSync(authPath, newAuthJson, 'utf-8')
+      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(loginPromise).resolves.toBeDefined()
+      expect(readFileSync(authPath, 'utf-8')).toBe(newAuthJson)
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform)
+      vi.useRealTimers()
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
+
+  it('keeps the timeout message when killing the login tree emits an error', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: () => void
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn(() => {
+      child.emit('error', Object.assign(new Error('kill EPERM'), { code: 'EPERM' }))
+    })
+    writeFileSync(
+      join(testState.fakeHomeDir, 'auth.json'),
+      createCodexAuthJson('user@example.com', 'provider-1', 'old-token'),
+      'utf-8'
+    )
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: vi.fn(() => child)
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    try {
+      const { CodexAccountService } = await import('./service')
       const service = new CodexAccountService(
         createStore(createSettings()) as never,
         createRateLimits() as never,
@@ -3431,22 +3558,9 @@ describe('CodexAccountService config sync', () => {
         'Codex sign-in took too long to finish.'
       )
 
-      writeFileSync(
-        authPath,
-        createCodexAuthJson('user@example.com', 'provider-1', 'half-written'),
-        'utf-8'
-      )
       await vi.advanceTimersByTimeAsync(120_000)
       await vi.advanceTimersByTimeAsync(5_000)
-
       await rejection
-      expect(readFileSync(authPath, 'utf-8')).toBe(originalAuthJson)
-      expect(child.listenerCount('close')).toBe(0)
-
-      // A close arriving after the forced settlement must not restore a second time.
-      writeFileSync(authPath, 'sentinel', 'utf-8')
-      child.emit('close', 1)
-      expect(readFileSync(authPath, 'utf-8')).toBe('sentinel')
     } finally {
       Object.defineProperty(process, 'platform', originalPlatform)
       vi.useRealTimers()

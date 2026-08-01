@@ -1768,7 +1768,7 @@ export class CodexAccountService {
       let authWatchInterval: ReturnType<typeof setInterval> | null = null
       let postAuthExitTimeout: ReturnType<typeof setTimeout> | null = null
       let forceSettleTimeout: ReturnType<typeof setTimeout> | null = null
-      let loginTreeKilledAfterAuth = false
+      let loginAuthSecured = false
       let failureError: Error | null = null
       const authJsonPath = join(managedHomePath, 'auth.json')
       const cleanupListeners = (): void => {
@@ -1803,9 +1803,10 @@ export class CodexAccountService {
         callback()
       }
 
-      // Why: the post-auth kill already secured new credentials, so a later failure must not roll them back.
-      const loginSucceededAfterForcedKill = (): boolean =>
-        loginTreeKilledAfterAuth && existsSync(authJsonPath)
+      // Why: once the auth watch has seen new credentials the login completed, whether or not a timeout also fired.
+      const loginFinishedBeforeForcedKill = (): boolean =>
+        loginAuthSecured &&
+        loginAuthChanged(initialAuthSnapshot, readLoginAuthSnapshot(authJsonPath))
 
       const settleFailure = (error: Error): void => {
         settle(() => {
@@ -1830,7 +1831,7 @@ export class CodexAccountService {
           return
         }
         forceSettleTimeout = setTimeout(() => {
-          if (loginSucceededAfterForcedKill()) {
+          if (loginFinishedBeforeForcedKill()) {
             settle(() => {
               resolvePromise()
             })
@@ -1855,12 +1856,12 @@ export class CodexAccountService {
           if (!loginAuthChanged(initialAuthSnapshot, readLoginAuthSnapshot(authJsonPath))) {
             return
           }
+          loginAuthSecured = true
           if (authWatchInterval) {
             clearInterval(authWatchInterval)
             authWatchInterval = null
           }
           postAuthExitTimeout = setTimeout(() => {
-            loginTreeKilledAfterAuth = true
             killLoginProcessTree(child)
           }, WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS)
         }, WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS)
@@ -1875,16 +1876,16 @@ export class CodexAccountService {
             ? 'Codex CLI not found.'
             : 'Codex CLI found but could not run — Node.js may not be in your PATH.'
           : error.message
-        failureError = new Error(message)
+        // Why: a kill that fails after the timeout must not replace the user-facing timeout message with its errno.
+        failureError ??= new Error(message)
         // Why: close normally follows a spawn error, but nothing guarantees it.
         armForcedSettle()
       }
 
       const onClose = (code: number | null): void => {
-        // Why: the post-auth tree kill is a success path — auth.json already
-        // exists and codex only failed to exit on its own, so the forced
-        // non-zero exit must not surface as a login failure.
-        if ((!failureError && code === 0) || loginSucceededAfterForcedKill()) {
+        // Why: a tree we killed after it wrote new credentials succeeded; its
+        // forced non-zero exit must not surface as a login failure.
+        if ((!failureError && code === 0) || loginFinishedBeforeForcedKill()) {
           settle(() => {
             resolvePromise()
           })
