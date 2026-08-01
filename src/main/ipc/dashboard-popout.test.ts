@@ -240,6 +240,40 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(sendToTrustedMock).toHaveBeenCalledWith('ui:ackDashboardAgent', 'tab1:leaf1')
   })
 
+  it('relays valid session-close requests from only the popout', () => {
+    handlers.get('dashboardPopout:closeAgent')!({ sender: untrustedSender } as never, {
+      paneKey: 'tab1:leaf1',
+      tabId: 'tab1'
+    })
+    handlers.get('dashboardPopout:closeAgent')!({ sender: popoutSender } as never, {
+      paneKey: '',
+      tabId: 'tab1'
+    })
+    handlers.get('dashboardPopout:closeAgent')!({ sender: popoutSender } as never, {
+      paneKey: 'tab1:leaf1',
+      tabId: 42
+    })
+    expect(sendToTrustedMock).not.toHaveBeenCalled()
+
+    handlers.get('dashboardPopout:closeAgent')!({ sender: popoutSender } as never, {
+      paneKey: 'tab1:leaf1',
+      tabId: 'tab1'
+    })
+    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:closeDashboardAgent', {
+      paneKey: 'tab1:leaf1',
+      tabId: 'tab1'
+    })
+
+    handlers.get('dashboardPopout:closeAgent')!({ sender: popoutSender } as never, {
+      paneKey: 'tab2:leaf2',
+      tabId: null
+    })
+    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:closeDashboardAgent', {
+      paneKey: 'tab2:leaf2',
+      tabId: null
+    })
+  })
+
   it('reveals an agent in only the trusted main window', () => {
     const main = makeWindow(mainSender)
     getTrustedWindowMock.mockReturnValue(main)

@@ -10,7 +10,11 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { BrowserFindSource } from '../shared/browser-find-source'
-import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
+import type {
+  DashboardSnapshot,
+  DashboardRevealAgentArgs,
+  DashboardCloseAgentArgs
+} from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -2467,10 +2471,12 @@ export type PreloadApi = {
     onSnapshotRequested: (callback: () => void) => () => void
     onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void) => () => void
     onAckAgent: (callback: (paneKey: string) => void) => () => void
+    onCloseAgent: (callback: (args: DashboardCloseAgentArgs) => void) => () => void
     requestSnapshot: () => Promise<void>
     onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
     revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
     ackAgent: (paneKey: string) => Promise<void>
+    closeAgent: (args: DashboardCloseAgentArgs) => Promise<void>
   }
   terminalPreview: {
     connect: (

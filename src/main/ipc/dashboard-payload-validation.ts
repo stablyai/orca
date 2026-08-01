@@ -1,5 +1,6 @@
 import {
   DASHBOARD_MAX_LABEL_LENGTH,
+  type DashboardCloseAgentArgs,
   type DashboardRevealAgentArgs,
   type DashboardSnapshot
 } from '../../shared/dashboard-snapshot'
@@ -71,6 +72,17 @@ export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRe
 
 export function isDashboardPaneKey(value: unknown): value is string {
   return isBoundedString(value, MAX_ID_LENGTH)
+}
+
+export function isDashboardCloseAgentArgs(value: unknown): value is DashboardCloseAgentArgs {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const args = value as Record<string, unknown>
+  return (
+    isDashboardPaneKey(args.paneKey) &&
+    (args.tabId === null || isBoundedString(args.tabId, MAX_ID_LENGTH))
+  )
 }
 
 export function isDashboardSnapshot(value: unknown): value is DashboardSnapshot {

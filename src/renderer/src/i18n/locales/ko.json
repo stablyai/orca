@@ -4413,7 +4413,11 @@
           "ef18787206": "삭제 대기 중"
         },
         "WorktreeCardAgents": {
-          "1b0a156717": "에이전트"
+          "1b0a156717": "에이전트",
+          "2ec931a922": "Close agent session?",
+          "e1250e23e9": "This closes the entire terminal tab running this agent, including all of its split panes. Any other agents running in those panes will be stopped too.",
+          "7d17689ff0": "Cancel",
+          "6ac88e0ff9": "Close session"
         },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}",
@@ -13198,7 +13202,9 @@
           "b06e13fcf7": "agent 닫기",
           "0272969e28": "이 agent에게 보내기",
           "92a7017987": "전송 중",
-          "019b74d93a": "전송 가능"
+          "019b74d93a": "전송 가능",
+          "271b256627": "Close agent session",
+          "1c27be5226": "Close session"
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "중단됨",
@@ -14523,7 +14529,12 @@
         "closed": "닫힌 리뷰"
       },
       "subagents_one": "서브에이전트 {{count}}개",
-      "subagents_other": "서브에이전트 {{count}}개"
+      "subagents_other": "서브에이전트 {{count}}개",
+      "closeTitle": "Close agent session?",
+      "closeDescription": "This closes the entire terminal tab running this agent, including all of its split panes. Any other agents running in those panes will be stopped too.",
+      "closeCancel": "Cancel",
+      "closeConfirm": "Close session",
+      "closeSession": "Close session"
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",

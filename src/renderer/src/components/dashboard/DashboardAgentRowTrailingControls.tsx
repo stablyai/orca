@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { ChevronDown, Send, X } from 'lucide-react'
+import { ChevronDown, Send, Square, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 
@@ -13,6 +13,9 @@ type DashboardAgentRowTrailingControlsProps = {
   hideDismiss?: boolean
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
   onDismiss: (paneKey: string) => void
+  /** Closes the agent's whole terminal tab (splits included) after confirmation.
+   *  Offered only for live rows — retained/dead rows get the dismiss X alone. */
+  onCloseSession?: (paneKey: string) => void
   onToggleExpanded: () => void
   onSendTargetClick?: (paneKey: string) => void
 }
@@ -25,6 +28,7 @@ export function DashboardAgentRowTrailingControls({
   hideDismiss = false,
   sendTargetStatus,
   onDismiss,
+  onCloseSession,
   onToggleExpanded,
   onSendTargetClick
 }: DashboardAgentRowTrailingControlsProps): React.JSX.Element {
@@ -45,6 +49,14 @@ export function DashboardAgentRowTrailingControls({
     },
     [onDismiss, paneKey]
   )
+  const handleCloseSession = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+      onCloseSession?.(paneKey)
+    },
+    [onCloseSession, paneKey]
+  )
   const handleToggleExpand = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
@@ -63,6 +75,33 @@ export function DashboardAgentRowTrailingControls({
     },
     [onSendTargetClick, paneKey, sendTargetStatus]
   )
+
+  // Why: timestamp/dismiss hover reveal lives on each button (not a wrapper)
+  // so keyboard focus reveals the focused control itself.
+  const hoverRevealClasses =
+    'can-hover:opacity-0 transition-opacity duration-150 group-hover/agent-row:opacity-100 focus-visible:opacity-100'
+
+  // Why: Square reads as "stop the session" — deliberately distinct from the
+  // dismiss X, which only hides the row.
+  const closeSessionButton = onCloseSession ? (
+    <button
+      type="button"
+      onClick={handleCloseSession}
+      onMouseDown={stopMouseDown}
+      onKeyDown={stopKeyDown}
+      className={cn(
+        'inline-flex items-center justify-center text-muted-foreground/70 hover:text-foreground',
+        hoverRevealClasses
+      )}
+      aria-label={translate(
+        'auto.components.dashboard.DashboardAgentRow.271b256627',
+        'Close agent session'
+      )}
+      title={translate('auto.components.dashboard.DashboardAgentRow.1c27be5226', 'Close session')}
+    >
+      <Square className="size-3" />
+    </button>
+  ) : null
 
   return (
     <span className="relative ml-auto flex h-3.5 w-12 shrink-0 items-center justify-end">
@@ -112,15 +151,39 @@ export function DashboardAgentRowTrailingControls({
           >
             {relativeTimestamp}
           </span>
+          <span className="[grid-area:1/1] inline-flex items-center justify-end gap-1">
+            {closeSessionButton}
+            <button
+              type="button"
+              onClick={handleDismiss}
+              onMouseDown={stopMouseDown}
+              onKeyDown={stopKeyDown}
+              className={cn(
+                'inline-flex items-center justify-center text-muted-foreground/70 hover:text-foreground',
+                hoverRevealClasses
+              )}
+              aria-label={translate(
+                'auto.components.dashboard.DashboardAgentRow.b06e13fcf7',
+                'Dismiss agent'
+              )}
+              title={translate('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
+            >
+              <X className="size-3.5" />
+            </button>
+          </span>
+        </span>
+      )}
+      {!sendTargetStatus && !hideDismiss && relativeTimestamp === null && (
+        <span className="inline-flex shrink-0 items-center justify-end gap-1">
+          {closeSessionButton}
           <button
             type="button"
             onClick={handleDismiss}
             onMouseDown={stopMouseDown}
             onKeyDown={stopKeyDown}
             className={cn(
-              '[grid-area:1/1] inline-flex items-center justify-center text-muted-foreground/70 hover:text-foreground',
-              'can-hover:opacity-0 transition-opacity duration-150',
-              'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
+              'inline-flex items-center justify-center text-muted-foreground/70 hover:text-foreground',
+              hoverRevealClasses
             )}
             aria-label={translate(
               'auto.components.dashboard.DashboardAgentRow.b06e13fcf7',
@@ -131,26 +194,6 @@ export function DashboardAgentRowTrailingControls({
             <X className="size-3.5" />
           </button>
         </span>
-      )}
-      {!sendTargetStatus && !hideDismiss && relativeTimestamp === null && (
-        <button
-          type="button"
-          onClick={handleDismiss}
-          onMouseDown={stopMouseDown}
-          onKeyDown={stopKeyDown}
-          className={cn(
-            'inline-flex shrink-0 items-center justify-center text-muted-foreground/70 hover:text-foreground',
-            'can-hover:opacity-0 transition-opacity duration-150',
-            'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
-          )}
-          aria-label={translate(
-            'auto.components.dashboard.DashboardAgentRow.b06e13fcf7',
-            'Dismiss agent'
-          )}
-          title={translate('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
-        >
-          <X className="size-3.5" />
-        </button>
       )}
       {!hideExpand && (
         <button

@@ -4413,7 +4413,11 @@
           "ef18787206": "已排队删除"
         },
         "WorktreeCardAgents": {
-          "1b0a156717": "智能体"
+          "1b0a156717": "智能体",
+          "2ec931a922": "Close agent session?",
+          "e1250e23e9": "This closes the entire terminal tab running this agent, including all of its split panes. Any other agents running in those panes will be stopped too.",
+          "7d17689ff0": "Cancel",
+          "6ac88e0ff9": "Close session"
         },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}",
@@ -13198,7 +13202,9 @@
           "b06e13fcf7": "关闭智能体",
           "0272969e28": "发送给该智能体",
           "92a7017987": "发送",
-          "019b74d93a": "有资格的"
+          "019b74d93a": "有资格的",
+          "271b256627": "Close agent session",
+          "1c27be5226": "Close session"
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "被打断",
@@ -14523,7 +14529,12 @@
         "closed": "已关闭的评审"
       },
       "subagents_one": "{{count}} 个子代理",
-      "subagents_other": "{{count}} 个子代理"
+      "subagents_other": "{{count}} 个子代理",
+      "closeTitle": "Close agent session?",
+      "closeDescription": "This closes the entire terminal tab running this agent, including all of its split panes. Any other agents running in those panes will be stopped too.",
+      "closeCancel": "Cancel",
+      "closeConfirm": "Close session",
+      "closeSession": "Close session"
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",

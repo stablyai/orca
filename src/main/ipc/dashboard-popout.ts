@@ -13,6 +13,7 @@ import { safelyRevealWindow } from '../window/focus-existing-window'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRenderer } from './ui'
 import {
   admitDashboardSnapshot,
+  isDashboardCloseAgentArgs,
   isDashboardPaneKey,
   isDashboardRevealAgentArgs
 } from './dashboard-payload-validation'
@@ -36,6 +37,7 @@ export function registerDashboardPopoutHandlers(
   ipcMain.removeHandler('dashboard:getPopoutOpen')
   ipcMain.removeHandler('dashboardPopout:revealAgent')
   ipcMain.removeHandler('dashboardPopout:ackAgent')
+  ipcMain.removeHandler('dashboardPopout:closeAgent')
 
   onDashboardPopoutOpenChanged((open) => {
     if (!open) {
@@ -118,6 +120,19 @@ export function registerDashboardPopoutHandlers(
       return
     }
     sendToTrustedUIRenderer('ui:ackDashboardAgent', (args as { paneKey: string }).paneKey)
+  })
+
+  // Session close: the popout owns no PTYs, so the main renderer runs the
+  // canonical closeTerminalTab (or dismisses the row when the tab is gone).
+  ipcMain.handle('dashboardPopout:closeAgent', (event, args: unknown): void => {
+    if (
+      !isDashboardPopoutRenderer(event.sender) ||
+      !isDashboardEnabled(store) ||
+      !isDashboardCloseAgentArgs(args)
+    ) {
+      return
+    }
+    sendToTrustedUIRenderer('ui:closeDashboardAgent', args)
   })
 
   // Click-to-focus: raise the main window and route it to the agent's pane.

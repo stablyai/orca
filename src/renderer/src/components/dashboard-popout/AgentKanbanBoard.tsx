@@ -10,6 +10,15 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { AgentKanbanCard } from './AgentKanbanCard'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
 import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
@@ -71,13 +80,15 @@ function KanbanColumn({
   cards,
   repoIconsByRepoId,
   now,
-  onOpenTerminal
+  onOpenTerminal,
+  onClose
 }: {
   bucket: DashboardBucket
   cards: DashboardCard[]
   repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
   now: number
   onOpenTerminal: (card: DashboardCard) => void
+  onClose: (card: DashboardCard) => void
 }): React.JSX.Element {
   return (
     // Why: attention no longer tints the whole column — the cards inside carry
@@ -104,6 +115,7 @@ function KanbanColumn({
               repoIcon={repoIconsByRepoId?.[card.repoId] ?? null}
               now={now}
               onOpenTerminal={onOpenTerminal}
+              onClose={onClose}
             />
           ))
         )}
@@ -216,6 +228,27 @@ export function AgentKanbanBoard({
     }
   }, [dialogCard?.unseen, dialogCard?.paneKey, onAckAgent])
 
+  // Session close: live sessions confirm first (the whole terminal tab dies,
+  // splits included); a card without a live PTY is dead state — dismiss it
+  // straight away. The actual close runs in the main renderer via the relay.
+  const [closeTarget, setCloseTarget] = useState<DashboardCard | null>(null)
+  const handleCloseCard = useCallback((card: DashboardCard) => {
+    if (card.ptyId === null) {
+      void window.api.dashboard.closeAgent?.({ paneKey: card.paneKey, tabId: card.tabId })
+      return
+    }
+    setCloseTarget(card)
+  }, [])
+  const handleConfirmClose = useCallback(() => {
+    if (closeTarget) {
+      void window.api.dashboard.closeAgent?.({
+        paneKey: closeTarget.paneKey,
+        tabId: closeTarget.tabId
+      })
+    }
+    setCloseTarget(null)
+  }, [closeTarget])
+
   return (
     // Why: the pop-out is its own React root with no app-level provider, and the
     // card's repo tooltip needs one in both hosts. Nesting inside the main
@@ -267,6 +300,7 @@ export function AgentKanbanBoard({
                 repoIconsByRepoId={snapshot.repoIconsByRepoId}
                 now={now}
                 onOpenTerminal={handleOpenTerminal}
+                onClose={handleCloseCard}
               />
             ))}
           </div>
@@ -276,6 +310,38 @@ export function AgentKanbanBoard({
           onOpenChange={handleDialogOpenChange}
           onReveal={onRevealAgent}
         />
+        <Dialog
+          open={closeTarget !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setCloseTarget(null)
+            }
+          }}
+        >
+          {closeTarget ? (
+            <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
+              <DialogHeader>
+                <DialogTitle className="text-sm">
+                  {translate('dashboardPopout.card.closeTitle', 'Close agent session?')}
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  {translate(
+                    'dashboardPopout.card.closeDescription',
+                    'This closes the entire terminal tab running this agent, including all of its split panes. Any other agents running in those panes will be stopped too.'
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCloseTarget(null)}>
+                  {translate('dashboardPopout.card.closeCancel', 'Cancel')}
+                </Button>
+                <Button variant="destructive" onClick={handleConfirmClose}>
+                  {translate('dashboardPopout.card.closeConfirm', 'Close session')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          ) : null}
+        </Dialog>
       </div>
     </TooltipProvider>
   )

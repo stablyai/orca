@@ -49,6 +49,7 @@ function renderCard(props: {
   now: number
   repoIcon?: RepoIcon | null
   onOpenTerminal?: () => void
+  onClose?: (card: DashboardCard) => void
 }): ReturnType<typeof render> {
   return render(
     <TooltipProvider>
@@ -57,6 +58,7 @@ function renderCard(props: {
         repoIcon={props.repoIcon}
         now={props.now}
         onOpenTerminal={props.onOpenTerminal ?? vi.fn()}
+        onClose={props.onClose ?? vi.fn()}
       />
     </TooltipProvider>
   )
@@ -78,6 +80,22 @@ describe('AgentKanbanCard', () => {
     expect(screen.queryByText(/\d+d/)).not.toBeInTheDocument()
   })
 
+  it('closes the session from the trailing control without opening the terminal', () => {
+    const onOpenTerminal = vi.fn()
+    const onClose = vi.fn()
+    const target = card()
+    renderCard({
+      card: target,
+      now: 2_000,
+      onOpenTerminal,
+      onClose
+    })
+
+    screen.getByRole('button', { name: 'Close session' }).click()
+    expect(onClose).toHaveBeenCalledWith(target)
+    expect(onOpenTerminal).not.toHaveBeenCalled()
+  })
+
   it('shows the question glyph once when a summary is available', () => {
     const attentionCard = card({
       bucket: 'attention',
@@ -95,6 +113,7 @@ describe('AgentKanbanCard', () => {
           card={{ ...attentionCard, askSummary: undefined }}
           now={2_000}
           onOpenTerminal={vi.fn()}
+          onClose={vi.fn()}
         />
       </TooltipProvider>
     )
@@ -222,6 +241,7 @@ describe('AgentKanbanCard', () => {
 
   it('skips structured-clone rerenders until visible card data or its age changes', () => {
     const onOpenTerminal = vi.fn()
+    const onClose = vi.fn()
     const initial = card({
       startedAt: 1_000,
       subagents: [{ id: 'child-1', name: 'Review loop', dotState: 'working' }]
@@ -234,6 +254,7 @@ describe('AgentKanbanCard', () => {
           repoIcon={repoIcon}
           now={61_500}
           onOpenTerminal={onOpenTerminal}
+          onClose={onClose}
         />
       </TooltipProvider>
     )
@@ -248,6 +269,7 @@ describe('AgentKanbanCard', () => {
           repoIcon={{ ...repoIcon }}
           now={62_000}
           onOpenTerminal={onOpenTerminal}
+          onClose={onClose}
         />
       </TooltipProvider>
     )
@@ -260,6 +282,7 @@ describe('AgentKanbanCard', () => {
           repoIcon={{ ...repoIcon }}
           now={121_500}
           onOpenTerminal={onOpenTerminal}
+          onClose={onClose}
         />
       </TooltipProvider>
     )
@@ -269,6 +292,7 @@ describe('AgentKanbanCard', () => {
 
   it('rerenders when the repo icon changes', () => {
     const onOpenTerminal = vi.fn()
+    const onClose = vi.fn()
     const initial = card({ startedAt: 1_000 })
     const { rerender } = render(
       <TooltipProvider>
@@ -277,6 +301,7 @@ describe('AgentKanbanCard', () => {
           repoIcon={{ type: 'lucide', name: 'Rocket' }}
           now={61_500}
           onOpenTerminal={onOpenTerminal}
+          onClose={onClose}
         />
       </TooltipProvider>
     )
@@ -289,6 +314,7 @@ describe('AgentKanbanCard', () => {
           repoIcon={{ type: 'lucide', name: 'Database' }}
           now={61_500}
           onOpenTerminal={onOpenTerminal}
+          onClose={onClose}
         />
       </TooltipProvider>
     )

@@ -4497,7 +4497,11 @@
           "ef18787206": "Queued for deletion"
         },
         "WorktreeCardAgents": {
-          "1b0a156717": "Agents"
+          "1b0a156717": "Agents",
+          "2ec931a922": "Close agent session?",
+          "e1250e23e9": "This closes the entire terminal tab running this agent, including all of its split panes. Any other agents running in those panes will be stopped too.",
+          "7d17689ff0": "Cancel",
+          "6ac88e0ff9": "Close session"
         },
         "WorktreeCardReviewDetailSection": {
           "copyLink": "Copy link",
@@ -13299,7 +13303,9 @@
           "b06e13fcf7": "Dismiss agent",
           "0272969e28": "Send to this agent",
           "92a7017987": "sending",
-          "019b74d93a": "eligible"
+          "019b74d93a": "eligible",
+          "271b256627": "Close agent session",
+          "1c27be5226": "Close session"
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "interrupted",
@@ -14637,7 +14643,12 @@
         "closed": "Closed review"
       },
       "subagents_one": "{{count}} subagent",
-      "subagents_other": "{{count}} subagents"
+      "subagents_other": "{{count}} subagents",
+      "closeTitle": "Close agent session?",
+      "closeDescription": "This closes the entire terminal tab running this agent, including all of its split panes. Any other agents running in those panes will be stopped too.",
+      "closeCancel": "Cancel",
+      "closeConfirm": "Close session",
+      "closeSession": "Close session"
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",

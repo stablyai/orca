@@ -3,6 +3,7 @@ import { useAppStore, type AppState } from '@/store'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
+import { closeDashboardAgentSession } from './close-dashboard-agent-session'
 
 // Why: cap snapshot rebuilds during bursts of agent-status pings. The board is a
 // glanceable surface, so ~4 updates/sec is plenty and keeps the cross-worktree
@@ -123,6 +124,17 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     }
     return window.api.dashboard.onAckAgent?.((paneKey) => {
       useAppStore.getState().acknowledgeAgents([paneKey])
+    })
+  }, [enabled])
+
+  // Session-close requests from the popout: close the whole terminal tab (or
+  // dismiss the dead row) in this window, which owns the PTYs.
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    return window.api.dashboard.onCloseAgent?.((args) => {
+      closeDashboardAgentSession(args)
     })
   }, [enabled])
 

@@ -71,6 +71,8 @@ function stateDotTooltipLabel(agent: DashboardAgentRowData, dotState: AgentDotSt
 type Props = {
   agent: DashboardAgentRowData
   onDismiss: (paneKey: string) => void
+  /** Closes the agent's whole terminal tab (splits included); live rows only. */
+  onCloseSession?: (paneKey: string) => void
   /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row. */
   onActivate: (tabId: string, paneKey: string) => void
   /** Why: injected from a parent so one shared tick re-renders every row's "Xm ago" (see useNow.ts), not a per-row interval. */
@@ -101,6 +103,7 @@ type Props = {
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
   agent,
   onDismiss,
+  onCloseSession,
   onActivate,
   now,
   isUnvisited = false,
@@ -311,6 +314,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           hideDismiss={agent.rowSource === 'subagent'}
           sendTargetStatus={sendTargetStatus}
           onDismiss={onDismiss}
+          onCloseSession={onCloseSession}
           onToggleExpanded={handleToggleExpanded}
           onSendTargetClick={onSendTargetClick}
         />

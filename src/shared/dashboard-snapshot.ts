@@ -151,3 +151,11 @@ export type DashboardRevealAgentArgs = {
   tabId: string
   leafId: string | null
 }
+
+/** Session-close request from a dashboard surface. tabId is the terminal tab
+ *  to close (the whole tab, splits included); null when the card's tab could
+ *  not be resolved, in which case the row is dead state and only dismissed. */
+export type DashboardCloseAgentArgs = {
+  paneKey: string
+  tabId: string | null
+}

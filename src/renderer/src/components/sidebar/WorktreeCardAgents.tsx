@@ -5,6 +5,8 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
+import { CloseAgentSessionDialog } from './CloseAgentSessionDialog'
+import { useAgentSessionClose } from './use-agent-session-close'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import {
   selectSendTargetControlInputs,
@@ -107,6 +109,9 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     },
     [dropAgentStatus, dismissRetainedAgent]
   )
+
+  // Retained rows have nothing to kill, so they keep only the dismiss X.
+  const { closeTarget, requestClose, confirmClose, cancelClose } = useAgentSessionClose(agents)
 
   const isAgentSendTargetModeActive = agentSendPopoverTargetMode !== null
   const sendTargetsByPaneKey = useMemo(() => {
@@ -261,6 +266,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         <DashboardAgentRow
           agent={agent}
           onDismiss={handleDismissAgent}
+          onCloseSession={agent.rowSource === 'retained' ? undefined : requestClose}
           onActivate={
             agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
           }
@@ -414,6 +420,15 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
     >
       {rootAgents.map((rootAgent) => renderAgentBranch(rootAgent))}
+      <CloseAgentSessionDialog
+        open={closeTarget !== null}
+        onConfirm={confirmClose}
+        onOpenChange={(open) => {
+          if (!open) {
+            cancelClose()
+          }
+        }}
+      />
     </div>
   )
 })

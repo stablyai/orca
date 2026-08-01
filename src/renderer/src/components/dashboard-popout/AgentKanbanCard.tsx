@@ -6,7 +6,8 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   GitPullRequestDraft,
-  MessageCircleQuestion
+  MessageCircleQuestion,
+  X
 } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -184,6 +185,9 @@ type AgentKanbanCardProps = {
    *  card: bucket moves remount the card, and an embedded dialog would close
    *  the chat mid-conversation. */
   onOpenTerminal: (card: DashboardCard) => void
+  /** Asks the board to close this agent's session (it owns the confirm dialog
+   *  for the same remount reason as onOpenTerminal). */
+  onClose: (card: DashboardCard) => void
 }
 
 /** One agent on the kanban board. Clicking opens the board's live terminal dialog. */
@@ -192,7 +196,8 @@ export const AgentKanbanCard = memo(
     card,
     repoIcon = null,
     now,
-    onOpenTerminal
+    onOpenTerminal,
+    onClose
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
@@ -206,6 +211,22 @@ export const AgentKanbanCard = memo(
     // twice.
     const heading = card.conversationName ?? card.worktreeName
     const worktreeInFooter = card.conversationName !== undefined
+
+    // Why: the card root is a <button>, so the close control is a role=button
+    // span (nested <button> is invalid HTML); it must not trigger the card's
+    // own click activation.
+    const handleCloseClick = (event: React.MouseEvent): void => {
+      event.preventDefault()
+      event.stopPropagation()
+      onClose(card)
+    }
+    const handleCloseKeyDown = (event: React.KeyboardEvent): void => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        event.stopPropagation()
+        onClose(card)
+      }
+    }
 
     return (
       <div
@@ -240,7 +261,34 @@ export const AgentKanbanCard = memo(
             >
               {heading}
             </span>
-            {card.askSummary ? null : <AgentStateDot state={card.dotState} className="ml-auto" />}
+            {/* Why: state dot and close control share one slot (same pattern as
+                the sidebar's timestamp/dismiss-X); the dot yields on hover and on
+                touch devices, where the X is always visible. */}
+            <span className="relative ml-auto grid shrink-0 grid-cols-1 grid-rows-1 items-center justify-items-end">
+              {card.askSummary ? null : (
+                <AgentStateDot
+                  state={card.dotState}
+                  // Why: pointer-events-none — a sub-1 opacity element stacks above
+                  // the close span and would eat its clicks even when invisible.
+                  className="pointer-events-none [grid-area:1/1] transition-opacity duration-150 group-hover:opacity-0 [@media(hover:none)]:opacity-0"
+                />
+              )}
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={translate('dashboardPopout.card.closeSession', 'Close session')}
+                title={translate('dashboardPopout.card.closeSession', 'Close session')}
+                onClick={handleCloseClick}
+                onKeyDown={handleCloseKeyDown}
+                className={cn(
+                  '[grid-area:1/1] inline-flex items-center justify-center text-muted-foreground/70 hover:text-foreground',
+                  'can-hover:opacity-0 transition-opacity duration-150',
+                  'group-hover:opacity-100 focus-visible:opacity-100'
+                )}
+              >
+                <X className="size-3.5" />
+              </span>
+            </span>
           </div>
 
           {card.lastUserMessage || card.lastAgentMessage ? (
@@ -336,6 +384,7 @@ export const AgentKanbanCard = memo(
   },
   (previous, next) =>
     previous.onOpenTerminal === next.onOpenTerminal &&
+    previous.onClose === next.onClose &&
     sameCard(previous.card, next.card) &&
     sameRepoIcon(previous.repoIcon, next.repoIcon) &&
     (displayTimestamp(previous.card) <= 0 ||

@@ -7,9 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   acknowledgeAgents: vi.fn(),
   setActiveWorktree: vi.fn(),
+  dropAgentStatus: vi.fn(),
+  dismissRetainedAgent: vi.fn(),
+  closeTerminalTab: vi.fn(),
   subscribeStore: vi.fn((_listener: (state: unknown, previousState: unknown) => void) => vi.fn()),
   onRevealAgent: vi.fn(),
   onAckAgent: vi.fn(),
+  onCloseAgent: vi.fn(),
   onPopoutOpenChanged: vi.fn(),
   onSnapshotRequested: vi.fn(),
   getPopoutOpen: vi.fn(async () => false),
@@ -19,18 +23,31 @@ const mocks = vi.hoisted(() => ({
   ),
   offRevealAgent: vi.fn(),
   offAckAgent: vi.fn(),
+  offCloseAgent: vi.fn(),
   offPopoutOpenChanged: vi.fn(),
-  offSnapshotRequested: vi.fn()
+  offSnapshotRequested: vi.fn(),
+  storeState: {
+    tabsByWorktree: {} as Record<string, { id: string }[]>,
+    unifiedTabsByWorktree: {} as Record<string, unknown[]>
+  }
 }))
 
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       acknowledgeAgents: mocks.acknowledgeAgents,
-      setActiveWorktree: mocks.setActiveWorktree
+      setActiveWorktree: mocks.setActiveWorktree,
+      dropAgentStatus: mocks.dropAgentStatus,
+      dismissRetainedAgent: mocks.dismissRetainedAgent,
+      tabsByWorktree: mocks.storeState.tabsByWorktree,
+      unifiedTabsByWorktree: mocks.storeState.unifiedTabsByWorktree
     }),
     subscribe: mocks.subscribeStore
   }
+}))
+
+vi.mock('@/components/terminal/terminal-tab-actions', () => ({
+  closeTerminalTab: mocks.closeTerminalTab
 }))
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
@@ -92,12 +109,14 @@ function Harness({ enabled }: { enabled: boolean }): null {
 function installDashboardApi(): void {
   mocks.onRevealAgent.mockReturnValue(mocks.offRevealAgent)
   mocks.onAckAgent.mockReturnValue(mocks.offAckAgent)
+  mocks.onCloseAgent.mockReturnValue(mocks.offCloseAgent)
   mocks.onPopoutOpenChanged.mockReturnValue(mocks.offPopoutOpenChanged)
   mocks.onSnapshotRequested.mockReturnValue(mocks.offSnapshotRequested)
   ;(window as unknown as { api: unknown }).api = {
     dashboard: {
       onRevealAgent: mocks.onRevealAgent,
       onAckAgent: mocks.onAckAgent,
+      onCloseAgent: mocks.onCloseAgent,
       onPopoutOpenChanged: mocks.onPopoutOpenChanged,
       onSnapshotRequested: mocks.onSnapshotRequested,
       getPopoutOpen: mocks.getPopoutOpen,
@@ -113,6 +132,8 @@ describe('useDashboardPopoutBridge', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     installDashboardApi()
+    mocks.storeState.tabsByWorktree = {}
+    mocks.storeState.unifiedTabsByWorktree = {}
     container = document.createElement('div')
     root = createRoot(container)
   })
@@ -126,6 +147,7 @@ describe('useDashboardPopoutBridge', () => {
 
     expect(mocks.onRevealAgent).not.toHaveBeenCalled()
     expect(mocks.onAckAgent).not.toHaveBeenCalled()
+    expect(mocks.onCloseAgent).not.toHaveBeenCalled()
     expect(mocks.onPopoutOpenChanged).not.toHaveBeenCalled()
     expect(mocks.onSnapshotRequested).not.toHaveBeenCalled()
     expect(mocks.getPopoutOpen).not.toHaveBeenCalled()
@@ -211,6 +233,7 @@ describe('useDashboardPopoutBridge', () => {
 
     expect(mocks.onRevealAgent).toHaveBeenCalledTimes(1)
     expect(mocks.onAckAgent).toHaveBeenCalledTimes(1)
+    expect(mocks.onCloseAgent).toHaveBeenCalledTimes(1)
     expect(mocks.onPopoutOpenChanged).toHaveBeenCalledTimes(1)
     expect(mocks.onSnapshotRequested).toHaveBeenCalledTimes(1)
     expect(mocks.getPopoutOpen).toHaveBeenCalledTimes(1)
@@ -219,8 +242,33 @@ describe('useDashboardPopoutBridge', () => {
 
     expect(mocks.offRevealAgent).toHaveBeenCalledTimes(1)
     expect(mocks.offAckAgent).toHaveBeenCalledTimes(1)
+    expect(mocks.offCloseAgent).toHaveBeenCalledTimes(1)
     expect(mocks.offPopoutOpenChanged).toHaveBeenCalledTimes(1)
     expect(mocks.offSnapshotRequested).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes the whole tab for a live session and only dismisses a dead row', async () => {
+    await act(async () => root.render(<Harness enabled />))
+    const closeHandler = mocks.onCloseAgent.mock.calls[0][0] as (args: {
+      paneKey: string
+      tabId: string | null
+    }) => void
+
+    mocks.storeState.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
+    closeHandler({ paneKey: 'tab-1:leaf-1', tabId: 'tab-1' })
+    expect(mocks.closeTerminalTab).toHaveBeenCalledWith('tab-1', { reason: 'user' })
+    expect(mocks.dropAgentStatus).not.toHaveBeenCalled()
+    expect(mocks.dismissRetainedAgent).not.toHaveBeenCalled()
+
+    // The tab is already gone: nothing to kill, so the row is just dismissed.
+    mocks.storeState.tabsByWorktree = {}
+    closeHandler({ paneKey: 'tab-2:leaf-2', tabId: 'tab-2' })
+    closeHandler({ paneKey: 'tab-3:leaf-3', tabId: null })
+    expect(mocks.closeTerminalTab).toHaveBeenCalledTimes(1)
+    expect(mocks.dropAgentStatus).toHaveBeenCalledWith('tab-2:leaf-2')
+    expect(mocks.dismissRetainedAgent).toHaveBeenCalledWith('tab-2:leaf-2')
+    expect(mocks.dropAgentStatus).toHaveBeenCalledWith('tab-3:leaf-3')
+    expect(mocks.dismissRetainedAgent).toHaveBeenCalledWith('tab-3:leaf-3')
   })
 })
 
