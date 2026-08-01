@@ -21,7 +21,8 @@ const CLAUDE_SERVICE_TEST_ROOT = join(tmpdir(), 'orca-claude-service-test')
 vi.mock('electron', () => ({
   app: {
     getPath: () => CLAUDE_SERVICE_TEST_ROOT
-  }
+  },
+  shell: { openExternal: vi.fn() }
 }))
 
 const commandMocks = vi.hoisted(() => ({
@@ -1462,7 +1463,7 @@ describe('ClaudeAccountService credential capture', () => {
           '--',
           'bash',
           '-lc',
-          "export CLAUDE_CONFIG_DIR='/home/user/.config/orca auth'; exec claude 'auth' 'status' '--json'"
+          "export PATH=\"$PATH:'/home/user/.config/orca auth/orca-opener'\"; export CLAUDE_CONFIG_DIR='/home/user/.config/orca auth'; exec claude 'auth' 'status' '--json'"
         ],
         expect.objectContaining({ shell: false, windowsVerbatimArguments: false })
       )
