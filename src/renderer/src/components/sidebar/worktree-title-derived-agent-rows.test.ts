@@ -50,8 +50,8 @@ describe('buildTitleDerivedAgentRows', () => {
       retained: [],
       runtimePaneTitlesByTabId: {
         'tab-1': {
-          1: 'Trae ready',
-          2: '⠋ Trae'
+          1: 'traecli',
+          2: '⠋ traecli'
         }
       },
       ptyIdsByTabId: { 'tab-1': ['pty-idle', 'pty-working'] },
@@ -137,7 +137,23 @@ describe('buildTitleDerivedAgentRows', () => {
       entries: [],
       retained: [],
       runtimePaneTitlesByTabId: {
-        'tab-1': { 1: 'Trae ready' }
+        'tab-1': { 1: '⠋ Codex' }
+      },
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not infer Trae from stale configuration without a live PTY', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'traecli' }
       },
       ptyIdsByTabId: {},
       terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
@@ -153,7 +169,7 @@ describe('buildTitleDerivedAgentRows', () => {
       entries: [],
       retained: [],
       runtimePaneTitlesByTabId: {
-        'tab-1': { 1: 'trae-cli ready' }
+        'tab-1': { 1: 'trae-cli' }
       },
       ptyIdsByTabId: { 'tab-1': ['pty-unknown'] },
       terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },

@@ -27,12 +27,17 @@ export const AGENT_NAMES = [
   'aider',
   'grok',
   'devin',
-  'trae'
+  'traecli'
 ]
 
 // Why: Windows agent titles can surface launcher process names such as
 // `openclaude.exe`; still reject arbitrary dotted path fragments.
 const WINDOWS_EXECUTABLE_SUFFIX_RE = String.raw`(?:\.(?:exe|cmd|bat|ps1))`
+
+const TRAE_CLI_TITLE_RE = new RegExp(
+  `^(?:[\\u2800-\\u28ff]+\\s+)?traecli${WINDOWS_EXECUTABLE_SUFFIX_RE}?$`,
+  'i'
+)
 
 export function buildAgentNameRe(name: string): RegExp {
   return new RegExp(
@@ -58,6 +63,11 @@ export function titleHasAgentName(title: string, name: string): boolean {
 /** True when `title` contains any AGENT_NAMES entry as a whole token. */
 export function titleHasAnyLegacyAgentName(title: string): boolean {
   return ANY_LEGACY_AGENT_NAME_RE.test(title)
+}
+
+/** True when the title is the Trae CLI identity, including a Windows suffix. */
+export function isTraeCliTitle(title: string): boolean {
+  return TRAE_CLI_TITLE_RE.test(title.trim())
 }
 
 // Why: `android` contains `droid`; like the legacy names above, Droid must be

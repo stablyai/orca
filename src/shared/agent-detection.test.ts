@@ -103,22 +103,26 @@ describe('MiMo title detection', () => {
 
 describe('Trae title detection', () => {
   it.each([
-    ['Trae', 'idle'],
-    ['Trae ready', 'idle'],
-    ['⠋ Trae', 'working'],
-    ['Trae working', 'working']
+    ['traecli', 'idle'],
+    ['traecli.exe', 'idle'],
+    ['⠋ traecli', 'working'],
+    ['⠋ traecli.exe', 'working']
   ] as const)('classifies %s', (title, expectedStatus) => {
     expect(getAgentLabel(title)).toBe('Trae')
     expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
   })
 
-  it.each(['trae-cli ready', 'trae-agent working', '~/trae/working'])(
+  it.each(['trae', 'trae-cli', 'trae-agent', '~/traecli/working'])(
     'does not classify a non-Trae title %s',
     (title) => {
       expect(getAgentLabel(title)).toBeNull()
       expect(detectAgentStatusFromTitle(title)).toBeNull()
     }
   )
+
+  it('keeps a Claude task title that mentions Trae classified as Claude', () => {
+    expect(getAgentLabel('⠋ fix the trae mapping')).toBe('Claude Code')
+  })
 })
 
 describe('Pi-compatible title detection', () => {

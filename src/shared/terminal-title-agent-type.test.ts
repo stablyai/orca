@@ -47,9 +47,13 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
   })
 
   it('maps Trae titles without accepting similarly named commands', () => {
-    expect(resolveExplicitTerminalTitleAgentType('Trae ready')).toBe('trae')
-    expect(resolveExplicitTerminalTitleAgentType('⠋ Trae')).toBe('trae')
-    expect(resolveExplicitTerminalTitleAgentType('trae-cli ready')).toBeNull()
+    expect(resolveExplicitTerminalTitleAgentType('traecli')).toBe('trae')
+    expect(resolveExplicitTerminalTitleAgentType('⠋ traecli')).toBe('trae')
+    expect(resolveExplicitTerminalTitleAgentType('trae-cli')).toBeNull()
+  })
+
+  it('does not relabel a Claude task that mentions Trae', () => {
+    expect(resolveExplicitTerminalTitleAgentType('⠋ fix the trae mapping')).toBeNull()
   })
 
   it('treats Claude generic status prefixes as activity-only, not identity', () => {

@@ -8,6 +8,7 @@ import {
   isCursorAgentTitle,
   isGeminiTerminalTitle,
   isPiAgentTitle,
+  isTraeCliTitle,
   titleHasAgentName
 } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
@@ -113,7 +114,7 @@ export function getAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
-  if (titleHasAgentName(title, 'trae')) {
+  if (isTraeCliTitle(title)) {
     return 'Trae'
   }
   if (isClaudeAgent(title)) {

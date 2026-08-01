@@ -2,6 +2,7 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  isTraeCliTitle,
   titleHasAgentName
 } from './agent-name-token-match'
 import { isCursorAgentTitle } from './agent-title-core'
@@ -201,7 +202,7 @@ export function getAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
-  if (titleHasAgentName(title, 'trae')) {
+  if (isTraeCliTitle(title)) {
     return 'Trae'
   }
   if (isClaudeAgent(title)) {
