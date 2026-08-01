@@ -16033,5 +16033,370 @@ describe('registerPtyHandlers', () => {
       expect(getPaneHoldStatus(paneKey)).toBeNull()
       expect(sentinelWriteTargets()).toEqual([])
     })
+
+    type BackfillControllerSpawnArgs = {
+      cols: number
+      rows: number
+      command: string
+      cwd?: string
+      launchAgent?: TuiAgent
+      commandDelivery?: 'provider'
+      connectionId?: string
+      tabId: string
+      leafId: string
+      resumeProviderSession?: { key: 'session_id'; id: string; transcriptPath: string }
+      agentSessionEnsure?: {
+        claim: {
+          digestVersion: 1
+          keyId: string
+          identityDigest: string
+          worktreeScopeDigest: string
+          agent: 'codex'
+        }
+        surface: { worktreeId: string; tabId: string; leafId: string; terminalHandle: string }
+      }
+    }
+
+    // Why: worktree creation spawns via OrcaRuntimeService.createTerminal -> ptyController.spawn
+    // (orca-runtime.ts), never pty:spawn — these tests cover that controller arm directly.
+    function registerBackfillRuntimeController(opts: {
+      getSelectedCodexHome: () => string | null
+      prepareCodexSessionResume?: PrepareCodexSessionResume
+    }): { spawn(args: BackfillControllerSpawnArgs): Promise<{ id: string }> } {
+      handlers.clear()
+      const runtime = {
+        setPtyController: vi.fn(),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        preAllocateHandleForPty: vi.fn(() => 'term_backfill_runtime'),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        opts.getSelectedCodexHome,
+        undefined,
+        undefined,
+        undefined,
+        opts.prepareCodexSessionResume
+          ? { prepareCodexSessionResume: opts.prepareCodexSessionResume }
+          : undefined
+      )
+      return runtime.setPtyController.mock.calls[0]?.[0] as {
+        spawn(args: BackfillControllerSpawnArgs): Promise<{ id: string }>
+      }
+    }
+
+    posixOnlyIt(
+      'holds a worktree-creation startup terminal spawned through the runtime controller',
+      async () => {
+        vi.useFakeTimers()
+        const mockProc = createMockProc()
+        spawnMock.mockReturnValue(mockProc.proc)
+        const tempHome = '/tmp/orca-backfill-home-controller'
+        markBackfillPending(tempHome)
+        try {
+          const controller = registerBackfillRuntimeController({
+            getSelectedCodexHome: () => tempHome
+          })
+          // Why: leafId must be a real UUID — paneKey minting requires isTerminalLeafId, and
+          // without a paneKey the gate silently skips and this test could never engage it.
+          const leafId = '44444444-4444-4444-8444-444444444444'
+          const paneKey = makePaneKey('tab-backfill-wt', leafId)
+          await controller.spawn({
+            cols: 80,
+            rows: 24,
+            command: GATED_CODEX_COMMAND,
+            launchAgent: 'codex',
+            commandDelivery: 'provider',
+            tabId: 'tab-backfill-wt',
+            leafId,
+            cwd: '/tmp/repo/.orca/worktrees/repo/branch'
+          })
+
+          // Shell spawned; the codex command is withheld behind the gate wrapper.
+          expect(spawnMock).toHaveBeenCalledTimes(1)
+          const [, shellArgs, options] = lastNodePtySpawnCall()
+          expect(options.env[ORCA_BACKFILL_GATED_COMMAND_ENV]).toBe(GATED_CODEX_COMMAND)
+          expect(options.env[ORCA_BACKFILL_RELEASE_FILE_ENV].startsWith(`${tempHome}/.orca/`)).toBe(
+            true
+          )
+          expect(JSON.stringify(shellArgs)).not.toContain('codex')
+          expect(paneHoldBroadcasts()).toEqual([
+            { paneKey, phase: 'indexing', lastWatermark: BACKFILL_WATERMARK }
+          ])
+          expect(getPaneHoldStatus(paneKey)).toEqual({
+            paneKey,
+            phase: 'indexing',
+            lastWatermark: BACKFILL_WATERMARK
+          })
+        } finally {
+          vi.useRealTimers()
+        }
+      }
+    )
+
+    posixOnlyIt(
+      'auto-launches the held worktree-creation pane when the backfill completes',
+      async () => {
+        vi.useFakeTimers()
+        const mockProc = createMockProc()
+        spawnMock.mockReturnValue(mockProc.proc)
+        const tempHome = '/tmp/orca-backfill-home-controller-release'
+        markBackfillPending(tempHome)
+        try {
+          const controller = registerBackfillRuntimeController({
+            getSelectedCodexHome: () => tempHome
+          })
+          const leafId = '55555555-5555-4555-8555-555555555555'
+          const paneKey = makePaneKey('tab-backfill-wt-release', leafId)
+          await controller.spawn({
+            cols: 80,
+            rows: 24,
+            command: GATED_CODEX_COMMAND,
+            launchAgent: 'codex',
+            commandDelivery: 'provider',
+            tabId: 'tab-backfill-wt-release',
+            leafId,
+            cwd: '/tmp/repo/.orca/worktrees/repo/branch'
+          })
+          const [, , options] = lastNodePtySpawnCall()
+          const releaseFile = options.env[ORCA_BACKFILL_RELEASE_FILE_ENV]
+
+          backfillPendingMock.mockReturnValue(false)
+          backfillStatusMock.mockReturnValue({
+            kind: 'complete',
+            stateDbPath: `${tempHome}/state_5.sqlite`
+          })
+          mainWindow.webContents.send.mockClear()
+          vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS)
+
+          // The release sentinel the wrapper polls now exists and 'launched' was broadcast.
+          expect(writeFileSyncMock.mock.calls.some(([target]) => target === releaseFile)).toBe(true)
+          expect(paneHoldBroadcasts()).toEqual([
+            { paneKey, phase: 'launched', lastWatermark: null }
+          ])
+          expect(getPaneHoldStatus(paneKey)).toBeNull()
+        } finally {
+          vi.useRealTimers()
+        }
+      }
+    )
+
+    posixOnlyIt('holds the agentSessionEnsure controller arm the same way', async () => {
+      vi.useFakeTimers()
+      const resumeHome = '/tmp/orca-backfill-resume-home'
+      const laneHome = vi.fn(() => '/tmp/orca-backfill-lane-home')
+      markBackfillPending(resumeHome)
+      const sessions: { id: string; incarnationId: string; cwd: string; title: string }[] = []
+      const physicalSpawn = vi.fn(async (_options: { env: Record<string, string> }) => {
+        const result = { id: 'pty-backfill-ensure', incarnationId: 'incarnation-backfill-ensure' }
+        sessions.push({ ...result, cwd: '/tmp', title: 'Codex' })
+        return result
+      })
+      setLocalPtyProvider(
+        createAgentClaimProvider({
+          sessions,
+          spawn: physicalSpawn,
+          authoritativeOwnerListings: false
+        }) as never
+      )
+      try {
+        const controller = registerBackfillRuntimeController({
+          getSelectedCodexHome: laneHome,
+          prepareCodexSessionResume: async () => ({
+            outcome: 'resume' as const,
+            codexHomePath: resumeHome
+          })
+        })
+        const leafId = '66666666-6666-4666-8666-666666666666'
+        const paneKey = makePaneKey('tab-backfill-ensure', leafId)
+        const result = await controller.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          command: 'codex resume session-a',
+          launchAgent: 'codex',
+          commandDelivery: 'provider',
+          tabId: 'tab-backfill-ensure',
+          leafId,
+          resumeProviderSession: {
+            key: 'session_id',
+            id: 'session-a',
+            transcriptPath: `${resumeHome}/sessions/2026/07/20/rollout-a.jsonl`
+          },
+          agentSessionEnsure: {
+            claim: {
+              digestVersion: 1 as const,
+              keyId: 'backfill-ensure-key',
+              identityDigest: 'ccccccccccccccccccccccccccccccccccccccccccc',
+              worktreeScopeDigest: 'ddddddddddddddddddddddddddddddddddddddddddd',
+              agent: 'codex' as const
+            },
+            surface: {
+              worktreeId: 'repo-1::/tmp/wt-ensure',
+              tabId: '99999999-9999-4999-8999-999999999999',
+              leafId: 'abababab-abab-4bab-8bab-abababababab',
+              terminalHandle: 'term_backfill_ensure'
+            }
+          }
+        })
+
+        expect(result).toMatchObject({ agentSessionEnsure: { disposition: 'created' } })
+        const spawnOptions = physicalSpawn.mock.calls.at(-1)?.[0] as unknown as {
+          env: Record<string, string>
+        }
+        // Why: the resume-pinned home takes precedence — lane selection must never be consulted.
+        expect(laneHome).not.toHaveBeenCalled()
+        expect(backfillPendingMock).toHaveBeenCalledWith(resumeHome)
+        expect(spawnOptions.env[ORCA_BACKFILL_GATED_COMMAND_ENV]).toContain('codex')
+        expect(
+          spawnOptions.env[ORCA_BACKFILL_RELEASE_FILE_ENV].startsWith(`${resumeHome}/.orca/`)
+        ).toBe(true)
+        expect(paneHoldBroadcasts()).toEqual([
+          { paneKey, phase: 'indexing', lastWatermark: BACKFILL_WATERMARK }
+        ])
+        expect(getPaneHoldStatus(paneKey)).toEqual({
+          paneKey,
+          phase: 'indexing',
+          lastWatermark: BACKFILL_WATERMARK
+        })
+      } finally {
+        vi.useRealTimers()
+        clearProviderPtyState('pty-backfill-ensure')
+      }
+    })
+
+    it('does not hold when the ensure arm adopts a live owner instead of spawning', async () => {
+      const resumeHome = '/tmp/orca-backfill-adopt-home'
+      markBackfillPending(resumeHome)
+      const claim = {
+        digestVersion: 1 as const,
+        keyId: 'backfill-adopt-key',
+        identityDigest: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        worktreeScopeDigest: 'fffffffffffffffffffffffffffffffffffffffffff',
+        agent: 'codex' as const
+      }
+      const surface = {
+        worktreeId: 'repo-1::/tmp/wt-adopt',
+        tabId: 'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd',
+        leafId: 'efefefef-efef-4fef-8fef-efefefefefef',
+        terminalHandle: 'term_backfill_adopt'
+      }
+      const owner: AgentSessionOwnerBinding = {
+        claim,
+        generation: 'generation-backfill-adopt',
+        phase: 'live',
+        ptyId: 'pty-backfill-adopt',
+        surface
+      }
+      const provider = createAgentClaimProvider({
+        sessions: [
+          {
+            id: owner.ptyId,
+            incarnationId: 'incarnation-backfill-adopt',
+            cwd: '/tmp',
+            title: 'Codex',
+            agentSessionOwners: [owner]
+          }
+        ],
+        livePtyIds: new Set([owner.ptyId])
+      })
+      setLocalPtyProvider(provider as never)
+      try {
+        const controller = registerBackfillRuntimeController({
+          getSelectedCodexHome: () => null,
+          prepareCodexSessionResume: async () => ({
+            outcome: 'resume' as const,
+            codexHomePath: resumeHome
+          })
+        })
+        const leafId = '77777777-7777-4777-8777-777777777777'
+        const paneKey = makePaneKey('tab-backfill-adopt', leafId)
+        const result = await controller.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          command: 'codex resume session-a',
+          launchAgent: 'codex',
+          commandDelivery: 'provider',
+          tabId: 'tab-backfill-adopt',
+          leafId,
+          resumeProviderSession: {
+            key: 'session_id',
+            id: 'session-a',
+            transcriptPath: `${resumeHome}/sessions/2026/07/20/rollout-a.jsonl`
+          },
+          agentSessionEnsure: { claim, surface }
+        })
+
+        expect(result).toMatchObject({
+          id: owner.ptyId,
+          agentSessionEnsure: { disposition: 'adopted' }
+        })
+        expect(provider.spawn).not.toHaveBeenCalled()
+        // Why: adoption never executed the wrapped command — a hold would overlay the wrong pane.
+        expect(paneHoldBroadcasts()).toEqual([])
+        expect(getPaneHoldStatus(paneKey)).toBeNull()
+        expect(sentinelWriteTargets()).toEqual([])
+      } finally {
+        clearProviderPtyState(owner.ptyId)
+      }
+    })
+
+    it('passes a remote controller spawn through untouched', async () => {
+      backfillPendingMock.mockReturnValue(true)
+      const sshSpawn = vi.fn(async (_opts: { command?: string; env?: Record<string, string> }) => ({
+        id: 'ssh:ssh-1@@relay-backfill'
+      }))
+      registerSshPtyProvider('ssh-1', {
+        spawn: sshSpawn,
+        write: vi.fn(),
+        resize: vi.fn(),
+        shutdown: vi.fn(),
+        sendSignal: vi.fn(),
+        getCwd: vi.fn(),
+        getInitialCwd: vi.fn(),
+        clearBuffer: vi.fn(),
+        acknowledgeDataEvent: vi.fn(),
+        hasChildProcesses: vi.fn(),
+        getForegroundProcess: vi.fn(),
+        serialize: vi.fn(),
+        revive: vi.fn(),
+        onData: vi.fn(() => () => {}),
+        onReplay: vi.fn(() => () => {}),
+        onExit: vi.fn(() => () => {}),
+        listProcesses: vi.fn(async () => []),
+        attach: vi.fn(),
+        getDefaultShell: vi.fn(),
+        getProfiles: vi.fn()
+      } as never)
+      const controller = registerBackfillRuntimeController({
+        getSelectedCodexHome: () => '/tmp/orca-backfill-home-ssh-runtime'
+      })
+      // Why: a real UUID leafId mints the paneKey, so the passthrough below is proven by the
+      // gate's connectionId exclusion alone — not vacuously by a missing paneKey.
+      const leafId = '88888888-8888-4888-8888-888888888888'
+      const paneKey = makePaneKey('tab-backfill-ssh-runtime', leafId)
+      await controller.spawn({
+        cols: 80,
+        rows: 24,
+        command: 'codex',
+        launchAgent: 'codex',
+        connectionId: 'ssh-1',
+        tabId: 'tab-backfill-ssh-runtime',
+        leafId
+      })
+
+      const sshOptions = sshSpawn.mock.calls.at(-1)![0]
+      expect(sshOptions.command).toBe('codex')
+      expect(sshOptions.env?.[ORCA_BACKFILL_GATED_COMMAND_ENV]).toBeUndefined()
+      expect(backfillPendingMock).not.toHaveBeenCalled()
+      expect(paneHoldBroadcasts()).toEqual([])
+      expect(getPaneHoldStatus(paneKey)).toBeNull()
+    })
   })
 })
