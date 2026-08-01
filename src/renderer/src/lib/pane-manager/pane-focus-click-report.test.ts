@@ -104,6 +104,8 @@ function clickPane(pane: ManagedPane): void {
   dispatchPointerDown(pane.container)
   const element = terminalElement(pane)
   dispatchMouse(element, 'mousedown')
+  // Real browser order: pointerdown, mousedown, pointerup, mouseup.
+  dispatchMouse(pane.container, 'pointerup')
   dispatchMouse(element, 'mouseup')
 }
 

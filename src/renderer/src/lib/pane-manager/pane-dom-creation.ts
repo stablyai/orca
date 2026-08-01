@@ -128,8 +128,9 @@ export function createPaneDOM(
       return
     }
     swallowNextMouseDown = false
-    // Why stopPropagation only: the pane still focuses on pointerdown, and
-    // preventDefault would also cancel the browser's own focus handling.
+    // Why stopPropagation rather than preventDefault: the mouse report is built
+    // by xterm's own listener, not by a browser default action, so not reaching
+    // that listener is all it takes.
     event.stopPropagation()
   }
   const paneMouseEnterHandler = (event: MouseEvent): void => onMouseEnter(id, event)
