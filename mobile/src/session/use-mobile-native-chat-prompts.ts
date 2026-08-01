@@ -19,15 +19,17 @@ export function useMobileNativeChatPrompts(args: {
 }): MobileNativeChatPrompts {
   const { enabled, status, messages } = args
   const blocked = status?.state === 'waiting' || status?.state === 'blocked'
+  // Why: the approval envelope outlives the wait it was emitted for, so it only
+  // means "approve this" while the agent is still paused on it.
   const permission =
-    (blocked && status
-      ? detectAgentPermission({
+    blocked && status
+      ? (detectAgentPermission({
           state: status.state,
           lastAssistantMessage: status.lastAssistantMessage,
           toolName: status.toolName,
           toolInput: status.toolInput
-        })
-      : null) ?? parseApprovalFromStatus(status?.interactivePrompt)
+        }) ?? parseApprovalFromStatus(status.interactivePrompt))
+      : null
   const question =
     blocked && status && !permission ? parseAgentQuestion(status.lastAssistantMessage ?? '') : null
   const askFromStatus = useMemo(
