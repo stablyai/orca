@@ -226,7 +226,12 @@ export async function loadAutomaticUpdateCheckEnabled(): Promise<boolean> {
 }
 
 export async function saveAutomaticUpdateCheckEnabled(enabled: boolean): Promise<void> {
-  await AsyncStorage.setItem(UPDATE_CHECK_KEY, String(enabled))
+  try {
+    await AsyncStorage.setItem(UPDATE_CHECK_KEY, String(enabled))
+  } catch {
+    // Why: the About toggle fires this without awaiting, so a storage failure
+    // must not surface as an unhandled rejection; the value re-reads next launch.
+  }
 }
 
 function stringArray(value: unknown): string[] {

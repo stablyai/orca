@@ -44,7 +44,10 @@ function XIcon({ size = 16, color = colors.textSecondary }) {
 export default function AboutScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const [updateCheckEnabled, setUpdateCheckEnabled] = useState(true)
+  // Why: null until the stored value is read. Rendering a default-on switch
+  // first would flash ON for opted-out users, and a tap landing before the load
+  // resolved would be silently reverted by it.
+  const [updateCheckEnabled, setUpdateCheckEnabled] = useState<boolean | null>(null)
 
   useEffect(() => {
     let disposed = false
@@ -107,7 +110,7 @@ export default function AboutScreen() {
       {/* Why: Android installs as a sideloaded APK with no store to announce a
           new build, so the check only exists there — an iOS toggle would
           control nothing (TestFlight already notifies). */}
-      {Platform.OS === 'android' && (
+      {Platform.OS === 'android' && updateCheckEnabled !== null && (
         <View style={styles.updateSection}>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Check for updates</Text>

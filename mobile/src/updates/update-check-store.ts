@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { UpdateCheckState } from './app-update-check'
 
-const STORAGE_KEY = 'orca.updateCheck.v1'
+// Matches the 'orca:camelCaseKey' convention used across preferences.ts.
+const STORAGE_KEY = 'orca:updateCheckState'
 
 export async function loadUpdateCheckState(): Promise<UpdateCheckState> {
   try {

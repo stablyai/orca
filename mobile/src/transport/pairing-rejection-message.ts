@@ -21,7 +21,12 @@ export function pairingRejectionMessage(
     case 'malformed-code':
       return malformedCodeMessage(source)
     case 'unsupported-version':
-      return `This pairing code is version ${rejection.offerVersion}, but this app only supports version ${rejection.supportedVersion}. Update Orca on your phone.`
+      // Why: a newer offer means this app is behind; an older one means the
+      // desktop is. Naming the wrong side sends the user to update a machine
+      // that is already current.
+      return rejection.offerVersion > rejection.supportedVersion
+        ? `This pairing code is version ${rejection.offerVersion}, but this app only supports version ${rejection.supportedVersion}. Update Orca on your phone.`
+        : `This pairing code is version ${rejection.offerVersion}, but this app expects version ${rejection.supportedVersion}. Update Orca on your computer.`
     case 'invalid-offer':
       return 'That pairing code is not usable — generate a new one on your computer'
   }
