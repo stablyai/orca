@@ -497,7 +497,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('blocks local HTTP interrupt inference without exposing transport metadata', async () => {
+  it('blocks local HTTP interrupt inference for provider-owned work without exposing transport metadata', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -529,6 +529,26 @@ describe('AgentHookServer listener replay', () => {
           baselinePrompt: 'run in background',
           baselineAgentType: 'claude',
           intent: 'plain-escape'
+        })
+      ).toBe(false)
+
+      await expect(
+        postHook({
+          hook_event_name: 'Stop',
+          background_tasks: [],
+          session_crons: [{ id: 'cron-1' }]
+        })
+      ).resolves.toMatchObject({ status: 204 })
+      const cronBaseline = server.getStatusSnapshot()[0]
+      expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: cronBaseline.receivedAt,
+          baselineStateStartedAt: cronBaseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
         })
       ).toBe(false)
     } finally {

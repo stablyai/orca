@@ -2639,21 +2639,6 @@ function normalizeClaudeEvent(
   const sessionCrons = hookPayload['session_crons']
   const sessionCronInventoryPresent = Array.isArray(sessionCrons)
   const hasActiveSessionCron = sessionCronInventoryPresent && sessionCrons.length > 0
-  if (backgroundTasks.present && eventAgentId === undefined) {
-    updateClaudeRunningNonAgentTask(
-      state,
-      paneKey,
-      backgroundTasks.hasRunningNonAgentTask,
-      interrupted === true
-    )
-  }
-  if (sessionCronInventoryPresent && eventAgentId === undefined) {
-    if (hasActiveSessionCron && interrupted !== true) {
-      state.claudeActiveSessionCronPaneKeys.add(paneKey)
-    } else {
-      state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-    }
-  }
 
   // Why: Claude's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest; its Notification hook isn't registered) while blocked on a human answer.
   // Treat that PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
@@ -2673,6 +2658,21 @@ function normalizeClaudeEvent(
 
   if (!reportedStateName) {
     return null
+  }
+  if (backgroundTasks.present && eventAgentId === undefined) {
+    updateClaudeRunningNonAgentTask(
+      state,
+      paneKey,
+      backgroundTasks.hasRunningNonAgentTask,
+      interrupted === true
+    )
+  }
+  if (sessionCronInventoryPresent && eventAgentId === undefined) {
+    if (hasActiveSessionCron && interrupted !== true) {
+      state.claudeActiveSessionCronPaneKeys.add(paneKey)
+    } else {
+      state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+    }
   }
   const stateName = reportedStateName
 

@@ -752,7 +752,7 @@ export class AgentHookServer {
     if (payload.subagents?.some((subagent) => subagent.state !== 'idle')) {
       return false
     }
-    // Why: Escape/Ctrl+C at Claude's idle prompt does not stop provider-owned background shells.
+    // Why: Escape/Ctrl+C at Claude's idle prompt does not stop provider-owned shells or session crons.
     if (
       agentType === 'claude' &&
       (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
