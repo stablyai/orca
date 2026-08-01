@@ -10971,7 +10971,8 @@
                   "323bb614aa": "Commit y sincronizar",
                   "2b8e6595fd": "Commit",
                   "04d709801d": "Fetch del remoto sin hacer merge"
-                }
+                },
+                "undo_last_commit": "Deshacer último commit"
               },
               "primary": {
                 "action": {

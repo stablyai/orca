@@ -207,6 +207,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
+    this.dispatcher.onRequest('git.undoLastCommit', (p) => this.undoLastCommit(p))
     this.dispatcher.onRequest('git.diff', (p, context) => this.getDiff(p, context))
     this.dispatcher.onRequest('git.stage', (p) => this.stage(p))
     this.dispatcher.onRequest('git.unstage', (p) => this.unstage(p))
@@ -518,6 +519,22 @@ export class GitHandler {
     const message = params.message as string
     try {
       return await commitChangesRelay(this.git.bind(this), worktreePath, message)
+    } finally {
+      this.clearGitMutationReadCaches()
+    }
+  }
+
+  private async undoLastCommit(
+    params: Record<string, unknown>
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    this.clearGitMutationReadCaches()
+    const worktreePath = params.worktreePath as string
+    try {
+      const messageResult = await this.git(['log', '-1', '--format=%s'], worktreePath)
+      await this.git(['reset', '--soft', 'HEAD~1'], worktreePath)
+      return { success: true, message: messageResult.stdout.trim() }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Undo failed' }
     } finally {
       this.clearGitMutationReadCaches()
     }

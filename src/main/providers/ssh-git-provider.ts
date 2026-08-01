@@ -195,6 +195,13 @@ export class SshGitProvider implements IGitProvider {
     )
   }
 
+  async undoLastCommit(
+    worktreePath: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    const result = await this.mux.request('git.undoLastCommit', { worktreePath })
+    return result as { success: boolean; message?: string; error?: string }
+  }
+
   async getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null> {
     const branchPromise = this.exec(['branch', '--show-current'], worktreePath).catch(() => ({
       stdout: ''

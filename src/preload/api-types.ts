@@ -2961,6 +2961,10 @@ export type PreloadApi = {
       message: string
       connectionId?: string
     }) => Promise<{ success: boolean; error?: string }>
+    undoLastCommit: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<{ success: boolean; message?: string; error?: string }>
     generateCommitMessage: (args: {
       worktreePath: string
       /** Raw (unstripped) worktree meta key; validated against worktreePath in main. */

@@ -10971,7 +10971,8 @@
                   "323bb614aa": "Commit と同期",
                   "2b8e6595fd": "Commit",
                   "04d709801d": "Fetch from remote without merging"
-                }
+                },
+                "undo_last_commit": "最後のコミットを元に戻す"
               },
               "primary": {
                 "action": {

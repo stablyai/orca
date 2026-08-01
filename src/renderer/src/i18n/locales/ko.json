@@ -10971,7 +10971,8 @@
                   "323bb614aa": "Commit 및 동기화",
                   "2b8e6595fd": "Commit",
                   "04d709801d": "병합하지 않고 원격에서 가져오기(fetch)"
-                }
+                },
+                "undo_last_commit": "마지막 커밋 실행 취소"
               },
               "primary": {
                 "action": {

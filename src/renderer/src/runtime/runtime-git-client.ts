@@ -640,6 +640,24 @@ export async function commitRuntimeGit(
   )
 }
 
+export async function undoLastCommitRuntimeGit(
+  context: RuntimeGitContext
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.undoLastCommit({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<{ success: boolean; message?: string; error?: string }>(
+    target,
+    'git.undoLastCommit',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { timeoutMs: 30_000 }
+  )
+}
+
 export async function generateRuntimeCommitMessage(
   context: RuntimeGitContext,
   overrides?: RuntimeGenerateCommitMessageOverrides

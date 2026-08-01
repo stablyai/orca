@@ -180,6 +180,7 @@ import {
   cancelRuntimeGeneratePullRequestFields,
   commitRuntimeGit,
   discardRuntimeGitPath,
+  undoLastCommitRuntimeGit,
   generateRuntimeCommitMessage,
   generateRuntimePullRequestFields,
   getRuntimeGitBranchCompare,
@@ -2153,6 +2154,35 @@ function SourceControlInner(): React.JSX.Element {
       worktreePath
     ]
   )
+
+  const handleUndoLastCommit = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath || isExecutingBulk) return
+    const result = await undoLastCommitRuntimeGit({
+      settings: activeRepoSettings,
+      worktreeId: activeWorktreeId,
+      worktreePath,
+      connectionId: getConnectionId(activeWorktreeId) ?? undefined
+    })
+    if (!result.success) {
+      setCommitErrorForWorktree(activeWorktreeId, result.error ?? 'Undo failed')
+      return
+    }
+    if (result.message !== undefined) {
+      updateCommitDrafts((drafts) => ({
+        ...drafts,
+        [activeWorktreeId]: result.message ?? ''
+      }))
+    }
+    await refreshActiveGitStatusAfterMutation()
+  }, [
+    activeWorktreeId,
+    worktreePath,
+    activeRepoSettings,
+    isExecutingBulk,
+    refreshActiveGitStatusAfterMutation,
+    updateCommitDrafts,
+    setCommitErrorForWorktree
+  ])
 
   const handleGenerate = useCallback(
     async (overrides?: RuntimeGenerateCommitMessageOverrides): Promise<void> => {
@@ -4312,7 +4342,8 @@ function SourceControlInner(): React.JSX.Element {
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
-        rebaseBaseRef: effectiveBaseRef
+        rebaseBaseRef: effectiveBaseRef,
+        worktreeId: activeWorktreeId
       }),
     [
       commitMessage,
@@ -4337,7 +4368,8 @@ function SourceControlInner(): React.JSX.Element {
       branchName,
       effectiveBaseRef,
       remoteStatusForActions,
-      unresolvedConflicts.length
+      unresolvedConflicts.length,
+      activeWorktreeId
     ]
   )
 
@@ -4356,6 +4388,9 @@ function SourceControlInner(): React.JSX.Element {
           return
         case 'commit_sync':
           void runCompoundCommitAction('sync')
+          return
+        case 'undo_last_commit':
+          void handleUndoLastCommit()
           return
         case 'abort_merge':
           void handleAbortMerge()
@@ -4385,6 +4420,7 @@ function SourceControlInner(): React.JSX.Element {
       handleCreatePullRequest,
       handleAbortMerge,
       handleAbortRebase,
+      handleUndoLastCommit,
       isCreatingPr,
       isCreatePrIntentInFlight,
       prGenerating,
