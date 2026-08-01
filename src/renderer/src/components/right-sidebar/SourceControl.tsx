@@ -2160,7 +2160,11 @@ function SourceControlInner(): React.JSX.Element {
       worktreePath
     ]
   )
-
+  /**
+   * Invokes `git reset --soft HEAD~1` on the active worktree, restoring the last
+   * commit message to the draft field and keeping all changes staged. Guards against
+   * concurrent undo via per-worktree in-flight tracking.
+   */
   const handleUndoLastCommit = useCallback(async (): Promise<void> => {
     if (!activeWorktreeId || !worktreePath || isExecutingBulk) return
     if (undoInFlightRef.current[activeWorktreeId]) return
