@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   buildServeSimKeyboardFramesForKey,
   type ServeSimKeyboardFrame
@@ -70,7 +71,7 @@ export function useEmulatorScreenKeyboard({
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (
         !canInteract ||
-        event.nativeEvent.isComposing ||
+        isImeCompositionKeyDown(event) ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey

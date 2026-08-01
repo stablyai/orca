@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { CornerDownLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   getCommentBodySubmitState,
@@ -214,7 +215,7 @@ export function DiffCommentPopover({
               return
             }
             // Why: Shift+Enter inserts a newline; skip isComposing so IME composition Enter doesn't submit a half-typed CJK note.
-            if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
+            if (e.key === 'Enter' && !isImeCompositionKeyDown(e) && !e.shiftKey) {
               e.preventDefault()
               if (submitting) {
                 return

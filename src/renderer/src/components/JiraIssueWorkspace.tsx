@@ -29,6 +29,7 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useAppStore } from '@/store'
 import {
   jiraAddIssueComment,
@@ -609,7 +610,7 @@ export default function JiraIssueWorkspace({
                         value={titleDraft}
                         onChange={(event) => setTitleDraft(event.target.value)}
                         onKeyDown={(event) => {
-                          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                          if (event.key === 'Enter' && !isImeCompositionKeyDown(event)) {
                             event.preventDefault()
                             handleSaveTitle()
                           }

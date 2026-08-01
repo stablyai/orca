@@ -1,5 +1,6 @@
 import type React from 'react'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import type { SearchFileResult, SearchMatch, SearchResult } from '../../../../shared/types'
@@ -206,7 +207,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.nativeEvent.isComposing) {
+      if (isImeCompositionKeyDown(e)) {
         return
       }
       if (e.key === 'Escape') {

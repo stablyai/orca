@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 
 const ANNOUNCE_DEBOUNCE_MS = 400
@@ -119,7 +120,7 @@ export default function WorkspaceKanbanSearchField({
           // this field is the only handler — it must cover both outcomes.
           // Mid-composition Escape belongs to the IME, which cancels the
           // in-progress reading rather than the query behind it.
-          if (event.key !== 'Escape' || event.nativeEvent.isComposing) {
+          if (event.key !== 'Escape' || isImeCompositionKeyDown(event)) {
             return
           }
           event.preventDefault()

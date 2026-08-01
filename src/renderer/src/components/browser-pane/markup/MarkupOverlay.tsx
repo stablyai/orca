@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 import { MarkupToolbar } from './MarkupToolbar'
 import type { MarkupBaseImage } from './markup-base-image'
@@ -83,7 +84,7 @@ export function MarkupOverlay({
             event.stopPropagation()
             // Why: during IME composition (e.g. Japanese conversion), Enter
             // confirms the candidate — it must NOT also commit the annotation.
-            if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            if (event.key === 'Enter' && !isImeCompositionKeyDown(event)) {
               event.preventDefault()
               editor.commitPendingText(event.currentTarget.value)
             } else if (event.key === 'Escape') {

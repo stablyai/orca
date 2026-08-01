@@ -41,6 +41,7 @@ import { getConnectionIdForFile } from '@/lib/connection-context'
 import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolution'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { detectLanguage } from '@/lib/language-detect'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import type { DiffComment, MarkdownDocument, Worktree } from '../../../../shared/types'
 import {
   fileUrlToAbsolutePath,
@@ -2120,7 +2121,7 @@ function MarkdownAnnotationComposer({
             onCancel()
             return
           }
-          if (event.key === 'Enter' && !event.nativeEvent.isComposing && !event.shiftKey) {
+          if (event.key === 'Enter' && !isImeCompositionKeyDown(event) && !event.shiftKey) {
             event.preventDefault()
             void submit()
           }

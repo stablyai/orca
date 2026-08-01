@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Plus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Button } from '../ui/button'
 import { Command, CommandGroup, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
@@ -217,7 +218,7 @@ export function AddressPicker({
       event.altKey ||
       event.ctrlKey ||
       event.metaKey ||
-      event.nativeEvent.isComposing
+      isImeCompositionKeyDown(event)
     ) {
       return
     }

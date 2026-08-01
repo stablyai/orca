@@ -4,11 +4,10 @@ import {
   shouldSuppressEnterSubmit
 } from './new-workspace-enter-guard'
 
-function makeEvent(overrides: Partial<{ isComposing: boolean; shiftKey: boolean }>): {
-  isComposing: boolean
-  shiftKey: boolean
-} {
-  return { isComposing: false, shiftKey: false, ...overrides }
+function makeEvent(
+  overrides: Partial<Pick<KeyboardEvent, 'isComposing' | 'key' | 'keyCode' | 'shiftKey'>>
+): Pick<KeyboardEvent, 'isComposing' | 'key' | 'keyCode' | 'shiftKey'> {
+  return { isComposing: false, key: 'Enter', keyCode: 13, shiftKey: false, ...overrides }
 }
 
 class FakeHTMLElement extends EventTarget {
@@ -32,6 +31,11 @@ describe('shouldSuppressEnterSubmit', () => {
 
   it('returns true when IME composition is active', () => {
     expect(shouldSuppressEnterSubmit(makeEvent({ isComposing: true }), false)).toBe(true)
+  })
+
+  it('returns true for an IME-owned Enter carrying only the Windows 229 marker', () => {
+    // Bare isComposing missed this; the central predicate is what catches it.
+    expect(shouldSuppressEnterSubmit(makeEvent({ key: 'Process', keyCode: 229 }), false)).toBe(true)
   })
 
   it('returns true for Shift+Enter inside a textarea', () => {

@@ -1,3 +1,5 @@
+import { isImeCompositionKeyDown } from './ime-composition-keyboard-event'
+
 /**
  * Returns true when an Enter keydown event should be suppressed for submit actions.
  *
@@ -6,10 +8,12 @@
  *  2. Shift+Enter inside a textarea — intended as a newline, not a submit.
  */
 export function shouldSuppressEnterSubmit(
-  event: { isComposing: boolean; shiftKey: boolean },
+  event: Pick<KeyboardEvent, 'isComposing' | 'key' | 'keyCode' | 'shiftKey'>,
   isTextarea: boolean
 ): boolean {
-  if (event.isComposing) {
+  // Delegates so these gates get the 229 / 'Process' markers and the live-composition
+  // flag too; bare isComposing misses an IME-owned Enter on Windows and Android.
+  if (isImeCompositionKeyDown(event)) {
     return true
   }
   if (isTextarea && event.shiftKey) {
