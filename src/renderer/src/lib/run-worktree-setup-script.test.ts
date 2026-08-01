@@ -213,6 +213,27 @@ describe('runWorktreeSetupScript', () => {
     expect(result).toEqual({ status: 'launched', primaryTabId: 'tab-1' })
   })
 
+  it('prefers the canonical trustContent over the raw script for the trust gate', async () => {
+    prepareSetupRunner.mockResolvedValue({
+      status: 'ok',
+      setup: setupLaunch,
+      setupScript: 'pnpm install',
+      setupScriptSource: 'yaml',
+      trustContent: 'pnpm install\n\n# defaultTabs[1]\nnpm run dev'
+    })
+
+    await runWorktreeSetupScript('wt-1')
+
+    expect(ensureHooksConfirmed).toHaveBeenCalledWith(
+      expect.anything(),
+      'repo-1',
+      'setup',
+      'local',
+      undefined,
+      { scriptContentOverride: 'pnpm install\n\n# defaultTabs[1]\nnpm run dev' }
+    )
+  })
+
   it('skips the trust prompt for user-owned local Settings scripts', async () => {
     prepareSetupRunner.mockResolvedValue({
       status: 'ok',

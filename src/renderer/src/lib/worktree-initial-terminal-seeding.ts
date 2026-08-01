@@ -223,7 +223,7 @@ export function ensureWorktreeHasInitialTerminal(
   if (!shouldAutoCreate && !shouldCreateForExplicitWork && !shouldCreateNewStartupTerminal) {
     const terminalTabs = store.tabsByWorktree[worktreeId] ?? []
     // On an existing worktree the oldest terminal is unrelated to where the user is.
-    const activeTabId = useAppStore.getState().getActiveTab?.(worktreeId)?.id
+    const activeTabId = (store.getActiveTab ?? useAppStore.getState().getActiveTab)?.(worktreeId)?.id
     const existingTerminalTabId =
       terminalTabs.find((tab) => tab.id === activeTabId)?.id ?? terminalTabs[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {

@@ -5,7 +5,8 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { getSetupCommandSource } from '../../hooks'
+import { getSetupTrustContent } from '../../../shared/orca-hook-setup-config'
+import { getSetupCommandSource, loadHooks } from '../../hooks'
 import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { createSetupRunnerScript } from '../../worktree-runner-script'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
@@ -16,6 +17,7 @@ type PrepareSetupRunnerResult = {
   setup: ReturnType<typeof createSetupRunnerScript> | null
   setupScript?: string
   setupScriptSource?: 'yaml' | 'local' | 'both'
+  trustContent?: string
   reason?: 'no-setup-configured' | 'folder-repo' | 'remote-host' | 'runner-failed'
   message?: string
 }
@@ -39,7 +41,7 @@ export function registerWorktreeSetupRunnerHandler(context: WorktreeIpcContext):
             setup: null,
             reason: 'runner-failed',
             message:
-              'This project exists on multiple hosts; retry from the workspace list of the host that owns it.'
+              'Multiple project entries share this id; remove the duplicate project, or retry from the host that owns this workspace.'
           }
         }
         throw new Error(`Repo not found: ${args.repoId}`)
@@ -83,7 +85,14 @@ export function registerWorktreeSetupRunnerHandler(context: WorktreeIpcContext):
           setupScript,
           getLocalProjectWorktreeGitOptions(store, repo)
         )
-        return { status: 'ok', setup, setupScript, setupScriptSource: commandSource?.source }
+        const trustContent = getSetupTrustContent(loadHooks(args.worktreePath))
+        return {
+          status: 'ok',
+          setup,
+          setupScript,
+          setupScriptSource: commandSource?.source,
+          ...(trustContent ? { trustContent } : {})
+        }
       } catch (error) {
         return {
           status: 'error',

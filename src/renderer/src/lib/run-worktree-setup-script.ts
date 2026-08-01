@@ -134,17 +134,19 @@ export async function runWorktreeSetupScript(
     return { status: 'skipped', reason: 'no-setup-configured' }
   }
 
-  // Why: confirm the exact script the runner will execute — the worktree's orca.yaml can
-  // differ from the repo root the generic trust inspection reads. Purely local Settings
-  // scripts are user-owned and need no repo trust.
+  // Why: confirm the script the runner will execute — the worktree's orca.yaml can
+  // differ from the repo root the generic trust inspection reads. The canonical
+  // trustContent (setup + defaultTabs commands) keeps the per-repo hash slot in sync
+  // with the create flow. Purely local Settings scripts are user-owned: no repo trust.
   if (prepared.setupScriptSource !== 'local') {
+    const trustContent = (prepared.trustContent ?? prepared.setupScript ?? '').trim()
     const trust = await ensureHooksConfirmed(
       useAppStore.getState(),
       repo.id,
       'setup',
       hostId,
       undefined,
-      { scriptContentOverride: prepared.setupScript ?? '' }
+      trustContent ? { scriptContentOverride: trustContent } : undefined
     )
     if (trust !== 'run') {
       return { status: 'skipped', reason: 'trust-skipped' }

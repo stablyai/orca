@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync, chmodSync, renameSync, rmSync } from 'node:fs'
-import { dirname, isAbsolute, join } from 'node:path'
+import { dirname, join, posix as posixPath, win32 as win32Path } from 'node:path'
 import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
 import { nativeWindowsPathToPosixShellPath } from '../../shared/setup-runner-command'
 import { scriptDeclaresPosixShell } from '../../shared/setup-script-shebang'
@@ -23,6 +23,8 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/project-exe
 import type { SetupRunnerShell } from '../../shared/setup-runner-command'
 
 type SetupRunnerShellSettings = Record<string, unknown> | undefined
+
+let runnerTmpSequence = 0
 
 function getGitPath(cwd: string, relativePath: string): string {
   return gitExecFileSync(['rev-parse', '--git-path', relativePath], {
@@ -100,7 +102,9 @@ async function createWorktreeRunnerScript(args: {
   let runnerScriptPath = fromLink ?? getGitPath(worktreePath, gitRelPath)
 
   // A main worktree's --git-path is worktree-relative. fs calls must not resolve it from the app cwd.
-  if (!isAbsolute(runnerScriptPath) && !runnerScriptPath.startsWith('/')) {
+  // win32.isAbsolute also treats rooted Linux paths from git-in-WSL as absolute.
+  const isPathAbsolute = process.platform === 'win32' ? win32Path.isAbsolute : posixPath.isAbsolute
+  if (!isPathAbsolute(runnerScriptPath)) {
     runnerScriptPath = join(worktreePath, runnerScriptPath)
   }
 
@@ -118,7 +122,8 @@ async function createWorktreeRunnerScript(args: {
     runnerShell.family === 'cmd' ? buildWindowsRunnerScript(script) : buildPosixRunnerScript(script)
   // A manual re-run can overwrite a script bash is still reading by byte offset.
   // rename swaps the inode so the running shell keeps its own copy.
-  const tmpRunnerPath = `${runnerScriptPath}.tmp`
+  // The suffix is per-call so overlapping preparations do not share one tmp file.
+  const tmpRunnerPath = `${runnerScriptPath}.tmp-${process.pid}-${++runnerTmpSequence}`
   writeFileSync(tmpRunnerPath, runnerContent, 'utf-8')
   if (runnerShell.family !== 'cmd' && !nativeWindowsWorktree) {
     chmodSync(tmpRunnerPath, 0o755)
@@ -126,9 +131,12 @@ async function createWorktreeRunnerScript(args: {
   try {
     renameSync(tmpRunnerPath, runnerScriptPath)
   } catch {
-    // Windows can refuse to replace a runner cmd.exe still holds open.
-    writeFileSync(runnerScriptPath, runnerContent, 'utf-8')
-    rmSync(tmpRunnerPath, { force: true })
+    try {
+      // Windows can refuse to replace a runner cmd.exe still holds open.
+      writeFileSync(runnerScriptPath, runnerContent, 'utf-8')
+    } finally {
+      rmSync(tmpRunnerPath, { force: true })
+    }
   }
 
   // WSL bash needs Linux spellings for environment paths.

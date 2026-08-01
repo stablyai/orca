@@ -12,6 +12,7 @@ import type { PendingWorktreeCreation } from './pending-worktree-creation'
 
 export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
+  getActiveTab?: (worktreeId: string) => { id: string } | null
   pendingWorktreeCreations?: Record<string, PendingWorktreeCreation>
   closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
