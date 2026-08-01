@@ -9,13 +9,21 @@ export type FileExplorerImportFailureToast = {
   description?: string
 }
 
+// Why: path-bearing reasons (e.g. per-file EACCES) defeat dedup, so a large
+// drop could otherwise fill the screen with one toast.
+const MAX_DESCRIPTION_REASONS = 5
+
 export function getFileExplorerImportFailureToast(
   failed: readonly FailedFileExplorerImport[]
 ): FileExplorerImportFailureToast {
   const noun = failed.length === 1 ? 'file' : 'files'
-  const reasons = [
+  const uniqueReasons = [
     ...new Set(failed.map((result) => result.reason.trim()).filter((reason) => reason.length > 0))
   ]
+  const reasons =
+    uniqueReasons.length > MAX_DESCRIPTION_REASONS
+      ? [...uniqueReasons.slice(0, MAX_DESCRIPTION_REASONS), '…']
+      : uniqueReasons
 
   return {
     title: translate(

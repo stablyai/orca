@@ -29,4 +29,17 @@ describe('getFileExplorerImportFailureToast', () => {
       title: 'Failed to import 1 file.'
     })
   })
+
+  it('caps distinct reasons and marks the truncation', () => {
+    const failed = Array.from({ length: 7 }, (_, i) => ({
+      reason: `EACCES: permission denied, open '/dest/file-${i}.txt'`
+    }))
+    const toast = getFileExplorerImportFailureToast(failed)
+    expect(toast.title).toBe('Failed to import 7 files.')
+    expect(toast.description?.split('\n')).toHaveLength(6)
+    expect(toast.description?.split('\n').slice(0, 5)).toEqual(
+      failed.slice(0, 5).map((f) => f.reason)
+    )
+    expect(toast.description?.endsWith('\n…')).toBe(true)
+  })
 })
