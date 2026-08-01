@@ -344,6 +344,7 @@ function normalizeSubagentsField(value: unknown): AgentSubagentSnapshot[] | unde
   return normalized.length > 0 ? normalized : undefined
 }
 
+/** Returns the canonical supported interaction, omitting malformed or unknown kinds. */
 function normalizeInteractionField(value: unknown): AgentStatusInteraction | undefined {
   if (typeof value !== 'object' || value === null) {
     return undefined
