@@ -98,7 +98,7 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
     ),
     description: translate(
       'auto.components.settings.terminal.search.require_alt_for_mouse_input_description',
-      'Clicks and drags reach a program that tracks the mouse only while Alt (Option on macOS) is held, so a stray click cannot answer its prompt. Plain clicks select text instead. Scrolling is unchanged.'
+      'Clicks and drags reach a program that tracks the mouse only while Alt (Option on macOS) is held, so a stray click cannot answer its prompt. Without the modifier they drive text selection instead. Scrolling is unchanged.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.terminal.search.ea364ce6e4', 'mouse'),
