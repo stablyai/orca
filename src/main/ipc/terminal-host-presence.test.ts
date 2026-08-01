@@ -154,7 +154,7 @@ describe('registerTerminalHostPresenceHandlers', () => {
       requestId: string
     }
 
-    unsubscribe({} as never, { requestId: hostResult.requestId })
+    unsubscribe(hostEvent, { requestId: hostResult.requestId })
 
     expect(otherEvent.sender.send).toHaveBeenCalledWith('terminalHostPresence:event', {
       requestId: otherResult.requestId,
@@ -195,6 +195,26 @@ describe('registerTerminalHostPresenceHandlers', () => {
     send({} as never, { requestId: otherResult.requestId, terminal: 'term-1', state: sampleState })
 
     expect(destroyedEvent.sender.send).not.toHaveBeenCalled()
+  })
+
+  it('ignores an unsubscribe from a sender that does not own the session', () => {
+    handleMock.mockClear()
+    const { runtime, listeners } = makeFakeRuntime()
+    registerTerminalHostPresenceHandlers(runtime)
+    const subscribe = findHandler('terminalHostPresence:subscribe')
+    const unsubscribe = findHandler('terminalHostPresence:unsubscribe')
+
+    const ownerEvent = makeSender()
+    const intruderEvent = makeSender()
+    const ownerResult = subscribe(ownerEvent, { terminal: 'term-1' }) as {
+      ok: true
+      requestId: string
+    }
+
+    // Why: session ids are sequential, so another window can guess them.
+    unsubscribe(intruderEvent, { requestId: ownerResult.requestId })
+
+    expect(listeners.size).toBe(1)
   })
 
   it('tears the session down when the owning sender is destroyed without unsubscribing', () => {

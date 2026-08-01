@@ -5,7 +5,12 @@ import type { PeerPresenceEvent, PeerPresenceState } from '../../shared/peer-pre
 let sessionSeq = 0
 const activeSessions = new Map<
   string,
-  { terminal: string; unsubscribe: () => void; releaseSenderBinding: () => void }
+  {
+    terminal: string
+    owner: Electron.WebContents
+    unsubscribe: () => void
+    releaseSenderBinding: () => void
+  }
 >()
 
 // Why: bridges the host's own terminal panes into the presence fan-out peer
@@ -50,14 +55,20 @@ export function registerTerminalHostPresenceHandlers(runtime: OrcaRuntimeService
     sender.once('destroyed', onDestroyed)
     activeSessions.set(sessionId, {
       terminal: args.terminal,
+      owner: sender,
       unsubscribe,
       releaseSenderBinding: () => sender.removeListener('destroyed', onDestroyed)
     })
     return { ok: true as const, requestId: sessionId }
   })
 
-  ipcMain.handle('terminalHostPresence:unsubscribe', (_event, args: { requestId: string }) => {
-    endSession(args.requestId)
+  ipcMain.handle('terminalHostPresence:unsubscribe', (event, args: { requestId: string }) => {
+    // Why: session ids are sequential, so only the sender that subscribed may
+    // end its session — another window guessing an id must not tear it down.
+    const session = activeSessions.get(args.requestId)
+    if (session && session.owner === event.sender) {
+      endSession(args.requestId)
+    }
     return { ok: true }
   })
 
