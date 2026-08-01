@@ -873,4 +873,12 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
   })
+
+  it('passes the automation agent args through to the background session launch', async () => {
+    await registerAndDispatch(makeAutomation({ agentArgs: '--yolo' }))
+
+    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
+      expect.objectContaining({ agentArgs: '--yolo' })
+    )
+  })
 })
