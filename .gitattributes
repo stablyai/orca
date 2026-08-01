@@ -12,3 +12,8 @@
 /src/cli/bundled-skill-guides.ts text eol=lf
 # Bundled plugin trees are byte-hashed; CRLF checkout would break the pinned hash.
 /resources/plugins/** text eol=lf
+# pnpm hashes this generated patch byte-for-byte, and its minified bundle lines make a
+# text diff megabytes wide — large enough that GitHub stops computing one. Review the
+# hand-written source patch under xterm-src/ instead.
+/config/patches/@xterm__xterm@*.patch -diff -text
+/config/patches/xterm-src/*.patch text eol=lf
