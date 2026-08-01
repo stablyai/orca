@@ -843,6 +843,19 @@ export type RuntimeWorktreePsResult = {
   truncated: boolean
 }
 
+export type RuntimeWorktreePsSnapshotResult = RuntimeWorktreePsResult & {
+  snapshotId: string
+}
+
+export type RuntimeWorktreePsUnchangedResult = {
+  unchanged: true
+  snapshotId: string
+}
+
+export type RuntimeWorktreePsConditionalResult =
+  | RuntimeWorktreePsSnapshotResult
+  | RuntimeWorktreePsUnchangedResult
+
 export type RuntimeRepoList = {
   repos: Repo[]
 }
