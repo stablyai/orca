@@ -62,6 +62,9 @@ export function useGitHistoryCommitActions({
 
   const loadCommitFiles = useCallback(
     async (item: GitHistoryItem): Promise<GitBranchChangeEntry[]> => {
+      if (item.provider === 'jj') {
+        return item.fileEntries ?? EMPTY_BRANCH_CHANGE_ENTRIES
+      }
       if (!activeWorktreeId || !worktreePath) {
         return EMPTY_BRANCH_CHANGE_ENTRIES
       }
@@ -97,6 +100,9 @@ export function useGitHistoryCommitActions({
 
   const openHistoryCommitDiff = useCallback(
     async (item: GitHistoryItem): Promise<void> => {
+      if (item.provider === 'jj') {
+        return
+      }
       if (!activeWorktreeId || !worktreePath) {
         return
       }
@@ -187,6 +193,9 @@ export function useGitHistoryCommitActions({
   const handleCommitAction = useCallback(
     (action: GitHistoryCommitAction, item: GitHistoryItem): void => {
       if (action === 'open-remote') {
+        if (item.provider === 'jj') {
+          return
+        }
         if (!activeWorktreeId || !worktreePath) {
           return
         }

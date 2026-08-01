@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { GitHistoryExecutor } from './git-history'
 import {
   GIT_HISTORY_MAX_LIMIT,
+  loadHistoryFromExecutors,
   loadGitHistoryFromExecutor,
+  parseJjHistoryLog,
   parseGitHistoryLog
 } from './git-history'
 import { GIT_HISTORY_COMMIT_FORMAT } from './git-history-log-parser'
@@ -261,6 +263,76 @@ describe('git history loader', () => {
       hasMore: false
     })
     expect(executor).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to git history when auto jj history is unavailable', async () => {
+    const { executor } = createHistoryExecutor()
+    const jj = vi.fn(async () => {
+      throw new Error('jj repo not found')
+    })
+
+    const result = await loadHistoryFromExecutors(
+      {
+        git: executor,
+        jj
+      },
+      '/repo',
+      { provider: 'auto' }
+    )
+
+    expect(result.provider).toBe('git')
+    expect(result.items[0]?.id).toBe(HEAD_OID)
+    expect(jj).toHaveBeenCalled()
+  })
+})
+
+describe('jj history parsing', () => {
+  it('parses change ids, commit ids, bookmarks, and changed files', () => {
+    const commit = {
+      commit_id: HEAD_OID,
+      parents: [BASE_OID],
+      change_id: 'xryqywtszkznmqkxoyuovustxovrwxwp',
+      description: 'feat: add jj graph\n\nbody',
+      author: {
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        timestamp: '2026-07-23T12:00:00+09:00'
+      }
+    }
+    const bookmarks = [{ name: 'feature/jj' }, { name: 'feature/jj', remote: 'origin' }]
+    const stdout = [
+      JSON.stringify(commit),
+      JSON.stringify(bookmarks),
+      'true',
+      'false',
+      'false',
+      'false',
+      'M src/a.ts\nA src/b.ts\nD src/c.ts'
+    ].join('\x1f')
+
+    const [item] = parseJjHistoryLog(`${stdout}\0`)
+
+    expect(item).toMatchObject({
+      id: HEAD_OID,
+      parentIds: [BASE_OID],
+      subject: 'feat: add jj graph',
+      changeId: 'xryqywtszkznmqkxoyuovustxovrwxwp',
+      displayChangeId: 'xryqywts',
+      displayId: HEAD_OID.slice(0, 8),
+      provider: 'jj',
+      author: 'Ada Lovelace',
+      authorEmail: 'ada@example.com'
+    })
+    expect(item?.references?.map((ref) => [ref.id, ref.name, ref.category])).toEqual([
+      ['jj:working-copy', '@', 'commits'],
+      ['jj:bookmark:feature/jj', 'feature/jj', 'bookmarks'],
+      ['jj:remote-bookmark:origin/feature/jj', 'origin/feature/jj', 'remote bookmarks']
+    ])
+    expect(item?.fileEntries).toEqual([
+      { path: 'src/a.ts', status: 'modified' },
+      { path: 'src/b.ts', status: 'added' },
+      { path: 'src/c.ts', status: 'deleted' }
+    ])
   })
 })
 

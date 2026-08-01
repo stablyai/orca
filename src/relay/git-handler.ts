@@ -61,7 +61,7 @@ import {
   getEffectiveGitUpstreamStatus,
   resolveEffectiveGitUpstream
 } from '../shared/git-effective-upstream'
-import { loadGitHistoryFromExecutor } from '../shared/git-history'
+import { loadHistoryFromExecutors } from '../shared/git-history'
 import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
 import {
   removeSafeUntrackedDiscardTarget,
@@ -353,6 +353,17 @@ export class GitHandler {
     return stdout
   }
 
+  private async jj(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
+    const { stdout, stderr } = await execFileAsync('jj', args, {
+      cwd: expandTilde(cwd),
+      env: buildRelayGitEnv(),
+      encoding: 'utf-8',
+      maxBuffer: MAX_GIT_BUFFER,
+      timeout: 15_000
+    })
+    return { stdout: String(stdout), stderr: String(stderr) }
+  }
+
   private async getStatus(params: Record<string, unknown>, context: RequestContext) {
     this.gitDiffReadDedupe.clear()
     return getStatusOp(this.git.bind(this), streamRelayGitStdout, params, {
@@ -417,10 +428,21 @@ export class GitHandler {
 
   private async history(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
-    return loadGitHistoryFromExecutor(this.git.bind(this), worktreePath, {
-      limit: typeof params.limit === 'number' ? params.limit : undefined,
-      baseRef: typeof params.baseRef === 'string' ? params.baseRef : null
-    })
+    return loadHistoryFromExecutors(
+      {
+        git: this.git.bind(this),
+        jj: this.jj.bind(this)
+      },
+      worktreePath,
+      {
+        limit: typeof params.limit === 'number' ? params.limit : undefined,
+        baseRef: typeof params.baseRef === 'string' ? params.baseRef : null,
+        provider:
+          params.provider === 'git' || params.provider === 'jj' || params.provider === 'auto'
+            ? params.provider
+            : undefined
+      }
+    )
   }
 
   private async getDiff(params: Record<string, unknown>, context?: RequestContext) {

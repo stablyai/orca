@@ -196,6 +196,7 @@ import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullR
 import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
+import type { GitHistoryProvider } from '../../../../shared/git-history'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import {
   isBehindOnlyUpstream,
@@ -1168,6 +1169,7 @@ function SourceControlInner(): React.JSX.Element {
   const [gitHistoryByWorktree, setGitHistoryByWorktree] = useState<
     Record<string, GitHistoryPanelState>
   >({})
+  const [gitHistoryProvider, setGitHistoryProvider] = useState<GitHistoryProvider>('auto')
   const gitHistoryRequestSeqRef = useRef(0)
   const gitHistoryRequestByWorktreeRef = useRef<Record<string, number>>({})
   const gitHistoryState = activeWorktreeId
@@ -4910,7 +4912,7 @@ function SourceControlInner(): React.JSX.Element {
           worktreePath,
           connectionId
         },
-        { limit: 50, baseRef: compareBaseRef }
+        { limit: 50, baseRef: compareBaseRef, provider: gitHistoryProvider }
       )
       if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
         return
@@ -4935,6 +4937,7 @@ function SourceControlInner(): React.JSX.Element {
     activeRepoSettings,
     activeWorktreeId,
     compareBaseRef,
+    gitHistoryProvider,
     isBranchVisible,
     isFolder,
     isGitHistoryExpanded,
@@ -4965,6 +4968,7 @@ function SourceControlInner(): React.JSX.Element {
     activeGitStatusHead,
     activeWorktreeId,
     compareBaseRef,
+    gitHistoryProvider,
     isBranchVisible,
     isFolder,
     worktreePath
@@ -4993,6 +4997,7 @@ function SourceControlInner(): React.JSX.Element {
   }, [
     activeWorktreeId,
     compareBaseRef,
+    gitHistoryProvider,
     isBranchVisible,
     isFolder,
     remoteStatus?.ahead,
@@ -6219,6 +6224,8 @@ function SourceControlInner(): React.JSX.Element {
                 state={gitHistoryState}
                 collapsed={collapsedSections.has('history')}
                 onToggle={() => toggleSection('history')}
+                historyProvider={gitHistoryProvider}
+                onProviderChange={setGitHistoryProvider}
                 onRefresh={() => void refreshGitHistory()}
                 onOpenCommit={(item) => void openHistoryCommitDiff(item)}
                 onLoadCommitFiles={loadCommitFiles}

@@ -128,7 +128,8 @@ export const GIT_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitHistory(params.worktree, {
         limit: params.limit,
-        baseRef: params.baseRef
+        baseRef: params.baseRef,
+        ...(params.provider ? { provider: params.provider } : {})
       })
   }),
   defineMethod({

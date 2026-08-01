@@ -10,8 +10,10 @@ import {
   type GitHistoryExecutor,
   type GitHistoryItemRef,
   type GitHistoryOptions,
+  type GitHistoryProvider,
   type GitHistoryResult
 } from './git-history-types'
+import { loadJjHistoryFromExecutor } from './jj-history'
 
 export type {
   GitHistoryExecutor,
@@ -20,6 +22,7 @@ export type {
   GitHistoryItemRef,
   GitHistoryItemStatistics,
   GitHistoryOptions,
+  GitHistoryProvider,
   GitHistoryRefCategory,
   GitHistoryResult
 } from './git-history-types'
@@ -32,6 +35,7 @@ export {
   GIT_HISTORY_REMOTE_REF_COLOR
 } from './git-history-types'
 export { compareGitHistoryItemRefsByCategory, parseGitHistoryLog } from './git-history-log-parser'
+export { loadJjHistoryFromExecutor, parseJjDiffSummary, parseJjHistoryLog } from './jj-history'
 
 function clampHistoryLimit(limit: number | undefined): number {
   if (!Number.isFinite(limit)) {
@@ -228,6 +232,7 @@ export async function loadGitHistoryFromExecutor(
 
   return {
     items,
+    provider: 'git',
     currentRef,
     remoteRef,
     baseRef,
@@ -237,4 +242,29 @@ export async function loadGitHistoryFromExecutor(
     hasMore: parsed.length > limit,
     limit
   }
+}
+
+export async function loadHistoryFromExecutors(
+  executors: {
+    git: GitHistoryExecutor
+    jj?: GitHistoryExecutor
+  },
+  cwd: string,
+  options: GitHistoryOptions = {}
+): Promise<GitHistoryResult> {
+  const provider: GitHistoryProvider = options.provider ?? 'git'
+  if (provider === 'jj') {
+    if (!executors.jj) {
+      throw new Error('jj is not available on this host')
+    }
+    return loadJjHistoryFromExecutor(executors.jj, cwd, options)
+  }
+  if (provider === 'auto' && executors.jj) {
+    try {
+      return await loadJjHistoryFromExecutor(executors.jj, cwd, options)
+    } catch {
+      // Git remains the stable baseline when jj is absent or the repo is not colocated.
+    }
+  }
+  return loadGitHistoryFromExecutor(executors.git, cwd, options)
 }

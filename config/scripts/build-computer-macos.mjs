@@ -30,10 +30,34 @@ createHelperApp()
 function buildUniversalBinary() {
   const builtBinaries = universalTriples.map((triple) => {
     run('swift', ['build', '-c', 'release', '--package-path', packagePath, '--triple', triple])
-    return path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
+    const builtBinary = resolveSwiftBuildBinaryPath(triple)
+    const copiedBinary = path.join(
+      packagePath,
+      '.build',
+      'release',
+      `orca-computer-use-macos-${triple}`
+    )
+    mkdirSync(path.dirname(copiedBinary), { recursive: true })
+    // Why: newer SwiftPM can reuse one bin path for different triples, so copy each slice before the next build overwrites it.
+    copyFileSync(builtBinary, copiedBinary)
+    return copiedBinary
   })
   mkdirSync(path.dirname(binaryPath), { recursive: true })
   run('lipo', ['-create', ...builtBinaries, '-output', binaryPath])
+}
+
+function resolveSwiftBuildBinaryPath(triple) {
+  const binPath = runCapture('swift', [
+    'build',
+    '-c',
+    'release',
+    '--package-path',
+    packagePath,
+    '--triple',
+    triple,
+    '--show-bin-path'
+  ]).trim()
+  return path.join(binPath, 'orca-computer-use-macos')
 }
 
 function createHelperApp() {
@@ -91,6 +115,23 @@ function run(command, args) {
   if (result.status !== 0) {
     process.exit(result.status ?? 1)
   }
+}
+
+function runCapture(command, args) {
+  const result = spawnSync(command, args, { encoding: 'utf8' })
+  if (result.signal) {
+    process.kill(process.pid, result.signal)
+  }
+  if (result.status !== 0) {
+    if (result.stdout) {
+      process.stdout.write(result.stdout)
+    }
+    if (result.stderr) {
+      process.stderr.write(result.stderr)
+    }
+    process.exit(result.status ?? 1)
+  }
+  return result.stdout
 }
 
 function infoPlist() {

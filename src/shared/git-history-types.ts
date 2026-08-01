@@ -1,3 +1,5 @@
+import type { GitBranchChangeEntry } from './types'
+
 export type GitHistoryGraphColorId =
   | 'git-graph-ref'
   | 'git-graph-remote-ref'
@@ -23,7 +25,13 @@ export const GIT_HISTORY_LANE_COLORS: readonly GitHistoryGraphColorId[] = [
 export const GIT_HISTORY_DEFAULT_LIMIT = 50
 export const GIT_HISTORY_MAX_LIMIT = 200
 
-export type GitHistoryRefCategory = 'branches' | 'remote branches' | 'tags' | 'commits'
+export type GitHistoryRefCategory =
+  | 'branches'
+  | 'remote branches'
+  | 'bookmarks'
+  | 'remote bookmarks'
+  | 'tags'
+  | 'commits'
 
 export type GitHistoryItemRef = {
   id: string
@@ -46,20 +54,29 @@ export type GitHistoryItem = {
   subject: string
   message: string
   displayId?: string
+  changeId?: string
+  displayChangeId?: string
+  commitId?: string
+  provider?: GitHistoryProvider
   author?: string
   authorEmail?: string
   timestamp?: number
   statistics?: GitHistoryItemStatistics
   references?: GitHistoryItemRef[]
+  fileEntries?: GitBranchChangeEntry[]
 }
+
+export type GitHistoryProvider = 'git' | 'jj' | 'auto'
 
 export type GitHistoryOptions = {
   limit?: number
   baseRef?: string | null
+  provider?: GitHistoryProvider
 }
 
 export type GitHistoryResult = {
   items: GitHistoryItem[]
+  provider?: Exclude<GitHistoryProvider, 'auto'>
   currentRef?: GitHistoryItemRef
   remoteRef?: GitHistoryItemRef
   baseRef?: GitHistoryItemRef
