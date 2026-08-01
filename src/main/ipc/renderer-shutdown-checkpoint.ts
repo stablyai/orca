@@ -116,7 +116,11 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
         // other hosts' checkpoints or leave the window unable to quit; the
         // skipped host keeps its last debounced write instead.
         if (!isRendererShutdownSessionPartition(session)) {
-          console.error('[app] Skipping malformed renderer shutdown checkpoint partition')
+          const hostId = isPlainRecord(session) ? session.hostId : undefined
+          console.error(
+            '[app] Skipping malformed renderer shutdown checkpoint partition:',
+            typeof hostId === 'string' ? hostId : 'local'
+          )
           continue
         }
         store.setWorkspaceSession(session.state, session.hostId)

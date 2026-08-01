@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
-import { recordPaneIsOwnedByPreservedPane } from './sleeping-agent-pane-ownership'
+import {
+  findUniqueAdoptableRebuiltPaneRecord,
+  recordPaneIsOwnedByPreservedPane
+} from './sleeping-agent-pane-ownership'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
@@ -165,5 +168,84 @@ describe('preserved sleeping-agent pane ownership', () => {
     } as never
     expect(recordPaneIsOwnedByPreservedPane(worktreeSleep, withNonRecoveryOrigins)).toBe(false)
     expect(recordPaneIsOwnedByPreservedPane(originless, withNonRecoveryOrigins)).toBe(false)
+  })
+})
+
+describe('findUniqueAdoptableRebuiltPaneRecord', () => {
+  const LOST_LEAF = '11111111-1111-4111-8111-111111111111'
+  const BOUND_LEAF = '22222222-2222-4222-8222-222222222222'
+  const makeRecord = (
+    leafId: string,
+    overrides: Partial<SleepingAgentSessionRecord> = {}
+  ): SleepingAgentSessionRecord => ({
+    paneKey: makePaneKey(TAB_ID, leafId),
+    tabId: TAB_ID,
+    worktreeId: WORKTREE_ID,
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: `sess-${leafId.slice(0, 1)}` },
+    prompt: 'finish the task',
+    state: 'working',
+    capturedAt: 1,
+    updatedAt: 1,
+    origin: 'quit',
+    ...overrides
+  })
+  const makeState = (
+    records: SleepingAgentSessionRecord[],
+    terminalLayoutsByTabId: Record<string, unknown> = {}
+  ): never =>
+    ({
+      terminalLayoutsByTabId,
+      sleepingAgentSessionsByPaneKey: Object.fromEntries(
+        records.map((record) => [record.paneKey, record])
+      )
+    }) as never
+
+  it('adopts only quit/live records directly', () => {
+    // The inner origin gate protects the connectPanePty caller, which never
+    // routes through recordPaneIsOwnedByPreservedPane's outer gate.
+    const worktreeSleep = makeRecord(LOST_LEAF, { origin: 'worktree-sleep' })
+    expect(
+      findUniqueAdoptableRebuiltPaneRecord(makeState([worktreeSleep]), WORKTREE_ID, TAB_ID)
+    ).toBeNull()
+
+    const originless = makeRecord(LOST_LEAF, { origin: undefined })
+    expect(
+      findUniqueAdoptableRebuiltPaneRecord(makeState([originless]), WORKTREE_ID, TAB_ID)
+    ).toBeNull()
+
+    const quit = makeRecord(LOST_LEAF)
+    expect(
+      findUniqueAdoptableRebuiltPaneRecord(makeState([quit]), WORKTREE_ID, TAB_ID)?.record
+    ).toBe(quit)
+  })
+
+  it('fails closed when a same-session candidate leaf is still bound in the layout', () => {
+    const lost = makeRecord(LOST_LEAF)
+    const boundSibling = makeRecord(BOUND_LEAF, {
+      updatedAt: 5,
+      providerSession: lost.providerSession
+    })
+    const boundLayout = {
+      [TAB_ID]: {
+        root: { type: 'leaf', leafId: BOUND_LEAF },
+        activeLeafId: BOUND_LEAF,
+        expandedLeafId: null
+      }
+    }
+    expect(
+      findUniqueAdoptableRebuiltPaneRecord(
+        makeState([lost, boundSibling], boundLayout),
+        WORKTREE_ID,
+        TAB_ID
+      )
+    ).toBeNull()
+
+    // Control: with the layout fully lost, the same pair collapses to the
+    // freshest row of the one recovery identity.
+    expect(
+      findUniqueAdoptableRebuiltPaneRecord(makeState([lost, boundSibling]), WORKTREE_ID, TAB_ID)
+        ?.record
+    ).toBe(boundSibling)
   })
 })

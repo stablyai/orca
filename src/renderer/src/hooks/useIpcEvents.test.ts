@@ -7740,6 +7740,92 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
+  it('drops a barrier snapshot response that lost to a newer ready-window request', async () => {
+    const setAgentStatus = vi.fn()
+    const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+    let resolveBarrierSnapshot!: (entries: AgentStatusSetData[]) => void
+    let snapshotCalls = 0
+    const getSnapshot = vi.fn(() => {
+      snapshotCalls += 1
+      return snapshotCalls === 1
+        ? new Promise<AgentStatusSetData[]>((resolve) => {
+            resolveBarrierSnapshot = resolve
+          })
+        : Promise.resolve([])
+    })
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: false,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn((listener: StoreSubscribeListener) => {
+          subscribeListenerRef.current = listener
+          return () => {
+            subscribeListenerRef.current = null
+          }
+        }),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal('window', buildWindowApi({ getSnapshot, onSet: () => () => {} }))
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    const { requestAgentStatusStartupSnapshot } =
+      await import('@/lib/agent-status-startup-snapshot')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    // The startup barrier issues its request; the snapshot IPC hangs.
+    void requestAgentStatusStartupSnapshot()
+    await Promise.resolve()
+    expect(snapshotCalls).toBe(1)
+
+    // The 5s fail-open lets startup proceed: the workspace becomes ready and a
+    // newer ready-window request settles first.
+    Object.assign(storeState, { workspaceSessionReady: true })
+    subscribeListenerRef.current?.(storeState, storeState)
+    for (let i = 0; i < 20; i += 1) {
+      await Promise.resolve()
+    }
+    expect(snapshotCalls).toBe(2)
+
+    // Only now does the barrier response land, carrying an older row; it must
+    // not reach the store once the newer request already settled.
+    resolveBarrierSnapshot([
+      {
+        paneKey: FUTURE_PANE_KEY,
+        tabId: 'tab-future',
+        worktreeId: 'wt-1',
+        state: 'working',
+        prompt: 'stale barrier row',
+        agentType: 'codex',
+        receivedAt: 1,
+        stateStartedAt: 1
+      }
+    ])
+    for (let i = 0; i < 30; i += 1) {
+      await Promise.resolve()
+    }
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
   it('suppresses notifications for replayed done snapshots after pane hydration', async () => {
     const setAgentStatus = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
