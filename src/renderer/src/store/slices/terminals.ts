@@ -2917,6 +2917,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         result.deferredSessionIdsByTabId,
         targetId
       )
+      if (!result.patch && deferredSshSessionIdsByTabId === s.deferredSshSessionIdsByTabId) {
+        return s
+      }
       return {
         ...result.patch,
         ...(deferredSshSessionIdsByTabId !== s.deferredSshSessionIdsByTabId
@@ -2947,6 +2950,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         result.deferredSessionIdsByTabId,
         authority.targetId
       )
+      if (!result.patch && deferredSshSessionIdsByTabId === s.deferredSshSessionIdsByTabId) {
+        return s
+      }
       return {
         ...result.patch,
         ...(deferredSshSessionIdsByTabId !== s.deferredSshSessionIdsByTabId

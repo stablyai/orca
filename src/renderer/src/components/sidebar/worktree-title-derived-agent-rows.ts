@@ -63,6 +63,7 @@ export function buildTitleDerivedAgentRows(args: {
       continue
     }
     const layout = terminalLayoutsByTabId[tab.id]
+    const allowLaunchAgentFallback = collectLeafIds(layout?.root ?? null).length === 1
     const paneTitles = runtimePaneTitlesByTabId[tab.id]
     const paneTitleEntries =
       paneTitles && Object.keys(paneTitles).length > 0
@@ -85,6 +86,7 @@ export function buildTitleDerivedAgentRows(args: {
           leafId,
           title,
           now: args.now,
+          allowLaunchAgentFallback,
           runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
         })
         if (!row || args.seenPaneKeys.has(row.paneKey)) {
@@ -105,6 +107,7 @@ export function buildTitleDerivedAgentRows(args: {
       leafId,
       title: tab.title,
       now: args.now,
+      allowLaunchAgentFallback,
       runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
     })
     if (!row || args.seenPaneKeys.has(row.paneKey)) {
@@ -126,6 +129,7 @@ function buildTitleDerivedAgentRow(args: {
   leafId: string
   title: string
   now: number
+  allowLaunchAgentFallback: boolean
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
   if (!isTerminalLeafId(args.leafId)) {
@@ -140,12 +144,10 @@ function buildTitleDerivedAgentRow(args: {
   const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
   const paneKey = makePaneKey(args.tab.id, args.leafId)
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-  // Why (#11791): after SSH reconnect, OSC titles and hooks lag while the PTY is
-  // already live — blank/shell titles would hide OMP/Codex tabs from the card.
-  // launchAgent is explicit user intent to run an agent, so surface an idle row
-  // until title/hook evidence returns. Plain shell tabs without launchAgent stay hidden.
+  // Why (#11791): launchAgent bridges blank reconnect titles only for a sole leaf;
+  // tab-level launch metadata cannot identify one pane in a split.
   if (!status || !label) {
-    if (!args.tab.launchAgent) {
+    if (!args.tab.launchAgent || !args.allowLaunchAgentFallback) {
       return null
     }
     const agentType = args.tab.launchAgent

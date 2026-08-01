@@ -153,6 +153,27 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows).toHaveLength(0)
   })
 
+  it('does not attribute blank split siblings to the tab launch agent', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'omp' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: '⠋ OMP',
+          2: ''
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['ssh:target@@pty-1', 'ssh:target@@pty-2'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.agentType])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_1), 'omp']
+    ])
+  })
+
   it('uses runtime orchestration metadata for title-derived worker rows', () => {
     const parentPaneKey = makePaneKey('tab-parent', LEAF_ID_1)
     const childPaneKey = makePaneKey('tab-child', LEAF_ID_2)

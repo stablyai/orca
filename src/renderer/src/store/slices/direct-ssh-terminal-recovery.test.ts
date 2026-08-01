@@ -127,6 +127,17 @@ describe('clearDirectSshTerminalBindings', () => {
     })
   })
 
+  it('prefers a tracked PTY over a different lastKnown session id', () => {
+    const state = makeState()
+    state.tabsByWorktree['repo::/ssh-work'][1] = makeTab('ssh-unbound', null)
+    state.ptyIdsByTabId['ssh-unbound'] = ['ssh-target@@pty-tracked']
+    state.lastKnownRelayPtyIdByTabId['ssh-unbound'] = 'ssh-target@@pty-last-known'
+
+    const result = clearDirectSshTerminalBindings(state, new Set(['repo::/ssh-work']))
+
+    expect(result.deferredSessionIdsByTabId['ssh-unbound']).toBe('ssh-target@@pty-tracked')
+  })
+
   it('re-arms reconnectable disconnects without erasing retry history', () => {
     const state = makeState()
     const authority = {

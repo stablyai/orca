@@ -19,6 +19,7 @@ import {
   connectDockerSshRelayTarget,
   reconnectDockerSshRelayTarget
 } from './helpers/docker-ssh-relay-connection'
+import { worktreeRow } from './worktree-row-locators'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const KEY_LATENCY_SAMPLES = 'abcdefghij'
@@ -354,7 +355,7 @@ test.describe('Docker SSH relay perf', () => {
     }
   })
 
-  test('keeps an SSH workspace terminal usable after disconnect and reconnect', async ({
+  test('keeps every SSH agent terminal and sidebar row after disconnect and reconnect', async ({
     orcaPage
   }, testInfo) => {
     test.slow()
@@ -365,46 +366,92 @@ test.describe('Docker SSH relay perf', () => {
       await waitForActiveWorktree(orcaPage)
       const remote = await connectDockerSshRelayTarget(orcaPage, target)
       await ensureTerminalVisible(orcaPage, 45_000)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      const beforePtyId = await waitForActivePanePtyId(orcaPage, 60_000)
-      const beforeMarker = `SSH_RECONNECT_BEFORE_${Date.now()}`
-      await execInTerminal(orcaPage, beforePtyId, `printf ${shellQuote(beforeMarker)}`)
-      await waitForTerminalOutput(orcaPage, beforeMarker, 20_000, 60_000)
-      const recoveryStartedMarker = `SSH_RECONNECT_RECOVERY_STARTED_${Date.now()}`
-      const recoveryMarker = `SSH_RECONNECT_RECOVERY_${Date.now()}`
-      const recoveryScript = [
-        'let frame = 0',
-        "const chunk = 'Q'.repeat(4096)",
-        `process.stdout.write('${recoveryStartedMarker}\\n')`,
-        'const timer = setInterval(() => {',
-        'frame += 1',
-        "process.stdout.write('RECOVERY_FRAME_' + frame + '_' + chunk + '\\n')",
-        `if (frame === 256) { clearInterval(timer); process.stdout.write('${recoveryMarker}\\n') }`,
-        '}, 10)'
-      ].join(';')
-      await execInTerminal(orcaPage, beforePtyId, `node -e ${shellQuote(recoveryScript)}`)
-      await waitForTerminalOutput(orcaPage, recoveryStartedMarker, 30_000, 80_000)
+      await orcaPage.evaluate(() => {
+        const state = window.__store?.getState()
+        if (!state) {
+          throw new Error('Store unavailable')
+        }
+        state.setSidebarOpen(true)
+        state.setAgentActivityDisplayMode('compact')
+        if (!state.worktreeCardProperties.includes('inline-agents')) {
+          state.toggleWorktreeCardProperty('inline-agents')
+        }
+      })
+
+      const agentTabs: { tabId: string; beforePtyId: string; recoveryMarker: string }[] = []
+      for (const index of [1, 2]) {
+        const tabId = await orcaPage.evaluate((worktreeId) => {
+          const state = window.__store?.getState()
+          if (!state) {
+            throw new Error('Store unavailable')
+          }
+          const tab = state.createTab(worktreeId, undefined, undefined, {
+            activate: true,
+            launchAgent: 'omp',
+            recordInteraction: false
+          })
+          state.setActiveTab(tab.id)
+          state.setActiveTabType('terminal')
+          return tab.id
+        }, remote.worktreeId)
+        const tab = orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`)
+        await expect(tab).toBeVisible({ timeout: 30_000 })
+        await expect(tab).toHaveAttribute('data-active', 'true')
+        await waitForActiveTerminalManager(orcaPage, 60_000)
+        const beforePtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+        const beforeMarker = `SSH_RECONNECT_BEFORE_${index}_${Date.now()}`
+        await execInTerminal(
+          orcaPage,
+          beforePtyId,
+          `printf '\\033]0;\\007%s\\n' ${shellQuote(beforeMarker)}`
+        )
+        await waitForTerminalOutput(orcaPage, beforeMarker, 20_000, 60_000)
+        const recoveryStartedMarker = `SSH_RECONNECT_RECOVERY_STARTED_${index}_${Date.now()}`
+        const recoveryMarker = `SSH_RECONNECT_RECOVERY_${index}_${Date.now()}`
+        const recoveryScript = [
+          `process.stdout.write('${recoveryStartedMarker}\\n')`,
+          `setTimeout(() => process.stdout.write('${recoveryMarker}\\n'), 2500)`
+        ].join(';')
+        await execInTerminal(orcaPage, beforePtyId, `node -e ${shellQuote(recoveryScript)}`)
+        await waitForTerminalOutput(orcaPage, recoveryStartedMarker, 30_000, 80_000)
+        agentTabs.push({ tabId, beforePtyId, recoveryMarker })
+      }
+
+      const agentSummary = worktreeRow(orcaPage, remote.worktreeId)
+        .locator('button.compact-agent-summary-button')
+        .first()
+      await expect(agentSummary).toHaveAttribute('aria-label', /2 agents/, { timeout: 30_000 })
 
       await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
       await ensureTerminalVisible(orcaPage, 45_000)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      const afterPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
-      await waitForTerminalOutput(orcaPage, recoveryMarker, 30_000, 80_000)
-      const afterMarker = `SSH_RECONNECT_AFTER_${Date.now()}`
-      const remoteProofPath = `/tmp/${afterMarker}`
-      await execInTerminal(
-        orcaPage,
-        afterPtyId,
-        `printf ${shellQuote(afterMarker)} | tee ${shellQuote(remoteProofPath)}`
-      )
-      await waitForTerminalOutput(orcaPage, afterMarker, 20_000, 60_000)
-      expect(execDockerSshRelayTargetCommand(target, `cat ${shellQuote(remoteProofPath)}`)).toBe(
-        afterMarker
-      )
+      const afterPtyIds: string[] = []
+      for (const [index, agentTab] of agentTabs.entries()) {
+        const tab = orcaPage.locator(
+          `[data-testid="sortable-tab"][data-tab-id="${agentTab.tabId}"]`
+        )
+        await tab.click()
+        await expect(tab).toHaveAttribute('data-active', 'true')
+        await waitForActiveTerminalManager(orcaPage, 60_000)
+        const afterPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+        afterPtyIds.push(afterPtyId)
+        await waitForTerminalOutput(orcaPage, agentTab.recoveryMarker, 30_000, 80_000)
+        const afterMarker = `SSH_RECONNECT_AFTER_${index + 1}_${Date.now()}`
+        const remoteProofPath = `/tmp/${afterMarker}`
+        await execInTerminal(
+          orcaPage,
+          afterPtyId,
+          `printf '%s' ${shellQuote(afterMarker)} | tee ${shellQuote(remoteProofPath)}`
+        )
+        await waitForTerminalOutput(orcaPage, afterMarker, 20_000, 60_000)
+        expect(execDockerSshRelayTargetCommand(target, `cat ${shellQuote(remoteProofPath)}`)).toBe(
+          afterMarker
+        )
+      }
+      await expect(agentSummary).toHaveAttribute('aria-label', /2 agents/, { timeout: 30_000 })
 
       testInfo.annotations.push({
         type: 'docker-ssh-reconnect',
-        description: `terminal survived reconnect: beforePty=${beforePtyId}, afterPty=${afterPtyId}`
+        description: `terminals survived reconnect: beforePtys=${agentTabs.map((tab) => tab.beforePtyId).join(',')} afterPtys=${afterPtyIds.join(',')}`
       })
     } finally {
       cleanupDockerSshRelayTarget(target)
