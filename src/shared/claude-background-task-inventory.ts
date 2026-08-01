@@ -10,7 +10,6 @@ const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'finished',
   'failed',
   'error',
-  'stopped',
   'terminated',
   'exited',
   'aborted',

@@ -116,8 +116,10 @@ export type HookListenerState = {
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
   /** Last state from the LEAD session's own events (subagent events carry agent_id, excluded), so a SubagentStop can re-emit pane status; `interrupted` persists so the eventual done still carries it. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
-  /** Panes whose latest complete Claude task inventory still has running non-agent work. */
+  /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
   claudeRunningNonAgentTaskPaneKeys: Set<string>
+  /** Panes whose latest authoritative Claude cron inventory still has a scheduled job. */
+  claudeActiveSessionCronPaneKeys: Set<string>
   /** Live thread-spawn children per Codex pane. */
   codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
   /** Incremental parent/child rollout cursors for Codex collaboration v2. */
@@ -152,6 +154,7 @@ export function createHookListenerState(): HookListenerState {
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
     claudeRunningNonAgentTaskPaneKeys: new Set(),
+    claudeActiveSessionCronPaneKeys: new Set(),
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map()
@@ -167,6 +170,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
   state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
@@ -212,6 +216,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
+  movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
@@ -255,6 +260,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
   state.claudeRunningNonAgentTaskPaneKeys.clear()
+  state.claudeActiveSessionCronPaneKeys.clear()
   state.codexSubagentRosterByPaneKey.clear()
   state.codexSubagentTranscriptByPaneKey.clear()
   state.codexLeadStateByPaneKey.clear()
@@ -2450,7 +2456,9 @@ function resolveClaudePaneState(
   }
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   return claudeRosterHasWorkingSubagent(roster) ||
-    (!lead.interrupted && state.claudeRunningNonAgentTaskPaneKeys.has(paneKey))
+    (!lead.interrupted &&
+      (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+        state.claudeActiveSessionCronPaneKeys.has(paneKey)))
     ? 'working'
     : 'done'
 }
@@ -2498,6 +2506,7 @@ function normalizeClaudeSubagentLifecycleEvent(
 export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
   state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  state.claudeActiveSessionCronPaneKeys.delete(paneKey)
 }
 
 /** Rebuild a pane's working roster from a persisted snapshot; live activity confirms a seed, a complete task inventory may reap an unconfirmed one whose finish hook arrived while Orca was offline. */
@@ -2627,6 +2636,9 @@ function normalizeClaudeEvent(
       ? true
       : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
+  const sessionCrons = hookPayload['session_crons']
+  const sessionCronInventoryPresent = Array.isArray(sessionCrons)
+  const hasActiveSessionCron = sessionCronInventoryPresent && sessionCrons.length > 0
   if (backgroundTasks.present && eventAgentId === undefined) {
     updateClaudeRunningNonAgentTask(
       state,
@@ -2634,6 +2646,13 @@ function normalizeClaudeEvent(
       backgroundTasks.hasRunningNonAgentTask,
       interrupted === true
     )
+  }
+  if (sessionCronInventoryPresent && eventAgentId === undefined) {
+    if (hasActiveSessionCron && interrupted !== true) {
+      state.claudeActiveSessionCronPaneKeys.add(paneKey)
+    } else {
+      state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+    }
   }
 
   // Why: Claude's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest; its Notification hook isn't registered) while blocked on a human answer.
@@ -2655,12 +2674,6 @@ function normalizeClaudeEvent(
   if (!reportedStateName) {
     return null
   }
-  const sessionCrons = hookPayload['session_crons']
-  const hasActiveSessionCron =
-    (eventName === 'Stop' || eventName === 'StopFailure') &&
-    Array.isArray(sessionCrons) &&
-    sessionCrons.length > 0
-
   const stateName = reportedStateName
 
   // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
@@ -2733,13 +2746,13 @@ function normalizeClaudeEvent(
 
   if (interrupted && eventAgentId === undefined) {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   }
 
-  // Why: preserve upstream cron gating while the pane cache carries task evidence across child lifecycle events.
-  const effectiveState =
-    stateName === 'done' && hasActiveSessionCron && interrupted !== true
-      ? 'working'
-      : resolveClaudePaneState(state, paneKey, { state: stateName, interrupted })
+  const effectiveState = resolveClaudePaneState(state, paneKey, {
+    state: stateName,
+    interrupted
+  })
 
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,
@@ -4133,7 +4146,9 @@ export function normalizeHookPayload(
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
         ...(source === 'claude'
           ? {
-              claudeRunningNonAgentTask: state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+              claudeRunningNonAgentTask:
+                state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+                state.claudeActiveSessionCronPaneKeys.has(paneKey)
             }
           : {}),
         ...(providerSession ? { providerSession } : {}),

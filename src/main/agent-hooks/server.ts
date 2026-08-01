@@ -755,7 +755,8 @@ export class AgentHookServer {
     // Why: Escape/Ctrl+C at Claude's idle prompt does not stop provider-owned background shells.
     if (
       agentType === 'claude' &&
-      this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey)
+      (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
+        this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey))
     ) {
       return false
     }
@@ -1037,7 +1038,10 @@ export class AgentHookServer {
     }
   }
 
-  private applyNormalizedStatus(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
+  private applyNormalizedStatus(
+    payload: AgentHookEventPayload,
+    onAccepted?: () => void
+  ): EnrichedAgentHookEventPayload {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
@@ -1051,6 +1055,7 @@ export class AgentHookServer {
     }
     if (payload.providerSessionOnly) {
       // Why: Pi session_start replaces stale turn state and survives replay, but must not emit prompt telemetry or a fabricated status.
+      onAccepted?.()
       const enriched = this.attachStatusTiming(payload, now)
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
@@ -1161,6 +1166,7 @@ export class AgentHookServer {
     ) {
       this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
+    onAccepted?.()
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
@@ -1822,18 +1828,11 @@ export class AgentHookServer {
     ) {
       return
     }
-    if (
+    const applyClaudeBackgroundWork =
       normalizedPayload.agentType === 'claude' &&
       typeof envelope.claudeRunningNonAgentTask === 'boolean' &&
       // Why: reconnect replay may seed a restarted listener, but cannot override any observation made by this runtime.
       (envelope.isReplay !== true || !this.runtimeObservedStatusPaneKeys.has(paneKey))
-    ) {
-      if (envelope.claudeRunningNonAgentTask) {
-        this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
-      } else {
-        this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-      }
-    }
     // Why: run the HTTP path's warn-once version/env-mismatch diagnostics with this.env as expected.
     warnOnHookEnvOrVersionMismatch(this.state, {
       version: envelope.version,
@@ -1862,7 +1861,18 @@ export class AgentHookServer {
       payload: normalizedPayload
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyNormalizedStatus(event)
+    this.applyNormalizedStatus(
+      event,
+      applyClaudeBackgroundWork
+        ? () => {
+            if (envelope.claudeRunningNonAgentTask) {
+              this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+            } else {
+              this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+            }
+          }
+        : undefined
+    )
   }
 
   async start(options?: {
@@ -2053,6 +2063,7 @@ export class AgentHookServer {
           this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
           this.state.claudeLeadStateByPaneKey.delete(paneKey)
           this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+          this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
         }
       }
     }

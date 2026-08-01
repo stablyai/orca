@@ -83,7 +83,6 @@ describe('Claude background task status', () => {
         'complete',
         'finished',
         'error',
-        'stopped',
         'terminated',
         'exited',
         'aborted',
@@ -198,6 +197,31 @@ describe('Claude background task status', () => {
         session_crons: [{ id: 'cron-1' }]
       })
     ).toMatchObject({ state: 'done', interrupted: true })
+  })
+
+  it('keeps a session cron working through child lifecycle events until a drained inventory', () => {
+    const state = createHookListenerState()
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        session_crons: [{ id: 'cron-1' }]
+      })?.state
+    ).toBe('working')
+    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'SubagentStop',
+        agent_id: 'child-1'
+      })?.state
+    ).toBe('working')
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        session_crons: []
+      })?.state
+    ).toBe('done')
+    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
   it('treats an interrupted StopFailure as terminal', () => {

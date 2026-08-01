@@ -607,6 +607,43 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('does not apply Claude background metadata from a rejected remote status', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'PermissionRequest',
+        claudeRunningNonAgentTask: true,
+        payload: {
+          state: 'waiting',
+          prompt: 'approve shell',
+          agentType: 'claude',
+          toolName: 'Bash'
+        }
+      },
+      'conn-1'
+    )
+    const waiting = server.getStatusSnapshot()[0]
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'PreToolUse',
+        claudeRunningNonAgentTask: false,
+        payload: {
+          state: 'working',
+          prompt: 'approve shell',
+          agentType: 'claude',
+          toolName: 'OtherTool'
+        }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]).toEqual(waiting)
+    expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
+  })
+
   it('carries idle subagent rows through an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
