@@ -5,6 +5,7 @@ import {
   extractAllOscTitles,
   extractLastOscTitle,
   getAgentLabel,
+  isClaudeAgent,
   isCursorAgentTitle,
   MAX_OSC_TITLE_CHARS,
   MAX_OSC_TITLES_PER_CHUNK,
@@ -122,6 +123,14 @@ describe('Trae title detection', () => {
 
   it('keeps a Claude task title that mentions Trae classified as Claude', () => {
     expect(getAgentLabel('⠋ fix the trae mapping')).toBe('Claude Code')
+  })
+
+  // Why: the prompt-cache timer and parked-terminal byte watcher call isClaudeAgent
+  // directly, so a Trae working title must not reach Claude-only behavior.
+  it('keeps Trae working titles out of isClaudeAgent', () => {
+    expect(isClaudeAgent('⠋ traecli')).toBe(false)
+    expect(isClaudeAgent('⠋ traecli.exe')).toBe(false)
+    expect(isClaudeAgent('⠋ fix the trae mapping')).toBe(true)
   })
 })
 

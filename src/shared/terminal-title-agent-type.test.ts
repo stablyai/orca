@@ -144,4 +144,10 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('⠋ preserve cursor visibility across replays')).toBe(true)
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
   })
+
+  it('excludes Trae working titles so Claude-only timers stay off them', () => {
+    expect(isClaudeAgent('⠋ traecli')).toBe(false)
+    expect(isClaudeAgent('⠋ traecli.exe')).toBe(false)
+    expect(isClaudeAgent('⠋ fix the trae mapping')).toBe(true)
+  })
 })

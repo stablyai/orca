@@ -35,7 +35,7 @@ export function isClaudeAgent(title: string): boolean {
   if (containsBrailleSpinner(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
     // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
-    return !isCursorAgentTitle(title) && !lower.includes('openclaude')
+    return !isCursorAgentTitle(title) && !isTraeCliTitle(title) && !lower.includes('openclaude')
   }
 
   const trimmedTitle = title.trimStart()
