@@ -33,6 +33,12 @@ import {
   recordWebAgentSessionHandoff,
   resetWebAgentSessionHandoffsForTests
 } from './web-agent-session-handoff'
+import {
+  clearWebSessionTerminalOrphanRecoveryForTests,
+  recoverWebSessionTerminalOrphansBeforeApply
+} from './web-session-terminal-orphan-recovery'
+import { listRemoteRuntimeSessionTabsDeduped } from './remote-runtime-session-tabs-inflight'
+import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 
 const mocks = vi.hoisted(() => ({
@@ -48,7 +54,8 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn()
+  getRuntimeEnvironmentIdForWorktree: vi.fn(),
+  toastError: vi.fn()
 }))
 
 vi.mock('../store', () => ({
@@ -79,12 +86,20 @@ vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
 
+vi.mock('sonner', () => ({
+  toast: { error: mocks.toastError }
+}))
+
 const ENVIRONMENT_ID = 'web-env-1'
 const RUNTIME_EXECUTION_HOST_ID = toRuntimeExecutionHostId(ENVIRONMENT_ID)
 const WORKTREE_ID = 'repo::/worktree'
 const FOCUS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
-afterEach(() => resetWebSessionCloseIntentForTests())
+afterEach(() => {
+  resetWebSessionCloseIntentForTests()
+  // Why: refreshes now join the per-worktree recovery chain; drop it so a test's pending entry cannot gate the next test's applies.
+  clearWebSessionTerminalOrphanRecoveryForTests()
+})
 
 function makeSnapshot(): RuntimeMobileSessionTabsResult {
   return {
@@ -99,22 +114,21 @@ function makeSnapshot(): RuntimeMobileSessionTabsResult {
 }
 
 describe('refreshWebRuntimeSessionTabsSnapshot', () => {
+  beforeEach(() => {
+    // Why: the refresh now funnels through orphan recovery, which reads the local mirror.
+    mocks.getState.mockReturnValue({ tabsByWorktree: {} })
+    mocks.setState.mockImplementation((updater: (state: unknown) => unknown) =>
+      updater({ state: 'before' })
+    )
+  })
+
   afterEach(() => {
     resetWebAgentSessionHandoffsForTests()
     vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
 
-  it('confirms only the exact handoff after its post-create list completes', async () => {
-    const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'list',
-      ok: true,
-      result: makeSnapshot()
-    })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
-    mocks.applyFreshWebSessionTabsSnapshot.mockImplementation((state) => state)
+  const recordHandoffPair = (): void => {
     recordWebAgentSessionHandoff({
       environmentId: ENVIRONMENT_ID,
       worktreeId: WORKTREE_ID,
@@ -129,6 +143,39 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
       hostTabId: 'host-b',
       hostTerminalHandle: 'term_host-b'
     })
+  }
+  const confirmed = (provisionalTabId: string): boolean =>
+    isWebAgentSessionHandoffPostCreateSnapshotConfirmed({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      provisionalTabId
+    })
+
+  it('confirms only the exact handoff after its post-create list contains the host tab', async () => {
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'list',
+      ok: true,
+      result: {
+        ...makeSnapshot(),
+        tabs: [
+          {
+            type: 'terminal' as const,
+            id: 'host-a::leaf-1',
+            parentTabId: 'host-a',
+            leafId: 'leaf-1',
+            title: 'Codex',
+            terminal: 'term_host-a',
+            status: 'ready' as const,
+            isActive: true
+          }
+        ]
+      }
+    })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+    mocks.applyFreshWebSessionTabsSnapshot.mockImplementation((state) => state)
+    recordHandoffPair()
 
     await refreshWebRuntimeSessionTabsSnapshot(ENVIRONMENT_ID, WORKTREE_ID, {
       acceptCurrentSnapshot: true,
@@ -139,12 +186,6 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
       }
     })
 
-    const confirmed = (provisionalTabId: string): boolean =>
-      isWebAgentSessionHandoffPostCreateSnapshotConfirmed({
-        environmentId: ENVIRONMENT_ID,
-        worktreeId: WORKTREE_ID,
-        provisionalTabId
-      })
     expect(confirmed('provisional-a')).toBe(true)
     expect(confirmed('provisional-b')).toBe(false)
     expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
@@ -168,6 +209,97 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
     })
     expect(confirmed('provisional-a')).toBe(false)
   })
+
+  it('does not confirm the handoff when the post-create list lacks the host tab', async () => {
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'list',
+      ok: true,
+      result: makeSnapshot()
+    })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+    mocks.applyFreshWebSessionTabsSnapshot.mockImplementation((state) => state)
+    recordHandoffPair()
+
+    await refreshWebRuntimeSessionTabsSnapshot(ENVIRONMENT_ID, WORKTREE_ID, {
+      acceptCurrentSnapshot: true,
+      confirmAgentSessionHandoff: {
+        provisionalTabId: 'provisional-a',
+        hostTabId: 'host-a',
+        hostTerminalHandle: 'term_host-a'
+      }
+    })
+
+    // Why: a stale list without the host tab must not arm absence-based retirement of the provisional tab.
+    expect(confirmed('provisional-a')).toBe(false)
+    expect(confirmed('provisional-b')).toBe(false)
+    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledTimes(1)
+  })
+
+  it('queues the list-result apply behind a delayed in-flight subscription frame', async () => {
+    const candidateState = {
+      tabsByWorktree: {
+        [WORKTREE_ID]: [{ id: 'web-terminal-host-tab', worktreeId: WORKTREE_ID } as never]
+      },
+      terminalLayoutsByTabId: {
+        'web-terminal-host-tab': {
+          root: { type: 'leaf' as const, leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-1': toRemoteRuntimePtyId('term_live', ENVIRONMENT_ID) }
+        }
+      },
+      activeTabIdByWorktree: {},
+      activeGroupIdByWorktree: {}
+    }
+    let releaseDelayedFrame: ((value: unknown) => void) | null = null
+    const delayedFrameCall = vi.fn(
+      async () =>
+        await new Promise((resolve) => {
+          releaseDelayedFrame = resolve
+        })
+    )
+    const delayedFrame = { ...makeSnapshot(), publicationEpoch: 'stale-epoch' }
+    const delayedApply = vi.fn()
+    const delayed = recoverWebSessionTerminalOrphansBeforeApply(
+      candidateState,
+      delayedFrame,
+      ENVIRONMENT_ID,
+      delayedFrameCall as never
+    ).then((recovered) => {
+      if (recovered) {
+        delayedApply(recovered)
+      }
+    })
+    const listSnapshot = { ...makeSnapshot(), snapshotVersion: 5 }
+    const runtimeCall = vi.fn().mockResolvedValue({ id: 'list', ok: true, result: listSnapshot })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    mocks.applyFreshWebSessionTabsSnapshot.mockImplementation((state) => state)
+
+    const refresh = refreshWebRuntimeSessionTabsSnapshot(ENVIRONMENT_ID, WORKTREE_ID)
+    await vi.waitFor(() => expect(releaseDelayedFrame).not.toBeNull())
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    // Why: the list result already resolved, but its apply must wait behind the delayed frame.
+    expect(mocks.applyFreshWebSessionTabsSnapshot).not.toHaveBeenCalled()
+
+    releaseDelayedFrame!({
+      ok: true,
+      result: { terminals: [], totalCount: 0, truncated: false }
+    })
+    await Promise.all([delayed, refresh])
+
+    expect(delayedApply).toHaveBeenCalledWith(delayedFrame)
+    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      listSnapshot,
+      ENVIRONMENT_ID
+    )
+    expect(delayedApply.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.applyFreshWebSessionTabsSnapshot.mock.invocationCallOrder[0]!
+    )
+  })
 })
 
 describe('activateWebRuntimeSessionWorktree', () => {
@@ -176,7 +308,9 @@ describe('activateWebRuntimeSessionWorktree', () => {
     mocks.getState.mockReturnValue({
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
-      }
+      },
+      // Why: non-empty so the bounded recovery re-list loop bails instead of outliving the test.
+      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'local-terminal-1' }] }
     })
     mocks.setState.mockImplementation((updater: (state: unknown) => unknown) =>
       updater({ state: 'before' })
@@ -250,6 +384,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
       activeWorktreeId: WORKTREE_ID,
+      tabsByWorktree: {},
       browserPagesByWorkspace: {},
       remoteBrowserPageHandlesByPageId: {},
       createBrowserTab: mocks.createBrowserTab,
@@ -452,6 +587,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
       activeWorktreeId,
+      tabsByWorktree: {},
       browserPagesByWorkspace: {},
       remoteBrowserPageHandlesByPageId: {},
       createBrowserTab: mocks.createBrowserTab,
@@ -540,6 +676,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
       activeWorktreeId: WORKTREE_ID,
+      tabsByWorktree: {},
       browserPagesByWorkspace: {},
       remoteBrowserPageHandlesByPageId: {},
       createBrowserTab: mocks.createBrowserTab,
@@ -590,6 +727,57 @@ describe('createWebRuntimeSessionTerminal', () => {
     ).resolves.toEqual({ status: 'created' })
 
     expect(selectedHosts).toEqual([RUNTIME_EXECUTION_HOST_ID])
+  })
+
+  it('waits out a pre-create in-flight list instead of using it as the post-create proof', async () => {
+    let resolvePreOpList: ((snapshot: RuntimeMobileSessionTabsResult) => void) | null = null
+    void listRemoteRuntimeSessionTabsDeduped({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      load: () =>
+        new Promise<RuntimeMobileSessionTabsResult>((resolve) => {
+          resolvePreOpList = resolve
+        })
+    })
+    const postCreateSnapshot = { ...makeSnapshot(), snapshotVersion: 3 }
+    const runtimeCall = vi.fn(async (request: { method: string }) => {
+      if (request.method === 'session.tabs.createTerminal') {
+        return {
+          id: 'create',
+          ok: true,
+          result: { tab: { id: 'host-tab-2', leafId: 'leaf-1' } }
+        }
+      }
+      return { id: 'list', ok: true, result: postCreateSnapshot }
+    })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    const create = createWebRuntimeSessionTerminal({
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID
+    })
+    await vi.waitFor(() =>
+      expect(runtimeCall).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'session.tabs.createTerminal' })
+      )
+    )
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    // Why: a list that began before the create committed cannot serve as the post-create proof.
+    expect(runtimeCall.mock.calls.some(([request]) => request.method === 'session.tabs.list')).toBe(
+      false
+    )
+
+    resolvePreOpList!({ ...makeSnapshot(), publicationEpoch: 'pre-op' })
+    await expect(create).resolves.toEqual({ status: 'created' })
+
+    expect(runtimeCall.mock.calls.some(([request]) => request.method === 'session.tabs.list')).toBe(
+      true
+    )
+    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      postCreateSnapshot,
+      ENVIRONMENT_ID
+    )
   })
 
   it.each([
@@ -1547,6 +1735,7 @@ describe('web runtime session tab actions', () => {
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
+      tabsByWorktree: {},
       setActiveWorktree: mocks.setActiveWorktree
     })
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
@@ -1762,6 +1951,8 @@ describe('web runtime session tab actions', () => {
         Date.now()
       )
     ).toBe(false)
+    // Why: lifecycle echoes are not user actions; no toast for their failures.
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('restores reconciliation authority when the host refuses a lifecycle close', async () => {
@@ -1862,6 +2053,103 @@ describe('web runtime session tab actions', () => {
       )
     ).toBe(true)
     expect(mocks.acceptReplayedWebSessionTabsSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('restores the tab and refreshes when a user close fails on the host', async () => {
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'close',
+        ok: false,
+        error: { code: 'internal', message: 'close_failed' }
+      })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+    ).resolves.toBe(false)
+
+    // Why: the failed close must drop suppression and honestly restore the host's tab.
+    expect(
+      isWebSessionCloseIntentPending(
+        { environmentId: ENVIRONMENT_ID },
+        WORKTREE_ID,
+        'host-browser-unified',
+        Date.now()
+      )
+    ).toBe(false)
+    expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      ENVIRONMENT_ID,
+      WORKTREE_ID
+    )
+    expect(runtimeCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ method: 'session.tabs.list' })
+    )
+    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      expect.stringContaining('restored'),
+      expect.objectContaining({ description: expect.stringContaining('close_failed') })
+    )
+  })
+
+  it('shows pinned-specific guidance when the host rejects closing a pinned tab', async () => {
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'close',
+        ok: false,
+        error: { code: 'invalid_request', message: 'terminal_tab_pinned' }
+      })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+    ).resolves.toBe(false)
+
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      expect.stringContaining('pinned'),
+      expect.objectContaining({ description: expect.stringContaining('Unpin') })
+    )
+  })
+
+  it('suppresses the restored toast when the tab was already closed elsewhere (tab_not_found)', async () => {
+    // Why: a double-close race leaves the tab gone; claiming it "has been
+    // restored" would be false. The refresh still reconciles the absence.
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'close',
+        ok: false,
+        error: { code: 'invalid_request', message: 'tab_not_found' }
+      })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+    ).resolves.toBe(false)
+
+    expect(runtimeCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ method: 'session.tabs.list' })
+    )
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('clears an optimistic close intent when pairing CAS rejects the host call', async () => {

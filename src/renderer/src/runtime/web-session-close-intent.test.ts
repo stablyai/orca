@@ -4,9 +4,9 @@ import {
   clearWebSessionCloseIntentsForOwner,
   clearWebSessionCloseIntentsForWorktree,
   isWebSessionCloseIntentPending,
-  reconcileWebSessionCloseIntents,
   recordWebSessionCloseIntent,
-  resetWebSessionCloseIntentForTests
+  resetWebSessionCloseIntentForTests,
+  sweepExpiredWebSessionCloseIntents
 } from './web-session-close-intent'
 
 const WT = 'repo::/wt'
@@ -15,13 +15,30 @@ const OWNER = { environmentId: 'runtime-a', pairingRevision: 1 }
 afterEach(() => resetWebSessionCloseIntentForTests())
 
 describe('web session close intent', () => {
-  it('keeps an intent until the host confirms removal', () => {
+  it('keeps suppressing after a tab-absent frame until the TTL expires', () => {
+    // Why: absence in one frame is not proof of completion; a delayed pre-close
+    // frame can still follow, so the intent must outlive the confirming frame.
     recordWebSessionCloseIntent(OWNER, WT, 'host-tab-1', 1000)
-    reconcileWebSessionCloseIntents(OWNER, WT, new Set(['host-tab-1', 'host-tab-2']))
-    expect(isWebSessionCloseIntentPending(OWNER, WT, 'host-tab-1', 1000)).toBe(true)
+    sweepExpiredWebSessionCloseIntents(OWNER, WT, 2000)
+    expect(isWebSessionCloseIntentPending(OWNER, WT, 'host-tab-1', 2000)).toBe(true)
 
-    reconcileWebSessionCloseIntents(OWNER, WT, new Set(['host-tab-2']))
-    expect(isWebSessionCloseIntentPending(OWNER, WT, 'host-tab-1', 1000)).toBe(false)
+    sweepExpiredWebSessionCloseIntents(OWNER, WT, 9000)
+    expect(isWebSessionCloseIntentPending(OWNER, WT, 'host-tab-1', 9000)).toBe(true)
+
+    sweepExpiredWebSessionCloseIntents(OWNER, WT, 12_000)
+    expect(isWebSessionCloseIntentPending(OWNER, WT, 'host-tab-1', 12_000)).toBe(false)
+  })
+
+  it('sweeps only expired intents within the owner and worktree partition', () => {
+    const otherOwner = { environmentId: 'runtime-b', pairingRevision: 1 }
+    recordWebSessionCloseIntent(OWNER, WT, 'host-tab-old', 1000)
+    recordWebSessionCloseIntent(OWNER, WT, 'host-tab-new', 9000)
+    recordWebSessionCloseIntent(otherOwner, WT, 'host-tab-other', 1000)
+
+    sweepExpiredWebSessionCloseIntents(OWNER, WT, 12_000)
+    expect(isWebSessionCloseIntentPending(OWNER, WT, 'host-tab-old', 12_000)).toBe(false)
+    expect(isWebSessionCloseIntentPending(OWNER, WT, 'host-tab-new', 12_000)).toBe(true)
+    expect(isWebSessionCloseIntentPending(otherOwner, WT, 'host-tab-other', 9000)).toBe(true)
   })
 
   it('expires a never-confirmed close', () => {

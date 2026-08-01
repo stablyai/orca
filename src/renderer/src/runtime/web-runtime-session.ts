@@ -25,6 +25,7 @@ import type {
   RuntimeCreateAgentSessionResult,
   RuntimeEnsureAgentSessionResult
 } from '../../../shared/agent-session-host-authority'
+import { toast } from 'sonner'
 import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 import type { AppState } from '../store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
@@ -56,6 +57,7 @@ import {
   listRemoteRuntimeSessionTabsAfterCurrentInFlight,
   listRemoteRuntimeSessionTabsDeduped
 } from './remote-runtime-session-tabs-inflight'
+import { recoverWebSessionTerminalOrphansBeforeApply } from './web-session-terminal-orphan-recovery'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { translate } from '../i18n/i18n'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
@@ -394,7 +396,9 @@ async function createWebRuntimeSessionTerminalResult(
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
       expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
       // Why: the publication can beat the RPC response; replay it once after caller focus intent exists.
-      acceptCurrentSnapshot: args.activate !== false && Boolean(createdTabId)
+      acceptCurrentSnapshot: args.activate !== false && Boolean(createdTabId),
+      // Why: a list that began before creation committed cannot prove the created tab's state.
+      listAfterCurrentInFlight: true
     })
     return {
       outcome: { status: 'created' },
@@ -560,6 +564,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
   options: {
     expectedEnvironmentPairingRevision?: number
     acceptCurrentSnapshot?: boolean
+    listAfterCurrentInFlight?: boolean
     confirmAgentSessionHandoff?: {
       provisionalTabId: string
       hostTabId: string
@@ -580,9 +585,10 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       // re-accept its current version after the exact provisional handoff is known.
       acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
     }
-    const listSessionTabs = options.confirmAgentSessionHandoff
-      ? listRemoteRuntimeSessionTabsAfterCurrentInFlight
-      : listRemoteRuntimeSessionTabsDeduped
+    const listSessionTabs =
+      options.confirmAgentSessionHandoff || options.listAfterCurrentInFlight
+        ? listRemoteRuntimeSessionTabsAfterCurrentInFlight
+        : listRemoteRuntimeSessionTabsDeduped
     const snapshot = await listSessionTabs({
       environmentId,
       worktreeId,
@@ -599,15 +605,35 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
         )
       }
     })
+    // Why: subscription frames apply through this per-worktree chain; joining it keeps
+    // a delayed push frame from applying after this newer list result, and gives list
+    // results the same live-orphan drop protection.
+    const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
+      useAppStore.getState(),
+      snapshot,
+      environmentId
+    )
+    if (!recovered) {
+      return
+    }
     if (options.confirmAgentSessionHandoff) {
-      const { confirmWebAgentSessionHandoffAfterCreate } =
-        await import('./web-agent-session-handoff')
-      // Why: this list completed after structured creation, so absence now proves the exact host tab already retired.
-      confirmWebAgentSessionHandoffAfterCreate({
-        environmentId,
-        worktreeId,
-        ...options.confirmAgentSessionHandoff
-      })
+      const confirm = options.confirmAgentSessionHandoff
+      // Why: only a list that actually contained the host tab proves the create was
+      // published; confirming on a stale absence lets retirement kill the provisional tab.
+      const hostTabListed = recovered.tabs.some(
+        (tab) =>
+          tab.id === confirm.hostTabId ||
+          (tab.type === 'terminal' && tab.parentTabId === confirm.hostTabId)
+      )
+      if (hostTabListed) {
+        const { confirmWebAgentSessionHandoffAfterCreate } =
+          await import('./web-agent-session-handoff')
+        confirmWebAgentSessionHandoffAfterCreate({
+          environmentId,
+          worktreeId,
+          ...confirm
+        })
+      }
     }
     const { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsStorePatch } =
       await import('./web-session-tabs-sync')
@@ -616,7 +642,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     }
     applyWebSessionTabsStorePatch((state) => {
       // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
-      const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, environmentId)
+      const patch = applyFreshWebSessionTabsSnapshot(state, recovered, environmentId)
       return patch === state ? state : patch
     })
   } catch (error) {
@@ -945,12 +971,16 @@ async function callWebRuntimeSessionTabMethod(
     for (const hostTabId of closeIntentTabIds) {
       clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
     }
-    if (isLifecycleClose) {
+    if (isClose) {
+      // Why: the host kept the tab; re-list so the mirror honestly restores it instead of diverging silently.
       const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
       acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision
       })
+      if (!isLifecycleClose) {
+        showWebRuntimeSessionUserCloseFailureToast(error)
+      }
     }
     console.warn(
       `[web-runtime-session] failed to ${isClose ? 'close' : 'activate'} tab:`,
@@ -958,6 +988,38 @@ async function callWebRuntimeSessionTabMethod(
     )
     return false
   }
+}
+
+// Why: user closes were fire-and-forget; the tab honestly reappearing needs an explanation, and pinned refusals need an action.
+function showWebRuntimeSessionUserCloseFailureToast(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error)
+  if (message.includes('tab_not_found')) {
+    // Why: a double-close race — the tab is already gone and the refresh
+    // reconciles its absence; "restored" copy would be false.
+    return
+  }
+  if (message.includes('terminal_tab_pinned')) {
+    toast.error(
+      translate(
+        'auto.runtime.webRuntimeSession.closePinnedRefused',
+        'The host declined to close a pinned tab'
+      ),
+      {
+        description: translate(
+          'auto.runtime.webRuntimeSession.closePinnedRefusedDescription',
+          'Unpin the tab, then close it again.'
+        )
+      }
+    )
+    return
+  }
+  toast.error(
+    translate(
+      'auto.runtime.webRuntimeSession.closeFailedRestored',
+      "Couldn't close the session on the host — it has been restored"
+    ),
+    { description: message }
+  )
 }
 
 export function splitWebRuntimeTerminal(

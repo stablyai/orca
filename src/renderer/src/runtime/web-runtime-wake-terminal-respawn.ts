@@ -1,29 +1,50 @@
 const wakeTerminalRespawnInFlightByWorktree = new Set<string>()
 
-export function shouldSkipWebRuntimeWakeTerminalRespawn(worktreeId: string): boolean {
-  return wakeTerminalRespawnInFlightByWorktree.has(worktreeId)
+// Why: env-scoped keys let one environment's teardown clear only its own
+// in-flight guards instead of releasing every environment's.
+function wakeRespawnKey(environmentId: string, worktreeId: string): string {
+  return `${environmentId}\0${worktreeId}`
 }
 
-export function beginWebRuntimeWakeTerminalRespawn(worktreeId: string): boolean {
-  if (wakeTerminalRespawnInFlightByWorktree.has(worktreeId)) {
+export function shouldSkipWebRuntimeWakeTerminalRespawn(
+  environmentId: string,
+  worktreeId: string
+): boolean {
+  return wakeTerminalRespawnInFlightByWorktree.has(wakeRespawnKey(environmentId, worktreeId))
+}
+
+export function beginWebRuntimeWakeTerminalRespawn(
+  environmentId: string,
+  worktreeId: string
+): boolean {
+  const key = wakeRespawnKey(environmentId, worktreeId)
+  if (wakeTerminalRespawnInFlightByWorktree.has(key)) {
     return false
   }
-  wakeTerminalRespawnInFlightByWorktree.add(worktreeId)
+  wakeTerminalRespawnInFlightByWorktree.add(key)
   return true
 }
 
-export function endWebRuntimeWakeTerminalRespawn(worktreeId: string): void {
-  wakeTerminalRespawnInFlightByWorktree.delete(worktreeId)
+export function endWebRuntimeWakeTerminalRespawn(environmentId: string, worktreeId: string): void {
+  wakeTerminalRespawnInFlightByWorktree.delete(wakeRespawnKey(environmentId, worktreeId))
 }
 
-export function clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId: string): void {
-  wakeTerminalRespawnInFlightByWorktree.delete(worktreeId)
+export function clearWebRuntimeWakeTerminalRespawnForWorktree(
+  environmentId: string,
+  worktreeId: string
+): void {
+  wakeTerminalRespawnInFlightByWorktree.delete(wakeRespawnKey(environmentId, worktreeId))
 }
 
-export function clearAllWebRuntimeWakeTerminalRespawn(): void {
-  wakeTerminalRespawnInFlightByWorktree.clear()
+export function clearWebRuntimeWakeTerminalRespawnForEnvironment(environmentId: string): void {
+  const keyPrefix = `${environmentId}\0`
+  for (const key of wakeTerminalRespawnInFlightByWorktree) {
+    if (key.startsWith(keyPrefix)) {
+      wakeTerminalRespawnInFlightByWorktree.delete(key)
+    }
+  }
 }
 
 export function resetWebRuntimeWakeTerminalRespawnForTests(): void {
-  clearAllWebRuntimeWakeTerminalRespawn()
+  wakeTerminalRespawnInFlightByWorktree.clear()
 }

@@ -30,6 +30,8 @@ const store = {
     ]
   },
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] as { id: string; launchAgent?: string }[] },
+  pendingStartupByTabId: {} as Record<string, { command: string }>,
+  automaticAgentResumeClaimsByTabId: {} as Record<string, unknown>,
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
@@ -98,7 +100,11 @@ describe('launchAgentInNewTab paired web runtime', () => {
     expect(mocks.createTab).not.toHaveBeenCalled()
     await Promise.resolve()
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(mocks.closeTab).toHaveBeenCalledWith('stale-agent-tab', { reason: 'cleanup' })
+    // Why: the prune is local-only — a stale row must never fire terminal.close at the host.
+    expect(mocks.closeTab).toHaveBeenCalledWith('stale-agent-tab', {
+      reason: 'cleanup',
+      remoteCloseOwnedByHost: true
+    })
   })
 
   it('forwards prompt launch env and captured config to the host runtime', async () => {

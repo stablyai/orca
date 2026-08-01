@@ -53,18 +53,20 @@ export function isWebSessionCloseIntentPending(
   return true
 }
 
-export function reconcileWebSessionCloseIntents(
+// Why: one tab-absent frame is not proof the close completed — a delayed pre-close
+// frame can still follow and resurrect the tab; suppress until the TTL expires.
+export function sweepExpiredWebSessionCloseIntents(
   owner: WebSessionIntentOwner,
   worktreeId: string,
-  presentHostTabIds: ReadonlySet<string>
+  now: number
 ): void {
   const partitionKey = closeIntentPartitionKey(owner, worktreeId)
   const byTab = pendingCloseByOwnerAndWorktree.get(partitionKey)
   if (!byTab) {
     return
   }
-  for (const hostTabId of byTab.keys()) {
-    if (!presentHostTabIds.has(hostTabId)) {
+  for (const [hostTabId, intent] of byTab) {
+    if (now - intent.recordedAt > CLOSE_INTENT_TTL_MS) {
       byTab.delete(hostTabId)
     }
   }

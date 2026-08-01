@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: these tests cover one reconciliation boundary
  * across ready, pending, split, and batched session snapshots. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { posix as pathPosix } from 'node:path'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -34,6 +34,8 @@ import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
   clearWebSessionTabsTrackingForEnvironment,
+  getLastKnownHostTerminalTabCount,
+  reconcileWebSessionMirrorEnvironmentSync,
   resolveHostSessionTabIdForWebSessionTab,
   resetWebSessionTabsSnapshotFreshnessForTests,
   shouldSyncAllRuntimeSessionTabs,
@@ -279,14 +281,24 @@ describe('applyWebSessionTabsSnapshot', () => {
       toWebTerminalSurfaceTabId('host-tab-1')
     )
 
-    // The host's post-close snapshot omits the tab -> intent clears; a later
-    // snapshot that re-adds the SAME id (a genuinely new tab) is no longer hidden.
+    // A tab-absent frame no longer clears the intent (a delayed pre-close frame
+    // can still follow); a same-id tab stays hidden until the TTL expires, after
+    // which a snapshot that re-adds the SAME id (a genuinely new tab) shows again.
     applyWebSessionTabsSnapshot(makeState(), makeSnapshot([]), ENV, NOW + 1)
+    const stillHidden = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([surface], { snapshotVersion: 4 }),
+      ENV,
+      NOW + 2
+    )
+    expect((stillHidden.tabsByWorktree?.[WT] ?? []).map((tab) => tab.id)).not.toContain(
+      toWebTerminalSurfaceTabId('host-tab-1')
+    )
     const reopened = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot([surface], { snapshotVersion: 5 }),
       ENV,
-      NOW + 2
+      NOW + 10_001
     )
     expect((reopened.tabsByWorktree?.[WT] ?? []).map((tab) => tab.id)).toContain(
       toWebTerminalSurfaceTabId('host-tab-1')
@@ -3866,5 +3878,285 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
     expect(patch.activeTabId).toBe(mirroredId)
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
+  })
+})
+
+describe('hydrationPending and fabricated-empty snapshot guards', () => {
+  const readySurface = {
+    type: 'terminal' as const,
+    id: HOST_SURFACE_ID,
+    parentTabId: 'host-tab-1',
+    leafId: LEAF_ID,
+    title: 'Terminal',
+    status: 'ready' as const,
+    terminal: 'term_host',
+    isActive: true
+  }
+
+  beforeEach(() => {
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    resetWebSessionCloseIntentForTests()
+    resetWebSessionFocusIntentForTests()
+    resetWebSessionReorderIntentForTests()
+  })
+
+  it('skips a hydrationPending frame without touching the mirror or the freshness floor', () => {
+    const ready = makeSnapshot([readySurface], { snapshotVersion: 3 })
+    expect(shouldApplyWebSessionTabsSnapshot(ready, ENV)).toBe(true)
+    expect(getLastKnownHostTerminalTabCount(ENV, WT)).toBe(1)
+
+    const pending = makeSnapshot([], {
+      publicationEpoch: 'none',
+      snapshotVersion: 0,
+      hydrationPending: true,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null
+    })
+    expect(shouldApplyWebSessionTabsSnapshot(pending, ENV)).toBe(false)
+    // Why: the pending frame must not poison the floor or the terminal count.
+    expect(getLastKnownHostTerminalTabCount(ENV, WT)).toBe(1)
+    const state = makeState()
+    expect(applyFreshWebSessionTabsSnapshot(state, pending, ENV, NOW)).toBe(state)
+    // The floor still reflects the last real frame: same-epoch newer frames apply.
+    expect(
+      shouldApplyWebSessionTabsSnapshot(makeSnapshot([readySurface], { snapshotVersion: 4 }), ENV)
+    ).toBe(true)
+  })
+
+  it('skips a hydrationPending frame on any epoch, not only the fabricated one', () => {
+    const pending = makeSnapshot([], {
+      publicationEpoch: 'headless:abc',
+      snapshotVersion: 7,
+      hydrationPending: true,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null
+    })
+    expect(shouldApplyWebSessionTabsSnapshot(pending, ENV)).toBe(false)
+  })
+
+  it("skips an epoch-'none' empty frame only while the mirror still has terminal tabs", () => {
+    const fabricated = (): RuntimeMobileSessionTabsResult =>
+      makeSnapshot([], {
+        publicationEpoch: 'none',
+        snapshotVersion: 0,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null
+      })
+    // Empty mirror: degrade to current behavior and apply (old-server compatibility).
+    expect(shouldApplyWebSessionTabsSnapshot(fabricated(), ENV)).toBe(true)
+
+    // Non-empty mirror: the fabricated frame must not wipe it, even cross-epoch.
+    expect(shouldApplyWebSessionTabsSnapshot(makeSnapshot([readySurface]), ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(fabricated(), ENV)).toBe(false)
+    expect(getLastKnownHostTerminalTabCount(ENV, WT)).toBe(1)
+  })
+
+  it('still applies a hydrated genuinely-empty snapshot', () => {
+    expect(shouldApplyWebSessionTabsSnapshot(makeSnapshot([readySurface]), ENV)).toBe(true)
+    const hydratedEmpty = makeSnapshot([], {
+      publicationEpoch: 'epoch-2',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null
+    })
+    expect(shouldApplyWebSessionTabsSnapshot(hydratedEmpty, ENV)).toBe(true)
+  })
+
+  it("skips the projected 'none:client-navigation' empty frame paired clients actually receive", () => {
+    // Regression: per-client projection rewrites the fabricated epoch to
+    // 'none:client-navigation' (version 0 + revision), so a strict 'none'
+    // match never fired for a paired device.
+    const projected = (): RuntimeMobileSessionTabsResult =>
+      makeSnapshot([], {
+        publicationEpoch: 'none:client-navigation',
+        snapshotVersion: 2,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null
+      })
+    // Empty mirror: degrade to current behavior and apply (old-server compatibility).
+    expect(shouldApplyWebSessionTabsSnapshot(projected(), ENV)).toBe(true)
+
+    // Non-empty mirror: the projected fabricated frame must not wipe it.
+    expect(shouldApplyWebSessionTabsSnapshot(makeSnapshot([readySurface]), ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(projected(), ENV)).toBe(false)
+    expect(getLastKnownHostTerminalTabCount(ENV, WT)).toBe(1)
+  })
+
+  it('skips a fabricated empty frame when the store still mirrors terminal tabs after a tracking wipe', () => {
+    // Reconnect recycles the terminal counter; the surviving store mirror must
+    // still veto the wipe.
+    const mirroredTab: TerminalTab = {
+      id: toWebTerminalSurfaceTabId('host-tab-1'),
+      ptyId: 'remote-pty-1',
+      worktreeId: WT,
+      title: 'Terminal',
+      defaultTitle: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const mirrorState = makeState({
+      tabsByWorktree: { [WT]: [mirroredTab] }
+    })
+    const fabricated = makeSnapshot([], {
+      publicationEpoch: 'none',
+      snapshotVersion: 0,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null
+    })
+    expect(getLastKnownHostTerminalTabCount(ENV, WT)).toBe(0)
+    expect(shouldApplyWebSessionTabsSnapshot(fabricated, ENV, mirrorState)).toBe(false)
+    expect(applyFreshWebSessionTabsSnapshot(mirrorState, fabricated, ENV, NOW)).toBe(mirrorState)
+  })
+
+  it('skips a fabricated empty frame when the mirror holds only a browser tab', () => {
+    // The remembered count is terminal-only; non-terminal mirrors need the
+    // store-based emptiness check.
+    const workspace: BrowserWorkspace = {
+      id: 'mirror-browser-workspace',
+      worktreeId: WT,
+      activePageId: 'mirror-browser-page',
+      pageIds: ['mirror-browser-page'],
+      url: 'https://example.com/',
+      title: 'Example',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW
+    }
+    const page: BrowserPage = {
+      id: 'mirror-browser-page',
+      workspaceId: workspace.id,
+      worktreeId: WT,
+      url: 'https://example.com/',
+      title: 'Example',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW
+    }
+    const mirrorState = makeState({
+      browserTabsByWorktree: { [WT]: [workspace] },
+      browserPagesByWorkspace: { [workspace.id]: [page] },
+      remoteBrowserPageHandlesByPageId: {
+        [page.id]: { environmentId: ENV, remotePageId: 'host-browser-page' }
+      }
+    })
+    const fabricated = (): RuntimeMobileSessionTabsResult =>
+      makeSnapshot([], {
+        publicationEpoch: 'none:client-navigation',
+        snapshotVersion: 0,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null
+      })
+    expect(getLastKnownHostTerminalTabCount(ENV, WT)).toBe(0)
+    expect(shouldApplyWebSessionTabsSnapshot(fabricated(), ENV, mirrorState)).toBe(false)
+    // An empty mirror still degrades to current behavior and applies.
+    expect(shouldApplyWebSessionTabsSnapshot(fabricated(), ENV, makeState())).toBe(true)
+  })
+})
+
+describe('reconcileWebSessionMirrorEnvironmentSync', () => {
+  const entryKey = (environmentId: string, connectionGeneration: number): string =>
+    `${environmentId}\u0001runtime-1\u0001${connectionGeneration}\u00015`
+
+  beforeEach(() => {
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    resetWebSessionCloseIntentForTests()
+    resetWebSessionFocusIntentForTests()
+    resetWebSessionReorderIntentForTests()
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          // Why: the sync starter fires listAll/subscribeAll; parking them keeps the test on the reconcile logic.
+          call: vi.fn(() => new Promise(() => {})),
+          subscribe: vi.fn(() => new Promise(() => {}))
+        }
+      }
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("recycles only the reconnected environment's floors and intents", () => {
+    const disposersByEntryKey = new Map<string, () => void>()
+    reconcileWebSessionMirrorEnvironmentSync({
+      disposersByEntryKey,
+      runtimeSessionMirrorEnvironmentKey: [entryKey('env-a', 1), entryKey('env-b', 1)].join(
+        '\u0000'
+      ),
+      workspaceSessionReady: true
+    })
+    expect([...disposersByEntryKey.keys()]).toEqual([entryKey('env-a', 1), entryKey('env-b', 1)])
+
+    const frame = makeSnapshot([], { activeTabType: null })
+    expect(shouldApplyWebSessionTabsSnapshot(frame, 'env-a')).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(frame, 'env-b')).toBe(true)
+    recordWebSessionCloseIntent({ environmentId: 'env-a', pairingRevision: 5 }, WT, 'tab-a', NOW)
+    recordWebSessionCloseIntent({ environmentId: 'env-b', pairingRevision: 5 }, WT, 'tab-b', NOW)
+
+    // env-a reconnects (connection-generation bump); env-b is unchanged.
+    reconcileWebSessionMirrorEnvironmentSync({
+      disposersByEntryKey,
+      runtimeSessionMirrorEnvironmentKey: [entryKey('env-a', 2), entryKey('env-b', 1)].join(
+        '\u0000'
+      ),
+      workspaceSessionReady: true
+    })
+    expect(new Set(disposersByEntryKey.keys())).toEqual(
+      new Set([entryKey('env-a', 2), entryKey('env-b', 1)])
+    )
+
+    // env-a: floor cleared (the same frame applies again) and its intent dropped.
+    expect(shouldApplyWebSessionTabsSnapshot(frame, 'env-a')).toBe(true)
+    expect(
+      isWebSessionCloseIntentPending(
+        { environmentId: 'env-a', pairingRevision: 5 },
+        WT,
+        'tab-a',
+        NOW + 1
+      )
+    ).toBe(false)
+    // env-b: floor and intent intact.
+    expect(shouldApplyWebSessionTabsSnapshot(frame, 'env-b')).toBe(false)
+    expect(
+      isWebSessionCloseIntentPending(
+        { environmentId: 'env-b', pairingRevision: 5 },
+        WT,
+        'tab-b',
+        NOW + 1
+      )
+    ).toBe(true)
+  })
+
+  it('disposes every environment when the workspace session is no longer ready', () => {
+    const disposersByEntryKey = new Map<string, () => void>()
+    reconcileWebSessionMirrorEnvironmentSync({
+      disposersByEntryKey,
+      runtimeSessionMirrorEnvironmentKey: entryKey('env-a', 1),
+      workspaceSessionReady: true
+    })
+    expect(disposersByEntryKey.size).toBe(1)
+
+    reconcileWebSessionMirrorEnvironmentSync({
+      disposersByEntryKey,
+      runtimeSessionMirrorEnvironmentKey: entryKey('env-a', 1),
+      workspaceSessionReady: false
+    })
+    expect(disposersByEntryKey.size).toBe(0)
   })
 })

@@ -58,9 +58,12 @@ async function recoverTerminalOrphans(
       .filter((tab) => tab.type === 'terminal')
       .map((tab) => `${tab.parentTabId}\0${tab.leafId}`)
   )
+  // Why: a tombstoned host tab was just closed on another device; its dying PTYs are closed, not adoptable live orphans, so they must not gate the frame.
+  const tombstonedHostTabIds = new Set(snapshot.recentlyClosedTabIds ?? [])
   const candidates = (state.tabsByWorktree[snapshot.worktree] ?? []).filter(
     (tab) =>
       isWebTerminalSurfaceTabId(tab.id) &&
+      !tombstonedHostTabIds.has(toHostSessionTabId(tab.id)) &&
       Object.keys(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).some(
         (leafId) => !hostSurfaceKeys.has(`${toHostSessionTabId(tab.id)}\0${leafId}`)
       )

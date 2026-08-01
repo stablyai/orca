@@ -332,6 +332,10 @@ export type RuntimeMobileSessionTabsResult = {
   snapshotVersion: number
   /** Live-only targeted command; omitted from durable/list snapshots so reconnect cannot replay navigation. */
   navigationIntent?: 'follow'
+  /** Host has not hydrated this worktree yet; the (possibly empty) list is not authoritative and must not clear a client mirror. */
+  hydrationPending?: true
+  /** Host tabs closed within the tombstone TTL; clients treat their still-dying PTYs as closed, not live orphans. */
+  recentlyClosedTabIds?: readonly string[]
   activeGroupId: string | null
   activeTabId: string | null
   activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null

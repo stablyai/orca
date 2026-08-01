@@ -516,6 +516,11 @@ import {
   deriveClientSessionTabSelection,
   projectClientSessionTabSelection
 } from './client-session-tab-selection'
+import {
+  MobileSessionTabsPublicationClock,
+  normalizeClientEchoedPublicationEpoch
+} from './mobile-session-tabs-publication'
+import { SessionTabCloseTombstoneStore } from './session-tab-close-tombstones'
 import type {
   PtyProviderBufferSnapshot,
   IFilesystemProvider,
@@ -2645,6 +2650,19 @@ export class OrcaRuntimeService {
   private readonly rendererPublicationThrottle = new RendererPublicationThrottle()
   private tabs = new Map<string, RuntimeSyncedTab>()
   private mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+  // Why: headless publications must reuse one epoch per worktree per boot with
+  // strictly-increasing versions, or the client's same-epoch gate is vacuous.
+  private readonly mobileSessionPublicationClock = new MobileSessionTabsPublicationClock()
+  // Why: closes kill PTYs asynchronously; tombstones stop other devices from
+  // treating a dying PTY as a live orphan or re-adopting the closed session.
+  private readonly sessionTabCloseTombstones = new SessionTabCloseTombstoneStore()
+  // Why: distinguishes "hydrated with zero tabs" (authoritative empty list)
+  // from a missing snapshot entry the host has not hydrated yet
+  // (hydrationPending, must not wipe a client mirror).
+  private readonly fullyHydratedMobileSessionWorktrees = new Set<string>()
+  // Why: a serve/SSH-only hydrate seeds a subset entry; track that provenance
+  // so the full hydrate still rebuilds instead of skipping it as populated.
+  private readonly runtimeOwnedSeededMobileSessionWorktrees = new Set<string>()
   // Why: renderer publication ordering must be judged against the renderer's
   // own last-accepted (epoch, version) — never against the stored snapshot's
   // version, which main-local touches bump independently and can push
@@ -4617,9 +4635,10 @@ export class OrcaRuntimeService {
     return worktreeIds
   }
 
-  private getWorkspaceSessionHydrationTargets(
-    includeAllPersistedWorktrees: boolean
-  ): Map<string, WorkspaceSessionState> {
+  private getWorkspaceSessionHydrationTargets(includeAllPersistedWorktrees: boolean): {
+    targets: Map<string, WorkspaceSessionState>
+    coveredWorktreeIds: Set<string>
+  } {
     const repos = this.store?.getRepos?.() ?? []
     const repoHostIdByRepoId = new Map(
       repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)] as const)
@@ -4642,6 +4661,7 @@ export class OrcaRuntimeService {
     }
 
     const targets = new Map<string, WorkspaceSessionState>()
+    const coveredWorktreeIds = new Set<string>()
     for (const hostId of hostIds) {
       const session = this.store?.getWorkspaceSession?.(hostId)
       if (!session) {
@@ -4655,16 +4675,19 @@ export class OrcaRuntimeService {
             : (repoHostIdByRepoId.get(
                 getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
               ) ?? LOCAL_EXECUTION_HOST_ID)
+        if (ownerHostId !== hostId) {
+          continue
+        }
+        coveredWorktreeIds.add(worktreeId)
         if (
-          ownerHostId === hostId &&
-          (includeAllPersistedWorktrees ||
-            this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs))
+          includeAllPersistedWorktrees ||
+          this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs)
         ) {
           targets.set(worktreeId, session)
         }
       }
     }
-    return targets
+    return { targets, coveredWorktreeIds }
   }
 
   getStatus(): RuntimeStatus {
@@ -4910,7 +4933,10 @@ export class OrcaRuntimeService {
       }
       this.mobileSessionTabsByWorktree.set(worktreeId, {
         ...next,
-        snapshotVersion: snapshot.snapshotVersion + 1
+        snapshotVersion: this.mobileSessionPublicationClock.nextVersion(
+          worktreeId,
+          snapshot.snapshotVersion
+        )
       })
       this.mobileSessionTabsNotifyCoalescer.schedule(worktreeId)
       return
@@ -5406,7 +5432,10 @@ export class OrcaRuntimeService {
       // The accepted-renderer tracking is untouched: this is a main-local bump.
       this.mobileSessionTabsByWorktree.set(worktreeId, {
         ...stored,
-        snapshotVersion: stored.snapshotVersion + 1
+        snapshotVersion: this.mobileSessionPublicationClock.nextVersion(
+          worktreeId,
+          stored.snapshotVersion
+        )
       })
       changedMobileWorktrees.add(worktreeId)
     }
@@ -5592,12 +5621,20 @@ export class OrcaRuntimeService {
           continue
         }
       }
+      if (options.onlyRuntimeOwnedTerminals !== true) {
+        // Why: after a full hydrate a missing snapshot entry means "zero tabs",
+        // not "not hydrated yet" — see getMobileSessionTabsForWorktree.
+        this.fullyHydratedMobileSessionWorktrees.add(entryWorktreeId)
+      }
       const existing = this.mobileSessionTabsByWorktree.get(entryWorktreeId)
       if (
         existing &&
         existing.tabs.length > 0 &&
         options.force !== true &&
-        options.onlyRuntimeOwnedTerminals !== true
+        options.onlyRuntimeOwnedTerminals !== true &&
+        // Why: a serve/SSH-only seed is a subset — the full hydrate must still
+        // rebuild it or persisted non-runtime tabs never surface.
+        !this.runtimeOwnedSeededMobileSessionWorktrees.has(entryWorktreeId)
       ) {
         // Why: terminals are stable/persisted so we normally skip a rebuild, but
         // offscreen browser tabs are live and may have been created/closed since.
@@ -5631,8 +5668,15 @@ export class OrcaRuntimeService {
         ...browserTabs.map((tab) => tab.id)
       ]
       const groupId = this.getHeadlessMobileSessionGroupId(entryWorktreeId)
+      // Why: the full rebuild over a runtime-owned seed must keep the seeded
+      // tabs (live serve/SSH/daemon bindings) — existing-first, like the
+      // runtime-owned merge — while adding the persisted rest (#11448).
+      const mergeExistingRuntimeOwnedTabs =
+        existing !== undefined &&
+        (options.onlyRuntimeOwnedTerminals === true ||
+          this.runtimeOwnedSeededMobileSessionWorktrees.has(entryWorktreeId))
       const mergedTabs =
-        options.onlyRuntimeOwnedTerminals === true && existing
+        mergeExistingRuntimeOwnedTabs && existing
           ? this.mergeMobileSessionSnapshotTabs(existing.tabs, tabs)
           : tabs
       const mergedActiveTab =
@@ -5678,7 +5722,7 @@ export class OrcaRuntimeService {
             // browser's persisted group forward instead of coalescing left.
             this.collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
           )
-        : options.onlyRuntimeOwnedTerminals === true && existing?.tabGroups
+        : mergeExistingRuntimeOwnedTabs && existing?.tabGroups
           ? this.appendBrowserTabOrder(
               this.mergeMobileSessionTabGroups(
                 entryWorktreeId,
@@ -5709,9 +5753,16 @@ export class OrcaRuntimeService {
       const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
         worktree: existing?.worktree ?? entryWorktreeId,
         publicationEpoch: mergedIntoRendererPublication
-          ? this.getMergedMobileSessionPublicationEpoch(existing, tabs)
-          : `headless-hydrated:${Date.now().toString(36)}`,
-        snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
+          ? this.getMergedMobileSessionPublicationEpoch(existing)
+          : this.mobileSessionPublicationClock.epoch(
+              entryWorktreeId,
+              existing?.publicationEpoch,
+              'headless-hydrated'
+            ),
+        snapshotVersion: this.mobileSessionPublicationClock.nextVersion(
+          entryWorktreeId,
+          existing?.snapshotVersion
+        ),
         activeGroupId: existing?.activeGroupId ?? groupId,
         activeTabId: mergedActiveTab?.id ?? null,
         activeTabType: mergedActiveTab?.type ?? null,
@@ -5720,10 +5771,20 @@ export class OrcaRuntimeService {
         // existing split layout forward or each sync drops it and fans out.
         ...(hasPersistedSplit && persistedLayout
           ? { tabGroupLayout: persistedLayout }
-          : options.onlyRuntimeOwnedTerminals === true && existing?.tabGroupLayout
+          : mergeExistingRuntimeOwnedTabs && existing?.tabGroupLayout
             ? { tabGroupLayout: existing.tabGroupLayout }
             : {}),
         tabs: mergedTabs
+      }
+      // Why: seed provenance — a runtime-owned hydrate only marks entries it
+      // created (or re-marks its own seed); the full hydrate's rebuild clears
+      // the mark so later full hydrates can skip again.
+      if (options.onlyRuntimeOwnedTerminals === true) {
+        if (existing === undefined) {
+          this.runtimeOwnedSeededMobileSessionWorktrees.add(entryWorktreeId)
+        }
+      } else {
+        this.runtimeOwnedSeededMobileSessionWorktrees.delete(entryWorktreeId)
       }
       // Why: the runtime-owned hydrate runs on EVERY graph sync; when the rebuilt
       // projection matches the existing snapshot, keep the existing object and
@@ -5738,8 +5799,8 @@ export class OrcaRuntimeService {
   }
 
   // Why: content equality for the hydrate's idempotence check — compares every
-  // client-visible field EXCEPT publicationEpoch/snapshotVersion (both are
-  // freshly minted on each rebuild and would defeat the comparison). Tab and
+  // client-visible field EXCEPT publicationEpoch/snapshotVersion (the version
+  // is freshly minted on each rebuild and would defeat the comparison). Tab and
   // group objects are rebuilt each hydrate, so compare by value, not identity.
   private headlessMobileSnapshotContentUnchanged(
     existing: RuntimeMobileSessionTabsSnapshot,
@@ -5838,8 +5899,12 @@ export class OrcaRuntimeService {
       : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
     this.mobileSessionTabsByWorktree.set(worktreeId, {
       ...existing,
-      publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
-      snapshotVersion: existing.snapshotVersion + 1,
+      // Why: keep the existing epoch — reconcile is a same-boot content update
+      // and clients order same-epoch frames by version.
+      snapshotVersion: this.mobileSessionPublicationClock.nextVersion(
+        worktreeId,
+        existing.snapshotVersion
+      ),
       ...(activeStillPresent
         ? {}
         : { activeTabId: active?.id ?? null, activeTabType: active?.type ?? null }),
@@ -6327,9 +6392,9 @@ export class OrcaRuntimeService {
     )
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
-      publicationEpoch:
-        existing?.publicationEpoch ?? `headless:pty-backed:${Date.now().toString(36)}`,
-      snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, existing, {
+        mintPrefix: 'headless:pty-backed'
+      }),
       activeGroupId: existing?.activeGroupId ?? this.getHeadlessMobileSessionGroupId(worktreeId),
       activeTabId: activeTab?.id ?? null,
       activeTabType: activeTab?.type ?? null,
@@ -6363,7 +6428,10 @@ export class OrcaRuntimeService {
       }
       this.mobileSessionTabsByWorktree.set(worktreeId, {
         ...snapshot,
-        snapshotVersion: snapshot.snapshotVersion + 1
+        snapshotVersion: this.mobileSessionPublicationClock.nextVersion(
+          worktreeId,
+          snapshot.snapshotVersion
+        )
       })
       if (options.immediate) {
         // Why: readiness/lifecycle changes are structural and must not wait
@@ -7301,8 +7369,7 @@ export class OrcaRuntimeService {
     }))
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, snapshot),
       activeTabId: activeTab.id,
       activeTabType: 'terminal',
       tabGroups: this.buildHeadlessMobileSessionTabGroups(
@@ -7436,7 +7503,8 @@ export class OrcaRuntimeService {
     }
     if (
       options.expectedPublicationEpoch !== undefined &&
-      snapshot?.publicationEpoch !== options.expectedPublicationEpoch
+      snapshot?.publicationEpoch !==
+        normalizeClientEchoedPublicationEpoch(options.expectedPublicationEpoch)
     ) {
       this.republishMobileSessionTabsSnapshot(worktreeId)
       return {
@@ -7552,6 +7620,17 @@ export class OrcaRuntimeService {
         return { closed: true }
       }
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
+        // Why: the renderer kills the PTYs during retirement; capture their ids
+        // before the relay so the tombstone can cover them.
+        const relayedPtyIds = snapshot!.tabs.flatMap((candidate) =>
+          candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
+            ? [
+                candidate.ptyId,
+                candidate.parentLayout?.ptyIdsByLeafId?.[candidate.leafId],
+                this.findPtyForMobileTerminalTab(worktreeId, candidate)?.ptyId
+              ].filter((ptyId): ptyId is string => Boolean(ptyId))
+            : []
+        )
         // Why: whole-tab close is a lifecycle transaction. The renderer reply
         // arrives only after canonical retirement and a forced session flush.
         const win = this.getAvailableAuthoritativeWindow()
@@ -7585,6 +7664,7 @@ export class OrcaRuntimeService {
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
           this.store?.flushOrThrow?.()
         }
+        this.recordSessionTabCloseTombstone(worktreeId, tab.parentTabId, relayedPtyIds)
         this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot!, tab.parentTabId)
         return { closed: true }
       }
@@ -7604,6 +7684,9 @@ export class OrcaRuntimeService {
       if (tab.id === tabId) {
         const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
         if (pty) {
+          // Why: leaf close kills just this pane; tombstone the PTY so no device
+          // adopts it while it dies (the parent tab may live on).
+          this.sessionTabCloseTombstones.recordPty(worktreeId, pty.ptyId)
           this.ptyController?.kill(pty.ptyId)
         } else {
           this.notifier?.closeTerminal(tab.parentTabId)
@@ -7621,9 +7704,25 @@ export class OrcaRuntimeService {
       // snapshot so paired clients stop showing it.
       await this.closeHeadlessMobileBrowserTab(worktreeId, snapshot!, tab)
     } else {
-      this.notifier?.closeSessionTab?.(tab.id, worktreeId)
+      if (!this.notifier?.closeSessionTab) {
+        // Why: acking with no renderer route hides the tab without closing it —
+        // silent client/host divergence. Fail honestly so clients restore it.
+        throw new Error('renderer_unavailable')
+      }
+      this.notifier.closeSessionTab(tab.id, worktreeId)
     }
     return { closed: true }
+  }
+
+  private recordSessionTabCloseTombstone(
+    worktreeId: string,
+    hostTabId: string,
+    ptyIds: Iterable<string>
+  ): void {
+    this.sessionTabCloseTombstones.record(worktreeId, hostTabId)
+    for (const ptyId of ptyIds) {
+      this.sessionTabCloseTombstones.recordPty(worktreeId, ptyId)
+    }
   }
 
   // Why: a refused echoed close means the echoing client already pruned its
@@ -7634,7 +7733,10 @@ export class OrcaRuntimeService {
     if (snapshot) {
       this.mobileSessionTabsByWorktree.set(worktreeId, {
         ...snapshot,
-        snapshotVersion: snapshot.snapshotVersion + 1
+        snapshotVersion: this.mobileSessionPublicationClock.nextVersion(
+          worktreeId,
+          snapshot.snapshotVersion
+        )
       })
     }
     this.notifyMobileSessionTabsChanged(worktreeId)
@@ -7672,12 +7774,12 @@ export class OrcaRuntimeService {
     if (tab.browserPageId) {
       await this.offscreenBrowserBackend?.closeTab(tab.browserPageId).catch(() => {})
     }
+    this.recordSessionTabCloseTombstone(worktreeId, tab.id, [])
     const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== tab.id)
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, snapshot),
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
       tabGroups: (snapshot.tabGroups ?? []).map((group) => ({
@@ -7731,8 +7833,7 @@ export class OrcaRuntimeService {
         )
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, snapshot),
       ...(hasTargetGroup ? { activeGroupId: targetGroupId } : {}),
       activeTabId: tab.id,
       activeTabType: 'browser',
@@ -7762,10 +7863,43 @@ export class OrcaRuntimeService {
     const projectedPtyIds = this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId, {
       allowMissing: options.allowMissingPersistedTab
     })
+    // Why: a live daemon PTY left unbound (tabId null after a failed restart
+    // surface restore) is still this tab's process per its persisted binding;
+    // leaving it alive would let another device re-adopt the closed session.
+    // But local provider ids ARE reused after a daemon restart, so when the
+    // closed tab's persisted pane incarnations are known and the unbound live
+    // record carries a DIFFERENT incarnation, the id now belongs to another
+    // session — never kill it.
+    const persistedIncarnationsForClosedTab = new Set(
+      Object.entries(
+        this.getWorkspaceSessionForWorktree(worktreeId)?.terminalPtyIncarnationsByPaneKey ?? {}
+      )
+        .filter(([paneKey]) => paneKey.startsWith(`${closedParentTabId}:`))
+        .map(([, incarnationId]) => incarnationId)
+    )
+    const isLiveDaemonPtyForClosedTab = (ptyId: string): boolean => {
+      const record = this.ptysById.get(ptyId)
+      if (record?.connected !== true || record.worktreeId !== worktreeId) {
+        return false
+      }
+      if (record.tabId !== null) {
+        return record.tabId === closedParentTabId
+      }
+      return (
+        persistedIncarnationsForClosedTab.size === 0 ||
+        record.incarnationId === null ||
+        persistedIncarnationsForClosedTab.has(record.incarnationId)
+      )
+    }
     // Why: local provider ids can be reused after restart, so a dormant
-    // persisted id is not kill authority. SSH relay ids remain durable exact
-    // identities even before pane metadata reconnects.
-    const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
+    // persisted id is not kill authority — only a live daemon match for this
+    // tab/worktree is. SSH relay ids remain durable exact identities even
+    // before pane metadata reconnects.
+    const ptyIdsToKill = new Set(
+      projectedPtyIds.filter(
+        (ptyId) => parseAppSshPtyId(ptyId) || isLiveDaemonPtyForClosedTab(ptyId)
+      )
+    )
     for (const candidate of snapshot.tabs) {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         continue
@@ -7778,13 +7912,20 @@ export class OrcaRuntimeService {
           other.parentTabId !== closedParentTabId &&
           other.ptyId === ptyId
       )
-      if (ptyId && !hasOtherOwner && (livePty || parseAppSshPtyId(ptyId))) {
+      if (
+        ptyId &&
+        !hasOtherOwner &&
+        (livePty || parseAppSshPtyId(ptyId) || isLiveDaemonPtyForClosedTab(ptyId))
+      ) {
         // Why: a live serve leaf can exist before its debounced binding reaches
         // persistence. Include it from the authoritative snapshot so split
         // close cannot leave a provider process behind.
         ptyIdsToKill.add(ptyId)
       }
     }
+    // Why: tombstone before emitting (kill success or not) so the removal frame
+    // itself carries recentlyClosedTabIds and no device re-adopts a dying PTY.
+    this.recordSessionTabCloseTombstone(worktreeId, closedParentTabId, ptyIdsToKill)
     if (options.killPtys !== false) {
       for (const ptyId of ptyIdsToKill) {
         this.ptyController?.kill(ptyId)
@@ -7799,8 +7940,7 @@ export class OrcaRuntimeService {
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, snapshot),
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
       tabGroups: this.buildHeadlessMobileSessionTabGroups(
@@ -8011,8 +8151,7 @@ export class OrcaRuntimeService {
     }
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, snapshot),
       tabs
     }
     this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
@@ -8097,8 +8236,7 @@ export class OrcaRuntimeService {
     }
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, snapshot),
       tabs
     }
     this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
@@ -8152,8 +8290,7 @@ export class OrcaRuntimeService {
       : [{ ...targetGroup, tabOrder, activeTabId: reorderedTargetActiveTabId }]
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, snapshot),
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
       tabGroups: nextGroups,
@@ -8195,8 +8332,7 @@ export class OrcaRuntimeService {
     }
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, snapshot),
       activeGroupId: split.newGroupId,
       tabGroups: split.groups,
       tabGroupLayout: split.layout
@@ -8231,8 +8367,7 @@ export class OrcaRuntimeService {
     const layout = moved.layout ?? { type: 'leaf' as const, groupId: move.targetGroupId }
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, snapshot),
       activeGroupId: move.targetGroupId,
       tabGroups: moved.groups,
       tabGroupLayout: layout
@@ -14718,6 +14853,14 @@ export class OrcaRuntimeService {
         if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
           continue
         }
+        // Why: a tombstoned PTY is dying from a recent close; presenting it as
+        // live would stall remote frame recovery or invite re-adoption.
+        if (
+          leaf.ptyId &&
+          this.sessionTabCloseTombstones.isPtyTombstoned(leaf.worktreeId, leaf.ptyId)
+        ) {
+          continue
+        }
         if (
           opts.requireFreshPtyLiveness &&
           (!leaf.ptyId || !refreshedPtyLiveness?.has(leaf.ptyId))
@@ -14739,6 +14882,11 @@ export class OrcaRuntimeService {
     // so mobile does not show a false "No terminals" create flow.
     for (const pty of this.ptysById.values()) {
       if (!pty.connected || ptyIdsFromLeaves.has(pty.ptyId)) {
+        continue
+      }
+      // Why: keep dying just-closed PTYs out of the inventory — reporting one
+      // as an adoptable orphan resurrects the closed session on other devices.
+      if (this.sessionTabCloseTombstones.isPtyTombstoned(pty.worktreeId, pty.ptyId)) {
         continue
       }
       if (opts.requireFreshPtyLiveness && !refreshedPtyLiveness?.has(pty.ptyId)) {
@@ -14842,6 +14990,14 @@ export class OrcaRuntimeService {
       }
       seenPtyIds.add(claim.ptyId)
       seenPaneKeys.add(paneKey)
+      // Why: a tombstoned PTY/tab is a recent close still dying — adopting it
+      // would resurrect the closed session on every paired device.
+      if (
+        this.sessionTabCloseTombstones.isPtyTombstoned(workspace.id, claim.ptyId) ||
+        this.sessionTabCloseTombstones.isTabTombstoned(workspace.id, claim.tabId)
+      ) {
+        throw new Error('terminal_orphan_tombstoned')
+      }
       const live = this.getLivePtyForHandle(claim.terminal)
       const pty = live?.pty
       const controllerIdentity = terminalIdentityByPtyId.get(claim.ptyId)
@@ -25144,8 +25300,7 @@ export class OrcaRuntimeService {
     }
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
+      ...this.mobileSessionPublicationClock.next(worktreeId, existing),
       // Why: activating the new tab also focuses its group, so a "+" targeting a specific split group makes that group active too.
       activeGroupId:
         activate && opts.targetGroupId
@@ -28324,8 +28479,11 @@ export class OrcaRuntimeService {
       notify: false
     })
     // Why: graph sync must scan each persisted host session once, not once per workspace.
+    const hydrationCoverage = this.getWorkspaceSessionHydrationTargets(
+      Boolean(this.offscreenBrowserBackend)
+    )
     const worktreeSessionsToHydrate = new Map<string, WorkspaceSessionState | null>(
-      this.getWorkspaceSessionHydrationTargets(Boolean(this.offscreenBrowserBackend))
+      hydrationCoverage.targets
     )
     if (this.offscreenBrowserBackend) {
       for (const snapshot of snapshots) {
@@ -28341,6 +28499,17 @@ export class OrcaRuntimeService {
         onlyRuntimeOwnedTerminals: true,
         ...(workspaceSession ? { runtimeOwnedTerminalCandidateKnown: true, workspaceSession } : {})
       })
+    }
+    // Why: renderer sync IS hydration on a headed hub (the full hydrate is
+    // gated off by the attached window). Absence from the batch means zero
+    // tabs, so every persisted worktree the scan covered — not only the
+    // runtime-owned hydrate targets — must serve authoritative-empty for
+    // remote bootstrap instead of hydrationPending forever.
+    for (const worktreeId of hydrationCoverage.coveredWorktreeIds) {
+      this.fullyHydratedMobileSessionWorktrees.add(worktreeId)
+    }
+    for (const worktreeId of worktreeSessionsToHydrate.keys()) {
+      this.fullyHydratedMobileSessionWorktrees.add(worktreeId)
     }
     const nextWorktrees = new Set<string>()
     for (const snapshot of snapshots) {
@@ -28389,6 +28558,12 @@ export class OrcaRuntimeService {
           ? nextSnapshot
           : { ...nextSnapshot, snapshotVersion: storedVersion }
       )
+      // Why: keep the headless clock's floor above every stored version so a
+      // later clock-published frame can never regress below what clients saw.
+      this.mobileSessionPublicationClock.observe(snapshot.worktree, storedVersion)
+      // Why: the entry now carries a full renderer publication, not a
+      // runtime-owned-only seed.
+      this.runtimeOwnedSeededMobileSessionWorktrees.delete(snapshot.worktree)
       this.acceptedRendererMobileSnapshotByWorktree.set(snapshot.worktree, {
         publicationEpoch: snapshot.publicationEpoch,
         rendererVersion: snapshot.snapshotVersion
@@ -28416,6 +28591,10 @@ export class OrcaRuntimeService {
         } else {
           this.mobileSessionTabsByWorktree.delete(worktreeId)
           this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
+          this.runtimeOwnedSeededMobileSessionWorktrees.delete(worktreeId)
+          // Why: the renderer authoritatively stopped publishing this worktree,
+          // so a later fabricated empty list must not read as hydrationPending.
+          this.fullyHydratedMobileSessionWorktrees.add(worktreeId)
           // Why: drop any pending coalesced notify so a stale snapshot can't land after the removed frame.
           this.mobileSessionTabsNotifyCoalescer.cancel(worktreeId)
           this.notifyMobileSessionTabsRemoved(worktreeId)
@@ -28460,10 +28639,7 @@ export class OrcaRuntimeService {
     )
     return {
       ...snapshot,
-      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(
-        snapshot,
-        normalizedPreservedTabs
-      ),
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(snapshot),
       snapshotVersion: Math.max(snapshot.snapshotVersion, existing.snapshotVersion),
       activeGroupId: snapshot.activeGroupId ?? existing.activeGroupId,
       activeTabId: activeTab?.id ?? null,
@@ -28495,9 +28671,12 @@ export class OrcaRuntimeService {
     )
     return {
       ...existing,
-      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing),
       // Why: mint a fresh version or clients' same-epoch gate drops the prune frame.
-      snapshotVersion: existing.snapshotVersion + 1,
+      snapshotVersion: this.mobileSessionPublicationClock.nextVersion(
+        existing.worktree,
+        existing.snapshotVersion
+      ),
       activeGroupId:
         existing.activeGroupId ?? this.getHeadlessMobileSessionGroupId(existing.worktree),
       activeTabId: activeTab?.id ?? null,
@@ -28600,24 +28779,15 @@ export class OrcaRuntimeService {
   }
 
   private getMergedMobileSessionPublicationEpoch(
-    snapshot: RuntimeMobileSessionTabsSnapshot,
-    preservedTabs: readonly RuntimeMobileSessionSnapshotTab[]
+    snapshot: RuntimeMobileSessionTabsSnapshot
   ): string {
-    // Why: preserved snapshots can merge repeatedly; strip the prior merge suffix first so the publication epoch stays idempotent.
+    // Why: preserved snapshots can merge repeatedly; strip the prior merge
+    // suffix first so the publication epoch stays idempotent. The signature is
+    // boot-stable — hashing the preserved set flipped the epoch per change and
+    // bypassed the client's same-epoch version gate; strictly-increasing
+    // versions carry preserved-set changes instead.
     const normalizedPublicationEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
-    const signature = createHash('sha1')
-      .update(
-        preservedTabs
-          .map((tab) =>
-            tab.type === 'terminal'
-              ? `${tab.id}:${tab.parentTabId}:${tab.ptyId ?? ''}:${tab.leafId}`
-              : tab.id
-          )
-          .join('|')
-      )
-      .digest('hex')
-      .slice(0, 12)
-    return `${normalizedPublicationEpoch}:headless-merge:${signature}`
+    return `${normalizedPublicationEpoch}:headless-merge:${this.mobileSessionPublicationClock.mergeSignature}`
   }
 
   private notifyMobileSessionTabsRemoved(worktreeId: string): void {
@@ -28696,11 +28866,20 @@ export class OrcaRuntimeService {
   ): RuntimeMobileSessionTabsResult {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
+      // Why: an entry deleted mid-boot can still have live tombstones; carry
+      // them so clients keep treating just-closed tabs as closed.
+      const recentlyClosedTabIds = this.sessionTabCloseTombstones.activeIds(worktreeId)
       return this.clientSessionTabSelections.project(
         {
           worktree: worktreeId,
           publicationEpoch: 'none',
           snapshotVersion: 0,
+          // Why: a fabricated empty list is only authoritative once a full
+          // hydrate ran; before that, clients must not wipe their mirror on it.
+          ...(this.fullyHydratedMobileSessionWorktrees.has(worktreeId)
+            ? {}
+            : { hydrationPending: true as const }),
+          ...(recentlyClosedTabIds.length > 0 ? { recentlyClosedTabIds } : {}),
           activeGroupId: null,
           activeTabId: null,
           activeTabType: null,
@@ -29056,10 +29235,14 @@ export class OrcaRuntimeService {
           )?.id ??
           tabGroups?.[0]?.id ??
           null)
+    // Why: every emission (list, listAll, subscribe frames, coalesced notifies)
+    // flows through here, so tombstones reach clients on whichever frame ships.
+    const recentlyClosedTabIds = this.sessionTabCloseTombstones.activeIds(snapshot.worktree)
     return {
       worktree: snapshot.worktree,
       publicationEpoch: snapshot.publicationEpoch,
       snapshotVersion: snapshot.snapshotVersion,
+      ...(recentlyClosedTabIds.length > 0 ? { recentlyClosedTabIds } : {}),
       activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,

@@ -14421,7 +14421,10 @@
         "reconnectTimeout": "The server did not reconnect on the updated version."
       },
       "webRuntimeSession": {
-        "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+        "remoteHostDisconnected": "The workspace is not connected to a remote Orca host.",
+        "closePinnedRefused": "The host declined to close a pinned tab",
+        "closePinnedRefusedDescription": "Unpin the tab, then close it again.",
+        "closeFailedRestored": "Couldn't close the session on the host — it has been restored"
       }
     }
   },

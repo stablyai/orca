@@ -703,6 +703,38 @@ describe('session tab RPC methods', () => {
     )
   })
 
+  it('carries hydrationPending on the subscribe initial frame', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listMobileSessionTabs: vi.fn().mockResolvedValue({
+        worktree: 'wt-1',
+        publicationEpoch: 'none',
+        snapshotVersion: 0,
+        hydrationPending: true,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }),
+      onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
+      registerSubscriptionCleanup: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+    const messages: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.subscribe', { worktree: 'id:wt-1' }),
+      (message) => messages.push(message),
+      { connectionId: 'conn-1' }
+    )
+
+    expect(JSON.parse(messages[0]!).result).toMatchObject({
+      type: 'snapshot',
+      worktree: 'wt-1',
+      hydrationPending: true
+    })
+  })
+
   it('keeps duplicate session tab subscribers for one worktree independent', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

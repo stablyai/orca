@@ -44,6 +44,21 @@ export function resolveWebAgentSessionHandoff(args: WebAgentSessionHandoffKey): 
   return handoffByProvisionalTab.get(handoffKey(args))?.hostTabId ?? null
 }
 
+/** Environment-agnostic lookup: callers that only know the worktree (e.g. the
+ * QuickLaunch prune) must still treat a handed-off provisional tab as live. */
+export function hasWebAgentSessionHandoffForProvisionalTab(
+  worktreeId: string,
+  provisionalTabId: string
+): boolean {
+  const suffix = `\0${worktreeId}\0${provisionalTabId}`
+  for (const key of handoffByProvisionalTab.keys()) {
+    if (key.endsWith(suffix)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function isWebAgentSessionHandoffPostCreateSnapshotConfirmed(
   args: WebAgentSessionHandoffKey
 ): boolean {

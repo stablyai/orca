@@ -11,16 +11,41 @@ import type { Tab, TuiAgent } from '../../../shared/types'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
 import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
+import { hasWebAgentSessionHandoffForProvisionalTab } from '@/runtime/web-agent-session-handoff'
 
-function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
+function removeStaleLocalAgentTabsForWebHostLaunch(
+  worktreeId: string,
+  pruneableTabIds?: ReadonlySet<string>
+): ReadonlySet<string> {
   const state = useAppStore.getState()
+  const survivingTabIds = new Set<string>()
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    if (tab.launchAgent && !isWebTerminalSurfaceTabId(tab.id)) {
-      // Why: pruning a stale local agent tab is a system close — keep it out of
-      // the Cmd+Shift+T reopen stack.
-      state.closeTab(tab.id, { reason: 'cleanup' })
+    if (!tab.launchAgent || isWebTerminalSurfaceTabId(tab.id)) {
+      survivingTabIds.add(tab.id)
+      continue
     }
+    // Why: a provisional tab mid-launch (recorded handoff, queued startup, or
+    // resume claim) is not stale — pruning it kills the create it belongs to.
+    if (
+      hasWebAgentSessionHandoffForProvisionalTab(worktreeId, tab.id) ||
+      state.pendingStartupByTabId[tab.id] ||
+      state.automaticAgentResumeClaimsByTabId[tab.id]
+    ) {
+      survivingTabIds.add(tab.id)
+      continue
+    }
+    // Why: the post-create pass may only prune tabs it saw pre-create; anything
+    // newer was born mid-operation and is not stale.
+    if (pruneableTabIds && !pruneableTabIds.has(tab.id)) {
+      survivingTabIds.add(tab.id)
+      continue
+    }
+    // Why: pruning a stale local agent tab is a system close — keep it out of
+    // the Cmd+Shift+T reopen stack. remoteCloseOwnedByHost keeps the prune
+    // local so it can never fire terminal.close at a live host session.
+    state.closeTab(tab.id, { reason: 'cleanup', remoteCloseOwnedByHost: true })
   }
+  return survivingTabIds
 }
 
 /**
@@ -65,7 +90,7 @@ export function launchAgentInWebHostTab(args: {
   const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions)
   const structuredPromptDelivery: AgentPromptDelivery =
     promptDelivery === 'draft' ? 'draft' : 'auto-submit'
-  removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+  const preCreateSurvivingTabIds = removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
   const launch = {
     worktreeId,
     environmentId,
@@ -102,7 +127,7 @@ export function launchAgentInWebHostTab(args: {
   }): { delivered: boolean; failureNotified: boolean } => {
     // Why: created means the host accepted the launch, not that a local tab
     // exists; keep pruning stale local rows until the snapshot mirrors.
-    removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+    removeStaleLocalAgentTabsForWebHostLaunch(worktreeId, preCreateSurvivingTabIds)
     if (outcome.status === 'failed') {
       toast.error(
         outcome.message ||

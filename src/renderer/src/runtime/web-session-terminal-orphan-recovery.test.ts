@@ -142,6 +142,45 @@ describe('web session terminal orphan recovery', () => {
     )
   })
 
+  it('treats tombstoned host tabs as closed so the frame applies without adoption', async () => {
+    const worktree = 'repo::/worktree'
+    const call = vi.fn()
+    const state = {
+      tabsByWorktree: {
+        [worktree]: [{ id: 'web-terminal-host-tab', worktreeId: worktree } as never]
+      },
+      terminalLayoutsByTabId: {
+        'web-terminal-host-tab': {
+          root: { type: 'leaf' as const, leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: {
+            'leaf-1': toRemoteRuntimePtyId('term_live', 'windows-2')
+          }
+        }
+      },
+      activeTabIdByWorktree: {},
+      activeGroupIdByWorktree: {}
+    }
+    // Why: another device just closed host-tab; its still-dying PTY must not be
+    // treated as a live-unresolved orphan that drops (or re-adopts) this frame.
+    const tombstoned = {
+      worktree,
+      publicationEpoch: 'post-close',
+      snapshotVersion: 3,
+      recentlyClosedTabIds: ['host-tab'],
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    }
+
+    await expect(
+      recoverWebSessionTerminalOrphansBeforeApply(state, tombstoned, 'windows-2', call as never)
+    ).resolves.toEqual(tombstoned)
+    expect(call).not.toHaveBeenCalled()
+  })
+
   it('does not apply absence when an exact recoverable orphan cannot be adopted yet', async () => {
     const worktree = 'repo::/worktree'
     const call = vi.fn(async ({ method }) =>
