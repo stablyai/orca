@@ -40,9 +40,11 @@ existing `SyncDatabase` adapter, Electron IPC (`ipcMain.handle` / `webContents.s
   fork point `e058429e1` (v1.4.162). All commands below run from that worktree root.
 - Cross-platform (macOS / Linux / Windows): paths via `path.join` only; no
   hardcoded POSIX-only paths in product code (AGENTS.md).
-- SSH / remote / folder-workspace use cases: the pane gate applies ONLY to fresh
-  **local** spawns; remote-runtime and SSH panes must fail open (spawn immediately)
-  because their codex home is on the remote host and main's reader is local-fs only.
+- SSH / remote / WSL / folder-workspace use cases: the pane gate applies ONLY to
+  fresh **local** spawns whose codex reads the home the gate status covers;
+  remote-runtime panes, SSH panes, AND WSL panes (local IPC panes whose codex
+  reads the WSL distro's home — a home the local prewarm can never cure) must
+  fail open (spawn immediately). Main's reader is local-host-fs only.
 - Comments are concise WHY-only. No `max-lines` lint disables — new logic goes in
   focused sibling modules, not inline growth of `pty-connection.ts` (8,872 lines).
 - No vague `util`/`helper` filenames.
@@ -534,17 +536,40 @@ describe('backfill deferral (#11828)', () => {
 
     expect(lane).toBe('removed')
   })
+
+  it('does not un-latch a genuinely failed lane while the backfill is pending', () => {
+    // Why: 'unavailable' latches a REAL grant failure behind installRetryAfterMs
+    // (Number.POSITIVE_INFINITY for unsupported binaries, :266-270). If the
+    // deferral converted it to 'pending-index', isRealHomeCodexHookLaneUsable()
+    // would flip false→true on the next per-pane ensure call (index.ts:847/:973),
+    // re-opening real-home routing and bypassing the cooldown gate. Genuine
+    // failures must keep today's semantics even while the index is pending.
+    grantUnavailable()
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    pendingMock.mockReturnValue(true)
+
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('unavailable')
+    expect(isRealHomeCodexHookLaneUsable()).toBe(false)
+    expect(grantMock).toHaveBeenCalledTimes(1)
+  })
 })
 ```
 
-(Adapt helper names — `grantSucceeds`, `getRealHooksJsonPath`, `fakeHomeDir`,
-`userDataDir` — to the file's existing helpers; they exist verbatim today.)
+(Adapt helper names — `grantSucceeds`, `grantUnavailable`, `getRealHooksJsonPath`,
+`fakeHomeDir`, `userDataDir` — to the file's existing helpers; they exist
+verbatim today. `grantUnavailable()` (`:74-76`) latches the permanent
+unsupported-binary cooldown, the strongest case.)
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `pnpm exec vitest run src/main/codex/codex-real-home-hook-install.test.ts --config config/vitest.config.ts`
-Expected: new tests FAIL (`'pending-index'` not a lane value; grant still spawns).
-Existing tests must still PASS (the `pendingMock` default keeps them on today's path).
+Expected: the first five new tests FAIL (`'pending-index'` not a lane value; grant
+still spawns). The sixth ('does not un-latch...') PASSES pre-implementation — it
+is a regression pin whose job is to still pass in Step 4 once the deferral
+exists. Existing tests must still PASS (the `pendingMock` default keeps them on
+today's path).
 
 - [ ] **Step 3: Implement**
 
@@ -577,9 +602,15 @@ export type RealHomeCodexHookLane =
   // backfill wait and dies, and its failure used to latch 'unavailable', which
   // silently disabled the very scheduler/prewarm that would finish the index.
   // Skip when already installed: a valid grant ledger spawns nothing anyway.
+  // Skip when 'unavailable': that lane latches a GENUINE grant failure behind
+  // installRetryAfterMs (permanent for unsupported binaries, :266-270);
+  // rewriting it to 'pending-index' would flip isRealHomeCodexHookLaneUsable()
+  // back to true and bypass the cooldown gate below — un-latching a real
+  // failure just because an index happens to be pending.
   if (
     args.hooksEnabled &&
     currentLane !== 'installed' &&
+    currentLane !== 'unavailable' &&
     isCodexBackfillIndexPending(getSystemCodexHomePath())
   ) {
     if (currentLane !== 'pending-index') {
@@ -596,8 +627,11 @@ No other changes: `isRealHomeCodexHookLaneUsable()` already returns true for any
 non-`'unavailable'` lane; the `installRetryAfterMs` cooldown only consults
 `currentLane === 'unavailable'` so `'pending-index'` bypasses it; the three
 genuine-failure `return 'unavailable'` sites (`:131`, `:137`, catch at `:110`) and
-the grant-failure latch (`:219-223`) are untouched — genuine failures keep today's
-semantics.
+the grant-failure latch (`:219-223`) are untouched. The
+`currentLane !== 'unavailable'` conjunct is what keeps genuine failures on
+today's semantics: once latched, ensure falls through to the existing cooldown
+gate (transient 5-min or permanent unsupported-binary latch) instead of being
+rewritten to a usable lane by the deferral.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -644,10 +678,29 @@ it('skips the fetch without spawning codex while the target home backfill is pen
   expect(result.status).toBe('unavailable')
   // Assert via the file's spawn seam that NO codex process was launched.
 })
+
+it('does not consult the backfill check for a WSL UNC codex home (#11828)', async () => {
+  // Why: a \\wsl$\... home belongs to the WSL distro — the local-only prewarm
+  // can never cure it, and the pending probe's sync sqlite/readdir would run
+  // over UNC on the main process. The file's existing WSL dispatch (:1111,
+  // backend-first) must keep handling these homes untouched.
+  backfillPendingMock.mockReturnValue(true)
+
+  await fetchCodexRateLimits({
+    codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+  })
+
+  expect(backfillPendingMock).not.toHaveBeenCalled()
+})
 ```
 
-(Behavioral contract: pending ⇒ resolve `status: 'unavailable'` with no spawn;
-not pending, or no `codexHomePath` ⇒ existing behavior byte-for-byte.)
+(For the WSL test, mirror whatever the file's existing WSL-path tests stub for
+the backend/spawn seams; the only assertion that matters is that the pending
+probe is never consulted — ignore the fetch result. Note it passes vacuously
+pre-implementation; it is a regression pin for Step 7's UNC exclusion.
+Behavioral contract: pending on a LOCAL home ⇒ resolve `status: 'unavailable'`
+with no spawn; not pending, no `codexHomePath`, or a WSL UNC `codexHomePath` ⇒
+existing behavior byte-for-byte.)
 
 - [ ] **Step 7: Implement the skip**
 
@@ -657,11 +710,19 @@ In `src/main/rate-limits/codex-fetcher.ts`, at the top of
 ```ts
 import { isCodexBackfillIndexPending } from '../codex/codex-state-db'
 
-  if (options?.codexHomePath && isCodexBackfillIndexPending(options.codexHomePath)) {
-    // Why: a 10s RPC codex against an unindexed home dies in the #11828
-    // backfill wait AND can steal the backfill lease from the prewarm (a
-    // killed claimer blocks the index for up to 15 min). Skip; the service's
-    // normal refetch cadence picks rate limits up once the index completes.
+  // Why: a 10s RPC codex against an unindexed home dies in the #11828
+  // backfill wait AND can steal the backfill lease from the prewarm (a
+  // killed claimer blocks the index for up to 15 min). Skip; the service's
+  // normal refetch cadence picks rate limits up once the index completes.
+  // WSL UNC homes (\\wsl$\...) are excluded: they belong to the distro, the
+  // local-only prewarm can never cure them (skipping would starve rate limits
+  // forever), and the pending probe's sync sqlite/readdir would run over UNC —
+  // the existing WSL dispatch below (:1111) keeps handling them unchanged.
+  if (
+    options?.codexHomePath &&
+    !parseWslUncPath(options.codexHomePath) &&
+    isCodexBackfillIndexPending(options.codexHomePath)
+  ) {
     return {
       provider: 'codex',
       session: null,
@@ -1472,16 +1533,50 @@ describe('codex backfill spawn gate (#11828)', () => {
 
   it('does not gate a reattach to an existing pty', async () => {
     // Why: a reattach joins a live codex process; only fresh spawns can hit the
-    // backfill wait. Use the harness's restored-pty seam (restoredPtyIdByLeafId +
-    // restoredLeafId, as the branch's session-restore tests do).
+    // backfill wait. Reattach needs BOTH deps fields set (createDeps defaults
+    // restoredLeafId: null / restoredPtyIdByLeafId: {}, :595-596) AND the store
+    // tab carrying the pty id — mirror the local reattach fixture at :9597-9602.
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     stubCodexBackfillApi({ pending: true, lastWatermark: null })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-existing' }] }
+    }
+    const deps = createDeps({
+      startup: { command: 'codex', launchAgent: 'codex' },
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'pty-existing' }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    // sessionId proves the REATTACH path connected (not a gated fresh spawn
+    // that happened to fail open) — same signature the file's reattach tests use.
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'pty-existing' })
+    )
+  })
+
+  it('does not gate an SSH codex pane (fails open to the remote host)', async () => {
+    // Why: SSH panes ride the IPC transport with runtimeEnvironmentId === null
+    // and a separate connectionId axis — the gate must exclude BOTH remote
+    // axes or it parks a remote pane on irrelevant local-home state.
+    // SSH is store-driven, not a deps field: mirror the fixture at :3977-3986.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.getConnectionId.mockReturnValue('ssh-a')
+    transportFactoryQueue.push(transport)
+    stubCodexBackfillApi({ pending: true, lastWatermark: null })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'ssh-a' }],
+      sshConnectionStates: new Map([['ssh-a', { status: 'connected' }]])
+    }
     const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
-    // Adapt to the harness's exact reattach fixture — mirror an existing
-    // reattach test in this file for the deps shape.
-    deps.restoredPtyIdByLeafId = { [deps.restoredLeafId ?? 'leaf-1']: 'pty-existing' }
 
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks()
@@ -1489,17 +1584,26 @@ describe('codex backfill spawn gate (#11828)', () => {
     expect(transport.connect).toHaveBeenCalledTimes(1)
   })
 
-  it('does not gate an SSH codex pane (fails open to the remote host)', async () => {
-    // Why: SSH panes ride the IPC transport with runtimeEnvironmentId === null
-    // and a separate connectionId axis — the gate must exclude BOTH remote
-    // axes or it parks a remote pane on irrelevant local-home state.
+  it('does not gate a WSL codex pane (its codex reads the distro home)', async () => {
+    // Why: WSL panes are local IPC panes — connectionId AND runtimeEnvironmentId
+    // are both null, so the two remote axes cannot exclude them; only
+    // projectRuntime (kind 'wsl', derived at :3508) identifies them. Their codex
+    // reads the WSL distro's home, which the local prewarm can never cure, so
+    // gating would falsely park them on irrelevant Windows-home state. The
+    // harness's platform mock is win32 (:1004), so projectRuntime resolves —
+    // mirror the WSL project fixture at :9567-9581.
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     stubCodexBackfillApi({ pending: true, lastWatermark: null })
+    mockStoreState = {
+      ...mockStoreState,
+      projects: [{ id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }],
+      worktreesByRepo: {
+        repo1: [{ id: 'wt-1', repoId: 'repo1', path: 'C:\\tmp\\wt-1', displayName: 'feat/notis' }]
+      }
+    }
     const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
-    // Adapt to the harness's SSH/worktree-connection fixture — mirror an
-    // existing connectionId-carrying test in this file for the deps shape.
 
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks()
@@ -1518,7 +1622,12 @@ split-pane case: a split in a live codex tab has no pane-scoped codex startup,
 so the pane-scoped predicate below leaves it ungated by construction.)
 
 Run: `pnpm exec vitest run src/renderer/src/components/terminal-pane/pty-connection.test.ts --config config/vitest.config.ts`
-Expected: the 4 new tests FAIL (no gate exists); all pre-existing tests PASS —
+Expected: the FIRST new test ('defers a fresh codex spawn...') FAILS — the spawn
+is not deferred, so `transport.connect` fires immediately. The other five new
+tests assert today's immediate-connect behavior and PASS pre-implementation;
+they are regression pins whose job is to STILL pass in Step 6 once the gate
+exists (non-codex, not-pending, reattach, SSH, WSL all fail open). All
+pre-existing tests PASS —
 **if any pre-existing test starts failing because `window.api.codexBackfill` is
 undefined in its stub, that is the fail-open path working; do not "fix" it by
 requiring the API.**
@@ -1543,18 +1652,40 @@ connect-state locals (by `connectStarted` / `startupGridSettledForConnect`):
 ```ts
   let codexBackfillGateCleared = false
   let codexBackfillGateDispose: (() => void) | null = null
-  // Why: gate only fresh LOCAL codex spawns. BOTH remote axes must be excluded:
-  // runtimeEnvironmentId (remote runtime) AND connectionId (SSH — SSH panes
-  // ride the IPC transport with runtimeEnvironmentId === null; see the two-axis
-  // local-only idiom at :3509/:3608/:4372). The agent signal is PANE-scoped
-  // (paneStartup), NOT tab.launchAgent: the tab flag persists while codex runs
-  // (use-tab-agent.ts:288-291), so a split in a live codex tab — a plain shell
-  // pane — would otherwise be parked behind the indexing overlay.
+  // Why: gate only fresh LOCAL codex spawns whose codex reads the home the IPC
+  // gate status covers. THREE exclusions: runtimeEnvironmentId (remote
+  // runtime), connectionId (SSH — SSH panes ride the IPC transport with
+  // runtimeEnvironmentId === null; see the two-axis local-only idiom at
+  // :3509/:3608/:4372), AND WSL panes — on Windows these are local IPC panes
+  // with BOTH of those fields null, indistinguishable from plain local panes
+  // except via projectRuntime (:3508); their codex reads the WSL distro's
+  // home, which the local prewarm can never cure, so gating them parks a pane
+  // on irrelevant Windows-home state. Mirror the WSL verdict used by
+  // getColdRestoreAgentResumePlatform (:4764-4775). The agent signal is
+  // PANE-scoped (paneStartup), NOT tab.launchAgent: the tab flag persists
+  // while codex runs (use-tab-agent.ts:288-291), so a split in a live codex
+  // tab — a plain shell pane — would otherwise be parked behind the indexing
+  // overlay.
+  const isWslCodexHomePane = (): boolean => {
+    if (projectRuntime?.status === 'repair-required') {
+      return projectRuntime.repair.preferredRuntime.kind === 'wsl'
+    }
+    if (projectRuntime?.status === 'resolved') {
+      return projectRuntime.runtime.kind === 'wsl'
+    }
+    return Boolean(worktree?.path && isWslUncPath(worktree.path))
+  }
   const shouldGateCodexSpawnOnBackfill = (): boolean =>
     !runtimeEnvironmentId &&
     !connectionId &&
+    !isWslCodexHomePane() &&
     (paneStartup?.launchAgent ?? paneStartup?.initialAgentStatus?.agent) === 'codex'
 ```
+
+(`projectRuntime`, `worktree`, and the imported `isWslUncPath` (:295) are
+already in closure scope at this point — this is the exact discrimination
+`getColdRestoreAgentResumePlatform` performs, minus its `connectionId` arm,
+which the predicate's own `!connectionId` conjunct already covers.)
 
 (No reattach conjunct is needed — the clause below runs only in the fresh-spawn
 arm, after every reattach/adoption target has been ruled out.)
@@ -1580,7 +1711,7 @@ background-agent adoption). Mirror the startup-grid clause's cancel idiom:
       // connect-progress flag this pass already set (e.g. connectStarted) so
       // onClear's runDeferredConnect actually proceeds instead of early-returning.
       connectStarted = false
-      codexBackfillGateDispose = waitForCodexBackfillGate({
+      const gateDispose = waitForCodexBackfillGate({
         api: window.api.codexBackfill,
         onWaiting: (state) => deps.onCodexIndexingStateRef?.current?.(pane.id, state),
         onClear: () => {
@@ -1590,6 +1721,15 @@ background-agent adoption). Mirror the startup-grid clause's cancel idiom:
           runDeferredConnect()
         }
       })
+      // Why: the module fails open by calling onClear SYNCHRONOUSLY (absent or
+      // malformed api, :1347-1350) — in that case the pane already reconnected
+      // via the recursive runDeferredConnect above, and unconditionally storing
+      // the returned noop would leave codexBackfillGateDispose non-null for the
+      // pane's lifetime, permanently muting input-undeliverable recovery
+      // (clause 5's guard). Arm the dispose only while actually parked.
+      if (!codexBackfillGateCleared) {
+        codexBackfillGateDispose = gateDispose
+      }
       return
     }
 ```
@@ -2068,8 +2208,11 @@ If nothing changed, skip the commit.
   the pending re-check after prewarm resolution (T3), so neither panes nor the
   lane can park forever on a failed prewarm; (A5) rate-limit fetcher skips while
   the target home's backfill is pending (T2) — the second doomed real-home
-  spawner, and the lease thief; (A6) gate predicate excludes BOTH remote axes
-  (`!connectionId` added) with an SSH fail-open test (T5); (A7) gate agent
+  spawner, and the lease thief; (A6) gate predicate excludes ALL THREE
+  non-local-home axes — remote runtime, SSH (`!connectionId`), and WSL
+  (`projectRuntime` kind `'wsl'`; both id fields are null on WSL panes) — with
+  SSH and WSL fail-open tests (T5), and the rate-limit skip likewise ignores
+  WSL UNC homes (T2); (A7) gate agent
   signal is pane-scoped (`paneStartup`), never `tab.launchAgent` (T5); (A8) gate
   clause lives in `runDeferredConnect`'s fresh-spawn arm, after the compound
   reattach/adoption decision (T5). One accepted risk with mitigations: long
