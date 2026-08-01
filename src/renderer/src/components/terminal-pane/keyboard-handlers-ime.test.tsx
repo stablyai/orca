@@ -295,6 +295,34 @@ describe('Windows IME keyboard ownership', () => {
     hook.unmount()
     harness.dispose()
   })
+
+  // Windows gives a shifted jamo the same Process/229/shiftKey shape as the committing
+  // Enter, so treating it as Enter injects a Shift+Enter newline into ordinary Hangul.
+  it.each([
+    { code: 'KeyQ', jamo: 'ㅃ' },
+    { code: 'KeyE', jamo: 'ㄸ' }
+  ])('does not read a shifted $jamo as the committing Enter', ({ code, jamo }) => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    harness.startComposition()
+    const shiftedJamo = keyboardEvent('keydown', {
+      key: 'Process',
+      code,
+      keyCode: 229,
+      timeStamp: 10,
+      isComposing: true,
+      shiftKey: true
+    })
+
+    harness.terminalInput.dispatchEvent(shiftedJamo)
+    harness.endComposition(jamo)
+    vi.advanceTimersByTime(250)
+
+    expect(harness.ptyWrites).toEqual([jamo])
+    expect(shiftedJamo.defaultPrevented).toBe(false)
+    hook.unmount()
+    harness.dispose()
+  })
 })
 
 // The committing press repeats and the direct shortcut write races xterm's flush for

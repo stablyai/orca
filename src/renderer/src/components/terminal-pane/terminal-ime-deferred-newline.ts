@@ -108,11 +108,17 @@ export function getTerminalImeModifiedEnterKind(
 }
 
 export function isTerminalImeProcessEnter(
-  event: Pick<KeyboardEvent, 'key' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'code' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+  >
 ): boolean {
+  // Why: Windows reports every IME-consumed keydown as Process/229, so a shifted jamo
+  // (ㅃ, ㄲ) matches the modifier check too; only `code` tells it apart from Enter.
   return (
     event.key === 'Process' &&
     event.keyCode === 229 &&
+    (event.code === 'Enter' || event.code === 'NumpadEnter') &&
     getTerminalImeModifiedEnterKind(event) !== null
   )
 }
