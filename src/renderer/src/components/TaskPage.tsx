@@ -272,7 +272,8 @@ import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   buildJiraCreateCustomFields,
   getJiraCreateAllowedValueLabel,
-  isVisibleJiraCreateField
+  isVisibleJiraCreateField,
+  jiraCreateFieldNeedsAssignableUsersPicker
 } from '@/components/task-page-jira-create-field-value'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
@@ -5687,6 +5688,22 @@ export default function TaskPage(): React.JSX.Element {
   const [jiraCreateFieldsError, setJiraCreateFieldsError] = useState<string | null>(null)
   const [jiraCreateAssignableUsers, setJiraCreateAssignableUsers] = useState<JiraUser[]>([])
   const [jiraCreateAssignableUsersLoading, setJiraCreateAssignableUsersLoading] = useState(false)
+  const [jiraCreateAssignableUsersError, setJiraCreateAssignableUsersError] = useState<
+    string | null
+  >(null)
+  const [jiraCreateAssignableUsersQuery, setJiraCreateAssignableUsersQuery] = useState('')
+  const [jiraCreateAssignableUsersDebouncedQuery, setJiraCreateAssignableUsersDebouncedQuery] =
+    useState('')
+  // Why: search results are a bounded page, so a user picked earlier can scroll out of
+  // the current results; remember picked labels so the trigger keeps showing a name.
+  const [jiraCreateAssignableUserLabels, setJiraCreateAssignableUserLabels] = useState<
+    Record<string, string>
+  >({})
+  const [jiraCreateUserFieldPopoverKey, setJiraCreateUserFieldPopoverKey] = useState<string | null>(
+    null
+  )
+  const jiraCreateAssignableUsersSearchInputRef = useRef<HTMLInputElement | null>(null)
+  const jiraCreateAssignableUsersLookupKeyRef = useRef<string | null>(null)
   const [newJiraIssueCustomFieldValues, setNewJiraIssueCustomFieldValues] = useState<
     Record<string, string>
   >({})
@@ -5728,6 +5745,10 @@ export default function TaskPage(): React.JSX.Element {
       setJiraCreateFieldsError(null)
       setNewJiraIssueCustomFieldValues({})
       setNewJiraIssueSubmitting(false)
+      setJiraCreateAssignableUsersQuery('')
+      setJiraCreateAssignableUsersDebouncedQuery('')
+      setJiraCreateAssignableUserLabels({})
+      setJiraCreateUserFieldPopoverKey(null)
     }
   }, [newJiraIssueOpen, newLinearIssueOpen, providerRuntimeContextKey])
 
@@ -5760,6 +5781,9 @@ export default function TaskPage(): React.JSX.Element {
   const newJiraIssueTargetProjectSelectionKey = newJiraIssueTargetProject
     ? getJiraProjectSelectionKey(newJiraIssueTargetProject)
     : ''
+  const newJiraIssueTargetAuthType = jiraSites.find(
+    (site) => site.id === newJiraIssueTargetProject?.siteId
+  )?.authType
 
   const newJiraIssueTargetType = useMemo(
     () =>
@@ -5775,7 +5799,7 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const jiraCreateNeedsAssignableUsers = useMemo(
-    () => visibleJiraCreateFields.some((field) => field.schema?.type === 'user'),
+    () => visibleJiraCreateFields.some(jiraCreateFieldNeedsAssignableUsersPicker),
     [visibleJiraCreateFields]
   )
 
@@ -5802,6 +5826,23 @@ export default function TaskPage(): React.JSX.Element {
     })
     return () => cancelAnimationFrame(frame)
   }, [newJiraIssueProjectComboboxOpen])
+
+  useEffect(() => {
+    if (!jiraCreateUserFieldPopoverKey) {
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      jiraCreateAssignableUsersSearchInputRef.current?.focus()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [jiraCreateUserFieldPopoverKey])
+
+  const handleJiraCreateUserFieldPopoverOpenChange = useCallback((fieldKey: string) => {
+    return (open: boolean) => {
+      setJiraCreateUserFieldPopoverKey(open ? fieldKey : null)
+      setJiraCreateAssignableUsersQuery('')
+    }
+  }, [])
 
   const handleNewJiraIssueProjectComboboxOpenChange = useCallback(
     (open: boolean) => {
@@ -5937,6 +5978,14 @@ export default function TaskPage(): React.JSX.Element {
     jiraTaskSourceContext
   ])
 
+  // Why: debounce the assignable-user search box so typing doesn't fire a request per keystroke.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setJiraCreateAssignableUsersDebouncedQuery(jiraCreateAssignableUsersQuery)
+    }, TASK_SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [jiraCreateAssignableUsersQuery])
+
   useEffect(() => {
     if (
       !newJiraIssueOpen ||
@@ -5944,26 +5993,54 @@ export default function TaskPage(): React.JSX.Element {
       !newJiraIssueTargetProject ||
       !jiraCreateNeedsAssignableUsers
     ) {
+      jiraCreateAssignableUsersLookupKeyRef.current = null
       setJiraCreateAssignableUsers([])
       setJiraCreateAssignableUsersLoading(false)
+      setJiraCreateAssignableUsersError(null)
       return
     }
+    // Why: detect a project/issue-type switch synchronously so the first fetch for the
+    // new scope ignores the old (not-yet-cleared) debounced query text.
+    const lookupKey = `${getJiraProjectSelectionKey(newJiraIssueTargetProject)}::${newJiraIssueTargetType?.id ?? ''}`
+    const scopeChanged = jiraCreateAssignableUsersLookupKeyRef.current !== lookupKey
+    jiraCreateAssignableUsersLookupKeyRef.current = lookupKey
+    if (scopeChanged) {
+      setJiraCreateAssignableUsersQuery('')
+      setJiraCreateAssignableUsersDebouncedQuery('')
+      setJiraCreateAssignableUserLabels({})
+      setJiraCreateUserFieldPopoverKey(null)
+    }
     let cancelled = false
+    setJiraCreateAssignableUsers([])
     setJiraCreateAssignableUsersLoading(true)
+    setJiraCreateAssignableUsersError(null)
     void jiraListAssignableUsersForProject(
       jiraTaskSourceContext ?? settings,
       newJiraIssueTargetProject.id,
-      undefined,
+      scopeChanged ? undefined : jiraCreateAssignableUsersDebouncedQuery.trim() || undefined,
       newJiraIssueTargetProject.siteId
     )
       .then((users) => {
         if (!cancelled) {
           setJiraCreateAssignableUsers(users)
+          setJiraCreateAssignableUserLabels((prev) => {
+            const next = { ...prev }
+            for (const user of users) {
+              next[user.accountId] = user.displayName
+            }
+            return next
+          })
         }
       })
       .catch(() => {
         if (!cancelled) {
           setJiraCreateAssignableUsers([])
+          setJiraCreateAssignableUsersError(
+            translate(
+              'jira.createIssue.userField.loadError',
+              'Failed to load assignable Jira users.'
+            )
+          )
         }
       })
       .finally(() => {
@@ -5979,7 +6056,9 @@ export default function TaskPage(): React.JSX.Element {
     jiraConnected,
     newJiraIssueOpen,
     newJiraIssueTargetProject,
+    newJiraIssueTargetType,
     jiraCreateNeedsAssignableUsers,
+    jiraCreateAssignableUsersDebouncedQuery,
     jiraTaskSourceContext
   ])
 
@@ -6982,7 +7061,8 @@ export default function TaskPage(): React.JSX.Element {
     }
     const customFields = buildJiraCreateCustomFields(
       visibleJiraCreateFields,
-      newJiraIssueCustomFieldValues
+      newJiraIssueCustomFieldValues,
+      newJiraIssueTargetAuthType
     )
     setNewJiraIssueSubmitting(true)
     const submitProviderRuntimeContextKey = providerRuntimeContextKey
@@ -7051,6 +7131,7 @@ export default function TaskPage(): React.JSX.Element {
     newJiraIssueBody,
     newJiraIssueCustomFieldValues,
     newJiraIssueSubmitting,
+    newJiraIssueTargetAuthType,
     newJiraIssueTargetProject,
     newJiraIssueTargetType,
     newJiraIssueTitle,
@@ -12269,6 +12350,11 @@ export default function TaskPage(): React.JSX.Element {
                 {jiraCreateFieldsError}
               </p>
             ) : null}
+            {jiraCreateAssignableUsersError ? (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {jiraCreateAssignableUsersError}
+              </p>
+            ) : null}
             {visibleJiraCreateFields.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {visibleJiraCreateFields.map((field) => {
@@ -12278,41 +12364,103 @@ export default function TaskPage(): React.JSX.Element {
                       <label className="text-[11px] font-medium text-muted-foreground">
                         {field.name}
                       </label>
-                      {field.schema?.type === 'user' ? (
-                        <Select
-                          value={fieldValue}
-                          onValueChange={(value) =>
-                            setNewJiraIssueCustomFieldValues((prev) => ({
-                              ...prev,
-                              [field.key]: value
-                            }))
-                          }
-                          disabled={newJiraIssueSubmitting || jiraCreateAssignableUsersLoading}
+                      {jiraCreateFieldNeedsAssignableUsersPicker(field) ? (
+                        <Popover
+                          open={jiraCreateUserFieldPopoverKey === field.key}
+                          onOpenChange={handleJiraCreateUserFieldPopoverOpenChange(field.key)}
                         >
-                          <SelectTrigger>
-                            <SelectValue
-                              placeholder={
-                                jiraCreateAssignableUsersLoading
-                                  ? translate(
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={jiraCreateUserFieldPopoverKey === field.key}
+                              disabled={newJiraIssueSubmitting}
+                              className="h-9 w-full justify-between px-3 text-left text-xs font-normal"
+                            >
+                              {fieldValue ? (
+                                <span className="min-w-0 truncate">
+                                  {jiraCreateAssignableUserLabels[fieldValue] ?? fieldValue}
+                                </span>
+                              ) : (
+                                <span className="min-w-0 truncate text-muted-foreground">
+                                  {translate(
+                                    'jira.createIssue.userField.placeholder',
+                                    'Select {{value0}}',
+                                    { value0: field.name }
+                                  )}
+                                </span>
+                              )}
+                              <ChevronDown className="size-3.5 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="start"
+                            className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
+                            onOpenAutoFocus={(event) => event.preventDefault()}
+                          >
+                            <Command shouldFilter={false}>
+                              <CommandInput
+                                ref={jiraCreateAssignableUsersSearchInputRef}
+                                placeholder={translate(
+                                  'jira.createIssue.userField.searchPlaceholder',
+                                  'Search users...'
+                                )}
+                                value={jiraCreateAssignableUsersQuery}
+                                onValueChange={setJiraCreateAssignableUsersQuery}
+                              />
+                              <CommandList className="max-h-56">
+                                {jiraCreateAssignableUsersLoading ? (
+                                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                                    <LoaderCircle className="size-3.5 animate-spin" />
+                                    {translate(
                                       'jira.createIssue.userField.loading',
                                       'Loading users…'
-                                    )
-                                  : translate(
-                                      'jira.createIssue.userField.placeholder',
-                                      'Select {{value0}}',
-                                      { value0: field.name }
-                                    )
-                              }
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {jiraCreateAssignableUsers.map((user) => (
-                              <SelectItem key={user.accountId} value={user.accountId}>
-                                {user.displayName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                                    )}
+                                  </div>
+                                ) : jiraCreateAssignableUsersError ? (
+                                  <div className="px-3 py-2 text-xs text-destructive">
+                                    {jiraCreateAssignableUsersError}
+                                  </div>
+                                ) : jiraCreateAssignableUsers.length === 0 ? (
+                                  <CommandEmpty>
+                                    {translate(
+                                      'auto.components.TaskPage.edf4bc4135',
+                                      'No assignable users.'
+                                    )}
+                                  </CommandEmpty>
+                                ) : (
+                                  jiraCreateAssignableUsers.map((user) => (
+                                    <CommandItem
+                                      key={user.accountId}
+                                      value={user.accountId}
+                                      onSelect={() => {
+                                        setNewJiraIssueCustomFieldValues((prev) => ({
+                                          ...prev,
+                                          [field.key]: user.accountId
+                                        }))
+                                        setJiraCreateUserFieldPopoverKey(null)
+                                      }}
+                                      className="items-center gap-2 px-3 py-2 text-xs"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          'size-3.5 text-foreground',
+                                          user.accountId === fieldValue
+                                            ? 'opacity-100'
+                                            : 'opacity-0'
+                                        )}
+                                      />
+                                      <span className="min-w-0 flex-1 truncate">
+                                        {user.displayName}
+                                      </span>
+                                    </CommandItem>
+                                  ))
+                                )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       ) : field.allowedValues?.length && field.schema?.type !== 'array' ? (
                         <Select
                           value={fieldValue}

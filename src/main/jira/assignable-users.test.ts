@@ -136,5 +136,15 @@ describe('Jira assignable-user search (#4643)', () => {
       expect(requestedUrl).toContain('username=Alex')
       expect(requestedUrl).not.toContain('query=Alex')
     })
+
+    it('surfaces project-scoped lookup failures to the create form', async () => {
+      const failure = new Error('Jira unavailable')
+      jiraRequestMock.mockRejectedValueOnce(failure)
+
+      const { listAssignableUsersForProject } = await import('./issues')
+      await expect(listAssignableUsersForProject('10000', undefined, 'site-1')).rejects.toBe(
+        failure
+      )
+    })
   })
 })

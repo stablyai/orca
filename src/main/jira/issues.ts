@@ -1151,6 +1151,10 @@ async function fetchAssignableUsers(
       throw error
     }
     console.warn('[jira] listAssignableUsers failed:', error)
+    if ('projectIdOrKey' in scope) {
+      // Why: the create-issue picker needs to tell "lookup failed" apart from "no assignable users".
+      throw error
+    }
     return []
   } finally {
     release()

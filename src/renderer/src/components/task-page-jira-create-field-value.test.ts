@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildJiraCreateCustomFields,
   buildJiraCreateFieldValue,
-  isVisibleJiraCreateField
+  isVisibleJiraCreateField,
+  jiraCreateFieldNeedsAssignableUsersPicker
 } from './task-page-jira-create-field-value'
 import type { JiraCreateField } from '../../../shared/types'
 
@@ -22,17 +23,55 @@ describe('isVisibleJiraCreateField', () => {
   })
 })
 
-describe('buildJiraCreateFieldValue', () => {
-  it('wraps a picked accountId as { id } for user-type fields (#4643)', () => {
+describe('jiraCreateFieldNeedsAssignableUsersPicker', () => {
+  it('needs the fallback picker for a user field with no allowedValues', () => {
     const reporterField = field({ key: 'reporter', schema: { type: 'user' } })
-    expect(buildJiraCreateFieldValue(reporterField, '5b10a2844c20165700ede21g')).toEqual({
+    expect(jiraCreateFieldNeedsAssignableUsersPicker(reporterField)).toBe(true)
+  })
+
+  it('defers to the Jira-provided options for a user field with allowedValues', () => {
+    const teamField = field({
+      key: 'customfield_team_lead',
+      schema: { type: 'user' },
+      allowedValues: [{ id: 'acc-1', name: 'Alex Rivera' }]
+    })
+    expect(jiraCreateFieldNeedsAssignableUsersPicker(teamField)).toBe(false)
+  })
+
+  it('does not need the picker for non-user fields', () => {
+    expect(jiraCreateFieldNeedsAssignableUsersPicker(field({ schema: { type: 'option' } }))).toBe(
+      false
+    )
+  })
+})
+
+describe('buildJiraCreateFieldValue', () => {
+  it('wraps a picked Cloud accountId as { id } for user-type fields (#4643)', () => {
+    const reporterField = field({ key: 'reporter', schema: { type: 'user' } })
+    expect(buildJiraCreateFieldValue(reporterField, '5b10a2844c20165700ede21g', 'cloud')).toEqual({
       id: '5b10a2844c20165700ede21g'
+    })
+  })
+
+  it('wraps a picked Server username as { name } for user-type fields', () => {
+    const reporterField = field({ key: 'reporter', schema: { type: 'user' } })
+    expect(buildJiraCreateFieldValue(reporterField, ' wquintal ', 'server')).toEqual({
+      name: 'wquintal'
     })
   })
 
   it('returns undefined for a blank user-field draft rather than an empty id', () => {
     const reporterField = field({ key: 'reporter', schema: { type: 'user' } })
     expect(buildJiraCreateFieldValue(reporterField, '   ')).toBeUndefined()
+  })
+
+  it('uses the Jira-provided allowedValue for a user field instead of wrapping the raw draft', () => {
+    const teamField = field({
+      key: 'customfield_team_lead',
+      schema: { type: 'user' },
+      allowedValues: [{ id: 'acc-1', name: 'Alex Rivera' }]
+    })
+    expect(buildJiraCreateFieldValue(teamField, 'acc-1', 'cloud')).toEqual({ id: 'acc-1' })
   })
 
   it('maps a select field to its allowed-value id', () => {
@@ -65,13 +104,35 @@ describe('buildJiraCreateCustomFields', () => {
       field({ key: 'customfield_labels', schema: { type: 'array' } }),
       field({ key: 'customfield_empty' })
     ]
-    const result = buildJiraCreateCustomFields(fields, {
-      reporter: 'acc-1',
-      customfield_labels: 'p1,p2',
-      customfield_empty: ''
-    })
+    const result = buildJiraCreateCustomFields(
+      fields,
+      {
+        reporter: 'acc-1',
+        customfield_labels: 'p1,p2',
+        customfield_empty: ''
+      },
+      'cloud'
+    )
     expect(result).toEqual({
       reporter: { id: 'acc-1' },
+      customfield_labels: ['p1', 'p2']
+    })
+  })
+
+  it('sends Server user fields as { name } without changing other field payloads', () => {
+    const fields = [
+      field({ key: 'reporter', schema: { type: 'user' } }),
+      field({ key: 'customfield_labels', schema: { type: 'array' } })
+    ]
+
+    expect(
+      buildJiraCreateCustomFields(
+        fields,
+        { reporter: 'wquintal', customfield_labels: 'p1,p2' },
+        'server'
+      )
+    ).toEqual({
+      reporter: { name: 'wquintal' },
       customfield_labels: ['p1', 'p2']
     })
   })

@@ -176,6 +176,7 @@ describe('jira RPC methods', () => {
       jiraListCreateFields: vi.fn().mockResolvedValue([{ key: 'customfield_10010' }]),
       jiraListPriorities: vi.fn().mockResolvedValue([{ id: 'priority-1' }]),
       jiraListAssignableUsers: vi.fn().mockResolvedValue([{ accountId: 'user-1' }]),
+      jiraListAssignableUsersForProject: vi.fn().mockResolvedValue([{ accountId: 'user-1' }]),
       jiraListTransitions: vi.fn().mockResolvedValue([{ id: 'transition-1' }]),
       jiraGetProjectStatusOrder: vi.fn().mockResolvedValue({
         statusIdsByColumn: [['status-1']]
@@ -203,6 +204,13 @@ describe('jira RPC methods', () => {
       })
     )
     await dispatcher.dispatch(
+      makeRequest('jira.listAssignableUsersForProject', {
+        projectIdOrKey: ' project-1 ',
+        query: 'Ada',
+        siteId: 'site-1'
+      })
+    )
+    await dispatcher.dispatch(
       makeRequest('jira.listTransitions', { key: 'ABC-3', siteId: 'site-1' })
     )
     await dispatcher.dispatch(
@@ -214,7 +222,27 @@ describe('jira RPC methods', () => {
     expect(runtime.jiraListCreateFields).toHaveBeenCalledWith('project-1', 'type-1', 'site-1')
     expect(runtime.jiraListPriorities).toHaveBeenCalledWith('site-1')
     expect(runtime.jiraListAssignableUsers).toHaveBeenCalledWith('ABC-3', 'Ada', 'site-1')
+    expect(runtime.jiraListAssignableUsersForProject).toHaveBeenCalledWith(
+      'project-1',
+      'Ada',
+      'site-1'
+    )
     expect(runtime.jiraListTransitions).toHaveBeenCalledWith('ABC-3', 'site-1')
     expect(runtime.jiraGetProjectStatusOrder).toHaveBeenCalledWith('ALP', 'site-1')
+  })
+
+  it('rejects whitespace-only Jira project-scoped user lookups', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      jiraListAssignableUsersForProject: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
+
+    await expect(
+      dispatcher.dispatch(
+        makeRequest('jira.listAssignableUsersForProject', { projectIdOrKey: '   ' })
+      )
+    ).resolves.toMatchObject({ ok: false })
+    expect(runtime.jiraListAssignableUsersForProject).not.toHaveBeenCalled()
   })
 })

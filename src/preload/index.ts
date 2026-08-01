@@ -148,6 +148,7 @@ import type {
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
 import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
+import type { JiraUser } from '../shared/jira-types'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
 import type {
@@ -1911,7 +1912,7 @@ const api = {
       projectIdOrKey: string
       query?: string
       siteId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('jira:listAssignableUsersForProject', args),
+    }): Promise<JiraUser[]> => ipcRenderer.invoke('jira:listAssignableUsersForProject', args),
 
     listTransitions: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('jira:listTransitions', args),

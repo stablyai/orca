@@ -190,6 +190,39 @@ describe('runtime Jira client search bounds', () => {
     })
   })
 
+  it('routes create-issue reporter lookups by project through runtime RPC', async () => {
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'status.get') {
+        return createCompatibleRuntimeStatusResponse()
+      }
+      return {
+        id: 'rpc-1',
+        ok: true,
+        result: [{ accountId: 'acc-1', displayName: 'Alex Rivera' }],
+        _meta: { runtimeId: 'remote-runtime' }
+      }
+    })
+
+    await expect(
+      jiraListAssignableUsersForProject(
+        { activeRuntimeEnvironmentId: 'env-1' },
+        '10000',
+        'Alex',
+        'site-1'
+      )
+    ).resolves.toEqual([{ accountId: 'acc-1', displayName: 'Alex Rivera' }])
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'jira.listAssignableUsersForProject',
+        params: { projectIdOrKey: '10000', query: 'Alex', siteId: 'site-1' },
+        timeoutMs: 30_000
+      })
+    )
+    expect(jiraListAssignableUsersForProjectLocal).not.toHaveBeenCalled()
+  })
+
   it('rejects oversized project-scoped Jira assignee search before RPC', async () => {
     await expect(
       jiraListAssignableUsersForProject(

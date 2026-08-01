@@ -95,7 +95,9 @@ const AssignableUsers = z.object({
 })
 
 const AssignableUsersForProject = z.object({
-  projectIdOrKey: requiredString('Project is required'),
+  projectIdOrKey: requiredString('Project is required').pipe(
+    z.string().trim().min(1, 'Project is required')
+  ),
   query: OptionalPlainString,
   siteId: OptionalString
 })

@@ -14708,8 +14708,10 @@
   "jira": {
     "createIssue": {
       "userField": {
+        "loadError": "Failed to load assignable Jira users.",
         "loading": "Loading users…",
-        "placeholder": "Select {{value0}}"
+        "placeholder": "Select {{value0}}",
+        "searchPlaceholder": "Search users..."
       }
     }
   }

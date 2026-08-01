@@ -1,10 +1,15 @@
-import type { JiraCreateField } from '../../../shared/types'
+import type { JiraAuthType, JiraCreateField } from '../../../shared/types'
 import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
 
 const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
 
 export function isVisibleJiraCreateField(field: JiraCreateField): boolean {
   return field.required && !JIRA_CREATE_SYSTEM_FIELD_KEYS.has(field.key)
+}
+
+// User fields with Jira-provided allowedValues render the standard options picker instead.
+export function jiraCreateFieldNeedsAssignableUsersPicker(field: JiraCreateField): boolean {
+  return field.schema?.type === 'user' && !field.allowedValues?.length
 }
 
 export function getJiraCreateAllowedValueLabel(
@@ -35,7 +40,11 @@ function getJiraCreateOptionPayload(
   return fallback
 }
 
-export function buildJiraCreateFieldValue(field: JiraCreateField, draftValue: string): unknown {
+export function buildJiraCreateFieldValue(
+  field: JiraCreateField,
+  draftValue: string,
+  authType?: JiraAuthType
+): unknown {
   const trimmed = draftValue.trim()
   if (!trimmed) {
     return undefined
@@ -52,13 +61,12 @@ export function buildJiraCreateFieldValue(field: JiraCreateField, draftValue: st
     }
     return parts
   }
-  if (field.schema?.type === 'user') {
-    // User fields have no allowedValues; the picker stores the selected accountId,
-    // which Jira Cloud/Server both require wrapped as { id }.
-    return { id: trimmed }
-  }
   if (field.allowedValues?.length) {
     return getJiraCreateOptionPayload(findJiraCreateAllowedValue(field, trimmed), trimmed)
+  }
+  if (field.schema?.type === 'user') {
+    // Why: Cloud identifies users by accountId ({ id }); Server/DC by username ({ name }).
+    return authType === 'server' ? { name: trimmed } : { id: trimmed }
   }
   if (field.schema?.type === 'number') {
     const numberValue = Number(trimmed)
@@ -72,11 +80,12 @@ export function buildJiraCreateFieldValue(field: JiraCreateField, draftValue: st
 
 export function buildJiraCreateCustomFields(
   fields: readonly JiraCreateField[],
-  values: Record<string, string>
+  values: Record<string, string>,
+  authType?: JiraAuthType
 ): Record<string, unknown> | undefined {
   const customFields: Record<string, unknown> = {}
   for (const field of fields) {
-    const value = buildJiraCreateFieldValue(field, values[field.key] ?? '')
+    const value = buildJiraCreateFieldValue(field, values[field.key] ?? '', authType)
     if (value !== undefined) {
       customFields[field.key] = value
     }
