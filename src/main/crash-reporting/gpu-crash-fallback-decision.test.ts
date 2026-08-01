@@ -3,6 +3,7 @@ import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   GpuCrashFallbackTracker,
+  countsTowardDurableGpuCrashHistory,
   isGpuChildProcessType,
   isGpuFallbackCrashCandidate
 } from './gpu-crash-fallback-decision'
@@ -170,5 +171,28 @@ describe('isGpuFallbackCrashCandidate', () => {
         reason: 'crashed'
       })
     ).toBe(false)
+  })
+})
+
+describe('countsTowardDurableGpuCrashHistory', () => {
+  it('counts the reasons the crash loop actually produces', () => {
+    // All 57 distinct GPU child deaths across the 39 cluster-E bundles are
+    // `crashed` (53 STATUS_BREAKPOINT) or `killed` — none are `launch-failed`.
+    expect(countsTowardDurableGpuCrashHistory('crashed')).toBe(true)
+    expect(countsTowardDurableGpuCrashHistory('abnormal-exit')).toBe(true)
+  })
+
+  it('refuses launch-failed, which clusters across launches for recoverable reasons', () => {
+    // A driver update, an RDP session transition, or a monitor hotplug can fail the
+    // GPU launch on several consecutive launches. Counting those durably would latch
+    // build-sticky safe graphics on a condition that clears itself; the in-process
+    // tracker still catches 3 inside one 30s session.
+    expect(countsTowardDurableGpuCrashHistory('launch-failed')).toBe(false)
+  })
+
+  it('ignores reasons that are not fallback candidates at all', () => {
+    for (const reason of ['killed', 'clean-exit', 'oom', 'integrity-failure', '']) {
+      expect([reason, countsTowardDurableGpuCrashHistory(reason)]).toEqual([reason, false])
+    }
   })
 })

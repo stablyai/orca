@@ -129,22 +129,35 @@ import {
 import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
+  clearGpuFallbackMarker,
+  gpuFallbackMarkerFileExists,
   readActiveGpuFallbackMarker,
+  sweepStaleGpuFallbackMarkerTempFiles,
   writeGpuFallbackMarker,
   type GpuFallbackEnvironment,
   type WindowsGpuFallbackEnvironment
 } from './startup/gpu-fallback-marker'
+import {
+  DEFAULT_GPU_CRASH_DURABLE_WINDOW_MS,
+  clearGpuCrashHistory,
+  discardExpiredGpuCrashHistory,
+  evaluateGpuCrashHistory,
+  gpuCrashHistoryFileExists,
+  inertGpuCrashHistoryDecision,
+  persistGpuCrashTimes,
+  sweepStaleGpuCrashHistoryTempFiles
+} from './startup/gpu-crash-history'
+import { engageGpuFallback } from './crash-reporting/gpu-fallback-engagement'
+import { resolveGpuFallbackEngagement } from './crash-reporting/gpu-fallback-engagement-resolution'
 import { applyGpuFallbackCommandLineSwitches } from './startup/gpu-fallback-switches'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   GpuCrashFallbackTracker,
+  countsTowardDurableGpuCrashHistory,
   isGpuFallbackCrashCandidate
 } from './crash-reporting/gpu-crash-fallback-decision'
-import {
-  promptForGpuFallbackRestart,
-  type GpuFallbackRestartDecision
-} from './crash-reporting/gpu-fallback-restart-prompt'
+import { promptForGpuFallbackRestart } from './crash-reporting/gpu-fallback-restart-prompt'
 import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
@@ -366,6 +379,12 @@ const gpuCrashFallbackTracker = new GpuCrashFallbackTracker({
   threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD
 })
 let gpuFallbackActiveThisLaunch = false
+// Why a separate latch: the durable history and the in-process tracker can each
+// fire, so without this a later same-session crash opens a second restart prompt.
+let gpuFallbackEngagementStarted = false
+// Why: the safe-graphics marker is written before the user answers, so it must be
+// dropped again if the app reaches an orderly shutdown instead of a GPU kill.
+let provisionalGpuFallbackUserDataPath: string | null = null
 let gpuFeatureStatus: Electron.GPUFeatureStatus | null = null
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
@@ -1250,6 +1269,9 @@ function openMainWindow(): BrowserWindow {
     }
   })
   recordCrashBreadcrumb('main_window_created')
+  // Why: a Windows logoff/shutdown can end the session without reaching will-quit,
+  // and that reboot is exactly the driver-update case that must not latch safe graphics.
+  window.on('session-end', dropUnconfirmedGpuFallbackMarker)
   logStartupMilestone('window-created')
   // Why: Windows Tray construction can block synchronously on Shell_NotifyIcon, so both platforms defer creation to after first paint.
   let trayCreated = false
@@ -1553,72 +1575,168 @@ function maybeApplyGpuFallbackForThisLaunch(): void {
   if (isServeMode || process.platform !== 'win32') {
     return
   }
-  const marker = readActiveGpuFallbackMarker(app.getPath('userData'), getGpuFallbackEnvironment())
+  // Why canonical: handleGpuChildCrash writes through the same helper, and a late
+  // app.setName/setPath would silently split the read and write paths.
+  const userDataPath = getCanonicalUserDataPath()
+  // A kill between a write and its rename orphans a temp file next to the target.
+  // Why gated: the sweep readdirs all of userData — Cache, Code Cache, GPUCache,
+  // Local Storage — on a path that runs before whenReady on every Windows launch,
+  // and a temp can only be orphaned next to a file the fallback already wrote.
+  const environment = getGpuFallbackEnvironment()
+  const historyExists = gpuCrashHistoryFileExists(userDataPath)
+  const sweepForOrphans = gpuFallbackMarkerFileExists(userDataPath) || historyExists
+  const marker = readActiveGpuFallbackMarker(userDataPath, environment)
+  if (sweepForOrphans) {
+    void sweepStaleGpuFallbackMarkerTempFiles(userDataPath).catch(() => undefined)
+    void sweepStaleGpuCrashHistoryTempFiles(userDataPath).catch(() => undefined)
+  }
   if (!marker) {
+    // Why here: one or two GPU deaths is the common launch, and nothing else ever
+    // deletes that file — it would keep the gate above armed on every later launch.
+    if (historyExists) {
+      void discardExpiredGpuCrashHistory(userDataPath, environment, {
+        now: Date.now(),
+        windowMs: DEFAULT_GPU_CRASH_DURABLE_WINDOW_MS
+      }).catch(() => undefined)
+    }
     return
   }
   app.disableHardwareAcceleration()
   const appliedSwitches = applyGpuFallbackCommandLineSwitches(app.commandLine, process.platform)
   gpuFallbackActiveThisLaunch = true
+  // Why: the user is already in safe graphics, so pre-fallback crash times must not
+  // re-fire the prompt on the first unrelated GPU hiccup of this launch.
+  clearGpuCrashHistory(userDataPath)
   // Why: with no GPU child left, child-process-gone can't report a GPU fault, so
   // name the applied switches in the trail any later crash report carries.
   recordCrashBreadcrumb('gpu_fallback_applied', {
     crashesInWindow: marker.crashesInWindow,
+    consented: marker.consented,
     switches: appliedSwitches.join(',')
   })
 }
 
+// Why swallow: the marker is already on disk, so a tracer failure here must not
+// surface as 'marker-failed' and cancel the restart the write just earned.
+function recordGpuFallbackMarkerPersisted(
+  consented: boolean,
+  data: Record<string, string | number | boolean | null>
+): void {
+  try {
+    recordDurableCrashBreadcrumb('gpu_fallback_marker_persisted', { ...data, consented })
+  } catch {
+    // Diagnostics only; the marker is what the next launch reads.
+  }
+}
+
 // Why: a burst of GPU child crashes means HW acceleration is unusable — persist a build-scoped marker and offer software rendering.
 async function handleGpuChildCrash(reason: string, exitCode: number | null): Promise<void> {
-  // Software rendering already active or shutting down: nothing more to do.
-  if (gpuFallbackActiveThisLaunch || isQuitting || isServeMode) {
+  // Software rendering already active, engagement under way, or shutting down.
+  if (gpuFallbackActiveThisLaunch || gpuFallbackEngagementStarted || isQuitting || isServeMode) {
     return
   }
-  const result = gpuCrashFallbackTracker.recordGpuCrash(performance.now())
-  if (!result.shouldEngageFallback) {
-    return
-  }
-  recordCrashBreadcrumb('gpu_fallback_engaged', {
-    reason,
-    exitCode,
-    crashesInWindow: result.crashesInWindow
-  })
-  const engagedAt = Date.now()
-  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
-  let restartDecision: GpuFallbackRestartDecision
-  try {
-    restartDecision = await promptForGpuFallbackRestart(window)
-  } catch (error) {
-    console.warn('[gpu-fallback] failed to show restart prompt:', error)
-    return
-  }
-  const fallbackData = {
-    processReason: reason,
-    exitCode,
-    crashesInWindow: result.crashesInWindow
-  }
-  if (isQuitting) {
-    return
-  }
-  if (restartDecision !== 'restart') {
-    recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData)
-    return
-  }
+  // Why first: everything below this point must stay inert off Windows.
   const environment = getWindowsGpuFallbackEnvironment()
   if (!environment) {
     return
   }
-  try {
-    writeGpuFallbackMarker(
-      app.getPath('userData'),
-      {
-        engagedAt,
-        crashesInWindow: result.crashesInWindow
-      },
-      environment
-    )
-  } catch (error) {
-    console.warn('[gpu-fallback] failed to persist marker:', error)
+  // Why canonical: the reader above resolves the same way, and a late app.setName
+  // would otherwise move the write out from under it.
+  const userDataPath = getCanonicalUserDataPath()
+  const inProcess = gpuCrashFallbackTracker.recordGpuCrash(performance.now())
+  // Why durable too: the in-memory count resets on every launch, and 66 of the 73
+  // observed launches recorded only one or two GPU deaths. Per machine that takes the
+  // bundles reaching the threshold from 2 of 21 to 6 — wider reach, not a new one.
+  // Why reason-gated: `launch-failed` clusters across launches for recoverable
+  // reasons (driver update, RDP transition, monitor hotplug) — see the reason set.
+  const countsDurably = countsTowardDurableGpuCrashHistory(reason)
+  const durable = countsDurably
+    ? evaluateGpuCrashHistory(userDataPath, environment, {
+        now: Date.now(),
+        windowMs: DEFAULT_GPU_CRASH_DURABLE_WINDOW_MS,
+        threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD
+      })
+    : inertGpuCrashHistoryDecision()
+  if (!inProcess.shouldEngageFallback && !durable.crossesThreshold) {
+    // Why only here: on the crash that fires, this fsync would land in front of the
+    // marker write, which is racing a kill that can arrive ~7ms after the failure.
+    // Why gated: an inert decision carries no times, so writing it would erase the
+    // real ones an excluded reason is only supposed to be ignored by.
+    if (countsDurably) {
+      persistGpuCrashTimes(userDataPath, environment, durable.crashTimes)
+    }
+    return
+  }
+  gpuFallbackEngagementStarted = true
+  const crashesInWindow = Math.max(inProcess.crashesInWindow, durable.crashesInWindow)
+  recordCrashBreadcrumb('gpu_fallback_engaged', {
+    reason,
+    exitCode,
+    crashesInWindow,
+    crashesAcrossLaunches: durable.crashesInWindow,
+    trigger: inProcess.shouldEngageFallback ? 'in-process' : 'durable'
+  })
+  const engagedAt = Date.now()
+  const fallbackData = {
+    processReason: reason,
+    exitCode,
+    crashesInWindow
+  }
+  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
+  // Why: Chromium fatally CHECKs the browser process on the 6th GPU failure, so
+  // the marker must land before the prompt or an unattended crash never latches.
+  const outcome = await engageGpuFallback({
+    persistMarker: () => {
+      writeGpuFallbackMarker(
+        userDataPath,
+        { engagedAt, crashesInWindow, consented: false },
+        environment
+      )
+      provisionalGpuFallbackUserDataPath = userDataPath
+      // Why after the write: a kill lands here more often than anywhere else, and
+      // this is the only record separating a provisional latch from a consented one.
+      recordGpuFallbackMarkerPersisted(false, fallbackData)
+    },
+    clearMarker: () => clearGpuFallbackMarker(userDataPath),
+    prompt: () => promptForGpuFallbackRestart(window),
+    isQuitting: () => isQuitting,
+    onMarkerPersistFailed: (error) => {
+      console.warn('[gpu-fallback] failed to persist marker:', error)
+      recordDurableCrashBreadcrumb('gpu_fallback_marker_failed', fallbackData)
+    },
+    onMarkerClearFailed: () =>
+      recordDurableCrashBreadcrumb('gpu_fallback_marker_clear_failed', fallbackData),
+    onPromptFailed: (error) => {
+      console.warn('[gpu-fallback] failed to show restart prompt:', error)
+      // Why durable: this is the state the process is most likely to be killed in.
+      recordDurableCrashBreadcrumb('gpu_fallback_prompt_failed', fallbackData)
+    },
+    onRestartDeferred: () =>
+      recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData)
+  })
+  // Why delegated: this mapping is unit-tested; deriving it inline here left the
+  // whole feature defeatable by a one-token change no test could see.
+  const resolution = resolveGpuFallbackEngagement(outcome, userDataPath)
+  provisionalGpuFallbackUserDataPath = resolution.provisionalMarkerPath
+  // Why here and not at fire time: a kill during the prompt must leave the count
+  // armed to fire again, while a decline must not re-prompt on the very next crash.
+  if (resolution.clearDurableHistory) {
+    clearGpuCrashHistory(userDataPath)
+  }
+  if (resolution.rePersistConsentedMarker) {
+    try {
+      writeGpuFallbackMarker(
+        userDataPath,
+        { engagedAt, crashesInWindow, consented: true },
+        environment
+      )
+      recordGpuFallbackMarkerPersisted(true, fallbackData)
+    } catch (error) {
+      console.warn('[gpu-fallback] failed to re-persist marker after consent:', error)
+      recordDurableCrashBreadcrumb('gpu_fallback_marker_failed', fallbackData)
+    }
+  }
+  if (!resolution.relaunch) {
     return
   }
   isQuitting = true
@@ -1626,6 +1744,46 @@ async function handleGpuChildCrash(reason: string, exitCode: number | null): Pro
   // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
   destroySystemTray()
   app.exit(0)
+}
+
+// Why a user-visible escape hatch: the marker is build-sticky, so a false latch
+// would otherwise hold a working GPU in software rendering until the next update.
+function turnOffGpuFallback(): void {
+  const userDataPath = getCanonicalUserDataPath()
+  clearGpuCrashHistory(userDataPath)
+  if (!clearGpuFallbackMarker(userDataPath)) {
+    // Why not relaunch: the next launch would read the marker and come straight back.
+    recordDurableCrashBreadcrumb('gpu_fallback_marker_clear_failed', { phase: 'user-opt-out' })
+    return
+  }
+  provisionalGpuFallbackUserDataPath = null
+  recordDurableCrashBreadcrumb('gpu_fallback_disabled_by_user')
+  isQuitting = true
+  relaunchApp('gpu-fallback-opt-out')
+  destroySystemTray()
+  app.exit(0)
+}
+
+// Why: an orderly shutdown proves Chromium's GPU CHECK never landed, so a marker
+// the user never confirmed must not survive into the next launch.
+function dropUnconfirmedGpuFallbackMarker(): void {
+  if (provisionalGpuFallbackUserDataPath === null) {
+    return
+  }
+  // Why the count too: an orderly shutdown proves the burst was survivable, so
+  // leaving it armed would re-latch on the next single GPU crash inside the window.
+  // Why not hoisted above the null guard: only an engagement sets this path, and a
+  // quit that clears the count unconditionally would wipe the 1-2 crashes recorded
+  // by a loop the user quits out of by hand — the counting this file exists for.
+  // The residual is bounded: an uncleared count ages out of the 5-minute window.
+  clearGpuCrashHistory(provisionalGpuFallbackUserDataPath)
+  if (!clearGpuFallbackMarker(provisionalGpuFallbackUserDataPath)) {
+    // `quit` is the last JS event, so this is terminal: the next launch starts in
+    // safe graphics and clears itself on the next Orca or Electron version.
+    recordDurableCrashBreadcrumb('gpu_fallback_marker_clear_failed', { phase: 'shutdown' })
+    return
+  }
+  provisionalGpuFallbackUserDataPath = null
 }
 
 function recordProcessGoneCrash(
@@ -2641,6 +2799,8 @@ void app.whenReady().then(async () => {
 
   registerAppMenu({
     appMenuLabel: devInstanceIdentity.name,
+    isGpuFallbackActive: () => gpuFallbackActiveThisLaunch,
+    onTurnOffGpuFallback: turnOffGpuFallback,
     onCheckForUpdates: (options) => runUserInitiatedUpdateCheck(options),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (mainWindow?.webContents.id === webContentsId) {
@@ -2933,6 +3093,11 @@ app.on('before-quit', () => {
   // Why: defer PTY cleanup to will-quit so the renderer captures scrollback before PTY-exit events unmount TerminalPane (dropping its capture callbacks).
   rateLimits?.stop()
 })
+
+// Why 'quit', not will-quit: will-quit's first pass only means a quit was requested
+// and then defers teardown for seconds, during which Chromium's GPU CHECK can still
+// fire. Only 'quit' proves the process is leaving without that kill.
+app.on('quit', dropUnconfirmedGpuFallbackMarker)
 
 // Why: will-quit fires twice — first pass runs sync cleanup + preventDefault to await checkpoint writes; second pass exits.
 let daemonDisconnectDone = false

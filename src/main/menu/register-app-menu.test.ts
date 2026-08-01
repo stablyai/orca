@@ -417,4 +417,35 @@ describe('registerAppMenu', () => {
     expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
+
+  it('offers the safe-graphics escape hatch only while the fallback is latched', () => {
+    const label = 'Turn Off Safe Graphics Mode'
+
+    registerAppMenu(buildMenuOptions())
+    expect(getSubmenu(getTemplate(), 'Help').map((item) => item.label)).not.toContain(label)
+
+    buildFromTemplateMock.mockReset()
+    buildFromTemplateMock.mockImplementation((template) => ({ template }))
+    const options = {
+      ...buildMenuOptions(),
+      isGpuFallbackActive: vi.fn(() => true),
+      onTurnOffGpuFallback: vi.fn()
+    }
+    registerAppMenu(options)
+
+    // Why it must exist: the marker is build-sticky, so without this a false latch
+    // holds a working GPU in software rendering until the next app update.
+    const item = getSubmenu(getTemplate(), 'Help').find((entry) => entry.label === label)
+    expect(item).toBeDefined()
+    item?.click?.({} as never, {} as never, {} as never)
+    expect(options.onTurnOffGpuFallback).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the escape hatch when no handler is wired, rather than a dead item', () => {
+    registerAppMenu({ ...buildMenuOptions(), isGpuFallbackActive: vi.fn(() => true) })
+
+    expect(getSubmenu(getTemplate(), 'Help').map((item) => item.label)).not.toContain(
+      'Turn Off Safe Graphics Mode'
+    )
+  })
 })

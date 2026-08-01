@@ -5,6 +5,8 @@ import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-br
 export type AppRelaunchReason =
   | 'admin-restart'
   | 'gpu-fallback'
+  /** User turned safe graphics back off from the Help menu. */
+  | 'gpu-fallback-opt-out'
   | 'profile-switch'
   | 'profile-transfer'
   | 'renderer-request'

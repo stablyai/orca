@@ -7,6 +7,27 @@ export type GpuCrashFallbackOptions = {
 
 const GPU_FALLBACK_CRASH_REASONS = new Set(['abnormal-exit', 'crashed', 'launch-failed'])
 
+/**
+ * Reasons that may accumulate in the *cross-launch* history.
+ *
+ * Why `launch-failed` is excluded here but kept in-process: a GPU that fails to
+ * launch clusters across launches for recoverable reasons — a driver update in
+ * flight, an RDP session transition, a monitor hotplug — and durable counting
+ * would latch build-sticky safe graphics on a condition that clears itself. Three
+ * launch failures inside one 30s session is still a broken GPU, so the in-process
+ * tracker keeps counting them.
+ *
+ * Costs nothing on the observed data: the 39 cluster-E bundles hold 111 distinct
+ * GPU child deaths — 97 `crashed` (87 STATUS_BREAKPOINT, 9 exit-34, 1 exit-`-1`),
+ * 14 `killed` (13 exit-1), and zero `launch-failed`. `killed` reaches neither
+ * counter, here or in `GPU_FALLBACK_CRASH_REASONS`; that predates this file.
+ */
+const DURABLE_GPU_FALLBACK_CRASH_REASONS = new Set(['abnormal-exit', 'crashed'])
+
+export function countsTowardDurableGpuCrashHistory(reason: string): boolean {
+  return DURABLE_GPU_FALLBACK_CRASH_REASONS.has(reason)
+}
+
 // Why: on old/flaky GPU drivers the GPU child process crashes (STATUS_BREAKPOINT
 // / ANGLE-D3D init failure) repeatedly - Windows clusters F0BDNADU79Q and
 // F0BDNRZ5MDG. GPU child deaths are intentionally suppressed as recoverable

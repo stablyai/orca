@@ -37,6 +37,10 @@ type RegisterAppMenuOptions = {
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
   getKeybindings?: () => KeybindingOverrides | undefined
+  // Why an escape hatch: the safe-graphics marker is build-sticky, so without this
+  // a false latch leaves a user in software rendering until the next app update.
+  isGpuFallbackActive?: () => boolean
+  onTurnOffGpuFallback?: () => void
   // Why: the macOS app-menu title. Passed the per-branch dev label since
   // app.name is now pinned to a stable value for Keychain-key stability.
   appMenuLabel?: string
@@ -57,7 +61,9 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onToggleRightSidebar,
     onToggleAppearance,
     getAppearanceState,
-    getKeybindings
+    getKeybindings,
+    isGpuFallbackActive,
+    onTurnOffGpuFallback
   } = options
 
   const isMac = process.platform === 'darwin'
@@ -292,10 +298,24 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [{ role: 'minimize' }, { role: 'zoom' }]
   }
 
+  // Why only while latched: the item is meaningless otherwise, and the marker is
+  // read before whenReady so this state cannot change during the launch.
+  const gpuFallbackItems: Electron.MenuItemConstructorOptions[] =
+    isGpuFallbackActive?.() && onTurnOffGpuFallback
+      ? [
+          { type: 'separator' },
+          {
+            label: translateMain('menu.turnOffSafeGraphics', 'Turn Off Safe Graphics Mode'),
+            click: () => onTurnOffGpuFallback()
+          }
+        ]
+      : []
+
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.help', 'Help'),
     submenu: [
       crashReportItem,
+      ...gpuFallbackItems,
       { type: 'separator' },
       featureTourItem,
       setupGuideItem,
