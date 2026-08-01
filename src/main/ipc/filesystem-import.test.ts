@@ -545,7 +545,7 @@ describe('fs:importExternalPaths', () => {
 
     expect(result.sources[0]).toMatchObject({
       status: 'failed',
-      reason: 'File exceeds the 25 MB remote import limit'
+      reason: "'large.bin' exceeds the 25 MB remote import limit"
     })
     expect(openMock).not.toHaveBeenCalled()
   })
@@ -772,7 +772,7 @@ describe('fs:importExternalPaths', () => {
 
     expect(result.sources[0]).toMatchObject({
       status: 'failed',
-      reason: "File changed during upload staging: ''"
+      reason: "File changed during upload staging: 'logo.png'"
     })
     expect(readFileHandleMock).not.toHaveBeenCalled()
   })
@@ -801,7 +801,7 @@ describe('fs:importExternalPaths', () => {
 
     expect(result.sources[0]).toMatchObject({
       status: 'failed',
-      reason: "Path escaped upload root during staging: ''"
+      reason: "Path escaped upload root during staging: 'assets'"
     })
   })
 })
