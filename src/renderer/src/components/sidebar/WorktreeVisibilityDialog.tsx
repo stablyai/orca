@@ -392,7 +392,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
             <p className="min-w-0 flex-1 leading-5">
               {translate(
                 'auto.components.sidebar.WorktreeVisibilityDialog.18e435afc7',
-                'Both switches also cover worktrees created later. Hiding a kind clears the worktrees you had shown individually.'
+                'Both switches also cover worktrees created later. Hiding a kind also hides the worktrees you had shown individually.'
               )}
             </p>
           </div>

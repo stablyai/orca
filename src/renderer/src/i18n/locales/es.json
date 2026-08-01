@@ -4662,7 +4662,7 @@
           "7ce6903db5": "{{value0}} de {{value1}} mostrados",
           "e5b1027c94": "¿Qué es esto?",
           "f6c2138da5": "Dos tipos de worktrees que no son de Orca",
-          "18e435afc7": "Ambos interruptores también cubren los worktrees creados más adelante. Ocultar un tipo borra los worktrees que habías mostrado individualmente.",
+          "18e435afc7": "Ambos interruptores también cubren los worktrees creados más adelante. Ocultar un tipo también oculta los worktrees que habías mostrado individualmente.",
           "29f5d4a1b8": "Creados a mano o por otra herramienta.",
           "1af4360b27": "Todo lo creado a través de Orca siempre aparece en la barra lateral, tanto si lo pediste tú como un agente. Esta pantalla trata de los worktrees creados fuera de Orca: los que los agentes crean directamente en el repositorio, como .claude/worktrees, y los creados a mano con git. Cada tipo tiene su propio interruptor abajo.",
           "2b05471c38": "Creados por agentes directamente en el repositorio, fuera de Orca.",

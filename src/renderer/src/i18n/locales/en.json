@@ -4786,7 +4786,7 @@
           "7ce6903db5": "{{value0}} of {{value1}} shown",
           "e5b1027c94": "What is this?",
           "f6c2138da5": "Two kinds of non-Orca worktrees",
-          "18e435afc7": "Both switches also cover worktrees created later. Hiding a kind clears the worktrees you had shown individually.",
+          "18e435afc7": "Both switches also cover worktrees created later. Hiding a kind also hides the worktrees you had shown individually.",
           "29f5d4a1b8": "Created by hand or by another tool.",
           "1af4360b27": "Anything created through Orca always shows in the sidebar, whether you or an agent asked for it. This screen is about worktrees created outside Orca: the ones agents make directly in the repo, like .claude/worktrees, and the ones made by hand with git. Each kind has its own switch below.",
           "2b05471c38": "Created by agents directly in the repo, outside Orca.",
