@@ -15,6 +15,7 @@ import {
   getGitRepoRoot,
   getLinkedWorktreeMainRepoRoot,
   isGitRepo,
+  isGitRepoRoot,
   normalizeGitRepoRootForInputPath
 } from './repo'
 
@@ -46,6 +47,16 @@ describe('isGitRepo', () => {
     git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
 
     expect(isGitRepo(bareRepo)).toBe(true)
+  })
+
+  it('distinguishes a selected repo root from an ordinary nested folder', () => {
+    const repo = path.join(tmpDir, 'root-selection')
+    const nested = path.join(repo, 'packages', 'mobile')
+    mkdirSync(nested, { recursive: true })
+    git(repo, ['init', '--quiet'])
+
+    expect(isGitRepoRoot(repo)).toBe(true)
+    expect(isGitRepoRoot(nested)).toBe(false)
   })
 
   it('accepts a real repository when git itself cannot be run', () => {

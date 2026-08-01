@@ -1233,7 +1233,8 @@ async function scanNestedReposForIpc(args: {
       },
       isSelectedPathGitRepo: async (path) => {
         try {
-          return (await gitProvider.isGitRepoAsync(path)).isRepo
+          const check = await gitProvider.isGitRepoAsync(path)
+          return check.isRepo && posix.normalize(check.rootPath ?? '') === posix.normalize(path)
         } catch {
           return false
         }

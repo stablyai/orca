@@ -382,6 +382,18 @@ describe('scanNestedRepos', () => {
     expect(result.repos).toEqual([])
   })
 
+  it('keeps a selected plain subfolder separate from its parent git repo', async () => {
+    const root = await tempRoot()
+    const selected = join(root, 'notes')
+    await mkdir(selected, { recursive: true })
+    await makeGitRepo(root)
+
+    const result = await scanNestedRepos({ path: selected })
+
+    expect(result.selectedPathKind).toBe('non_git_folder')
+    expect(result.repos).toEqual([])
+  })
+
   it.skipIf(process.platform === 'win32')(
     'does not follow symlinked directories outside the selected folder',
     async () => {

@@ -91,6 +91,11 @@ export function isGitRepo(path: string): boolean {
   return markerScan.status === 'valid'
 }
 
+/** Check whether the selected directory itself, rather than an ancestor, is the repository root. */
+export function isGitRepoRoot(path: string): boolean {
+  return isGitRepo(path) && pathsReferToSameEntry(path, getGitRepoRoot(path))
+}
+
 let warnedMarkerFallbackThisSession = false
 
 /**

@@ -7,7 +7,7 @@ import type {
   NestedRepoScanOptions,
   NestedRepoScanResult
 } from '../../shared/project-group-types'
-import { isGitRepo } from '../git/repo'
+import { isGitRepoRoot } from '../git/repo'
 
 type NestedRepoDirectoryEntry = {
   name: string
@@ -225,7 +225,7 @@ export async function scanNestedRepos(args: {
     joinPath: join,
     basename,
     hasGitMarker,
-    isSelectedPathGitRepo: async (path: string) => isGitRepo(path) || (await hasGitMarker(path))
+    isSelectedPathGitRepo: async (path: string) => isGitRepoRoot(path) || (await hasGitMarker(path))
   }
   const buildResult = (selectedPathKind: NestedRepoScanResult['selectedPathKind']) => ({
     selectedPath: args.path,
