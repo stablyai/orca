@@ -1491,9 +1491,12 @@ type RuntimeVisibleTerminalState = {
 type ProviderBufferAcquisition = {
   generation: number
   scrollbackRows: number
-  promise: Promise<PtyProviderBufferSnapshot | null>
+  promise: Promise<SequenceAnchoredProviderSnapshot | null>
   timedOut: boolean
 }
+
+/** Provider snapshot for clients; seq is omitted until a provider sequence sync anchors it to this boot's output domain. */
+type SequenceAnchoredProviderSnapshot = Omit<PtyProviderBufferSnapshot, 'seq'> & { seq?: number }
 
 type RuntimeTerminalBufferSnapshot = {
   data: string
@@ -2842,7 +2845,7 @@ export class OrcaRuntimeService {
   private providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
   private providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
   private providerVisibleRetryAtByPtyId = new Map<string, number>()
-  private providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
+  private providerSnapshotsWithLiveModeTransition = new WeakSet<SequenceAnchoredProviderSnapshot>()
   private ptyLifecycleGenerationById = new Map<string, number>()
   private nextPtyLifecycleGeneration = 1
   private recentPtyPathCandidatesById = new Map<string, string[]>()
@@ -7179,14 +7182,19 @@ export class OrcaRuntimeService {
       // their tab id, so focusing the renderer would silently no-op.
       // Phone-local activation also needs this path for inactive restored tabs:
       // desktop focus is intentionally suppressed, but the PTY still must exist.
+      const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
+      // Why: a host restart restores 'ready' records from the provider inventory, but the
+      // daemon streams output only to the process that last ran createOrAttach; a ready tab
+      // whose PTY is detached must re-materialize or subscribers never see live bytes.
+      const ptyStreamDetached =
+        sessionId !== undefined && this.ptyController?.hasPty?.(sessionId) === false
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
-        publicTab.status !== 'ready' &&
+        (publicTab.status !== 'ready' || ptyStreamDetached) &&
         (!targetsHost ||
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
       if (shouldMaterializePendingTerminal) {
-        const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
           group.tabOrder.includes(tab.parentTabId)
         )?.id
@@ -11003,7 +11011,9 @@ export class OrcaRuntimeService {
         if (snapshot.oscLinks !== undefined) {
           state.emulator.setRestoredOscLinks(snapshot.oscLinks)
         }
-        state.outputSequence = snapshot.seq
+        if (snapshot.seq !== undefined) {
+          state.outputSequence = snapshot.seq
+        }
       })
       .catch(() => {
         // Best-effort: live bytes already chain behind this replacement state.
@@ -11146,7 +11156,7 @@ export class OrcaRuntimeService {
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
     wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
-  ): Promise<PtyProviderBufferSnapshot | null> {
+  ): Promise<SequenceAnchoredProviderSnapshot | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
     let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
@@ -11171,7 +11181,7 @@ export class OrcaRuntimeService {
       return acquisition.promise
     }
     const result = await withTimeout<
-      { settled: true; value: PtyProviderBufferSnapshot | null } | { settled: false }
+      { settled: true; value: SequenceAnchoredProviderSnapshot | null } | { settled: false }
     >(
       acquisition.promise.then((value) => ({ settled: true as const, value })),
       wait.timeoutMs,
@@ -11190,7 +11200,7 @@ export class OrcaRuntimeService {
     ptyId: string,
     opts: { scrollbackRows?: number },
     generation: number
-  ): Promise<PtyProviderBufferSnapshot | null> {
+  ): Promise<SequenceAnchoredProviderSnapshot | null> {
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()
     let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
     if (!liveModeTrackers) {
@@ -11228,14 +11238,21 @@ export class OrcaRuntimeService {
         this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
         effectiveAlternateScreen = modeTracker.isAlternateScreen
       }
-      const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
-      const reconciledSnapshot = this.preferTrackedLastTitle(ptyId, {
-        ...snapshot,
-        seq: providerOffset + snapshot.seq,
-        ...(effectiveAlternateScreen !== undefined
-          ? { alternateScreen: effectiveAlternateScreen }
-          : {})
-      })
+      // Why: until a provider sequence sync runs this boot, snapshot.seq lives in the
+      // provider's cumulative domain while live frames use the boot-local counter; a
+      // foreign seq poisons client dedupe baselines into dropping all live output.
+      const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId)
+      const { seq: providerDomainSeq, ...snapshotWithoutSeq } = snapshot
+      const reconciledSnapshot = this.preferTrackedLastTitle<SequenceAnchoredProviderSnapshot>(
+        ptyId,
+        {
+          ...snapshotWithoutSeq,
+          ...(providerOffset !== undefined ? { seq: providerOffset + providerDomainSeq } : {}),
+          ...(effectiveAlternateScreen !== undefined
+            ? { alternateScreen: effectiveAlternateScreen }
+            : {})
+        }
+      )
       if (liveModeTracker.hasObservedAlternateScreenSwitch) {
         this.providerSnapshotsWithLiveModeTransition.add(reconciledSnapshot)
       }
@@ -11396,13 +11413,16 @@ export class OrcaRuntimeService {
     if (this.getPtyLifecycleGeneration(ptyId) !== generation) {
       return null
     }
+    // Why: an unsynced provider seq is a foreign domain; watermark with the counter read
+    // before the capture so any byte that raced the snapshot invalidates this cache entry.
+    const visibleSequence = snapshot.seq ?? outputSequence
     const visibleState: RuntimeVisibleTerminalState = {
       lines,
       isAlternateScreen: snapshot.alternateScreen ?? false,
-      sequence: snapshot.seq,
+      sequence: visibleSequence,
       generation
     }
-    if (this.getPtyOutputSequence(ptyId) <= snapshot.seq) {
+    if (this.getPtyOutputSequence(ptyId) <= visibleSequence) {
       this.providerVisibleStateByPtyId.set(ptyId, visibleState)
     }
     return visibleState

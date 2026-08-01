@@ -8928,15 +8928,44 @@ describe('OrcaRuntimeService', () => {
       expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-restored', {
         scrollbackRows: 5000
       })
+      // Why no seq: without a provider sequence sync this boot, the provider's
+      // cumulative seq is a foreign domain and must not reach clients.
       expect(snapshot).toEqual({
         data: 'restored screen\r\n',
         scrollbackAnsi: 'restored history\r\n',
         cols: 120,
         rows: 40,
         cwd: '/projects/restored',
+        source: 'headless'
+      })
+    })
+
+    it('anchors the provider snapshot seq once a provider sequence sync has run', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'restored screen\r\n',
+        cols: 120,
+        rows: 40,
         seq: 900,
         source: 'headless'
       })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      runtime.synchronizePtyOutputSequenceFromProvider('pty-restored', {
+        value: 900,
+        generation: 'continued'
+      })
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-restored', {
+        scrollbackRows: 5000
+      })
+
+      expect(snapshot?.seq).toBe(900)
     })
 
     it('prefers provider history over a partial headless mirror for requested snapshots', async () => {
@@ -8959,13 +8988,14 @@ describe('OrcaRuntimeService', () => {
       syncSinglePty(runtime)
       runtime.onPtyData('pty-1', 'partial current screen\r\n', 100)
 
-      await expect(
-        runtime.serializeAuthoritativeTerminalBuffer('pty-1', { scrollbackRows: 5000 })
-      ).resolves.toMatchObject({
-        data: 'authoritative screen\r\n',
-        scrollbackAnsi: 'deep provider history\r\n',
-        seq: 900
+      const authoritative = await runtime.serializeAuthoritativeTerminalBuffer('pty-1', {
+        scrollbackRows: 5000
       })
+      expect(authoritative).toMatchObject({
+        data: 'authoritative screen\r\n',
+        scrollbackAnsi: 'deep provider history\r\n'
+      })
+      expect(authoritative?.seq).toBeUndefined()
       expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-1', {
         scrollbackRows: 5000
       })
@@ -28256,6 +28286,88 @@ describe('OrcaRuntimeService', () => {
       leafId: HEADLESS_LEAF_ID,
       status: 'ready'
     })
+  })
+
+  function makeRestartRestoredReadyTabRuntime(hasPty: boolean): {
+    runtime: OrcaRuntimeService
+    spawn: ReturnType<typeof vi.fn>
+    persistedPtyId: string
+  } {
+    const persistedPtyId = `${TEST_WORKTREE_ID}@@serve-restored-pty`
+    const spawn = vi.fn().mockResolvedValue({ id: persistedPtyId, isReattach: true })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: persistedPtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Restored Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: persistedPtyId })
+        }
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      // Why: the provider inventory reports the session live across a host restart
+      // regardless of whether this process has attached its output stream.
+      listProcesses: async () => [
+        { id: persistedPtyId, cwd: TEST_WORKTREE_PATH, title: 'restored' }
+      ],
+      hasPty: () => hasPty
+    })
+    runtime.registerPty(persistedPtyId, TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    return { runtime, spawn, persistedPtyId }
+  }
+
+  it('re-materializes a ready session tab whose PTY has no provider attachment this boot', async () => {
+    const { runtime, spawn, persistedPtyId } = makeRestartRestoredReadyTabRuntime(false)
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(listed.tabs[0]).toMatchObject({ type: 'terminal', status: 'ready' })
+
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', HEADLESS_LEAF_ID, {
+      notifyClients: false
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: TEST_WORKTREE_ID,
+        tabId: 'host-tab',
+        leafId: HEADLESS_LEAF_ID,
+        sessionId: persistedPtyId,
+        persistHostSessionBinding: true
+      })
+    )
+  })
+
+  it('keeps ready session tab activation spawn-free while the PTY is provider-attached', async () => {
+    const { runtime, spawn } = makeRestartRestoredReadyTabRuntime(true)
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(listed.tabs[0]).toMatchObject({ type: 'terminal', status: 'ready' })
+
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', HEADLESS_LEAF_ID, {
+      notifyClients: false
+    })
+
+    expect(spawn).not.toHaveBeenCalled()
   })
 
   function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string[] } = {}): {
