@@ -10140,6 +10140,119 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(10)
   })
 
+  it('fails closed when a stale working row names a different session than a stopped one', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transportFactoryQueue.push(transport)
+    const staleWorkingPaneKey = makePaneKey('tab-1', LEAF_1)
+    const stoppedPaneKey = makePaneKey('tab-1', '33333333-3333-4333-8333-333333333333')
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: null }]
+      },
+      ptyIdsByTabId: {
+        'tab-1': []
+      },
+      terminalLayoutsByTabId: {},
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {
+        [staleWorkingPaneKey]: {
+          state: 'working',
+          prompt: 'old abandoned session',
+          agentType: 'codex',
+          paneKey: staleWorkingPaneKey,
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'codex-session-old' }
+        },
+        [stoppedPaneKey]: {
+          state: 'done',
+          prompt: 'finished later session',
+          agentType: 'codex',
+          paneKey: stoppedPaneKey,
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          updatedAt: 2,
+          stateStartedAt: 2,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'codex-session-new' }
+        }
+      },
+      sleepingAgentSessionsByPaneKey: {}
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({ restoredLeafId: undefined, restoredPtyIdByLeafId: {} })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(10)
+
+    // The tab's rows name two distinct sessions; resuming the stale working
+    // one would relaunch a conversation the user already moved past.
+    expect(transport.connect).not.toHaveBeenCalledWith(
+      expect.objectContaining({ command: expect.stringContaining('resume') })
+    )
+  })
+
+  it('does not resume a session whose freshest row is stopped', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transportFactoryQueue.push(transport)
+    const workingPaneKey = makePaneKey('tab-1', LEAF_1)
+    const stoppedPaneKey = makePaneKey('tab-1', '33333333-3333-4333-8333-333333333333')
+    const makeEntry = (paneKey: string, state: 'working' | 'done', updatedAt: number) => ({
+      state,
+      prompt: 'same session',
+      agentType: 'codex',
+      paneKey,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      updatedAt,
+      stateStartedAt: updatedAt,
+      stateHistory: [],
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
+    })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: null }]
+      },
+      ptyIdsByTabId: {
+        'tab-1': []
+      },
+      terminalLayoutsByTabId: {},
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {
+        [workingPaneKey]: makeEntry(workingPaneKey, 'working', 1),
+        [stoppedPaneKey]: makeEntry(stoppedPaneKey, 'done', 2)
+      },
+      sleepingAgentSessionsByPaneKey: {}
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({ restoredLeafId: undefined, restoredPtyIdByLeafId: {} })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(10)
+
+    // The freshest row for the session is done: the Stop is authoritative.
+    expect(transport.connect).not.toHaveBeenCalledWith(
+      expect.objectContaining({ command: expect.stringContaining('resume') })
+    )
+  })
+
   it('does not choose a non-exact legacy record when same-tab provider sessions differ', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')

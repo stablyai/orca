@@ -4879,9 +4879,11 @@ export function connectPanePty(
       // status only when the tab/worktree has exactly one resumable live
       // provider identity; multiple candidates remain ambiguous and fail
       // closed rather than resuming the wrong split pane.
+      // Why: done rows stay in the candidate set as suppressing evidence — a
+      // stale working row must not win adoption over a fresher stopped
+      // session, and a tab whose rows name distinct sessions stays ambiguous.
       const candidates = Object.values(state.agentStatusByPaneKey).filter((entry) => {
         if (
-          entry.state === 'done' ||
           !entry.providerSession ||
           !isResumableTuiAgent(entry.agentType) ||
           entry.worktreeId !== deps.worktreeId
@@ -4910,7 +4912,10 @@ export function connectPanePty(
       if (!allSameSession) {
         return undefined
       }
-      return candidates.reduce((best, entry) => (entry.updatedAt > best.updatedAt ? entry : best))
+      const freshest = candidates.reduce((best, entry) =>
+        entry.updatedAt > best.updatedAt ? entry : best
+      )
+      return freshest.state === 'done' ? undefined : freshest
     }
     const buildColdRestoreAgentResumeStartup = (): ColdRestoreAgentResumeStartup | null => {
       if (pendingStartupCommand) {

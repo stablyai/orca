@@ -6326,6 +6326,34 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('synchronously checkpoints a first-seen Stop that introduces the provider identity', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'Stop',
+          session_id: 'codex-first-stop-checkpoint'
+        }),
+        '/hook/codex'
+      )
+
+      // Main may have been down for the whole working phase; this done row is
+      // the only durable resume ID and must not wait out the debounce.
+      expect(existsSync(lastStatusPath())).toBe(true)
+      expect(JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]).toMatchObject({
+        payload: { state: 'done' },
+        providerSession: { key: 'session_id', id: 'codex-first-stop-checkpoint' }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
   it('synchronously checkpoints Pi metadata-only session identity', async () => {
     const server = new AgentHookServer()
     await server.start({

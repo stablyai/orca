@@ -241,7 +241,18 @@ function needsImmediateResumableStatusCheckpoint(
   }
   // A Stop event must synchronously replace a previously persisted working row;
   // otherwise an abrupt exit in this interval could relaunch a completed turn.
-  return next.payload.state === 'done' && hasResumableProviderSession(previous)
+  if (next.payload.state !== 'done') {
+    return false
+  }
+  if (hasResumableProviderSession(previous)) {
+    return true
+  }
+  // A done row that first introduces (or changes) the provider identity is
+  // itself the only durable resume ID — it must not wait out the debounce.
+  return (
+    hasProviderSessionIdentity(next) &&
+    (!hasProviderSessionIdentity(previous) || !providerSessionsEqual(previous, next))
+  )
 }
 
 // Why: validate the durable `${tabId}:${leafUuid}` leaf suffix at write/hydrate so legacy numeric rows fail closed.

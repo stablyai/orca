@@ -3279,6 +3279,7 @@ export function useIpcEvents(): void {
     }
 
     let snapshotRequestedForReadyWindow = false
+    let startupSnapshotBarrierStarted = false
     let snapshotRequestId = 0
     const loadAgentStatusSnapshot = async (options?: {
       allowBeforeWorkspaceReady?: boolean
@@ -3333,9 +3334,10 @@ export function useIpcEvents(): void {
     }
 
     unsubs.push(
-      registerAgentStatusStartupSnapshotLoader(() =>
-        loadAgentStatusSnapshot({ allowBeforeWorkspaceReady: true })
-      )
+      registerAgentStatusStartupSnapshotLoader(() => {
+        startupSnapshotBarrierStarted = true
+        return loadAgentStatusSnapshot({ allowBeforeWorkspaceReady: true })
+      })
     )
 
     const requestAgentStatusSnapshotIfReady = (): void => {
@@ -3357,7 +3359,13 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.agentStatus.onSet((data) => {
-        applyAgentStatus(data)
+        // Why: once the startup barrier applied the hook cache, a live push
+        // (e.g. a remote Stop landing during reconnect) must not be dropped
+        // pre-ready, or the stale working row would drive cold restore.
+        applyAgentStatus(
+          data,
+          startupSnapshotBarrierStarted ? { allowBeforeWorkspaceReady: true } : undefined
+        )
       })
     )
     const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(

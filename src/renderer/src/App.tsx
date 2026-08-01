@@ -1177,6 +1177,11 @@ function App(): React.JSX.Element {
             try {
               await window.api.app.awaitFirstWindowStartupServices()
               await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+              // Why: degraded startup still rebuilds lost-layout tabs; without
+              // the hook-cache barrier they would cold-restore as bare shells.
+              await requestAgentStatusStartupSnapshot().catch((err) => {
+                console.warn('[agent-status] degraded-path startup snapshot failed:', err)
+              })
               await actions.reconnectPersistedTerminals(abortController.signal)
               await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
             } catch (reconnectErr) {
