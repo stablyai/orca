@@ -296,6 +296,7 @@ import {
   isExpectedAgentProcess,
   recognizeAgentProcessFromCommandLine
 } from '../../../../shared/agent-process-recognition'
+import { isTmuxSessionCommand } from '../../../../shared/tmux-pane-process'
 import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
@@ -1323,11 +1324,12 @@ export function connectPanePty(
   // shadowing the shell's current command line, for generic terminals where no
   // launch metadata exists. Consumed by getAuthoritativePaneAgent below.
   let commandInferredPaneAgent: TuiAgent | null = null
+  let commandInferredTmuxSessionCommand: string | null = null
   let pendingShellCommandLine = ''
   let pendingShellCommandCursor = 0
   let commandInferredPaneAgentGeneration = 0
   let shellCommandInferenceSuspendedUntilCommandEnd = false
-  let startAcceptedInferredCommand = (_agent: TuiAgent): void => {}
+  let startAcceptedInferredCommand = (_expectation: TuiAgent | 'tmux'): void => {}
   let requestKnownDroidReconfirmation = (): void => {}
   const resetPendingShellCommandLine = (): void => {
     pendingShellCommandLine = ''
@@ -1339,6 +1341,7 @@ export function connectPanePty(
     const candidateAgent = commandLine
       ? (recognizeAgentProcessFromCommandLine(commandLine)?.agent ?? null)
       : null
+    const candidateTmuxCommand = isTmuxSessionCommand(commandLine) ? commandLine : null
     const state = useAppStore.getState()
     const registeredLaunchAgent = state.agentLaunchConfigByPaneKey[cacheKey]?.identity.agentType
     // Why: input inside a live TUI can spell another agent command; process or
@@ -1347,14 +1350,22 @@ export function connectPanePty(
       state.paneForegroundAgentByPaneKey[cacheKey]?.agent || isTuiAgent(registeredLaunchAgent)
         ? null
         : candidateAgent
+    const nextTmuxCommand =
+      nextAgent === null &&
+      !state.paneForegroundAgentByPaneKey[cacheKey]?.agent &&
+      !isTuiAgent(registeredLaunchAgent)
+        ? candidateTmuxCommand
+        : null
     commandInferredPaneAgent = nextAgent
+    commandInferredTmuxSessionCommand = nextTmuxCommand
     commandInferredPaneAgentGeneration += 1
-    if (nextAgent) {
-      startAcceptedInferredCommand(nextAgent)
+    if (nextAgent || nextTmuxCommand) {
+      startAcceptedInferredCommand(nextAgent ?? 'tmux')
     }
   }
   const clearCommandInferredPaneAgent = (): void => {
     commandInferredPaneAgent = null
+    commandInferredTmuxSessionCommand = null
     resetPendingShellCommandLine()
     commandInferredPaneAgentGeneration += 1
   }
@@ -1580,7 +1591,7 @@ export function connectPanePty(
       // submit or interrupt revokes only stale Droid routing and confirms once.
       requestKnownDroidReconfirmation()
     }
-    if (commandInferredPaneAgent) {
+    if (commandInferredPaneAgent || commandInferredTmuxSessionCommand) {
       return
     }
     // Why: bytes typed inside a live agent TUI are prompt text, not shell
@@ -2190,7 +2201,9 @@ export function connectPanePty(
       visibleForegroundSampleSettled = false
       // Why: typed commands can be aliases, so they only widen the bounded
       // process-confirmation window; they never become routing evidence.
-      paneForegroundAgentTracker.onCommandStarted(commandInferredPaneAgent)
+      paneForegroundAgentTracker.onCommandStarted(
+        commandInferredPaneAgent ?? (commandInferredTmuxSessionCommand ? 'tmux' : null)
+      )
     },
     onCommandFinished: handleCommandFinished
   })

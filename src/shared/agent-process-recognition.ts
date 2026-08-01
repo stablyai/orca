@@ -101,7 +101,7 @@ function recognizedAgentForProcess(normalized: string): RecognizedAgentProcess |
   return agent ? { agent, processName: normalized } : null
 }
 
-function tokenizeCommandLine(commandLine: string): string[] {
+export function tokenizeProcessCommandLine(commandLine: string): string[] {
   const tokens: string[] = []
   let current = ''
   let quote: '"' | "'" | null = null
@@ -287,7 +287,7 @@ export function recognizeAgentProcessFromCommandLine(
     return null
   }
   const keep = options?.includeHeadlessOneShot === true
-  const tokens = tokenizeCommandLine(commandLine)
+  const tokens = tokenizeProcessCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
   let direct = recognizeAgentProcess(tokens[0])
   // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.

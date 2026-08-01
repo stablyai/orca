@@ -6914,6 +6914,42 @@ describe('connectPanePty', () => {
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
   })
 
+  it('remembers a typed tmux attach command until its pane agent is visible', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    vi.mocked(window.api.pty.confirmForegroundProcess)
+      .mockResolvedValueOnce('tmux')
+      .mockResolvedValue('codex')
+    const pane = createPane(1)
+    const ptyId = 'pty-manual-tmux-no-osc'
+    const tabId = 'tab-manual-tmux-no-osc'
+    const paneKey = makePaneKey(tabId, LEAF_1)
+    transportFactoryQueue.push(createMockTransport(ptyId))
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({ tabId, isVisibleRef: { current: false } }) as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+
+    sendTerminalInputThroughPane(pane, 'tmux -L work attach-session -t agent\r')
+    await vi.advanceTimersByTimeAsync(350)
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: null,
+      shellForeground: false
+    })
+
+    await vi.advanceTimersByTimeAsync(1200)
+    expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledTimes(2)
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: 'codex',
+      routingTrusted: true,
+      shellForeground: false
+    })
+  })
+
   it('confirms an Orca-launched Droid fresh spawn in a no-OSC shell (Git Bash)', async () => {
     // Why: no-OSC shells (Git Bash/cmd) emit no command boundary, so without a fresh-spawn sample the pane never earns routing trust and Shift+Enter regresses to Esc+CR (#7620).
     vi.useFakeTimers()

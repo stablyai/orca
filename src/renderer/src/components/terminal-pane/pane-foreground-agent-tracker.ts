@@ -3,6 +3,7 @@ import {
   recognizeAgentProcess
 } from '../../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
+import { isTmuxProcessCommand } from '../../../../shared/tmux-pane-process'
 import type { TuiAgent } from '../../../../shared/types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
@@ -12,6 +13,7 @@ const COMMAND_SETTLE_MS = 350
 const VISIBLE_PTY_SETTLE_MS = 350
 const WRAPPER_RESOLVE_RETRY_DELAYS_MS = [1200, 6000] as const
 type ForegroundReadReason = 'command' | 'visible-pty' | 'command-finished'
+type ForegroundAgentCommandExpectation = TuiAgent | 'tmux'
 
 type PaneForegroundAgentTrackerDeps = {
   getPtyId: () => string | null
@@ -44,7 +46,7 @@ type PaneForegroundAgentTrackerDeps = {
  */
 export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTrackerDeps): {
   onVisiblePtyBound: (expectsAgent?: boolean) => boolean
-  onCommandStarted: (expectedAgent?: TuiAgent | null) => void
+  onCommandStarted: (expectedAgent?: ForegroundAgentCommandExpectation | null) => void
   /** True when pane identity must remain visible until an async shell confirmation. */
   onCommandFinished: () => boolean
   dispose: () => void
@@ -151,7 +153,9 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       retryDelay !== undefined &&
       (shouldRetryExpectedIdentity ||
         (processName !== null &&
-          (reason === 'command' || isAgentForegroundWrapperProcess(processName))))
+          (reason === 'command' ||
+            isAgentForegroundWrapperProcess(processName) ||
+            isTmuxProcessCommand(processName))))
     if (shouldRetry) {
       // Why: provisional PowerShell may hide a live agent; the bounded ladder
       // spans PowerShell-to-WMIC enrichment without becoming a polling loop.

@@ -206,6 +206,18 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({ agent: 'codex', shellForeground: false })
   })
 
+  it('retries a restored visible tmux client until its pane agent resolves', async () => {
+    readForegroundProcess.mockResolvedValueOnce('tmux').mockResolvedValueOnce('claude')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound()
+    await flushSettleRead(VISIBLE_PTY_SETTLE_MS)
+    expect(publish).not.toHaveBeenCalled()
+
+    await flushSettleRead(WRAPPER_RESOLVE_RETRY_MS)
+    expect(publish).toHaveBeenLastCalledWith({ agent: 'claude', shellForeground: false })
+  })
+
   it('re-reads on a bounded ladder while the read still sees an interpreter wrapper', async () => {
     // Why: daemon shell/helper→agent ancestry resolution has been observed to
     // take >1.5s for real node-wrapped CLIs, so the ladder gets two re-reads.
@@ -226,6 +238,18 @@ describe('createPaneForegroundAgentTracker', () => {
     await flushSettleRead(SECOND_WRAPPER_RETRY_MS)
     expect(readForegroundProcess).toHaveBeenCalledTimes(3)
     expect(publish).toHaveBeenLastCalledWith({ agent: 'claude', shellForeground: false })
+  })
+
+  it('keeps sampling a tmux start until its active pane agent is visible', async () => {
+    readForegroundProcess.mockResolvedValueOnce('tmux').mockResolvedValueOnce('codex')
+    const tracker = makeTracker()
+
+    tracker.onCommandStarted()
+    await flushSettleRead(COMMAND_SETTLE_MS)
+    expect(publish).toHaveBeenLastCalledWith({ agent: null, shellForeground: false })
+
+    await flushSettleRead(WRAPPER_RESOLVE_RETRY_MS)
+    expect(publish).toHaveBeenLastCalledWith({ agent: 'codex', shellForeground: false })
   })
 
   it('stops after the ladder and publishes no identity for a persistent unknown process', async () => {
