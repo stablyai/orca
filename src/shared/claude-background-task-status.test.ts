@@ -62,6 +62,15 @@ describe('Claude background task status', () => {
         background_tasks: [{ id: 'task-1', type: 'background_shell', status: 'starting' }]
       }).hasRunningNonAgentTask
     ).toBe(true)
+    for (const task of [
+      { id: 'task-1', status: 'running' },
+      { id: 'task-1', type: 42, status: 'running' },
+      { id: 'task-1', type: ' ', status: 'running' }
+    ]) {
+      expect(
+        readClaudeBackgroundAgentTasks({ background_tasks: [task] }).hasRunningNonAgentTask
+      ).toBe(true)
+    }
 
     for (const backgroundTasks of [
       [{ id: 'shell-1', type: 'shell', status: 'completed' }],
@@ -245,6 +254,31 @@ describe('Claude background task status', () => {
         background_tasks: []
       })?.state
     ).toBe('working')
+  })
+
+  it('ignores TeammateIdle inventories for lead-owned background work', () => {
+    const state = createHookListenerState()
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [RUNNING_SHELL]
+    })
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'reviewer',
+        background_tasks: []
+      })?.state
+    ).toBe('working')
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [] })
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'TeammateIdle',
+      teammate_name: 'reviewer',
+      background_tasks: [RUNNING_SHELL]
+    })
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
   it('shows a child permission wait after the lead turn is interrupted', () => {

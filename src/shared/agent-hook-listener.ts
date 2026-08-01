@@ -2625,14 +2625,6 @@ function normalizeClaudeEvent(
       ? true
       : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
-  if (backgroundTasks.present && eventAgentId === undefined) {
-    updateClaudeRunningNonAgentTask(
-      state,
-      paneKey,
-      backgroundTasks.hasRunningNonAgentTask,
-      interrupted === true
-    )
-  }
 
   if (
     eventName === 'SubagentStart' ||
@@ -2640,6 +2632,14 @@ function normalizeClaudeEvent(
     eventName === 'TeammateIdle'
   ) {
     return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
+  }
+  if (backgroundTasks.present && eventAgentId === undefined) {
+    updateClaudeRunningNonAgentTask(
+      state,
+      paneKey,
+      backgroundTasks.hasRunningNonAgentTask,
+      interrupted === true
+    )
   }
 
   // Why: Claude's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest; its Notification hook isn't registered) while blocked on a human answer.

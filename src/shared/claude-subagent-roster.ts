@@ -195,7 +195,6 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     const taskStatus = typeof obj.status === 'string' ? obj.status.trim().toLowerCase() : ''
     // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows or explicit terminal states can safely retire work.
     if (
-      taskType.length > 0 &&
       taskType !== 'subagent' &&
       taskType !== 'teammate' &&
       (taskStatus.length === 0 || !CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(taskStatus))
@@ -215,7 +214,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       continue
     }
     tasks.push({
-      id: obj.id,
+      id: obj.id.trim(),
       agentType: typeof obj.agent_type === 'string' ? obj.agent_type : undefined,
       description: typeof obj.description === 'string' ? obj.description : undefined,
       running: taskStatus === 'running',
