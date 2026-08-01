@@ -58,7 +58,7 @@ Source-control and review changes must consider GitLab and other supported git p
 
 ## Localization Terminology
 
-A workspace and a worktree are different objects, and every locale must keep them apart — a translation that merges them names the wrong target in delete and remove copy. Same for `primary` versus `default`. Adjectival `working-tree` is paraphrased rather than transliterated. Locale catalogs are generated, so fix translations in `config/scripts/locale-*-phrase-fixes*.mjs` or `locale-<code>-key-overrides.json` and re-run `pnpm repair:locale-catalog --locale <code>`; hand edits to a catalog do not survive. See the Localization section of [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md).
+Keep workspace ≠ worktree and primary ≠ default in every locale. Catalogs are generated — edit phrase-fixes / key-overrides, then `pnpm repair:locale-catalog --locale <code>`. See [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md).
 
 ## GitHub CLI Usage
 

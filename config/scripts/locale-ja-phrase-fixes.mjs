@@ -1,3 +1,5 @@
+import { JA_PHRASE_FIXES_ROUND6 } from './locale-ja-phrase-fixes-round6.mjs'
+
 // Japanese phrase fixes from high-visibility UI audit rounds 1–4.
 // Why: keep locale-phrase-fixes.mjs under max-lines while preserving repair coverage.
 export const JA_PHRASE_FIXES = [
@@ -241,5 +243,6 @@ export const JA_PHRASE_FIXES = [
   { pattern: /追加してください/g, replacement: '追加', whenEnIncludes: 'Add' },
   { pattern: /試してください/g, replacement: '試す', whenEnIncludes: 'Try' },
   // Why: JP engineers use "Issue" in Latin, not katakana. Runs last so all *→イシュー fixes above normalize to Issue.
-  { pattern: /イシュー/g, replacement: 'Issue', whenEnIncludes: 'issue' }
+  { pattern: /イシュー/g, replacement: 'Issue', whenEnIncludes: 'issue' },
+  ...JA_PHRASE_FIXES_ROUND6
 ]

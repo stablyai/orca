@@ -56,24 +56,9 @@ CI enforces this for `src/preload/` and `src/shared/` — see `docs/preload-type
 
 ## Localization
 
-Locale catalogs in `src/renderer/src/i18n/locales/` are generated, not hand-written. `pnpm bootstrap:<locale>-catalog` translates strings that are new to `en.json`, and `pnpm repair:locale-catalog --locale <code>` re-applies the glossary held in `config/scripts/locale-*-phrase-fixes*.mjs` and `locale-<code>-key-overrides.json`. Correct a bad translation in those policy files and re-run the repair script — a value edited directly in a catalog is overwritten the next time either script runs.
+Locale catalogs in `src/renderer/src/i18n/locales/` are generated. Fix copy in `config/scripts/locale-*-phrase-fixes*.mjs` (term swaps) or `locale-<code>-key-overrides.json` (meaning rewrites), then run `pnpm repair:locale-catalog --locale <code>`. Hand edits to catalogs are overwritten.
 
-### Workspace, worktree, and working tree
-
-The sidebar entry is a **workspace**. The git checkout behind it is a **worktree**. Different actions create and delete each one, so a translation that collapses them tells the user a different object is about to disappear. Never let machine translation merge the pair:
-
-| English | 한국어 |
-| --- | --- |
-| workspace | 워크스페이스 |
-| worktree | 워크트리 |
-| primary (worktree, checkout, branch) | 주 |
-| default (branch, value, behavior) | 기본 |
-
-`primary` and `default` are also distinct — a repo's `primary branch` is not its `default branch`, and the primary-worktree badge is unreadable in a locale that spells both the same way.
-
-`working-tree` is a third term, and English does not keep it clean: git's own vocabulary calls a worktree a "working tree" too, which is why `isMainWorktree` in `src/shared/types.ts` is documented as "the repo's main working tree". That overlap stays out of the catalogs, though — every translatable string carrying the term uses it as an adjective on a file ("no working-tree file is available to edit"), where what is missing is the file, not the worktree. Translate that meaning — the editable copy on disk — instead of transliterating a term a reader will not tell apart from `worktree`. Strings that match git stderr (`cannot remove a locked working tree`, `is not a working tree`) are matched, not shown, and must never be translated at all.
-
-The two halves live in different files. Lexical swaps — workspace, worktree, primary, default — are phrase-fix rules in `config/scripts/locale-ko-phrase-fixes-round6.mjs`. The `working-tree` paraphrase is not, because rewriting a meaning cannot be expressed as a term swap; it sits in `config/scripts/locale-ko-key-overrides.json` alongside the other strings whose machine translation was wrong beyond terminology. Add both kinds of guard when you touch another locale.
+Keep **workspace** and **worktree** distinct — they are different objects. Same for **primary** vs **default**. Paraphrase adjectival **working-tree** (editable file on disk); do not transliterate it as worktree.
 
 ## Pull Requests
 
