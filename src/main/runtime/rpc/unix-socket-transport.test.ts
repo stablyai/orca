@@ -108,13 +108,14 @@ describe('UnixSocketTransport', () => {
     })
     const socket = new FakeSocket()
     let dispatchCount = 0
+    let siblingReply: ((response: string) => void) | undefined
 
     transport.onMessage((_msg, reply, context) => {
       dispatchCount += 1
       if (dispatchCount === 1) {
         context?.startKeepalive(250)
       } else {
-        void reply
+        siblingReply = reply
       }
     })
 
@@ -128,7 +129,11 @@ describe('UnixSocketTransport', () => {
 
     vi.advanceTimersByTime(300)
     expect(socket.destroyed).toBe(false)
+    expect(dispatchCount).toBe(2)
     expect(socket.writes.at(-1)).toContain('"id":"slow"')
     expect(socket.writes.at(-1)).toContain('"requestPhase":"awaiting_response"')
+    expect(siblingReply).toBeTypeOf('function')
+    siblingReply?.('{"id":"sibling","ok":true}')
+    expect(socket.writes.at(-1)).toContain('"id":"sibling"')
   })
 })
