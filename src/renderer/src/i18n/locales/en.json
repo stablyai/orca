@@ -10207,7 +10207,9 @@
           "clientEnabledDescription": "Turn this on to connect this desktop to another Orca as a peer client.",
           "clientHostDisabled": "The host turned off sharing, so you were disconnected.",
           "hostEnabledLabel": "Allow other desktops to connect",
-          "hostEnabledDescription": "Turn this on so other Orca desktops can pair with and view terminals on this computer. Turning it off immediately disconnects any desktop currently connected."
+          "hostEnabledDescription": "Turn this on so other Orca desktops can pair with and view terminals on this computer. Turning it off immediately disconnects any desktop currently connected.",
+          "hostGroupTitle": "Host",
+          "clientGroupTitle": "Client"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",

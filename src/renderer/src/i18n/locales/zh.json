@@ -5064,7 +5064,7 @@
         },
         "PeerTerminalsSection": {
           "dd7ecb3f10": "已连接的主机",
-          "f966803cfd": "对等端",
+          "f966803cfd": "Peers",
           "d5f6851245": "尚未共享任何终端",
           "4fd5f4c027": "未命名终端"
         }
@@ -10131,10 +10131,12 @@
           "clientTransportError": "连接失败：{{reason}}",
           "clientLocalNetworkHint": "在 macOS 上，请在“系统设置 → 隐私与安全性 → 本地网络”中允许此应用。",
           "clientEnabledLabel": "允许连接到其他桌面",
-          "clientEnabledDescription": "开启后可将此桌面作为 peer client 连接到另一台 Orca。",
-          "clientHostDisabled": "host 已关闭共享，因此你已断开连接。",
+          "clientEnabledDescription": "开启后可将此桌面作为客户端连接到另一台 Orca。",
+          "clientHostDisabled": "主机已关闭共享，因此你已断开连接。",
           "hostEnabledLabel": "允许其他桌面连接",
-          "hostEnabledDescription": "开启后，其他 Orca 桌面可以与此电脑配对并查看终端。关闭后，当前已连接的桌面会立即断开。"
+          "hostEnabledDescription": "开启后，其他 Orca 桌面可以与此电脑配对并查看终端。关闭后，当前已连接的桌面会立即断开。",
+          "hostGroupTitle": "主机",
+          "clientGroupTitle": "客户端"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",

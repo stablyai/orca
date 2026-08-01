@@ -5064,7 +5064,7 @@
         },
         "PeerTerminalsSection": {
           "dd7ecb3f10": "Anfitrión conectado",
-          "f966803cfd": "Pares",
+          "f966803cfd": "Peers",
           "d5f6851245": "Aún no se ha compartido ninguna terminal",
           "4fd5f4c027": "Terminal sin título"
         }
@@ -10131,10 +10131,12 @@
           "clientTransportError": "Error de conexión: {{reason}}",
           "clientLocalNetworkHint": "En macOS, permite esta app en Ajustes del Sistema → Privacidad y seguridad → Red local.",
           "clientEnabledLabel": "Permitir conectarse a otros escritorios",
-          "clientEnabledDescription": "Actívalo para conectar este escritorio a otro Orca como client de par.",
-          "clientHostDisabled": "El host desactivó la compartición, así que se te desconectó.",
+          "clientEnabledDescription": "Actívalo para conectar este escritorio a otro Orca como cliente.",
+          "clientHostDisabled": "El anfitrión desactivó la compartición, así que se te desconectó.",
           "hostEnabledLabel": "Permitir que otros escritorios se conecten",
-          "hostEnabledDescription": "Actívalo para que otros escritorios Orca puedan emparejarse y ver terminales en este equipo. Al desactivarlo, cualquier escritorio conectado se desconecta de inmediato."
+          "hostEnabledDescription": "Actívalo para que otros escritorios Orca puedan emparejarse y ver terminales en este equipo. Al desactivarlo, cualquier escritorio conectado se desconecta de inmediato.",
+          "hostGroupTitle": "Anfitrión",
+          "clientGroupTitle": "Cliente"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",

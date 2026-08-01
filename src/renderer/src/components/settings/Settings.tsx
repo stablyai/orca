@@ -1421,6 +1421,7 @@ function Settings(): React.JSX.Element {
                       'Share terminals with other Orca desktops over your local network.'
                     )}
                     searchEntries={getSectionSearchEntries('peer-collab')}
+                    bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
                   >
                     {isSectionMounted('peer-collab') ? <PeerCollabSettingsPane /> : null}
                   </SettingsSection>

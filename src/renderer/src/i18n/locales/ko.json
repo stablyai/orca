@@ -5064,7 +5064,7 @@
         },
         "PeerTerminalsSection": {
           "dd7ecb3f10": "연결된 호스트",
-          "f966803cfd": "피어",
+          "f966803cfd": "Peers",
           "d5f6851245": "아직 공유된 터미널이 없습니다",
           "4fd5f4c027": "이름 없는 터미널"
         }
@@ -10131,10 +10131,12 @@
           "clientTransportError": "연결 실패: {{reason}}",
           "clientLocalNetworkHint": "macOS에서는 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 이 앱을 허용하세요.",
           "clientEnabledLabel": "다른 데스크톱에 연결 허용",
-          "clientEnabledDescription": "이 데스크톱을 다른 Orca에 peer client로 연결하려면 켜세요.",
-          "clientHostDisabled": "host가 공유를 중단하여 연결이 끊어졌습니다.",
+          "clientEnabledDescription": "이 데스크톱을 다른 Orca에 클라이언트로 연결하려면 켜세요.",
+          "clientHostDisabled": "호스트가 공유를 중단하여 연결이 끊어졌습니다.",
           "hostEnabledLabel": "다른 데스크톱의 접속 허용",
-          "hostEnabledDescription": "켜면 다른 Orca 데스크톱이 이 컴퓨터와 페어링하고 터미널을 볼 수 있습니다. 끄면 접속 중인 데스크톱이 즉시 끊어집니다."
+          "hostEnabledDescription": "켜면 다른 Orca 데스크톱이 이 컴퓨터와 페어링하고 터미널을 볼 수 있습니다. 끄면 접속 중인 데스크톱이 즉시 끊어집니다.",
+          "hostGroupTitle": "호스트",
+          "clientGroupTitle": "클라이언트"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",

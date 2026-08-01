@@ -5064,7 +5064,7 @@
         },
         "PeerTerminalsSection": {
           "dd7ecb3f10": "接続中のホスト",
-          "f966803cfd": "ピア",
+          "f966803cfd": "Peers",
           "d5f6851245": "まだ共有されたターミナルがありません",
           "4fd5f4c027": "名称未設定のターミナル"
         }
@@ -10131,10 +10131,12 @@
           "clientTransportError": "接続に失敗しました: {{reason}}",
           "clientLocalNetworkHint": "macOS では、システム設定 → プライバシーとセキュリティ → ローカルネットワークでこのアプリを許可してください。",
           "clientEnabledLabel": "他のデスクトップへの接続を許可",
-          "clientEnabledDescription": "このデスクトップを他の Orca に peer client として接続する場合はオンにします。",
-          "clientHostDisabled": "host が共有を停止したため、接続が切断されました。",
+          "clientEnabledDescription": "このデスクトップを他の Orca にクライアントとして接続する場合はオンにします。",
+          "clientHostDisabled": "ホストが共有を停止したため、接続が切断されました。",
           "hostEnabledLabel": "他のデスクトップからの接続を許可",
-          "hostEnabledDescription": "オンにすると、他の Orca デスクトップがこのコンピューターとペアリングしてターミナルを表示できます。オフにすると、接続中のデスクトップは即座に切断されます。"
+          "hostEnabledDescription": "オンにすると、他の Orca デスクトップがこのコンピューターとペアリングしてターミナルを表示できます。オフにすると、接続中のデスクトップは即座に切断されます。",
+          "hostGroupTitle": "ホスト",
+          "clientGroupTitle": "クライアント"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",

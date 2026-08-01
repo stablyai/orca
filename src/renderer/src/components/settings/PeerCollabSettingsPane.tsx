@@ -355,63 +355,77 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
-      <PeerCollabHostShareSection
-        hostEnabled={hostEnabled}
-        onToggleHostEnabled={() => void toggleHostEnabled()}
-        networkInterfaces={networkInterfaces}
-        selectedAddress={selectedAddress}
-        onSelectedAddressChange={handleSelectedAddressChange}
-        qrDataUrl={qrDataUrl}
-        pairingUrl={pairingUrl}
-        endpoint={endpoint}
-        loading={loading}
-        offerConsumed={offerConsumed}
-        qrEnlarged={qrEnlarged}
-        codeCopied={codeCopied}
-        onGenerate={() => void generateOffer({ rotate: qrDataUrl != null })}
-        onQrEnlargedChange={setQrEnlarged}
-        onCodeCopiedChange={setCodeCopied}
-        onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
-      />
-
-      {hostEnabled ? (
-        <PeerCollabDevicesSection
-          devices={devices}
-          hasQrCode={qrDataUrl != null}
-          onRevokeDevice={(deviceId) => void revokeDevice(deviceId)}
-          // Why: reuses the already-polled connectedClients so "connected now" doesn't need its own poll.
-          connectedDeviceIds={new Set(connectedClients.map((client) => client.deviceId))}
+      {/* Why: hosting and connecting-out are independent roles a desktop can hold
+          at once — separate cards keep each role's toggle scoped to its own box. */}
+      <div className="max-w-3xl space-y-6 rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs">
+        <h3 className="text-sm font-semibold text-foreground">
+          {translate('auto.components.settings.PeerCollabSettingsPane.hostGroupTitle', 'Host')}
+        </h3>
+        <PeerCollabHostShareSection
+          hostEnabled={hostEnabled}
+          onToggleHostEnabled={() => void toggleHostEnabled()}
+          networkInterfaces={networkInterfaces}
+          selectedAddress={selectedAddress}
+          onSelectedAddressChange={handleSelectedAddressChange}
+          qrDataUrl={qrDataUrl}
+          pairingUrl={pairingUrl}
+          endpoint={endpoint}
+          loading={loading}
+          offerConsumed={offerConsumed}
+          qrEnlarged={qrEnlarged}
+          codeCopied={codeCopied}
+          onGenerate={() => void generateOffer({ rotate: qrDataUrl != null })}
+          onQrEnlargedChange={setQrEnlarged}
+          onCodeCopiedChange={setCodeCopied}
+          onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
         />
-      ) : null}
 
-      {hostEnabled ? (
-        <PeerCollabConnectedClientsSection
-          exclusiveInputFloor={exclusiveInputFloor}
-          onToggleExclusiveInputFloor={() => void toggleExclusiveInputFloor()}
-          connectedClients={connectedClients}
-          onDisconnectClient={(deviceId, revoke) => void disconnectClient(deviceId, revoke)}
-          hostTerminals={ownTerminals}
-          onSetGrantedTerminals={(deviceId, handles) => void setGrantedTerminals(deviceId, handles)}
+        {hostEnabled ? (
+          <PeerCollabDevicesSection
+            devices={devices}
+            hasQrCode={qrDataUrl != null}
+            onRevokeDevice={(deviceId) => void revokeDevice(deviceId)}
+            // Why: reuses the already-polled connectedClients so "connected now" doesn't need its own poll.
+            connectedDeviceIds={new Set(connectedClients.map((client) => client.deviceId))}
+          />
+        ) : null}
+
+        {hostEnabled ? (
+          <PeerCollabConnectedClientsSection
+            exclusiveInputFloor={exclusiveInputFloor}
+            onToggleExclusiveInputFloor={() => void toggleExclusiveInputFloor()}
+            connectedClients={connectedClients}
+            onDisconnectClient={(deviceId, revoke) => void disconnectClient(deviceId, revoke)}
+            hostTerminals={ownTerminals}
+            onSetGrantedTerminals={(deviceId, handles) =>
+              void setGrantedTerminals(deviceId, handles)
+            }
+          />
+        ) : null}
+      </div>
+
+      <div className="max-w-3xl space-y-6 rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs">
+        <h3 className="text-sm font-semibold text-foreground">
+          {translate('auto.components.settings.PeerCollabSettingsPane.clientGroupTitle', 'Client')}
+        </h3>
+        <PeerCollabClientConnectSection
+          clientEnabled={clientEnabled}
+          onToggleClientEnabled={() => void toggleClientEnabled()}
+          clientPairingCode={clientPairingCode}
+          onClientPairingCodeChange={setClientPairingCode}
+          clientDisplayName={clientDisplayName}
+          onClientDisplayNameChange={setClientDisplayName}
+          clientStatus={clientStatus}
+          clientConnectBusy={clientConnectBusy}
+          onConnect={() => void connectAsClient()}
+          onDisconnect={() => void disconnectAsClient()}
+          hostTerminals={hostTerminals}
+          onOpenTerminal={(target) => openPeersPage(target)}
+          savedPairing={savedPairing}
+          onConnectSaved={() => void connectSavedAsClient()}
+          onForgetSavedPairing={() => void forgetSavedPairing()}
         />
-      ) : null}
-
-      <PeerCollabClientConnectSection
-        clientEnabled={clientEnabled}
-        onToggleClientEnabled={() => void toggleClientEnabled()}
-        clientPairingCode={clientPairingCode}
-        onClientPairingCodeChange={setClientPairingCode}
-        clientDisplayName={clientDisplayName}
-        onClientDisplayNameChange={setClientDisplayName}
-        clientStatus={clientStatus}
-        clientConnectBusy={clientConnectBusy}
-        onConnect={() => void connectAsClient()}
-        onDisconnect={() => void disconnectAsClient()}
-        hostTerminals={hostTerminals}
-        onOpenTerminal={(target) => openPeersPage(target)}
-        savedPairing={savedPairing}
-        onConnectSaved={() => void connectSavedAsClient()}
-        onForgetSavedPairing={() => void forgetSavedPairing()}
-      />
+      </div>
     </div>
   )
 }
