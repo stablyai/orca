@@ -108,16 +108,48 @@ stale leases expire ≤15 min — add an explicit unit test); on prewarm complet
 re-run the trust grant; gate fresh codex panes on the same pending check with an
 indexing overlay and auto-start.
 
-**"Pending" definition (one refinement, mirrored from the prewarm's own spawn
-gate):** the grant codex is only doomed when the backfill would outlive its 10s
-budget, i.e. when an index run is already tracked as unfinished, or when there is
-no index yet AND the session history is large. So: `incomplete` → pending;
-`missing`/`not-tracked` → pending only when the home has ≥ 100 rollout files
-(the prewarm's `PREWARM_MIN_SESSION_FILES` threshold — below it, codex indexes
-within its own 30s startup wait and the prewarm leg itself is a `not-needed`
-no-op that could never clear a deferral); `unreadable` → NOT pending (fail open,
-keep today's behavior; #11830 territory); `complete` → not pending. This keeps
-fresh-install behavior (empty `~/.codex`) unchanged.
+**"Pending" definition (one refinement):** the grant codex is only doomed when
+the backfill would outlive its 10s budget, i.e. when an index run is already
+tracked as unfinished, or when there is no index yet AND the session history is
+large. So: `incomplete` → pending; `missing`/`not-tracked` → pending only when
+the home has ≥ 100 rollout files (the prewarm's `PREWARM_MIN_SESSION_FILES`
+threshold — below it, codex indexes within its own 30s startup wait and the
+prewarm leg itself is a `not-needed` no-op that could never clear a deferral);
+`unreadable` → NOT pending (fail open, keep today's behavior; #11830 territory);
+`complete` → not pending. This keeps fresh-install behavior (empty `~/.codex`)
+unchanged.
+
+**Predicate ⇄ prewarm agreement (validated, must hold):** today's prewarm gate
+does NOT mirror this for `not-tracked` — `codex-state-db-prewarm.ts:98-100`
+returns `finish('not-needed', 0)` for `not-tracked` unconditionally (the
+file-count check applies only to `missing`, `:108-114`). Left as-is, a state DB
+that exists without a `backfill_state` row over a large history would be called
+pending by the predicate while the prewarm — the only clearing mechanism —
+refuses to spawn: grant parked and panes gated forever. Task 1 therefore ALSO
+aligns the prewarm: `not-tracked` is treated exactly like `missing` (count
+session files, spawn at ≥ threshold), so every state the predicate calls
+pending is one the prewarm will drive to `complete`.
+
+**Bounded-wait guarantees (validated, must hold):** the prewarm has real
+give-up paths (`gave-up` at the 60-min deadline or 5 fast exits,
+`codex-unavailable` on ENOENT, background rejection → null), and the scheduler
+never re-runs on prewarm failure (`shouldRerun = rerunRequested ||
+stoppedBackfill`, scheduler `:73`, can never match a prewarm result). So
+nothing may wait forever on the prewarm: (a) the pane gate carries a fail-open
+max wait (`CODEX_BACKFILL_GATE_MAX_WAIT_MS`, Task 5) that degrades to today's
+shipped behavior (codex launches, fails visibly, toast catches); (b) the
+post-prewarm grant retry BYPASSES the pending re-check (Task 3) — after the
+chain resolves, the grant runs for real: success installs, a genuine failure
+latches `'unavailable'` exactly like today instead of re-deferring forever.
+
+**Second doomed spawner (validated):** the rate-limit RPC fetcher is another
+automatic 10s `codex app-server` spawn pinned to the real home on this lane
+(`runtime-home-service.ts:529-534` → `codex-fetcher.ts` spawn `:559-590`,
+`RPC_TIMEOUT_MS` `:40`; startup deferred refresh + 15-min polls + 30s failure
+refetch). Its killed claimer plants the same ≤900s stale `running` lease the
+old trust grant did, delaying the prewarm. Task 2 adds a backfill-pending skip
+to `fetchCodexRateLimits` so no doomed rate-limit codex spawns (and no lease is
+stolen) while an index is pending.
 
 ---
 
@@ -126,8 +158,9 @@ fresh-install behavior (empty `~/.codex`) unchanged.
 | File | Task | Responsibility |
 |---|---|---|
 | `src/main/codex/codex-state-db.ts` (modify) | 1 | + `lastWatermark` on the `incomplete` variant; + `isCodexBackfillIndexPending()`; + `BACKFILL_PENDING_MIN_SESSION_FILES` |
-| `src/main/codex/codex-state-db-prewarm.ts` (modify) | 1 | `PREWARM_MIN_SESSION_FILES` re-exported from the shared constant (DRY) |
-| `src/main/codex/codex-real-home-hook-install.ts` (modify) | 2, 3 | `'pending-index'` lane + defer-before-grant; `retryRealHomeCodexHookAfterIndex()` |
+| `src/main/codex/codex-state-db-prewarm.ts` (modify) | 1 | `PREWARM_MIN_SESSION_FILES` re-exported from the shared constant (DRY); spawn gate treats `not-tracked` like `missing` (deadlock fix) |
+| `src/main/codex/codex-real-home-hook-install.ts` (modify) | 2, 3 | `'pending-index'` lane + defer-before-grant; `retryRealHomeCodexHookAfterIndex()` (bypasses the pending re-check) |
+| `src/main/rate-limits/codex-fetcher.ts` (modify) | 2 | skip the RPC fetch while the target home's backfill is pending (no doomed 10s codex, no lease steal) |
 | `src/main/index.ts` (modify) | 3, 4 | wrap `startStateDbPrewarm` to retry the deferred grant + broadcast status |
 | `src/shared/codex-backfill-status-types.ts` (create) | 4 | `CodexBackfillGateStatus` shared payload type |
 | `src/main/ipc/codex-backfill-status.ts` (create) | 4 | `codexBackfill:status` handler, `codexBackfill:statusChanged` broadcast, home resolution |
@@ -147,8 +180,9 @@ fresh-install behavior (empty `~/.codex`) unchanged.
 
 **Files:**
 - Modify: `src/main/codex/codex-state-db.ts`
-- Modify: `src/main/codex/codex-state-db-prewarm.ts` (constant re-export only)
+- Modify: `src/main/codex/codex-state-db-prewarm.ts` (constant re-export + `not-tracked` spawn-gate alignment)
 - Test: `src/main/codex/codex-state-db.test.ts`
+- Test: `src/main/codex/codex-state-db-prewarm.test.ts` (`not-tracked` gate cases)
 
 **Interfaces:**
 - Consumes: existing exports of the same module
@@ -162,6 +196,10 @@ fresh-install behavior (empty `~/.codex`) unchanged.
   - `export function isCodexBackfillIndexPending(codexHomePath: string): boolean`
   - `codex-state-db-prewarm.ts` keeps exporting `PREWARM_MIN_SESSION_FILES` (same
     value, now aliased to the shared constant) so its existing tests keep passing.
+  - `codex-state-db-prewarm.ts`'s spawn gate treats `not-tracked` exactly like
+    `missing` (count session files, spawn at ≥ threshold) — see Background
+    "Predicate ⇄ prewarm agreement": without this, `not-tracked` + large history
+    is pending-with-no-cure (permanent deferral/gate deadlock).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -249,12 +287,44 @@ it('pending: false (fail open) when the state db is unreadable', () => {
 Also update any existing `incomplete`-variant assertions in this file to include
 `lastWatermark` (add the field to expected objects, or switch to `toMatchObject`).
 
+In `src/main/codex/codex-state-db-prewarm.test.ts`, add the `not-tracked`
+gate cases using the file's existing `createDeps` DI pattern (mirror its
+existing `missing`-status gate tests — same fixtures, different `kind`):
+
+```ts
+it('spawns over a not-tracked state db with a large history (#11828 deadlock fix)', async () => {
+  // Why: isCodexBackfillIndexPending calls not-tracked+large "pending"; the
+  // prewarm must agree or the deferral/gate could never clear.
+  const { deps, spawnProcess } = createDeps({
+    readBackfillStatus: vi.fn(() => ({ kind: 'not-tracked', stateDbPath: '/x/state_5.sqlite' })),
+    countSessionFiles: vi.fn(() => PREWARM_MIN_SESSION_FILES)
+  })
+  // ...drive to completion with the file's status-sequencing/timer helpers...
+  expect(spawnProcess).toHaveBeenCalled()
+})
+
+it('reports not-needed for a not-tracked state db over a small history', async () => {
+  const { deps, spawnProcess } = createDeps({
+    readBackfillStatus: vi.fn(() => ({ kind: 'not-tracked', stateDbPath: '/x/state_5.sqlite' })),
+    countSessionFiles: vi.fn(() => PREWARM_MIN_SESSION_FILES - 1)
+  })
+  const summary = await runCodexStateDbPrewarm('/x', {}, deps)
+  expect(summary.outcome).toBe('not-needed')
+  expect(spawnProcess).not.toHaveBeenCalled()
+})
+```
+
+(Adapt the sequencing/completion mechanics to the file's existing helpers; the
+behavioral contract is: `not-tracked` + count ≥ threshold ⇒ spawn, below ⇒
+`not-needed`.)
+
 - [ ] **Step 2: Run tests to verify the new ones fail**
 
-Run: `pnpm exec vitest run src/main/codex/codex-state-db.test.ts --config config/vitest.config.ts`
+Run: `pnpm exec vitest run src/main/codex/codex-state-db.test.ts src/main/codex/codex-state-db-prewarm.test.ts --config config/vitest.config.ts`
 (if the test file's top comment prescribes a different repro command, use that).
 Expected: new tests FAIL (`isCodexBackfillIndexPending` not exported;
-`lastWatermark` missing).
+`lastWatermark` missing; `not-tracked`+large currently reports `not-needed`
+without spawning).
 
 - [ ] **Step 3: Implement**
 
@@ -330,6 +400,24 @@ export const PREWARM_MIN_SESSION_FILES = BACKFILL_PENDING_MIN_SESSION_FILES
 ```
 
 (The prewarm already imports from `./codex-state-db`; keep imports merged.)
+
+Also in `codex-state-db-prewarm.ts`, align the spawn gate: today `not-tracked`
+returns `finish('not-needed', 0)` unconditionally (`:98-100`) while the
+file-count check applies only to `missing` (`:108-114`). Merge the branches so
+`not-tracked` takes the same path as `missing`:
+
+```ts
+  // Why: the pending predicate calls not-tracked+large "pending"; the prewarm
+  // must agree or a deferral/pane gate could engage with no mechanism that
+  // ever completes the index (#11828 deadlock).
+  if (status.kind === 'missing' || status.kind === 'not-tracked') {
+    // ...existing missing-branch body: count session files, spawn at >= threshold...
+  }
+```
+
+(Adapt to the function's actual shape; the contract is pinned by the Step-1
+prewarm tests.)
+
 If the `incomplete`-variant change breaks compilation anywhere else, the fix is
 mechanical: those sites only read `kind`/`status`.
 
@@ -342,8 +430,8 @@ Also run: `pnpm typecheck` — expected exit 0.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/main/codex/codex-state-db.ts src/main/codex/codex-state-db.test.ts src/main/codex/codex-state-db-prewarm.ts
-git commit -m "feat(codex): expose backfill cursor and pending-index check from state db reader (#11828)"
+git add src/main/codex/codex-state-db.ts src/main/codex/codex-state-db.test.ts src/main/codex/codex-state-db-prewarm.ts src/main/codex/codex-state-db-prewarm.test.ts
+git commit -m "feat(codex): expose backfill pending check and align the prewarm spawn gate (#11828)"
 ```
 
 ---
@@ -353,6 +441,8 @@ git commit -m "feat(codex): expose backfill cursor and pending-index check from 
 **Files:**
 - Modify: `src/main/codex/codex-real-home-hook-install.ts`
 - Test: `src/main/codex/codex-real-home-hook-install.test.ts`
+- Modify: `src/main/rate-limits/codex-fetcher.ts` (Steps 6–8: pending skip)
+- Test: `src/main/rate-limits/codex-fetcher.test.ts`
 
 **Interfaces:**
 - Consumes: `isCodexBackfillIndexPending(codexHomePath: string): boolean` (Task 1);
@@ -521,6 +611,80 @@ git add src/main/codex/codex-real-home-hook-install.ts src/main/codex/codex-real
 git commit -m "fix(codex): defer real-home trust grant while the session index is pending (#11828)"
 ```
 
+The trust grant is not the only doomed pre-prewarm spawn (validated): the
+rate-limit RPC fetcher spawns a 10s `codex app-server` pinned to the real home
+on this lane (`runtime-home-service.ts:529-534` → the spawn in
+`codex-fetcher.ts:559-590`, `RPC_TIMEOUT_MS` `:40`; triggered by the deferred
+startup refresh, 15-min polls, and 30s failure refetches). Against a pending
+home it dies in the backfill wait — and worse, its killed claimer plants a
+≤900s stale `running` lease that stalls the prewarm. Steps 6–8 close it.
+
+- [ ] **Step 6: Write the failing rate-limit skip test**
+
+Extend `src/main/rate-limits/codex-fetcher.test.ts` using the file's existing
+spawn-mocking harness (mirror the closest RPC-path test for the mock shape).
+Add a hoisted mock for the pending check, defaulting to `false` so every
+existing test is unaffected:
+
+```ts
+const { backfillPendingMock } = vi.hoisted(() => ({
+  backfillPendingMock: vi.fn<() => boolean>(() => false)
+}))
+
+vi.mock('../codex/codex-state-db', () => ({
+  isCodexBackfillIndexPending: backfillPendingMock
+}))
+
+it('skips the fetch without spawning codex while the target home backfill is pending (#11828)', async () => {
+  backfillPendingMock.mockReturnValue(true)
+
+  const result = await fetchCodexRateLimits({ codexHomePath: '/real/.codex' })
+
+  expect(backfillPendingMock).toHaveBeenCalledWith('/real/.codex')
+  expect(result.status).toBe('unavailable')
+  // Assert via the file's spawn seam that NO codex process was launched.
+})
+```
+
+(Behavioral contract: pending ⇒ resolve `status: 'unavailable'` with no spawn;
+not pending, or no `codexHomePath` ⇒ existing behavior byte-for-byte.)
+
+- [ ] **Step 7: Implement the skip**
+
+In `src/main/rate-limits/codex-fetcher.ts`, at the top of
+`fetchCodexRateLimits` (`:~1073`), before any codex process is launched:
+
+```ts
+import { isCodexBackfillIndexPending } from '../codex/codex-state-db'
+
+  if (options?.codexHomePath && isCodexBackfillIndexPending(options.codexHomePath)) {
+    // Why: a 10s RPC codex against an unindexed home dies in the #11828
+    // backfill wait AND can steal the backfill lease from the prewarm (a
+    // killed claimer blocks the index for up to 15 min). Skip; the service's
+    // normal refetch cadence picks rate limits up once the index completes.
+    return {
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'codex session index backfill pending',
+      status: 'unavailable'
+    }
+  }
+```
+
+(Mirror the exact `ProviderRateLimits` unavailable shape the file already
+returns at `:757`/`:1186`.)
+
+- [ ] **Step 8: Run tests + typecheck, then commit**
+
+Run: `pnpm exec vitest run src/main/rate-limits/codex-fetcher.test.ts --config config/vitest.config.ts`
+Expected: PASS (all, including pre-existing). Run `pnpm typecheck` → exit 0.
+
+```bash
+git add src/main/rate-limits/codex-fetcher.ts src/main/rate-limits/codex-fetcher.test.ts
+git commit -m "fix(codex): skip rate-limit codex fetch while the session index backfill is pending (#11828)"
+```
+
 ---
 
 ### Task 3: Re-run the deferred grant when the prewarm completes (+ stale-lease proof)
@@ -539,7 +703,12 @@ git commit -m "fix(codex): defer real-home trust grant while the session index i
   `index.ts:2503-2510`).
 - Produces:
   - `export function retryRealHomeCodexHookAfterIndex(args: { hooksEnabled: boolean; userDataPath: string }): RealHomeCodexHookLane`
-    — no-op (returns current lane) unless the lane is `'pending-index'`.
+    — no-op (returns current lane) unless the lane is `'pending-index'`; from
+    `'pending-index'` it runs the grant with the pending re-check BYPASSED
+    (prewarm resolution is authoritative): success installs, a genuine failure
+    latches `'unavailable'` exactly like a startup failure. Why: the scheduler
+    never re-runs on prewarm failure, so re-deferring here would park the lane
+    (and the un-granted hooks) forever.
   - `index.ts` scheduler arg becomes a closure that re-runs the grant after every
     prewarm resolution (Task 4 extends the same closure with a broadcast).
 
@@ -581,6 +750,20 @@ describe('retryRealHomeCodexHookAfterIndex', () => {
     const lane = retryRealHomeCodexHookAfterIndex({ hooksEnabled: true, userDataPath: userDataDir })
 
     expect(lane).toBe('unavailable')
+  })
+
+  it('runs the grant even if the pending check still reports true (prewarm resolution is authoritative)', () => {
+    // Why: the scheduler never re-runs on prewarm failure — re-deferring here
+    // would park the lane forever. After the chain resolves, the grant runs
+    // for real: success installs, genuine failure latches like today.
+    pendingMock.mockReturnValue(true)
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    grantSucceeds()
+
+    const lane = retryRealHomeCodexHookAfterIndex({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('installed')
+    expect(grantMock).toHaveBeenCalledTimes(1)
   })
 })
 ```
@@ -630,8 +813,12 @@ In `codex-real-home-hook-install.ts`, after `ensureRealHomeCodexHookState`:
 ```ts
 /**
  * Re-runs a trust grant that Task-2 deferral parked behind the codex session
- * index (#11828). No-op for every other lane; a genuine grant failure on the
- * retry latches 'unavailable' exactly like a startup failure would.
+ * index (#11828). No-op for every other lane. Bypasses the pending re-check:
+ * the prewarm chain has resolved, so either the index completed (grant
+ * succeeds) or the prewarm gave up — in which case the grant runs for real
+ * and a genuine failure latches 'unavailable' exactly like a startup failure.
+ * Re-deferring here would park the lane forever: the scheduler never re-runs
+ * on prewarm failure.
  */
 export function retryRealHomeCodexHookAfterIndex(args: {
   hooksEnabled: boolean
@@ -640,9 +827,18 @@ export function retryRealHomeCodexHookAfterIndex(args: {
   if (currentLane !== 'pending-index') {
     return currentLane
   }
-  return ensureRealHomeCodexHookState(args)
+  bypassIndexDeferralOnce = true
+  try {
+    return ensureRealHomeCodexHookState(args)
+  } finally {
+    bypassIndexDeferralOnce = false
+  }
 }
 ```
+
+Add the module-scoped flag next to `currentLane`
+(`let bypassIndexDeferralOnce = false`) and extend Task 2's deferral condition
+with `&& !bypassIndexDeferralOnce` (first clause stays otherwise identical).
 
 In `src/main/index.ts`: add `retryRealHomeCodexHookAfterIndex` to the existing
 import from `./codex/codex-real-home-hook-install` (`:191-193`), and replace the
@@ -665,8 +861,10 @@ with:
 (The closure's shape still matches the scheduler's
 `MigrationRun = (options, systemCodexHomePathOverride?) => Promise<unknown>`.
 Retrying unconditionally on resolve is safe: `retryRealHomeCodexHookAfterIndex`
-no-ops off-lane, and if the prewarm gave up while still pending, the ensure call
-re-defers to `'pending-index'`.)
+no-ops off-lane, and from `'pending-index'` it runs the grant with the pending
+re-check bypassed — if the prewarm gave up, the grant fails honestly and
+latches `'unavailable'`, restoring today's semantics instead of parking the
+lane forever.)
 
 - [ ] **Step 4: Run tests + typecheck**
 
@@ -955,14 +1153,19 @@ git commit -m "feat(codex): expose backfill gate status to the renderer over IPC
 
 **Interfaces:**
 - Consumes: `window.api.codexBackfill` (Task 4 shape); inside `connectPanePty`:
-  `resolveExpectedLaunchTuiAgent(): TuiAgent | null` (`pty-connection.ts:~1968`),
-  `runDeferredConnect` (`:~4410`), `runtimeEnvironmentId` (already in scope near
-  the transport selection at `:~3733-3754`), `deps.onPtyErrorRef`-style dep refs.
+  `paneStartup` (the binding-scoped startup snapshot, `pty-connection.ts:~1119`),
+  `runDeferredConnect` (`:~4410`) and its fresh-spawn arm (`:~8590-8596`),
+  `runtimeEnvironmentId` AND `connectionId` (both in scope; the module's
+  local-only idiom is two-axis — `:3509`, `:3608`, `:4370-4373`),
+  `deps.onPtyErrorRef`-style dep refs.
 - Produces (Task 6 relies on these exactly):
   - `export type CodexIndexingPaneState = { lastWatermark: string | null }`
   - `export const CODEX_BACKFILL_GATE_REPOLL_MS = 20_000`
-  - `export function waitForCodexBackfillGate(args: { api: CodexBackfillGateApi | undefined; onWaiting: (state: CodexIndexingPaneState) => void; onClear: () => void; repollMs?: number }): () => void`
-    (returns a dispose that cancels silently — no `onClear`)
+  - `export const CODEX_BACKFILL_GATE_MAX_WAIT_MS = 15 * 60_000`
+  - `export function waitForCodexBackfillGate(args: { api: CodexBackfillGateApi | undefined; onWaiting: (state: CodexIndexingPaneState) => void; onClear: () => void; repollMs?: number; maxWaitMs?: number }): () => void`
+    (returns a dispose that cancels silently — no `onClear`; after `maxWaitMs`
+    it FAILS OPEN via `onClear` — a pane parked forever is worse than today's
+    visible failure, which the toast already nets)
   - `PtyConnectionDeps` gains
     `onCodexIndexingStateRef?: React.RefObject<(paneId: number, state: CodexIndexingPaneState | null) => void>`
 
@@ -1068,7 +1271,22 @@ it('dispose cancels silently without onClear', async () => {
   emit({ pending: false, lastWatermark: null })
   expect(onClear).not.toHaveBeenCalled()
 })
+
+it('fails open after the max wait even if still pending', async () => {
+  // Why: the prewarm has real give-up paths and the scheduler never re-runs on
+  // prewarm failure — a pane parked forever is worse than today's visible
+  // failure (codex dies -> toast), so the gate must eventually let go.
+  const { api } = createApi({ pending: true, lastWatermark: null })
+  const onClear = vi.fn()
+  waitForCodexBackfillGate({ api, onWaiting: vi.fn(), onClear })
+  await vi.runOnlyPendingTimersAsync()
+  expect(onClear).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(CODEX_BACKFILL_GATE_MAX_WAIT_MS)
+  expect(onClear).toHaveBeenCalledTimes(1)
+})
 ```
+
+(Import `CODEX_BACKFILL_GATE_MAX_WAIT_MS` alongside the other exports.)
 
 - [ ] **Step 2: Run gate tests to verify they fail**
 
@@ -1093,6 +1311,14 @@ export type CodexBackfillGateApi = {
 // statusChanged broadcast must not stay parked forever.
 export const CODEX_BACKFILL_GATE_REPOLL_MS = 20_000
 
+// Why: the prewarm has real give-up paths (60-min deadline, 5 fast exits,
+// codex missing) and the scheduler never re-runs on prewarm failure. After
+// this deadline the gate fails open: codex launches and, if the index is
+// genuinely still running, dies visibly with the toast as the net — today's
+// shipped behavior, which beats a pane parked forever. 15 min covers the
+// measured 10–13 min reporter-scale index with headroom.
+export const CODEX_BACKFILL_GATE_MAX_WAIT_MS = 15 * 60_000
+
 /**
  * Defers a fresh local codex spawn while the target home's session index is
  * incomplete (#11828). Reports progress via onWaiting while deferred, then calls
@@ -1105,6 +1331,7 @@ export function waitForCodexBackfillGate(args: {
   onWaiting: (state: CodexIndexingPaneState) => void
   onClear: () => void
   repollMs?: number
+  maxWaitMs?: number
 }): () => void {
   const api = args.api
   if (!api || typeof api.status !== 'function' || typeof api.onStatusChanged !== 'function') {
@@ -1113,6 +1340,7 @@ export function waitForCodexBackfillGate(args: {
   }
   let settled = false
   let repollTimer: ReturnType<typeof setInterval> | null = null
+  let maxWaitTimer: ReturnType<typeof setTimeout> | null = null
   let unsubscribe: (() => void) | null = null
   const cancel = (): void => {
     settled = true
@@ -1121,6 +1349,10 @@ export function waitForCodexBackfillGate(args: {
     if (repollTimer !== null) {
       clearInterval(repollTimer)
       repollTimer = null
+    }
+    if (maxWaitTimer !== null) {
+      clearTimeout(maxWaitTimer)
+      maxWaitTimer = null
     }
   }
   const clear = (): void => {
@@ -1145,6 +1377,8 @@ export function waitForCodexBackfillGate(args: {
     api.status().then(handleStatus, clear)
   }
   repollTimer = setInterval(poll, args.repollMs ?? CODEX_BACKFILL_GATE_REPOLL_MS)
+  // Why fail open at a deadline: see CODEX_BACKFILL_GATE_MAX_WAIT_MS.
+  maxWaitTimer = setTimeout(clear, args.maxWaitMs ?? CODEX_BACKFILL_GATE_MAX_WAIT_MS)
   poll()
   return cancel
 }
@@ -1244,6 +1478,24 @@ describe('codex backfill spawn gate (#11828)', () => {
 
     expect(transport.connect).toHaveBeenCalledTimes(1)
   })
+
+  it('does not gate an SSH codex pane (fails open to the remote host)', async () => {
+    // Why: SSH panes ride the IPC transport with runtimeEnvironmentId === null
+    // and a separate connectionId axis — the gate must exclude BOTH remote
+    // axes or it parks a remote pane on irrelevant local-home state.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    stubCodexBackfillApi({ pending: true, lastWatermark: null })
+    const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
+    // Adapt to the harness's SSH/worktree-connection fixture — mirror an
+    // existing connectionId-carrying test in this file for the deps shape.
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+  })
 })
 ```
 
@@ -1251,7 +1503,9 @@ describe('codex backfill spawn gate (#11828)', () => {
 `createDeps`, reattach fixtures — mirror the closest existing test in the file;
 they all exist today. The behavioral assertions are the contract:
 gated = `transport.connect` withheld until clear; ungated = called once,
-immediately.)
+immediately. Note the "does not gate non-codex panes" test also pins the
+split-pane case: a split in a live codex tab has no pane-scoped codex startup,
+so the pane-scoped predicate below leaves it ungated by construction.)
 
 Run: `pnpm exec vitest run src/renderer/src/components/terminal-pane/pty-connection.test.ts --config config/vitest.config.ts`
 Expected: the 4 new tests FAIL (no gate exists); all pre-existing tests PASS —
@@ -1279,24 +1533,31 @@ connect-state locals (by `connectStarted` / `startupGridSettledForConnect`):
 ```ts
   let codexBackfillGateCleared = false
   let codexBackfillGateDispose: (() => void) | null = null
-  // Why: only a fresh LOCAL spawn launches a new codex against a home main can
-  // inspect; reattaches join a live process and remote homes are unreachable.
+  // Why: gate only fresh LOCAL codex spawns. BOTH remote axes must be excluded:
+  // runtimeEnvironmentId (remote runtime) AND connectionId (SSH — SSH panes
+  // ride the IPC transport with runtimeEnvironmentId === null; see the two-axis
+  // local-only idiom at :3509/:3608/:4372). The agent signal is PANE-scoped
+  // (paneStartup), NOT tab.launchAgent: the tab flag persists while codex runs
+  // (use-tab-agent.ts:288-291), so a split in a live codex tab — a plain shell
+  // pane — would otherwise be parked behind the indexing overlay.
   const shouldGateCodexSpawnOnBackfill = (): boolean =>
     !runtimeEnvironmentId &&
-    !hasRestoredPtyForThisLeaf &&
-    resolveExpectedLaunchTuiAgent() === 'codex'
+    !connectionId &&
+    (paneStartup?.launchAgent ?? paneStartup?.initialAgentStatus?.agent) === 'codex'
 ```
 
-For `hasRestoredPtyForThisLeaf`, use the exact fresh-vs-reattach discriminator the
-surrounding code already uses for the `:5056` connect (the restored pty id for
-this pane's leaf, e.g. `deps.restoredPtyIdByLeafId?.[deps.restoredLeafId ?? '']`
-or the local variable `connectPanePty` derives from it — locate it where
-`transport.connect` chooses reattach; do NOT invent a new signal). The Step-4
-reattach test pins the required behavior.
+(No reattach conjunct is needed — the clause below runs only in the fresh-spawn
+arm, after every reattach/adoption target has been ruled out.)
 
-3. In `runDeferredConnect` (`:~4410`), add a second deferral clause after the
-startup-grid clause and before `connectStarted = true`, mirroring the existing
-idiom exactly:
+3. In `runDeferredConnect`, add the deferral clause at the top of the
+FRESH-SPAWN arm (`:~8590-8596` — the `else` branch reached only after the
+compound reattach decision: restored seam, store `tab.ptyId` →
+`tabFallbackPtyId` → `detachedLivePtyId` (`:8271-8299`), and eager-buffer
+adoption (`:8321-8331`) have all ruled out joining a live pty), immediately
+before the fresh-spawn call. Do NOT place it earlier (e.g. after the
+startup-grid clause): the reattach decision is compound, and gating before it
+would park panes that were about to JOIN a live codex (recovery remounts,
+background-agent adoption). Mirror the startup-grid clause's cancel idiom:
 
 ```ts
     if (!codexBackfillGateCleared && shouldGateCodexSpawnOnBackfill()) {
@@ -1305,6 +1566,10 @@ idiom exactly:
         clearTimeout(connectFallbackTimer)
         connectFallbackTimer = null
       }
+      // Why: parking must leave the binding re-enterable — reset any
+      // connect-progress flag this pass already set (e.g. connectStarted) so
+      // onClear's runDeferredConnect actually proceeds instead of early-returning.
+      connectStarted = false
       codexBackfillGateDispose = waitForCodexBackfillGate({
         api: window.api.codexBackfill,
         onWaiting: (state) => deps.onCodexIndexingStateRef?.current?.(pane.id, state),
@@ -1319,6 +1584,10 @@ idiom exactly:
     }
 ```
 
+(If the fresh-spawn arm sets other in-progress state before this point, reset
+it the same way — the Step-4 tests pin the observable contract: parked panes
+connect exactly once after clear.)
+
 4. In the binding's dispose/cleanup path (where `disposed = true` is set and
 frames/timers are cancelled), add:
 
@@ -1328,7 +1597,24 @@ frames/timers are cancelled), add:
     deps.onCodexIndexingStateRef?.current?.(pane.id, null)
 ```
 
-Keep the addition to `pty-connection.ts` to roughly these ~30 lines; all other
+5. Suppress input-driven recovery while parked. Keystrokes into a parked pane
+hit `transport.sendInput` → `false` pre-connect (`pty-transport.ts:1004-1008`)
+→ `requestRecoveryForUndeliverableInput`, whose "still settling" grace check
+(`:3855-3862`) consults only `transportConnectInFlightSince` — null while
+parked — so each keystroke would trigger a pointless recovery REMOUNT of the
+pane. Extend that grace check to also treat an armed gate as still settling:
+
+```ts
+    // Why: a pane parked behind the codex backfill gate has deliberately not
+    // connected; remounting it on undeliverable input would just re-park it.
+    if (codexBackfillGateDispose !== null) {
+      return
+    }
+```
+
+(placed with the existing `connectStillSettling` logic; adapt to its shape).
+
+Keep the addition to `pty-connection.ts` to roughly these ~40 lines; all other
 logic stays in the sibling module (no `max-lines` growth beyond this).
 
 - [ ] **Step 6: Run tests to verify they pass**
@@ -1474,6 +1760,11 @@ export function CodexIndexingOverlay({
 ```
 
 Run the Step-2 command again. Expected: PASS.
+
+(Validated watermark semantics — no extra code needed, just don't "fix" them:
+codex writes the cursor once per 200-file checkpoint, so it is EMPTY for the
+first ≤200 files, may lag up to 200 files, and can be NULL even at `complete`.
+Empty/unrecognized values already fall through to the no-date auto-start line.)
 
 - [ ] **Step 4: Wire `TerminalPane.tsx`**
 
@@ -1673,6 +1964,24 @@ not treat it as failure. If any observation genuinely cannot be produced, captur
 the relevant log lines + scheduler eligibility state and HALT with the evidence —
 do not fake observations.
 
+Validated scope of criterion 1 (know what it does and doesn't prove):
+- It depends on the FRESH sandbox: index-heal no-ops only when the managed home
+  is empty (empty backfill audit ledger, `codex-session-index-heal.ts:110-132`);
+  atop a USED managed home, heal spawns its own real-home codex and its timeout
+  log (`:189`) prints the `CodexAppServerTimeoutError` name without anything
+  being wrong. Always use a fresh `mktemp` sandbox.
+- It also depends on Task 2's rate-limit skip: without it, the 10s rate-limit
+  codex (`codex-fetcher.ts`) spawns against the unindexed home — it never logs
+  `CodexAppServerTimeoutError`, but its killed claimer plants a ≤15-min stale
+  lease that delays criterion 4's timeline. While the index runs, optionally
+  confirm the skip: the only `app-server` child with
+  `CODEX_HOME=$E2E_HOME/.codex` should be the prewarm's.
+- Criterion 3 interaction with the gate's fail-open: if the index takes longer
+  than `CODEX_BACKFILL_GATE_MAX_WAIT_MS` (15 min), a waiting pane launches
+  codex anyway, codex dies with the backfill message, and the amber toast
+  appears — record it as the designed fail-open (not a failure), and rely on
+  criterion 5's steady-state pass instead.
+
 - [ ] **Step 4: Clean up (mandatory, verify)**
 
 ```bash
@@ -1732,11 +2041,29 @@ If nothing changed, skip the commit.
 - **Type consistency:** `isCodexBackfillIndexPending(codexHomePath: string): boolean`
   (T1 → T2, T4); `incomplete` variant `{ kind; stateDbPath; status; lastWatermark }`
   (T1 → T4); `RealHomeCodexHookLane` with `'pending-index'` (T2 → T3);
-  `retryRealHomeCodexHookAfterIndex(args): RealHomeCodexHookLane` (T3 → index.ts);
+  `retryRealHomeCodexHookAfterIndex(args): RealHomeCodexHookLane` (T3 → index.ts,
+  bypasses the pending re-check via the module-scoped flag);
   `CodexBackfillGateStatus = { pending; lastWatermark }` (T4 → T5 preload/gate/web
   stub); `waitForCodexBackfillGate` / `CodexIndexingPaneState` /
-  `CODEX_BACKFILL_GATE_REPOLL_MS` (T5 → T5 integration, T6);
+  `CODEX_BACKFILL_GATE_REPOLL_MS` / `CODEX_BACKFILL_GATE_MAX_WAIT_MS` (T5 → T5
+  integration, T6);
   `onCodexIndexingStateRef` dep (T5 types → T6 wiring); overlay exports
   `CodexIndexingOverlay` / `formatCodexIndexingProgress` (T6). Scheduler
   `MigrationRun` shape `(options, override?) => Promise<unknown>` is preserved by
   the T3/T4 closure. All checked; names match across tasks.
+- **Load-bearing validation (run 2) applied:** six falsified assumptions were
+  planned around — (A1) prewarm `not-tracked` gate aligned with the pending
+  predicate (T1) so no pending state lacks a cure; (A2) bounded waits everywhere:
+  gate fail-open `CODEX_BACKFILL_GATE_MAX_WAIT_MS` (T5) + grant retry bypasses
+  the pending re-check after prewarm resolution (T3), so neither panes nor the
+  lane can park forever on a failed prewarm; (A5) rate-limit fetcher skips while
+  the target home's backfill is pending (T2) — the second doomed real-home
+  spawner, and the lease thief; (A6) gate predicate excludes BOTH remote axes
+  (`!connectionId` added) with an SSH fail-open test (T5); (A7) gate agent
+  signal is pane-scoped (`paneStartup`), never `tab.launchAgent` (T5); (A8) gate
+  clause lives in `runDeferredConnect`'s fresh-spawn arm, after the compound
+  reattach/adoption decision (T5). One accepted risk with mitigations: long
+  pre-connect parking (A9) — sole-trigger property verified, input-undeliverable
+  recovery suppressed while parked (T5.5), bounded by the 15-min fail-open, and
+  exercised live by T8 observation 3. Full ledger:
+  `.the-usual-logs/codex-backfill-prewarm/load-bearing-ledger.md`.
