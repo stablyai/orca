@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { createConnection } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { ALL_RPC_METHODS } from './rpc/methods'
 import { readRuntimeMetadata } from './runtime-metadata'
 import type { RpcResponse } from './rpc/core'
 import { OrcaRuntimeRpcServer, SLOW_DISPATCH_KEEPALIVE_MAX_MS } from './runtime-rpc'
@@ -210,5 +211,14 @@ describe('slow local RPC dispatches', () => {
     } finally {
       await server.stop()
     }
+  })
+
+  it('keeps the classifier aligned with the registered RPC methods', () => {
+    const registered = new Set(ALL_RPC_METHODS.map((method) => method.name))
+    expect(
+      ['worktree.create', 'browser.tabCreate', 'browser.snapshot'].every((name) =>
+        registered.has(name)
+      )
+    ).toBe(true)
   })
 })

@@ -228,6 +228,9 @@ export class UnixSocketTransport implements RpcTransport {
             keepaliveTimer = null
           }
           keepaliveExpiryTimer = null
+          // Why: reclaim the connection at the bound even when socket activity
+          // from another dispatch would otherwise keep the shared idle timer alive.
+          socket.destroy()
         }, maxDurationMs)
         if (typeof keepaliveExpiryTimer.unref === 'function') {
           keepaliveExpiryTimer.unref()

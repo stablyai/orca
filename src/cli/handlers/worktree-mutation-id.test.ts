@@ -101,6 +101,36 @@ describe('worktree create mutation identity', () => {
     })
   })
 
+  it('uses the generated id in response-loss retry guidance', async () => {
+    callMock.mockRejectedValue(
+      new RuntimeClientError('runtime_unavailable', 'The runtime closed before responding.', {
+        requestPhase: 'awaiting_response',
+        mutationMayHaveCompleted: true
+      })
+    )
+
+    let thrown: unknown
+    try {
+      await invoke(
+        new Map<string, string | boolean>([
+          ['repo', 'id:repo'],
+          ['name', 'slow-create'],
+          ['no-parent', true]
+        ])
+      )
+    } catch (error) {
+      thrown = error
+    }
+
+    const sentId = (callMock.mock.calls[0]?.[1] as { clientMutationId?: string })?.clientMutationId
+    expect(sentId).toEqual(expect.any(String))
+    expect(thrown).toMatchObject({
+      data: {
+        nextSteps: expect.arrayContaining([expect.stringContaining(`--mutation-id ${sentId}`)])
+      }
+    })
+  })
+
   it('rejects mutation ids longer than the runtime schema limit', async () => {
     await expect(
       invoke(

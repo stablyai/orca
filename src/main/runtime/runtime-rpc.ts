@@ -67,6 +67,7 @@ type OrcaRuntimeRpcServerOptions = {
   // Why: test-only overrides for the transport and long-poll constants below; production must not pass these.
   keepaliveIntervalMs?: number
   socketIdleTimeoutMs?: number
+  slowDispatchKeepaliveMaxMs?: number
   longPollCap?: number
   // Why: test-only override for the ownership reclaim cadence.
   metadataOwnershipPollMs?: number
@@ -482,6 +483,7 @@ export class OrcaRuntimeRpcServer {
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly socketIdleTimeoutMs: number | undefined
+  private readonly slowDispatchKeepaliveMaxMs: number
   private readonly longPollCap: number
   private readonly metadataOwnershipPollMs: number
   private readonly askLongPollCap: number
@@ -529,6 +531,7 @@ export class OrcaRuntimeRpcServer {
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     socketIdleTimeoutMs,
+    slowDispatchKeepaliveMaxMs = SLOW_DISPATCH_KEEPALIVE_MAX_MS,
     longPollCap = LONG_POLL_CAP,
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
   }: OrcaRuntimeRpcServerOptions) {
@@ -543,6 +546,7 @@ export class OrcaRuntimeRpcServer {
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.socketIdleTimeoutMs = socketIdleTimeoutMs
+    this.slowDispatchKeepaliveMaxMs = slowDispatchKeepaliveMaxMs
     this.longPollCap = longPollCap
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
     // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
@@ -1302,7 +1306,7 @@ export class OrcaRuntimeRpcServer {
     } else if (isSlowDispatchMethod(request.method)) {
       // Why: slow I/O-bound methods need liveness frames but are not long polls.
       // Keep them outside capacity admission and abort-signal wiring.
-      context?.startKeepalive(SLOW_DISPATCH_KEEPALIVE_MAX_MS)
+      context?.startKeepalive(this.slowDispatchKeepaliveMaxMs)
     }
 
     try {

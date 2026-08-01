@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { createServer, type Server } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { RuntimeClient } from './client'
+import { attachSlowMutationCompletionWarning } from './client-response-loss'
 import { RuntimeClientError } from './types'
 
 const servers = new Set<Server>()
@@ -64,5 +65,24 @@ describe('RuntimeClient response-loss recovery', () => {
         error.message.includes('may have completed')
       )
     })
+  })
+
+  it('describes a timeout as an incomplete response instead of a closed connection', () => {
+    const error = attachSlowMutationCompletionWarning(
+      new RuntimeClientError(
+        'runtime_timeout',
+        'Timed out waiting for the Orca runtime to respond.',
+        {
+          requestPhase: 'awaiting_response'
+        }
+      ),
+      'worktree.create'
+    )
+
+    expect(error).toMatchObject({
+      code: 'runtime_timeout',
+      message: expect.stringContaining('before the runtime responded')
+    })
+    expect((error as RuntimeClientError).message).not.toContain('connection closed')
   })
 })

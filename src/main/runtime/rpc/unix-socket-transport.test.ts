@@ -75,7 +75,7 @@ describe('UnixSocketTransport', () => {
     expect(socket.writes).toHaveLength(1)
   })
 
-  it('stops a bounded keepalive without affecting the socket idle policy', () => {
+  it('stops and destroys a bounded keepalive connection at expiry', () => {
     const transport = new UnixSocketTransport({
       endpoint: '/tmp/orca-runtime-rpc-test.sock',
       kind: 'unix',
@@ -94,6 +94,7 @@ describe('UnixSocketTransport', () => {
 
     vi.advanceTimersByTime(300)
     expect(socket.writes).toHaveLength(2)
+    expect(socket.destroyed).toBe(true)
 
     vi.advanceTimersByTime(300)
     expect(socket.writes).toHaveLength(2)

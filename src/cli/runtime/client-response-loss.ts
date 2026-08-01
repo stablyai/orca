@@ -26,9 +26,12 @@ export function attachSlowMutationCompletionWarning(error: unknown, method: stri
   if (data?.requestPhase !== 'awaiting_response') {
     return error
   }
-  return new RuntimeClientError(
-    error.code,
-    `The ${method} operation may have completed after the runtime connection closed before responding. Verify state before retrying.`,
-    { ...data, mutationMayHaveCompleted: true }
-  )
+  const completionMessage =
+    error.code === 'runtime_unavailable'
+      ? `The ${method} operation may have completed after the runtime connection closed before responding. Verify state before retrying.`
+      : `${error.message} The ${method} operation may have completed before the runtime responded. Verify state before retrying.`
+  return new RuntimeClientError(error.code, completionMessage, {
+    ...data,
+    mutationMayHaveCompleted: true
+  })
 }
