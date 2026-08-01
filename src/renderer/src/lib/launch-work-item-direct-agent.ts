@@ -19,6 +19,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
 import type { PersistedNativeChatSessionOptions } from '../../../shared/native-chat-session-options'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
@@ -160,8 +161,9 @@ export async function markDirectWorkItemAgentTrusted(args: {
   agent: TuiAgent | null
   workspacePath: string
   connectionId?: string | null
+  runtimeEnvironmentId?: string | null
 }): Promise<void> {
-  if (!args.agent || !args.workspacePath || !window.api.agentTrust?.markTrusted) {
+  if (!args.agent || !args.workspacePath) {
     return
   }
   const preset = TUI_AGENT_CONFIG[args.agent].preflightTrust
@@ -169,6 +171,17 @@ export async function markDirectWorkItemAgentTrusted(args: {
     return
   }
   try {
+    if (args.runtimeEnvironmentId) {
+      await callRuntimeRpc(
+        { kind: 'environment', environmentId: args.runtimeEnvironmentId },
+        'preflight.markAgentTrusted',
+        { agent: args.agent, workspacePath: args.workspacePath }
+      )
+      return
+    }
+    if (!window.api.agentTrust?.markTrusted) {
+      return
+    }
     await window.api.agentTrust.markTrusted({
       preset,
       workspacePath: args.workspacePath,

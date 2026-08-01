@@ -251,7 +251,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     await markDirectWorkItemAgentTrusted({
       agent: effectiveAgent,
       workspacePath: worktreePath,
-      connectionId: repo.connectionId
+      connectionId: repo.connectionId,
+      runtimeEnvironmentId
     })
 
     ;({ startupPlan, draftLaunchedNatively, startupPlanFailed } =

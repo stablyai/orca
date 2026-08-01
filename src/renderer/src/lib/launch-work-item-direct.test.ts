@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   openModalFallback: vi.fn(),
   resolvePrBase: vi.fn(),
   getConnectionId: vi.fn(),
+  callRuntimeRpc: vi.fn(),
   store: {} as Record<string, unknown> & {
     ensureDetectedAgents: ReturnType<typeof vi.fn>
     ensureRemoteDetectedAgents: ReturnType<typeof vi.fn>
@@ -69,7 +70,7 @@ vi.mock('@/runtime/runtime-hooks-client', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   getActiveRuntimeTarget: vi.fn().mockReturnValue({ kind: 'local' }),
-  callRuntimeRpc: vi.fn()
+  callRuntimeRpc: mocks.callRuntimeRpc
 }))
 
 vi.mock('@/lib/new-workspace', () => ({
@@ -155,6 +156,7 @@ describe('launchWorkItemDirect', () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
     mocks.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
     mocks.ensureRuntimeDetectedAgents.mockResolvedValue(['codex'])
+    mocks.callRuntimeRpc.mockResolvedValue(undefined)
     mocks.getConnectionId.mockReturnValue(null)
     mocks.createWorktree.mockResolvedValue({
       worktree: { id: 'repo-1::/repo/worktree', path: '/repo/worktree' },
@@ -236,6 +238,12 @@ describe('launchWorkItemDirect', () => {
 
     expect(mocks.ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1')
     expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'preflight.markAgentTrusted',
+      { agent: 'codex', workspacePath: '/repo/worktree' }
+    )
+    expect(mockApi.agentTrust.markTrusted).not.toHaveBeenCalled()
     expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith(
       expect.objectContaining({ isRemote: true, platform: 'linux' })
     )

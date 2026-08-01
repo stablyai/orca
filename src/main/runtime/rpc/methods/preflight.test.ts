@@ -8,12 +8,14 @@ const {
   detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgentsMock,
   detectRemoteWindowsTerminalCapabilitiesMock,
+  markRuntimeAgentWorkspaceTrustedMock,
   refreshShellPathAndDetectAgentsMock,
   runPreflightCheckMock
 } = vi.hoisted(() => ({
   detectInstalledAgentsWithShellPathHydrationMock: vi.fn(),
   detectRemoteAgentsMock: vi.fn(),
   detectRemoteWindowsTerminalCapabilitiesMock: vi.fn(),
+  markRuntimeAgentWorkspaceTrustedMock: vi.fn(),
   refreshShellPathAndDetectAgentsMock: vi.fn(),
   runPreflightCheckMock: vi.fn()
 }))
@@ -24,6 +26,10 @@ vi.mock('../../../ipc/preflight', () => ({
   detectRemoteWindowsTerminalCapabilities: detectRemoteWindowsTerminalCapabilitiesMock,
   refreshShellPathAndDetectAgents: refreshShellPathAndDetectAgentsMock,
   runPreflightCheck: runPreflightCheckMock
+}))
+
+vi.mock('../../runtime-agent-trust', () => ({
+  markRuntimeAgentWorkspaceTrusted: markRuntimeAgentWorkspaceTrustedMock
 }))
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
@@ -115,5 +121,20 @@ describe('preflight RPC methods', () => {
         hostPlatform: 'win32'
       }
     })
+  })
+
+  it('marks agent trust on the runtime that owns the workspace', async () => {
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('preflight.markAgentTrusted', {
+        agent: 'codex',
+        workspacePath: '/runtime/worktree'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(markRuntimeAgentWorkspaceTrustedMock).toHaveBeenCalledWith('codex', '/runtime/worktree')
   })
 })
