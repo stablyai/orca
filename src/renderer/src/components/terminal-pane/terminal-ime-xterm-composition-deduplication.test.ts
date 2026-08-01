@@ -137,6 +137,18 @@ function getPendingFinalizationCount(terminal: Terminal): number {
   return pending === undefined ? 0 : 1
 }
 
+function getPendingComposition(terminal: Terminal): { finalizerTimer?: unknown } | undefined {
+  return (
+    terminal as unknown as {
+      _core: {
+        _compositionHelper: {
+          _pendingComposition?: { finalizerTimer?: unknown }
+        }
+      }
+    }
+  )._core._compositionHelper._pendingComposition
+}
+
 function getCompositionHelper(terminal: Terminal): {
   keypress(text: string): boolean
 } {
@@ -751,14 +763,18 @@ describe('xterm IME composition de-duplication', () => {
     terminal.dispose()
   })
 
-  it('cancels a pending completion when Escape follows compositionend', async () => {
+  it('clears a pending completion timer when Escape follows compositionend', async () => {
     const { emitted, terminal, textarea } = openTerminal()
     startComposition(textarea, '한')
     await nextEventLoop()
 
     textarea.dispatchEvent(new CompositionEvent('compositionend', { data: '한', bubbles: true }))
+    const pending = getPendingComposition(terminal)
+    expect(pending?.finalizerTimer).toBeDefined()
     dispatchKeydown(textarea, 'Escape', 'Escape', 229, true, 100)
     dispatchKeydown(textarea, 'Escape', 'Escape', 27, false, 100)
+
+    expect(pending?.finalizerTimer).toBeUndefined()
     await nextEventLoop()
 
     expect(emitted).toEqual([])
