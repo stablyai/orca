@@ -520,6 +520,13 @@ function createDeps(overrides: Partial<CodexStateDbPrewarmDeps> = {}): {
     readBackfillStatus: vi.fn(() => incomplete),
     countSessionFiles: vi.fn(() => PREWARM_MIN_SESSION_FILES),
     logger: { warn: vi.fn(), info: vi.fn() },
+    // Why inject now/sleep: the implementation's defaultDeps capture the NATIVE Date.now
+    // reference at module load, which vi.useFakeTimers() (installed in beforeEach) does
+    // NOT replace — leaving default now() on the real wall clock while the tests advance
+    // a fake one. These call-time wrappers read the faked globalThis.Date/setTimeout, so
+    // the fake clock governs both elapsed-time measurement and every wait.
+    now: () => Date.now(),
+    sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
     ...overrides
   }
   return { deps, children, spawnProcess }
@@ -578,8 +585,9 @@ describe('runCodexStateDbPrewarm', () => {
     const { deps, children, spawnProcess } = createDeps()
     const task = runCodexStateDbPrewarm('/tmp/home', {}, deps)
     for (let i = 0; i < PREWARM_MAX_SPAWNS; i += 1) {
-      // Why < PREWARM_FAST_EXIT_MS: a child dying before codex's own 30s backfill gate
-      // is a real failure and must burn budget.
+      // Why one poll then exit: the exit event lands 5s (one PREWARM_POLL_INTERVAL_MS)
+      // after spawn — under the 10s PREWARM_FAST_EXIT_MS threshold — so each death is a
+      // fast failure and must burn the budget.
       await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS)
       children[children.length - 1].emit('exit', 1, null)
       await vi.advanceTimersByTimeAsync(PREWARM_SPAWN_RETRY_DELAY_MS + PREWARM_POLL_INTERVAL_MS)
@@ -764,13 +772,21 @@ export async function runCodexStateDbPrewarm(
     spawnCount += 1
     let childDown = false
     let spawnFailed = false
+    // Why capture the timestamp inside the listeners: lifetime must be measured at the
+    // exit event itself. Measuring at the next poll wakeup quantizes lifetime to 5s
+    // multiples, so a genuine crash in the 5-10s window would read as >=10s and be
+    // misclassified as an expected claim-blocked exit — respawning a crashing codex
+    // every few seconds until the 60-min deadline.
+    let exitedAt = spawnedAt
     child.once('error', (error) => {
       childDown = true
       spawnFailed = true
+      exitedAt = deps.now()
       deps.logger.warn('[codex-state-db-prewarm] codex spawn failed:', error)
     })
     child.once('exit', () => {
       childDown = true
+      exitedAt = deps.now()
     })
 
     while (!childDown) {
@@ -795,8 +811,9 @@ export async function runCodexStateDbPrewarm(
       return finish('codex-unavailable', spawnCount)
     }
     // Why: claim-blocked exits (~30s, verified) are expected — respawn until the
-    // deadline; only fast deaths burn the failure budget.
-    if (deps.now() - spawnedAt < PREWARM_FAST_EXIT_MS) {
+    // deadline; only fast deaths burn the failure budget, measured at the exit event
+    // (exitedAt), never at poll detection.
+    if (exitedAt - spawnedAt < PREWARM_FAST_EXIT_MS) {
       fastFailureCount += 1
     }
     await deps.sleep(PREWARM_SPAWN_RETRY_DELAY_MS)
@@ -887,6 +904,11 @@ export function startCodexStateDbPrewarmInBackground(
 ```
 
 Implementation notes (do these while writing, they are part of this step):
+- Timing discipline: every elapsed-time read in the supervisor goes through `deps.now()`
+  and every wait through `deps.sleep()` — never a captured `Date.now` reference or a bare
+  `setTimeout` — and child lifetime is taken from `exitedAt` (recorded inside the
+  `exit`/`error` listeners), never recomputed at poll detection. The tests inject
+  fake-clock `now`/`sleep` and depend on both properties.
 - Wire `getSpawnArgsForWindows` exactly as `codex-fetcher.ts:576-591` does (import from
   `src/main/win32-utils.ts`) so Windows `.cmd`/`.bat` shims spawn correctly; keep `windowsHide: true`.
 - If the smoke check in Step 1 selected different args, set `PREWARM_CODEX_ARGS` accordingly.
@@ -964,31 +986,65 @@ it('runs the state-db prewarm after backfill and index-heal complete', async () 
 
 it('skips the prewarm when the backfill run was stopped', async () => {
   const startStateDbPrewarm = vi.fn(async () => null)
+  const startIndexHeal = vi.fn(async () => null)
+  // Why a deferred first result: the scheduler auto-reruns after a stopped backfill
+  // (`rerunRequested || stoppedBackfill`), so an always-stopped mock would rerun forever.
+  // Reuse the test file's existing release/deferred pattern for this.
+  let releaseBackfill: ((result: { stopped: boolean }) => void) | undefined
+  const startBackfill = vi.fn(
+    () =>
+      new Promise<{ stopped: boolean }>((resolve) => {
+        releaseBackfill = resolve
+      })
+  )
   const scheduler = createCodexSessionMigrationScheduler({
     isEligible: () => true,
     isQuitting: () => false,
     resolveSystemCodexHomePathOverride: () => undefined,
-    // Why: mirror the shape isStoppedMigrationResult() recognizes — copy it from an
-    // existing "stopped" case in this test file.
-    startBackfill: vi.fn(async () => ({ stopped: true })),
-    startIndexHeal: vi.fn(async () => null),
+    startBackfill,
+    startIndexHeal,
     startStateDbPrewarm,
     initialDelayMs: 0
   })
   scheduler.requestRun()
-  await vi.waitFor(() => expect(startStateDbPrewarm).not.toHaveBeenCalled())
+  await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledOnce())
+  // Why { stopped: true }: the exact shape isStoppedMigrationResult() recognizes;
+  // existing tests in this file already use it.
+  releaseBackfill?.({ stopped: true })
+  // Settlement barrier: the stopped result makes the scheduler rerun, and the rerun's
+  // startBackfill call only happens after the first run's whole promise chain
+  // (including any wrongly-wired prewarm stage) has settled via its .finally. Waiting
+  // for the SECOND call therefore proves the chain finished — a bare
+  // `waitFor(() => expect(...).not.toHaveBeenCalled())` would resolve on its first
+  // check, before the chain settles, and pass against a broken implementation.
+  await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledTimes(2))
+  expect(startIndexHeal).not.toHaveBeenCalled()
+  expect(startStateDbPrewarm).not.toHaveBeenCalled()
+  // The second (rerun) backfill promise stays pending; the test ends here without
+  // releasing it, matching how the file's other deferred tests finish.
 })
 ```
 
 Important: read the existing test file first and reuse its established way of (a) building
-scheduler args and (b) representing a "stopped" migration result — `isStoppedMigrationResult`
-has an exact shape the existing tests already exercise.
+scheduler args, (b) representing a "stopped" migration result (`{ stopped: true }` is what
+`isStoppedMigrationResult` recognizes and what existing tests use), and (c) deferring a
+backfill result via a captured `release...` resolver. Note the file has NO chain-flush
+helper and `requestRun()` returns void, so the rerun barrier above is the only reliable
+settlement proof — do not replace it with fixed `await Promise.resolve()` drains.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `pnpm test src/main/codex/codex-session-migration-scheduler.test.ts`
-Expected: FAIL — TypeScript/arg error for the new `startStateDbPrewarm` property and the two
-new assertions.
+Expected: FAIL, specifically: the ordering test fails with `order` ending as
+`['backfill', 'heal']` (no `'prewarm'`). Vitest transforms with esbuild and does NOT
+typecheck, so the not-yet-accepted `startStateDbPrewarm` property produces no error at test
+runtime — the arg-type error surfaces at Step 5's `pnpm tc:node` instead. The stopped-case
+test PASSES at this point: before the implementation exists nothing can call
+`startStateDbPrewarm`, so its not-called assertions cannot red-fail; its value is (1) the
+`startIndexHeal` negative, which pins existing stop-propagation behavior, and (2) regression
+protection once the prewarm stage lands, made meaningful by the rerun settlement barrier.
+All pre-existing tests must still pass after adding `startStateDbPrewarm: vi.fn(async () =>
+null)` to their constructions.
 
 - [ ] **Step 3: Implement the scheduler change**
 
