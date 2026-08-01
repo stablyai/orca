@@ -303,6 +303,45 @@ describe('SshRelaySession data delivery', () => {
     fresh.dispose()
   })
 
+  it('resumes authenticated ownership from a persisted main-process recovery record', async () => {
+    const targetId = 'persisted-recovery-target'
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    vi.mocked(mockStore.getSshPtyConsumerRecovery).mockReturnValue({
+      targetId,
+      clientInstanceId: 'persisted-client',
+      serverBuildId: 'test-relay-build',
+      clientGeneration: 7,
+      ownerGeneration: 11,
+      ownerLease: 'persisted-owner-lease',
+      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+    })
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
+      platform: 'linux-x64',
+      serverBuildId: 'test-relay-build'
+    })
+
+    const session = new SshRelaySession(targetId, getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+
+    expect(openConsumerSessionMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        clientInstanceId: 'persisted-client',
+        resume: { ownerGeneration: 11, ownerLease: 'persisted-owner-lease' }
+      })
+    )
+    expect(mockStore.upsertSshPtyConsumerRecovery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetId,
+        clientInstanceId: 'persisted-client',
+        ownerLease: 'test-owner-lease'
+      })
+    )
+    session.dispose()
+    expect(mockStore.removeSshPtyConsumerRecovery).toHaveBeenCalledWith(targetId)
+  })
+
   it('clears stale owner recovery and retries a fresh same-build relay once without resume', async () => {
     const targetId = 'fresh-relay-retry'
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()

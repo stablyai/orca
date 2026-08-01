@@ -190,7 +190,7 @@ test.describe('Create Workspace', () => {
     }
   })
 
-  test('enters the Korean flag with a workspace shortcode suggestion', async ({ orcaPage }) => {
+  test('enters the Korean flag with the flag_kr shortcode suggestion', async ({ orcaPage }) => {
     try {
       await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
 

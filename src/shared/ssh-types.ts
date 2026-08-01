@@ -157,6 +157,20 @@ export type SshRemotePtyLease = {
   lastDetachedAt?: number
 }
 
+/** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */
+export type SshPtyConsumerRecovery = {
+  targetId: string
+  clientInstanceId: string
+  serverBuildId: string
+  clientGeneration: number
+  ownerGeneration: number
+  ownerLease: string
+  outputFlowControl?: {
+    version: 1
+    windowSu: number
+  }
+}
+
 // ─── Port Forwarding Types ─────────────────────────────────────────
 
 export type PortForwardEntry = {

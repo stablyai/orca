@@ -225,6 +225,7 @@ const browserPageSchema = z.object({
   canGoForward: z.boolean(),
   loadError: browserLoadErrorSchema.nullable(),
   createdAt: z.number(),
+  allowWindowClose: z.boolean().optional(),
   // Why: explicit null marks a browser page as client-local even when its
   // worktree is remote-owned; older sessions omit it and keep inferred runtime.
   browserRuntimeEnvironmentId: z.string().nullable().optional(),

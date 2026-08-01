@@ -76,6 +76,15 @@ function installAnimationFrameController(): {
   }
 }
 
+async function flushPortalFramesUntil(
+  frames: ReturnType<typeof installAnimationFrameController>,
+  settled: () => boolean
+): Promise<void> {
+  for (let frame = 0; frame < 4 && !settled(); frame += 1) {
+    await frames.flush()
+  }
+}
+
 // Models the tab-root DOM and sibling hiding emitted by a portaled TerminalPane.
 function renderPortaledTerminalPane(target: HTMLElement, tabId: string, leafIds: string[]): void {
   const isolatedLeafId = leafIds[0]
@@ -345,7 +354,7 @@ describe('Activity portal pane switching', () => {
     await act(async () => {
       root.render(<ActivityTerminalSlot />)
     })
-    await frames.flush()
+    await flushPortalFramesUntil(frames, () => statuses.at(-1) === 'unavailable')
     expect(statuses.at(-1)).toBe('unavailable')
 
     // Feed each observed DOM state separately so MutationObserver cannot coalesce the flips.
@@ -362,7 +371,7 @@ describe('Activity portal pane switching', () => {
       buildRoot('ready')
       await Promise.resolve()
     })
-    await frames.flush()
+    await flushPortalFramesUntil(frames, () => statuses.at(-1) === 'ready')
     expect(statuses.at(-1)).toBe('ready')
   })
 })

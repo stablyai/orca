@@ -847,7 +847,11 @@
         "9263e75f49": "Codex is using the previous account",
         "d3e8a1f4b2": "Account switched",
         "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
-        "6133594b12": "Keep old account"
+        "6133594b12": "Keep old account",
+        "8f0d5c92a1": "Codex setup changed",
+        "3ea91b5c07": "This Codex session is using an outdated configuration",
+        "e6b7139d2a": "Restart this session to load your current Codex configuration.",
+        "7b1d20f4c8": "Keep current session"
       },
       "ContextPressureIndicator": {
         "ariaLabel": "Context window {{value0}}% used",
@@ -14731,6 +14735,20 @@
         "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
         "unknown": "Restart Orca to try again."
       }
+    }
+  },
+  "featureTips": {
+    "voice": {
+      "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
+      "startDictation": "Start dictation",
+      "agentPromptTitle": "Agent prompt",
+      "listening": "Listening...",
+      "focusPaneInstruction": "Focus a terminal, editor, or agent prompt, then press",
+      "startInstruction": "to start voice dictation. Press",
+      "stopInstruction": "again to stop.",
+      "unassignedInstruction": "Assign a dictation shortcut before starting voice dictation in a focused pane.",
+      "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
+      "settingsLink": "Settings → Voice"
     }
   }
 }

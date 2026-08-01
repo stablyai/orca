@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-31",
+  "updatedAt": "2026-08-01",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -10,6 +10,86 @@
     }
   },
   "gates": [
+    {
+      "id": "terminal-provider.login-session-retirement",
+      "title": "macOS login-session retirement preserves live daemons through transient rejection bursts",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "daemon-terminal",
+      "layer": "macos-daemon-lifecycle",
+      "surfaces": [
+        "GUI-spawned macOS daemon",
+        "local PTY survival",
+        "daemon reconnect and replacement"
+      ],
+      "platforms": ["macos"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "A deterministic fake clock covers short-burst recovery, sustained session death, pending-timer and in-flight-probe suspension, event-trigger preemption, resolver corroboration, and shutdown cancellation. The production-only watch remains behind the macOS GUI launch flag; SSH/headless, WSL, Linux, Windows, mobile, and relay paths are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/11749",
+        "https://github.com/stablyai/orca/issues/7936"
+      ],
+      "invariant": "A GUI-spawned macOS daemon may retire for PAM rejections only after it previously accepted login wrapping, receives three conclusive rejections spanning at least one uninterrupted 120-second observation window, and observes explicitly unhealthy in-process resolver state. A conclusive acceptance or a sleep/App Nap-sized gap before or during a probe resets the rejection window to the periodic cadence, and client or PTY activity cannot shorten its scheduled backoff.",
+      "oracle": "Arm the watch with an accepted probe, inject three rejections over 20 seconds plus unhealthy resolver state, then inject client and PTY activity and require zero resolver reads, zero retirement calls, and exactly four probes until the 120-second boundary. Return acceptance at that boundary and require the daemon to survive. Jump wall time by one hour while a timer is pending and while a PAM probe promise is unresolved; require rejection evidence to restart after wake, zero probes for the next 119,999 milliseconds, and recovery without retirement in both cases. Repeatedly delay timers beyond the suspension threshold for one hour and require the periodic probe bound, one live timer, and zero resolver or retirement calls. Separately keep rejecting through an uninterrupted boundary and require one retirement, while healthy or unknown resolver state suppresses it and stop aborts an in-flight resolver check.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/macos-login-session-death-watch.test.ts --reporter=dot"
+      ],
+      "testFiles": ["src/main/daemon/macos-login-session-death-watch.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/macos-login-session-death-watch.test.ts",
+          "assertions": [
+            "preserves the daemon when a short PAM rejection burst recovers after wake",
+            "does not count a suspended timer gap as rejection evidence",
+            "does not count suspension during an in-flight probe as rejection evidence",
+            "backs off repeated timer lateness to the periodic probe cadence",
+            "retires only after sustained conclusive rejections with a degraded resolver",
+            "suppresses retirement while resolver health is healthy or unknown, then retires on explicit degradation",
+            "stop prevents an in-flight resolver check from retiring the daemon"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/macos-login-session-death-watch.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 0.1,
+          "summary": "The focused state-machine suite passed 21 tests, including the field-shaped 20-second rejection burst, pending-timer and in-flight-probe suspension rebaselining, repeated-lateness backoff, bounded recovery retry, sustained-death convergence, resolver suppression, trigger coalescing, and shutdown cancellation."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 2,
+        "scope": "deterministic login-session death-watch state-machine suite"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic suite passes locally; focused CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "On origin/main, the field-shaped accepted then three-rejection sequence calls onRetire after 20 seconds and fails the recovery oracle. With the minimum observation window and non-preemptible rejection schedule, the identical oracle preserves the daemon and recovers at the boundary."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The watch retains one timer and one in-flight probe. A rejection burst runs the existing two 10-second confirmation probes, then one recovery probe at the 120-second boundary; client and PTY activity cannot pull that deadline earlier. Timer lateness and in-flight probe suspension both rebaseline evidence to the periodic cadence, preventing an App Nap retry loop, and resolver work is skipped until the time floor. No polling loop, startup await, session scan, renderer work, provider fanout, listener, or retained payload was added."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Capture field evidence from macOS sleep/wake and a full GUI logout without a false retirement or missed stale-session recovery.",
+        "Keep the exact probe-count, no-early-resolver, trigger-preemption, acceptance-reset, and shutdown-abort assertions green."
+      ],
+      "knownGaps": [
+        "A real dead macOS GUI login session cannot be fabricated without ending the runner's login session; sustained-death coverage uses deterministic PAM and resolver oracles.",
+        "The two-minute production window and one-hour pending/in-flight suspension cases are covered by fake-clock tests rather than a real sleep/wake run.",
+        "No multi-process aggregate throttle is added; each stale daemon independently obeys the same non-preemptible observation window."
+      ],
+      "demotionRule": "Keep experimental or demote if any activity trigger shortens the rejection window, a transient burst reaches resolver retirement authority, sustained dead-session evidence no longer converges, shutdown permits late retirement, or the focused gate flakes without an identified product or harness fault."
+    },
     {
       "id": "ssh-relay.staged-upload-recovery",
       "title": "SSH relay uploads remain retryable before the shared install lock",
@@ -2971,6 +3051,105 @@
       "demotionRule": "Demote or quarantine if the unit gate flakes without a product bug or harness bug filed to the owner."
     },
     {
+      "id": "terminal-scroll.streaming-refocus-intent",
+      "title": "Streaming refocus preserves follow-output viewport intent",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit-and-electron-e2e",
+      "surfaces": [
+        "terminal lifecycle",
+        "window focus recovery",
+        "hidden-to-visible resume",
+        "xterm write backlog",
+        "scrollback"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon"],
+      "coverageNotes": "Unit coverage proves provider-independent ordering for any PaneManager. Live Electron coverage exercises a local PTY through the daemon on macOS; SSH, WSL, remote-runtime, Linux, and Windows remain unproved for this exact race.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/11753",
+        "https://github.com/stablyai/orca/pull/11915"
+      ],
+      "invariant": "When output is queued during a focus or visibility transition, Orca records the pre-flush viewport intent before xterm parses backlog writes, so a follow-output terminal stays at the bottom and a pinned terminal keeps its prior position.",
+      "oracle": "Unit tests require exactly one intent sync before each queued-output flush. The Electron test injects a transient top-of-buffer xterm wobble during refocus and requires every presented scrollbar frame, including the final rendered output, to remain at the bottom.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+        "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-streaming-refocus-viewport.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=5"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+        "tests/e2e/terminal-streaming-refocus-viewport.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "assertions": [
+            "window-wake recovery synchronizes viewport intent exactly once before flushing queued output",
+            "heavy visibility resume synchronizes intent exactly once before flushing queued output"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-streaming-refocus-viewport.spec.ts",
+          "assertions": [
+            "phase-one scrollback is visibly ready at the bottom without a fixed sleep",
+            "no presented animation frame moves the scrollbar thumb away from the bottom during refocus",
+            "the final streamed marker renders with the visible scrollbar still at the bottom"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.096,
+          "summary": "14 tests passed, including exact sync count and pre-flush ordering for wake and heavy visibility resume."
+        },
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-streaming-refocus-viewport.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=5",
+          "result": "passed",
+          "durationSeconds": 35.2,
+          "summary": "Five consecutive Electron iterations passed after replacing fixed-time readiness and stale tab capture with deterministic viewport and pane-identity oracles."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused renderer unit test or one Electron E2E iteration"
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Five consecutive local Electron iterations passed; CI soak history is still required before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The controlled xterm viewport wobble reproduces the pinned-top failure with post-flush intent sampling and passes when intent is latched before the queued write flush."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Wake recovery keeps one O(panes) intent pass before the existing bounded 64 KiB-per-pane flush. Heavy resume removes its second intent pass and keeps the existing bounded 256 KiB-per-pane flush; no polling, timers, subprocesses, IPC, output parsing, fit, or repaint work is added."
+      },
+      "promotionCriteria": [
+        "Collect stable CI soak history for the Electron race gate.",
+        "Run the live oracle on Linux and Windows terminal backends.",
+        "Add live SSH or remote-runtime coverage for queued output during refocus."
+      ],
+      "knownGaps": [
+        "The deterministic wobble uses xterm private buffer state and must be updated if that internal contract changes.",
+        "Live Linux, Windows, SSH, WSL, and remote-runtime execution is not covered for this exact race.",
+        "The Electron gate proves follow-output behavior; adjacent scroll-intent coverage protects pinned viewport behavior."
+      ],
+      "demotionRule": "Demote or quarantine if the Electron oracle flakes without a product bug or harness bug filed to terminal-rendering."
+    },
+    {
       "id": "startup-upgrade.persisted-session-corpus",
       "title": "Current Orca preserves or recovers old production persisted sessions",
       "maturity": "experimental",
@@ -3106,11 +3285,11 @@
       "oracle": "Resolve the launched instance's real main PID from inside Electron, force-kill only that PID, require it to die, require one command-line-scoped daemon PID and the stamped interactive shell PID to remain live, relaunch with persisted state, require the daemon PID to remain identical, read the exact shell PID and a per-shell environment sentinel back through the exact restored tab, then require a successful Windows Application event-log query with zero matching pwsh FailFast events across the full crash-to-input window.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts config/scripts/win-crash-survival-e2e.test.mjs",
-        "node tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8"
+        "node tests/tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8"
       ],
       "testFiles": [
         "config/scripts/win-crash-survival-e2e.test.mjs",
-        "tools/win-crash-survival-e2e/run.mjs"
+        "tests/tools/win-crash-survival-e2e/run.mjs"
       ],
       "assertionRefs": [
         {
@@ -3124,7 +3303,7 @@
           ]
         },
         {
-          "file": "tools/win-crash-survival-e2e/run.mjs",
+          "file": "tests/tools/win-crash-survival-e2e/run.mjs",
           "assertions": [
             "force-killing only the real Electron main leaves the exact scoped daemon and stamped interactive shell alive",
             "packaged relaunch adopts the unchanged daemon and reads the survivor shell's environment sentinel through the restored terminal"
@@ -3136,7 +3315,7 @@
           "date": "2026-07-18",
           "runner": "ci",
           "platform": "windows",
-          "command": "node tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8",
+          "command": "node tests/tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8",
           "result": "passed",
           "durationSeconds": 61,
           "summary": "The packaged branch build's real main died; the same daemon and shell PIDs survived; the event-log scan found zero FailFast events; relaunch adopted the unchanged daemon; and terminal input read the survivor shell sentinel back."
@@ -4622,6 +4801,101 @@
       "demotionRule": "Keep experimental or demote if the gate flakes without a product or harness bug, if any local shutdown reaches fallback before startup settles, or if shutdown adds inventory scans or retry loops."
     },
     {
+      "id": "terminal-provider.snapshot-capability-renderer-responsiveness",
+      "title": "PTY snapshot capability discovery never blocks renderer JavaScript",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-provider",
+      "layer": "renderer-ipc",
+      "surfaces": [
+        "renderer startup",
+        "cold terminal restoration",
+        "hidden terminal parking",
+        "SSH terminal restoration"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon", "ssh"],
+      "coverageNotes": "A preload contract and Electron main-stall oracle prove capability lookup is asynchronous. Startup prefetch covers restored primary and split-pane PTY identities before cold activation, while unknown providers remain eager. Docker SSH journeys prove remote terminals still remount eagerly and reclaim their authenticated PTY owner after restart.",
+      "motivatingLinks": ["https://stablygroup.slack.com/archives/C0BD60A5J85/p1785524559818629"],
+      "invariant": "PTY snapshot capability discovery must never synchronously block renderer JavaScript. Restored daemon capability must be known before workspace readiness enables cold activation; unknown or legacy capability must remain eager. A healthy SSH provider must return definitive false without polling. One unresponsive capability batch must fail open within one second regardless of PTY count, and stale async responses must not update current bindings.",
+      "oracle": "The preload test rejects sendSync and requires ipcRenderer.invoke. Unit contracts assert 512-ID batching, one-second fail-open, unknown retry, definitive SSH false, and generation-fenced stale responses. During an injected 1.5-second Electron main-thread stall, a renderer-owned 50ms interval must keep a maximum gap below 500ms and each API call must return within 100ms. The production cold-activation journey must still mount at most three of eight daemon tabs after reload, while Docker SSH restoration remains eager.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/preload/pty-snapshot-capability-ipc.test.ts src/main/ipc/pty.test.ts src/main/providers/ssh-pty-provider.test.ts src/renderer/src/components/terminal/terminal-provider-snapshot-capability.test.ts src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/app-startup-routing.test.ts --reporter=dot",
+        "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/pty-snapshot-capability-main-stall.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/preload/pty-snapshot-capability-ipc.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/main/providers/ssh-pty-provider.test.ts",
+        "src/renderer/src/components/terminal/terminal-provider-snapshot-capability.test.ts",
+        "src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx",
+        "src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts",
+        "src/renderer/src/app-startup-routing.test.ts",
+        "tests/e2e/pty-snapshot-capability-main-stall.spec.ts",
+        "tests/e2e/terminal-cold-activation-deferral.spec.ts",
+        "tests/e2e/ssh-cold-activation-restore.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/pty-snapshot-capability-main-stall.spec.ts",
+          "assertions": [
+            "a 1.5-second main stall leaves renderer interval gaps below 500ms",
+            "capability calls return to renderer JavaScript within 100ms"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-cold-activation-deferral.spec.ts",
+          "assertions": [
+            "cold reload mounts at most three of eight daemon tabs and parked watchers cover the rest"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-31",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/pty-snapshot-capability-main-stall.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
+          "result": "passed",
+          "durationSeconds": 16.8,
+          "summary": "Three 1.5-second main stalls produced 32 renderer calls each; maximum interval gaps were 70.3ms, 70.1ms, and 71.6ms, and maximum call-return durations were 0.1ms, 0.1ms, and 0.2ms. The synchronous baseline produced a 1465.1ms interval gap and 1464.2ms call-return duration."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused Electron responsiveness and cold-restore journeys"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic Electron oracle passed three consecutive local runs; CI soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical Electron oracle failed with synchronous sendSync at a 1465.1ms renderer interval gap and 1464.2ms call-return duration, then passed three times with async invoke at no more than 71.6ms and 0.2ms respectively. The preload test also fails on the synchronous baseline."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Capability requests are deduplicated by PTY ID, sent in bounded 512-ID batches, cached after a definitive result, and retried only for unknown results. SSH now returns definitive false. One unresponsive batch fails open after one second without scanning further batches. No subprocesses or provider inventories are added."
+      },
+      "promotionCriteria": [
+        "Run the Electron main-stall oracle for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Collect Windows and Linux desktop cold-restore coverage.",
+        "Add a headed paired-desktop cold-restore journey if provider capability semantics move into the remote runtime."
+      ],
+      "knownGaps": [
+        "The main-stall and local daemon cold-restore Electron journeys currently run on macOS only.",
+        "Docker SSH proves the Linux relay/provider path but not a Linux desktop renderer.",
+        "This gate proves renderer responsiveness to main stalls; it does not identify the cause of the reported production hard freeze."
+      ],
+      "demotionRule": "Demote if capability discovery reintroduces synchronous renderer IPC, cold daemon tabs mount eagerly despite authoritative snapshots, SSH capability polls after a definitive response, or the renderer gap budget flakes without a product or harness bug."
+    },
+    {
       "id": "terminal-provider.ssh-remote-reattach-contract",
       "title": "SSH restore and remote-runtime recovery preserve live terminal ownership",
       "maturity": "experimental",
@@ -5909,14 +6183,14 @@
       "oracle": "Runtime tests assert the exact PTY write sequence and failure cleanup; orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness dispatches a 32KB task to a fake Codex-like TUI and requires marker present, bracketed paste present, zero unframed line breaks, and submit observed.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
-        "node tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
+        "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
       ],
       "testFiles": [
         "src/shared/agent-prompt-injection.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/rpc/methods/orchestration.test.ts",
         "src/main/runtime/orchestration/coordinator.test.ts",
-        "tools/repro-orchestration-long-prompt.mjs"
+        "tests/tools/repro-orchestration-long-prompt.mjs"
       ],
       "assertionRefs": [
         {
@@ -5952,7 +6226,7 @@
           ]
         },
         {
-          "file": "tools/repro-orchestration-long-prompt.mjs",
+          "file": "tests/tools/repro-orchestration-long-prompt.mjs",
           "assertions": [
             "fake Codex-like worker observes submit after long orchestration dispatch",
             "32KB task marker survives before submit",
@@ -5974,7 +6248,7 @@
           "date": "2026-07-07",
           "runner": "local",
           "platform": "macos",
-          "command": "node tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000",
+          "command": "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000",
           "result": "passed",
           "durationSeconds": 2.2,
           "summary": "Live dev-runtime repro passed: expectedSpecBytes=32830, hasSubmit=true, rawContainsMarker=true, hasBracketedPasteFrame=true, unframedLineBreaks=0, contractOk=true."

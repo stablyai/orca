@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readlinkSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -201,6 +202,20 @@ function getRuntimeCodexAuthPath(): string {
   return join(getRuntimeCodexHomePath(), 'auth.json')
 }
 
+function getSharedRuntimeAuthProvenancePath(): string {
+  return join(testState.userDataDir, 'codex-runtime-home', 'shared-runtime-auth-provenance.json')
+}
+
+function writePaneRegistry(
+  panes: Record<string, { selectionKey: string; accountId: string | null; homeRoute?: string }>
+): void {
+  writeFileSync(
+    join(testState.userDataDir, 'codex-pane-accounts.json'),
+    `${JSON.stringify({ version: 2, panes })}\n`,
+    'utf-8'
+  )
+}
+
 function getLegacyActiveHostCodexHomePath(): string {
   return join(testState.userDataDir, 'codex-runtime-home', 'active', 'host', 'home')
 }
@@ -252,7 +267,8 @@ function createCodexAuthJson(
   email: string,
   accountId: string,
   refreshToken: string,
-  expiresAt?: number
+  expiresAt?: number,
+  lastRefresh?: string
 ): string {
   const idToken = [
     encodeJwtPart({ alg: 'none', typ: 'JWT' }),
@@ -269,6 +285,7 @@ function createCodexAuthJson(
 
   return `${JSON.stringify({
     auth_mode: 'chatgpt',
+    ...(lastRefresh === undefined ? {} : { last_refresh: lastRefresh }),
     tokens: {
       access_token: `access-${accountId}`,
       id_token: idToken,
@@ -293,6 +310,13 @@ describe('CodexRuntimeHomeService', () => {
     process.env.ORCA_USER_DATA_PATH = testState.userDataDir
     mkdirSync(getSystemCodexHomePath(), { recursive: true })
     mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
+    writePaneRegistry({
+      'retained-shared-pane': {
+        selectionKey: 'host',
+        accountId: null,
+        homeRoute: 'shared-home'
+      }
+    })
   })
 
   afterEach(() => {
@@ -1041,12 +1065,14 @@ describe('CodexRuntimeHomeService', () => {
     const service = new CodexRuntimeHomeService(store as never)
 
     expect(service.isHostSystemDefaultRealHome()).toBe(true)
+    expect(service.getSelectedHostCodexHomeRoute()).toBe('real-home')
     expect(service.prepareForCodexLaunch()).toBeNull()
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([
       getRuntimeCodexHomePath(),
       getSystemCodexHomePath()
     ])
     service.setRealHomeLaneGate(() => false)
+    expect(service.getSelectedHostCodexHomeRoute()).toBe('shared-home')
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
     const markerPath = join(
       testState.userDataDir,
@@ -1105,6 +1131,642 @@ describe('CodexRuntimeHomeService', () => {
         process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
       }
     }
+  })
+
+  it('seeds shared auth for a pane-local custom home on the real-home lane', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-token')
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    const customHome = join(testState.fakeHomeDir, 'pane-custom-codex-home')
+
+    expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: customHome })).toBe(
+      getRuntimeCodexHomePath()
+    )
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(systemAuth)
+  })
+
+  it('skips retired-home reconciliation when no retained host pane can use it', async () => {
+    const syncLegacySharedCodexConfigForRetainedPanes = vi.fn()
+    vi.doMock('./legacy-shared-config-compatibility', () => ({
+      syncLegacySharedCodexConfigForRetainedPanes
+    }))
+    const retainedAuth = createCodexAuthJson('system@example.com', 'acct-system', 'retained')
+    const currentAuth = createCodexAuthJson('system@example.com', 'acct-system', 'current')
+    const retainedConfig = 'model = "retained"\n'
+    writePaneRegistry({
+      'real-home-pane': {
+        selectionKey: 'host',
+        accountId: null,
+        homeRoute: 'real-home'
+      }
+    })
+    writeFileSync(getRuntimeCodexAuthPath(), retainedAuth, 'utf-8')
+    writeFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), retainedConfig, 'utf-8')
+    writeFileSync(getSystemCodexAuthPath(), currentAuth, 'utf-8')
+    writeFileSync(join(getSystemCodexHomePath(), 'config.toml'), 'model = "current"\n', 'utf-8')
+    writeFileSync(
+      getSharedRuntimeAuthProvenancePath(),
+      `${JSON.stringify({ owner: 'system-default', authJson: retainedAuth })}\n`,
+      'utf-8'
+    )
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+
+      service.reconcileLegacySharedHomeForRetainedPanes()
+      expect(service.prepareForCodexLaunch()).toBeNull()
+      expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+
+      expect(syncLegacySharedCodexConfigForRetainedPanes).not.toHaveBeenCalled()
+      expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(retainedAuth)
+      expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
+        retainedConfig
+      )
+    } finally {
+      vi.doUnmock('./legacy-shared-config-compatibility')
+    }
+  })
+
+  it('keeps pre-rollout shared-home panes authenticated on the real-home lane', async () => {
+    const oldSystemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-system')
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
+    const systemConfig = [
+      'model_provider = "codex-lb"',
+      '',
+      '[model_providers.codex-lb]',
+      'base_url = "https://codex-lb.example.test/v1"',
+      'requires_openai_auth = true',
+      ''
+    ].join('\n')
+    writeFileSync(getSystemCodexAuthPath(), oldSystemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(oldSystemAuth)
+
+    setRealHomeLaneForTest(true)
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    writeFileSync(join(getSystemCodexHomePath(), 'config.toml'), systemConfig, 'utf-8')
+    writeFileSync(
+      join(getRuntimeCodexHomePath(), 'config.toml'),
+      'model_provider = "stale-provider"\n',
+      'utf-8'
+    )
+
+    const service = new CodexRuntimeHomeService(store as never)
+
+    service.setRealHomeLaneGate(() => true)
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(oldSystemAuth)
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toContain(
+      'stale-provider'
+    )
+    service.reconcileLegacySharedHomeForRetainedPanes()
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(systemAuth)
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(systemConfig)
+    expect(service.prepareForCodexLaunch()).toBeNull()
+  })
+
+  it('preserves retained managed auth across a real-home main-process restart', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
+    const managedAuth = createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+    writeFileSync(getRuntimeCodexAuthPath(), managedAuth, 'utf-8')
+
+    setRealHomeLaneForTest(true)
+    const restartedService = new CodexRuntimeHomeService(store as never)
+    restartedService.setRealHomeLaneGate(() => true)
+
+    expect(restartedService.prepareForCodexLaunch()).toBeNull()
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(managedAuth)
+    expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
+  })
+
+  it('preserves same-identity retained managed auth after restart and source logout', async () => {
+    const systemAuth = createCodexAuthJson('shared@example.com', 'acct-shared', 'system')
+    const managedAuth = createCodexAuthJson('shared@example.com', 'acct-shared', 'managed')
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'shared@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-shared',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-shared',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    settings.activeCodexManagedAccountId = 'account-1'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-1', wsl: {} }
+    service.syncForCurrentSelection()
+
+    settings.activeCodexManagedAccountId = null
+    settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
+    setRealHomeLaneForTest(true)
+    rmSync(getSystemCodexAuthPath())
+    const restartedService = new CodexRuntimeHomeService(store as never)
+
+    expect(restartedService.prepareForCodexLaunch()).toBeNull()
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(managedAuth)
+  })
+
+  it('fences retained shared auth when a self-contained managed transition begins', async () => {
+    const systemAuth = createCodexAuthJson('shared@example.com', 'acct-shared', 'system')
+    const managedAuth = createCodexAuthJson('shared@example.com', 'acct-shared', 'managed')
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'shared@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-shared',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-shared',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    setRealHomeLaneForTest(true)
+    settings.activeCodexManagedAccountId = 'account-1'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-1', wsl: {} }
+    service.syncForCurrentSelection()
+    writeFileSync(getRuntimeCodexAuthPath(), managedAuth, 'utf-8')
+    settings.activeCodexManagedAccountId = null
+    settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
+    service.syncForCurrentSelection()
+    rmSync(getSystemCodexAuthPath())
+
+    service.prepareForRateLimitFetch()
+    service.prepareForRateLimitFetch()
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(managedAuth)
+  })
+
+  it('restores retained system ownership when a self-contained transition leaves it untouched', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
+    const refreshedSystemAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'refreshed'
+    )
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
+    )
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'managed@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-managed',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-managed',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    setRealHomeLaneForTest(true)
+    settings.activeCodexManagedAccountId = 'account-1'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-1', wsl: {} }
+    service.syncForCurrentSelection()
+    settings.activeCodexManagedAccountId = null
+    settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
+    service.syncForCurrentSelection()
+    writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
+
+    service.prepareForRateLimitFetch()
+    service.prepareForRateLimitFetch()
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(refreshedSystemAuth)
+  })
+
+  it('restores authoritative system auth when the shared lane follows a managed transition', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
+    const managedAuth = createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'managed@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-managed',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-managed',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    setRealHomeLaneForTest(true)
+    settings.activeCodexManagedAccountId = 'account-1'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-1', wsl: {} }
+    service.syncForCurrentSelection()
+    writeFileSync(getRuntimeCodexAuthPath(), managedAuth, 'utf-8')
+    settings.activeCodexManagedAccountId = null
+    settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
+    setRealHomeLaneForTest(false)
+    service.syncForCurrentSelection()
+
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(systemAuth)
+  })
+
+  it('refreshes untouched retained-pane auth during real-home rate polling', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+    const refreshedSystemAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'refreshed-token'
+    )
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(systemAuth)
+
+    setRealHomeLaneForTest(true)
+    writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
+
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(refreshedSystemAuth)
+  })
+
+  it('does not rewrite retained-auth provenance during unchanged rate polling', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-token')
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    const provenancePath = getSharedRuntimeAuthProvenancePath()
+    const originalInode = statSync(provenancePath).ino
+
+    setRealHomeLaneForTest(true)
+    service.prepareForRateLimitFetch()
+    service.prepareForRateLimitFetch()
+
+    expect(statSync(provenancePath).ino).toBe(originalInode)
+  })
+
+  it('does not rewrite completed retained logout metadata during rate polling', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-token')
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    setRealHomeLaneForTest(true)
+    rmSync(getSystemCodexAuthPath())
+    service.prepareForRateLimitFetch()
+    const metadataPaths = [
+      getSharedRuntimeAuthProvenancePath(),
+      join(testState.userDataDir, 'codex-runtime-home', 'system-default-auth.json'),
+      join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json')
+    ]
+    const originalInodes = metadataPaths.map((path) => statSync(path).ino)
+
+    service.prepareForRateLimitFetch()
+    service.prepareForRateLimitFetch()
+
+    expect(metadataPaths.map((path) => statSync(path).ino)).toEqual(originalInodes)
+  })
+
+  it('clears managed transition state before later retained-auth reconciliation', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+    const refreshedSystemAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'refreshed-token'
+    )
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('managed@example.com', 'acct-managed', 'managed-token')
+    )
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'managed@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-managed',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-managed',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    settings.activeCodexManagedAccountId = 'account-1'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-1', wsl: {} }
+    service.syncForCurrentSelection()
+
+    writeFileSync(getRuntimeCodexAuthPath(), systemAuth, 'utf-8')
+    writeFileSync(
+      join(testState.userDataDir, 'codex-runtime-home', 'shared-runtime-auth-provenance.json'),
+      `${JSON.stringify({ owner: 'system-default', authJson: systemAuth })}\n`
+    )
+    settings.activeCodexManagedAccountId = null
+    settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
+    setRealHomeLaneForTest(true)
+    service.syncForCurrentSelection()
+    writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
+
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(systemAuth)
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(refreshedSystemAuth)
+  })
+
+  it('does not overwrite auth changed by a retained Codex process', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+    const retainedAuth = createCodexAuthJson('system@example.com', 'acct-system', 'retained-token')
+    const refreshedSystemAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'refreshed-token'
+    )
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    writeFileSync(getRuntimeCodexAuthPath(), retainedAuth, 'utf-8')
+    writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
+
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(retainedAuth)
+    expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(refreshedSystemAuth)
+  })
+
+  it('applies source logout after a retained pane refreshes the same identity', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+    const retainedAuth = createCodexAuthJson('system@example.com', 'acct-system', 'retained-token')
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    setRealHomeLaneForTest(true)
+    const service = new CodexRuntimeHomeService(store as never)
+    writeFileSync(getRuntimeCodexAuthPath(), retainedAuth, 'utf-8')
+    rmSync(getSystemCodexAuthPath())
+
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
+  })
+
+  it('repairs a completed pending system-auth replacement after restart', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+    const refreshedSystemAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'refreshed-token'
+    )
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    writeFileSync(
+      getSharedRuntimeAuthProvenancePath(),
+      `${JSON.stringify({
+        owner: 'pending',
+        next: { owner: 'system-default', authJson: systemAuth },
+        runtimeAuthJson: systemAuth
+      })}\n`
+    )
+
+    setRealHomeLaneForTest(true)
+    writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(refreshedSystemAuth)
+  })
+
+  it('recovers runtime auth quarantined by an interrupted guarded update', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const heldAuthPath = `${runtimeAuthPath}.orca-guarded`
+    renameSync(runtimeAuthPath, heldAuthPath)
+
+    setRealHomeLaneForTest(true)
+    new CodexRuntimeHomeService(store as never)
+
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(systemAuth)
+    expect(existsSync(heldAuthPath)).toBe(false)
+  })
+
+  it('fences a pending auth replacement when runtime bytes do not match its intent', async () => {
+    const systemAuth = createCodexAuthJson('shared@example.com', 'acct-shared', 'system')
+    const retainedAuth = createCodexAuthJson('shared@example.com', 'acct-shared', 'retained')
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    writeFileSync(
+      getSharedRuntimeAuthProvenancePath(),
+      `${JSON.stringify({
+        owner: 'pending',
+        next: { owner: 'system-default', authJson: systemAuth },
+        runtimeAuthJson: systemAuth
+      })}\n`
+    )
+    writeFileSync(getRuntimeCodexAuthPath(), retainedAuth, 'utf-8')
+
+    setRealHomeLaneForTest(true)
+    rmSync(getSystemCodexAuthPath())
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(retainedAuth)
+  })
+
+  it('does not treat malformed provenance as a missing migration marker', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+    const refreshedSystemAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'refreshed-token'
+    )
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    writeFileSync(getSharedRuntimeAuthProvenancePath(), '{"owner":"pending"}\n')
+
+    setRealHomeLaneForTest(true)
+    writeFileSync(getSystemCodexAuthPath(), refreshedSystemAuth, 'utf-8')
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(systemAuth)
+  })
+
+  it('recreates proven logged-out shared auth after a real-home re-login', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+    const reloginAuth = createCodexAuthJson('system@example.com', 'acct-system', 'relogin-token')
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    setRealHomeLaneForTest(true)
+    const service = new CodexRuntimeHomeService(store as never)
+    rmSync(getSystemCodexAuthPath())
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
+
+    writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(reloginAuth)
+  })
+
+  it.each([
+    ['committed provenance', false],
+    ['pre-provenance migration', true]
+  ])(
+    'recreates retained auth after a %s crash between logout deletion and metadata commit',
+    async (_label, removeProvenance) => {
+      const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+      const reloginAuth = createCodexAuthJson('system@example.com', 'acct-system', 'relogin-token')
+      writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+      const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      new CodexRuntimeHomeService(store as never)
+
+      setRealHomeLaneForTest(true)
+      rmSync(getSystemCodexAuthPath())
+      rmSync(getRuntimeCodexAuthPath())
+      if (removeProvenance) {
+        rmSync(getSharedRuntimeAuthProvenancePath())
+      }
+      rmSync(
+        join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json'),
+        {
+          force: true
+        }
+      )
+      const restartedService = new CodexRuntimeHomeService(store as never)
+      restartedService.setRealHomeLaneGate(() => true)
+
+      expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
+      writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
+      expect(restartedService.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+      expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(reloginAuth)
+    }
+  )
+
+  it('recreates retained auth after interrupted logout crosses a managed transition', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+    const reloginAuth = createCodexAuthJson('system@example.com', 'acct-system', 'relogin-token')
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('managed@example.com', 'acct-managed', 'managed-token')
+    )
+    const settings = createSettings({
+      codexSystemDefaultRealHomeEnabled: false,
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'managed@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-managed',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-managed',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    setRealHomeLaneForTest(true)
+    rmSync(getSystemCodexAuthPath())
+    rmSync(getRuntimeCodexAuthPath())
+    rmSync(
+      join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json'),
+      {
+        force: true
+      }
+    )
+    const restartedService = new CodexRuntimeHomeService(store as never)
+    restartedService.setRealHomeLaneGate(() => true)
+    restartedService.reconcileLegacySharedHomeForRetainedPanes()
+
+    settings.activeCodexManagedAccountId = 'account-1'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-1', wsl: {} }
+    restartedService.syncForCurrentSelection()
+    writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
+    settings.activeCodexManagedAccountId = null
+    settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
+    restartedService.syncForCurrentSelection()
+
+    restartedService.prepareForRateLimitFetch()
+    restartedService.prepareForRateLimitFetch()
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(reloginAuth)
+  })
+
+  it('preserves shared config changes when a pending real-home lane falls back', async () => {
+    const systemConfigPath = join(getSystemCodexHomePath(), 'config.toml')
+    const runtimeConfigPath = join(getRuntimeCodexHomePath(), 'config.toml')
+    writeFileSync(systemConfigPath, 'model = "baseline"\n', 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+    writeFileSync(runtimeConfigPath, 'model = "runtime-change"\n', 'utf-8')
+
+    setRealHomeLaneForTest(true)
+    service.setRealHomeLaneGate(() => false)
+    service.reconcileLegacySharedHomeForRetainedPanes()
+    expect(readFileSync(systemConfigPath, 'utf-8')).toBe('model = "baseline"\n')
+    expect(readFileSync(runtimeConfigPath, 'utf-8')).toBe('model = "runtime-change"\n')
+
+    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+    expect(readFileSync(systemConfigPath, 'utf-8')).toBe('model = "runtime-change"\n')
+    expect(readFileSync(runtimeConfigPath, 'utf-8')).toBe('model = "runtime-change"\n')
   })
 
   it('routes a host MANAGED account to its own self-contained home when the flag is ON', async () => {
@@ -3179,13 +3841,21 @@ describe('CodexRuntimeHomeService', () => {
     ).toEqual({ authJson: refreshedAuth })
   })
 
-  it('reads back system-default token refreshes after restart when the snapshot proves the baseline', async () => {
+  it('reads back system-default token refreshes after a pre-provenance restart', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
-    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-old')
+    const systemAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'system-old',
+      undefined,
+      '2026-07-30T12:00:00.000Z'
+    )
     const refreshedAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
-      'system-refreshed'
+      'system-refreshed',
+      undefined,
+      '2026-07-31T12:00:00.000Z'
     )
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const store = createStore(createSettings())
@@ -3194,11 +3864,43 @@ describe('CodexRuntimeHomeService', () => {
     new CodexRuntimeHomeService(store as never)
 
     writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
+    rmSync(getSharedRuntimeAuthProvenancePath())
     const restartedService = new CodexRuntimeHomeService(store as never)
     restartedService.syncForCurrentSelection()
 
     expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(refreshedAuth)
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)
+  })
+
+  it('does not read back older same-identity auth without provenance', async () => {
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const systemAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'system-newer',
+      undefined,
+      '2026-07-31T12:00:00.000Z'
+    )
+    const staleRuntimeAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'runtime-older',
+      undefined,
+      '2026-07-30T12:00:00.000Z'
+    )
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings())
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    writeFileSync(runtimeAuthPath, staleRuntimeAuth, 'utf-8')
+    rmSync(getSharedRuntimeAuthProvenancePath())
+    const restartedService = new CodexRuntimeHomeService(store as never)
+    restartedService.syncForCurrentSelection()
+
+    expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(systemAuth)
   })
 
   it('keeps a local runtime logout when the system-default auth still exists', async () => {
@@ -3329,6 +4031,36 @@ describe('CodexRuntimeHomeService', () => {
         join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json')
       )
     ).toBe(true)
+  })
+
+  it('clears refreshed runtime auth after a pre-provenance external logout', async () => {
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const systemAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'system',
+      undefined,
+      '2026-07-30T12:00:00.000Z'
+    )
+    const refreshedAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'refreshed',
+      undefined,
+      '2026-07-31T12:00:00.000Z'
+    )
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings())
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
+    rmSync(getSharedRuntimeAuthProvenancePath())
+    rmSync(getSystemCodexAuthPath())
+    new CodexRuntimeHomeService(store as never)
+
+    expect(existsSync(runtimeAuthPath)).toBe(false)
   })
 
   it('persists runtime auth refreshes after returning to system default', async () => {
@@ -4427,6 +5159,48 @@ describe('CodexRuntimeHomeService', () => {
     service.syncForCurrentSelection()
 
     expect(existsSync(runtimeAuthPath)).toBe(false)
+  })
+
+  it('recreates retained auth after switching from managed to logged-out system default', async () => {
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-token')
+    const reloginAuth = createCodexAuthJson('system@example.com', 'acct-system', 'relogin-token')
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('managed@example.com', 'acct-managed', 'managed-token')
+    )
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'managed@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-managed',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-managed',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    rmSync(getSystemCodexAuthPath())
+    settings.activeCodexManagedAccountId = null
+    service.syncForCurrentSelection()
+    expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
+
+    setRealHomeLaneForTest(true)
+    service.setRealHomeLaneGate(() => true)
+    writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
+    service.reconcileLegacySharedHomeForRetainedPanes()
+
+    expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(reloginAuth)
   })
 
   it('captures a fresh system-default snapshot when re-entering managed mode', async () => {

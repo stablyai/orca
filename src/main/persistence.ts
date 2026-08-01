@@ -11,7 +11,7 @@ import {
   statSync,
   realpathSync
 } from 'node:fs'
-import { rename, mkdir, rm, copyFile, open } from 'node:fs/promises'
+import { rename, mkdir, rm, copyFile, open, stat, access } from 'node:fs/promises'
 import { renameDurable, writeFileDurableSync } from './durable-file-write'
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
@@ -98,6 +98,7 @@ import { hardenExistingSecureFile } from '../shared/secure-file'
 import {
   LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   type RemovedSshTargetTombstone,
+  type SshPtyConsumerRecovery,
   type SshRemotePtyLease,
   type SshTarget
 } from '../shared/ssh-types'
@@ -606,6 +607,14 @@ function parseWorkspaceSessionsByHostId(
 
 function backupPath(dataFile: string, index: number): string {
   return `${dataFile}.bak.${index}`
+}
+
+/** existsSync's non-blocking twin: existsSync is an access(F_OK) probe, so access() is the exact analogue. */
+async function exists(path: string): Promise<boolean> {
+  return access(path).then(
+    () => true,
+    () => false
+  )
 }
 
 function buildWorkspaceDirHistoryForUpdate(
@@ -1607,6 +1616,57 @@ function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | null {
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
     ...(typeof raw.lastAttachedAt === 'number' ? { lastAttachedAt: raw.lastAttachedAt } : {}),
     ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {})
+  }
+}
+
+const SSH_PTY_OWNER_LEASE_MAX_LENGTH = 512
+const ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH = 4096
+
+function normalizeSshPtyConsumerRecovery(
+  value: unknown,
+  ownerLeaseMaxLength = SSH_PTY_OWNER_LEASE_MAX_LENGTH
+): SshPtyConsumerRecovery | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const raw = value as Partial<SshPtyConsumerRecovery>
+  const clientGeneration = raw.clientGeneration
+  const ownerGeneration = raw.ownerGeneration
+  if (
+    typeof raw.targetId !== 'string' ||
+    raw.targetId.length === 0 ||
+    raw.targetId.length > 512 ||
+    typeof raw.clientInstanceId !== 'string' ||
+    raw.clientInstanceId.length === 0 ||
+    raw.clientInstanceId.length > 512 ||
+    typeof raw.serverBuildId !== 'string' ||
+    raw.serverBuildId.length === 0 ||
+    raw.serverBuildId.length > 512 ||
+    typeof clientGeneration !== 'number' ||
+    !Number.isSafeInteger(clientGeneration) ||
+    clientGeneration <= 0 ||
+    typeof ownerGeneration !== 'number' ||
+    !Number.isSafeInteger(ownerGeneration) ||
+    ownerGeneration <= 0 ||
+    typeof raw.ownerLease !== 'string' ||
+    raw.ownerLease.length === 0 ||
+    raw.ownerLease.length > ownerLeaseMaxLength
+  ) {
+    return null
+  }
+  const flow = raw.outputFlowControl
+  const outputFlowControl =
+    flow?.version === 1 && Number.isSafeInteger(flow.windowSu) && flow.windowSu > 0
+      ? { version: 1 as const, windowSu: flow.windowSu }
+      : undefined
+  return {
+    targetId: raw.targetId,
+    clientInstanceId: raw.clientInstanceId,
+    serverBuildId: raw.serverBuildId,
+    clientGeneration,
+    ownerGeneration,
+    ownerLease: raw.ownerLease,
+    ...(outputFlowControl ? { outputFlowControl } : {})
   }
 }
 
@@ -2710,6 +2770,8 @@ export class Store {
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
   private writeGeneration = 0
+  // Prevent a sync flush from interleaving a second rotation with awaited ring mutations.
+  private backupRotationInFlight = false
   // Why: after a profile transfer rewrites this file on disk, a late flush of stale in-memory state would resurrect the moved project.
   private writesFrozen = false
   // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
@@ -2852,28 +2914,52 @@ export class Store {
     }
   }
 
+  // Why separate from the sync twin: a statSync here parks the Electron main thread in uninterruptible
+  // sleep on a stalled SMB/NFS profile mount. Error semantics are deliberately identical: rotate.
+  private async shouldRotateBackupsAsync(dataFile: string): Promise<boolean> {
+    try {
+      const mtime = (await stat(backupPath(dataFile, 0))).mtimeMs
+      return Date.now() - mtime >= BACKUP_MIN_INTERVAL_MS
+    } catch {
+      return true
+    }
+  }
+
   // Why: rotate current file into the .bak ring so load() can recover if a later primary write is truncated or corrupt.
   private async rotateBackupsAsync(dataFile: string): Promise<void> {
-    if (!existsSync(dataFile)) {
+    if (this.backupRotationInFlight) {
       return
     }
-    await rm(backupPath(dataFile, BACKUP_COUNT - 1)).catch((err: unknown) => {
-      if (err && (err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error('[persistence] Failed to remove oldest backup:', err)
+    this.backupRotationInFlight = true
+    try {
+      if (!(await this.shouldRotateBackupsAsync(dataFile))) {
+        return
       }
-    })
-    for (let i = BACKUP_COUNT - 2; i >= 0; i--) {
-      const src = backupPath(dataFile, i)
-      const dst = backupPath(dataFile, i + 1)
-      if (existsSync(src)) {
-        await rename(src, dst).catch((err) => {
-          console.error('[persistence] Failed to rotate backup', src, '->', dst, err)
-        })
+      if (!(await exists(dataFile))) {
+        return
       }
+      await rm(backupPath(dataFile, BACKUP_COUNT - 1)).catch((err: unknown) => {
+        if (err && (err as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.error('[persistence] Failed to remove oldest backup:', err)
+        }
+      })
+      for (let i = BACKUP_COUNT - 2; i >= 0; i--) {
+        const src = backupPath(dataFile, i)
+        const dst = backupPath(dataFile, i + 1)
+        // Why probe instead of rename-then-swallow-ENOENT: a degraded mount rejects a rename of an
+        // absent slot with ESTALE/EIO, which would log once per empty slot on every debounced save.
+        if (await exists(src)) {
+          await rename(src, dst).catch((err) => {
+            console.error('[persistence] Failed to rotate backup', src, '->', dst, err)
+          })
+        }
+      }
+      await copyFile(dataFile, backupPath(dataFile, 0)).catch((err) => {
+        console.error('[persistence] Failed to snapshot current file to .bak.0:', err)
+      })
+    } finally {
+      this.backupRotationInFlight = false
     }
-    await copyFile(dataFile, backupPath(dataFile, 0)).catch((err) => {
-      console.error('[persistence] Failed to snapshot current file to .bak.0:', err)
-    })
   }
 
   private rotateBackupsSync(dataFile: string): void {
@@ -2956,6 +3042,16 @@ export class Store {
         if (parsed.ui?.browserKagiSessionLink) {
           parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
         }
+        parsed.sshPtyConsumerRecoveries = (
+          Array.isArray(parsed.sshPtyConsumerRecoveries) ? parsed.sshPtyConsumerRecoveries : []
+        )
+          .map((record) =>
+            normalizeSshPtyConsumerRecovery(record, ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH)
+          )
+          .filter((record): record is SshPtyConsumerRecovery => record !== null)
+          .map((record) => ({ ...record, ownerLease: decrypt(record.ownerLease) }))
+          .map((record) => normalizeSshPtyConsumerRecovery(record))
+          .filter((record): record is SshPtyConsumerRecovery => record !== null)
 
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
@@ -3547,6 +3643,7 @@ export class Store {
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
+          sshPtyConsumerRecoveries: parsed.sshPtyConsumerRecoveries,
           claudeLivePtySessionIds: normalizeClaudeLivePtySessionIds(parsed.claudeLivePtySessionIds),
           migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
             parsed.migrationUnsupportedPtyEntries
@@ -3799,6 +3896,10 @@ export class Store {
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
+      sshPtyConsumerRecoveries: (this.state.sshPtyConsumerRecoveries ?? []).map((record) => ({
+        ...record,
+        ownerLease: encryptToSentinel(record.ownerLease)
+      })),
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encryptToSentinel(this.state.settings.opencodeSessionCookie),
@@ -3871,18 +3972,15 @@ export class Store {
         await rm(tmpFile).catch(() => {})
       }
     }
-    // Why (issue #1158): rotate backups only after rename succeeded, and let a concurrent flush own rotation.
+    // Why (#1158): rotate only after the primary rename while this write still owns its generation.
     if (this.writeGeneration !== gen) {
       return
     }
-    const now = Date.now()
-    if (this.shouldRotateBackups(now, dataFile)) {
-      await this.rotateBackupsAsync(dataFile)
-    }
+    await this.rotateBackupsAsync(dataFile)
   }
 
   // Why: sync variant only for flush() at shutdown, where the process may exit before an async write completes.
-  private writeToDiskSync(opts: { force?: boolean } = {}): void {
+  private writeToDiskSync(opts: { force?: boolean; skipBackupRotation?: boolean } = {}): void {
     if (this.writesFrozen) {
       return
     }
@@ -3916,7 +4014,7 @@ export class Store {
       }
     }
     const now = Date.now()
-    if (this.shouldRotateBackups(now, dataFile)) {
+    if (!opts.skipBackupRotation && this.shouldRotateBackups(now, dataFile)) {
       this.rotateBackupsSync(dataFile)
     }
   }
@@ -3931,7 +4029,10 @@ export class Store {
     // Why: bump writeGeneration so an in-flight async write skips its rename and can't overwrite this sync write.
     this.writeGeneration++
     this.pendingWrite = null
-    this.writeToDiskSync({ force: asyncWriteWasInFlight })
+    this.writeToDiskSync({
+      force: asyncWriteWasInFlight,
+      skipBackupRotation: this.backupRotationInFlight
+    })
   }
 
   flushActiveViewPreferenceOrThrow(): void {
@@ -6506,10 +6607,15 @@ export class Store {
   }
 
   removeSshTarget(id: string): void {
-    if (!this.state.sshTargets) {
+    const targets = this.state.sshTargets ?? []
+    const recoveries = this.state.sshPtyConsumerRecoveries ?? []
+    const nextTargets = targets.filter((target) => target.id !== id)
+    const nextRecoveries = recoveries.filter((record) => record.targetId !== id)
+    if (nextTargets.length === targets.length && nextRecoveries.length === recoveries.length) {
       return
     }
-    this.state.sshTargets = this.state.sshTargets.filter((t) => t.id !== id)
+    this.state.sshTargets = nextTargets
+    this.state.sshPtyConsumerRecoveries = nextRecoveries
     this.scheduleSave()
   }
 
@@ -6656,6 +6762,12 @@ export class Store {
         carrierChanged = true
       }
     }
+    const recoveries = this.state.sshPtyConsumerRecoveries ?? []
+    const retainedRecoveries = recoveries.filter((record) => record.targetId !== oldTargetId)
+    if (retainedRecoveries.length !== recoveries.length) {
+      this.state.sshPtyConsumerRecoveries = retainedRecoveries
+      carrierChanged = true
+    }
     let setupsChanged = false
     const keptSetups: ProjectHostSetup[] = []
     for (const setup of this.state.projectHostSetups) {
@@ -6688,6 +6800,47 @@ export class Store {
       this.scheduleSave()
     }
     return [...repoIds]
+  }
+
+  // ── SSH PTY Consumer Recovery ──────────────────────────────────────
+
+  getSshPtyConsumerRecovery(targetId: string): SshPtyConsumerRecovery | null {
+    const record = (this.state.sshPtyConsumerRecoveries ?? []).find(
+      (candidate) => candidate.targetId === targetId
+    )
+    return record ? structuredClone(record) : null
+  }
+
+  upsertSshPtyConsumerRecovery(record: SshPtyConsumerRecovery): void {
+    const normalized = normalizeSshPtyConsumerRecovery(record)
+    if (!normalized) {
+      throw new Error('Invalid SSH PTY consumer recovery record')
+    }
+    const recoveries = this.state.sshPtyConsumerRecoveries ?? []
+    this.state.sshPtyConsumerRecoveries = [
+      ...recoveries.filter((candidate) => candidate.targetId !== normalized.targetId),
+      normalized
+    ]
+    this.flushSshPtyConsumerRecovery()
+  }
+
+  removeSshPtyConsumerRecovery(targetId: string): void {
+    const recoveries = this.state.sshPtyConsumerRecoveries ?? []
+    const next = recoveries.filter((record) => record.targetId !== targetId)
+    if (next.length === recoveries.length) {
+      return
+    }
+    this.state.sshPtyConsumerRecoveries = next
+    this.flushSshPtyConsumerRecovery()
+  }
+
+  private flushSshPtyConsumerRecovery(): void {
+    try {
+      // Why: ownership must be durable before relay setup continues, but active-view and GitHub sidecars are unrelated startup work.
+      this.flushOrThrow()
+    } catch (err) {
+      console.error('[persistence] Failed to flush SSH PTY consumer recovery:', err)
+    }
   }
 
   // ── SSH Remote PTY Leases ──────────────────────────────────────────

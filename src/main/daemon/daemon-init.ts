@@ -830,6 +830,26 @@ export function getDaemonProvider(): DaemonProvider | null {
   return adapter
 }
 
+/** Returns null unless every daemon generation supplied an authoritative inventory. */
+export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
+  if (!adapter) {
+    return null
+  }
+  const adapters =
+    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
+      ? adapter.getAllAdapters()
+      : [adapter]
+  const inventories = await Promise.allSettled(
+    adapters.map((daemonAdapter) => daemonAdapter.listProcesses())
+  )
+  if (inventories.some((inventory) => inventory.status === 'rejected')) {
+    return null
+  }
+  return inventories.flatMap((inventory) =>
+    inventory.status === 'fulfilled' ? inventory.value.map((process) => process.id) : []
+  )
+}
+
 // Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
 export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
   adapter = newAdapter

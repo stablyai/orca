@@ -525,6 +525,8 @@ export type CodexRestartNotice = {
    *  a re-mark actually points back at the account the pane launched under. */
   previousAccountId?: string | null
   nextAccountId?: string | null
+  /** The launch account still matches, but its baked CODEX_HOME route is retired. */
+  homeRouteChanged?: true
   /** Set once the user asks for the restart. The record outlives the prompt
    *  because the previous-account fields are the only memory of the account this
    *  pane actually launched under, which drives the A -> B -> A collapse. */
@@ -736,6 +738,8 @@ export type TerminalSlice = {
   markCodexRestartNotices: (
     notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
       Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {
+        /** Explicit false replaces a restored route notice after main rechecks it. */
+        homeRouteChanged?: boolean
         ptyId: string
       })[]
   ) => string[]
@@ -3463,9 +3467,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // describing two different accounts.
         const launch = existing ?? notice
         const target = { id: notice.nextAccountId, label: notice.nextAccountLabel }
+        const homeRouteChanged =
+          notice.homeRouteChanged === undefined
+            ? existing?.homeRouteChanged === true
+            : notice.homeRouteChanged
 
         // Why: a live Codex pane keeps its original launch account until it actually restarts, so A -> B -> A must not leave a stale restart notice.
         if (
+          !homeRouteChanged &&
           isSameCodexRestartNoticeAccount(
             { id: launch.previousAccountId, label: launch.previousAccountLabel },
             target
@@ -3483,6 +3492,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             ? {}
             : { previousAccountId: launch.previousAccountId }),
           ...(notice.nextAccountId === undefined ? {} : { nextAccountId: notice.nextAccountId }),
+          ...(homeRouteChanged ? { homeRouteChanged: true as const } : {}),
           // Why: a queued restart relaunches under whatever account is selected
           // when it runs, so a later switch does not reopen an answered prompt.
           ...(existing?.restartRequested ? { restartRequested: true as const } : {}),

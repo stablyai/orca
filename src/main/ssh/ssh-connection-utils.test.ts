@@ -313,7 +313,7 @@ describe('findDefaultKeyFile', () => {
     expect(result!.contents).toEqual(Buffer.from('key-contents'))
   })
 
-  it('probes keys in VS Code order: ed25519, rsa, ecdsa, dsa, xmss', () => {
+  it('probes regular and FIDO2 keys in stable default order', () => {
     const checkedPaths: string[] = []
     mockExistsSync.mockImplementation((path: unknown) => {
       checkedPaths.push(String(path))
@@ -329,6 +329,34 @@ describe('findDefaultKeyFile', () => {
       testHomePath('.ssh', 'id_dsa'),
       testHomePath('.ssh', 'id_xmss')
     ])
+  })
+
+  it('keeps a regular default ahead of a malformed FIDO2 default', () => {
+    mockExistsSync.mockImplementation((path: unknown) => {
+      return (
+        path === testHomePath('.ssh', 'id_rsa') || path === testHomePath('.ssh', 'id_ed25519_sk')
+      )
+    })
+    mockReadFileSync.mockImplementation((path: unknown) => {
+      if (String(path) === testHomePath('.ssh', 'id_ed25519_sk')) {
+        throw new Error('malformed FIDO2 key')
+      }
+      return Buffer.from('rsa-key')
+    })
+
+    expect(findDefaultKeyFile()).toEqual({
+      path: '~/.ssh/id_rsa',
+      contents: Buffer.from('rsa-key')
+    })
+  })
+
+  it('leaves FIDO2 defaults out of the ssh2 private-key fallback', () => {
+    mockExistsSync.mockImplementation((path: unknown) => {
+      return path === testHomePath('.ssh', 'id_ed25519_sk')
+    })
+
+    expect(findDefaultKeyFile()).toBeUndefined()
+    expect(mockReadFileSync).not.toHaveBeenCalled()
   })
 
   it('skips unreadable key files and tries next', () => {

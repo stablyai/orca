@@ -10,6 +10,7 @@ import {
   screen
 } from 'electron'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
 import { getAppIconPath } from '../app-icon'
@@ -18,6 +19,7 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { translateMain } from '../i18n/main-i18n'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
+import { BROWSER_WINDOW_CLOSE_ALLOWED_PRELOAD } from '../../shared/browser-window-close-policy'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
@@ -441,6 +443,8 @@ export function createMainWindow(
   // so register it with the window's other navigation policy.
   registerPluginPanelNavigationGuard(mainWindow.webContents)
 
+  const browserWindowClosePreload = join(__dirname, 'browser-window-close-preload.js')
+  const browserWindowCloseAllowedPreloadPath = fileURLToPath(BROWSER_WINDOW_CLOSE_ALLOWED_PRELOAD)
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
@@ -452,7 +456,18 @@ export function createMainWindow(
       return
     }
 
-    delete webPreferences.preload
+    const allowWindowClose = [params.preload, webPreferences.preload].some(
+      (preload) =>
+        preload === BROWSER_WINDOW_CLOSE_ALLOWED_PRELOAD ||
+        preload === browserWindowCloseAllowedPreloadPath
+    )
+    delete params.preload
+    if (allowWindowClose) {
+      delete webPreferences.preload
+    } else {
+      // Why: preload runs in the page's main world before inline scripts can call window.close().
+      webPreferences.preload = browserWindowClosePreload
+    }
     // Why: older Electron builds expose preloadURL alongside preload; delete both so the guest can't inherit the main preload bridge.
     delete (webPreferences as Record<string, unknown>).preloadURL
     webPreferences.nodeIntegration = false

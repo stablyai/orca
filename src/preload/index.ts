@@ -1031,8 +1031,8 @@ const api = {
     listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
     getAuthoritativeBufferSnapshotCapabilities: (
       ids: string[]
-    ): { id: string; authoritative: boolean | null }[] =>
-      ipcRenderer.sendSync('pty:getAuthoritativeBufferSnapshotCapabilitiesSync', { ids }),
+    ): Promise<{ id: string; authoritative: boolean | null }[]> =>
+      ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
     hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
 
     getMainBufferSnapshot: (
@@ -2046,7 +2046,12 @@ const api = {
     listStalePanes: (args: {
       ptyIds: string[]
     }): Promise<
-      { ptyId: string; launchAccountId: string | null; activeAccountId: string | null }[]
+      {
+        ptyId: string
+        launchAccountId: string | null
+        activeAccountId: string | null
+        reason?: 'account-change' | 'home-route-change'
+      }[]
     > => ipcRenderer.invoke('codexAccounts:listStalePanes', args),
     listRecordedPaneLanes: (args: { ptyIds: string[] }): Promise<Record<string, string>> =>
       ipcRenderer.invoke('codexAccounts:listRecordedPaneLanes', args),

@@ -135,7 +135,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           $log = "artifacts/crash-survival-output.log"
-          node tools/win-crash-survival-e2e/run.mjs `
+          node tests/tools/win-crash-survival-e2e/run.mjs `
             --expect "$env:EXPECT" `
             --exe-path "$env:ORCA_EXE" `
             --soak-seconds 8 2>&1 | Tee-Object -FilePath $log
