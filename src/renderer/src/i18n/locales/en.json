@@ -59,6 +59,27 @@
         "title": "Show Menu Bar Icon",
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
       }
+    },
+    "modifierRemap": {
+      "searchTitle": "Modifier Keys",
+      "searchDescription": "Swap Ctrl and Command so app shortcuts fire from Ctrl and Command reaches the terminal.",
+      "keyword": {
+        "ctrl": "ctrl",
+        "control": "control",
+        "cmd": "cmd",
+        "command": "command",
+        "modifier": "modifier",
+        "remap": "remap",
+        "swap": "swap"
+      },
+      "title": "Modifier Keys",
+      "description": "Swap Ctrl and Command so app shortcuts fire from Ctrl and Command reaches the terminal as a control character. Native menu shortcuts such as ⌘Q stay on Command.",
+      "rowLabel": "Ctrl / Command",
+      "rowDescription": "Applies to every key event, including terminal panes",
+      "option": {
+        "none": "Default",
+        "swap": "Swap Ctrl and Command"
+      }
     }
   },
   "menu": {

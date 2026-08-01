@@ -13,6 +13,7 @@ import {
   type KeybindingInput,
   type KeybindingOverrides
 } from '../../shared/keybindings'
+import { applyCtrlCmdSwapToInput, isCtrlCmdSwapActive } from '../../shared/modifier-remap'
 
 const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
@@ -210,10 +211,15 @@ export function createOrFocusDashboardPopout(
 
   // Why: the pop-out has no renderer-side shortcut plumbing; resolve only the
   // zoom chords here and let every other key fall through untouched.
-  window.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') {
+  window.webContents.on('before-input-event', (event, rawInput) => {
+    if (rawInput.type !== 'keyDown') {
       return
     }
+    // Why: the pop-out resolves zoom in main only, so it needs the main window's remap too.
+    const input = applyCtrlCmdSwapToInput(
+      rawInput,
+      isCtrlCmdSwapActive(store?.getSettings().modifierRemap, process.platform)
+    )
     const direction = resolveZoomShortcut(input, options.getKeybindings?.())
     if (direction) {
       event.preventDefault()

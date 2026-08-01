@@ -167,6 +167,7 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     terminalJISYenToBackslash: false,
+    modifierRemap: 'none',
     experimentalMobile: false,
     mobileAutoRestoreFitMs: null,
     experimentalPet: false,

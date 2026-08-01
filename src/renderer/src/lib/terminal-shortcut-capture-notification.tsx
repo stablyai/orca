@@ -8,6 +8,7 @@ import {
   type KeybindingActionId,
   type KeybindingOverrides
 } from '../../../shared/keybindings'
+import { isCtrlCmdSwapEnabled } from './install-modifier-remap'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
 
@@ -60,7 +61,8 @@ export function showTerminalShortcutCaptureNotification({
 
   const bindingLabel = formatKeybindingList(
     getEffectiveKeybindingsForAction(actionId, platform, keybindings),
-    platform
+    platform,
+    { swapCtrlCmd: isCtrlCmdSwapEnabled() }
   )
   // Why: this toast stays up longer than normal, so keep it compact while still
   // exposing the captured shortcut and the edit path.

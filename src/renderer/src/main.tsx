@@ -9,6 +9,7 @@ import {
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
+import { installCtrlCmdSwap } from './lib/install-modifier-remap'
 import { installTypingLatencyDiagnostic } from './lib/typing-latency-diagnostic'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
@@ -18,6 +19,8 @@ import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()
+// Why: must capture before App's keydown listener and xterm's textarea listeners; inert until enabled.
+installCtrlCmdSwap()
 
 if (
   import.meta.env.DEV &&

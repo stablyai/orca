@@ -2190,14 +2190,29 @@ export function matchKeybindingDigitIndex(
   return null
 }
 
-function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
+/** Bindings are stored in post-remap coordinates, so labels invert the swap to show the physical key. */
+export type KeybindingFormatOptions = { swapCtrlCmd?: boolean }
+
+function macMetaGlyph(swapCtrlCmd: boolean): string {
+  return swapCtrlCmd ? '⌃' : '⌘'
+}
+
+function macControlGlyph(swapCtrlCmd: boolean): string {
+  return swapCtrlCmd ? '⌘' : '⌃'
+}
+
+function formatModifierGlyph(
+  modifier: ModifierToken,
+  isMac: boolean,
+  swapCtrlCmd: boolean
+): string {
   switch (modifier) {
     case 'Mod':
-      return isMac ? '⌘' : 'Ctrl'
+      return isMac ? macMetaGlyph(swapCtrlCmd) : 'Ctrl'
     case 'Cmd':
-      return isMac ? '⌘' : 'Cmd'
+      return isMac ? macMetaGlyph(swapCtrlCmd) : 'Cmd'
     case 'Ctrl':
-      return isMac ? '⌃' : 'Ctrl'
+      return isMac ? macControlGlyph(swapCtrlCmd) : 'Ctrl'
     case 'Alt':
       return isMac ? '⌥' : 'Alt'
     case 'Shift':
@@ -2205,25 +2220,30 @@ function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
   }
 }
 
-export function formatKeybinding(binding: string, platform: NodeJS.Platform): string[] {
+export function formatKeybinding(
+  binding: string,
+  platform: NodeJS.Platform,
+  options: KeybindingFormatOptions = {}
+): string[] {
   const parsed = parseKeybinding(binding)
   if (!parsed) {
     return [binding]
   }
   const isMac = platform === 'darwin'
+  const swapCtrlCmd = isMac && options.swapCtrlCmd === true
   if (parsed.doubleTapModifier) {
-    const glyph = formatModifierGlyph(parsed.doubleTapModifier, isMac)
+    const glyph = formatModifierGlyph(parsed.doubleTapModifier, isMac, swapCtrlCmd)
     return [glyph, glyph]
   }
   const parts: string[] = []
   if (parsed.mod) {
-    parts.push(isMac ? '⌘' : 'Ctrl')
+    parts.push(isMac ? macMetaGlyph(swapCtrlCmd) : 'Ctrl')
   }
   if (parsed.meta) {
-    parts.push(isMac ? '⌘' : 'Cmd')
+    parts.push(isMac ? macMetaGlyph(swapCtrlCmd) : 'Cmd')
   }
   if (parsed.control) {
-    parts.push(isMac ? '⌃' : 'Ctrl')
+    parts.push(isMac ? macControlGlyph(swapCtrlCmd) : 'Ctrl')
   }
   if (parsed.alt) {
     parts.push(isMac ? '⌥' : 'Alt')
@@ -2237,7 +2257,8 @@ export function formatKeybinding(binding: string, platform: NodeJS.Platform): st
 
 export function formatKeybindingList(
   bindings: readonly string[],
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  options: KeybindingFormatOptions = {}
 ): string {
   if (bindings.length === 0) {
     return 'Unassigned'
@@ -2245,7 +2266,7 @@ export function formatKeybindingList(
   return bindings
     .map((binding) => {
       const separator = isDoubleTapBinding(binding) ? ' ' : platform === 'darwin' ? '' : '+'
-      return formatKeybinding(binding, platform).join(separator)
+      return formatKeybinding(binding, platform, options).join(separator)
     })
     .join(', ')
 }

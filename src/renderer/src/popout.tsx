@@ -9,6 +9,7 @@ import {
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
+import { installCtrlCmdSwap, syncCtrlCmdSwapFromSettings } from './lib/install-modifier-remap'
 import { buildAppFontFamily } from './lib/app-font-family'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
@@ -22,6 +23,7 @@ import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 // window. It shares the preload/window.api but not the DOM or JS context.
 recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics('dashboard-popout')
+installCtrlCmdSwap()
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
   applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })
@@ -43,6 +45,7 @@ if (startupSettings) {
   useAppStore.setState({ settings: startupSettings })
 }
 applyPopoutAppearance(startupSettings)
+syncCtrlCmdSwapFromSettings(startupSettings?.modifierRemap)
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
@@ -85,6 +88,7 @@ function PopoutSettingsSync(): null {
 
   useEffect(() => {
     applyPopoutAppearance(settings)
+    syncCtrlCmdSwapFromSettings(settings?.modifierRemap)
     if (settings?.theme !== 'system') {
       return
     }

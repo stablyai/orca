@@ -32,6 +32,7 @@ import {
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { buildAppFontFamily } from '@/lib/app-font-family'
+import { syncCtrlCmdSwapFromSettings } from '@/lib/install-modifier-remap'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -1461,6 +1462,10 @@ function App(): React.JSX.Element {
       buildAppFontFamily(settings?.appFontFamily)
     )
   }, [settings?.appFontFamily])
+
+  useEffect(() => {
+    syncCtrlCmdSwapFromSettings(settings?.modifierRemap)
+  }, [settings?.modifierRemap])
 
   // Refresh GitHub data (PR/issue status) when window regains focus
   useEffect(() => {

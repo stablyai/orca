@@ -5,6 +5,7 @@ import {
   type KeybindingActionId,
   type KeybindingInput
 } from '../../../../shared/keybindings'
+import { isCtrlCmdSwapEnabled } from '../../lib/install-modifier-remap'
 import {
   ModifierDoubleTapDetector,
   modifierFromKeyEvent,
@@ -182,7 +183,10 @@ export function ShortcutRecorderButton({
       ? translate('auto.components.settings.ShortcutRecorderButton.152e0bcd64', 'Add shortcut')
       : translate('auto.components.settings.ShortcutRecorderButton.5bd56445da', 'Change shortcut')
 
-  const keys = binding === null ? [] : formatKeybinding(binding, platform)
+  const keys =
+    binding === null
+      ? []
+      : formatKeybinding(binding, platform, { swapCtrlCmd: isCtrlCmdSwapEnabled() })
 
   return (
     <Tooltip>
