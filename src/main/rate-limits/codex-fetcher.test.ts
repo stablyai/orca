@@ -25,6 +25,14 @@ vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
 
+const { backfillPendingMock } = vi.hoisted(() => ({
+  backfillPendingMock: vi.fn<() => boolean>(() => false)
+}))
+
+vi.mock('../codex/codex-state-db', () => ({
+  isCodexBackfillIndexPending: backfillPendingMock
+}))
+
 // Default to signed-in so the spawn paths under test still run; the auth gate
 // itself is covered by codex-auth-presence.test.ts and the no-auth case below.
 vi.mock('./codex-auth-presence', () => ({
@@ -102,6 +110,7 @@ describe('fetchCodexRateLimits', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
+    backfillPendingMock.mockReturnValue(false)
     vi.mocked(probeCodexAuthPresence).mockResolvedValue('present')
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
     vi.stubGlobal('fetch', vi.fn())
@@ -779,6 +788,49 @@ describe('fetchCodexRateLimits', () => {
       } else {
         process.env.CODEX_HOME = originalCodexHome
       }
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('skips the fetch without spawning codex while the target home backfill is pending (#11828)', async () => {
+    backfillPendingMock.mockReturnValue(true)
+
+    const result = await fetchCodexRateLimits({ codexHomePath: '/real/.codex' })
+
+    expect(backfillPendingMock).toHaveBeenCalledWith('/real/.codex')
+    expect(result.status).toBe('unavailable')
+    expect(childSpawnMock).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('does not consult the backfill check for a WSL UNC codex home (#11828)', async () => {
+    // Why: a \\wsl$\... home belongs to the WSL distro — the local-only prewarm
+    // can never cure it, and the pending probe's sync sqlite/readdir would run
+    // over UNC on the main process. The file's existing WSL dispatch (:1111,
+    // backend-first) must keep handling these homes untouched.
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    backfillPendingMock.mockReturnValue(true)
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, { primary: { usedPercent: 11 } })
+
+    try {
+      const resultPromise = fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+      })
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(1)
+      await resultPromise
+
+      expect(backfillPendingMock).not.toHaveBeenCalled()
+    } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform

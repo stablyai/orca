@@ -23,6 +23,7 @@ import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnost
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
 import { cleanupHiddenRateLimitPty, registerHiddenRateLimitPty } from './hidden-pty-cleanup'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { isCodexBackfillIndexPending } from '../codex/codex-state-db'
 import { extractCodexAuthError, isCodexAuthError } from '../../shared/codex-auth-errors'
 import {
   buildWslLoginShellCommand,
@@ -1075,6 +1076,28 @@ export async function fetchCodexRateLimits(
 ): Promise<ProviderRateLimits> {
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
+  }
+  // Why: a 10s RPC codex against an unindexed home dies in the #11828
+  // backfill wait AND can steal the backfill lease from the prewarm (a
+  // killed claimer blocks the index for up to 15 min). Skip; the service's
+  // normal refetch cadence picks rate limits up once the index completes.
+  // WSL UNC homes (\\wsl$\...) are excluded: they belong to the distro, the
+  // local-only prewarm can never cure them (skipping would starve rate limits
+  // forever), and the pending probe's sync sqlite/readdir would run over UNC —
+  // the existing WSL dispatch below (:1111) keeps handling them unchanged.
+  if (
+    options?.codexHomePath &&
+    !parseWslUncPath(options.codexHomePath) &&
+    isCodexBackfillIndexPending(options.codexHomePath)
+  ) {
+    return {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'codex session index backfill pending',
+      status: 'unavailable'
+    }
   }
   // Why: don't spawn `codex` unless signed in — otherwise non-Codex users see an unexpected background process that can only error.
   const authPresence = await probeCodexAuthPresence(options?.codexHomePath, {
