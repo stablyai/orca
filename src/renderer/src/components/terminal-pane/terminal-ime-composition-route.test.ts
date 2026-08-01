@@ -149,6 +149,35 @@ describe('installTerminalImeCompositionRoute', () => {
     expect(harness.input).not.toHaveBeenCalled()
   })
 
+  it('leaves an uncaptured session to xterm when installed mid-composition', () => {
+    const harness = createHarness()
+
+    // No start was seen, so nothing here can deliver the text. Cancelling the event
+    // would suppress xterm's own insertion and drop the commit on the floor.
+    const notPrevented = harness.end(1, '한')
+
+    expect(notPrevented).toBe(true)
+    expect(harness.input).not.toHaveBeenCalled()
+  })
+
+  it('suppresses xterm insertion only for a session it captured', () => {
+    const harness = createHarness()
+    harness.start(1)
+
+    expect(harness.end(1, '한')).toBe(false)
+    expect(harness.input).toHaveBeenCalledWith('한')
+  })
+
+  it('keeps suppressing insertion for a captured session it deliberately drops', () => {
+    const harness = createHarness()
+    harness.start(1)
+    harness.state.currentTransport = createTransport('pty-replacement')
+
+    // Owned, so xterm must still stand down — the drop is this route's decision.
+    expect(harness.end(1, '한')).toBe(false)
+    expect(harness.input).not.toHaveBeenCalled()
+  })
+
   it.each(['terminal close', 'tab unmount'])(
     'releases the captured session and listeners on %s',
     () => {

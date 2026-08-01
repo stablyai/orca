@@ -116,6 +116,114 @@ describe('sendTerminalInputAfterComposition', () => {
     expect(send).toHaveBeenCalledTimes(1)
   })
 
+  it('re-arms past the fallback rather than splitting a still-pending composition', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const transport = { getPtyId: () => 'pty-1' } as unknown as PtyTransport
+    const route = installTerminalImeCompositionRoute({
+      terminalElement: el,
+      terminal: { input: vi.fn() },
+      capturedTransport: transport,
+      getCurrentTransport: () => transport
+    })
+    el.dispatchEvent(
+      new CustomEvent(XTERM_COMPOSITION_SESSION_START_EVENT, { detail: { id: 1, data: '한' } })
+    )
+
+    sendTerminalInputAfterComposition(el, send, { fallbackMs: 50, maxIdleMs: 1000 })
+    vi.advanceTimersByTime(500)
+
+    // A slow candidate window is not a reason to send Enter into the middle of the preedit.
+    expect(send).not.toHaveBeenCalled()
+
+    el.dispatchEvent(
+      new CustomEvent(XTERM_COMPOSITION_SESSION_END_EVENT, { detail: { id: 1, data: '한' } })
+    )
+    vi.advanceTimersByTime(0)
+    expect(send).toHaveBeenCalledTimes(1)
+
+    route.dispose()
+  })
+
+  it('holds the newline through a long conversion that keeps updating its preedit', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const transport = { getPtyId: () => 'pty-1' } as unknown as PtyTransport
+    const route = installTerminalImeCompositionRoute({
+      terminalElement: el,
+      terminal: { input: vi.fn() },
+      capturedTransport: transport,
+      getCurrentTransport: () => transport
+    })
+    el.dispatchEvent(
+      new CustomEvent(XTERM_COMPOSITION_SESSION_START_EVENT, { detail: { id: 1, data: 'にほん' } })
+    )
+
+    sendTerminalInputAfterComposition(el, send, { fallbackMs: 50, maxIdleMs: 200 })
+
+    // Multi-segment bunsetsu conversion: each segment takes longer than the ceiling
+    // in total, but never leaves the preedit idle for a full ceiling's worth.
+    for (let segment = 0; segment < 6; segment += 1) {
+      vi.advanceTimersByTime(150)
+      el.dispatchEvent(new Event('compositionupdate'))
+    }
+    expect(send).not.toHaveBeenCalled()
+
+    el.dispatchEvent(
+      new CustomEvent(XTERM_COMPOSITION_SESSION_END_EVENT, { detail: { id: 1, data: '日本' } })
+    )
+    vi.advanceTimersByTime(0)
+    expect(send).toHaveBeenCalledTimes(1)
+
+    route.dispose()
+  })
+
+  it('holds for a composition already in flight when nothing recorded its session start', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+
+    // No route installed, so there is no pending session to report — the live
+    // compositionupdate is the only evidence the composition exists.
+    sendTerminalInputAfterComposition(el, send, { fallbackMs: 50, maxIdleMs: 200 })
+    for (let tick = 0; tick < 5; tick += 1) {
+      vi.advanceTimersByTime(30)
+      el.dispatchEvent(new Event('compositionupdate'))
+    }
+    expect(send).not.toHaveBeenCalled()
+
+    el.dispatchEvent(new Event('compositionend'))
+    vi.advanceTimersByTime(0)
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends once at the ceiling when a composition never ends', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const transport = { getPtyId: () => 'pty-1' } as unknown as PtyTransport
+    const route = installTerminalImeCompositionRoute({
+      terminalElement: el,
+      terminal: { input: vi.fn() },
+      capturedTransport: transport,
+      getCurrentTransport: () => transport
+    })
+    el.dispatchEvent(
+      new CustomEvent(XTERM_COMPOSITION_SESSION_START_EVENT, { detail: { id: 1, data: '한' } })
+    )
+
+    sendTerminalInputAfterComposition(el, send, { fallbackMs: 50, maxIdleMs: 200 })
+    vi.advanceTimersByTime(150)
+    expect(send).not.toHaveBeenCalled()
+
+    // Bounded: a composition that stops progressing must not strand the keystroke.
+    vi.advanceTimersByTime(100)
+    expect(send).toHaveBeenCalledTimes(1)
+
+    vi.runAllTimers()
+    expect(send).toHaveBeenCalledTimes(1)
+
+    route.dispose()
+  })
+
   it('still delivers the input on the next macrotask without a terminal element', () => {
     const send = vi.fn()
 
