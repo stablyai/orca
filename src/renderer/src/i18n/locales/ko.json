@@ -6131,7 +6131,11 @@
           "1b1b70279a": "아직 페어링된 기기가 없습니다.",
           "1592afcc7a": "아직 페어링된 기기가 없습니다. Orca 모바일 앱으로 QR 코드를 스캔하세요.",
           "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다. 다시 생성해 보세요.",
-          "pairingQrError": "이 페어링 코드를 QR 코드로 표시할 수 없습니다. 대신 Orca Mobile에 복사하세요."
+          "pairingQrError": "이 페어링 코드를 QR 코드로 표시할 수 없습니다. 대신 Orca Mobile에 복사하세요.",
+          "pairingCodeReady": "Pairing code ready",
+          "copyPairingCode": "Copy pairing code",
+          "diagnosticsCopied": "Diagnostics copied",
+          "diagnosticsCopyFailed": "Failed to copy diagnostics"
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub 릴리스",
@@ -9452,7 +9456,8 @@
           "signInRequired": "Orca Mobile Relay를 사용하려면 로그인하세요.",
           "relayUnavailable": "이 빌드에서는 Orca Relay를 사용할 수 없습니다. LAN을 사용하세요.",
           "signInAgain": "다시 로그인",
-          "localTitle": "LAN"
+          "localTitle": "LAN",
+          "retrying": "Retrying"
         },
         "MobilePairingSetupSection": {
           "title": "휴대폰 페어링",
@@ -11469,7 +11474,16 @@
             "stable": "안정 버전"
           },
           "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다.",
-          "pairingQrError": "이 페어링 코드를 QR 코드로 표시할 수 없습니다. 대신 Orca Mobile에 복사하세요."
+          "pairingQrError": "이 페어링 코드를 QR 코드로 표시할 수 없습니다. 대신 Orca Mobile에 복사하세요.",
+          "noRelayCode": "No pairing code available",
+          "noPairingCode": "No pairing code available",
+          "qrSignInRequired": "Sign in to create a Relay pairing code",
+          "qrRenderFailed": "QR couldn’t be rendered — copy the code below",
+          "qrGeneratePrompt": "Generate a pairing code to continue",
+          "pairingCodeReady": "Pairing code ready",
+          "pairThisMac": "Pair this Mac.",
+          "pairThisPc": "Pair this PC.",
+          "pairThisComputer": "Pair this computer."
         },
         "MobilePage": {
           "e17393c6a3": "휴대폰 미리보기",
@@ -11482,7 +11496,9 @@
           "4e1eb5d55c": "기기를 취소하지 못했습니다.",
           "255372e6e8": "기기가 취소되었습니다.",
           "1b4509a8a1": "페어링됨",
-          "c5909374cf": "소개"
+          "c5909374cf": "소개",
+          "diagnosticsCopied": "Diagnostics copied",
+          "diagnosticsCopyFailed": "Failed to copy diagnostics"
         },
         "MobilePageToolbar": {
           "ad2284a9e2": "닫기 · Esc",
@@ -11613,6 +11629,18 @@
           "blocked-title": "Windows가 Orca Mobile을 차단하고 있을 수 있습니다",
           "blocked-description": "기존 인바운드 차단 규칙이 페어링 예외보다 우선할 수 있습니다. 복구를 실행하면 이 Orca 앱의 충돌하는 TCP 규칙을 제거한 다음 개인 네트워크에서 포트 {{port}}을(를) 허용합니다.",
           "repair": "방화벽 액세스 복구"
+        },
+        "MobileRelayMintFailureNotice": {
+          "retryingTitle": "Retrying Orca Relay…",
+          "unavailableTitle": "Orca Relay isn’t available on this desktop.",
+          "title": "Couldn’t create a Relay pairing code.",
+          "retryingBody": "Creating a new pairing code. This can take a moment over a remote connection.",
+          "unavailableBody": "Use LAN to pair over Tailscale or the same Wi‑Fi.",
+          "body": "Retry, or use LAN to pair over Tailscale or the same Wi‑Fi.",
+          "useLan": "Use LAN",
+          "retrying": "Retrying…",
+          "retry": "Retry Relay",
+          "copyDiagnostics": "Copy diagnostics"
         }
       },
       "gitlab": {
