@@ -2007,6 +2007,11 @@ function SourceControlInner(): React.JSX.Element {
         delete generateInFlightRef.current[key]
       }
     }
+    for (const key of Object.keys(undoInFlightRef.current)) {
+      if (!worktreeMap.has(key)) {
+        delete undoInFlightRef.current[key]
+      }
+    }
     for (const key of Object.keys(createPrIntentInFlightRef.current)) {
       if (!worktreeMap.has(key)) {
         delete createPrIntentInFlightRef.current[key]
@@ -2171,6 +2176,8 @@ function SourceControlInner(): React.JSX.Element {
     undoInFlightRef.current[activeWorktreeId] = true
     setUndoInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
     setCommitErrorForWorktree(activeWorktreeId, null)
+    // Why: snapshot the draft before the async call so the post-await guard can detect user edits made during the await — same pattern as handleCommit.
+    const preUndoDraft = commitDraftsRef.current[activeWorktreeId ?? '']
     try {
       const result = await undoLastCommitRuntimeGit({
         settings: activeRepoSettings,
@@ -2185,7 +2192,8 @@ function SourceControlInner(): React.JSX.Element {
       if (result.message !== undefined) {
         updateCommitDrafts((drafts) => {
           const current = drafts[activeWorktreeId]
-          if (current !== undefined && current.trim() !== result.message?.trim()) {
+          // Why: if the user edited the draft during the await, preserve their edits; otherwise restore the recovered message.
+          if (current !== undefined && current.trim() !== (preUndoDraft?.trim() ?? '')) {
             return drafts
           }
           return { ...drafts, [activeWorktreeId]: result.message ?? '' }
