@@ -76,8 +76,7 @@ function watcherBatch(count: number): WatcherProcessEvent[] {
   })) as WatcherProcessEvent[]
 }
 
-// Multi-byte segments plus JSON-escaped characters: each of these paths encodes to more bytes
-// than its UTF-16 length, so a chunk budget counting characters understates the frame.
+// Each path encodes beyond its UTF-16 length, exposing character-based budgets.
 function multiByteWatcherBatch(count: number): WatcherProcessEvent[] {
   return Array.from({ length: count }, (_, index) => ({
     type: index % 3 === 0 ? 'create' : index % 3 === 1 ? 'update' : 'delete',
@@ -91,8 +90,7 @@ function frameBytesFor(events: readonly WatcherEventPayload[]): number {
     .length
 }
 
-// Grows a prefix by real encodes, then pads the last path so the frame lands on exactly
-// `targetBytes` — independent of the arithmetic the emitter uses to size its chunks.
+// Real encodes keep this boundary oracle independent from the emitter's arithmetic.
 function batchEncodingTo(targetBytes: number): WatcherProcessEvent[] {
   const events = watcherBatch(400)
   let fitting = 1
@@ -117,8 +115,7 @@ function expectedPayloads(events: readonly WatcherProcessEvent[]): WatcherEventP
   }))
 }
 
-// Bounds the budget from above: every chunk but the last is packed so tightly that pulling the
-// next event forward would overshoot, so an overstated envelope (needless splitting) fails here.
+// Moving the next event forward must exceed capacity, catching needless splits.
 function expectMaximallyPackedChunks(capture: ClientCapture, capacity: number): void {
   const chunks = capture.framedEvents()
   expect(chunks.length).toBeGreaterThan(1)
@@ -293,8 +290,7 @@ describe('relay watcher fs.changed frame chunking', () => {
 
   it('keeps the fail-closed kill when retained chunks exhaust the producer queue budget', () => {
     vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    // A sink that accepts writes but never settles them retains every chunk in the producer
-    // queue, the way the real relay stdout sink does until the socket flushes.
+    // An unsettled sink models retained relay stdout writes.
     const { dispatcher, capture, detached } = createDispatcher(NODE_21_HIGH_WATER_MARK, {
       supportsWriteCallback: true
     })

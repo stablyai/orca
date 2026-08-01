@@ -23,7 +23,6 @@ function context(clientId: number, signal?: AbortSignal): RequestContext {
 describe('RelayFilesystemWatchRegistry pending setup waiters', () => {
   it('removes ten thousand aborted callers queued behind one teardown anchor', async () => {
     const pool = new PendingSetupPool()
-    // Watcher emission sizes chunks against these, so the fake must carry them.
     const dispatcher = {
       notify: vi.fn(),
       onClientDetached: vi.fn(),

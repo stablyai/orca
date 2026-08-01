@@ -21,11 +21,7 @@ export function emitRelayWatcherEvents(
   if (frameCapacity === undefined) {
     return
   }
-  // Why: a whole watcher batch routinely runs tens of times over the per-frame capacity, and an
-  // over-capacity frame on the ordinary lane kills the client. Chunk to fit, preserving order.
-  // Sizing is exact: JSON.stringify of an array is its elements joined by commas, so the frame is
-  // the empty-array envelope plus every element plus one comma per extra element. Chunks are
-  // packed to the byte because each one costs a full downstream fan-out on the desktop.
+  // Whole watcher batches exceed the ordinary-lane cap; byte-pack ordered chunks instead.
   const envelopeBytes = dispatcher.notificationFrameBytes(FS_CHANGED, { events: [] })
   let chunk: RelayWatcherEventPayload[] = []
   let chunkBytes = envelopeBytes
@@ -44,9 +40,6 @@ export function emitRelayWatcherEvents(
       ...(event.isDirectory === undefined ? {} : { isDirectory: event.isDirectory })
     }
     const payloadBytes = Buffer.byteLength(JSON.stringify(payload))
-    // Why it can still emit an over-capacity frame: one event too large for an empty envelope
-    // can't be chunked, so the ordinary-lane kill stays its backstop — a silent drop on this
-    // lane has no resync contract.
     if (chunk.length > 0 && chunkBytes + 1 + payloadBytes > frameCapacity) {
       flush()
     }

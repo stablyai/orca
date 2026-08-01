@@ -27,7 +27,6 @@ function context(clientId: number): RequestContext {
   return { clientId, isStale: () => false }
 }
 
-// Watcher emission sizes chunks against these, so the fake must carry them.
 function watchDispatcher() {
   return {
     notify: vi.fn(),
