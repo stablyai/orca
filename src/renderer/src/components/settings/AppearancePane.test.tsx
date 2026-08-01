@@ -491,8 +491,9 @@ describe('AppearancePane', () => {
     await act(async () => {
       toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    // Defaults off, so the first click turns it on.
-    expect(updateSettings).toHaveBeenCalledWith({ showNotchStatus: true })
+    // Defaults on now, so the first click turns it off — this switch is the only way to
+    // dismiss a permanently visible surface.
+    expect(updateSettings).toHaveBeenCalledWith({ showNotchStatus: false })
   })
 
   it('hides the notch status preference off macOS', async () => {

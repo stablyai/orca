@@ -3213,7 +3213,9 @@ export class Store {
             minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
             // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
             showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
-            showNotchStatus: parsed.settings?.showNotchStatus === true,
+            // Why !== false and not === true: missing means default-on, so only an explicit
+            // opt-out disables it — the same round-trip rule showMenuBarIcon uses above.
+            showNotchStatus: parsed.settings?.showNotchStatus !== false,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
