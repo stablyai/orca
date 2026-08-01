@@ -14449,6 +14449,9 @@
           "splitRightAction": "向右拆分",
           "splitRightTooltip": "向右拆分",
           "untitledTerminal": "未命名终端"
+        },
+        "PeersPanels": {
+          "closePane": "关闭面板"
         }
       }
     },

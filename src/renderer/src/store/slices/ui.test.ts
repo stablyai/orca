@@ -3471,6 +3471,71 @@ describe('createUISlice peers navigation', () => {
   })
 })
 
+describe('createUISlice peers pane split', () => {
+  const hostA = { hostId: 'h1', handle: 'a', title: 'A' }
+  const hostB = { hostId: 'h2', handle: 'b', title: 'B' }
+  const hostC = { hostId: 'h3', handle: 'c', title: 'C' }
+
+  it('creates the first split from the single-pane target and focuses the new pane', () => {
+    const store = createUIStore()
+    store.getState().openPeersPage(hostA)
+
+    store.getState().splitPeersPane(null, 'right', hostB)
+
+    expect(store.getState().peersLayout).toEqual({
+      type: 'split',
+      direction: 'row',
+      first: { type: 'leaf', target: hostA },
+      second: { type: 'leaf', target: hostB }
+    })
+    expect(store.getState().peersPageTarget).toEqual(hostB)
+  })
+
+  it('returns to a single pane and refocuses the survivor after closing a pane', () => {
+    const store = createUIStore()
+    store.getState().openPeersPage(hostA)
+    store.getState().splitPeersPane(null, 'right', hostB)
+
+    store.getState().closePeersPane('h2:b')
+
+    expect(store.getState().peersLayout).toBeNull()
+    expect(store.getState().peersPageTarget).toEqual(hostA)
+  })
+
+  it('swaps two panes when replacing the focused pane with a target already shown elsewhere', () => {
+    const store = createUIStore()
+    store.getState().openPeersPage(hostA)
+    store.getState().splitPeersPane(null, 'right', hostB)
+    // Focus is on hostB's pane; replacing it with hostA (already in the other pane) should swap.
+    store.getState().replaceFocusedPeersPane(hostA)
+
+    expect(store.getState().peersLayout).toEqual({
+      type: 'split',
+      direction: 'row',
+      first: { type: 'leaf', target: hostB },
+      second: { type: 'leaf', target: hostA }
+    })
+    expect(store.getState().peersPageTarget).toEqual(hostA)
+  })
+
+  it('prunes dead panes and refocuses when the focused pane dies', () => {
+    const store = createUIStore()
+    store.getState().openPeersPage(hostA)
+    store.getState().splitPeersPane(null, 'right', hostB)
+    store.getState().splitPeersPane('h2:b', 'bottom', hostC)
+
+    store.getState().prunePeersLayout(['h1:a', 'h2:b'])
+
+    expect(store.getState().peersLayout).toEqual({
+      type: 'split',
+      direction: 'row',
+      first: { type: 'leaf', target: hostA },
+      second: { type: 'leaf', target: hostB }
+    })
+    expect(store.getState().peersPageTarget).toEqual(hostA)
+  })
+})
+
 describe('openDiffNotesSendMenuForActiveWorktree', () => {
   function stubDiffNotesStore(
     comments: { sentAt?: number }[],

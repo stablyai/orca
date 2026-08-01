@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
+import { DndContext } from '@dnd-kit/core'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -46,15 +47,17 @@ async function renderStrip(
   mountedRoots.push(root)
   await act(async () => {
     root.render(
-      <TooltipProvider>
-        <PeersPageTabStrip
-          tabs={makeTabs()}
-          activeKey="host-a:a1"
-          onSelect={vi.fn()}
-          onReorder={() => {}}
-          {...props}
-        />
-      </TooltipProvider>
+      <DndContext>
+        <TooltipProvider>
+          <PeersPageTabStrip
+            tabs={makeTabs()}
+            activeKey="host-a:a1"
+            onSelect={vi.fn()}
+            onReorder={() => {}}
+            {...props}
+          />
+        </TooltipProvider>
+      </DndContext>
     )
   })
   return { container }
@@ -112,5 +115,25 @@ describe('PeersPageTabStrip', () => {
     const triggers = Array.from(container.querySelectorAll('[role="tab"]'))
     expect(triggers[0]?.textContent).toBe('Untitled terminal')
     expect(container.textContent).not.toContain('term_raw1')
+  })
+
+  it('marks a non-active visible tab with a dot but not the active tab', async () => {
+    const { container } = await renderStrip({
+      activeKey: 'host-a:a1',
+      visibleKeys: ['host-a:a1', 'host-a:a2']
+    })
+    const triggers = Array.from(container.querySelectorAll('[role="tab"]'))
+    const activeDot = triggers[0]?.querySelector('.rounded-full')
+    const visibleDot = triggers[1]?.querySelector('.rounded-full')
+    expect(activeDot).toBeNull()
+    expect(visibleDot).not.toBeNull()
+  })
+
+  it('shows no visible-tab dots when visibleKeys is omitted', async () => {
+    const { container } = await renderStrip({})
+    const triggers = Array.from(container.querySelectorAll('[role="tab"]'))
+    triggers.forEach((trigger) => {
+      expect(trigger.querySelector('.rounded-full')).toBeNull()
+    })
   })
 })

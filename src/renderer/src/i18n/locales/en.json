@@ -14555,6 +14555,9 @@
           "splitRightAction": "Split right",
           "splitRightTooltip": "Split right",
           "untitledTerminal": "Untitled terminal"
+        },
+        "PeersPanels": {
+          "closePane": "Close pane"
         }
       }
     },

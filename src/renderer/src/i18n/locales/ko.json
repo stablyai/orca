@@ -14449,6 +14449,9 @@
           "splitRightAction": "오른쪽으로 분할",
           "splitRightTooltip": "오른쪽으로 분할",
           "untitledTerminal": "이름 없는 터미널"
+        },
+        "PeersPanels": {
+          "closePane": "패널 닫기"
         }
       }
     },

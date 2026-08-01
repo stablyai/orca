@@ -14449,6 +14449,9 @@
           "splitRightAction": "右に分割",
           "splitRightTooltip": "右に分割",
           "untitledTerminal": "名前のないターミナル"
+        },
+        "PeersPanels": {
+          "closePane": "ペインを閉じる"
         }
       }
     },

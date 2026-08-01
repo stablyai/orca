@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
+import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { XIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +21,7 @@ import {
   peersFlatTabKey,
   type PeersFlatTab
 } from './peers-flat-tab-list'
+import { collectLeaves, leafKey as peersLeafKey } from './peers-split-tree'
 
 function connectionBadgeLabel(state: PeerClientStatus['state']): string {
   if (state === 'connected') {
@@ -29,6 +31,12 @@ function connectionBadgeLabel(state: PeerClientStatus['state']): string {
     return translate('auto.components.peers.PeersPage.b8d3a6c2e9', 'Reconnecting')
   }
   return translate('auto.components.peers.PeersPage.c2e9f5a1d8', 'Disconnected')
+}
+
+function grantedPeersLeafKeys(hosts: PeerHostConnection[]): string[] {
+  return hosts
+    .filter((host) => host.status.state === 'connected')
+    .flatMap((host) => host.terminals.map((terminal) => `${host.hostId}:${terminal.handle}`))
 }
 
 function isTargetStillGranted(
@@ -64,9 +72,14 @@ function resolveFallbackTarget(
 }
 
 export default function PeersPage(): React.JSX.Element {
+  // Why: a click must stay a click — only a deliberate 4px drag starts sorting/docking.
+  // Lifted above the strip and panel area so a tab drag can also dock into a panel split.
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const { hosts } = usePeerCollabClientConnection()
   const peersPageTarget = useAppStore((s) => s.peersPageTarget)
   const setPeersPageTarget = useAppStore((s) => s.setPeersPageTarget)
+  const peersLayout = useAppStore((s) => s.peersLayout)
+  const prunePeersLayout = useAppStore((s) => s.prunePeersLayout)
   const closePeersPage = useAppStore((s) => s.closePeersPage)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -78,6 +91,7 @@ export default function PeersPage(): React.JSX.Element {
   // Why: keep the shown terminal in sync with what hosts are actually granting —
   // pick a default when none is selected yet, and follow the grant/host away when it's revoked.
   useEffect(() => {
+    prunePeersLayout(grantedPeersLeafKeys(hosts))
     if (!anyConnected) {
       if (peersPageTarget !== null) {
         setPeersPageTarget(null)
@@ -94,7 +108,7 @@ export default function PeersPage(): React.JSX.Element {
     ) {
       setPeersPageTarget(fallback)
     }
-  }, [anyConnected, hosts, peersPageTarget, setPeersPageTarget])
+  }, [anyConnected, hosts, peersPageTarget, setPeersPageTarget, prunePeersLayout])
 
   const goToSettings = (): void => {
     openSettingsPage()
@@ -125,6 +139,17 @@ export default function PeersPage(): React.JSX.Element {
     (tab: PeersFlatTab) =>
       setPeersPageTarget({ hostId: tab.hostId, handle: tab.handle, title: tab.title }),
     [setPeersPageTarget]
+  )
+
+  // Why: split panes render more than the focused tab — the strip marks those too.
+  const visiblePeersKeys = useMemo(
+    () =>
+      peersLayout
+        ? collectLeaves(peersLayout)
+            .filter((leaf) => leaf.hostId === selectedHost?.hostId)
+            .map((leaf) => peersLeafKey(leaf))
+        : [],
+    [peersLayout, selectedHost]
   )
 
   return (
@@ -162,27 +187,30 @@ export default function PeersPage(): React.JSX.Element {
           </Tooltip>
         </div>
       </div>
-      {selectedHostConnected && peersPageTarget ? (
-        <PeersPageTabStrip
-          tabs={flatTabs}
-          activeKey={peersFlatTabKey(peersPageTarget)}
-          onSelect={selectPeersTab}
-          onReorder={(handles) => {
-            if (selectedHost) {
-              setPeersTabOrderForHost(selectedHost.hostId, handles)
-            }
-          }}
-        />
-      ) : null}
-      <div className="flex flex-1 min-h-0">
-        {!anyConnected ? (
-          <PeersEmptyState kind="disconnected" onOpenSettings={goToSettings} />
-        ) : !peersPageTarget || !selectedHostConnected ? (
-          <PeersEmptyState kind="no-terminals" onOpenSettings={goToSettings} />
-        ) : (
-          <PeersPanels hosts={hosts} primary={peersPageTarget} />
-        )}
-      </div>
+      <DndContext sensors={dndSensors}>
+        {selectedHostConnected && peersPageTarget ? (
+          <PeersPageTabStrip
+            tabs={flatTabs}
+            activeKey={peersFlatTabKey(peersPageTarget)}
+            visibleKeys={visiblePeersKeys}
+            onSelect={selectPeersTab}
+            onReorder={(handles) => {
+              if (selectedHost) {
+                setPeersTabOrderForHost(selectedHost.hostId, handles)
+              }
+            }}
+          />
+        ) : null}
+        <div className="flex flex-1 min-h-0">
+          {!anyConnected ? (
+            <PeersEmptyState kind="disconnected" onOpenSettings={goToSettings} />
+          ) : !peersPageTarget || !selectedHostConnected ? (
+            <PeersEmptyState kind="no-terminals" onOpenSettings={goToSettings} />
+          ) : (
+            <PeersPanels hosts={hosts} primary={peersPageTarget} />
+          )}
+        </div>
+      </DndContext>
     </div>
   )
 }

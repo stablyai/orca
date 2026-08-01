@@ -14449,6 +14449,9 @@
           "splitRightAction": "Dividir a la derecha",
           "splitRightTooltip": "Dividir a la derecha",
           "untitledTerminal": "Terminal sin nombre"
+        },
+        "PeersPanels": {
+          "closePane": "Cerrar panel"
         }
       }
     },
