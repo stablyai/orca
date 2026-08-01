@@ -205,6 +205,19 @@ vi.mock('../codex/codex-pane-account-registry', () => ({
   recordCodexPaneAccount: recordCodexPaneAccountMock,
   forgetCodexPaneAccount: forgetCodexPaneAccountMock
 }))
+
+const backfillPendingMock = vi.hoisted(() => vi.fn<(home: string) => boolean>(() => false))
+const backfillStatusMock = vi.hoisted(() =>
+  vi.fn<(home: string) => CodexStateDbBackfillStatus>(() => ({
+    kind: 'complete' as const,
+    stateDbPath: '/tmp/state_5.sqlite'
+  }))
+)
+vi.mock('../codex/codex-state-db', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  isCodexBackfillIndexPending: backfillPendingMock,
+  readCodexStateDbBackfillStatus: backfillStatusMock
+}))
 import {
   LocalPtyProvider,
   _resetLocalPtyProviderStateForTest
@@ -232,6 +245,12 @@ import {
   type PrepareCodexSessionResume
 } from './pty'
 import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-login-shell'
+import type { CodexStateDbBackfillStatus } from '../codex/codex-state-db'
+import { CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS } from '../codex/codex-backfill-spawn-hold'
+import {
+  ORCA_BACKFILL_GATED_COMMAND_ENV,
+  ORCA_BACKFILL_RELEASE_FILE_ENV
+} from '../../shared/codex-backfill-gate-wrapper'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   isHiddenRendererPty
@@ -365,6 +384,11 @@ describe('registerPtyHandlers', () => {
     clearPaneKeyAliasesForPtyMock.mockReset()
     recordCodexPaneAccountMock.mockReset()
     forgetCodexPaneAccountMock.mockReset()
+    // Why: backfill gate mocks default to "nothing pending" so the gate stays inert for every unrelated spawn test.
+    backfillPendingMock.mockReset()
+    backfillPendingMock.mockReturnValue(false)
+    backfillStatusMock.mockReset()
+    backfillStatusMock.mockReturnValue({ kind: 'complete', stateDbPath: '/tmp/state_5.sqlite' })
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
     mainWindow.webContents.removeListener.mockReset()
@@ -15616,6 +15640,398 @@ describe('registerPtyHandlers', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+  })
+
+  describe('codex backfill spawn hold', () => {
+    const GATED_CODEX_COMMAND = "codex '--flag'"
+    const BACKFILL_WATERMARK = 'sessions/2026/07/20/rollout-a.jsonl'
+    const SHELL_READY_MARKER = '\x1b]777;orca-shell-ready\x07'
+
+    function markBackfillPending(home: string): void {
+      backfillPendingMock.mockReturnValue(true)
+      backfillStatusMock.mockReturnValue({
+        kind: 'incomplete',
+        stateDbPath: `${home}/state_5.sqlite`,
+        status: 'processing',
+        lastWatermark: BACKFILL_WATERMARK
+      })
+    }
+
+    function getPaneHoldStatus(paneKey: string): unknown {
+      return handlers.get('codexBackfill:paneHoldStatus')!(null, paneKey)
+    }
+
+    function paneHoldBroadcasts(): unknown[] {
+      return mainWindow.webContents.send.mock.calls
+        .filter(([channel]) => channel === 'codexBackfill:paneHoldChanged')
+        .map(([, state]) => state)
+    }
+
+    function sentinelWriteTargets(): string[] {
+      return writeFileSyncMock.mock.calls
+        .map(([target]) => String(target))
+        .filter((target) => target.includes('backfill-release-'))
+    }
+
+    function lastNodePtySpawnCall(): [string, string[], { env: Record<string, string> }] {
+      return spawnMock.mock.calls.at(-1) as [string, string[], { env: Record<string, string> }]
+    }
+
+    async function spawnCodexPane(args: {
+      tabId: string
+      leafId: string
+      selectedCodexHome: string | null
+      command?: string
+      launchAgent?: TuiAgent
+      connectionId?: string
+    }): Promise<{ paneKey: string }> {
+      const paneKey = makePaneKey(args.tabId, args.leafId)
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, undefined, () => args.selectedCodexHome)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        command: args.command ?? GATED_CODEX_COMMAND,
+        ...('launchAgent' in args
+          ? args.launchAgent
+            ? { launchAgent: args.launchAgent }
+            : {}
+          : { launchAgent: 'codex' }),
+        ...(args.connectionId ? { connectionId: args.connectionId } : {}),
+        tabId: args.tabId,
+        leafId: args.leafId,
+        env: { ORCA_PANE_KEY: paneKey }
+      })
+      return { paneKey }
+    }
+
+    posixOnlyIt(
+      'replaces a gated codex launch with the wrapper and broadcasts the hold',
+      async () => {
+        vi.useFakeTimers()
+        const mockProc = createMockProc()
+        spawnMock.mockReturnValue(mockProc.proc)
+        const tempHome = '/tmp/orca-backfill-home-gated'
+        markBackfillPending(tempHome)
+        try {
+          const { paneKey } = await spawnCodexPane({
+            tabId: 'tab-backfill',
+            leafId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            selectedCodexHome: tempHome
+          })
+
+          expect(spawnMock).toHaveBeenCalledTimes(1)
+          const [, shellArgs, options] = lastNodePtySpawnCall()
+          expect(options.env[ORCA_BACKFILL_GATED_COMMAND_ENV]).toBe(GATED_CODEX_COMMAND)
+          const releaseFile = options.env[ORCA_BACKFILL_RELEASE_FILE_ENV]
+          expect(releaseFile.startsWith(`${tempHome}/.orca/`)).toBe(true)
+          expect(JSON.stringify(shellArgs)).not.toContain('codex')
+
+          // The startup path delivers the gate wrapper, never the withheld codex command.
+          mockProc.emitData(SHELL_READY_MARKER)
+          await Promise.resolve()
+          vi.advanceTimersByTime(250)
+          await Promise.resolve()
+          const writes = mockProc.proc.write.mock.calls.map(([data]) => String(data)).join('')
+          expect(writes).toContain(ORCA_BACKFILL_GATED_COMMAND_ENV)
+          expect(writes).not.toContain(GATED_CODEX_COMMAND)
+
+          expect(sentinelWriteTargets()).toEqual([])
+          expect(paneHoldBroadcasts()).toEqual([
+            { paneKey, phase: 'indexing', lastWatermark: BACKFILL_WATERMARK }
+          ])
+          expect(getPaneHoldStatus(paneKey)).toEqual({
+            paneKey,
+            phase: 'indexing',
+            lastWatermark: BACKFILL_WATERMARK
+          })
+        } finally {
+          vi.useRealTimers()
+        }
+      }
+    )
+
+    posixOnlyIt(
+      'releases the hold by creating the sentinel once the backfill completes',
+      async () => {
+        vi.useFakeTimers()
+        const mockProc = createMockProc()
+        spawnMock.mockReturnValue(mockProc.proc)
+        const tempHome = '/tmp/orca-backfill-home-release'
+        markBackfillPending(tempHome)
+        try {
+          const { paneKey } = await spawnCodexPane({
+            tabId: 'tab-backfill-release',
+            leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            selectedCodexHome: tempHome
+          })
+          const [, , options] = lastNodePtySpawnCall()
+          const releaseFile = options.env[ORCA_BACKFILL_RELEASE_FILE_ENV]
+
+          backfillPendingMock.mockReturnValue(false)
+          backfillStatusMock.mockReturnValue({
+            kind: 'complete',
+            stateDbPath: `${tempHome}/state_5.sqlite`
+          })
+          mainWindow.webContents.send.mockClear()
+          vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS)
+
+          // Main's only delivery act is touching the sentinel; the wrapper in the live shell does the exec.
+          expect(writeFileSyncMock.mock.calls.some(([target]) => target === releaseFile)).toBe(true)
+          expect(paneHoldBroadcasts()).toEqual([
+            { paneKey, phase: 'launched', lastWatermark: null }
+          ])
+          expect(getPaneHoldStatus(paneKey)).toBeNull()
+          const writes = mockProc.proc.write.mock.calls.map(([data]) => String(data)).join('')
+          expect(writes).not.toContain(GATED_CODEX_COMMAND)
+        } finally {
+          vi.useRealTimers()
+        }
+      }
+    )
+
+    posixOnlyIt('fails open with the original command when no backfill is pending', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+      try {
+        // backfillPendingMock defaults to false — the fail-open contract for unreadable DBs.
+        const { paneKey } = await spawnCodexPane({
+          tabId: 'tab-backfill-open',
+          leafId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          selectedCodexHome: '/tmp/orca-backfill-home-open'
+        })
+
+        const [, , options] = lastNodePtySpawnCall()
+        expect(options.env[ORCA_BACKFILL_GATED_COMMAND_ENV]).toBeUndefined()
+        expect(options.env[ORCA_BACKFILL_RELEASE_FILE_ENV]).toBeUndefined()
+
+        mockProc.emitData(SHELL_READY_MARKER)
+        await Promise.resolve()
+        vi.advanceTimersByTime(5_000)
+        await Promise.resolve()
+        const writes = mockProc.proc.write.mock.calls.map(([data]) => String(data)).join('')
+        expect(writes).toContain(GATED_CODEX_COMMAND)
+        expect(paneHoldBroadcasts()).toEqual([])
+        expect(getPaneHoldStatus(paneKey)).toBeNull()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('passes SSH panes through without ever reading the backfill DB', async () => {
+      const sshSpawn = vi.fn(async (_opts: { command?: string; env?: Record<string, string> }) => ({
+        id: 'ssh-pty'
+      }))
+      registerSshPtyProvider('ssh-1', {
+        spawn: sshSpawn,
+        write: vi.fn(),
+        resize: vi.fn(),
+        shutdown: vi.fn(),
+        sendSignal: vi.fn(),
+        getCwd: vi.fn(),
+        getInitialCwd: vi.fn(),
+        clearBuffer: vi.fn(),
+        acknowledgeDataEvent: vi.fn(),
+        hasChildProcesses: vi.fn(),
+        getForegroundProcess: vi.fn(),
+        serialize: vi.fn(),
+        revive: vi.fn(),
+        onData: vi.fn(() => () => {}),
+        onReplay: vi.fn(() => () => {}),
+        onExit: vi.fn(() => () => {}),
+        listProcesses: vi.fn(async () => []),
+        attach: vi.fn(),
+        getDefaultShell: vi.fn(),
+        getProfiles: vi.fn()
+      } as never)
+      backfillPendingMock.mockReturnValue(true)
+
+      const { paneKey } = await spawnCodexPane({
+        tabId: 'tab-backfill-ssh',
+        leafId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        selectedCodexHome: '/tmp/orca-backfill-home-ssh',
+        connectionId: 'ssh-1'
+      })
+
+      const sshOptions = sshSpawn.mock.calls.at(-1)![0]
+      expect(sshOptions.command).toBe(GATED_CODEX_COMMAND)
+      expect(sshOptions.env?.[ORCA_BACKFILL_GATED_COMMAND_ENV]).toBeUndefined()
+      expect(backfillPendingMock).not.toHaveBeenCalled()
+      expect(paneHoldBroadcasts()).toEqual([])
+      expect(getPaneHoldStatus(paneKey)).toBeNull()
+    })
+
+    it('passes WSL panes without an injected codex home through', async () => {
+      const originalPlatform = process.platform
+      const savedComspec = process.env.COMSPEC
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+      backfillPendingMock.mockReturnValue(true)
+      try {
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          () => null,
+          () => ({ terminalWindowsShell: 'wsl.exe' }) as never
+        )
+        const leafId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+        const paneKey = makePaneKey('tab-backfill-wsl', leafId)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          command: GATED_CODEX_COMMAND,
+          launchAgent: 'codex',
+          tabId: 'tab-backfill-wsl',
+          leafId,
+          env: { ORCA_PANE_KEY: paneKey }
+        })
+
+        const [, , options] = lastNodePtySpawnCall()
+        expect(options.env[ORCA_BACKFILL_GATED_COMMAND_ENV]).toBeUndefined()
+        expect(backfillPendingMock).not.toHaveBeenCalled()
+        expect(paneHoldBroadcasts()).toEqual([])
+        expect(getPaneHoldStatus(paneKey)).toBeNull()
+      } finally {
+        Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+        if (savedComspec === undefined) {
+          delete process.env.COMSPEC
+        } else {
+          process.env.COMSPEC = savedComspec
+        }
+      }
+    })
+
+    it('passes WSL panes with a \\\\wsl$ UNC codex home through', async () => {
+      const originalPlatform = process.platform
+      const savedComspec = process.env.COMSPEC
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+      backfillPendingMock.mockReturnValue(true)
+      try {
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          () => '\\\\wsl$\\Ubuntu\\home\\user\\.codex',
+          () => ({ terminalWindowsShell: 'wsl.exe' }) as never
+        )
+        const leafId = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+        const paneKey = makePaneKey('tab-backfill-unc', leafId)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          command: GATED_CODEX_COMMAND,
+          launchAgent: 'codex',
+          tabId: 'tab-backfill-unc',
+          leafId,
+          env: { ORCA_PANE_KEY: paneKey }
+        })
+
+        const [, , options] = lastNodePtySpawnCall()
+        expect(options.env[ORCA_BACKFILL_GATED_COMMAND_ENV]).toBeUndefined()
+        expect(backfillPendingMock).not.toHaveBeenCalled()
+        expect(paneHoldBroadcasts()).toEqual([])
+        expect(getPaneHoldStatus(paneKey)).toBeNull()
+      } finally {
+        Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+        if (savedComspec === undefined) {
+          delete process.env.COMSPEC
+        } else {
+          process.env.COMSPEC = savedComspec
+        }
+      }
+    })
+
+    posixOnlyIt('passes non-codex launches through untouched', async () => {
+      backfillPendingMock.mockReturnValue(true)
+
+      const { paneKey } = await spawnCodexPane({
+        tabId: 'tab-backfill-bash',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        selectedCodexHome: '/tmp/orca-backfill-home-bash',
+        command: 'bash',
+        launchAgent: undefined
+      })
+
+      const [, , options] = lastNodePtySpawnCall()
+      expect(options.env[ORCA_BACKFILL_GATED_COMMAND_ENV]).toBeUndefined()
+      expect(options.env[ORCA_BACKFILL_RELEASE_FILE_ENV]).toBeUndefined()
+      expect(backfillPendingMock).not.toHaveBeenCalled()
+      expect(paneHoldBroadcasts()).toEqual([])
+      expect(getPaneHoldStatus(paneKey)).toBeNull()
+    })
+
+    posixOnlyIt('never creates the sentinel when the pane tears down during the hold', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+      const tempHome = '/tmp/orca-backfill-home-teardown'
+      markBackfillPending(tempHome)
+      try {
+        const { paneKey } = await spawnCodexPane({
+          tabId: 'tab-backfill-teardown',
+          leafId: '22222222-2222-4222-8222-222222222222',
+          selectedCodexHome: tempHome
+        })
+        expect(getPaneHoldStatus(paneKey)).toEqual({
+          paneKey,
+          phase: 'indexing',
+          lastWatermark: BACKFILL_WATERMARK
+        })
+
+        mockProc.emitExit(0)
+        await Promise.resolve()
+        expect(getPaneHoldStatus(paneKey)).toBeNull()
+
+        backfillPendingMock.mockReturnValue(false)
+        backfillStatusMock.mockReturnValue({
+          kind: 'complete',
+          stateDbPath: `${tempHome}/state_5.sqlite`
+        })
+        vi.advanceTimersByTime(CODEX_BACKFILL_SPAWN_HOLD_REPOLL_MS * 2)
+
+        expect(sentinelWriteTargets()).toEqual([])
+        const launched = paneHoldBroadcasts().filter(
+          (state) => (state as { phase: string }).phase === 'launched'
+        )
+        expect(launched).toEqual([])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not hold when the spawn resolves as a reattach', async () => {
+      const providerSpawn = vi.fn(async () => ({ id: 'pty-reattached', isReattach: true }))
+      setLocalPtyProvider({
+        spawn: providerSpawn,
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(),
+        shutdown: vi.fn(),
+        onData: vi.fn(() => vi.fn()),
+        onExit: vi.fn(() => vi.fn()),
+        listProcesses: vi.fn(async () => []),
+        getForegroundProcess: vi.fn(async () => null)
+      } as never)
+      const tempHome = '/tmp/orca-backfill-home-reattach'
+      markBackfillPending(tempHome)
+
+      const { paneKey } = await spawnCodexPane({
+        tabId: 'tab-backfill-reattach',
+        leafId: '33333333-3333-4333-8333-333333333333',
+        selectedCodexHome: tempHome
+      })
+
+      // An adopted/reattached resolve never ran the replaced command — a hold would overlay the wrong pane.
+      expect(paneHoldBroadcasts()).toEqual([])
+      expect(getPaneHoldStatus(paneKey)).toBeNull()
+      expect(sentinelWriteTargets()).toEqual([])
     })
   })
 })

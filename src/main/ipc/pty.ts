@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: PTY IPC is centralized in one main-process module so spawn env scoping, lifecycle cleanup, process inspection, and renderer IPC stay behind one audited boundary. */
-import { join, delimiter } from 'node:path'
+import { join, delimiter, dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { statSync } from 'node:fs'
+import { mkdirSync, statSync, writeFileSync } from 'node:fs'
 import {
   type BrowserWindow,
   type IpcMainEvent,
@@ -138,7 +138,16 @@ import {
   clearMigrationUnsupportedPty,
   clearMigrationUnsupportedPtysForPaneKey
 } from '../agent-hooks/migration-unsupported-pty-state'
-import { parseWslPath } from '../wsl'
+import { parseWslPath, toLinuxPath } from '../wsl'
+import {
+  createCodexBackfillPaneHoldRegistry,
+  shouldHoldCodexSpawnForBackfill
+} from '../codex/codex-backfill-spawn-hold'
+import {
+  buildCodexBackfillGateWrapper,
+  resolveCodexBackfillGateShellPlatform
+} from '../../shared/codex-backfill-gate-wrapper'
+import type { CodexBackfillPaneHoldState } from '../../shared/codex-backfill-status-types'
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
 import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from '../pty/wsl-orca-env'
 import { PtyProducerFlowController } from './pty-producer-flow-control'
@@ -273,6 +282,59 @@ const paneKeyTeardownListeners = new Set<PaneKeyTeardownListener>()
 export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListener): () => void {
   paneKeyTeardownListeners.add(listener)
   return () => paneKeyTeardownListeners.delete(listener)
+}
+
+// Why: holds must survive registerPtyHandlers re-registration (window recreate) — only the broadcast target changes.
+let codexBackfillHoldBroadcast: ((state: CodexBackfillPaneHoldState) => void) | null = null
+const codexBackfillPaneHolds = createCodexBackfillPaneHoldRegistry({
+  broadcast: (state) => codexBackfillHoldBroadcast?.(state)
+})
+
+/** Why: the gate can only hold panes whose backfill DB this process can read — fail-open scope for #11828. */
+function resolveCodexBackfillGateHome(params: {
+  connectionId: string | null | undefined
+  resumeCodexHomePath: string | null | undefined
+  selectedCodexHomePath: string | null | undefined
+  wslDistro: string | null | undefined
+}): string | null {
+  if (params.connectionId) {
+    return null
+  }
+  const resolved =
+    params.resumeCodexHomePath ??
+    params.selectedCodexHomePath ??
+    // Why: a WSL pane without an injected home uses the distro's own ~/.codex, which the host cannot read.
+    (params.wslDistro ? null : getSystemCodexHomePath())
+  // Why: \\wsl$-style UNC homes ride 9P — sqlite reads over it are untrustworthy (AD-A10); fail open.
+  return resolved != null && resolved.startsWith('\\\\') ? null : resolved
+}
+
+function beginCodexBackfillPaneHold(params: {
+  paneKey: string
+  codexHomePath: string
+  releaseFilePath: string
+}): void {
+  let unregisterTeardownListener: () => void = () => {}
+  const handle = codexBackfillPaneHolds.begin({
+    paneKey: params.paneKey,
+    codexHomePath: params.codexHomePath,
+    releaseHeldCommand: () => {
+      unregisterTeardownListener()
+      // Why: release = create the sentinel the wrapper polls; idempotent and harmless even if the pty died.
+      try {
+        mkdirSync(dirname(params.releaseFilePath), { recursive: true })
+        writeFileSync(params.releaseFilePath, '')
+      } catch {
+        // Fail open: the wrapper's own ~20-min deadline launches the command without us.
+      }
+    }
+  })
+  unregisterTeardownListener = registerPaneKeyTeardownListener((tornDownPaneKey) => {
+    if (tornDownPaneKey === params.paneKey) {
+      unregisterTeardownListener()
+      handle.dispose()
+    }
+  })
 }
 
 // Why: renderer pre-declares serializer ownership before pty:spawn to suppress the daemon-snapshot seed; gen tokens prevent paneKey-reuse races on teardown. See docs/mobile-prefer-renderer-scrollback.md.
@@ -1729,6 +1791,22 @@ export function registerPtyHandlers(
   ipcMain.removeAllListeners('pty:ackData')
   ipcMain.removeAllListeners('pty:deliveryResyncResponse')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
+
+  // Why: rebind only the broadcast target — disposing holds here would drop them for surviving daemon ptys.
+  codexBackfillHoldBroadcast = (state) => {
+    if (
+      mainWindow.isDestroyed() ||
+      (typeof mainWindow.webContents.isDestroyed === 'function' &&
+        mainWindow.webContents.isDestroyed())
+    ) {
+      return
+    }
+    mainWindow.webContents.send('codexBackfill:paneHoldChanged', state)
+  }
+  ipcMain.removeHandler('codexBackfill:paneHoldStatus')
+  ipcMain.handle('codexBackfill:paneHoldStatus', (_event, paneKey: string) =>
+    codexBackfillPaneHolds.get(paneKey)
+  )
 
   // Why: only LocalPtyProvider needs main-process hook injection; daemon-backed providers spawn subprocesses internally.
   if (localProvider instanceof LocalPtyProvider) {
@@ -3686,6 +3764,59 @@ export function registerPtyHandlers(
               throw new Error('client_disconnected')
             }
           }
+          // Why: resolve only for local codex launches — the ungated lane lookup must not be observable
+          // for spawns the gate can never hold, and a resume-pinned home takes precedence over lane selection.
+          const codexBackfillGateHome =
+            args.launchAgent === 'codex' && !args.connectionId && spawnOptions.command
+              ? resolveCodexBackfillGateHome({
+                  connectionId: args.connectionId,
+                  resumeCodexHomePath: codexResumeHome?.codexHomePath ?? null,
+                  // Why: recompute ungated — the existing selectedCodexHomePath is only populated for daemon-host spawns.
+                  selectedCodexHomePath: codexResumeHome?.codexHomePath
+                    ? null
+                    : getCompatibleSelectedCodexHomePath(
+                        codexSelectionTarget,
+                        getSelectedCodexHomePath?.(codexSelectionTarget, env, {
+                          workspacePath: cwd,
+                          launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                        }) ?? null
+                      ),
+                  wslDistro: expectedWslDistro ?? null
+                })
+              : null
+          let heldCodexReleaseFilePath: string | undefined
+          if (
+            spawnOptions.paneKey &&
+            spawnOptions.command &&
+            codexBackfillGateHome &&
+            shouldHoldCodexSpawnForBackfill({
+              launchAgent: args.launchAgent,
+              startupCommand: spawnOptions.command,
+              connectionId: args.connectionId,
+              codexHomePath: codexBackfillGateHome
+            })
+          ) {
+            // Why: deliver via the gate wrapper through the proven startup path — never a raw deferred pty
+            // write (#11828). The wrapper flavor follows the PANE's shell, never process.platform: a
+            // win32-host WSL pane runs bash, where PowerShell could neither read the gated env nor see the sentinel.
+            const codexPaneIsWsl =
+              codexSelectionTarget.runtime === 'wsl' || Boolean(expectedWslDistro)
+            const gate = buildCodexBackfillGateWrapper({
+              originalCommand: spawnOptions.command,
+              codexHomePath: codexBackfillGateHome,
+              shellPlatform: resolveCodexBackfillGateShellPlatform({
+                hostPlatform: process.platform,
+                paneIsWsl: codexPaneIsWsl
+              }),
+              // Why: the sentinel is a host-view Windows path; the WSL bash poll sees it through the /mnt automount.
+              ...(codexPaneIsWsl && process.platform === 'win32'
+                ? { toShellViewPath: toLinuxPath }
+                : {})
+            })
+            spawnOptions.command = gate.command
+            spawnOptions.env = { ...spawnOptions.env, ...gate.env }
+            heldCodexReleaseFilePath = gate.releaseFilePath
+          }
           if (args.agentSessionEnsure) {
             // Why: daemon-backed claims can outlive this controller; import all
             // proven owners before deciding that an identity is absent.
@@ -3768,6 +3899,24 @@ export function registerPtyHandlers(
           }
           // Why: admission precedes sequence/context state and every durable publication below.
           runtime?.assertPtyRegistrationAllowed?.(result.id, result.incarnationId)
+          // Why: adopted resolves never ran the gate wrapper — a hold would overlay the wrong pane and
+          // later release a command nobody is polling for (ensure can adopt without spawning, and the
+          // daemon can adopt through the spawn callback).
+          const spawnCreatedFreshPty =
+            result.isReattach !== true &&
+            (!args.agentSessionEnsure || result.agentSessionEnsure?.disposition === 'created')
+          if (
+            heldCodexReleaseFilePath &&
+            spawnCreatedFreshPty &&
+            codexBackfillGateHome &&
+            spawnOptions.paneKey
+          ) {
+            beginCodexBackfillPaneHold({
+              paneKey: spawnOptions.paneKey,
+              codexHomePath: codexBackfillGateHome,
+              releaseFilePath: heldCodexReleaseFilePath
+            })
+          }
           if (result.providerSequence) {
             runtime?.synchronizePtyOutputSequenceFromProvider?.(
               result.id,
@@ -4804,6 +4953,59 @@ export function registerPtyHandlers(
         args.connectionId
       )
       const paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
+      // Why: after reservePaneSpawn so duplicate spawn requests coalesce onto the held pane.
+      // Why: resolve only for local codex launches — the ungated lane lookup must not be observable
+      // for spawns the gate can never hold, and a resume-pinned home takes precedence over lane selection.
+      const codexBackfillGateHome =
+        args.launchAgent === 'codex' && !args.connectionId && spawnOptions.command
+          ? resolveCodexBackfillGateHome({
+              connectionId: args.connectionId,
+              resumeCodexHomePath: codexResumeHome?.codexHomePath ?? null,
+              // Why: recompute ungated — the existing selectedCodexHomePath is only populated for daemon-host spawns.
+              selectedCodexHomePath: codexResumeHome?.codexHomePath
+                ? null
+                : getCompatibleSelectedCodexHomePath(
+                    codexSelectionTarget,
+                    getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+                      workspacePath: cwd,
+                      launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                    }) ?? null
+                  ),
+              wslDistro: expectedWslDistro ?? null
+            })
+          : null
+      let heldCodexReleaseFilePath: string | undefined
+      if (
+        spawnOptions.paneKey &&
+        spawnOptions.command &&
+        codexBackfillGateHome &&
+        shouldHoldCodexSpawnForBackfill({
+          launchAgent: args.launchAgent,
+          startupCommand: spawnOptions.command,
+          connectionId: args.connectionId,
+          codexHomePath: codexBackfillGateHome
+        })
+      ) {
+        // Why: deliver via the gate wrapper through the proven startup path — never a raw deferred pty
+        // write (#11828). The wrapper flavor follows the PANE's shell, never process.platform: a
+        // win32-host WSL pane runs bash, where PowerShell could neither read the gated env nor see the sentinel.
+        const codexPaneIsWsl = codexSelectionTarget.runtime === 'wsl' || Boolean(expectedWslDistro)
+        const gate = buildCodexBackfillGateWrapper({
+          originalCommand: spawnOptions.command,
+          codexHomePath: codexBackfillGateHome,
+          shellPlatform: resolveCodexBackfillGateShellPlatform({
+            hostPlatform: process.platform,
+            paneIsWsl: codexPaneIsWsl
+          }),
+          // Why: the sentinel is a host-view Windows path; the WSL bash poll sees it through the /mnt automount.
+          ...(codexPaneIsWsl && process.platform === 'win32'
+            ? { toShellViewPath: toLinuxPath }
+            : {})
+        })
+        spawnOptions.command = gate.command
+        spawnOptions.env = { ...spawnOptions.env, ...gate.env }
+        heldCodexReleaseFilePath = gate.releaseFilePath
+      }
       const initiallyHidden = args.initiallyHidden === true
       // Why: daemon PTYs can emit before spawn() resolves, so the hidden mark must beat byte zero (terminal-query-authority.md §races); other providers are safe with the post-spawn mark below.
       const preSpawnHiddenMarkId =
@@ -4851,6 +5053,20 @@ export function registerPtyHandlers(
           }
           assertSpawnReplyWasLive(result)
           runtime?.assertPtyRegistrationAllowed?.(result.id, result.incarnationId)
+          // Why: a reattach/adoption never ran the gate wrapper — a hold would overlay the wrong pane
+          // and later release a command nobody is polling for.
+          if (
+            heldCodexReleaseFilePath &&
+            result.isReattach !== true &&
+            codexBackfillGateHome &&
+            spawnOptions.paneKey
+          ) {
+            beginCodexBackfillPaneHold({
+              paneKey: spawnOptions.paneKey,
+              codexHomePath: codexBackfillGateHome,
+              releaseFilePath: heldCodexReleaseFilePath
+            })
+          }
           if (result.providerSequence) {
             runtime?.synchronizePtyOutputSequenceFromProvider?.(
               result.id,
