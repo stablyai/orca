@@ -71,4 +71,20 @@ describe('installCtrlCmdSwap', () => {
     expect(event.metaKey).toBe(true)
     expect(event.ctrlKey).toBe(false)
   })
+
+  it('ignores a second install so the swap is not applied twice', () => {
+    dispose = installCtrlCmdSwap()
+    const second = installCtrlCmdSwap()
+    setCtrlCmdSwapEnabled(true)
+
+    // Two listeners would swap back to the original and silently disable the remap.
+    const event = dispatch({ key: 'c', code: 'KeyC', metaKey: true })
+    expect(event.ctrlKey).toBe(true)
+    expect(event.metaKey).toBe(false)
+
+    // The redundant install owns nothing, so disposing it must not detach the real listener.
+    second()
+    const still = dispatch({ key: 'p', code: 'KeyP', ctrlKey: true })
+    expect(still.metaKey).toBe(true)
+  })
 })

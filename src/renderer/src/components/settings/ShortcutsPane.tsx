@@ -11,6 +11,7 @@ import {
   type KeybindingInput
 } from '../../../../shared/keybindings'
 import { EMPTY_DISABLED_TUI_AGENTS } from './shortcut-groups'
+import { isCtrlCmdSwapEnabled } from '../../lib/install-modifier-remap'
 import { useAppStore } from '../../store'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
@@ -207,7 +208,9 @@ export function ShortcutsPane(): React.JSX.Element {
         .join(', ')
       setErrors((prev) => ({
         ...prev,
-        [actionId]: `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with ${labels}.`
+        [actionId]: `${formatKeybindingList([blockingConflict.binding], platform, {
+          swapCtrlCmd: isCtrlCmdSwapEnabled()
+        })} conflicts with ${labels}.`
       }))
       return false
     }

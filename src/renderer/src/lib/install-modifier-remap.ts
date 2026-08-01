@@ -47,11 +47,22 @@ function swapEventModifiers(event: KeyboardEvent): void {
   overrideModifier(event, 'metaKey', modifiers.control)
 }
 
+// Why: two listeners would swap the same event twice — an identity, silently disabling the remap.
+let installedTarget: Window | null = null
+
 export function installCtrlCmdSwap(target: Window = window): () => void {
+  if (installedTarget) {
+    return () => undefined
+  }
+  installedTarget = target
   for (const type of REMAPPED_EVENTS) {
     target.addEventListener(type, swapEventModifiers as EventListener, { capture: true })
   }
   return () => {
+    if (installedTarget !== target) {
+      return
+    }
+    installedTarget = null
     for (const type of REMAPPED_EVENTS) {
       target.removeEventListener(type, swapEventModifiers as EventListener, { capture: true })
     }

@@ -2,6 +2,7 @@ import React from 'react'
 import { Search, X } from 'lucide-react'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { formatKeybindingList, type KeybindingDefinition } from '../../../../shared/keybindings'
+import { isCtrlCmdSwapEnabled } from '../../lib/install-modifier-remap'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -100,7 +101,7 @@ export function matchesShortcutLocalSearch(
     row.item.id,
     row.groupTitle,
     ...row.item.searchKeywords,
-    formatKeybindingList(row.effective, platform)
+    formatKeybindingList(row.effective, platform, { swapCtrlCmd: isCtrlCmdSwapEnabled() })
   ]
   return searchableText.some((value) => value.toLowerCase().includes(query))
 }
