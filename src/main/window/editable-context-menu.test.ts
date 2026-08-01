@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildEditableContextMenuTemplate } from './editable-context-menu'
+import {
+  buildEditableContextMenuTemplate,
+  buildRichMarkdownTableTargetExpression,
+  isRichMarkdownTableContextTarget
+} from './editable-context-menu'
 import { richMarkdownContextMenuCommandChannel } from '../../shared/rich-markdown-context-menu'
 
 function contextParams(
@@ -80,7 +84,8 @@ describe('buildEditableContextMenuTemplate', () => {
         replaceMisspelling: vi.fn(),
         send,
         session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
-      }
+      },
+      { includeTableActions: true }
     )
 
     expect(template.map((item) => item.label ?? item.role ?? item.type)).toEqual([
@@ -164,6 +169,19 @@ describe('buildEditableContextMenuTemplate', () => {
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: true })
   })
 
+  it('omits table actions when the context target is outside a table', () => {
+    const template = buildEditableContextMenuTemplate(
+      contextParams({ misspelledWord: '', dictionarySuggestions: [] }),
+      {
+        replaceMisspelling: vi.fn(),
+        send: vi.fn(),
+        session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
+      }
+    )
+
+    expect(template.map((item) => item.label ?? item.role ?? item.type)).not.toContain('Table')
+  })
+
   it('does not build a menu outside editable text', () => {
     const webContents = {
       replaceMisspelling: vi.fn(),
@@ -233,5 +251,48 @@ describe('buildEditableContextMenuTemplate', () => {
     template[8].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: false })
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: true })
+  })
+})
+
+describe('buildRichMarkdownTableTargetExpression', () => {
+  it('queries table cells inside the rich markdown editor at the context point', () => {
+    expect(buildRichMarkdownTableTargetExpression(12, 34)).toBe(
+      "Boolean(document.elementFromPoint(12, 34)?.closest('.rich-markdown-editor-shell td, .rich-markdown-editor-shell th'))"
+    )
+  })
+
+  it('replaces non-finite coordinates with offscreen values', () => {
+    expect(buildRichMarkdownTableTargetExpression(Number.NaN, Number.POSITIVE_INFINITY)).toContain(
+      'elementFromPoint(-1, -1)'
+    )
+  })
+})
+
+describe('isRichMarkdownTableContextTarget', () => {
+  it('returns the renderer table-cell result for rich markdown targets', async () => {
+    const executeJavaScript = vi.fn().mockResolvedValue(true)
+
+    await expect(
+      isRichMarkdownTableContextTarget(contextParams({ x: 12, y: 34 }), {
+        executeJavaScript
+      })
+    ).resolves.toBe(true)
+    expect(executeJavaScript).toHaveBeenCalledWith(
+      expect.stringContaining('elementFromPoint(12, 34)')
+    )
+  })
+
+  it('skips renderer queries outside rich markdown and fails closed', async () => {
+    const executeJavaScript = vi.fn().mockRejectedValue(new Error('renderer unavailable'))
+
+    await expect(
+      isRichMarkdownTableContextTarget(contextParams(), { executeJavaScript })
+    ).resolves.toBe(false)
+    await expect(
+      isRichMarkdownTableContextTarget(contextParams({ formControlType: 'input-text' }), {
+        executeJavaScript
+      })
+    ).resolves.toBe(false)
+    expect(executeJavaScript).toHaveBeenCalledTimes(1)
   })
 })

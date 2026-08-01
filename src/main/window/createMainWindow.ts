@@ -44,7 +44,10 @@ import {
   type KeybindingOverrides
 } from '../../shared/keybindings'
 import { getMainE2EConfig } from '../e2e-config'
-import { buildEditableContextMenuTemplate } from './editable-context-menu'
+import {
+  buildEditableContextMenuTemplate,
+  isRichMarkdownTableContextTarget
+} from './editable-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
@@ -539,8 +542,22 @@ export function createMainWindow(
   }
   ipcMain.on(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
 
-  const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
-    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents)
+  let mainContextMenuRequestId = 0
+  const onMainContextMenu = async (
+    _event: Electron.Event,
+    params: Electron.ContextMenuParams
+  ): Promise<void> => {
+    const requestId = ++mainContextMenuRequestId
+    const includeTableActions = await isRichMarkdownTableContextTarget(
+      params,
+      mainWindow.webContents
+    )
+    if (requestId !== mainContextMenuRequestId || mainWindow.isDestroyed()) {
+      return
+    }
+    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
+      includeTableActions
+    })
     if (template.length === 0) {
       return
     }

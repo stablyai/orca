@@ -2753,7 +2753,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:toggleLeftSidebar')
   })
 
-  it('shows spellcheck context menu for editable text without relying on markdown focus mirror', () => {
+  it('shows spellcheck context menu for editable text without relying on markdown focus mirror', async () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -2789,7 +2789,7 @@ describe('createMainWindow', () => {
 
     createMainWindow(null)
 
-    windowHandlers['context-menu'](
+    await windowHandlers['context-menu'](
       {} as never,
       {
         x: 42,

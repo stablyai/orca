@@ -44,7 +44,8 @@ function editableContextPasteItem(
 
 function buildMarkdownMenuTemplate(
   webContents: EditableContextMenuWebContents,
-  point: { x: number; y: number }
+  point: { x: number; y: number },
+  includeTableActions: boolean
 ): Electron.MenuItemConstructorOptions[] {
   return [
     markdownCommandItem('Add link', 'add-link', webContents, point),
@@ -84,18 +85,22 @@ function buildMarkdownMenuTemplate(
         markdownCommandItem('Code block', 'code-block', webContents, point)
       ]
     },
-    {
-      label: 'Table',
-      submenu: [
-        markdownCommandItem('Insert row above', 'insert-row-above', webContents, point),
-        markdownCommandItem('Insert row below', 'insert-row-below', webContents, point),
-        markdownCommandItem('Delete current row', 'delete-row', webContents, point),
-        { type: 'separator' },
-        markdownCommandItem('Insert column left', 'insert-column-left', webContents, point),
-        markdownCommandItem('Insert column right', 'insert-column-right', webContents, point),
-        markdownCommandItem('Delete current column', 'delete-column', webContents, point)
-      ]
-    },
+    ...(includeTableActions
+      ? [
+          {
+            label: 'Table',
+            submenu: [
+              markdownCommandItem('Insert row above', 'insert-row-above', webContents, point),
+              markdownCommandItem('Insert row below', 'insert-row-below', webContents, point),
+              markdownCommandItem('Delete current row', 'delete-row', webContents, point),
+              { type: 'separator' as const },
+              markdownCommandItem('Insert column left', 'insert-column-left', webContents, point),
+              markdownCommandItem('Insert column right', 'insert-column-right', webContents, point),
+              markdownCommandItem('Delete current column', 'delete-column', webContents, point)
+            ]
+          }
+        ]
+      : []),
     { type: 'separator' },
     { role: 'cut' },
     { role: 'copy' },
@@ -119,7 +124,8 @@ function buildNativeEditMenuTemplate(
 
 export function buildEditableContextMenuTemplate(
   params: Electron.ContextMenuParams,
-  webContents: EditableContextMenuWebContents
+  webContents: EditableContextMenuWebContents,
+  options?: { includeTableActions?: boolean }
 ): Electron.MenuItemConstructorOptions[] {
   if (!params.isEditable) {
     return []
@@ -149,9 +155,32 @@ export function buildEditableContextMenuTemplate(
   }
   template.push(
     ...(isRichMarkdownSurface
-      ? buildMarkdownMenuTemplate(webContents, { x: params.x, y: params.y })
+      ? buildMarkdownMenuTemplate(
+          webContents,
+          { x: params.x, y: params.y },
+          options?.includeTableActions === true
+        )
       : buildNativeEditMenuTemplate(webContents))
   )
 
   return template
+}
+
+export function buildRichMarkdownTableTargetExpression(x: number, y: number): string {
+  const clientX = Number.isFinite(x) ? x : -1
+  const clientY = Number.isFinite(y) ? y : -1
+  return `Boolean(document.elementFromPoint(${clientX}, ${clientY})?.closest('.rich-markdown-editor-shell td, .rich-markdown-editor-shell th'))`
+}
+
+export async function isRichMarkdownTableContextTarget(
+  params: Electron.ContextMenuParams,
+  webContents: Pick<Electron.WebContents, 'executeJavaScript'>
+): Promise<boolean> {
+  if (!params.isEditable || params.formControlType !== 'none') {
+    return false
+  }
+  return webContents
+    .executeJavaScript(buildRichMarkdownTableTargetExpression(params.x, params.y))
+    .then((result) => result === true)
+    .catch(() => false)
 }
