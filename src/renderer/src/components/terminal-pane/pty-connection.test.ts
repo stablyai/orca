@@ -23610,4 +23610,178 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
     })
   })
+
+  describe('codex backfill spawn gate (#11828)', () => {
+    function stubCodexBackfillApi(initial: { pending: boolean; lastWatermark: string | null }): {
+      emit: (status: { pending: boolean; lastWatermark: string | null }) => void
+    } {
+      let listener: ((s: { pending: boolean; lastWatermark: string | null }) => void) | null = null
+      window.api.codexBackfill = {
+        status: vi.fn(() => Promise.resolve(initial)),
+        onStatusChanged: (cb: (s: { pending: boolean; lastWatermark: string | null }) => void) => {
+          listener = cb
+          return () => {}
+        }
+      } as never
+      return { emit: (status) => listener?.(status) }
+    }
+
+    it('defers a fresh codex spawn while the backfill is pending, then spawns on clear', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      const { emit } = stubCodexBackfillApi({
+        pending: true,
+        lastWatermark: 'sessions/2026/07/02/r.jsonl'
+      })
+      // Why ptyId null: the harness default ('tab-pty') routes into the reattach
+      // path (connect({ sessionId })), which the gate deliberately never guards.
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        ptyIdsByTabId: { 'tab-1': [] }
+      }
+      const onCodexIndexingStateRef = { current: vi.fn() }
+      const deps = createDeps({
+        startup: { command: 'codex', launchAgent: 'codex' },
+        onCodexIndexingStateRef
+      })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      expect(transport.connect).not.toHaveBeenCalled()
+      expect(onCodexIndexingStateRef.current).toHaveBeenCalledWith(expect.anything(), {
+        lastWatermark: 'sessions/2026/07/02/r.jsonl'
+      })
+
+      emit({ pending: false, lastWatermark: null })
+      await flushAsyncTicks()
+
+      expect(onCodexIndexingStateRef.current).toHaveBeenCalledWith(expect.anything(), null)
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not gate non-codex panes', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      stubCodexBackfillApi({ pending: true, lastWatermark: null })
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        ptyIdsByTabId: { 'tab-1': [] }
+      }
+      const deps = createDeps()
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+    })
+
+    it('spawns immediately when the backfill is not pending', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      stubCodexBackfillApi({ pending: false, lastWatermark: null })
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        ptyIdsByTabId: { 'tab-1': [] }
+      }
+      const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not gate a reattach to an existing pty', async () => {
+      // Why: a reattach joins a live codex process; only fresh spawns can hit the
+      // backfill wait. Reattach needs BOTH deps fields set (createDeps defaults
+      // restoredLeafId: null / restoredPtyIdByLeafId: {}) AND the store tab
+      // carrying the pty id — mirror the local reattach fixture.
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      stubCodexBackfillApi({ pending: true, lastWatermark: null })
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-existing' }] }
+      }
+      const deps = createDeps({
+        startup: { command: 'codex', launchAgent: 'codex' },
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'pty-existing' }
+      })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      // sessionId proves the REATTACH path connected (not a gated fresh spawn
+      // that happened to fail open) — same signature the file's reattach tests use.
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'pty-existing' })
+      )
+    })
+
+    it('does not gate an SSH codex pane (fails open to the remote host)', async () => {
+      // Why: SSH panes ride the IPC transport with runtimeEnvironmentId === null
+      // and a separate connectionId axis — the gate must exclude BOTH remote
+      // axes or it parks a remote pane on irrelevant local-home state.
+      // SSH is store-driven, not a deps field: mirror the SSH startup fixture.
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transport.getConnectionId.mockReturnValue('ssh-a')
+      transportFactoryQueue.push(transport)
+      stubCodexBackfillApi({ pending: true, lastWatermark: null })
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        repos: [{ id: 'repo1', connectionId: 'ssh-a' }],
+        sshConnectionStates: new Map([['ssh-a', { status: 'connected' }]])
+      } as StoreState
+
+      const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not gate a WSL codex pane (its codex reads the distro home)', async () => {
+      // Why: WSL panes are local IPC panes — connectionId AND runtimeEnvironmentId
+      // are both null, so the two remote axes cannot exclude them; only
+      // projectRuntime (kind 'wsl') identifies them. Their codex reads the WSL
+      // distro's home, which the local prewarm can never cure, so gating would
+      // falsely park them on irrelevant Windows-home state. The harness's
+      // platform mock is win32, so projectRuntime resolves — mirror the WSL
+      // project fixture.
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      stubCodexBackfillApi({ pending: true, lastWatermark: null })
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        ptyIdsByTabId: { 'tab-1': [] },
+        projects: [
+          { id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }
+        ],
+        worktreesByRepo: {
+          repo1: [{ id: 'wt-1', repoId: 'repo1', path: 'C:\\tmp\\wt-1', displayName: 'feat/notis' }]
+        }
+      } as StoreState
+
+      const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+    })
+  })
 })

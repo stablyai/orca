@@ -13,6 +13,7 @@ import type {
 } from '../../../../shared/agent-session-resume'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
+import type { CodexIndexingPaneState } from './codex-backfill-spawn-gate'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
 
@@ -64,6 +65,10 @@ export type PtyConnectionDeps = {
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   onPtyRecoveryStateRef?: React.RefObject<
     (paneId: number, state: PtyTransportRecoveryState | null) => void
+  >
+  /** Pane-level codex indexing wait state (#11828 spawn gate); null clears it. */
+  onCodexIndexingStateRef?: React.RefObject<
+    (paneId: number, state: CodexIndexingPaneState | null) => void
   >
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean

@@ -49,6 +49,7 @@ import {
 } from '@/lib/windows-terminal-capabilities'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import { createCodexBackfillErrorDetector } from './codex-backfill-error-detector'
+import { waitForCodexBackfillGate } from './codex-backfill-spawn-gate'
 import {
   shouldReconcileDeadSession,
   shouldReconcileMissingSession,
@@ -1044,6 +1045,8 @@ export function connectPanePty(
   let startupGridSettleHandle: TerminalStartupGridSettleHandle | null = null
   let startupGridSettledForConnect = false
   let connectStarted = false
+  let codexBackfillGateCleared = false
+  let codexBackfillGateDispose: (() => void) | null = null
   let unregisterBacklogRecovery: (() => void) | null = null
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
   let cancelHiddenOutputSnapshotScrollRestore = (): void => {}
@@ -3512,6 +3515,33 @@ export function connectPanePty(
           availableWslDistros: localWindowsTerminalCapabilities?.wslDistros ?? null
         })
       : undefined
+  // Why: gate only fresh LOCAL codex spawns whose codex reads the home the IPC
+  // gate status covers. THREE exclusions: runtimeEnvironmentId (remote
+  // runtime), connectionId (SSH — SSH panes ride the IPC transport with
+  // runtimeEnvironmentId === null; see the two-axis local-only idiom used by
+  // cwdFallback and shouldSettleStartupGridBeforeConnect), AND WSL panes — on
+  // Windows these are local IPC panes with BOTH of those fields null,
+  // indistinguishable from plain local panes except via projectRuntime; their
+  // codex reads the WSL distro's home, which the local prewarm can never cure,
+  // so gating them parks a pane on irrelevant Windows-home state. Mirror the
+  // WSL verdict used by getColdRestoreAgentResumePlatform. The agent signal is
+  // PANE-scoped (paneStartup), NOT tab.launchAgent: the tab flag persists
+  // while codex runs (use-tab-agent.ts), so a split in a live codex tab — a
+  // plain shell pane — would otherwise be parked behind the indexing overlay.
+  const isWslCodexHomePane = (): boolean => {
+    if (projectRuntime?.status === 'repair-required') {
+      return projectRuntime.repair.preferredRuntime.kind === 'wsl'
+    }
+    if (projectRuntime?.status === 'resolved') {
+      return projectRuntime.runtime.kind === 'wsl'
+    }
+    return Boolean(worktree?.path && isWslUncPath(worktree.path))
+  }
+  const shouldGateCodexSpawnOnBackfill = (): boolean =>
+    !runtimeEnvironmentId &&
+    !connectionId &&
+    !isWslCodexHomePane() &&
+    (paneStartup?.launchAgent ?? paneStartup?.initialAgentStatus?.agent) === 'codex'
   const shouldOwnAgentStatusInRenderer = runtimeEnvironmentId !== null
   // Why: when main holds side-effect authority for this PTY's bytes, the
   // transport must NOT register title/bell/agent byte parsers — the
@@ -3856,6 +3886,11 @@ export function connectPanePty(
       transportConnectInFlightSince !== null &&
       Date.now() - transportConnectInFlightSince < TRANSPORT_CONNECT_SETTLE_GRACE_MS
     if (connectStillSettling || disposed) {
+      return
+    }
+    // Why: a pane parked behind the codex backfill gate has deliberately not
+    // connected; remounting it on undeliverable input would just re-park it.
+    if (codexBackfillGateDispose !== null) {
       return
     }
     const storePtyId = useAppStore.getState().ptyIdsByTabId?.[deps.tabId]?.[0] ?? null
@@ -8587,6 +8622,37 @@ export function connectPanePty(
             reportError(err instanceof Error ? err.message : String(err))
           })
       } else {
+        if (!codexBackfillGateCleared && shouldGateCodexSpawnOnBackfill()) {
+          cancelScheduledConnectFrame()
+          if (connectFallbackTimer !== null) {
+            clearTimeout(connectFallbackTimer)
+            connectFallbackTimer = null
+          }
+          // Why: parking must leave the binding re-enterable — reset any
+          // connect-progress flag this pass already set (e.g. connectStarted) so
+          // onClear's runDeferredConnect actually proceeds instead of early-returning.
+          connectStarted = false
+          const gateDispose = waitForCodexBackfillGate({
+            api: window.api.codexBackfill,
+            onWaiting: (state) => deps.onCodexIndexingStateRef?.current?.(pane.id, state),
+            onClear: () => {
+              codexBackfillGateDispose = null
+              codexBackfillGateCleared = true
+              deps.onCodexIndexingStateRef?.current?.(pane.id, null)
+              runDeferredConnect()
+            }
+          })
+          // Why: the module fails open by calling onClear SYNCHRONOUSLY (absent or
+          // malformed api) — in that case the pane already reconnected via the
+          // recursive runDeferredConnect above, and unconditionally storing the
+          // returned noop would leave codexBackfillGateDispose non-null for the
+          // pane's lifetime, permanently muting input-undeliverable recovery.
+          // Arm the dispose only while actually parked.
+          if (!codexBackfillGateCleared) {
+            codexBackfillGateDispose = gateDispose
+          }
+          return
+        }
         recordPtyConnectDiagnostic(`pane=${pane.id} -> FRESH SPAWN`)
         if (sleptRemoteColdRestoreStartup || hasSleepingAgentSession) {
           startFreshColdRestoreAgentResume(sleptRemoteColdRestoreStartup ?? undefined)
@@ -8748,6 +8814,9 @@ export function connectPanePty(
     reconcileIfSessionMissing,
     dispose() {
       disposed = true
+      codexBackfillGateDispose?.()
+      codexBackfillGateDispose = null
+      deps.onCodexIndexingStateRef?.current?.(pane.id, null)
       directSshPaneRetrySettlementCancelled = true
       for (const timer of directSshPaneRetrySettlementTimers) {
         clearTimeout(timer)
