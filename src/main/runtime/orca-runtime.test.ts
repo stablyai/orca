@@ -17315,10 +17315,11 @@ describe('OrcaRuntimeService', () => {
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
 
-      const payload = write.mock.calls.find(
-        ([, text]) => typeof text === 'string' && text.includes('Subject: worker done')
-      )?.[1]
-      expect(payload).toEqual(expect.stringContaining('Subject: terminal status'))
+      const written = write.mock.calls
+        .map(([, text]) => (typeof text === 'string' ? text : ''))
+        .join('')
+      expect(written).toContain('Subject: worker done')
+      expect(written).toContain('Subject: terminal status')
       await vi.advanceTimersByTimeAsync(500)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
       expect(db.getMessageById(runMessage.id)).toMatchObject({

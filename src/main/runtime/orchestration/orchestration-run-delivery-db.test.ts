@@ -87,8 +87,9 @@ describe('OrchestrationDb Run state', () => {
     it('keeps delivered Run mail suppressed after database restart without changing read state', () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-run-push-'))
       const dbPath = join(dir, 'orchestration.db')
+      let firstDb: OrchestrationDb | undefined
       try {
-        const firstDb = new OrchestrationDb(dbPath)
+        firstDb = new OrchestrationDb(dbPath)
         const run = firstDb.createRun({
           objective: 'Restart delivery',
           coordinatorHandle: 'term_coord',
@@ -104,6 +105,7 @@ describe('OrchestrationDb Run state', () => {
         firstDb.markAsDelivered([message.id])
         expect(firstDb.getMessageById(message.id)).toMatchObject({ read: 0 })
         firstDb.close()
+        firstDb = undefined
 
         const reopened = new OrchestrationDb(dbPath)
         db = reopened
@@ -112,6 +114,7 @@ describe('OrchestrationDb Run state', () => {
           { id: message.id, read: 0 }
         ])
       } finally {
+        firstDb?.close()
         db?.close()
         db = undefined
         rmSync(dir, { recursive: true, force: true })
