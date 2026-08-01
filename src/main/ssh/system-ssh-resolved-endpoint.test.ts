@@ -51,6 +51,23 @@ function createResolvedConfig(
   }
 }
 
+function getEndpointOptions(args: string[]): string[] {
+  const destinationIndex = args.indexOf('--')
+  const endpointOptions: string[] = []
+  for (let i = 0; i < destinationIndex; i++) {
+    const option = args[i]
+    const value = args[i + 1]
+    if (option === '-p' || option === '-l') {
+      endpointOptions.push(option, value)
+      i++
+    } else if (option === '-o' && value?.startsWith('Hostname=')) {
+      endpointOptions.push(option, value)
+      i++
+    }
+  }
+  return endpointOptions
+}
+
 describe('system SSH resolved endpoints', () => {
   beforeEach(() => {
     existsSyncMock.mockReset()
@@ -92,6 +109,14 @@ describe('system SSH resolved endpoints', () => {
     )
 
     const args = spawnMock.mock.calls[0][1] as string[]
+    expect(getEndpointOptions(args)).toEqual([
+      '-p',
+      '2222',
+      '-o',
+      'Hostname=10.0.0.5',
+      '-l',
+      'deploy'
+    ])
     expect(args).toEqual(
       expect.arrayContaining([
         '-o',
@@ -132,6 +157,7 @@ describe('system SSH resolved endpoints', () => {
     expect(args).not.toContain('Hostname=prod')
     expect(args).not.toContain('-p')
     expect(args).not.toContain('-l')
+    expect(getEndpointOptions(args)).toEqual([])
   })
 
   it('keeps a concrete resolved HostName authoritative', () => {
@@ -153,6 +179,14 @@ describe('system SSH resolved endpoints', () => {
       }
     )
 
+    expect(getEndpointOptions(args)).toEqual([
+      '-p',
+      '2200',
+      '-o',
+      'Hostname=current.example.com',
+      '-l',
+      'current-user'
+    ])
     expect(args).toEqual(
       expect.arrayContaining([
         '-o',
