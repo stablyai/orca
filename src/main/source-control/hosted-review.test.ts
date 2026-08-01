@@ -66,7 +66,11 @@ vi.mock('../gitea/client', () => ({
   getGiteaPullRequest: vi.fn()
 }))
 
-import { getHostedReviewForBranch } from './hosted-review'
+import {
+  getHostedReviewForBranch,
+  hostedReviewLookupFailure,
+  lookupHostedReviewForBranch
+} from './hosted-review'
 
 describe('getHostedReviewForBranch', () => {
   beforeEach(() => {
@@ -115,6 +119,21 @@ describe('getHostedReviewForBranch', () => {
     expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
   })
 
+  it('returns a typed GitLab transient failure instead of a no-review result', async () => {
+    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+    getMergeRequestForBranchMock.mockRejectedValue(
+      new Error('could not resolve host: gitlab.com private-project')
+    )
+
+    await expect(
+      lookupHostedReviewForBranch({ repoPath: '/repo', branch: 'feature' })
+    ).resolves.toEqual({
+      kind: 'upstream-error',
+      provider: 'gitlab',
+      errorType: 'network'
+    })
+  })
+
   it('falls through to GitHub when origin is not GitLab', async () => {
     getProjectSlugMock.mockResolvedValue(null)
     getRepoSlugMock.mockResolvedValue({ owner: 'o', repo: 'r' })
@@ -146,6 +165,92 @@ describe('getHostedReviewForBranch', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', 'feature', 3, undefined, null, {
       currentHeadOid: null
     })
+  })
+
+  it('returns a typed provider failure without exposing the upstream message', async () => {
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockResolvedValue({ owner: 'o', repo: 'r' })
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'repo_unavailable',
+      message: 'secret command output and repository URL',
+      fetchedAt: 1
+    })
+
+    await expect(
+      lookupHostedReviewForBranch({ repoPath: '/repo', branch: 'feature' })
+    ).resolves.toEqual({
+      kind: 'upstream-error',
+      provider: 'github',
+      errorType: 'repo_unavailable'
+    })
+  })
+
+  it('classifies provider discovery failures inside the redacted result boundary', async () => {
+    getProjectSlugMock.mockRejectedValueOnce(
+      new Error('could not resolve host: private-gitlab.example.com secret-token')
+    )
+
+    await expect(
+      lookupHostedReviewForBranch({ repoPath: '/repo', branch: 'feature' })
+    ).resolves.toEqual({
+      kind: 'upstream-error',
+      provider: 'unknown',
+      errorType: 'network'
+    })
+  })
+
+  it.each([
+    ['gitlab', 'ENOTFOUND'],
+    ['bitbucket', 'ECONNREFUSED'],
+    ['azure-devops', 'EAI_AGAIN'],
+    ['gitea', 'UND_ERR_CONNECT_TIMEOUT']
+  ] as const)(
+    'classifies native %s fetch cause chains without exposing details',
+    (provider, code) => {
+      const cause = Object.assign(new Error('private host and token detail'), { code })
+      const fetchError = new TypeError('fetch failed', { cause })
+
+      const result = hostedReviewLookupFailure(fetchError, provider)
+
+      expect(result).toEqual({ kind: 'upstream-error', provider, errorType: 'network' })
+      expect(JSON.stringify(result)).not.toContain('private host')
+    }
+  )
+
+  it('classifies provider HTTP 5xx responses as server errors', () => {
+    expect(hostedReviewLookupFailure(new Error('HTTP 503: Service Unavailable'), 'gitea')).toEqual({
+      kind: 'upstream-error',
+      provider: 'gitea',
+      errorType: 'server_error'
+    })
+  })
+
+  it.each([
+    ['top-level', Object.assign(new Error('request cancelled'), { name: 'AbortError' })],
+    [
+      'cause-chain',
+      new TypeError('fetch failed', {
+        cause: Object.assign(new Error('request cancelled'), { name: 'AbortError' })
+      })
+    ]
+  ])('classifies a standard %s AbortError as a network failure', (_location, error) => {
+    expect(hostedReviewLookupFailure(error, 'gitea')).toEqual({
+      kind: 'upstream-error',
+      provider: 'gitea',
+      errorType: 'network'
+    })
+  })
+
+  it('stops safely when a malformed provider error cause cannot be read', () => {
+    const error = new Error('unexpected provider defect')
+    Object.defineProperty(error, 'cause', {
+      get: () => {
+        throw new Error('secret getter failure')
+      }
+    })
+
+    expect(() => hostedReviewLookupFailure(error, 'gitea')).toThrow(error)
   })
 
   it('routes local WSL project branch lookup through provider detection and the selected provider', async () => {

@@ -101,6 +101,23 @@ describe('subscribeViaWatcherProcess', () => {
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ message: 'boom' }), [])
   })
 
+  it('keeps the subscription live after overflow and forwards later events', async () => {
+    const callback = vi.fn()
+    const onOverflow = vi.fn()
+    const promise = subscribeViaWatcherProcess('/repo', callback, {}, { onOverflow })
+    const child = currentChild()
+    const id = ackSubscribe(child)
+    await promise
+
+    child.emit('message', { op: 'overflow', id })
+    const events = [{ type: 'update', path: '/repo/after-overflow.txt' }]
+    child.emit('message', { op: 'events', id, events })
+
+    expect(onOverflow).toHaveBeenCalledTimes(1)
+    expect(callback).toHaveBeenCalledWith(null, events)
+    expect(child.sent).not.toContainEqual({ op: 'unsubscribe', id })
+  })
+
   it('rejects and physically cancels a watcher error before subscription readiness', async () => {
     const callback = vi.fn()
     const promise = subscribeViaWatcherProcess('/repo', callback, {})

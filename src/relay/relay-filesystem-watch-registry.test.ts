@@ -129,19 +129,91 @@ describe('RelayFilesystemWatchRegistry', () => {
     expect(pool.installed[1].unsubscribe).toHaveBeenCalledTimes(1)
   })
 
+  it('replaces a genuinely failed subscription while overflow remains non-terminal', async () => {
+    await registry.watch('/repo', context(1))
+    const first = pool.installed[0]
+
+    first.hooks.onOverflow?.()
+    first.callback(null, [{ type: 'update', path: '/repo/after-overflow.txt' }])
+    expect(pool.installed).toHaveLength(1)
+
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      first.callback(new Error('watched root backend failed'), [])
+      await vi.waitFor(() => expect(pool.installed).toHaveLength(2))
+      pool.installed[1].callback(null, [{ type: 'create', path: '/repo/recovered.txt' }])
+
+      expect(first.unsubscribe).toHaveBeenCalledTimes(1)
+      expect(dispatcher.notify.mock.calls).toEqual([
+        ['fs.changed', { events: [{ kind: 'overflow', absolutePath: '/repo' }] }],
+        ['fs.changed', { events: [{ kind: 'update', absolutePath: '/repo/after-overflow.txt' }] }],
+        ['fs.changed', { events: [{ kind: 'overflow', absolutePath: '/repo' }] }],
+        ['fs.changed', { events: [{ kind: 'create', absolutePath: '/repo/recovered.txt' }] }]
+      ])
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
+  it('claims callback-error recovery before asynchronous unsubscribe yields', async () => {
+    await registry.watch('/repo', context(1))
+    const first = pool.installed[0]
+    let finishUnsubscribe: () => void = () => undefined
+    first.unsubscribe.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishUnsubscribe = resolve
+        })
+    )
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    first.callback(new Error('first native callback failure'), [])
+    first.callback(new Error('duplicate native callback failure'), [])
+
+    expect(first.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(pool.installed).toHaveLength(1)
+    finishUnsubscribe()
+    await vi.waitFor(() => expect(pool.installed).toHaveLength(2))
+    stderr.mockRestore()
+  })
+
+  it('ignores a stale recovery rejection after a newer generation becomes healthy', async () => {
+    await registry.watch('/repo', context(1), 101)
+    const first = pool.installed[0]
+    let recoveringCallback: WatcherProcessCallback | undefined
+    let rejectStaleRecovery: (error: Error) => void = () => undefined
+    vi.spyOn(pool, 'subscribe').mockImplementationOnce(
+      (_rootPath, callback) =>
+        new Promise<WatcherProcessSubscription>((_resolve, reject) => {
+          recoveringCallback = callback
+          rejectStaleRecovery = reject
+        })
+    )
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    first.hooks.onTerminalError?.(new Error('first generation terminated'))
+    await vi.waitFor(() => expect(recoveringCallback).toBeDefined())
+    recoveringCallback?.(new Error('recovery generation callback failed'), [])
+    await vi.waitFor(() => expect(pool.installed).toHaveLength(2))
+    rejectStaleRecovery(new Error('stale recovery rejected'))
+    await Promise.resolve()
+    pool.installed[1].callback(null, [{ type: 'update', path: '/repo/healthy.txt' }])
+
+    expect(dispatcher.notifyClient).not.toHaveBeenCalled()
+    expect(dispatcher.notify).toHaveBeenLastCalledWith('fs.changed', {
+      events: [{ kind: 'update', absolutePath: '/repo/healthy.txt' }]
+    })
+    stderr.mockRestore()
+  })
+
   it('notifies each owning client when bounded recovery terminates a live watch', async () => {
     await registry.watch('/repo', context(1), 101)
     await registry.watch('/repo', context(2), 202)
     const first = pool.installed[0]
     vi.spyOn(pool, 'subscribe').mockRejectedValueOnce(new Error('quarantine recovery failed'))
 
-    first.hooks.onTerminalError?.(
-      new WatcherProcessFailure(
-        'file watcher process crashed repeatedly',
-        'supervisor',
-        'supervisor_crash_fuse'
-      )
-    )
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    first.callback(new Error('watched root backend failed'), [])
 
     await vi.waitFor(() => expect(dispatcher.notifyClient).toHaveBeenCalledTimes(2))
     expect(dispatcher.notifyClient).toHaveBeenNthCalledWith(1, 1, 'fs.watchFailed', {
@@ -154,6 +226,7 @@ describe('RelayFilesystemWatchRegistry', () => {
       watchId: 202,
       message: 'quarantine recovery failed'
     })
+    stderr.mockRestore()
   })
 
   it('aborts a pending crawl only after the last same-root client leaves', async () => {

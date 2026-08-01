@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import { createHostedReviewSlice, getHostedReviewCacheKey } from './hosted-review'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo, HostedReviewLookupResult } from '../../../../shared/hosted-review'
 
 const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
@@ -57,6 +57,11 @@ const review: HostedReviewInfo = {
   mergeable: 'MERGEABLE'
 }
 
+const found = (value: HostedReviewInfo): HostedReviewLookupResult => ({
+  kind: 'found',
+  review: value
+})
+
 function makeGitHubReview(title: string): HostedReviewInfo {
   return {
     ...review,
@@ -84,8 +89,8 @@ describe('hosted review cache race protection', () => {
     vi.setSystemTime(100)
     const olderReview: HostedReviewInfo = { ...review, title: 'Older hosted review status' }
     const newerReview = makeGitHubReview('Newer GitHub refresh status')
-    let resolveFetch: (value: HostedReviewInfo) => void = () => {}
-    const fetch = new Promise<HostedReviewInfo>((resolve) => {
+    let resolveFetch: (value: HostedReviewLookupResult) => void = () => {}
+    const fetch = new Promise<HostedReviewLookupResult>((resolve) => {
       resolveFetch = resolve
     })
     mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
@@ -112,7 +117,7 @@ describe('hosted review cache race protection', () => {
       }
     })
     vi.setSystemTime(300)
-    resolveFetch(olderReview)
+    resolveFetch(found(olderReview))
 
     await expect(request).resolves.toEqual(olderReview)
     expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
@@ -217,6 +222,173 @@ describe('hosted review cache race protection', () => {
     }
   })
 
+  it('preserves cached review and deduplicates expected upstream diagnostics while retrying', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const cachedReview = makeGitHubReview('Known PR status')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/typed-upstream-error',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
+    mockApi.hostedReview.forBranch.mockResolvedValue({
+      kind: 'upstream-error',
+      provider: 'github',
+      errorType: 'repo_unavailable'
+    })
+    const store = makeStore()
+    store.setState({
+      hostedReviewCache: {
+        [cacheKey]: { data: cachedReview, fetchedAt: 100, linkedReviewHintKey: 'github:42' }
+      }
+    })
+
+    try {
+      await expect(
+        store
+          .getState()
+          .fetchHostedReviewForBranch('/repo', 'feature/typed-upstream-error', { force: true })
+      ).resolves.toEqual(cachedReview)
+      await expect(
+        store
+          .getState()
+          .fetchHostedReviewForBranch('/repo', 'feature/typed-upstream-error', { force: true })
+      ).resolves.toEqual(cachedReview)
+
+      expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
+      expect(consoleWarn).toHaveBeenCalledTimes(1)
+      expect(consoleWarn).toHaveBeenCalledWith('[hosted-review] lookup unavailable', {
+        repoId: 'repo-1',
+        provider: 'github',
+        errorType: 'repo_unavailable'
+      })
+      expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
+        data: cachedReview,
+        fetchedAt: 100,
+        linkedReviewHintKey: 'github:42'
+      })
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('ignores a superseded upstream diagnostic after a newer request completes', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let resolveOlder: (value: HostedReviewLookupResult) => void = () => {}
+    let resolveCurrent: (value: HostedReviewLookupResult) => void = () => {}
+    const older = new Promise<HostedReviewLookupResult>((resolve) => {
+      resolveOlder = resolve
+    })
+    const current = new Promise<HostedReviewLookupResult>((resolve) => {
+      resolveCurrent = resolve
+    })
+    mockApi.hostedReview.forBranch
+      .mockReturnValueOnce(older)
+      .mockResolvedValueOnce(found(review))
+      .mockReturnValueOnce(current)
+    const store = makeStore()
+
+    try {
+      const olderRequest = store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-diagnostic')
+      await store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-diagnostic', { force: true })
+      const currentRequest = store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-diagnostic', { force: true })
+
+      resolveOlder({ kind: 'upstream-error', provider: 'github', errorType: 'network' })
+      await olderRequest
+      resolveCurrent(found(review))
+      await currentRequest
+
+      expect(consoleWarn).not.toHaveBeenCalled()
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not let a superseded success clear the current failure diagnostic', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let resolveOlder: (value: HostedReviewLookupResult) => void = () => {}
+    let resolveCurrent: (value: HostedReviewLookupResult) => void = () => {}
+    const older = new Promise<HostedReviewLookupResult>((resolve) => {
+      resolveOlder = resolve
+    })
+    const current = new Promise<HostedReviewLookupResult>((resolve) => {
+      resolveCurrent = resolve
+    })
+    const failure = {
+      kind: 'upstream-error' as const,
+      provider: 'github' as const,
+      errorType: 'network' as const
+    }
+    mockApi.hostedReview.forBranch
+      .mockReturnValueOnce(older)
+      .mockResolvedValueOnce(failure)
+      .mockReturnValueOnce(current)
+    const store = makeStore()
+
+    try {
+      const olderRequest = store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-success')
+      await store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-success', { force: true })
+      const currentRequest = store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-success', { force: true })
+
+      resolveOlder(found(review))
+      await olderRequest
+      resolveCurrent(failure)
+      await currentRequest
+
+      expect(consoleWarn).toHaveBeenCalledTimes(1)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not clear an expected failure diagnostic after an unexpected rejection', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const failure = {
+      kind: 'upstream-error' as const,
+      provider: 'github' as const,
+      errorType: 'network' as const
+    }
+    mockApi.hostedReview.forBranch
+      .mockResolvedValueOnce(failure)
+      .mockRejectedValueOnce(new Error('unexpected lookup defect'))
+      .mockResolvedValueOnce(failure)
+    const store = makeStore()
+
+    try {
+      await store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/rejected-diagnostic', { force: true })
+      await store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/rejected-diagnostic', { force: true })
+      await store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/rejected-diagnostic', { force: true })
+
+      expect(consoleWarn).toHaveBeenCalledTimes(1)
+      expect(consoleError).toHaveBeenCalledTimes(1)
+    } finally {
+      consoleWarn.mockRestore()
+      consoleError.mockRestore()
+    }
+  })
+
   it('does not let a same-millisecond external cache write after request start be overwritten', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(100)
@@ -225,8 +397,8 @@ describe('hosted review cache race protection', () => {
       title: 'Older same-ms hosted review status'
     }
     const newerReview = makeGitHubReview('Newer same-ms GitHub refresh status')
-    let resolveFetch: (value: HostedReviewInfo) => void = () => {}
-    const fetch = new Promise<HostedReviewInfo>((resolve) => {
+    let resolveFetch: (value: HostedReviewLookupResult) => void = () => {}
+    const fetch = new Promise<HostedReviewLookupResult>((resolve) => {
       resolveFetch = resolve
     })
     mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
@@ -251,7 +423,7 @@ describe('hosted review cache race protection', () => {
         }
       }
     })
-    resolveFetch(olderReview)
+    resolveFetch(found(olderReview))
 
     await expect(request).resolves.toEqual(olderReview)
     expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
@@ -272,7 +444,7 @@ describe('hosted review cache race protection', () => {
       ...review,
       title: 'Fresh same-ms hosted review status'
     }
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(freshReview)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(found(freshReview))
     const store = makeStore()
     const cacheKey = getHostedReviewCacheKey(
       '/repo',
@@ -307,11 +479,13 @@ describe('hosted review cache race protection', () => {
 
   it('does not reuse a provider-scoped inflight request for neutral discovery', async () => {
     const githubReview = makeGitHubReview('Linked GitHub PR status')
-    let resolveGitHubLookup: (value: HostedReviewInfo | null) => void = () => {}
-    const githubLookup = new Promise<HostedReviewInfo | null>((resolve) => {
+    let resolveGitHubLookup: (value: HostedReviewLookupResult) => void = () => {}
+    const githubLookup = new Promise<HostedReviewLookupResult>((resolve) => {
       resolveGitHubLookup = resolve
     })
-    mockApi.hostedReview.forBranch.mockReturnValueOnce(githubLookup).mockResolvedValueOnce(review)
+    mockApi.hostedReview.forBranch
+      .mockReturnValueOnce(githubLookup)
+      .mockResolvedValueOnce(found(review))
     const store = makeStore()
 
     const linkedRequest = store.getState().fetchHostedReviewForBranch('/repo', 'feature/inflight', {
@@ -330,7 +504,7 @@ describe('hosted review cache race protection', () => {
       linkedGiteaPR: null,
       repoPath: '/repo'
     })
-    resolveGitHubLookup(githubReview)
+    resolveGitHubLookup(found(githubReview))
 
     await expect(linkedRequest).resolves.toEqual(githubReview)
     await expect(neutralRequest).resolves.toEqual(review)

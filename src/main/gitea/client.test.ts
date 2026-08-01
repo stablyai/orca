@@ -224,7 +224,7 @@ describe('Gitea client', () => {
     expect(listCalls).toBe(1)
   })
 
-  it('retries a failed /pulls scan after only the short failure cooldown', async () => {
+  it('does not cache a transient /pulls failure as an empty review list', async () => {
     vi.useFakeTimers()
     try {
       let listCalls = 0
@@ -240,14 +240,12 @@ describe('Gitea client', () => {
       })
       vi.stubGlobal('fetch', fetchMock)
 
-      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
-      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
-      expect(listCalls).toBe(1)
-
-      await vi.advanceTimersByTimeAsync(3_001)
-      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
-        number: 7
-      })
+      await expect(
+        getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')
+      ).rejects.toThrow('HTTP 503')
+      await expect(
+        getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')
+      ).resolves.toMatchObject({ number: 7 })
       expect(listCalls).toBe(2)
     } finally {
       vi.useRealTimers()

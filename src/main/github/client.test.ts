@@ -1568,6 +1568,89 @@ describe('getPRForBranch', () => {
     )
   })
 
+  it('continues to origin when an upstream repository candidate is unavailable', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [
+        { owner: 'retired-upstream', repo: 'orca' },
+        { owner: 'origin-owner', repo: 'orca' }
+      ],
+      headRepo: { owner: 'origin-owner', repo: 'orca' }
+    })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('GraphQL: Could not resolve to a Repository'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 91,
+            title: 'Origin branch PR',
+            state: 'open',
+            html_url: 'https://github.com/origin-owner/orca/pull/91',
+            updated_at: '2026-07-16T00:00:00Z',
+            draft: false,
+            mergeable: true,
+            base: { ref: 'main', sha: 'base-oid' },
+            head: { ref: 'feature/test', sha: 'head-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 91,
+          title: 'Origin branch PR',
+          state: 'OPEN',
+          url: 'https://github.com/origin-owner/orca/pull/91',
+          statusCheckRollup: [],
+          updatedAt: '2026-07-16T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+
+    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
+
+    expect(outcome).toMatchObject({
+      kind: 'found',
+      pr: { number: 91, title: 'Origin branch PR' }
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        'api',
+        'repos/retired-upstream/orca/pulls?head=origin-owner%3Afeature%2Ftest&state=all&per_page=1'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'api',
+        'repos/origin-owner/orca/pulls?head=origin-owner%3Afeature%2Ftest&state=all&per_page=1'
+      ],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('preserves an unavailable-candidate error when every candidate misses', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [
+        { owner: 'retired-upstream', repo: 'orca' },
+        { owner: 'origin-owner', repo: 'orca' }
+      ],
+      headRepo: { owner: 'origin-owner', repo: 'orca' }
+    })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('GraphQL: Could not resolve to a Repository'))
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+
+    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
+
+    expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'repo_unavailable' })
+  })
+
   it('treats a merged branch lookup as a miss before using a fallback PR number', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock

@@ -50,7 +50,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
         params.linkedGitHubPR == null ? (params.fallbackGitHubPR ?? null) : null
-      return runtime.getHostedReviewForBranch({
+      return runtime.lookupHostedReviewForBranch({
         repoSelector: params.repo,
         branch: params.branch,
         currentHeadOid: params.currentHeadOid ?? null,

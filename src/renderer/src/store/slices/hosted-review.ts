@@ -1,12 +1,14 @@
 /* eslint-disable max-lines -- Why: hosted-review cache identity, runtime dispatch,
 and race protection are kept together so branch review lookup invariants stay testable. */
 import type { StateCreator } from 'zustand'
-import type {
-  CreateHostedReviewInput,
-  CreateHostedReviewResult,
-  HostedReviewCreationEligibility,
-  HostedReviewCreationEligibilityArgs,
-  HostedReviewInfo
+import {
+  normalizeHostedReviewLookupResult,
+  type CreateHostedReviewInput,
+  type CreateHostedReviewResult,
+  type HostedReviewCreationEligibility,
+  type HostedReviewCreationEligibilityArgs,
+  type HostedReviewInfo,
+  type HostedReviewLookupResult
 } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -18,6 +20,7 @@ import {
 } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { hostedReviewFailureDiagnostics } from './hosted-review-failure-diagnostics'
 
 export { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 
@@ -81,16 +84,15 @@ const inflightHostedReviewRequests = new Map<
     linkedReviewHintKey: string
   }
 >()
-const requestGenerations = new Map<string, number>()
 
 /** @internal - exposed for leak-regression tests only */
 export function _getHostedReviewRequestGenerationCountForTest(): number {
-  return requestGenerations.size
+  return hostedReviewFailureDiagnostics.requestGenerationCount()
 }
 
 /** @internal - exposed for leak-regression tests only */
 export function _clearHostedReviewRequestGenerationsForTest(): void {
-  requestGenerations.clear()
+  hostedReviewFailureDiagnostics.clearRequestGenerations()
 }
 
 function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
@@ -156,6 +158,19 @@ function isStaleMergedGitHubReviewForHead(
     data.headSha !== head &&
     data.confirmedContainedHeadOid !== head
   )
+}
+
+function hostedReviewFallbackAfterFailure(
+  get: () => AppState,
+  cacheKey: string,
+  currentHeadOid: string | null | undefined
+): HostedReviewInfo | null {
+  const preserved = get().hostedReviewCache[cacheKey]
+  // Why: don't preserve a merged GitHub review the worktree has moved off of;
+  // that PR is only valid while checked out at its head.
+  return isStaleMergedGitHubReviewForHead(preserved, currentHeadOid)
+    ? null
+    : (preserved?.data ?? null)
 }
 
 function hasNewerHostedReviewCacheEntry(
@@ -375,10 +390,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       inflightRequest !== undefined &&
       canReuseInflightHint(inflightRequest.linkedReviewHintKey, hintKey)
     const startRequest = (): Promise<HostedReviewInfo | null> => {
-      const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
+      const generation = hostedReviewFailureDiagnostics.claimRequest(cacheKey)
       const requestStartedAt = Date.now()
       const requestStartedEntry = get().hostedReviewCache[cacheKey]
-      requestGenerations.set(cacheKey, generation)
       const request = (async () => {
         try {
           const fallbackGitHubPR =
@@ -394,9 +408,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
             linkedGiteaPR: options?.linkedGiteaPR ?? null
           }
-          const review =
+          const rawResult =
             target.kind === 'environment'
-              ? await callRuntimeRpc<HostedReviewInfo | null>(
+              ? await callRuntimeRpc<HostedReviewLookupResult | HostedReviewInfo | null>(
                   target,
                   'hostedReview.forBranch',
                   { repo: repo?.id ?? options?.repoId ?? repoPath, repoPath, ...args },
@@ -410,7 +424,16 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   repoPath,
                   ...args
                 })
-          if (requestGenerations.get(cacheKey) === generation) {
+          const result = normalizeHostedReviewLookupResult(rawResult)
+          if (result.kind === 'upstream-error') {
+            if (hostedReviewFailureDiagnostics.ownsRequest(cacheKey, generation)) {
+              hostedReviewFailureDiagnostics.report(cacheKey, repoId, result)
+            }
+            return hostedReviewFallbackAfterFailure(get, cacheKey, options?.currentHeadOid)
+          }
+          const review = result.kind === 'found' ? result.review : null
+          if (hostedReviewFailureDiagnostics.ownsRequest(cacheKey, generation)) {
+            hostedReviewFailureDiagnostics.clear(cacheKey)
             set((state) => {
               if (
                 hasNewerHostedReviewCacheEntry(
@@ -475,20 +498,12 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           // cache TTL. Preserve the last known review and let the next visible
           // poll retry instead.
           console.error('Failed to fetch hosted review:', error)
-          const preserved = get().hostedReviewCache[cacheKey]
-          // Why: don't preserve a merged GitHub review the worktree has moved
-          // off of; that PR is only valid while checked out at its head.
-          if (isStaleMergedGitHubReviewForHead(preserved, options?.currentHeadOid)) {
-            return null
-          }
-          return preserved?.data ?? null
+          return hostedReviewFallbackAfterFailure(get, cacheKey, options?.currentHeadOid)
         } finally {
           const activeRequest = inflightHostedReviewRequests.get(cacheKey)
           if (activeRequest?.generation === generation) {
             inflightHostedReviewRequests.delete(cacheKey)
-            if (requestGenerations.get(cacheKey) === generation) {
-              requestGenerations.delete(cacheKey)
-            }
+            hostedReviewFailureDiagnostics.finishRequest(cacheKey, generation)
           }
         }
       })()

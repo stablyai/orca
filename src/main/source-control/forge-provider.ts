@@ -2,6 +2,7 @@ import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
   HostedReviewInfo,
+  HostedReviewLookupErrorType,
   HostedReviewProvider
 } from '../../shared/hosted-review'
 import {
@@ -113,11 +114,34 @@ const gitLabForgeProvider = {
 // gh/git failure poison the sidebar's hosted-review cache with a definitive
 // miss. Surface the error so callers can preserve the last known review state,
 // mirroring how the PR refresh coordinator keeps cache on upstream-error.
+/** Provider-scoped lookup failure whose public fields are safe to serialize. */
+export class HostedReviewLookupError extends Error {
+  readonly _tag = 'HostedReviewLookupError'
+
+  /** Retains the original cause in-process while exposing a safe classification. */
+  constructor(
+    readonly provider: ForgeProviderId | 'unknown',
+    readonly errorType: HostedReviewLookupErrorType,
+    message: string,
+    options?: ErrorOptions
+  ) {
+    super(message, options)
+    this.name = 'HostedReviewLookupError'
+  }
+}
+
 function unwrapGitHubPRForBranchOutcome(
   outcome: Awaited<ReturnType<typeof getPRForBranchOutcome>>
 ): HostedReviewInfo | null {
   if (outcome.kind === 'upstream-error') {
-    throw new Error(`GitHub PR lookup failed (${outcome.errorType}): ${outcome.message}`)
+    if (outcome.errorType === 'unknown') {
+      throw new Error(outcome.message)
+    }
+    throw new HostedReviewLookupError(
+      'github',
+      outcome.errorType === 'gh_unavailable' ? 'cli_unavailable' : outcome.errorType,
+      outcome.message
+    )
   }
   return outcome.kind === 'found' ? mapGitHubReview(outcome.pr) : null
 }

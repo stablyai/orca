@@ -259,7 +259,7 @@ import type {
 } from '../shared/local-log-tail-types'
 import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
-import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
+import type { HostedReviewForBranchArgs, HostedReviewLookupResult } from '../shared/hosted-review'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type {
   LocalhostWorktreeLabelResult,
@@ -1657,7 +1657,7 @@ const api = {
   },
 
   hostedReview: {
-    forBranch: (args: HostedReviewForBranchArgs): Promise<unknown> =>
+    forBranch: (args: HostedReviewForBranchArgs): Promise<HostedReviewLookupResult> =>
       ipcRenderer.invoke('hostedReview:forBranch', args),
     getCreationEligibility: (args: unknown): Promise<unknown> =>
       ipcRenderer.invoke('hostedReview:getCreationEligibility', args),

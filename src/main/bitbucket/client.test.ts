@@ -201,6 +201,17 @@ describe('Bitbucket client', () => {
     )
   })
 
+  it('does not collapse a transient branch request into no review', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ message: 'temporary failure' }, { status: 503 }))
+    )
+
+    await expect(
+      getBitbucketPullRequestForBranchOrThrow('/repo', 'feature/bitbucket')
+    ).rejects.toThrow('HTTP 503')
+  })
+
   it('reports env-token auth status through the Bitbucket /user endpoint', async () => {
     const fetchMock = vi.fn(async () => Response.json({ username: 'bitbucket-user' }))
     vi.stubGlobal('fetch', fetchMock)

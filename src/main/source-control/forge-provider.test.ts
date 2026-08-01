@@ -76,6 +76,7 @@ vi.mock('../gitea/pull-request-creation', () => ({
 
 import {
   FORGE_PROVIDERS,
+  type HostedReviewLookupError,
   detectHostedReviewProvider,
   getForgeProviderById,
   getForgeProviderForRepository
@@ -375,6 +376,11 @@ describe('forge provider interface', () => {
         connectionId: null,
         branch: 'feature/x'
       })
-    ).rejects.toThrow(/network/)
+    ).rejects.toMatchObject({
+      name: 'HostedReviewLookupError',
+      _tag: 'HostedReviewLookupError',
+      provider: 'github',
+      errorType: 'network'
+    } satisfies Partial<HostedReviewLookupError>)
   })
 })

@@ -52,6 +52,37 @@ export type HostedReviewForBranchArgs = {
   currentHeadOid?: string | null
 }
 
+export type HostedReviewLookupErrorType =
+  | 'rate_limited'
+  | 'auth'
+  | 'network'
+  | 'permission'
+  | 'repo_unavailable'
+  | 'server_error'
+  | 'cli_unavailable'
+
+export type HostedReviewLookupResult =
+  | { kind: 'found'; review: HostedReviewInfo }
+  | { kind: 'not-found' }
+  | {
+      kind: 'upstream-error'
+      provider: Exclude<HostedReviewProvider, 'unsupported'> | 'unknown'
+      errorType: HostedReviewLookupErrorType
+    }
+
+// Why: compatible older runtimes return null-or-review without the typed envelope.
+export function normalizeHostedReviewLookupResult(
+  result: HostedReviewLookupResult | HostedReviewInfo | null
+): HostedReviewLookupResult {
+  if (result === null) {
+    return { kind: 'not-found' }
+  }
+  if ('kind' in result) {
+    return result
+  }
+  return { kind: 'found', review: result }
+}
+
 export type HostedReviewSummary = {
   number?: number
   url: string

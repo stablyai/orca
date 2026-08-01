@@ -1,5 +1,10 @@
 import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
+import {
+  resolveHostedReviewRequestFailure,
+  shouldThrowHostedReviewHttpStatus,
+  type HostedReviewRequestFailurePolicy
+} from '../source-control/hosted-review-request-failure-policy'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
@@ -14,6 +19,7 @@ type AzureDevOpsAuthConfig = {
 export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
+  failureMode?: HostedReviewRequestFailurePolicy
 }
 
 function envValue(name: string): string | null {
@@ -90,17 +96,18 @@ export async function requestAzureDevOpsJsonAtBase<T>(
     })
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
-      if (throwOnFailure) {
-        throw new Error(`Azure DevOps request failed: HTTP ${response.status}`)
+      const failureMode = options.failureMode ?? (throwOnFailure ? 'throw-all' : 'return-null')
+      if (shouldThrowHostedReviewHttpStatus(failureMode, response.status)) {
+        throw new Error(`HTTP ${response.status}: Azure DevOps request failed`)
       }
       return null
     }
     return (await response.json()) as T
   } catch (error) {
-    if (throwOnFailure) {
-      throw error
-    }
-    return null
+    return resolveHostedReviewRequestFailure(
+      options.failureMode ?? (throwOnFailure ? 'throw-all' : 'return-null'),
+      error
+    )
   }
 }
 

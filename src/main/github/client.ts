@@ -2734,7 +2734,13 @@ async function lookupPRByBranchName(args: {
         }
       } catch (err) {
         if (args.headRepo) {
-          throw err
+          // Why: a stale/inaccessible upstream candidate must not prevent the
+          // origin candidate from resolving the branch's pull request.
+          if (!hasPendingError) {
+            pendingError = err
+            hasPendingError = true
+          }
+          continue
         }
         if (!hasPendingError) {
           pendingError = err

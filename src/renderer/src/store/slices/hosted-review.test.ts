@@ -7,7 +7,7 @@ import {
   HostedReviewCreationEligibilityTimeoutError,
   refreshHostedReviewCard
 } from './hosted-review'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo, HostedReviewLookupResult } from '../../../../shared/hosted-review'
 
 const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
@@ -64,6 +64,12 @@ const review: HostedReviewInfo = {
   mergeable: 'MERGEABLE'
 }
 
+const found = (value: HostedReviewInfo): HostedReviewLookupResult => ({
+  kind: 'found',
+  review: value
+})
+const notFound: HostedReviewLookupResult = { kind: 'not-found' }
+
 const githubReview: HostedReviewInfo = {
   provider: 'github',
   number: 12,
@@ -88,7 +94,7 @@ describe('hosted review slice', () => {
   })
 
   it('fetches and caches branch review status through the common IPC surface', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(found(review))
     const store = makeStore()
 
     await expect(
@@ -144,7 +150,7 @@ describe('hosted review slice', () => {
   })
 
   it('clears stale GitHub PR cache when branch review lookup finds a non-GitHub review', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(found(review))
     const store = makeStore()
     store.setState({
       prCache: {
@@ -186,7 +192,7 @@ describe('hosted review slice', () => {
   })
 
   it('uses SSH-scoped hosted review cache entries for SSH-backed repos', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(found(review))
     const store = makeStore()
     store.setState({
       repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' } as AppState['repos'][number]]
@@ -205,7 +211,7 @@ describe('hosted review slice', () => {
   })
 
   it('uses local hosted-review IPC for a known local repo while a runtime is focused', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(found(review))
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
@@ -229,7 +235,7 @@ describe('hosted review slice', () => {
   })
 
   it('routes active runtime review lookups through runtime RPC', async () => {
-    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
+    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(found(review))
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
@@ -259,8 +265,25 @@ describe('hosted review slice', () => {
     )
   })
 
-  it('routes runtime-owned review lookups through the owning runtime when local is focused', async () => {
+  it('normalizes hosted-review responses from compatible legacy runtimes', async () => {
     runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
+    const store = makeStore({
+      activeRuntimeEnvironmentId: 'env-legacy'
+    } as AppState['settings'])
+    store.setState({ repos: [] })
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/runtime/repo', 'feature/legacy')
+    ).resolves.toEqual(review)
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/runtime/repo', 'feature/legacy')
+    ).resolves.toEqual(review)
+
+    expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes runtime-owned review lookups through the owning runtime when local is focused', async () => {
+    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(found(review))
     const store = makeStore(null)
     store.setState({
       repos: [
@@ -292,7 +315,7 @@ describe('hosted review slice', () => {
   })
 
   it('uses SSH ownership instead of the focused runtime for branch review lookups', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(found(review))
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-focused'
     } as AppState['settings'])
@@ -543,7 +566,9 @@ describe('hosted review slice', () => {
   })
 
   it('refetches a fresh null branch result when a linked PR hint is later available', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(null).mockResolvedValueOnce(review)
+    mockApi.hostedReview.forBranch
+      .mockResolvedValueOnce(notFound)
+      .mockResolvedValueOnce(found(review))
     const store = makeStore()
 
     await expect(store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr')).resolves.toBe(
@@ -559,7 +584,7 @@ describe('hosted review slice', () => {
   })
 
   it('honors the cache TTL after a linked PR miss with the same hint', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValue(null)
+    mockApi.hostedReview.forBranch.mockResolvedValue(notFound)
     const store = makeStore()
 
     await expect(
@@ -577,11 +602,13 @@ describe('hosted review slice', () => {
   })
 
   it('does not dedupe a linked PR hint onto a weaker in-flight branch lookup', async () => {
-    let resolveBranchLookup: (value: null) => void = () => {}
-    const branchLookup = new Promise<null>((resolve) => {
+    let resolveBranchLookup: (value: HostedReviewLookupResult) => void = () => {}
+    const branchLookup = new Promise<HostedReviewLookupResult>((resolve) => {
       resolveBranchLookup = resolve
     })
-    mockApi.hostedReview.forBranch.mockReturnValueOnce(branchLookup).mockResolvedValueOnce(review)
+    mockApi.hostedReview.forBranch
+      .mockReturnValueOnce(branchLookup)
+      .mockResolvedValueOnce(found(review))
     const store = makeStore()
 
     const plainFetch = store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr')
@@ -590,7 +617,7 @@ describe('hosted review slice', () => {
     })
 
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
-    resolveBranchLookup(null)
+    resolveBranchLookup(notFound)
     await expect(plainFetch).resolves.toBeNull()
     await expect(linkedFetch).resolves.toEqual(review)
   })
@@ -607,7 +634,9 @@ describe('hosted review slice', () => {
       mergeable: 'MERGEABLE',
       headSha: 'aaaaaaa'
     }
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(mergedAtHead).mockResolvedValueOnce(null)
+    mockApi.hostedReview.forBranch
+      .mockResolvedValueOnce(found(mergedAtHead))
+      .mockResolvedValueOnce(notFound)
     const store = makeStore()
 
     await expect(
@@ -639,7 +668,7 @@ describe('hosted review slice', () => {
       headSha: 'aaaaaaa',
       confirmedContainedHeadOid: 'bbbbbbb'
     }
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(mergedBehindHead)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(found(mergedBehindHead))
     const store = makeStore()
 
     await expect(

@@ -298,7 +298,6 @@ export async function getMergeRequestForBranch(
   linkedMRIid?: number | null,
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {},
-  // Why: when true, a failed lookup throws instead of returning null, so callers never report a false not_found.
   throwOnFailure = false
 ): Promise<MRInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
@@ -313,6 +312,7 @@ export async function getMergeRequestForBranch(
     return null
   }
   await acquire()
+  let exactLookupStarted = false
   try {
     if (branchName) {
       const { stdout } = await glabExecFileAsync(
@@ -351,7 +351,10 @@ export async function getMergeRequestForBranch(
     if (typeof linkedMRIid !== 'number') {
       return null
     }
-    // Why: create-from-MR worktrees may rename the branch; fall back to the durable linked iid.
+    // Why: create-from-MR worktrees may use a fresh local branch name rather
+    // than the MR source branch. Fall back to the durable linked iid so the
+    // core review status still follows the workspace.
+    exactLookupStarted = true
     const { stdout } = await glabExecFileAsync(
       [
         'api',
@@ -367,10 +370,16 @@ export async function getMergeRequestForBranch(
     const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
     return mapMRInfo(raw, pipelineStatus)
   } catch (error) {
-    if (throwOnFailure) {
-      throw error
+    const message = error instanceof Error ? error.message : String(error)
+    if (exactLookupStarted && classifyGlabError(message).type === 'not_found') {
+      return null
     }
-    return null
+    if (!throwOnFailure) {
+      return null
+    }
+    // Why: an empty successful list is the only definitive branch miss.
+    // Auth/network/rate failures must reach hosted-review cache preservation.
+    throw error
   } finally {
     release()
   }

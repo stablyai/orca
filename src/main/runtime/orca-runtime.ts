@@ -634,10 +634,14 @@ import type {
   CreateHostedReviewResult,
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
-  HostedReviewInfo
+  HostedReviewInfo,
+  HostedReviewLookupResult
 } from '../../shared/hosted-review'
-import { getHostedReviewForBranch as getHostedReviewForBranchFromRepo } from '../source-control/hosted-review'
-import type { ForgeProviderId } from '../source-control/forge-provider'
+import {
+  getHostedReviewForBranch as getHostedReviewForBranchFromRepo,
+  lookupHostedReviewForBranch as lookupHostedReviewForBranchFromRepo
+} from '../source-control/hosted-review'
+import { HostedReviewLookupError, type ForgeProviderId } from '../source-control/forge-provider'
 import {
   createHostedReview as createHostedReviewFromRepo,
   getHostedReviewCreationEligibility as getHostedReviewCreationEligibilityFromRepo
@@ -18549,7 +18553,25 @@ export class OrcaRuntimeService {
     )
   }
 
-  async getHostedReviewForBranch(args: {
+  async getHostedReviewForBranch(
+    args: Parameters<OrcaRuntimeService['lookupHostedReviewForBranch']>[0]
+  ): Promise<HostedReviewInfo | null> {
+    const result = await this.lookupHostedReviewForBranch(args)
+    switch (result.kind) {
+      case 'found':
+        return result.review
+      case 'not-found':
+        return null
+      case 'upstream-error':
+        throw new HostedReviewLookupError(
+          result.provider,
+          result.errorType,
+          'Hosted review lookup failed.'
+        )
+    }
+  }
+
+  async lookupHostedReviewForBranch(args: {
     repoSelector: string
     branch: string
     currentHeadOid?: string | null
@@ -18559,10 +18581,9 @@ export class OrcaRuntimeService {
     linkedBitbucketPR?: number | null
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
-  }): Promise<HostedReviewInfo | null> {
+  }): Promise<HostedReviewLookupResult> {
     const repo = await this.resolveRepoSelector(args.repoSelector)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
-    const review = await getHostedReviewForBranchFromRepo({
+    const result = await lookupHostedReviewForBranchFromRepo({
       repoPath: repo.path,
       connectionId: repo.connectionId ?? null,
       branch: args.branch,
@@ -18573,8 +18594,9 @@ export class OrcaRuntimeService {
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null,
-      ...executionOptions
+      ...this.getHostedReviewExecutionOptions(repo)
     })
+    const review = result.kind === 'found' ? result.review : null
     if (review?.provider === 'github' && this.stats && !this.stats.hasCountedPR(review.url)) {
       this.stats.record({
         type: 'pr_created',
@@ -18583,7 +18605,7 @@ export class OrcaRuntimeService {
         meta: { prNumber: review.number, prUrl: review.url }
       })
     }
-    return review
+    return result
   }
 
   async getHostedReviewCreationEligibility(

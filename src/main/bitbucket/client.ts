@@ -14,6 +14,11 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import {
+  resolveHostedReviewRequestFailure,
+  shouldThrowHostedReviewHttpStatus,
+  type HostedReviewRequestFailurePolicy
+} from '../source-control/hosted-review-request-failure-policy'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
@@ -36,6 +41,7 @@ export type BitbucketAuthStatus = {
 type RequestOptions = {
   searchParams?: Record<string, string | readonly string[]>
   timeoutMs?: number
+  failureMode?: HostedReviewRequestFailurePolicy
 }
 
 function envValue(name: string): string | null {
@@ -108,17 +114,18 @@ async function requestJson<T>(
     })
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
-      if (throwOnFailure) {
-        throw new Error(`Bitbucket request failed: HTTP ${response.status}`)
+      const failureMode = options.failureMode ?? (throwOnFailure ? 'throw-all' : 'return-null')
+      if (shouldThrowHostedReviewHttpStatus(failureMode, response.status)) {
+        throw new Error(`HTTP ${response.status}: Bitbucket request failed`)
       }
       return null
     }
     return (await response.json()) as T
   } catch (error) {
-    if (throwOnFailure) {
-      throw error
-    }
-    return null
+    return resolveHostedReviewRequestFailure(
+      options.failureMode ?? (throwOnFailure ? 'throw-all' : 'return-null'),
+      error
+    )
   }
 }
 
@@ -229,9 +236,9 @@ export async function getBitbucketPullRequestForBranch(
           sort: '-updated_on',
           q: query,
           state: ALL_PULL_REQUEST_STATES
-        }
-      },
-      throwOnFailure
+        },
+        failureMode: throwOnFailure ? 'throw-all' : 'return-null'
+      }
     )
     const raw = list?.values?.[0]
     if (raw) {
@@ -257,7 +264,7 @@ export async function getBitbucketPullRequestForBranch(
   }
   const raw = await requestJson<RawBitbucketPullRequest>(
     `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(linkedPRNumber))}`,
-    {},
+    { failureMode: throwOnFailure ? 'throw-transient' : 'return-null' },
     throwOnFailure
   )
   return raw ? normalizePullRequest(repo, raw) : null

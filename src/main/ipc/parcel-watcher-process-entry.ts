@@ -23,6 +23,12 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
+function isRecoverableFSEventsOverflow(err: unknown): boolean {
+  return /events were dropped by the fsevents client.*file system must be re-scanned/i.test(
+    errorMessage(err)
+  )
+}
+
 // Canary self-check. Why: @parcel/watcher can wedge silently — a lock-order
 // inversion between Debounce::notify (debounce mutex → watcher mutex) and
 // Watcher teardown (watcher mutex → debounce mutex in ~Watcher) deadlocks the
@@ -199,6 +205,12 @@ function main(): void {
             dir,
             (err, events) => {
               if (err) {
+                // Why: FSEvents keeps this subscription live after dropping its
+                // queue; callers need a full refresh, not terminal teardown.
+                if (process.platform === 'darwin' && isRecoverableFSEventsOverflow(err)) {
+                  send({ op: 'overflow', id })
+                  return
+                }
                 send({ op: 'watch-error', id, message: errorMessage(err) })
                 return
               }

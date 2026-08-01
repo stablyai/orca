@@ -5,7 +5,7 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchArgs,
-  HostedReviewInfo,
+  HostedReviewLookupResult,
   HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
@@ -1975,7 +1975,7 @@ export type PreloadApi = {
     updateIssueTypeBySlug: (args: UpdateIssueTypeBySlugArgs) => Promise<GitHubProjectMutationResult>
   }
   hostedReview: {
-    forBranch: (args: HostedReviewForBranchArgs) => Promise<HostedReviewInfo | null>
+    forBranch: (args: HostedReviewForBranchArgs) => Promise<HostedReviewLookupResult>
     getCreationEligibility: (
       args: HostedReviewCreationEligibilityArgs
     ) => Promise<HostedReviewCreationEligibility>

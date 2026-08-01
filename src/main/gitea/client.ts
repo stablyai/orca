@@ -13,6 +13,11 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import {
+  resolveHostedReviewRequestFailure,
+  shouldThrowHostedReviewHttpStatus,
+  type HostedReviewRequestFailurePolicy
+} from '../source-control/hosted-review-request-failure-policy'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
@@ -39,6 +44,7 @@ export type GiteaAuthStatus = {
 type RequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
+  failureMode?: HostedReviewRequestFailurePolicy
 }
 
 function envValue(name: string): string | null {
@@ -97,17 +103,18 @@ async function requestJsonAtBase<T>(
     })
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
-      if (throwOnFailure) {
-        throw new Error(`Gitea request failed: HTTP ${response.status}`)
+      const failureMode = options.failureMode ?? (throwOnFailure ? 'throw-all' : 'return-null')
+      if (shouldThrowHostedReviewHttpStatus(failureMode, response.status)) {
+        throw new Error(`HTTP ${response.status}: Gitea request failed`)
       }
       return null
     }
     return (await response.json()) as T
   } catch (error) {
-    if (throwOnFailure) {
-      throw error
-    }
-    return null
+    return resolveHostedReviewRequestFailure(
+      options.failureMode ?? (throwOnFailure ? 'throw-all' : 'return-null'),
+      error
+    )
   }
 }
 
@@ -274,7 +281,8 @@ export async function getGiteaPullRequestForBranch(
               page,
               limit: PULL_REQUEST_PAGE_LIMIT
             },
-            timeoutMs: PULL_REQUEST_LIST_TIMEOUT_MS
+            timeoutMs: PULL_REQUEST_LIST_TIMEOUT_MS,
+            failureMode: throwOnFailure ? 'throw-all' : 'return-null'
           },
           throwOnFailure
         ),
@@ -306,7 +314,7 @@ export async function getGiteaPullRequestForBranch(
   const raw = await requestJson<RawGiteaPullRequest>(
     repo,
     `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
-    {},
+    { failureMode: throwOnFailure ? 'throw-transient' : 'return-null' },
     throwOnFailure
   )
   return raw ? normalizePullRequest(repo, raw) : null

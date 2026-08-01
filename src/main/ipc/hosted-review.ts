@@ -12,7 +12,7 @@ import {
   createHostedReview,
   getHostedReviewCreationEligibility
 } from '../source-control/hosted-review-creation'
-import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import { lookupHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './filesystem-auth'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -80,7 +80,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
     const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
-    const review = await getHostedReviewForBranch({
+    const result = await lookupHostedReviewForBranch({
       repoPath: repo.path,
       connectionId: repo.connectionId,
       branch: args.branch,
@@ -93,6 +93,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       currentHeadOid: args.currentHeadOid ?? null,
       ...(Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {})
     })
+    const review = result.kind === 'found' ? result.review : null
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
       stats.record({
         type: 'pr_created',
@@ -101,7 +102,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
         meta: { prNumber: review.number, prUrl: review.url }
       })
     }
-    return review
+    return result
   })
 
   ipcMain.handle(

@@ -15,7 +15,6 @@ import {
   RelayWatcherTeardownTracker,
   type RelayWatcherTeardownState
 } from './relay-watcher-teardown-tracker'
-import { emitRelayWatcherTerminalFailure } from './relay-watcher-terminal-notifier'
 import { assertRelayWatcherRootCapacity } from './relay-watcher-root-capacity'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import {
@@ -27,6 +26,7 @@ import { releaseStaleRelayWatches } from './relay-watcher-stale-client-release'
 import { PromiseSettlementWaiters } from '../shared/promise-settlement-waiters'
 import { joinRelayWatcherPendingSetup } from './relay-watcher-pending-setup-join'
 import { createRelayWatcherState } from './relay-watcher-state'
+import { recoverRelayWatcherGeneration } from './relay-watcher-recovery'
 
 const RELAY_WATCH_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
 
@@ -202,8 +202,10 @@ export class RelayFilesystemWatchRegistry {
     }
   }
 
-  private subscribeState(state: RelayWatcherTeardownState): Promise<void> {
-    const generation = ++state.generation
+  private subscribeState(
+    state: RelayWatcherTeardownState,
+    generation = ++state.generation
+  ): Promise<void> {
     const emitOverflow = (): void => {
       if (state.generation === generation) {
         emitRelayWatcherOverflow(this.dispatcher, state.rootPath, state.closed)
@@ -220,7 +222,9 @@ export class RelayFilesystemWatchRegistry {
             process.stderr.write(
               `[relay] File watcher error for ${state.rootPath}: ${error.message}\n`
             )
-            emitOverflow()
+            // Why: overflow has a dedicated live-subscription hook. Callback
+            // errors require bounded replacement of the untrustworthy watcher.
+            this.recoverWatch(state, generation, error, true)
             return
           }
           emitRelayWatcherEvents(this.dispatcher, state.closed, events)
@@ -251,24 +255,17 @@ export class RelayFilesystemWatchRegistry {
   private recoverWatch(
     state: RelayWatcherTeardownState,
     failedGeneration: number,
-    error: Error
+    error: Error,
+    releaseFailedSubscription = false
   ): void {
-    if (state.closed || state.generation !== failedGeneration) {
-      return
-    }
-    state.subscription = null
-    emitRelayWatcherOverflow(this.dispatcher, state.rootPath, state.closed)
-    const recovery = this.subscribeState(state)
-    state.setupWaiters = new PromiseSettlementWaiters(recovery)
-    void recovery.catch((recoveryError: unknown) => {
-      if (!state.closed) {
-        const message = recoveryError instanceof Error ? recoveryError.message : error.message
-        process.stderr.write(
-          `[relay] File watcher disabled after bounded recovery for ${state.rootPath}: ${message}\n`
-        )
-        emitRelayWatcherTerminalFailure(this.dispatcher, state, message)
-        void this.closeWatch(state).catch(() => {})
-      }
+    recoverRelayWatcherGeneration({
+      state,
+      failedGeneration,
+      error,
+      releaseFailedSubscription,
+      dispatcher: this.dispatcher,
+      install: (generation) => this.subscribeState(state, generation),
+      close: () => this.closeWatch(state)
     })
   }
 

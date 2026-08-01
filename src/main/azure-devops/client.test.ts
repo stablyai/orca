@@ -228,6 +228,19 @@ describe('Azure DevOps client', () => {
     })
   })
 
+  it('does not collapse a transient branch request into no review', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+    })
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ message: 'temporary failure' }), { status: 503 })
+    ) as never
+
+    await expect(
+      getAzureDevOpsPullRequestForBranchOrThrow('/repo', 'feature/azure')
+    ).rejects.toThrow('HTTP 503')
+  })
+
   it('hides a stale completed/abandoned PR whose source branch is the repo default branch (#9171)', async () => {
     primeGitExecWithDefaultBranch()
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
