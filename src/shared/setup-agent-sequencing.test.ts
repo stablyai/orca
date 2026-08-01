@@ -50,6 +50,28 @@ describe('createSequencedSetupAgentCommands', () => {
     ).toBe('powershell wait-wrapper')
   })
 
+  it('resolves gated codex launches through the backfill gate env hop', () => {
+    expect(
+      resolveSetupAgentSequenceLaunchCommand(
+        { ORCA_BACKFILL_GATED_COMMAND: 'codex --resume' },
+        'gate wrapper'
+      )
+    ).toBe('codex --resume')
+    // Why: a gated setup wrapper resolves through both hops — the sequenced startup command wins.
+    expect(
+      resolveSetupAgentSequenceLaunchCommand(
+        {
+          ORCA_BACKFILL_GATED_COMMAND: 'bash -lc setup-wait-wrapper',
+          [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: 'codex --resume'
+        },
+        'gate wrapper'
+      )
+    ).toBe('codex --resume')
+    expect(
+      resolveSetupAgentSequenceLaunchCommand({ ORCA_BACKFILL_GATED_COMMAND: '   ' }, 'fallback')
+    ).toBe('fallback')
+  })
+
   it('wraps POSIX setup and startup commands with a matching nonce marker', () => {
     const result = createSequencedSetupAgentCommands({
       runnerScriptPath: '/repo/.git/orca/setup-runner.sh',

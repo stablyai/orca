@@ -1,3 +1,4 @@
+import { ORCA_BACKFILL_GATED_COMMAND_ENV } from './codex-backfill-gate-wrapper'
 import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
   resolveSetupRunnerCommand,
@@ -19,7 +20,8 @@ export function resolveSetupAgentSequenceLaunchCommand(
   fallbackCommand: string | undefined
 ): string | undefined {
   const sequencedStartup = env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]?.trim()
-  return sequencedStartup || fallbackCommand
+  // Why: backfill-gated codex spawns carry the held launch command in the gate env (#11828).
+  return sequencedStartup || env[ORCA_BACKFILL_GATED_COMMAND_ENV]?.trim() || fallbackCommand
 }
 
 export function createSetupAgentSequenceNonce(): string {

@@ -7,3 +7,12 @@ export type CodexBackfillGateStatus = {
   /** Backfill cursor (a sessions/... rollout path) while pending; null otherwise. */
   lastWatermark: string | null
 }
+
+export type CodexBackfillPaneHoldPhase = 'indexing' | 'launched'
+
+/** Why: main owns gate enforcement (#11828); panes mirror this per-paneKey state to drive the indexing overlay. */
+export type CodexBackfillPaneHoldState = {
+  paneKey: string
+  phase: CodexBackfillPaneHoldPhase
+  lastWatermark: string | null
+}
