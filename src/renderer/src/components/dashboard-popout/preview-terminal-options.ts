@@ -36,6 +36,8 @@ export function buildPreviewAppearanceOptions(
     wordSeparator: settings?.terminalWordSeparator,
     // Why only 'true': 'left'/'right' are handled by the keydown policy, which needs Option composable at the xterm level.
     macOptionIsMeta,
+    // Why: this preview forwards its own mouse reports to the PTY, so the Alt gate has to hold here too.
+    mouseEventsRequireAlt: settings?.terminalMouseEventsRequireAlt === true,
     // Why: xterm renders an alpha background opaque unless transparency is on (matches applyTerminalAppearance).
     allowTransparency:
       settings?.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
