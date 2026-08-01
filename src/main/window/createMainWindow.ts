@@ -206,6 +206,21 @@ type CreateMainWindowOptions = {
   onBeforeRecoveryReload?: (webContentsId: number) => void
 }
 
+/**
+ * Resolves the filesystem form of the window-close sentinel, or null where it has none.
+ *
+ * Why: the sentinel is a driveless `file:///` URL. On POSIX that maps to a real path, but
+ * Windows file URLs require a drive letter, so `fileURLToPath` throws ERR_INVALID_FILE_URL_PATH
+ * there. Returning null keeps the caller on URL-only matching instead of crashing window setup.
+ */
+export function resolveBrowserWindowCloseAllowedPreloadPath(): string | null {
+  try {
+    return fileURLToPath(BROWSER_WINDOW_CLOSE_ALLOWED_PRELOAD)
+  } catch {
+    return null
+  }
+}
+
 export function loadMainWindow(mainWindow: BrowserWindow): void {
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -444,7 +459,9 @@ export function createMainWindow(
   registerPluginPanelNavigationGuard(mainWindow.webContents)
 
   const browserWindowClosePreload = join(__dirname, 'browser-window-close-preload.js')
-  const browserWindowCloseAllowedPreloadPath = fileURLToPath(BROWSER_WINDOW_CLOSE_ALLOWED_PRELOAD)
+  // Why: the sentinel is a driveless file URL, which only has a filesystem form on
+  // POSIX; on Windows fileURLToPath throws, so fall back to URL-only matching.
+  const browserWindowCloseAllowedPreloadPath = resolveBrowserWindowCloseAllowedPreloadPath()
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
@@ -459,7 +476,8 @@ export function createMainWindow(
     const allowWindowClose = [params.preload, webPreferences.preload].some(
       (preload) =>
         preload === BROWSER_WINDOW_CLOSE_ALLOWED_PRELOAD ||
-        preload === browserWindowCloseAllowedPreloadPath
+        (browserWindowCloseAllowedPreloadPath !== null &&
+          preload === browserWindowCloseAllowedPreloadPath)
     )
     delete params.preload
     if (allowWindowClose) {

@@ -70,12 +70,12 @@ vi.mock('../browser/browser-manager', () => ({
 import {
   createMainWindow,
   loadMainWindow,
+  resolveBrowserWindowCloseAllowedPreloadPath,
   WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS
 } from './createMainWindow'
 import { ipcMain } from 'electron'
 import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
 import { BROWSER_WINDOW_CLOSE_ALLOWED_PRELOAD } from '../../shared/browser-window-close-policy'
-import { fileURLToPath } from 'node:url'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
@@ -105,6 +105,19 @@ describe('createMainWindow', () => {
     vi.mocked(ipcMain.handle).mockReset()
     vi.mocked(ipcMain.removeHandler).mockReset()
     vi.useRealTimers()
+  })
+
+  it('resolves the window-close sentinel without throwing on driveless file URLs', () => {
+    // Why: Windows file URLs need a drive letter, so fileURLToPath on the sentinel throws
+    // ERR_INVALID_FILE_URL_PATH there and used to abort window setup before it was shown.
+    expect(() => resolveBrowserWindowCloseAllowedPreloadPath()).not.toThrow()
+
+    const resolved = resolveBrowserWindowCloseAllowedPreloadPath()
+    if (process.platform === 'win32') {
+      expect(resolved).toBeNull()
+    } else {
+      expect(resolved).toBe('/__orca_window_close_allowed__')
+    }
   })
 
   it('can defer renderer loading until startup IPC handlers are registered', () => {
@@ -281,16 +294,20 @@ describe('createMainWindow', () => {
     expect(allowWindowCloseParams.preload).toBeUndefined()
     expect(allowWindowClosePrefs).not.toHaveProperty('preload')
 
-    const allowWindowClosePathPrefs = {
-      partition: 'persist:orca-browser',
-      preload: fileURLToPath(BROWSER_WINDOW_CLOSE_ALLOWED_PRELOAD)
+    // Why: the sentinel only has a filesystem form on POSIX, so this leg is Windows-exempt.
+    const sentinelPath = resolveBrowserWindowCloseAllowedPreloadPath()
+    if (sentinelPath !== null) {
+      const allowWindowClosePathPrefs = {
+        partition: 'persist:orca-browser',
+        preload: sentinelPath
+      }
+      windowHandlers['will-attach-webview'](
+        { preventDefault: vi.fn() } as never,
+        allowWindowClosePathPrefs as never,
+        { src: 'data:text/html,', preload: '' } as never
+      )
+      expect(allowWindowClosePathPrefs).not.toHaveProperty('preload')
     }
-    windowHandlers['will-attach-webview'](
-      { preventDefault: vi.fn() } as never,
-      allowWindowClosePathPrefs as never,
-      { src: 'data:text/html,', preload: '' } as never
-    )
-    expect(allowWindowClosePathPrefs).not.toHaveProperty('preload')
 
     const cliGuest = { marker: 'cli-guest' }
     windowHandlers['did-attach-webview']({} as never, cliGuest as never)
