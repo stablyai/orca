@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -23,6 +23,8 @@ export function useTerminalFontZoom({
   settingsRef,
   updateSettings
 }: FontZoomDeps): void {
+  const baseFontSizeRef = useRef<number | null>(settingsRef.current?.terminalFontSize ?? null)
+
   useEffect(() => {
     if (!isActive) {
       return
@@ -45,11 +47,13 @@ export function useTerminalFontZoom({
       if (!settings) {
         return
       }
+      const baseSize = baseFontSizeRef.current ?? settings.terminalFontSize ?? DEFAULT_FONT_SIZE
+      baseFontSizeRef.current = baseSize
       const currentSize = settings.terminalFontSize ?? DEFAULT_FONT_SIZE
 
       let nextSize: number
       if (direction === 'reset') {
-        nextSize = DEFAULT_FONT_SIZE
+        nextSize = baseSize
       } else if (direction === 'in') {
         nextSize = Math.min(MAX_FONT_SIZE, currentSize + 1)
       } else {
@@ -63,7 +67,7 @@ export function useTerminalFontZoom({
       }
       void updateSettings({ terminalFontSize: nextSize })
 
-      const percent = Math.round((nextSize / DEFAULT_FONT_SIZE) * 100)
+      const percent = Math.round((nextSize / baseSize) * 100)
       dispatchZoomLevelChanged('terminal', percent)
     })
   }, [containerRef, isActive, managerRef, settingsRef, updateSettings])

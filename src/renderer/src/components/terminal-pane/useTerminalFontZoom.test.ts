@@ -14,7 +14,8 @@ vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
   return {
     ...actual,
-    useEffect: (effect: () => void | (() => void)) => effect()
+    useEffect: (effect: () => void | (() => void)) => effect(),
+    useRef: <T>(initialValue: T) => ({ current: initialValue })
   }
 })
 
@@ -120,6 +121,71 @@ describe('useTerminalFontZoom', () => {
     expect(updateSettings).toHaveBeenCalledOnce()
     expect(updateSettings).toHaveBeenCalledWith({ terminalFontSize: 15 })
     expect(mocks.dispatchZoomLevelChanged).toHaveBeenCalledWith('terminal', 107)
+  })
+
+  it('resets to the configured base size and reports zoom relative to that base', () => {
+    const helper = document.createElement('textarea')
+    helper.className = 'xterm-helper-textarea'
+    const { listener, terminals, updateSettings } = useMountedTerminalFontZoom(helper, 20)
+
+    listener('in')
+
+    expect(terminals.map((terminal) => terminal.options.fontSize)).toEqual([21, 21])
+    expect(updateSettings).toHaveBeenLastCalledWith({ terminalFontSize: 21 })
+    expect(mocks.dispatchZoomLevelChanged).toHaveBeenLastCalledWith('terminal', 105)
+
+    listener('reset')
+
+    expect(terminals.map((terminal) => terminal.options.fontSize)).toEqual([20, 20])
+    expect(updateSettings).toHaveBeenLastCalledWith({ terminalFontSize: 20 })
+    expect(mocks.dispatchZoomLevelChanged).toHaveBeenLastCalledWith('terminal', 100)
+    expect(mocks.safeFit).toHaveBeenCalledTimes(4)
+  })
+
+  it('preserves the configured base independently across hooks sharing settings', () => {
+    const firstContainer = document.createElement('div')
+    const secondContainer = document.createElement('div')
+    const firstHelper = document.createElement('textarea')
+    const secondHelper = document.createElement('textarea')
+    firstHelper.className = 'xterm-helper-textarea'
+    secondHelper.className = 'xterm-helper-textarea'
+    firstContainer.appendChild(firstHelper)
+    secondContainer.appendChild(secondHelper)
+    document.body.append(firstContainer, secondContainer)
+
+    const sharedSettingsRef = { current: { terminalFontSize: 20 } }
+    const firstTerminal = { options: { fontSize: 20 } }
+    const secondTerminal = { options: { fontSize: 20 } }
+    const updateSettings = vi.fn()
+    useTerminalFontZoom({
+      isActive: true,
+      containerRef: { current: firstContainer },
+      managerRef: {
+        current: { getPanes: () => [{ id: 1, terminal: firstTerminal }] }
+      } as never,
+      settingsRef: sharedSettingsRef,
+      updateSettings
+    })
+    useTerminalFontZoom({
+      isActive: true,
+      containerRef: { current: secondContainer },
+      managerRef: {
+        current: { getPanes: () => [{ id: 2, terminal: secondTerminal }] }
+      } as never,
+      settingsRef: sharedSettingsRef,
+      updateSettings
+    })
+
+    firstHelper.focus()
+    terminalZoomListeners[0]('in')
+    expect(sharedSettingsRef.current.terminalFontSize).toBe(21)
+
+    secondHelper.focus()
+    terminalZoomListeners[1]('reset')
+
+    expect(secondTerminal.options.fontSize).toBe(20)
+    expect(updateSettings).toHaveBeenLastCalledWith({ terminalFontSize: 20 })
+    expect(mocks.dispatchZoomLevelChanged).toHaveBeenLastCalledWith('terminal', 100)
   })
 
   it('clamps zoom out and resets the persisted size to the global default', () => {
