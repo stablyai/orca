@@ -49,16 +49,19 @@ describe('Claude background task status', () => {
     ).toBe('working')
   })
 
-  it('fails future task statuses active but ignores terminal and malformed entries', () => {
-    expect(
-      readClaudeBackgroundAgentTasks({
-        background_tasks: [{ id: 'shell-1', type: 'shell', status: 'queued' }]
-      }).hasRunningShellOrMonitor
-    ).toBe(true)
+  it('fails unknown or partial task statuses active but ignores terminal and malformed entries', () => {
+    for (const status of ['queued', undefined]) {
+      expect(
+        readClaudeBackgroundAgentTasks({
+          background_tasks: [{ id: 'shell-1', type: 'shell', status }]
+        }).hasRunningShellOrMonitor
+      ).toBe(true)
+    }
 
     for (const backgroundTasks of [
       [{ id: 'shell-1', type: 'shell', status: 'completed' }],
-      [{ id: 'shell-1', type: 'shell' }],
+      [{ id: 'shell-1', type: 'shell', status: 'canceled' }],
+      [{ id: 'shell-1', type: 'shell', status: 'timed_out' }],
       [null, 'shell'],
       { id: 'shell-1', type: 'shell', status: 'running' }
     ]) {
@@ -167,7 +170,7 @@ describe('Claude background task status', () => {
     expect(state.claudeRunningShellOrMonitorPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
-  it('starts background gating again only on a genuine user turn', () => {
+  it('resumes on task notifications and user slash commands after interruption', () => {
     const state = createHookListenerState()
     claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
@@ -181,17 +184,24 @@ describe('Claude background task status', () => {
         prompt: '<task-notification><status>completed</status></task-notification>',
         background_tasks: [RUNNING_SHELL]
       })
+    ).toMatchObject({ state: 'working' })
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        is_interrupt: true,
+        background_tasks: [RUNNING_SHELL]
+      })
     ).toMatchObject({ state: 'done', interrupted: true })
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'UserPromptSubmit',
-        prompt: 'start another task',
+        prompt: '<command-message>review</command-message><command-name>/review</command-name>',
         background_tasks: [RUNNING_SHELL]
       })?.state
     ).toBe('working')
   })
 
-  it('reconciles an authoritative inventory before returning child-attributed events', () => {
+  it('does not let a child-attributed inventory clear lead-owned background work', () => {
     const state = createHookListenerState()
     claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'SubagentStart',
@@ -207,10 +217,10 @@ describe('Claude background task status', () => {
       agent_id: 'child-1',
       background_tasks: []
     })
-    expect(state.claudeRunningShellOrMonitorPaneKeys.has(SOURCE_PANE)).toBe(false)
+    expect(state.claudeRunningShellOrMonitorPaneKeys.has(SOURCE_PANE)).toBe(true)
   })
 
-  it('clears background gating from an empty SubagentStop inventory', () => {
+  it('keeps background gating through an empty child SubagentStop inventory', () => {
     const state = createHookListenerState()
     claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
@@ -223,7 +233,25 @@ describe('Claude background task status', () => {
         agent_id: 'child-1',
         background_tasks: []
       })?.state
-    ).toBe('done')
+    ).toBe('working')
+  })
+
+  it('shows a child permission wait after the lead turn is interrupted', () => {
+    const state = createHookListenerState()
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'SubagentStart',
+      agent_id: 'child-1'
+    })
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', is_interrupt: true })
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'child-1',
+        tool_name: 'Bash',
+        tool_input: { command: 'git status' }
+      })
+    ).toMatchObject({ state: 'waiting', toolName: 'Bash' })
   })
 
   it('preserves authoritative work across partial inventories and clears it on teardown', () => {

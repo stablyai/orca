@@ -1824,6 +1824,7 @@ export class AgentHookServer {
     }
     if (
       normalizedPayload.agentType === 'claude' &&
+      envelope.isReplay !== true &&
       typeof envelope.claudeRunningShellOrMonitor === 'boolean'
     ) {
       if (envelope.claudeRunningShellOrMonitor) {

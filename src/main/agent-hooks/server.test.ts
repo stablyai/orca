@@ -434,6 +434,40 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('does not treat replayed Claude background metadata as live evidence', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          isReplay: true,
+          claudeRunningShellOrMonitor: true,
+          payload: { state: 'working', prompt: 'stale replay', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'stale replay',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
+        })
+      ).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('carries idle subagent rows through an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

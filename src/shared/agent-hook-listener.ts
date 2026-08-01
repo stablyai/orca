@@ -2432,11 +2432,12 @@ function updateClaudeRunningShellOrMonitor(
   state: HookListenerState,
   paneKey: string,
   hasRunningShellOrMonitor: boolean,
-  interrupted: boolean
+  interrupted: boolean,
+  inventoryCanClear: boolean
 ): void {
   if (hasRunningShellOrMonitor && !interrupted) {
     state.claudeRunningShellOrMonitorPaneKeys.add(paneKey)
-  } else {
+  } else if (interrupted || inventoryCanClear) {
     state.claudeRunningShellOrMonitorPaneKeys.delete(paneKey)
   }
 }
@@ -2611,12 +2612,17 @@ function normalizeClaudeEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
-  const startsUserTurn =
-    eventName === 'UserPromptSubmit' && !isKnownHarnessInjectedUserTurnText(promptText)
+  const eventAgentId = readString(hookPayload, 'agent_id')
+  const preservesInterruptedBoundary =
+    eventName === 'Stop' ||
+    eventName === 'StopFailure' ||
+    eventName === 'SubagentStart' ||
+    eventName === 'SubagentStop' ||
+    eventName === 'TeammateIdle'
   const interrupted =
     ((eventName === 'Stop' || eventName === 'StopFailure') &&
       hookPayload['is_interrupt'] === true) ||
-    (previousLead?.interrupted === true && !startsUserTurn)
+    (previousLead?.interrupted === true && preservesInterruptedBoundary)
       ? true
       : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
@@ -2625,7 +2631,8 @@ function normalizeClaudeEvent(
       state,
       paneKey,
       backgroundTasks.hasRunningShellOrMonitor,
-      interrupted === true
+      interrupted === true,
+      eventAgentId === undefined
     )
   }
 
@@ -2660,13 +2667,11 @@ function normalizeClaudeEvent(
     (eventName === 'Stop' || eventName === 'StopFailure') &&
     hasActiveClaudeNonAgentBackgroundWork(hookPayload)
 
-  // Why: after cancellation, delayed bookkeeping cannot revive the turn; only a genuine user prompt starts a new one.
-  const stateName = interrupted ? 'done' : reportedStateName
+  const stateName = reportedStateName
 
-  const eventAgentId = readString(hookPayload, 'agent_id')
   // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
   // Two exceptions take the full path below: waiting-inducing events (a child needs human attention on this pane) and the blocked child's own next tool event (approval granted — clear the wait as for the lead).
-  const isWaitingInducing = reportedStateName === 'waiting' && !interrupted
+  const isWaitingInducing = reportedStateName === 'waiting'
   const subagentOriginId =
     !isWaitingInducing &&
     (eventName === 'PreToolUse' ||

@@ -8,7 +8,9 @@ const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'completed',
   'failed',
   'killed',
-  'cancelled'
+  'cancelled',
+  'canceled',
+  'timed_out'
 ])
 
 /** Live subagents/teammates tracked for one Claude pane, keyed by the
@@ -192,9 +194,9 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     // Why: future nonterminal labels must fail active; only explicit terminal states can safely retire work.
     if (
       (obj.type === 'shell' || obj.type === 'monitor') &&
-      typeof obj.status === 'string' &&
-      obj.status.length > 0 &&
-      !CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(obj.status)
+      (typeof obj.status !== 'string' ||
+        obj.status.length === 0 ||
+        !CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(obj.status))
     ) {
       hasRunningShellOrMonitor = true
     }
