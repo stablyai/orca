@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 
 type RichMarkdownSearchBarProps = {
@@ -247,6 +248,12 @@ export function RichMarkdownSearchBar({
                 value={replaceQuery}
                 onChange={(event) => onReplaceQueryChange(event.target.value)}
                 onKeyDown={(event) => {
+                  // Why: while a CJK candidate is composing, Enter only confirms it
+                  // and Escape only cancels it — replacing the match or closing the
+                  // bar here would act on a keystroke aimed at the IME.
+                  if (isImeCompositionKeyDown(event)) {
+                    return
+                  }
                   if (event.key === 'Enter') {
                     event.preventDefault()
                     onReplaceCurrent()
