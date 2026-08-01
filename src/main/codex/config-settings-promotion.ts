@@ -246,17 +246,17 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     conflicts,
     runtimeValuesToPreserve
   })
-  // Why: a fresh host has no ~/.codex; create it owner-only (holds auth.json) or the atomic write ENOENTs and the mirror wipes it.
-  mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
   const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
-  // Why: a dangling symlink may target an unmade dir tree; create its real parent so the atomic temp write has a home.
-  mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
   const targetExists = existsSync(writeTarget.path)
   const systemContent = targetExists ? readAgentStateFileSync(writeTarget.path) : null
   const nextContent = prepareSystemConfigForPromotion(systemContent, runtimeConfig, updates)
   if (nextContent === null || (targetExists && nextContent === systemContent)) {
     return { conflicts, runtimeValuesToPreserve }
   }
+  // Why: a fresh host has no ~/.codex; create it owner-only (holds auth.json) or the atomic write ENOENTs and the mirror wipes it.
+  mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
+  // Why: a dangling symlink may target an unmade dir tree; create its real parent so the atomic temp write has a home.
+  mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
   if (targetExists && parseWslUncPath(writeTarget.path)) {
     // Why: \\wsl$ 9P symlink metadata is unreliable; write through the existing file to preserve the WSL-side inode.
     writeFileSync(writeTarget.path, nextContent, 'utf-8')

@@ -187,6 +187,24 @@ describe('Codex marketplace refresh promotion through the config mirror', () => 
     expect(readRuntimeConfig()).toContain('source = "https://github.com/example/demo.git"')
   })
 
+  it('inserts last_revision after last_updated when the canonical marketplace lacks it', () => {
+    writeSystemConfig(MARKETPLACE_CONFIG.replace('last_revision = "canonical-revision"\r\n', ''))
+    syncSystemConfigIntoManagedCodexHome()
+    expect(existsSync(runtimeConfigPath())).toBe(true)
+    writeRuntimeConfig(
+      readRuntimeConfig().replace(
+        /last_updated = .*\r?\n/,
+        'last_updated = "2026-07-02T00:00:00Z"\r\nlast_revision = "runtime-revision"\r\n'
+      )
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readSystemConfig()).toContain(
+      'last_updated = "2026-07-02T00:00:00Z" # keep this comment\r\nlast_revision = "runtime-revision"\r\nenabled = true'
+    )
+  })
+
   it('does not restore a runtime-only marketplace or a removed canonical marketplace', () => {
     seedMirroredConfig()
     writeRuntimeConfig(
