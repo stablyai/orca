@@ -54,12 +54,7 @@ function refreshEarliestUnknownCapabilityRetry(): void {
   }
 }
 
-/**
- * Why bounded: an id that stays unknown re-arms this resolver's own retry timer,
- * so a fixed delay is a 1 Hz main-process IPC plus a full all-PTY scan for the
- * life of the app. Settling on `false` is the same mount-eagerly behaviour an
- * unresolved id already gets, and it lets the loop converge.
- */
+// Unknown routes settle eager after bounded retries to avoid lifelong capability polling.
 function backOffUnknownCapability(ptyId: string, nowMs: number): void {
   const attempts = (unknownCapabilityAttemptsByPtyId.get(ptyId) ?? 0) + 1
   if (attempts >= UNKNOWN_CAPABILITY_MAX_ATTEMPTS) {
@@ -180,7 +175,7 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
     }
   }
   refreshEarliestUnknownCapabilityRetry()
-  return unknownCapabilityRetryDelayMs(nowMs)
+  return unknownCapabilityRetryDelayMs(observedAtMs === undefined ? Date.now() : nowMs)
 }
 
 export function startTerminalProviderSnapshotCapabilitySynchronization(

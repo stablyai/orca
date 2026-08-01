@@ -12,6 +12,10 @@ test('PTY capability lookup keeps renderer JavaScript responsive while main is s
   orcaPage
 }) => {
   await orcaPage.evaluate(() => {
+    const getCapabilities = window.api.pty.getAuthoritativeBufferSnapshotCapabilities
+    if (!getCapabilities) {
+      throw new Error('PTY snapshot capability API is unavailable')
+    }
     const probe: CapabilityProbe = {
       calls: 0,
       gapsMs: [],
@@ -24,7 +28,7 @@ test('PTY capability lookup keeps renderer JavaScript responsive while main is s
       probe.gapsMs.push(tickAt - previousTickAt)
       previousTickAt = tickAt
       const callStartedAt = performance.now()
-      void window.api.pty.getAuthoritativeBufferSnapshotCapabilities?.(['ssh:e2e@@pty-1'])
+      void getCapabilities(['ssh:e2e@@pty-1']).catch(() => {})
       probe.returnDurationsMs.push(performance.now() - callStartedAt)
       probe.calls += 1
     }, 50)

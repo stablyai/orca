@@ -122,6 +122,19 @@ describe('terminal provider snapshot capabilities', () => {
     expect(terminalProviderHasAuthoritativeSnapshot('pty-1')).toBe(false)
   })
 
+  it('retries immediately when a timeout consumes the retry delay', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const synchronization = synchronizeTerminalProviderSnapshotCapabilities(
+      ['pty-1'],
+      () => new Promise(() => {})
+    )
+
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    await expect(synchronization).resolves.toBe(0)
+  })
+
   it('ignores a stale capability response after the live PTY set changes', async () => {
     let resolveStale!: (value: { id: string; authoritative: boolean | null }[]) => void
     const stale = new Promise<{ id: string; authoritative: boolean | null }[]>((resolve) => {
@@ -140,8 +153,7 @@ describe('terminal provider snapshot capabilities', () => {
   })
 
   it('stops polling for a PTY whose route never resolves', async () => {
-    // The retry re-arms this module's own timer, so a fixed delay is a 1 Hz IPC
-    // plus a full all-PTY scan for the life of the app.
+    // Bounded retries prevent lifelong capability polling for vanished routes.
     const resolve = vi.fn(async () => [{ id: 'gone-pty', authoritative: null }])
     const backoffSchedule = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]
 

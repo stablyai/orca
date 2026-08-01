@@ -6341,11 +6341,7 @@ export function registerPtyHandlers(
         }
         seen.add(value)
         const provider = tryGetProviderForPty(value)
-        // Why null is reserved for an unresolved route: the renderer never caches
-        // it and keeps re-arming, so a provider that merely omits the optional
-        // method would poll forever. Omitting it means "no authoritative
-        // snapshot" — the same mount-eagerly outcome null already produced, but
-        // cacheable. Degraded routing keeps its explicit false for the same reason.
+        // Resolved providers without the optional method are definitively non-authoritative; null remains retryable.
         capabilities.push({
           id: value,
           authoritative:

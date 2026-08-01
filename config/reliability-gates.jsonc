@@ -4632,13 +4632,12 @@
         "renderer startup",
         "cold terminal restoration",
         "hidden terminal parking",
-        "SSH terminal restoration",
-        "paired web terminal restoration"
+        "SSH terminal restoration"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["daemon", "ssh", "remote-runtime"],
-      "coveredPlatforms": ["macos", "linux"],
-      "coveredProviders": ["daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon", "ssh"],
       "coverageNotes": "A preload contract and Electron main-stall oracle prove capability lookup is asynchronous. Startup prefetch covers restored primary and split-pane PTY identities before cold activation, while unknown providers remain eager. Docker SSH journeys prove remote terminals still remount eagerly and reclaim their authenticated PTY owner after restart.",
       "motivatingLinks": ["https://stablygroup.slack.com/archives/C0BD60A5J85/p1785524559818629"],
       "invariant": "PTY snapshot capability discovery must never synchronously block renderer JavaScript. Restored daemon capability must be known before workspace readiness enables cold activation; unknown or legacy capability must remain eager. A healthy SSH provider must return definitive false without polling. One unresponsive capability batch must fail open within one second regardless of PTY count, and stale async responses must not update current bindings.",
@@ -4686,7 +4685,7 @@
           "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/pty-snapshot-capability-main-stall.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
           "result": "passed",
           "durationSeconds": 16.8,
-          "summary": "Three 1.5-second main stalls produced 32 renderer calls each; maximum interval gaps were 70.3ms, 70.1ms, and 71.6ms, and maximum call-return durations were 0.1ms, 0.1ms, and 0.2ms. The synchronous baseline produced a 1465.1ms interval gap and 1464.2ms call-return duration. Cold daemon restore and both Docker SSH restore journeys also passed."
+          "summary": "Three 1.5-second main stalls produced 32 renderer calls each; maximum interval gaps were 70.3ms, 70.1ms, and 71.6ms, and maximum call-return durations were 0.1ms, 0.1ms, and 0.2ms. The synchronous baseline produced a 1465.1ms interval gap and 1464.2ms call-return duration."
         }
       ],
       "runtimeBudget": {

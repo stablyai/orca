@@ -6672,8 +6672,7 @@ describe('registerPtyHandlers', () => {
   })
 
   it('answers false, not null, for a resolved provider with no snapshot capability', async () => {
-    // Why: null is never cached, so a provider that merely omits the optional
-    // method would keep the renderer's retry timer armed for the whole session.
+    // Null is never cached, so missing optional methods must resolve false.
     registerPtyHandlers(mainWindow as never)
     setLocalPtyProvider({ spawn: vi.fn(), write: vi.fn() } as never)
 
