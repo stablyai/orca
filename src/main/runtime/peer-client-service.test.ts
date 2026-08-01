@@ -132,6 +132,26 @@ describe('PeerClientService', () => {
     expect(service.getStatus().lastErrorReason).toMatch(/ECONNREFUSED/)
   })
 
+  it('disarms the pending reconnect timer when connecting to a new host', async () => {
+    // Why: a timer armed for the previous host would fire after this connect and
+    // open a second socket, which the host closes as a duplicate connection —
+    // latching the brand-new session to closed.
+    const { server, endpoint } = await startServer()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    const serverKeys = generateKeyPair()
+
+    const service = new PeerClientService()
+    services.push(service)
+    const code = makePeerOffer(endpoint, serverKeys, 'any-token')
+
+    expect(service.connect(code)).toEqual({ ok: true })
+    await waitForState(service, 'reconnect-wait')
+
+    expect(service.connect(code)).toEqual({ ok: true })
+    const timer = (service as unknown as { reconnectTimer: unknown }).reconnectTimer
+    expect(timer).toBeNull()
+  })
+
   it('survives reconnecting while the previous socket is still establishing', async () => {
     // Why: a TCP server that accepts but never answers the WS upgrade keeps the
     // socket in CONNECTING — the state a macOS local-network permission prompt

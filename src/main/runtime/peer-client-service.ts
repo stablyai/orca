@@ -133,6 +133,12 @@ export class PeerClientService {
       return { ok: false, reason: 'not_a_peer_pairing_code' }
     }
     this.intentionallyClosed = true
+    // Why: a reconnect timer armed for the previous host would fire after this
+    // connect and open a second socket, tripping the duplicate-connection close.
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     this.handshake.teardown()
     this.rpc.rejectAll(new Error('Reconnecting to a new host'))
     this.offer = offer

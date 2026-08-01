@@ -747,6 +747,29 @@ describe('peer-collab grant enforcement', () => {
     expect(result.ok).toBe(false)
   })
 
+  it('rejects terminal.subscribe from a peer that declares a non-desktop client type', async () => {
+    const { server, pairingUrl } = await startPeerHost({ grantedTerminals: [TEST_TERMINAL] })
+    servers.push(server)
+    const client = new PeerClientService()
+    clients.push(client)
+    expect(client.connect(pairingUrl, 'Client A')).toEqual({ ok: true })
+    await waitFor(() => client.getStatus().state === 'connected')
+
+    // Why: client.type is caller-declared; asserting 'mobile' would skip the
+    // remote-driver input lock and claim the higher-priority mobile input floor.
+    const rpc = (
+      client as unknown as {
+        rpc: { sendRequest: (m: string, p: unknown) => Promise<{ ok: boolean }> }
+      }
+    ).rpc
+    const result = await rpc.sendRequest('terminal.subscribe', {
+      terminal: TEST_TERMINAL,
+      client: { id: 'spoofed', type: 'mobile' },
+      viewport: { cols: 80, rows: 24 }
+    })
+    expect(result.ok).toBe(false)
+  })
+
   it('rejects terminal.send for a terminal the peer was not granted', async () => {
     const { client } = await connectedUngrantedClient()
     // Why: PeerClientService only exposes input via an established subscribe

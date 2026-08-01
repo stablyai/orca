@@ -2960,6 +2960,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (isPeerDevice && !params.client) {
         throw new Error('peer_terminal_subscribe_requires_client')
       }
+      // Why: client.type is caller-declared; a peer that asserts 'mobile' would skip
+      // the remote-driver input lock and claim the higher-priority mobile input floor.
+      if (isPeerDevice && params.client?.type !== 'desktop') {
+        throw new Error('peer_terminal_subscribe_requires_desktop_client')
+      }
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
       const isPeer = isNegotiatingPeerClient(isPeerDevice, params.client)
