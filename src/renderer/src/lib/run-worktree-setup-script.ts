@@ -4,7 +4,7 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { translate } from '@/i18n/i18n'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 
 export type RunWorktreeSetupScriptResult =
   | { status: 'launched'; primaryTabId: string | null }
@@ -14,6 +14,7 @@ export type RunWorktreeSetupScriptResult =
         | 'worktree-missing'
         | 'repo-missing'
         | 'folder-repo'
+        | 'remote-host'
         | 'no-setup-configured'
         | 'trust-skipped'
         | 'activation-failed'
@@ -58,13 +59,21 @@ export async function runWorktreeSetupScript(
     return { status: 'skipped', reason: 'folder-repo' }
   }
 
+  // Why: reject before the trust gate — a remote-host trust fetch can fail and end the
+  // flow silently, hiding the main process's explicit unsupported message.
+  const hostId = getRepoExecutionHostId(repo)
+  if (hostId !== LOCAL_EXECUTION_HOST_ID) {
+    toast.info(
+      translate(
+        'auto.lib.runWorktreeSetupScript.remoteHost',
+        'Run setup script is not yet supported for remote worktrees. Create a new worktree to run setup on that host, or open a local clone.'
+      )
+    )
+    return { status: 'skipped', reason: 'remote-host' }
+  }
+
   // Why: same trust gate as create — shared orca.yaml setup must be confirmed before run.
-  const trust = await ensureHooksConfirmed(
-    useAppStore.getState(),
-    repo.id,
-    'setup',
-    getRepoExecutionHostId(repo)
-  )
+  const trust = await ensureHooksConfirmed(useAppStore.getState(), repo.id, 'setup', hostId)
   if (trust !== 'run') {
     return { status: 'skipped', reason: 'trust-skipped' }
   }
@@ -73,7 +82,8 @@ export async function runWorktreeSetupScript(
   try {
     prepared = await window.api.hooks.prepareSetupRunner({
       repoId: repo.id,
-      worktreePath: worktree.path
+      worktreePath: worktree.path,
+      hostId
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

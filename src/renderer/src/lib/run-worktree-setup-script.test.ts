@@ -45,7 +45,12 @@ const setupLaunch = {
 
 function mockStore(overrides?: {
   worktree?: { id: string; repoId: string; path: string } | null
-  repo?: { id: string; kind?: 'git' | 'folder'; connectionId?: string | null } | null
+  repo?: {
+    id: string
+    kind?: 'git' | 'folder'
+    connectionId?: string | null
+    executionHostId?: string | null
+  } | null
 }): void {
   const worktree =
     overrides && 'worktree' in overrides
@@ -69,14 +74,13 @@ describe('runWorktreeSetupScript', () => {
     ensureHooksConfirmed.mockResolvedValue('run')
     prepareSetupRunner.mockResolvedValue({ status: 'ok', setup: setupLaunch })
     activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'tab-1' })
-    // @ts-expect-error test stub
     globalThis.window = {
       api: {
         hooks: {
           prepareSetupRunner
         }
       }
-    }
+    } as unknown as typeof globalThis.window
   })
 
   it('skips when the worktree is missing', async () => {
@@ -99,6 +103,29 @@ describe('runWorktreeSetupScript', () => {
     expect(prepareSetupRunner).not.toHaveBeenCalled()
   })
 
+  it('rejects SSH repos before the trust gate with a visible toast', async () => {
+    mockStore({ repo: { id: 'repo-1', kind: 'git', connectionId: 'ssh-target' } })
+
+    const result = await runWorktreeSetupScript('wt-1')
+
+    expect(result).toEqual({ status: 'skipped', reason: 'remote-host' })
+    expect(toastInfo).toHaveBeenCalledWith(expect.stringContaining('not yet supported'))
+    expect(ensureHooksConfirmed).not.toHaveBeenCalled()
+    expect(prepareSetupRunner).not.toHaveBeenCalled()
+  })
+
+  it('rejects runtime-host repos even without a connectionId', async () => {
+    mockStore({
+      repo: { id: 'repo-1', kind: 'git', connectionId: null, executionHostId: 'runtime:env-1' }
+    })
+
+    const result = await runWorktreeSetupScript('wt-1')
+
+    expect(result).toEqual({ status: 'skipped', reason: 'remote-host' })
+    expect(ensureHooksConfirmed).not.toHaveBeenCalled()
+    expect(prepareSetupRunner).not.toHaveBeenCalled()
+  })
+
   it('stops when setup trust is declined', async () => {
     ensureHooksConfirmed.mockResolvedValue('skip')
 
@@ -118,9 +145,7 @@ describe('runWorktreeSetupScript', () => {
     const result = await runWorktreeSetupScript('wt-1')
 
     expect(result).toEqual({ status: 'skipped', reason: 'no-setup-configured' })
-    expect(toastInfo).toHaveBeenCalledWith(
-      'No setup script is configured for this project.'
-    )
+    expect(toastInfo).toHaveBeenCalledWith('No setup script is configured for this project.')
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
@@ -144,7 +169,8 @@ describe('runWorktreeSetupScript', () => {
 
     expect(prepareSetupRunner).toHaveBeenCalledWith({
       repoId: 'repo-1',
-      worktreePath: '/repo-feature'
+      worktreePath: '/repo-feature',
+      hostId: 'local'
     })
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', { setup: setupLaunch })
     expect(result).toEqual({ status: 'launched', primaryTabId: 'tab-1' })

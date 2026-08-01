@@ -1,8 +1,14 @@
 import { ipcMain } from 'electron'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { getEffectiveHooks } from '../../hooks'
 import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { createSetupRunnerScript } from '../../worktree-runner-script'
+import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
 type PrepareSetupRunnerResult = {
@@ -18,23 +24,25 @@ export function registerWorktreeSetupRunnerHandler(context: WorktreeIpcContext):
 
   ipcMain.handle(
     'hooks:prepareSetupRunner',
-    (_event, args: { repoId: string; worktreePath: string }): PrepareSetupRunnerResult => {
-      const repo = store.getRepo(args.repoId)
+    (
+      _event,
+      args: { repoId: string; worktreePath: string; hostId?: ExecutionHostId }
+    ): PrepareSetupRunnerResult => {
+      const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo) {
         throw new Error(`Repo not found: ${args.repoId}`)
       }
       if (isFolderRepo(repo)) {
         return { status: 'ok', setup: null, reason: 'folder-repo' }
       }
-      // getEffectiveHooks and createSetupRunnerScript are local-FS only.
-      // SSH worktrees need the remote setup path before a runner can be written.
-      if (repo.connectionId) {
+      // Runtime-host repos have no connectionId, so gate on the execution host.
+      if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
         return {
           status: 'error',
           setup: null,
           reason: 'runner-failed',
           message:
-            'Run setup script is not yet supported for remote/SSH worktrees. Create a new worktree to run setup on that host, or open a local clone.'
+            'Run setup script is not yet supported for remote worktrees. Create a new worktree to run setup on that host, or open a local clone.'
         }
       }
 

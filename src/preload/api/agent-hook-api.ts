@@ -17,7 +17,11 @@ export type HooksApi = {
     repoId: string
     hostId?: ExecutionHostId
   }) => Promise<SetupScriptImportCandidate[]>
-  prepareSetupRunner: (args: { repoId: string; worktreePath: string }) => Promise<{
+  prepareSetupRunner: (args: {
+    repoId: string
+    worktreePath: string
+    hostId?: ExecutionHostId
+  }) => Promise<{
     status: 'ok' | 'error'
     setup: WorktreeSetupLaunch | null
     reason?: 'no-setup-configured' | 'folder-repo' | 'runner-failed'
