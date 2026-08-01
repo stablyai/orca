@@ -223,6 +223,7 @@ function marketplaceIdentityMatches(
       return false
     }
     if (key === 'sparse_paths') {
+      // Why: an unparsed array (multi-line) can't prove identity, so fail closed rather than promote across a source change.
       if (
         systemField.stringArrayValue === null ||
         runtimeField.stringArrayValue === null ||
