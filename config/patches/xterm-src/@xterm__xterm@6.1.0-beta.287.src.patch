@@ -88,7 +88,7 @@ index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc0
  
  export interface IBrowser {
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
-index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..ef545ca0abfbda2a058e1dbe1e1c6a859dedb166 100644
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..163a1d4a18dba60fe7e80245306fb8c31bf97247 100644
 --- a/src/browser/input/CompositionHelper.ts
 +++ b/src/browser/input/CompositionHelper.ts
 @@ -12,6 +12,28 @@ interface IPosition {
@@ -645,7 +645,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..ef545ca0abfbda2a058e1dbe1e1c6a85
 +    }
 +    if (input.startsWith(dataAlreadySent)) {
 +      return input.substring(dataAlreadySent.length);
-+    }
+     }
 +    return dataAlreadySent.includes(input) ? '' : input;
 +  }
 +
@@ -785,13 +785,57 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..ef545ca0abfbda2a058e1dbe1e1c6a85
 +  private _cancelDeferredTimer(timer?: ReturnType<typeof setTimeout>): void {
 +    if (timer === undefined) {
 +      return;
-     }
++    }
 +    clearTimeout(timer);
 +    this._compositionTimers.delete(timer);
    }
  
    /**
-@@ -278,7 +761,8 @@ export class CompositionHelper {
+@@ -214,21 +697,39 @@ export class CompositionHelper {
+       return;
+     }
+     const oldValue = this._textarea.value;
++    // Record the caret too, so an insertion is read as the slice between two known
++    // offsets instead of a diff of two buffer observations. `newValue.replace(oldValue, '')`
++    // dropped the first occurrence of the old value *anywhere* in the new one, so any
++    // insertion that was not a pure append produced mangled text: old "ab" with new "xaby"
++    // yielded "xy". Orca routes bare keydown-229 here on macOS and Linux, which is the
++    // non-composition punctuation and digit path for an active IME.
++    const oldSelectionStart = this._textarea.selectionStart ?? oldValue.length;
+     this._textareaChangeTimer = window.setTimeout(() => {
+       this._textareaChangeTimer = undefined;
+       // Ignore if a composition has started since the timeout
+       if (!this._isComposing) {
+         const newValue = this._textarea.value;
+ 
+-        const diff = newValue.replace(oldValue, '');
+-
+-        this._dataAlreadySent = diff;
++        // Keep _dataAlreadySent equal to what was actually sent — _finalizeComposition
++        // advances the composition start by its length to avoid re-sending (Issue #3191),
++        // so any other value shifts that offset by text the pty never received.
++        this._dataAlreadySent = '';
+ 
+         if (newValue.length > oldValue.length) {
+-          this._coreService.triggerDataEvent(diff, true);
++          const newSelectionEnd = this._textarea.selectionEnd ?? newValue.length;
++          const grew = newValue.length - oldValue.length;
++          if (newSelectionEnd < oldSelectionStart || grew !== newSelectionEnd - oldSelectionStart) {
++            // The caret does not account for the growth, so which characters are new is
++            // ambiguous. Emit nothing rather than guess text straight into the pty.
++            return;
++          }
++          const inserted = newValue.substring(oldSelectionStart, newSelectionEnd);
++          this._dataAlreadySent = inserted;
++          this._coreService.triggerDataEvent(inserted, true);
+         } else if (newValue.length < oldValue.length) {
+           this._coreService.triggerDataEvent(`${C0.DEL}`, true);
+         } else if ((newValue.length === oldValue.length) && (newValue !== oldValue)) {
++          this._dataAlreadySent = newValue;
+           this._coreService.triggerDataEvent(newValue, true);
+         }
+ 
+@@ -278,7 +779,8 @@ export class CompositionHelper {
      }
  
      if (!dontRecurse) {

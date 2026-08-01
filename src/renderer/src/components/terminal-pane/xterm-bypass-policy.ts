@@ -135,10 +135,13 @@ export function shouldSuppressTerminalImeKeyboardEvent(
   }
   // Why: IMEs own Process-key / composing keystrokes — letting xterm translate
   // them corrupts committed CJK text. Bare macOS/Linux keydown 229 is exempt:
-  // it must reach xterm's CompositionHelper so it can schedule its textarea
-  // diff (macOS: first key after an input-source switch; Linux: Sogou/fcitx
-  // candidate commits outside a composition session). Windows keeps full
-  // suppression until verified against its preedit-diff race.
+  // it must reach xterm's CompositionHelper so it can pick up the non-composition
+  // glyph the IME writes into the helper textarea (macOS: first key after an
+  // input-source switch; Linux: Sogou/fcitx candidate commits outside a
+  // composition session). Windows keeps full suppression: our patch now reads
+  // that glyph from the caret range rather than a buffer diff, but the Windows
+  // race is preedit landing in the textarea *before* compositionstart, which
+  // still reads as an ordinary insertion.
   const passesStandalone229Keydown = isMac || isLinux
   return (
     event.isComposing === true ||
@@ -156,8 +159,8 @@ export function shouldPreventDefaultTerminalImeCandidateKey(
 ): boolean {
   // Why: returning false from attachCustomKeyEventHandler does not
   // preventDefault — the candidate keydown would still fire a keypress and
-  // write into the helper textarea, where a later 229 diff could flush the
-  // leaked selector to the PTY.
+  // write into the helper textarea, where a later bare 229 keydown could flush
+  // the leaked selector to the PTY.
   return (
     event.type === 'keydown' &&
     options.isLinux &&
