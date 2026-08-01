@@ -1824,8 +1824,9 @@ export class AgentHookServer {
     }
     if (
       normalizedPayload.agentType === 'claude' &&
-      envelope.isReplay !== true &&
-      typeof envelope.claudeRunningNonAgentTask === 'boolean'
+      typeof envelope.claudeRunningNonAgentTask === 'boolean' &&
+      // Why: reconnect replay may seed a restarted listener, but cannot override any observation made by this runtime.
+      (envelope.isReplay !== true || !this.runtimeObservedStatusPaneKeys.has(paneKey))
     ) {
       if (envelope.claudeRunningNonAgentTask) {
         this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)

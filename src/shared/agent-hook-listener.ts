@@ -2710,7 +2710,7 @@ function normalizeClaudeEvent(
     return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
-  if (eventName === 'Stop' || eventName === 'StopFailure') {
+  if ((eventName === 'Stop' || eventName === 'StopFailure') && eventAgentId === undefined) {
     // Why: background_tasks is trusted only where unambiguous (see foldClaudeBackgroundTasksIntoRoster) — teammates report "running" here even while idle.
     // Older Claude builds without the field keep the incrementally tracked roster.
     if (backgroundTasks.present) {

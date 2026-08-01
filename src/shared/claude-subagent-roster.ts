@@ -5,6 +5,7 @@ import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-
  *  invisible in the emitted snapshots (which drop such ids). */
 const CLAUDE_SUBAGENT_ID_MAX_LENGTH = 64
 const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
+  'idle',
   'completed',
   'failed',
   'killed',
@@ -193,18 +194,18 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     const obj = item as Record<string, unknown>
     const taskType = typeof obj.type === 'string' ? obj.type.trim().toLowerCase() : ''
     const taskStatus = typeof obj.status === 'string' ? obj.status.trim().toLowerCase() : ''
+    const isAgentTask = taskType === 'subagent' || taskType === 'teammate'
+    const isTerminal =
+      taskStatus.length > 0 && CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(taskStatus)
     // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows or explicit terminal states can safely retire work.
-    if (
-      taskType !== 'subagent' &&
-      taskType !== 'teammate' &&
-      (taskStatus.length === 0 || !CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(taskStatus))
-    ) {
+    if (!isAgentTask && !isTerminal) {
       hasRunningNonAgentTask = true
     }
-    if (taskType !== 'subagent' && taskType !== 'teammate') {
+    if (!isAgentTask) {
       continue
     }
     if (typeof obj.id !== 'string' || obj.id.trim().length === 0) {
+      truncated = true
       continue
     }
     if (tasks.length >= AGENT_STATUS_MAX_SUBAGENTS) {
@@ -217,7 +218,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       id: obj.id.trim(),
       agentType: typeof obj.agent_type === 'string' ? obj.agent_type : undefined,
       description: typeof obj.description === 'string' ? obj.description : undefined,
-      running: taskStatus === 'running',
+      running: !isTerminal,
       teammate: taskType === 'teammate'
     })
   }
