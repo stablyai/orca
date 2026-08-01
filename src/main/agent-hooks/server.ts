@@ -1250,11 +1250,11 @@ export class AgentHookServer {
     if (!existing || existing.providerSessionOnly) {
       return
     }
-    if (
-      providerSessionId !== undefined &&
-      existing.providerSession?.id !== undefined &&
-      providerSessionId !== existing.providerSession.id
-    ) {
+    // Why: a session-tagged reading needs an ESTABLISHED row identity — before the row's
+    // first identity-bearing hook lands, a tagged reading can only be a stale post from a
+    // prior session (or aimed at a provider that never reports ids). Drop it; the feed
+    // re-reports within its throttle window once identity is stamped.
+    if (providerSessionId !== undefined && providerSessionId !== existing.providerSession?.id) {
       return
     }
     const normalized = normalizeAgentContextUsage(usage)

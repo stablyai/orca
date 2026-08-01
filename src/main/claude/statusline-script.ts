@@ -103,13 +103,12 @@ export function getManagedStatusLineScript(
           'fi'
         ]
       : []),
-    // Why: post only payloads carrying rate_limits (subscriber usage windows) or context_window (per-pane context pressure); skip the post (and its curl spawn) otherwise.
+    // Why: post only payloads the receiver uses; skip the post (and its curl spawn) otherwise.
+    // Remote posts only gated context_window: the relay drops rate_limits by design (account
+    // identity stays host-local), so posting it would be per-turn subprocess churn for nothing.
     'case "$payload" in',
     ...(target === 'posix'
-      ? [
-          '  *\'"rate_limits"\'*) ;;',
-          '  *\'"context_window"\'*) [ "$ORCA_CONTEXT_PRESSURE_ENABLED" = "1" ] || exit 0 ;;'
-        ]
+      ? ['  *\'"context_window"\'*) [ "$ORCA_CONTEXT_PRESSURE_ENABLED" = "1" ] || exit 0 ;;']
       : [
           contextPressureEnabled
             ? '  *\'"rate_limits"\'*|*\'"context_window"\'*) ;;'

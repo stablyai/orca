@@ -5819,7 +5819,7 @@
             "criticalLabel": "Critical at",
             "criticalDescription": "Percent of the effective context limit at which the indicator turns red.",
             "softLimitsLabel": "Soft limits",
-            "softLimitsDescription": "Absolute token caps keyed by global, provider:<id>, agent:<type>, or model:<id>. Unprefixed model and agent keys remain supported. The most specific matching cap wins.",
+            "softLimitsDescription": "Absolute token caps keyed by global, provider:<id>, agent:<type>, or model:<id>. The most specific matching cap wins.",
             "softLimitKeyPlaceholder": "global, provider:id, model:id, or agent:type",
             "softLimitKeyAriaLabel": "Soft limit key: global, provider, model, or agent type",
             "softLimitTokensPlaceholder": "Tokens",
@@ -5829,7 +5829,8 @@
             "confirmAddLimit": "Add",
             "cancelAddLimit": "Cancel adding soft limit",
             "removeLimit": "Remove soft limit for {{value0}}",
-            "duplicateLimit": "A soft limit with this key already exists."
+            "duplicateLimit": "A soft limit with this key already exists.",
+            "invalidLimitKey": "Use global, provider:<id>, agent:<type>, or model:<id>."
           }
         },
         "FloatingWorkspacePane": {

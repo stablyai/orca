@@ -77,7 +77,7 @@ describe('resolveContextPressure', () => {
     expect(
       resolveContextPressure({
         ...base,
-        config: { ...CONFIG, softLimits: { 'claude-sonnet-4-5': 100_000 } }
+        config: { ...CONFIG, softLimits: { 'model:claude-sonnet-4-5': 100_000 } }
       })
     ).toMatchObject({ limitTokens: 100_000, limitSource: 'soft-cap', level: 'critical' })
     // Provider binds when it is lowest.
@@ -85,7 +85,7 @@ describe('resolveContextPressure', () => {
       resolveContextPressure({
         usage: { usedTokens: 90_000, maxTokens: 120_000 },
         model: 'claude-sonnet-4-5',
-        config: { ...CONFIG, softLimits: { 'claude-sonnet-4-5': 500_000 } }
+        config: { ...CONFIG, softLimits: { 'model:claude-sonnet-4-5': 500_000 } }
       })
     ).toMatchObject({ limitTokens: 120_000, limitSource: 'provider' })
     // Model table binds when the provider max is larger and no soft cap exists.
@@ -113,7 +113,7 @@ describe('resolveContextPressure', () => {
     const snapshot = resolveContextPressure({
       usage: { usedTokens: 10, maxTokens: 1000 },
       agentType: 'claude',
-      config: { ...CONFIG, softLimits: { claude: 1000 } }
+      config: { ...CONFIG, softLimits: { 'agent:claude': 1000 } }
     })
     expect(snapshot?.limitSource).toBe('provider')
   })
@@ -121,7 +121,7 @@ describe('resolveContextPressure', () => {
   it('keys soft limits by exact model id before agent type', () => {
     const config: ContextPressureConfig = {
       ...CONFIG,
-      softLimits: { 'claude-opus-5': 400_000, claude: 100_000 }
+      softLimits: { 'model:claude-opus-5': 400_000, 'agent:claude': 100_000 }
     }
     expect(
       resolveContextPressure({
@@ -171,6 +171,18 @@ describe('resolveContextPressure', () => {
       limitTokens: 160_000,
       limitSource: 'soft-cap'
     })
+  })
+
+  it('ignores unprefixed keys that bypassed sanitation instead of guessing their scope', () => {
+    // Both unprefixed caps are skipped, so the model table binds instead of a 500/600 soft cap.
+    expect(
+      resolveContextPressure({
+        usage: { usedTokens: 10 },
+        model: 'claude-opus-5',
+        agentType: 'claude',
+        config: { ...CONFIG, softLimits: { 'claude-opus-5': 500, claude: 600 } }
+      })
+    ).toMatchObject({ limitSource: 'model' })
   })
 
   it('matches normalized model families on boundaries and uses the longest match', () => {
@@ -241,7 +253,7 @@ describe('resolveContextPressure', () => {
       resolveContextPressure({
         usage: { usedTokens: 10 },
         agentType: 'claude',
-        config: { ...CONFIG, softLimits: { claude: 0 } }
+        config: { ...CONFIG, softLimits: { 'agent:claude': 0 } }
       })
     ).toBeNull()
   })
@@ -266,28 +278,40 @@ describe('normalizeContextPressureSoftLimits', () => {
   it('keeps positive finite caps as clamped integers and drops invalid entries', () => {
     expect(
       normalizeContextPressureSoftLimits({
-        'claude-opus-5': 400_000.9,
-        '  claude  ': 100_000,
-        codex: -1,
-        gemini: Number.NaN,
-        amp: '5',
+        'model:claude-opus-5': 400_000.9,
+        '  agent:claude  ': 100_000,
+        'agent:codex': -1,
+        'agent:gemini': Number.NaN,
+        'agent:amp': '5',
         '': 10,
-        oversized: AGENT_CONTEXT_USAGE_MAX_TOKENS * 2
+        'model:oversized': AGENT_CONTEXT_USAGE_MAX_TOKENS * 2
       })
     ).toEqual({
-      'claude-opus-5': 400_000,
-      claude: 100_000,
-      oversized: AGENT_CONTEXT_USAGE_MAX_TOKENS
+      'model:claude-opus-5': 400_000,
+      'agent:claude': 100_000,
+      'model:oversized': AGENT_CONTEXT_USAGE_MAX_TOKENS
     })
   })
 
+  it('drops unprefixed and unknown-scope keys — every cap needs an explicit scope', () => {
+    expect(
+      normalizeContextPressureSoftLimits({
+        claude: 100_000,
+        'claude-opus-5': 200_000,
+        'window:foo': 300_000,
+        'model:': 400_000,
+        global: 150_000
+      })
+    ).toEqual({ global: 150_000 })
+  })
+
   it('bounds key length and entry count', () => {
-    const longKey = 'k'.repeat(CONTEXT_PRESSURE_SOFT_LIMIT_KEY_MAX_LENGTH + 1)
+    const longKey = `model:${'k'.repeat(CONTEXT_PRESSURE_SOFT_LIMIT_KEY_MAX_LENGTH)}`
     expect(normalizeContextPressureSoftLimits({ [longKey]: 10 })).toEqual({})
 
     const oversized = Object.fromEntries(
       Array.from({ length: CONTEXT_PRESSURE_SOFT_LIMIT_MAX_ENTRIES + 10 }, (_, i) => [
-        `model-${i}`,
+        `model:m-${i}`,
         1000
       ])
     )

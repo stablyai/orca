@@ -442,6 +442,48 @@ describe('ClaudeHookService.installRemote', () => {
     expect(status.detail).toContain('Could not parse remote Claude settings.json')
   })
 
+  it('never claims a user-owned remote statusLine slot and writes no orphan script', async () => {
+    const svc = new ClaudeHookService()
+    const { sftp, fs } = createFakeSftp()
+    fs.files.set(
+      '/home/dev/.claude/settings.json',
+      JSON.stringify({ statusLine: { type: 'command', command: '/usr/local/bin/my-statusline' } })
+    )
+    const status = await svc.installRemote(sftp, '/home/dev')
+    expect(status.state).toBe('installed')
+    const parsed = JSON.parse(fs.files.get('/home/dev/.claude/settings.json')!)
+    expect(parsed.statusLine.command).toBe('/usr/local/bin/my-statusline')
+    expect(fs.files.has('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toBe(false)
+    expect(fs.files.has('/home/dev/.orca/agent-hooks/claude-statusline.sh.installed')).toBe(false)
+  })
+
+  it('respects a remote statusline opt-out: empty slot plus marker is never re-claimed', async () => {
+    const svc = new ClaudeHookService()
+    const { sftp, fs } = createFakeSftp()
+    const first = await svc.installRemote(sftp, '/home/dev')
+    expect(first.state).toBe('installed')
+    expect(fs.files.has('/home/dev/.orca/agent-hooks/claude-statusline.sh.installed')).toBe(true)
+    // User deletes the managed entry (opt-out); reconnect must not re-claim the slot.
+    const parsed = JSON.parse(fs.files.get('/home/dev/.claude/settings.json')!)
+    delete parsed.statusLine
+    fs.files.set('/home/dev/.claude/settings.json', JSON.stringify(parsed))
+    const second = await svc.installRemote(sftp, '/home/dev')
+    expect(second.state).toBe('installed')
+    const after = JSON.parse(fs.files.get('/home/dev/.claude/settings.json')!)
+    expect(after.statusLine).toBeUndefined()
+  })
+
+  it('refreshes a managed remote statusline script on reconnect', async () => {
+    const svc = new ClaudeHookService()
+    const { sftp, fs } = createFakeSftp()
+    await svc.installRemote(sftp, '/home/dev')
+    fs.files.set('/home/dev/.orca/agent-hooks/claude-statusline.sh', '#!/bin/sh\n# stale body\n')
+    await svc.installRemote(sftp, '/home/dev')
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toContain(
+      '/statusline/claude'
+    )
+  })
+
   it('preserves user-authored hook entries while sweeping old managed entries', async () => {
     const svc = new ClaudeHookService()
     const { sftp, fs } = createFakeSftp()

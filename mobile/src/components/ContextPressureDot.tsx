@@ -2,7 +2,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentContextPressure } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
 import { formatContextPressurePercent } from '../worktree/context-pressure-display'
-import { getContextPressureCopy } from './context-pressure-copy'
+import { CONTEXT_PRESSURE_COPY } from './context-pressure-copy'
 
 // Mobile exposes exact pressure details on press instead of hover.
 const LEVEL_COLORS: Record<RuntimeWorktreeAgentContextPressure['level'], string> = {
@@ -16,9 +16,8 @@ export function ContextPressureDot({
 }: {
   pressure: RuntimeWorktreeAgentContextPressure
 }) {
-  const locale = Intl.DateTimeFormat().resolvedOptions().locale
-  const copy = getContextPressureCopy(locale)
-  const numberFormat = new Intl.NumberFormat(locale)
+  const copy = CONTEXT_PRESSURE_COPY
+  const numberFormat = new Intl.NumberFormat()
   const percent = formatContextPressurePercent(pressure.usedPercent)
   const levelLabel = copy.levels[pressure.level]
   const approximate = pressure.usedTokensSource === 'derived-percent' ? `${copy.approximate} ` : ''

@@ -38,12 +38,20 @@ describe('getManagedStatusLineScript (posix)', () => {
     expect(script).not.toContain('curl.exe')
   })
 
-  it('keeps rate limits active but excludes context posts while pressure tracking is off', () => {
-    const script = getManagedStatusLineScript('posix', false)
+  it('keeps local rate-limit posts while excluding context posts when pressure tracking is off', () => {
+    stubPlatform('darwin')
+    const script = getManagedStatusLineScript('local', false)
     expect(script).toContain('*\'"rate_limits"\'*) ;;')
+    expect(script).not.toContain('context_window')
+  })
+
+  it('posts only flag-gated context_window from remotes — the relay drops rate_limits', () => {
+    const script = getManagedStatusLineScript('posix')
+    expect(script).not.toContain('rate_limits')
     expect(script).toContain(
       '*\'"context_window"\'*) [ "$ORCA_CONTEXT_PRESSURE_ENABLED" = "1" ] || exit 0 ;;'
     )
+    // Endpoint sourcing precedes the case so the flag read is live, not baked at install time.
     expect(script.indexOf('ORCA_AGENT_HOOK_ENDPOINT')).toBeLessThan(
       script.indexOf('*\'"context_window"\'*')
     )
@@ -196,7 +204,9 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     })
   }
 
-  function makeHarness(): {
+  // Why: throttle machinery is shared, but rate_limits posting is local-only now — the local
+  // sh script exercises it; the posix harness covers the remote context-only contract.
+  function makeHarness(target: 'local' | 'posix' = 'local'): {
     scriptPath: string
     dir: string
     curlLog: string
@@ -211,7 +221,7 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     const dateLog = join(dir, 'date.log')
     const catLog = join(dir, 'cat.log')
     const scriptPath = join(dir, 'statusline.sh')
-    writeFileSync(scriptPath, getManagedStatusLineScript('posix'))
+    writeFileSync(scriptPath, getManagedStatusLineScript(target))
     const binDir = join(dir, 'stub-bin')
     mkdirSync(binDir, { recursive: true })
     writeFileSync(
@@ -386,8 +396,8 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     expect(readFileSync(stampPathFor(dir), 'utf8')).toBe('1')
   })
 
-  it('applies live remote context-pressure state without affecting rate limits', async () => {
-    const { scriptPath, dir, curlLog } = makeHarness()
+  it('gates remote context posts on the live flag and never posts remote rate_limits', async () => {
+    const { scriptPath, dir, curlLog, dateLog } = makeHarness('posix')
     const contextPayload = JSON.stringify({
       cost: { total_duration_ms: 1_000 },
       context_window: { current_usage: { input_tokens: 10 } }
@@ -396,6 +406,12 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     expect(lineCount(curlLog)).toBe(0)
     await runScript(scriptPath, dir, contextPayload, PANE_KEY, '1')
     expect(lineCount(curlLog)).toBe(1)
+    // Why: the relay discards rate_limits (account identity stays host-local), so the remote
+    // script must not spend a curl on it — flag on or off.
+    await runScript(scriptPath, dir, rateLimitPayload(16_500), PANE_KEY, '1')
+    await runScript(scriptPath, dir, rateLimitPayload(17_000), PANE_KEY, '0')
+    expect(lineCount(curlLog)).toBe(1)
+    expect(lineCount(dateLog)).toBe(0)
   })
 
   it('shares one throttle across rate-limit and context posts', async () => {

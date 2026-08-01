@@ -165,6 +165,27 @@ describe('AgentHookServer context-usage ingestion', () => {
       expect.objectContaining({ paneKey: PANE, state: 'working', contextUsage: null })
     ])
   })
+
+  it('drops a session-tagged reading until the row has an established session identity', async () => {
+    // Row created by a hook that carried no session_id: identity not yet established.
+    await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'work' })
+    server.applyPaneContextUsage(PANE, { usedTokens: 9_000, maxTokens: 200_000 }, 'stale-session')
+    expect(server.getStatusSnapshotForPane(PANE)[0]?.contextUsage).toBeUndefined()
+
+    // Identity lands; only the matching session's readings apply.
+    await postClaudeHook({
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'work',
+      session_id: 'live-session'
+    })
+    server.applyPaneContextUsage(PANE, { usedTokens: 9_000, maxTokens: 200_000 }, 'stale-session')
+    expect(server.getStatusSnapshotForPane(PANE)[0]?.contextUsage).toBeUndefined()
+    server.applyPaneContextUsage(PANE, { usedTokens: 9_000, maxTokens: 200_000 }, 'live-session')
+    expect(server.getStatusSnapshotForPane(PANE)[0]?.contextUsage).toEqual({
+      usedTokens: 9_000,
+      maxTokens: 200_000
+    })
+  })
 })
 
 describe('AgentHookServer context-usage persistence and relay ingest', () => {

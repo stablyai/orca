@@ -5756,7 +5756,7 @@
             "criticalLabel": "위험 임계값",
             "criticalDescription": "표시기가 빨간색으로 바뀌는 시점의 유효 컨텍스트 한도 대비 비율(%)입니다.",
             "softLimitsLabel": "소프트 한도",
-            "softLimitsDescription": "global, provider:<id>, agent:<type>, model:<id>별 절대 토큰 제한입니다. 접두사 없는 모델 및 에이전트 키도 계속 지원됩니다. 가장 구체적으로 일치하는 제한이 우선합니다.",
+            "softLimitsDescription": "global, provider:<id>, agent:<type>, model:<id>별 절대 토큰 제한입니다. 가장 구체적으로 일치하는 제한이 우선합니다.",
             "softLimitKeyPlaceholder": "global, provider:id, model:id 또는 agent:type",
             "softLimitKeyAriaLabel": "소프트 한도 키: global, provider:id, model:id 또는 agent:type",
             "softLimitTokensPlaceholder": "토큰",
@@ -5766,7 +5766,8 @@
             "confirmAddLimit": "추가",
             "cancelAddLimit": "소프트 한도 추가 취소",
             "removeLimit": "{{value0}}의 소프트 한도 제거",
-            "duplicateLimit": "이 키의 소프트 한도가 이미 있습니다."
+            "duplicateLimit": "이 키의 소프트 한도가 이미 있습니다.",
+            "invalidLimitKey": "global, provider:<id>, agent:<type> 또는 model:<id>를 사용하세요."
           }
         },
         "FloatingWorkspacePane": {

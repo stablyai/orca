@@ -5756,7 +5756,7 @@
             "criticalLabel": "危険しきい値",
             "criticalDescription": "インジケーターが赤になる、実効コンテキスト上限に対する割合（%）です。",
             "softLimitsLabel": "ソフト上限",
-            "softLimitsDescription": "global、provider:<id>、agent:<type>、model:<id> ごとの絶対トークン上限。接頭辞なしのモデル／エージェントキーも引き続き使用できます。最も具体的な一致が優先されます。",
+            "softLimitsDescription": "global、provider:<id>、agent:<type>、model:<id> ごとの絶対トークン上限。最も具体的な一致が優先されます。",
             "softLimitKeyPlaceholder": "global、provider:id、model:id、agent:type",
             "softLimitKeyAriaLabel": "ソフト上限キー（global、provider:id、model:id、agent:type）",
             "softLimitTokensPlaceholder": "トークン",
@@ -5766,7 +5766,8 @@
             "confirmAddLimit": "追加",
             "cancelAddLimit": "ソフト上限の追加をキャンセル",
             "removeLimit": "{{value0}} のソフト上限を削除",
-            "duplicateLimit": "このキーのソフトリミットは既に存在します。"
+            "duplicateLimit": "このキーのソフトリミットは既に存在します。",
+            "invalidLimitKey": "global、provider:<id>、agent:<type>、model:<id> のいずれかを使用してください。"
           }
         },
         "FloatingWorkspacePane": {

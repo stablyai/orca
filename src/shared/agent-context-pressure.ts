@@ -24,8 +24,9 @@ export type ContextPressureLevel = 'ok' | 'warning' | 'critical'
 export type ContextPressureConfig = {
   warnPercent: number
   criticalPercent: number
-  /** Absolute caps. Reserved keys: global, provider:<id>, agent:<type>, model:<id>.
-   *  Unprefixed keys remain backward-compatible model/agent keys. */
+  /** Absolute caps. Keys: global, provider:<id>, agent:<type>, model:<id>.
+   *  Every key needs an explicit scope — an unprefixed key would ambiguously
+   *  match both a model family and an agent type, so sanitation drops it. */
   softLimits?: Record<string, number>
 }
 
@@ -60,11 +61,18 @@ export function normalizeContextPressureSoftLimitKey(value: string): string {
   const trimmed = value.trim().toLowerCase()
   const separator = trimmed.indexOf(':')
   if (separator < 0) {
-    return trimmed.replace(/\./g, '-')
+    return trimmed
   }
   const scope = trimmed.slice(0, separator)
   const identity = trimmed.slice(separator + 1).trim()
   return `${scope}:${scope === 'model' ? identity.replace(/\./g, '-') : identity}`
+}
+
+const SOFT_LIMIT_KEY_PATTERN = /^(?:global|(?:provider|agent|model):\S+)$/
+
+/** True when a raw key normalizes to an explicitly scoped soft-limit key. */
+export function isValidContextPressureSoftLimitKey(value: string): boolean {
+  return SOFT_LIMIT_KEY_PATTERN.test(normalizeContextPressureSoftLimitKey(value))
 }
 
 /** Percent threshold for pressure levels: integer 1–100; anything else → fallback. */
@@ -86,8 +94,8 @@ export function normalizeContextPressureSoftLimits(value: unknown): Record<strin
   for (const [rawKey, rawLimit] of Object.entries(value)) {
     const key = normalizeContextPressureSoftLimitKey(rawKey)
     if (
-      key.length === 0 ||
       key.length > CONTEXT_PRESSURE_SOFT_LIMIT_KEY_MAX_LENGTH ||
+      !SOFT_LIMIT_KEY_PATTERN.test(key) ||
       typeof rawLimit !== 'number' ||
       !Number.isFinite(rawLimit) ||
       rawLimit < 1
@@ -213,7 +221,7 @@ function resolveSoftCap(
   if (normalizedModel) {
     let best: { length: number; cap: number } | undefined
     for (const [rawKey, cap] of entries) {
-      const key = rawKey.startsWith('model:') ? rawKey.slice(6) : rawKey.includes(':') ? '' : rawKey
+      const key = rawKey.startsWith('model:') ? rawKey.slice(6) : ''
       const normalizedKey = key.replace(/\./g, '-')
       if (
         normalizedKey &&
@@ -233,7 +241,6 @@ function resolveSoftCap(
   for (const key of [
     provider ? `provider:${provider.trim().toLowerCase()}` : null,
     agentType ? `agent:${agentType.trim().toLowerCase()}` : null,
-    agentType?.trim().toLowerCase(),
     'global'
   ]) {
     if (!key) {

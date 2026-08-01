@@ -3,6 +3,7 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD } from '../../shared/agent-hook-relay'
 
 export type WslHookRelayState = {
+  /** Original casing for wsl.exe argv and breadcrumbs; map keys are lowercased. */
   distro: string
   phase: 'starting' | 'running' | 'failed'
   child?: ChildProcessWithoutNullStreams
@@ -16,10 +17,6 @@ export type WslHookRelayState = {
   restartTimer?: ReturnType<typeof setTimeout>
   reinstallTimer?: ReturnType<typeof setTimeout>
   lastInstallAt?: number
-}
-
-export function wslHookRelayDistroKey(distro: string): string {
-  return distro.trim().toLowerCase()
 }
 
 export class WslContextPressureRelayState {

@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react'
 import {
   CONTEXT_PRESSURE_SOFT_LIMIT_KEY_MAX_LENGTH,
   CONTEXT_PRESSURE_SOFT_LIMIT_MAX_ENTRIES,
+  isValidContextPressureSoftLimitKey,
   normalizeContextPressureSoftLimitKey
 } from '../../../../shared/agent-context-pressure'
 import { translate } from '@/i18n/i18n'
@@ -32,7 +33,8 @@ export function ContextPressureSoftLimitsEditor({
   const entries = Object.entries(softLimits)
   const draftKey = draft?.key.trim() ?? ''
   const draftTokens = draft ? parseSoftLimitTokens(draft.tokens) : null
-  const draftValid = draftKey.length > 0 && draftTokens !== null
+  const draftKeyInvalid = draftKey.length > 0 && !isValidContextPressureSoftLimitKey(draftKey)
+  const draftValid = draftKey.length > 0 && !draftKeyInvalid && draftTokens !== null
   const draftCollision = Object.keys(softLimits).some(
     (key) =>
       normalizeContextPressureSoftLimitKey(key) === normalizeContextPressureSoftLimitKey(draftKey)
@@ -76,7 +78,7 @@ export function ContextPressureSoftLimitsEditor({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.ExperimentalPane.contextPressure.softLimitsDescription',
-              'Absolute token caps keyed by global, provider:<id>, agent:<type>, or model:<id>. Unprefixed model and agent keys remain supported. The most specific matching cap wins.'
+              'Absolute token caps keyed by global, provider:<id>, agent:<type>, or model:<id>. The most specific matching cap wins.'
             )}
           </p>
         </div>
@@ -171,6 +173,13 @@ export function ContextPressureSoftLimitsEditor({
                 'A soft limit with this key already exists.'
               )}
             </span>
+          ) : draftKeyInvalid ? (
+            <span className="text-xs text-destructive" role="alert">
+              {translate(
+                'auto.components.settings.ExperimentalPane.contextPressure.invalidLimitKey',
+                'Use global, provider:<id>, agent:<type>, or model:<id>.'
+              )}
+            </span>
           ) : null}
           <Button
             type="button"
@@ -208,6 +217,7 @@ function SoftLimitRow({
   const [keyDraft, setKeyDraft] = useState(entryKey)
   const [tokensDraft, setTokensDraft] = useState(String(tokens))
   const [duplicate, setDuplicate] = useState(false)
+  const [invalidKey, setInvalidKey] = useState(false)
   const [prev, setPrev] = useState({ entryKey, tokens })
   // Why: render-time prop sync (NumberField pattern) so external updates refresh drafts.
   if (prev.entryKey !== entryKey || prev.tokens !== tokens) {
@@ -226,11 +236,19 @@ function SoftLimitRow({
     )
     if (collision) {
       setDuplicate(true)
+      setInvalidKey(false)
       setKeyDraft(entryKey)
       setTokensDraft(String(tokens))
       return
     }
     setDuplicate(false)
+    if (nextKey && !isValidContextPressureSoftLimitKey(nextKey)) {
+      setInvalidKey(true)
+      setKeyDraft(entryKey)
+      setTokensDraft(String(tokens))
+      return
+    }
+    setInvalidKey(false)
     if (!nextKey || nextTokens === null) {
       // Why: invalid edits revert to the persisted entry instead of being stored.
       setKeyDraft(entryKey)
@@ -303,6 +321,13 @@ function SoftLimitRow({
           {translate(
             'auto.components.settings.ExperimentalPane.contextPressure.duplicateLimit',
             'A soft limit with this key already exists.'
+          )}
+        </span>
+      ) : invalidKey ? (
+        <span className="text-xs text-destructive" role="alert">
+          {translate(
+            'auto.components.settings.ExperimentalPane.contextPressure.invalidLimitKey',
+            'Use global, provider:<id>, agent:<type>, or model:<id>.'
           )}
         </span>
       ) : null}

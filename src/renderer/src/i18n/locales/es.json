@@ -5771,7 +5771,7 @@
             "criticalLabel": "Crítico al",
             "criticalDescription": "Porcentaje del límite efectivo de contexto en el que el indicador se pone rojo.",
             "softLimitsLabel": "Límites blandos",
-            "softLimitsDescription": "Límites absolutos de tokens por global, provider:<id>, agent:<type> o model:<id>. Se siguen admitiendo claves de modelo y agente sin prefijo. Gana el límite coincidente más específico.",
+            "softLimitsDescription": "Límites absolutos de tokens por global, provider:<id>, agent:<type> o model:<id>. Gana el límite coincidente más específico.",
             "softLimitKeyPlaceholder": "global, provider:id, model:id o agent:type",
             "softLimitKeyAriaLabel": "Clave del límite blando: global, proveedor, modelo o tipo de agente",
             "softLimitTokensPlaceholder": "Tokens",
@@ -5781,7 +5781,8 @@
             "confirmAddLimit": "Añadir",
             "cancelAddLimit": "Cancelar la adición del límite blando",
             "removeLimit": "Quitar el límite blando de {{value0}}",
-            "duplicateLimit": "Ya existe un límite blando con esta clave."
+            "duplicateLimit": "Ya existe un límite blando con esta clave.",
+            "invalidLimitKey": "Usa global, provider:<id>, agent:<type> o model:<id>."
           }
         },
         "FloatingWorkspacePane": {
