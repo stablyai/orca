@@ -13,6 +13,7 @@ import {
   createTerminalImeDeferredNewlineSender,
   createTerminalImeModifiedEnterChordOwner,
   getTerminalImeModifiedEnterKind,
+  isTerminalImeConsumedKey,
   isTerminalImeEnterKeyUp,
   isTerminalImeProcessEnter
 } from './terminal-ime-deferred-newline'
@@ -500,6 +501,18 @@ export function useTerminalKeyboardShortcuts({
         terminalPaneForImeShortcut?.terminal.element
       )
       const imeProcessEnter = isWindows && hasPendingImeComposition && isTerminalImeProcessEnter(e)
+      if (
+        isWindows &&
+        hasPendingImeComposition &&
+        !imeProcessEnter &&
+        isTerminalImeConsumedKey(e)
+      ) {
+        // Why: Process has no logical key, so shortcut matching would fall back to the physical code and
+        // fire Ctrl+K/Ctrl+W here and in window-level handlers mid-composition. xterm already ignores
+        // keyCode 229 while composing, so swallowing the chord loses no input.
+        e.stopImmediatePropagation()
+        return
+      }
       const shortcutEvent = imeProcessEnter
         ? {
             key: 'Enter',
