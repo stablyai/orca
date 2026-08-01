@@ -2519,9 +2519,12 @@ export type PreloadApi = {
     openFileUri: (uri: string) => Promise<void>
     pathExists: (path: string) => Promise<boolean>
     pickAttachment: () => Promise<string | null>
+    pickAttachments: () => Promise<string[]>
     pickImage: () => Promise<string | null>
+    pickImages: () => Promise<string[]>
     pickRepoIconImage: () => Promise<{ dataUrl: string; fileName: string } | null>
     pickAudio: () => Promise<string | null>
+    pickAudios: () => Promise<string[]>
     pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
   }

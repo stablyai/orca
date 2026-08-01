@@ -2387,12 +2387,18 @@ const api = {
 
     pickAttachment: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAttachment'),
 
+    pickAttachments: (): Promise<string[]> => ipcRenderer.invoke('shell:pickAttachments'),
+
     pickImage: (): Promise<string | null> => ipcRenderer.invoke('shell:pickImage'),
+
+    pickImages: (): Promise<string[]> => ipcRenderer.invoke('shell:pickImages'),
 
     pickRepoIconImage: (): Promise<{ dataUrl: string; fileName: string } | null> =>
       ipcRenderer.invoke('shell:pickRepoIconImage'),
 
     pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
+
+    pickAudios: (): Promise<string[]> => ipcRenderer.invoke('shell:pickAudios'),
 
     pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
       ipcRenderer.invoke('shell:pickDirectory', args),

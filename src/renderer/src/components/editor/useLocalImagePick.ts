@@ -21,20 +21,24 @@ export function useLocalImagePick(
     const insertPos = editor.state.selection.from
     const targetDom = editor.view.dom
     try {
-      const srcPath = await window.api.shell.pickImage()
-      if (!srcPath) {
+      const srcPaths = await window.api.shell.pickImages()
+      if (srcPaths.length === 0) {
         return
       }
-      await insertRichMarkdownImageFromPath({
-        editor,
-        filePath,
-        sourcePath: srcPath,
-        worktreeId,
-        runtimeEnvironmentId,
-        insertPos,
-        canInsert: (candidate) =>
-          !candidate.isDestroyed && candidate.view.dom === targetDom && targetDom.isConnected
-      })
+      // Why: insertContentAt with a fixed position inserts in reverse order
+      // when called repeatedly. Reversing preserves the user's selection order.
+      for (const srcPath of srcPaths.toReversed()) {
+        await insertRichMarkdownImageFromPath({
+          editor,
+          filePath,
+          sourcePath: srcPath,
+          worktreeId,
+          runtimeEnvironmentId,
+          insertPos,
+          canInsert: (candidate) =>
+            !candidate.isDestroyed && candidate.view.dom === targetDom && targetDom.isConnected
+        })
+      }
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
     }

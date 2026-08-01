@@ -26,7 +26,10 @@ export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
  * way dev (`orca-dev` userData) and packaged (`orca` userData) runs lock in
  * separate namespaces instead of serialising against each other.
  */
-export function acquireSingleInstanceLock(app: App, onSecondInstance: () => void): boolean {
+export function acquireSingleInstanceLock(
+  app: App,
+  onSecondInstance: (event: Electron.Event, argv: string[], workingDirectory: string) => void
+): boolean {
   if (!app.requestSingleInstanceLock()) {
     return false
   }

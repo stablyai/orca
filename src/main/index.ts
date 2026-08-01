@@ -328,6 +328,10 @@ let desktopRelayStatus: RelayBrokerStatus = 'offline'
 let pendingUnpairedDeviceAuthFailure = false
 // Why: gates whether headless serve installs the offscreen browser backend (and advertises browser pane support).
 let headlessBrowserDisplayAvailable = false
+// Why: macOS open-file fires before whenReady; queue paths so the renderer can open them after the window loads.
+const pendingExternalOpenFiles: string[] = []
+// Why: macOS open-file fires before the app is ready; track whether the event was registered so we don't double-register.
+let openFileListenerRegistered = false
 
 let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
@@ -609,6 +613,19 @@ function requestDesktopActivation(): void {
   desktopActivationGate.requestActivation()
 }
 
+/**
+ * second-instance callback: activates the window AND processes any file
+ * paths passed via argv (e.g. `orca file.txt` from CLI when already running).
+ */
+function handleSecondInstance(_event: Electron.Event, argv: string[]): void {
+  requestDesktopActivation()
+  const filePaths = extractFilePathsFromArgv(argv)
+  if (filePaths.length > 0) {
+    pendingExternalOpenFiles.push(...filePaths)
+    flushPendingExternalOpenFiles()
+  }
+}
+
 const handleMacAppActivation = createMacAppActivationHandler({
   getWindow: () => mainWindow,
   requestActivation: requestDesktopActivation
@@ -714,7 +731,7 @@ const hasSingleInstanceLock = skipSingleInstanceLock
   ? true
   : bypassSingleInstanceLock
     ? true
-    : acquireSingleInstanceLock(app, requestDesktopActivation)
+    : acquireSingleInstanceLock(app, handleSecondInstance)
 if (startupDiagnosticsEnabled) {
   logStartupDiagnostic('single-instance-lock-result', {
     acquired: hasSingleInstanceLock,
@@ -1283,6 +1300,8 @@ function openMainWindow(): BrowserWindow {
     clearExpectedRendererReload(rendererWebContentsId)
     recordCrashBreadcrumb('main_window_loaded')
     logStartupMilestone('did-finish-load')
+    // Why: flush any files queued by the macOS open-file event before the renderer was ready.
+    flushPendingExternalOpenFiles()
     if (!store) {
       return
     }
@@ -1974,6 +1993,62 @@ function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
       agentEnv: args.launchConfig.agentEnv
     }) === 'yolo'
   )
+}
+
+// Why: macOS open-file fires before whenReady; queue the paths for the renderer to open after the window loads.
+// Must be registered before app.whenReady() so the first open-file event is captured.
+if (process.platform === 'darwin' && !openFileListenerRegistered) {
+  openFileListenerRegistered = true
+  app.on('open-file', (_event, filePath) => {
+    _event.preventDefault()
+    if (filePath && existsSync(filePath)) {
+      pendingExternalOpenFiles.push(filePath)
+      // Why: if the window is already loaded, flush immediately;
+      // otherwise the queue is drained on did-finish-load.
+      flushPendingExternalOpenFiles()
+    }
+  })
+}
+
+/**
+ * Extract file paths from second-instance argv.
+ * Skips the app binary, flags, and non-existent paths.
+ */
+function extractFilePathsFromArgv(argv: string[]): string[] {
+  const paths: string[] = []
+  for (let i = 1; i < argv.length; i++) {
+    const arg = argv[i]
+    // Why: skip flags (--foo, -f) and non-absolute paths.
+    if (arg.startsWith('-') || !isAbsolute(arg)) {
+      continue
+    }
+    try {
+      if (existsSync(arg)) {
+        paths.push(arg)
+      }
+    } catch {
+      // ignore stat errors
+    }
+  }
+  return paths
+}
+
+/**
+ * Send queued external file paths to the renderer for opening in editor tabs.
+ * Uses the same 'terminal:file-drop' IPC channel as native file drops.
+ */
+function flushPendingExternalOpenFiles(): void {
+  if (pendingExternalOpenFiles.length === 0) {
+    return
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return
+  }
+  const paths = pendingExternalOpenFiles.splice(0)
+  mainWindow.webContents.send('terminal:file-drop', {
+    paths,
+    target: 'editor'
+  })
 }
 
 void app.whenReady().then(async () => {
