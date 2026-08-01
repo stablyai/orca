@@ -33,10 +33,8 @@ import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/sta
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
 import { normalizeTerminalLayoutPtyOwnership } from '@/components/terminal-pane/terminal-layout-pty-ownership'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getRuntimeSessionMirrorEnvironmentIds
-} from '@/lib/worktree-runtime-owner'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getReachableRuntimeSessionMirrorTargets } from '@/lib/runtime-session-mirror-targets'
 import {
   createWebRuntimeSessionTerminal,
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -2694,17 +2692,11 @@ export function applyWebSessionTabsStorePatch(
 export function useWebSessionTabsSync(): void {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const runtimeSessionMirrorEnvironmentKey = useAppStore((state) =>
-    getRuntimeSessionMirrorEnvironmentIds(state)
-      .map((environmentId) => {
-        const status = state.runtimeStatusByEnvironmentId.get(environmentId)
-        const environment = state.runtimeEnvironments.find(
-          (candidate) => candidate.id === environmentId
-        )
-        const pairingRevision = environment
-          ? (environment.pairingRevision ?? environment.createdAt)
-          : ''
-        return `${environmentId}\u0001${status?.status?.runtimeId ?? ''}\u0001${status?.connectionGeneration ?? 0}\u0001${pairingRevision}`
-      })
+    getReachableRuntimeSessionMirrorTargets(state)
+      .map(
+        ({ environmentId, runtimeId, connectionGeneration, pairingRevision }) =>
+          `${environmentId}\u0001${runtimeId}\u0001${connectionGeneration}\u0001${pairingRevision}`
+      )
       .join('\u0000')
   )
   const activeWorktreeRuntimeEnvironmentId = useAppStore((state) =>

@@ -5826,6 +5826,7 @@ export class OrchestrationDb {
       .prepare(
         `UPDATE dispatch_contexts
          SET status = ?, failure_count = ?, last_failure = ?,
+             completed_at = COALESCE(completed_at, datetime('now')),
              capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
          WHERE id = ?`
       )

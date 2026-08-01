@@ -16,7 +16,14 @@ export type WorkspaceEmojiReplacement = {
   value: string
 }
 
-const SHORTCODE_ENTRIES = STANDARD_EMOJI_SHORTCODE_ENTRIES
+const WORKSPACE_EMOJI_SHORTCODE_ADDITIONS: readonly WorkspaceEmojiSuggestion[] = [
+  { emoji: '🇰🇷', shortcode: 'kr' }
+]
+
+const SHORTCODE_ENTRIES = [
+  ...STANDARD_EMOJI_SHORTCODE_ENTRIES,
+  ...WORKSPACE_EMOJI_SHORTCODE_ADDITIONS
+]
 
 const EXACT_SHORTCODE = new Map(
   SHORTCODE_ENTRIES.map(({ emoji, shortcode }) => [shortcode, { emoji, shortcode }])

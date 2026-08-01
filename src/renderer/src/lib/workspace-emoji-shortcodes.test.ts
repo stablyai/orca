@@ -7,8 +7,12 @@ import {
 } from './workspace-emoji-shortcodes'
 
 describe('workspace emoji shortcodes', () => {
-  it('finds standard emoji by Slack-style shortcode', () => {
+  it('finds standard emoji by shortcode', () => {
     expect(searchWorkspaceEmojiShortcodes('wink', 1)).toEqual([{ emoji: '😉', shortcode: 'wink' }])
+  })
+
+  it('finds the Korean flag by kr shortcode', () => {
+    expect(searchWorkspaceEmojiShortcodes('kr', 1)).toEqual([{ emoji: '🇰🇷', shortcode: 'kr' }])
   })
 
   it('ranks an exact shortcode before longer aliases', () => {
@@ -36,6 +40,13 @@ describe('workspace emoji shortcodes', () => {
     expect(replaceCompletedWorkspaceEmojiShortcode('Ship :wink: today', 11)).toEqual({
       value: 'Ship 😉 today',
       cursor: 7
+    })
+  })
+
+  it('replaces the completed kr shortcode', () => {
+    expect(replaceCompletedWorkspaceEmojiShortcode(':kr:', 4)).toEqual({
+      value: '🇰🇷',
+      cursor: 4
     })
   })
 

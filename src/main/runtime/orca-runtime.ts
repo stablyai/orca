@@ -4561,14 +4561,14 @@ export class OrcaRuntimeService {
     return this.startedAt
   }
 
-  private getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
+  private tryGetWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId | null {
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
       const workspace = this.store
         ?.getFolderWorkspaces?.()
         .find((entry) => entry.id === scope.folderWorkspaceId)
       if (!workspace) {
-        throw new Error('folder_workspace_not_found')
+        return null
       }
       const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
       return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
@@ -4578,11 +4578,17 @@ export class OrcaRuntimeService {
     return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
   }
 
+  private getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
+    const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+    if (!hostId) {
+      throw new Error('folder_workspace_not_found')
+    }
+    return hostId
+  }
+
   private getWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
-    return (
-      this.store?.getWorkspaceSession?.(this.getWorkspaceSessionHostIdForWorktree(worktreeId)) ??
-      null
-    )
+    const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+    return hostId ? (this.store?.getWorkspaceSession?.(hostId) ?? null) : null
   }
 
   private setWorkspaceSessionForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
@@ -4609,6 +4615,56 @@ export class OrcaRuntimeService {
       }
     }
     return worktreeIds
+  }
+
+  private getWorkspaceSessionHydrationTargets(
+    includeAllPersistedWorktrees: boolean
+  ): Map<string, WorkspaceSessionState> {
+    const repos = this.store?.getRepos?.() ?? []
+    const repoHostIdByRepoId = new Map(
+      repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)] as const)
+    )
+    const folderHostIdByWorkspaceId = new Map(
+      (this.store?.getFolderWorkspaces?.() ?? []).map((workspace) => {
+        const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
+        return [
+          workspace.id,
+          connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+        ] as const
+      })
+    )
+    const hostIds = new Set<ExecutionHostId>(['local'])
+    for (const repo of repos) {
+      hostIds.add(getRepoExecutionHostId(repo))
+    }
+    for (const hostId of this.store?.getWorkspaceSessionHostIds?.() ?? []) {
+      hostIds.add(hostId)
+    }
+
+    const targets = new Map<string, WorkspaceSessionState>()
+    for (const hostId of hostIds) {
+      const session = this.store?.getWorkspaceSession?.(hostId)
+      if (!session) {
+        continue
+      }
+      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+        const scope = parseWorkspaceKey(worktreeId)
+        const ownerHostId =
+          scope?.type === 'folder'
+            ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
+            : (repoHostIdByRepoId.get(
+                getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
+              ) ?? LOCAL_EXECUTION_HOST_ID)
+        if (
+          ownerHostId === hostId &&
+          (includeAllPersistedWorktrees ||
+            this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs))
+        ) {
+          targets.set(worktreeId, session)
+        }
+      }
+    }
+    return targets
   }
 
   getStatus(): RuntimeStatus {
@@ -5475,6 +5531,8 @@ export class OrcaRuntimeService {
       force?: boolean
       allowAttachedWindow?: boolean
       onlyRuntimeOwnedTerminals?: boolean
+      runtimeOwnedTerminalCandidateKnown?: boolean
+      workspaceSession?: WorkspaceSessionState
     } = {}
   ): Set<string> {
     // Why: report which worktrees were reconciled in place so callers don't
@@ -5483,9 +5541,11 @@ export class OrcaRuntimeService {
     if (this.getAvailableAuthoritativeWindow() && options.allowAttachedWindow !== true) {
       return reconciledWorktreeIds
     }
-    const session = worktreeId
-      ? this.getWorkspaceSessionForWorktree(worktreeId)
-      : this.store?.getWorkspaceSession?.()
+    const session =
+      options.workspaceSession ??
+      (worktreeId
+        ? this.getWorkspaceSessionForWorktree(worktreeId)
+        : this.store?.getWorkspaceSession?.())
     if (!session) {
       return reconciledWorktreeIds
     }
@@ -5497,7 +5557,14 @@ export class OrcaRuntimeService {
     if (
       options.onlyRuntimeOwnedTerminals === true &&
       !this.offscreenBrowserBackend &&
-      !this.workspaceSessionHasRuntimeOwnedPtyCandidate(session)
+      options.runtimeOwnedTerminalCandidateKnown !== true &&
+      !(worktreeId
+        ? this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
+            session,
+            worktreeId,
+            session.tabsByWorktree[worktreeId] ?? []
+          )
+        : this.workspaceSessionHasRuntimeOwnedPtyCandidate(session))
     ) {
       return reconciledWorktreeIds
     }
@@ -5542,7 +5609,8 @@ export class OrcaRuntimeService {
       }
       const terminalTabs = this.buildHeadlessMobileSessionTerminalTabs(
         entryWorktreeId,
-        persistedTabs
+        persistedTabs,
+        session
       ).filter(
         (tab) =>
           options.onlyRuntimeOwnedTerminals !== true ||
@@ -5854,24 +5922,28 @@ export class OrcaRuntimeService {
   }
 
   private workspaceSessionHasRuntimeOwnedPtyCandidate(session: WorkspaceSessionState): boolean {
-    for (const tabs of Object.values(session.tabsByWorktree ?? {})) {
-      for (const tab of tabs) {
-        if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
-          return true
-        }
-        const leafPtyIds = session.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId
-        if (
-          leafPtyIds &&
-          Object.values(leafPtyIds).some((ptyId) => this.isServeOrSshOwnedPtyId(ptyId))
-        ) {
-          return true
-        }
-      }
-    }
-    // Why: expiry clears the stale PTY id but retains pane coordinates so paired viewers can ask the HUB for a fresh shell.
     return Object.entries(session.tabsByWorktree ?? {}).some(([worktreeId, tabs]) =>
-      tabs.some((tab) => this.getRecentExpiredSshLease(worktreeId, tab.id, undefined) !== null)
+      this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs)
     )
+  }
+
+  private workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
+    session: WorkspaceSessionState,
+    worktreeId: string,
+    tabs: WorkspaceSessionState['tabsByWorktree'][string]
+  ): boolean {
+    return tabs.some((tab) => {
+      if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
+        return true
+      }
+      const leafPtyIds = session.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId
+      return (
+        (leafPtyIds &&
+          Object.values(leafPtyIds).some((ptyId) => this.isServeOrSshOwnedPtyId(ptyId))) ||
+        // Why: expiry keeps pane coordinates so paired viewers can request a fresh shell.
+        this.getRecentExpiredSshLease(worktreeId, tab.id, undefined) !== null
+      )
+    })
   }
 
   private getRecentExpiredSshLease(
@@ -6482,12 +6554,9 @@ export class OrcaRuntimeService {
 
   private buildHeadlessMobileSessionTerminalTabs(
     worktreeId: string,
-    persistedTabs: readonly TerminalTab[]
+    persistedTabs: readonly TerminalTab[],
+    session: WorkspaceSessionState
   ): RuntimeMobileSessionTerminalTab[] {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session) {
-      return []
-    }
     return [...persistedTabs]
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
       .flatMap((tab, index) => {
@@ -6519,7 +6588,13 @@ export class OrcaRuntimeService {
               ...(tab.color != null ? { color: tab.color } : {}),
               ...(tab.isPinned ? { isPinned: true } : {}),
               ...(tab.viewMode ? { viewMode: tab.viewMode } : {}),
-              isActive: this.isPersistedTerminalLeafActive(worktreeId, tab.id, leafId, layout)
+              isActive: this.isPersistedTerminalLeafActive(
+                session,
+                worktreeId,
+                tab.id,
+                leafId,
+                layout
+              )
             }
           ]
         })
@@ -6708,13 +6783,13 @@ export class OrcaRuntimeService {
   }
 
   private isPersistedTerminalLeafActive(
+    session: WorkspaceSessionState,
     worktreeId: string,
     tabId: string,
     leafId: string,
     layout: TerminalLayoutSnapshot | undefined
   ): boolean {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    const activeTabId = session?.activeTabIdByWorktree?.[worktreeId] ?? session?.activeTabId
+    const activeTabId = session.activeTabIdByWorktree?.[worktreeId] ?? session.activeTabId
     return activeTabId === tabId && (!layout?.activeLeafId || layout.activeLeafId === leafId)
   }
 
@@ -28248,15 +28323,23 @@ export class OrcaRuntimeService {
       missingSnapshotOnly: true,
       notify: false
     })
-    const worktreeIdsToHydrate = this.getKnownWorkspaceSessionWorktreeIds()
-    for (const snapshot of snapshots) {
-      worktreeIdsToHydrate.add(snapshot.worktree)
+    // Why: graph sync must scan each persisted host session once, not once per workspace.
+    const worktreeSessionsToHydrate = new Map<string, WorkspaceSessionState | null>(
+      this.getWorkspaceSessionHydrationTargets(Boolean(this.offscreenBrowserBackend))
+    )
+    if (this.offscreenBrowserBackend) {
+      for (const snapshot of snapshots) {
+        if (!worktreeSessionsToHydrate.has(snapshot.worktree)) {
+          worktreeSessionsToHydrate.set(snapshot.worktree, null)
+        }
+      }
     }
     // Why: an empty renderer publication after HUB restart must not hide SSH panes persisted in this HUB's host partition.
-    for (const worktreeId of worktreeIdsToHydrate) {
+    for (const [worktreeId, workspaceSession] of worktreeSessionsToHydrate) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
+        onlyRuntimeOwnedTerminals: true,
+        ...(workspaceSession ? { runtimeOwnedTerminalCandidateKnown: true, workspaceSession } : {})
       })
     }
     const nextWorktrees = new Set<string>()
@@ -29307,10 +29390,10 @@ export class OrcaRuntimeService {
     handle: string,
     db = this.getOrchestrationDbIfAvailable()
   ): AgentStatusOrchestrationContext | undefined {
-    // Why: active dispatch is authoritative for reused terminals; completed context stale-groups future work once its done row is gone.
+    // Why: active dispatch is authoritative for reused terminals; settled context stale-groups later work once its row is gone.
     const dispatch =
       db?.getActiveDispatchForTerminal?.(handle) ??
-      this.getRecentCompletedDispatchForTerminal(handle, db)
+      this.getRecentSettledDispatchForTerminal(handle, db)
     if (!dispatch) {
       return undefined
     }
@@ -29323,7 +29406,10 @@ export class OrcaRuntimeService {
             displayName: task.display_name
           })
         : { taskTitle: '', displayName: '' }
-    const activeRun = dispatch.status === 'completed' ? undefined : db?.getActiveCoordinatorRun?.()
+    const activeRun =
+      dispatch.status === 'pending' || dispatch.status === 'dispatched'
+        ? db?.getActiveCoordinatorRun?.()
+        : undefined
     const parentTerminalHandle =
       task?.created_by_terminal_handle ??
       (activeRun?.coordinator_handle && activeRun.coordinator_handle !== handle
@@ -29336,6 +29422,7 @@ export class OrcaRuntimeService {
     return {
       taskId: dispatch.task_id,
       dispatchId: dispatch.id,
+      dispatchStatus: dispatch.status,
       ...(display.taskTitle ? { taskTitle: display.taskTitle } : {}),
       ...(display.displayName ? { displayName: display.displayName } : {}),
       ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
@@ -29345,12 +29432,16 @@ export class OrcaRuntimeService {
     }
   }
 
-  private getRecentCompletedDispatchForTerminal(
+  private getRecentSettledDispatchForTerminal(
     handle: string,
     db = this.getOrchestrationDbIfAvailable()
   ): ReturnType<OrchestrationDb['getLatestDispatchForTerminal']> {
     const dispatch = db?.getLatestDispatchForTerminal?.(handle)
-    if (dispatch?.status !== 'completed' || !dispatch.completed_at) {
+    if (
+      !dispatch?.completed_at ||
+      dispatch.status === 'pending' ||
+      dispatch.status === 'dispatched'
+    ) {
       return undefined
     }
     const completedAtMs = Date.parse(

@@ -5,6 +5,7 @@ import {
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
   foldClaudeBackgroundTasksIntoRoster,
+  hasActiveClaudeNonAgentBackgroundWork,
   idleClaudeTeammateByName,
   readClaudeBackgroundAgentTasks,
   reapRestoredClaudeSubagentsWithoutLiveAgent,
@@ -200,6 +201,27 @@ describe('claude-subagent-roster', () => {
         teammate: true
       }
     ])
+  })
+
+  it('detects live non-agent background work without treating agent tasks as shell work', () => {
+    expect(
+      hasActiveClaudeNonAgentBackgroundWork({
+        background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }]
+      })
+    ).toBe(true)
+    expect(hasActiveClaudeNonAgentBackgroundWork({ session_crons: [{ id: 'cron-1' }] })).toBe(true)
+    expect(
+      hasActiveClaudeNonAgentBackgroundWork({
+        background_tasks: [
+          { id: 'agent-1', type: 'subagent', status: 'running' },
+          { id: 'team-1', type: 'teammate', status: 'running' }
+        ]
+      })
+    ).toBe(false)
+    expect(hasActiveClaudeNonAgentBackgroundWork({ background_tasks: [], session_crons: [] })).toBe(
+      false
+    )
+    expect(hasActiveClaudeNonAgentBackgroundWork({})).toBe(false)
   })
 
   it('reports background_tasks as absent when missing or malformed', () => {

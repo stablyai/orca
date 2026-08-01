@@ -198,6 +198,11 @@ import {
 import { resolveCodexPaneLaunchAccount } from '../codex/codex-pane-launch-account'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
+import {
+  environmentCodexHomeOverrideContextsEqual,
+  getCustomCodexHomeOverrideForLaunch,
+  shellStartupCodexHomeOverrideContextsEqual
+} from '../codex/codex-real-home-path'
 import type { CodexSessionResumePreparation } from '../codex/codex-session-resume-home'
 import { dropUnverifiedCodexResumeArgv } from '../codex/codex-unverified-resume-launch'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
@@ -995,16 +1000,47 @@ function recordCodexPaneAccountForSpawn(args: {
   isReattach: boolean
   pinnedByResume: boolean
   launchCodexHomePath: string | null
+  launchEnv?: NodeJS.ProcessEnv
   target: CodexAccountSelectionTarget
   settings: GlobalSettings | undefined
 }): void {
   if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
     return
   }
+  const customHomeOverride = getCustomCodexHomeOverrideForLaunch(args.launchEnv)
+  const processHomeOverride = customHomeOverride ? getCustomCodexHomeOverrideForLaunch() : null
+  const recheckableEnvironmentOverride =
+    customHomeOverride?.source === 'environment' &&
+    processHomeOverride?.source === 'environment' &&
+    environmentCodexHomeOverrideContextsEqual(
+      customHomeOverride.context,
+      processHomeOverride.context
+    )
+      ? customHomeOverride.context
+      : undefined
+  const recheckableShellStartupOverride =
+    customHomeOverride?.source === 'shell-startup' &&
+    processHomeOverride?.source === 'shell-startup' &&
+    shellStartupCodexHomeOverrideContextsEqual(
+      customHomeOverride.context,
+      processHomeOverride.context
+    )
+      ? customHomeOverride.context
+      : undefined
   const record = args.settings
     ? resolveCodexPaneLaunchAccount({
         pinnedByResume: args.pinnedByResume,
         launchCodexHomePath: args.launchCodexHomePath,
+        // Why: pane-local overrides cannot be re-derived when a restart builds
+        // a fresh launch env, so route prompts would guess and block valid input.
+        recordComparableHomeRoute:
+          args.pinnedByResume ||
+          ((customHomeOverride?.source !== 'environment' ||
+            recheckableEnvironmentOverride !== undefined) &&
+            (customHomeOverride?.source !== 'shell-startup' ||
+              recheckableShellStartupOverride !== undefined)),
+        shellStartupHomeOverride: args.pinnedByResume ? undefined : recheckableShellStartupOverride,
+        environmentHomeOverride: args.pinnedByResume ? undefined : recheckableEnvironmentOverride,
         systemCodexHomePath: getSystemCodexHomePath(),
         settings: args.settings,
         target: args.target
@@ -4361,6 +4397,7 @@ export function registerPtyHandlers(
           isReattach: result.isReattach === true,
           pinnedByResume: codexResumeHomeSelected,
           launchCodexHomePath: selectedCodexHomePath,
+          launchEnv: args.env,
           target: codexSelectionTarget,
           settings: getSettings?.()
         })
@@ -5445,6 +5482,7 @@ export function registerPtyHandlers(
           isReattach: result.isReattach === true,
           pinnedByResume: codexResumeHomeSelected,
           launchCodexHomePath: selectedCodexHomePath,
+          launchEnv: baseEnv,
           target: codexSelectionTarget,
           settings: getSettings?.()
         })

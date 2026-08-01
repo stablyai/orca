@@ -10,6 +10,7 @@ import {
 } from '@/runtime/runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { translate } from '@/i18n/i18n'
+import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 
 /** Live status for one saved runtime environment, as last observed by the
  * renderer. `status === null` records a probe that failed or timed out so the
@@ -257,11 +258,16 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     }
     set((s) => {
       const next = new Map(s.runtimeStatusByEnvironmentId)
+      const sessionEnded = status.status === null && previous?.status != null
       const connectionChanged =
         status.status !== null &&
         (previous?.status == null || previous.status.runtimeId !== status.status.runtimeId)
+      const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
       if (connectionChanged) {
         advanceRuntimeEnvironmentConnectionGeneration(environmentId)
+      }
+      if (activeEnvironmentId === environmentId && (sessionEnded || connectionChanged)) {
+        bumpProviderRuntimeSessionGeneration()
       }
       next.set(environmentId, {
         ...status,

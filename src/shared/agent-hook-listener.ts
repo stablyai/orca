@@ -31,6 +31,7 @@ import {
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
   foldClaudeBackgroundTasksIntoRoster,
+  hasActiveClaudeNonAgentBackgroundWork,
   idleClaudeTeammateByName,
   readClaudeBackgroundAgentTasks,
   reapRestoredClaudeSubagentsWithoutLiveAgent,
@@ -2600,6 +2601,9 @@ function normalizeClaudeEvent(
   if (!stateName) {
     return null
   }
+  const hasActiveNonAgentBackgroundWork =
+    (eventName === 'Stop' || eventName === 'StopFailure') &&
+    hasActiveClaudeNonAgentBackgroundWork(hookPayload)
 
   const eventAgentId = readString(hookPayload, 'agent_id')
   // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
@@ -2682,10 +2686,13 @@ function normalizeClaudeEvent(
     ...(stateBeforeWait ? { stateBeforeWait } : {})
   })
 
-  // Why: a lead Stop isn't "done" while subagents/teammates run (would show a finished row mid-flight); Claude re-wakes the lead, so a later empty-roster Stop resolves to done.
+  // Why: a lead Stop isn't done while children, shells, or crons remain live; a later drained Stop resolves it.
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   const effectiveState =
-    stateName === 'done' && claudeRosterHasWorkingSubagent(roster) ? 'working' : stateName
+    stateName === 'done' &&
+    (hasActiveNonAgentBackgroundWork || claudeRosterHasWorkingSubagent(roster))
+      ? 'working'
+      : stateName
 
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,

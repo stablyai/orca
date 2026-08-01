@@ -2,17 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { View, Text, StyleSheet, Pressable, FlatList, Alert } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
-import {
-  QrCode,
-  Settings,
-  ChevronRight,
-  Terminal,
-  Plus,
-  RefreshCw,
-  PowerOff,
-  Edit3,
-  ListTodo
-} from 'lucide-react-native'
+import { QrCode, Settings, ChevronRight, Terminal, Plus, ListTodo } from 'lucide-react-native'
 import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
 import {
   type AccountsSnapshot,
@@ -48,7 +38,8 @@ import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { MobileHostCard } from '../src/components/MobileHostCard'
 import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
-import { ActionSheetModal, type ActionSheetAction } from '../src/components/ActionSheetModal'
+import { ActionSheetModal } from '../src/components/ActionSheetModal'
+import { getHostListActionSheetActions } from '../src/host-list-action-sheet-actions'
 import { ConfirmModal } from '../src/components/ConfirmModal'
 import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../src/cache/home-snapshot-cache'
@@ -548,7 +539,6 @@ export default function HomeScreen() {
       }
     }
     // Why: key on host-id set + each client's identity so resubs fire when forceReconnect swaps a host's client, not on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     allClients
       .map((e) => `${e.hostId}:${clientKey(e.client)}`)
@@ -973,57 +963,18 @@ export default function HomeScreen() {
         visible={actionTarget != null}
         title={actionTarget?.name}
         message={actionTarget ? endpointLabel(actionTarget.endpoint) : undefined}
-        actions={(() => {
-          const host = actionTarget
-          if (!host) {
-            return []
-          }
-          const state = hostStates[host.id] ?? 'connecting'
-          const isLive =
-            state === 'connected' ||
-            state === 'connecting' ||
-            state === 'handshaking' ||
-            state === 'reconnecting'
-          // Why: label "Connect" (not "Reconnect") when never connected this session, so the verb matches the action.
-          const hasEverConnected = (hostLastConnected[host.id] ?? null) != null
-          const items: ActionSheetAction[] = []
-          items.push({
-            label: hasEverConnected && isLive ? 'Reconnect' : 'Connect',
-            icon: RefreshCw,
-            onPress: () => {
-              setActionTarget(null)
-              void forceReconnectHost(host.id)
-            }
-          })
-          if (isLive) {
-            items.push({
-              label: 'Disconnect',
-              icon: PowerOff,
-              onPress: () => {
-                setActionTarget(null)
-                closeHostClient(host.id)
-              }
-            })
-          }
-          items.push({
-            label: 'Edit host',
-            icon: Edit3,
-            closeBeforePress: true,
-            onPress: () => {
-              setActionTarget(null)
-              navigateToMobileHostEdit(router, host.id)
-            }
-          })
-          items.push({
-            label: 'Remove',
-            destructive: true,
-            closeBeforePress: true,
-            onPress: () => {
-              setConfirmRemove(host)
-            }
-          })
-          return items
-        })()}
+        actions={getHostListActionSheetActions({
+          host: actionTarget,
+          state: actionTarget ? (hostStates[actionTarget.id] ?? 'connecting') : 'disconnected',
+          hasEverConnected: actionTarget
+            ? (hostLastConnected[actionTarget.id] ?? null) != null
+            : false,
+          onDismiss: () => setActionTarget(null),
+          onReconnect: (hostId) => void forceReconnectHost(hostId),
+          onDisconnect: closeHostClient,
+          onEdit: (hostId) => navigateToMobileHostEdit(router, hostId),
+          onRemove: setConfirmRemove
+        })}
         onClose={() => setActionTarget(null)}
       />
 

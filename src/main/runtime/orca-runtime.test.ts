@@ -26944,6 +26944,86 @@ describe('OrcaRuntimeService', () => {
     expect(secondMerge.publicationEpoch.match(/:headless-merge:/g) ?? []).toHaveLength(1)
   })
 
+  it('keeps the graph ready when a mobile snapshot references a removed folder workspace', () => {
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getFolderWorkspaces: () => []
+    } as never)
+
+    expect(() =>
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: 'folder:removed-folder',
+            publicationEpoch: 'stale-folder-publication',
+            snapshotVersion: 1,
+            activeGroupId: null,
+            activeTabId: null,
+            activeTabType: null,
+            tabs: []
+          }
+        ]
+      })
+    ).not.toThrow()
+    expect(runtime.getStatus().graphStatus).toBe('ready')
+  })
+
+  it('scans ordinary persisted sessions once instead of once per graph workspace', () => {
+    const tabsByWorktree = Object.fromEntries(
+      Array.from({ length: 100 }, (_, index) => [
+        `${TEST_REPO_ID}::/tmp/worktree-${index}`,
+        [{ id: `tab-${index}`, ptyId: `${TEST_REPO_ID}::/tmp/worktree-${index}@@pty` }]
+      ])
+    )
+    const session = { tabsByWorktree, terminalLayoutsByTabId: {} }
+    const getWorkspaceSession = vi.fn(() => session)
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorkspaceSession,
+      getWorkspaceSessionHostIds: () => ['local']
+    } as never)
+
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: Object.keys(tabsByWorktree).map((worktree) => ({
+        worktree,
+        publicationEpoch: 'large-profile',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }))
+    })
+
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(1)
+    expect(runtime.getStatus().graphStatus).toBe('ready')
+  })
+
+  it('hydrates runtime-owned candidates from one host-session read', () => {
+    const tabsByWorktree = Object.fromEntries(
+      Array.from({ length: 100 }, (_, index) => [
+        `${TEST_REPO_ID}::/tmp/runtime-worktree-${index}`,
+        [{ id: `runtime-tab-${index}`, ptyId: `serve-runtime-${index}` }]
+      ])
+    )
+    const session = { tabsByWorktree, terminalLayoutsByTabId: {} }
+    const getWorkspaceSession = vi.fn(() => session)
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorkspaceSession,
+      getWorkspaceSessionHostIds: () => ['local']
+    } as never)
+
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(1)
+    expect(runtime.getStatus().graphStatus).toBe('ready')
+  })
+
   it('briefly preserves abnormal SSH exits for paired pane recovery', async () => {
     vi.useFakeTimers()
     try {
@@ -27180,7 +27260,8 @@ describe('OrcaRuntimeService', () => {
       getWorkspaceSession
     } as never)
 
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(2)
 
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
       expect.objectContaining({
@@ -36465,6 +36546,7 @@ describe('OrcaRuntimeService', () => {
     expect(result.agentOrchestrationByPaneKey?.[workerPaneKey]).toMatchObject({
       taskId: 'task-1',
       dispatchId: 'ctx-1',
+      dispatchStatus: 'dispatched',
       taskTitle: 'Dispatch prompt work',
       displayName: 'Review dispatch prompts and make worker labels distinct',
       parentPaneKey: coordinatorPaneKey,
@@ -36542,6 +36624,7 @@ describe('OrcaRuntimeService', () => {
     expect(result.agentOrchestrationByPaneKey?.[workerPaneKey]).toMatchObject({
       taskId: 'task-done',
       dispatchId: 'ctx-done',
+      dispatchStatus: 'completed',
       parentPaneKey: coordinatorPaneKey,
       parentTerminalHandle: coordinatorHandle
     })
@@ -36599,9 +36682,65 @@ describe('OrcaRuntimeService', () => {
 
     expect(result.agentOrchestrationByPaneKey?.[workerPaneKey]).toEqual({
       taskId: 'task-done',
-      dispatchId: 'ctx-done'
+      dispatchId: 'ctx-done',
+      dispatchStatus: 'completed'
     })
   })
+
+  it.each(['failed', 'circuit_broken'] as const)(
+    'returns recent %s orchestration context without an active coordinator',
+    (dispatchStatus) => {
+      const runtime = new OrcaRuntimeService(store)
+      const workerLeafId = '66666666-6666-4666-8666-666666666666'
+      const workerPaneKey = makePaneKey('tab-worker', workerLeafId)
+      const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
+      const getActiveCoordinatorRun = vi.fn(() => ({
+        id: 'run-unrelated',
+        coordinator_handle: 'term_unrelated'
+      }))
+      runtime.setOrchestrationDb({
+        getActiveDispatchForTerminal: vi.fn(() => undefined),
+        getLatestDispatchForTerminal: vi.fn(() => ({
+          id: 'ctx-settled',
+          task_id: 'task-settled',
+          assignee_handle: workerHandle,
+          status: dispatchStatus,
+          completed_at: new Date(Date.now()).toISOString()
+        })),
+        getActiveCoordinatorRun
+      } as never)
+      runtime.attachWindow(1)
+
+      const result = runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-worker',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Claude Code',
+            activeLeafId: workerLeafId,
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-worker',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: workerLeafId,
+            paneRuntimeId: 1,
+            ptyId: 'pty-worker',
+            paneTitle: null
+          }
+        ]
+      })
+
+      expect(result.agentOrchestrationByPaneKey?.[workerPaneKey]).toEqual({
+        taskId: 'task-settled',
+        dispatchId: 'ctx-settled',
+        dispatchStatus
+      })
+      expect(getActiveCoordinatorRun).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not return stale completed orchestration context for renderer-synced terminal leaves', () => {
     const runtime = new OrcaRuntimeService(store)
