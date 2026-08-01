@@ -17,6 +17,7 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalWordSeparator: 'Word Separator',
   primarySelectionMiddleClickPaste: 'Middle-click Paste from Selection',
   terminalFocusFollowsMouse: 'Focus Follows Mouse',
+  terminalMouseEventsRequireAlt: 'Require Alt for Mouse Input',
   terminalColorOverrides: 'Color Overrides',
   terminalMacOptionAsAlt: 'Option as Alt',
   terminalPaddingX: 'Padding X',

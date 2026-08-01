@@ -2801,6 +2801,8 @@ export type GlobalSettings = {
   /** 'auto' resolves to PowerShell 7+ when present, else falls back to inbox Windows PowerShell. */
   terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
   terminalFocusFollowsMouse: boolean
+  /** Gates click/drag mouse reports to a tracking TUI behind Alt so a stray click can't answer its prompt; wheel is unaffected. Default off. */
+  terminalMouseEventsRequireAlt?: boolean
   /** X11/gnome-terminal "copy on select": selecting text auto-copies to the clipboard; default off. */
   terminalClipboardOnSelect: boolean
   /** Enables OSC 52 clipboard writes for TUIs (tmux/Zellij/nvim, incl. over SSH); default on. Clipboard *queries* stay blocked and payload size is capped, so this is write-only exposure. */

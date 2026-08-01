@@ -9050,7 +9050,9 @@
               "title": "Theme Mode",
               "keyword_target": "target",
               "keyword_editing": "editing"
-            }
+            },
+            "require_alt_for_mouse_input": "Require Alt for Mouse Input",
+            "require_alt_for_mouse_input_description": "Clicks and drags reach a program that tracks the mouse only while Alt (Option on macOS) is held, so a stray click cannot answer its prompt. Plain clicks select text instead. Scrolling is unchanged."
           },
           "windows": {
             "search": {
@@ -9590,7 +9592,10 @@
         },
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
-          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu.",
+          "require_alt_for_mouse_input_description_mac": "Clicks and drags reach a program that tracks the mouse only while Option is held, so a stray click cannot answer its prompt. Plain clicks select text instead, replacing Option-click-to-select. Scrolling is unchanged.",
+          "require_alt_for_mouse_input_description": "Clicks and drags reach a program that tracks the mouse only while Alt is held, so a stray click cannot answer its prompt. Plain clicks select text instead. Scrolling is unchanged.",
+          "require_alt_for_mouse_input": "Require Alt for Mouse Input"
         },
         "MobileRelayStatusSection": {
           "registered": "Registered",

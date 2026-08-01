@@ -186,6 +186,8 @@ export function applyTerminalAppearance(
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
+    // Co-owned with terminal-link-pty-mouse-suppression, which forces this on for one Cmd/Ctrl link gesture.
+    pane.terminal.options.mouseEventsRequireAlt = settings.terminalMouseEventsRequireAlt === true
     pane.terminal.options.lineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
     // Why unconditional: the helper no-ops when addon state already matches, so this keeps new panes and live toggles in sync.
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)

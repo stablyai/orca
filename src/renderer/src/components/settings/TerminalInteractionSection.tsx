@@ -104,6 +104,15 @@ export function TerminalInteractionSection({
         'auto.components.settings.TerminalPane.af0c3b6e39',
         'Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
       )
+  const requireAltForMouseInputDescription = isMac
+    ? translate(
+        'auto.components.settings.TerminalInteractionSection.require_alt_for_mouse_input_description_mac',
+        'Clicks and drags reach a program that tracks the mouse only while Option is held, so a stray click cannot answer its prompt. Plain clicks select text instead, replacing Option-click-to-select. Scrolling is unchanged.'
+      )
+    : translate(
+        'auto.components.settings.TerminalInteractionSection.require_alt_for_mouse_input_description',
+        'Clicks and drags reach a program that tracks the mouse only while Alt is held, so a stray click cannot answer its prompt. Plain clicks select text instead. Scrolling is unchanged.'
+      )
   const rightClickPasteSwitchDescription = isMac
     ? translate(
         'auto.components.settings.TerminalInteractionSection.c64497148a',
@@ -293,6 +302,29 @@ export function TerminalInteractionSection({
             onChange={() =>
               updateSettings({
                 terminalFocusFollowsMouse: !settings.terminalFocusFollowsMouse
+              })
+            }
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalInteractionSection.require_alt_for_mouse_input',
+            'Require Alt for Mouse Input'
+          )}
+          description={requireAltForMouseInputDescription}
+          keywords={['mouse', 'click', 'alt', 'option', 'tui', 'prompt', 'selection']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.TerminalInteractionSection.require_alt_for_mouse_input',
+              'Require Alt for Mouse Input'
+            )}
+            description={requireAltForMouseInputDescription}
+            checked={settings.terminalMouseEventsRequireAlt === true}
+            onChange={() =>
+              updateSettings({
+                terminalMouseEventsRequireAlt: settings.terminalMouseEventsRequireAlt !== true
               })
             }
           />
