@@ -6652,7 +6652,7 @@ describe('registerPtyHandlers', () => {
     await pendingInventory
   })
 
-  it('reports authoritative snapshot capability with the owning provider context', () => {
+  it('reports authoritative snapshot capability with the owning provider context', async () => {
     const capabilityProvider = {
       authoritativeIds: new Set(['current-pty']),
       canProvideAuthoritativeBufferSnapshot(id: string) {
@@ -6661,14 +6661,11 @@ describe('registerPtyHandlers', () => {
     }
     registerPtyHandlers(mainWindow as never)
     setLocalPtyProvider(capabilityProvider as never)
-    const listener = onMock.mock.calls.find(
-      ([channel]) => channel === 'pty:getAuthoritativeBufferSnapshotCapabilitiesSync'
-    )?.[1] as ((event: { returnValue?: unknown }, args: { ids: unknown[] }) => void) | undefined
-    const event: { returnValue?: unknown } = {}
+    const result = await handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
+      ids: ['current-pty', 'legacy-pty', 'current-pty', 42]
+    })
 
-    listener?.(event, { ids: ['current-pty', 'legacy-pty', 'current-pty', 42] })
-
-    expect(event.returnValue).toEqual([
+    expect(result).toEqual([
       { id: 'current-pty', authoritative: true },
       { id: 'legacy-pty', authoritative: false }
     ])

@@ -4622,6 +4622,102 @@
       "demotionRule": "Keep experimental or demote if the gate flakes without a product or harness bug, if any local shutdown reaches fallback before startup settles, or if shutdown adds inventory scans or retry loops."
     },
     {
+      "id": "terminal-provider.snapshot-capability-renderer-responsiveness",
+      "title": "PTY snapshot capability discovery never blocks renderer JavaScript",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-provider",
+      "layer": "renderer-ipc",
+      "surfaces": [
+        "renderer startup",
+        "cold terminal restoration",
+        "hidden terminal parking",
+        "SSH terminal restoration",
+        "paired web terminal restoration"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["daemon", "ssh", "remote-runtime"],
+      "coverageNotes": "A preload contract and Electron main-stall oracle prove capability lookup is asynchronous. Startup prefetch covers restored primary and split-pane PTY identities before cold activation, while unknown providers remain eager. Docker SSH journeys prove remote terminals still remount eagerly and reclaim their authenticated PTY owner after restart.",
+      "motivatingLinks": ["https://stablygroup.slack.com/archives/C0BD60A5J85/p1785524559818629"],
+      "invariant": "PTY snapshot capability discovery must never synchronously block renderer JavaScript. Restored daemon capability must be known before workspace readiness enables cold activation; unknown or legacy capability must remain eager. A healthy SSH provider must return definitive false without polling. One unresponsive capability batch must fail open within one second regardless of PTY count, and stale async responses must not update current bindings.",
+      "oracle": "The preload test rejects sendSync and requires ipcRenderer.invoke. Unit contracts assert 512-ID batching, one-second fail-open, unknown retry, definitive SSH false, and generation-fenced stale responses. During an injected 1.5-second Electron main-thread stall, a renderer-owned 50ms interval must keep a maximum gap below 500ms and each API call must return within 100ms. The production cold-activation journey must still mount at most three of eight daemon tabs after reload, while Docker SSH restoration remains eager.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/preload/pty-snapshot-capability-ipc.test.ts src/main/ipc/pty.test.ts src/main/providers/ssh-pty-provider.test.ts src/renderer/src/components/terminal/terminal-provider-snapshot-capability.test.ts src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/app-startup-routing.test.ts --reporter=dot",
+        "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/pty-snapshot-capability-main-stall.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/preload/pty-snapshot-capability-ipc.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/main/providers/ssh-pty-provider.test.ts",
+        "src/renderer/src/components/terminal/terminal-provider-snapshot-capability.test.ts",
+        "src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx",
+        "src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts",
+        "src/renderer/src/app-startup-routing.test.ts",
+        "tests/e2e/pty-snapshot-capability-main-stall.spec.ts",
+        "tests/e2e/terminal-cold-activation-deferral.spec.ts",
+        "tests/e2e/ssh-cold-activation-restore.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/pty-snapshot-capability-main-stall.spec.ts",
+          "assertions": [
+            "a 1.5-second main stall leaves renderer interval gaps below 500ms",
+            "capability calls return to renderer JavaScript within 100ms"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-cold-activation-deferral.spec.ts",
+          "assertions": [
+            "cold reload mounts at most three of eight daemon tabs and parked watchers cover the rest"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-31",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/pty-snapshot-capability-main-stall.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
+          "result": "passed",
+          "durationSeconds": 16.8,
+          "summary": "Three 1.5-second main stalls produced 32 renderer calls each; maximum interval gaps were 70.3ms, 70.1ms, and 71.6ms, and maximum call-return durations were 0.1ms, 0.1ms, and 0.2ms. The synchronous baseline produced a 1465.1ms interval gap and 1464.2ms call-return duration. Cold daemon restore and both Docker SSH restore journeys also passed."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused Electron responsiveness and cold-restore journeys"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic Electron oracle passed three consecutive local runs; CI soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical Electron oracle failed with synchronous sendSync at a 1465.1ms renderer interval gap and 1464.2ms call-return duration, then passed three times with async invoke at no more than 71.6ms and 0.2ms respectively. The preload test also fails on the synchronous baseline."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Capability requests are deduplicated by PTY ID, sent in bounded 512-ID batches, cached after a definitive result, and retried only for unknown results. SSH now returns definitive false. One unresponsive batch fails open after one second without scanning further batches. No subprocesses or provider inventories are added."
+      },
+      "promotionCriteria": [
+        "Run the Electron main-stall oracle for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Collect Windows and Linux desktop cold-restore coverage.",
+        "Add a headed paired-desktop cold-restore journey if provider capability semantics move into the remote runtime."
+      ],
+      "knownGaps": [
+        "The main-stall and local daemon cold-restore Electron journeys currently run on macOS only.",
+        "Docker SSH proves the Linux relay/provider path but not a Linux desktop renderer.",
+        "This gate proves renderer responsiveness to main stalls; it does not identify the cause of the reported production hard freeze."
+      ],
+      "demotionRule": "Demote if capability discovery reintroduces synchronous renderer IPC, cold daemon tabs mount eagerly despite authoritative snapshots, SSH capability polls after a definitive response, or the renderer gap budget flakes without a product or harness bug."
+    },
+    {
       "id": "terminal-provider.ssh-remote-reattach-contract",
       "title": "SSH restore and remote-runtime recovery preserve live terminal ownership",
       "maturity": "experimental",

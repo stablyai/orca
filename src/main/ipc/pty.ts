@@ -1911,7 +1911,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
-  ipcMain.removeAllListeners('pty:getAuthoritativeBufferSnapshotCapabilitiesSync')
+  ipcMain.removeHandler('pty:getAuthoritativeBufferSnapshotCapabilities')
   ipcMain.removeHandler('pty:declarePendingPaneSerializer')
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
@@ -6324,9 +6324,9 @@ export function registerPtyHandlers(
     return Array.from(deduped.values())
   })
 
-  ipcMain.on(
-    'pty:getAuthoritativeBufferSnapshotCapabilitiesSync',
-    (event, args: { ids?: unknown }) => {
+  ipcMain.handle(
+    'pty:getAuthoritativeBufferSnapshotCapabilities',
+    (_event, args: { ids?: unknown }) => {
       const ids = Array.isArray(args?.ids) ? args.ids.slice(0, 512) : []
       const capabilities: { id: string; authoritative: boolean | null }[] = []
       const seen = new Set<string>()
@@ -6351,8 +6351,7 @@ export function registerPtyHandlers(
               : null
         })
       }
-      // Why: cold deferral runs during render before hidden panes mount; this in-memory route lookup lets legacy PTYs mount in that pass.
-      event.returnValue = capabilities
+      return capabilities
     }
   )
 

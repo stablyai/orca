@@ -211,6 +211,10 @@ import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
 } from './components/terminal/background-terminal-worktree-mount'
+import {
+  collectTerminalProviderSnapshotPtyIds,
+  synchronizeTerminalProviderSnapshotCapabilities
+} from './components/terminal/terminal-provider-snapshot-capability'
 import { useRemoteRuntimeRecoveryTriggers } from './runtime/use-remote-runtime-recovery-triggers'
 
 // Why: bound the resume-record loss window on a hard kill to ~1 min; capture skips unchanged records so per-tick cost is negligible.
@@ -1074,6 +1078,11 @@ function App(): React.JSX.Element {
           await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
+          await timeRendererStartupStep('terminal-provider-snapshot-capabilities', () => {
+            return synchronizeTerminalProviderSnapshotCapabilities(
+              collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
+            )
+          })
           reconnectStarted = true
           await timeRendererStartupStep('reconnect-terminals', () =>
             actions.reconnectPersistedTerminals(abortController.signal)
