@@ -4,10 +4,24 @@ import { getFileExplorerImportFailureToast } from './file-explorer-import-feedba
 describe('getFileExplorerImportFailureToast', () => {
   it('shows the actionable reason for a single failed import', () => {
     expect(
-      getFileExplorerImportFailureToast([{ reason: 'File exceeds the 25 MB remote import limit' }])
+      getFileExplorerImportFailureToast([
+        { reason: "'large.bin' exceeds the 25 MB remote import limit" }
+      ])
     ).toEqual({
       title: 'Failed to import 1 file.',
-      description: 'File exceeds the 25 MB remote import limit'
+      description: "'large.bin' exceeds the 25 MB remote import limit"
+    })
+  })
+
+  it('collapses newlines inside a reason to keep one line per reason', () => {
+    expect(
+      getFileExplorerImportFailureToast([
+        { reason: "'a\nfake status line.bin' exceeds the 25 MB remote import limit" },
+        { reason: "'a fake status line.bin' exceeds the 25 MB remote import limit" }
+      ])
+    ).toEqual({
+      title: 'Failed to import 2 files.',
+      description: "'a fake status line.bin' exceeds the 25 MB remote import limit"
     })
   })
 
@@ -41,5 +55,16 @@ describe('getFileExplorerImportFailureToast', () => {
       failed.slice(0, 5).map((f) => f.reason)
     )
     expect(toast.description?.endsWith('\n…')).toBe(true)
+  })
+
+  it('never truncates when the ellipsis would not save a line', () => {
+    const reasonsOf = (count: number) =>
+      getFileExplorerImportFailureToast(
+        Array.from({ length: count }, (_, i) => ({ reason: `r-${i}` }))
+      ).description?.split('\n')
+    expect(reasonsOf(5)).toHaveLength(5)
+    expect(reasonsOf(5)).not.toContain('…')
+    expect(reasonsOf(6)).toHaveLength(6)
+    expect(reasonsOf(6)).not.toContain('…')
   })
 })

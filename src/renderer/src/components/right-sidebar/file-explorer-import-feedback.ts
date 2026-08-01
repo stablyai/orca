@@ -18,10 +18,18 @@ export function getFileExplorerImportFailureToast(
 ): FileExplorerImportFailureToast {
   const noun = failed.length === 1 ? 'file' : 'files'
   const uniqueReasons = [
-    ...new Set(failed.map((result) => result.reason.trim()).filter((reason) => reason.length > 0))
+    ...new Set(
+      failed
+        // Why: reasons can embed filenames, and a newline-bearing filename would
+        // both defeat the line cap and forge an extra toast line.
+        .map((result) => result.reason.replace(/\s+/g, ' ').trim())
+        .filter((reason) => reason.length > 0)
+    )
   ]
+  // Why: truncate only when it hides more than one reason — five reasons plus
+  // an ellipsis line costs the same height as six plain lines.
   const reasons =
-    uniqueReasons.length > MAX_DESCRIPTION_REASONS
+    uniqueReasons.length > MAX_DESCRIPTION_REASONS + 1
       ? [...uniqueReasons.slice(0, MAX_DESCRIPTION_REASONS), '…']
       : uniqueReasons
 

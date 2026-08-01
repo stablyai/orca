@@ -101,10 +101,12 @@ export function useFileExplorerImport({
           if (failed.length > 0) {
             const message = getFileExplorerImportFailureToast(failed)
             // Why: sonner renders string descriptions with collapsed whitespace;
-            // pre-line keeps the one-reason-per-line format.
+            // pre-line keeps the one-reason-per-line format. Multi-line reasons
+            // need more than sonner's 4s default to read and act on.
             toast.error(message.title, {
               description: message.description,
-              descriptionClassName: 'whitespace-pre-line'
+              descriptionClassName: 'whitespace-pre-line',
+              duration: 60_000
             })
           } else if (skipped.length > 0 && imported.length === 0) {
             const noun = skipped.length === 1 ? 'file' : 'files'
