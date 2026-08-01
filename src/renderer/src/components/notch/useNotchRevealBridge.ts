@@ -10,6 +10,17 @@ import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
  * the window before sending, so this only has to navigate.
  */
 export function useNotchRevealBridge(): void {
+  const activeTabId = useAppStore((state) => state.activeTabId)
+  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+
+  // Why: the notch panel is a non-focusable window, so it never receives a blur and cannot
+  // notice that your attention moved. Main closes it when another app takes over or an Orca
+  // window is focused; this covers the case those miss — switching tab or worktree inside an
+  // already-focused window, where no focus event fires at all.
+  useEffect(() => {
+    window.api.notch?.setExpanded?.(false)
+  }, [activeTabId, activeWorktreeId])
+
   useEffect(() => {
     const unsubscribe = window.api.notch?.onRevealPane?.((args) => {
       useAppStore.getState().setActiveWorktree(args.worktreeId)

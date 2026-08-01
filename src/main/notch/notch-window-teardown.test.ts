@@ -206,6 +206,27 @@ describe('notch window teardown', () => {
     expect(workspaceCalls.some((args) => args.length > 1)).toBe(false)
   })
 
+  it('collapses on demand, since a non-focusable window never blurs itself', () => {
+    // Why this matters: the panel cannot notice that attention moved — index.ts drives it from
+    // did-resign-active / browser-window-focus, and the renderer drives it on tab change.
+    // Without an external signal an open panel simply stays open behind whatever you do next.
+    create()
+    mod.setNotchExpanded(true)
+    expect(mod.isNotchExpanded()).toBe(true)
+
+    mod.setNotchExpanded(false)
+
+    expect(mod.isNotchExpanded()).toBe(false)
+  })
+
+  it('ignores a redundant collapse', () => {
+    create()
+    expect(mod.isNotchExpanded()).toBe(false)
+
+    expect(() => mod.setNotchExpanded(false)).not.toThrow()
+    expect(mod.isNotchExpanded()).toBe(false)
+  })
+
   it('is safe to tear down when no window was ever created', () => {
     expect(() => mod.closeNotchWindowForQuit()).not.toThrow()
   })

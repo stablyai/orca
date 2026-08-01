@@ -225,7 +225,8 @@ import {
   closeNotchWindow,
   closeNotchWindowForQuit,
   createNotchWindow,
-  getNotchWindow
+  getNotchWindow,
+  setNotchExpanded
 } from './notch/notch-window'
 import {
   NOTCH_QUIT_ABORT_GRACE_MS,
@@ -1171,6 +1172,13 @@ let notchRestorePending = false
 app.on('will-quit', () => {
   notchQuitCommitted = true
 })
+
+// Why both events: the notch panel is `focusable: false`, so it never gets a blur of its own
+// and would otherwise stay open behind whatever you did next. `did-resign-active` covers
+// switching to another app; `browser-window-focus` covers clicking back into Orca. Neither can
+// be emitted by the notch window itself, so this cannot fight the user's own click.
+app.on('did-resign-active', () => setNotchExpanded(false))
+app.on('browser-window-focus', () => setNotchExpanded(false))
 
 app.on('before-quit', () => {
   // Why captured in the closure rather than read from module scope at fire time: two vetoed
