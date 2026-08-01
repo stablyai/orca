@@ -74,6 +74,8 @@ function SavedHostCard({
 }): React.JSX.Element {
   const state = host?.status.state ?? 'closed'
   const rejected = state === 'closed' && host?.status.lastErrorReason === 'unauthorized'
+  const hostDisconnected =
+    state === 'closed' && host?.status.lastErrorReason === 'host_disconnected'
   const busy = state === 'connected' || state === 'connecting'
   const [editingName, setEditingName] = useState<string | null>(null)
 
@@ -167,6 +169,14 @@ function SavedHostCard({
           {translate(
             'auto.components.settings.PeerCollabSettingsPane.clientSavedPairingInvalid',
             'This pairing is no longer valid — the host may have revoked it.'
+          )}
+        </p>
+      ) : null}
+      {hostDisconnected ? (
+        <p className="text-muted-foreground text-xs">
+          {translate(
+            'auto.components.settings.PeerCollabSettingsPane.clientHostDisconnected',
+            'The host ended this connection. Connect again to rejoin.'
           )}
         </p>
       ) : null}

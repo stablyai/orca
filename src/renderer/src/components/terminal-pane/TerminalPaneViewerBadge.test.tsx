@@ -101,6 +101,40 @@ describe('TerminalPaneViewerBadge', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it('retries handle resolution until a freshly opened pane registers its PTY', async () => {
+    vi.useFakeTimers()
+    try {
+      resolveHandleMocks.resolveTerminalHandleForPane
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue('term_worker')
+      installPeerCollabApi()
+
+      const { container } = render(
+        <TerminalPaneViewerBadge
+          tabId="tab-1"
+          leafId="leaf-1"
+          connectedClients={[viewer({ subscribedTerminals: [] })]}
+          onConnectedClientsChanged={vi.fn()}
+        />
+      )
+
+      await vi.waitFor(() =>
+        expect(resolveHandleMocks.resolveTerminalHandleForPane).toHaveBeenCalledTimes(1)
+      )
+      expect(container).toBeEmptyDOMElement()
+
+      await vi.advanceTimersByTimeAsync(2000)
+      await vi.waitFor(() =>
+        expect(resolveHandleMocks.resolveTerminalHandleForPane).toHaveBeenCalledTimes(2)
+      )
+      await vi.waitFor(() =>
+        expect(screen.getByLabelText('1 granted access to this terminal')).toBeInTheDocument()
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('renders the badge for a connected client that is not watching this pane', async () => {
     resolveHandleMocks.resolveTerminalHandleForPane.mockResolvedValue('term_worker')
     installPeerCollabApi()
@@ -114,8 +148,31 @@ describe('TerminalPaneViewerBadge', () => {
       />
     )
 
-    await waitFor(() => expect(screen.getByText('1 connected, not watching')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByLabelText('1 granted access to this terminal')).toBeInTheDocument()
+    )
     expect(screen.getByText('Alice')).toBeInTheDocument()
+  })
+
+  it('shows a zero count when clients are connected but none is granted this terminal', async () => {
+    resolveHandleMocks.resolveTerminalHandleForPane.mockResolvedValue('term_worker')
+    installPeerCollabApi()
+
+    render(
+      <TerminalPaneViewerBadge
+        tabId="tab-1"
+        leafId="leaf-1"
+        connectedClients={[viewer({ subscribedTerminals: [], grantedTerminals: [] })]}
+        onConnectedClientsChanged={vi.fn()}
+      />
+    )
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('1 connected, no access granted to this terminal')
+      ).toBeInTheDocument()
+    )
+    expect(screen.getByText('0')).toBeInTheDocument()
   })
 
   it('lists both watching and non-watching connected clients, distinguished', async () => {

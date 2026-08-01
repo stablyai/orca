@@ -194,6 +194,19 @@ describe('remote desktop viewer width driver', () => {
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
+  it('a peer holding the input floor blocks remote-desktop layout takeover', async () => {
+    const { runtime, resizeCalls } = createRuntime()
+    const floor = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')
+    expect(floor).not.toBeNull()
+    await floor!.commit()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-A' })
+
+    // A remote-desktop viewer registering must not resize the peer-owned PTY.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 40)
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-A' })
+    expect(resizeCalls).toEqual([])
+  })
+
   it('isPtyResizeDrivenRemotely is false for idle and desktop drivers', async () => {
     const { runtime } = createRuntime()
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)

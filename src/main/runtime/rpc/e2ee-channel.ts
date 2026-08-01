@@ -21,6 +21,8 @@ import type { RuntimeCapability } from '../../../shared/protocol-version'
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
+// Why: this is persisted to device-registry's lastConnectedName; cap it so a peer can't grow the paired-devices store or UI label unbounded.
+const MAX_DISPLAY_NAME_LENGTH = 80
 
 export type E2EEChannelOptions = {
   serverSecretKey: Uint8Array
@@ -253,7 +255,7 @@ export class E2EEChannel {
     this.clientCapabilities = parseRuntimeClientCapabilities(authentication.auth.clientCapabilities)
     this.displayName =
       typeof authentication.auth.displayName === 'string'
-        ? authentication.auth.displayName.trim() || null
+        ? authentication.auth.displayName.trim().slice(0, MAX_DISPLAY_NAME_LENGTH) || null
         : null
     this.deviceToken = authenticatedDevice.deviceToken
     this.authenticatedDevice = authenticatedDevice

@@ -833,7 +833,7 @@ describe('peer input-floor arbitration (Phase 5)', () => {
     const claim = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
     await claim.commit()
 
-    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'peer-A' })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-A' })
     expect(ptySizes.get('pty-1')).toEqual(before)
   })
 
@@ -841,7 +841,7 @@ describe('peer input-floor arbitration (Phase 5)', () => {
     const { runtime } = createRuntime()
     const claim = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
     await claim.commit()
-    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'peer-A' })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-A' })
 
     runtime.releaseInputFloorIfHeldBy('pty-1', 'peer-A')
 
@@ -862,7 +862,7 @@ describe('peer input-floor arbitration (Phase 5)', () => {
 
     // Peer B's claim must still be able to commit correctly afterwards.
     await pendingB.commit()
-    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'peer-B' })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-B' })
   })
 
   it("releaseInputFloorIfHeldBy by a non-holder leaves another client's still-pending (uncommitted) claim rollback-able", async () => {
@@ -881,11 +881,97 @@ describe('peer input-floor arbitration (Phase 5)', () => {
     const { runtime } = createRuntime()
     const claimA = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
     await claimA.commit()
-    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'peer-A' })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-A' })
 
     // peer-B never claimed the floor; its disconnect must not touch peer-A's driver.
     runtime.releaseInputFloorIfHeldBy('pty-1', 'peer-B')
 
-    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'peer-A' })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-A' })
+  })
+
+  // Why: a peer occupying the floor is a distinct desktop, not "my phone" — a
+  // driver still labeled `{ kind: 'mobile' }` while a peer drives mislabels
+  // it in every UI consumer (lock banner, hibernation gate, native-chat gate).
+  it('beginInputFloor("peer") labels the driver kind:"peer", not kind:"mobile"', async () => {
+    const { runtime } = createRuntime()
+    const claim = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
+
+    // Reservation (pre-commit) already stamps the correct kind.
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-A' })
+
+    await claim.commit()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-A' })
+  })
+
+  it('beginInputFloor("peer") rollback restores the prior driver, still correctly kinded', async () => {
+    const { runtime } = createRuntime()
+    const claim = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
+    claim.rollback()
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+  })
+
+  it('a peer floor is never mistaken for mobile by the mobile-only query-authority gate', async () => {
+    const { runtime } = createRuntime()
+    const claim = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
+    await claim.commit()
+
+    // isMobileTerminalQueryReplyAuthority requires an active mobile subscriber
+    // record; a peer floor has none, so no clientId can become reply authority.
+    expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'peer-A')).toBe(false)
+  })
+
+  it('writeTerminalPreviewInput is blocked while a peer holds the floor', async () => {
+    const { runtime, writes } = createRuntime()
+    const claim = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
+    await claim.commit()
+
+    await expect(runtime.writeTerminalPreviewInput('pty-1', 'x')).resolves.toBe(false)
+    expect(writes).toHaveLength(0)
+  })
+
+  it('reclaimTerminalForDesktop releases a stale peer lock with no active claim', async () => {
+    const { runtime } = createRuntime()
+    const claim = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
+    await claim.commit()
+    // Peer disconnected without a clean release — driver is stale.
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-A' })
+
+    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+  })
+})
+
+describe('driver dedupe across remote-driver kinds', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  // Why: setDriver's dedupe must key on (kind, clientId) together — collapsing
+  // "any non-mobile kind" into one bucket previously let a peer→peer hand-off
+  // between different clientIds (or a mobile→peer/peer→mobile transition)
+  // silently no-op instead of notifying listeners of the real driver change.
+  it('does not dedupe a mobile → peer transition even with the same clientId', async () => {
+    const { runtime, driverEvents } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'actor-1', { cols: 45, rows: 20 })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'actor-1' })
+
+    const claim = runtime.beginInputFloor('pty-1', 'actor-1', 'peer')!
+    await claim.commit()
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'actor-1' })
+    expect(driverEvents.at(-1)?.driver).toEqual({ kind: 'peer', clientId: 'actor-1' })
+  })
+
+  it('does not dedupe a peer → peer hand-off between different clientIds', async () => {
+    const { runtime, driverEvents } = createRuntime()
+    const claimA = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
+    await claimA.commit()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-A' })
+
+    const claimB = runtime.beginInputFloor('pty-1', 'peer-B', 'peer')!
+    await claimB.commit()
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'peer', clientId: 'peer-B' })
+    expect(driverEvents.at(-1)?.driver).toEqual({ kind: 'peer', clientId: 'peer-B' })
   })
 })

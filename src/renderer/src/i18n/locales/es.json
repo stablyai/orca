@@ -2661,7 +2661,11 @@
             "f2a8b9c1d3": "Desde tu teléfono",
             "c7e4a2b8f1": "Tu teléfono tiene el control",
             "d9f3c6e2a4": "El teclado de escritorio está en pausa. Recupera este terminal para escribir aquí, recupera todos los terminales que controla tu teléfono o contrae para seguir observando.",
-            "a6b1d8f3e2": "La sesión del teléfono terminó. Restaura el tamaño de escritorio para este terminal o para todos los terminales que tu teléfono dejó en tamaño móvil."
+            "a6b1d8f3e2": "La sesión del teléfono terminó. Restaura el tamaño de escritorio para este terminal o para todos los terminales que tu teléfono dejó en tamaño móvil.",
+            "peerChipLabel": "Equipo remoto controlando",
+            "peerEyebrow": "Desde un equipo remoto",
+            "peerTitle": "Un equipo remoto tiene el control",
+            "peerBody": "El teclado de escritorio está en pausa. Recupera este terminal para escribir aquí, recupera todos los terminales que controla este equipo remoto o contrae para seguir observando."
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copiar contexto",
@@ -10140,7 +10144,8 @@
           "clientConnectedCount": "Conectado a {{count}} anfitrión(es)",
           "clientAddHostTitle": "Añadir un anfitrión",
           "renameHostPlaceholder": "Nombre visible de este anfitrión",
-          "renameHost": "Renombrar anfitrión"
+          "renameHost": "Renombrar anfitrión",
+          "clientHostDisconnected": "El anfitrión finalizó esta conexión. Conéctate de nuevo para volver a unirte."
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
@@ -14662,7 +14667,9 @@
       "disconnectFailed": "Failed to disconnect client",
       "shareToggleFailed": "Failed to update shared terminal",
       "connectedNotWatching": "{{count}} connected, not watching",
-      "shareToggle": "Share this terminal with {{name}}"
+      "shareToggle": "Share this terminal with {{name}}",
+      "grantedCount": "{{count}} con acceso concedido a esta terminal",
+      "noneGranted": "{{count}} conectado(s), sin acceso concedido a esta terminal"
     }
   },
   "dashboardPopout": {

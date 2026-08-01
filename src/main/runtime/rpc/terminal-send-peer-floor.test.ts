@@ -31,7 +31,7 @@ describe('terminal send RPC peer input floor', () => {
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       // Why: the peer that itself claimed the floor (source: 'peer') is the driver.
-      getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'peer-A' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'peer', clientId: 'peer-A' }),
       sendTerminal
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -57,7 +57,7 @@ describe('terminal send RPC peer input floor', () => {
   it('locks out a non-driving peer while another peer holds the input floor', async () => {
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'peer-A' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'peer', clientId: 'peer-A' }),
       sendTerminal: vi.fn()
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })

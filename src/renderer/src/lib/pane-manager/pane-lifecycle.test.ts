@@ -471,7 +471,12 @@ describe('openTerminal — addon and provider wiring', () => {
 
     const fakePaneContainer = {
       appendChild: vi.fn(),
-      addEventListener: vi.fn()
+      addEventListener: vi.fn(),
+      getBoundingClientRect: vi.fn(() => ({ left: 0, top: 0 }) as DOMRect),
+      scrollLeft: 0,
+      scrollTop: 0,
+      clientWidth: 800,
+      clientHeight: 480
     } as unknown as HTMLDivElement
     const fakeXtermContainer = {
       appendChild: vi.fn(),
@@ -665,5 +670,52 @@ describe('openTerminal — addon and provider wiring', () => {
 
     pane.webglAddon = null
     expect(handler('مرحبا')).toEqual([])
+  })
+
+  // Why: locks the IME anchor's compositionstart/compositionupdate handler
+  // to resolveTerminalCellGeometry's real (.xterm-screen-derived) geometry.
+  it('syncs the IME textarea anchor from resolved cell geometry', () => {
+    const { pane } = createOpenTerminalHarness()
+    const textarea = { style: {} as { top?: string; left?: string } }
+    Object.assign(pane.terminal, {
+      textarea,
+      buffer: { active: { cursorX: 3, cursorY: 2, baseY: 0, getLine: vi.fn(() => undefined) } }
+    })
+    const screenElement = {
+      getBoundingClientRect: vi.fn(() => ({ width: 800, height: 480 }) as DOMRect),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }
+    vi.mocked(pane.terminal.element!.querySelector).mockImplementation((selector: string) =>
+      selector === '.xterm-screen' ? (screenElement as never) : null
+    )
+
+    openTerminal(pane)
+    pane.compositionHandler!()
+
+    // cellWidth = 800/80 = 10, cellHeight = 480/24 = 20
+    expect(textarea.style.left).toBe('30px')
+    expect(textarea.style.top).toBe('40px')
+  })
+
+  // Why: locks the fallback contract documented on resolveTerminalCellGeometry
+  // — an unmeasurable `.xterm-screen` must still anchor the IME textarea via
+  // approximateTerminalCellGeometry rather than silently skipping the sync.
+  it('falls back to approximate geometry when .xterm-screen is unmeasurable', () => {
+    const { pane } = createOpenTerminalHarness()
+    const textarea = { style: {} as { top?: string; left?: string } }
+    Object.assign(pane.terminal, {
+      textarea,
+      buffer: { active: { cursorX: 3, cursorY: 2, baseY: 0, getLine: vi.fn(() => undefined) } }
+    })
+    vi.mocked(pane.terminal.element!.querySelector).mockReturnValue(null)
+    Object.assign(pane.container, { clientWidth: 800, clientHeight: 480 })
+
+    openTerminal(pane)
+    pane.compositionHandler!()
+
+    // approximate cellWidth = 800/80 = 10, cellHeight = 480/24 = 20
+    expect(textarea.style.left).toBe('30px')
+    expect(textarea.style.top).toBe('40px')
   })
 })

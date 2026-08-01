@@ -34,6 +34,7 @@ import {
 } from './rpc/scoped-rpc-method-allowlists'
 import {
   PEER_DUPLICATE_CONNECTION_CLOSE_CODE,
+  PEER_HOST_DISCONNECTED_CLOSE_CODE,
   PEER_HOSTING_DISABLED_CLOSE_CODE
 } from '../../shared/peer-connection-close-codes'
 import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
@@ -424,7 +425,17 @@ export class OrcaRuntimeRpcServer {
     if (device?.scope !== 'peer') {
       return false
     }
-    return (this.mobileSocketWiring?.terminateDeviceConnections(device.token) ?? 0) > 0
+    // Why: graceful close with a dedicated code so the client latches closed
+    // instead of auto-reconnecting; sockets that authenticated but never made
+    // it into the registry still get the hard terminate fallback.
+    const closed = this.peerConnections.closeByDevice(
+      deviceId,
+      PEER_HOST_DISCONNECTED_CLOSE_CODE,
+      'Host disconnected this client'
+    )
+    return (
+      closed > 0 || (this.mobileSocketWiring?.terminateDeviceConnections(device.token) ?? 0) > 0
+    )
   }
 
   listConnectedPeerClients(): {

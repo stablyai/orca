@@ -329,6 +329,7 @@ import {
   type RuntimeSessionTabCloseReason,
   type RuntimeBrowserDriverState,
   type RuntimeTerminalDriverState,
+  isRemoteTerminalDriver,
   type RuntimeSyncWindowGraph,
   type RuntimeWorktreeListResult,
   type BrowserTabInfo,
@@ -2972,7 +2973,7 @@ export class OrcaRuntimeService {
       base: DriverState
       generation: number
       committedGeneration: number
-      pending: Map<symbol, { clientId: string; generation: number }>
+      pending: Map<symbol, { clientId: string; generation: number; kind: 'mobile' | 'peer' }>
     }
   >()
   // Why: default is free input for peers (plan default); the host can opt
@@ -10400,8 +10401,9 @@ export class OrcaRuntimeService {
 
   isMobileTerminalQueryReplyAuthority(ptyId: string, clientId: string): boolean {
     // Why: a passive phone watching desktop-sized output must not race the
-    // desktop xterm. Mobile becomes reply authority only with the mobile floor.
-    if (this.getDriver(ptyId).kind !== 'mobile') {
+    // desktop xterm. Mobile becomes reply authority only while a remote
+    // client (mobile or peer) holds the floor.
+    if (!isRemoteTerminalDriver(this.getDriver(ptyId))) {
       return false
     }
     const subscribers = this.mobileSubscribers.get(ptyId)
@@ -10475,15 +10477,15 @@ export class OrcaRuntimeService {
   /** Raw keystroke pass-through for the pop-out dashboard's terminal preview.
    *  Honors the mobile-presence lock like the main window's pty:write path. */
   async writeTerminalPreviewInput(ptyId: string, data: string): Promise<boolean> {
-    if (data.length === 0 || this.getDriver(ptyId).kind === 'mobile') {
+    if (data.length === 0 || isRemoteTerminalDriver(this.getDriver(ptyId))) {
       return false
     }
     try {
       await assertTerminalInputWithinLimitWithYield(data)
       await this.writeTerminalInputChunks(ptyId, data, {
-        // Why: a phone can claim the floor while a paste yields between chunks.
+        // Why: a phone or peer can claim the floor while a paste yields between chunks.
         beforeWrite: () => {
-          if (this.getDriver(ptyId).kind === 'mobile') {
+          if (isRemoteTerminalDriver(this.getDriver(ptyId))) {
             throw new Error('terminal_mobile_driver_active')
           }
         }
@@ -12704,10 +12706,14 @@ export class OrcaRuntimeService {
   private setBrowserDriver(browserPageId: string, next: RuntimeBrowserDriverState): void {
     const prev = this.getBrowserDriver(browserPageId)
     if (prev.kind === next.kind) {
-      if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
+      if (
+        isRemoteTerminalDriver(prev) &&
+        isRemoteTerminalDriver(next) &&
+        prev.clientId === next.clientId
+      ) {
         return
       }
-      if (prev.kind !== 'mobile' && next.kind !== 'mobile') {
+      if (!isRemoteTerminalDriver(prev) && !isRemoteTerminalDriver(next)) {
         return
       }
     }
@@ -13064,10 +13070,14 @@ export class OrcaRuntimeService {
   private setDriver(ptyId: string, next: DriverState): void {
     const prev = this.getDriver(ptyId)
     if (prev.kind === next.kind) {
-      if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
+      if (
+        isRemoteTerminalDriver(prev) &&
+        isRemoteTerminalDriver(next) &&
+        prev.clientId === next.clientId
+      ) {
         return
       }
-      if (prev.kind !== 'mobile' && next.kind !== 'mobile') {
+      if (!isRemoteTerminalDriver(prev) && !isRemoteTerminalDriver(next)) {
         return
       }
     }
@@ -13216,7 +13226,7 @@ export class OrcaRuntimeService {
   }
 
   async applyRemoteDesktopLayout(ptyId: string): Promise<boolean> {
-    if (this.getDriver(ptyId).kind === 'mobile') {
+    if (isRemoteTerminalDriver(this.getDriver(ptyId))) {
       return true
     }
     const target = this.activeRemoteDesktopViewport(ptyId)
@@ -13506,29 +13516,30 @@ export class OrcaRuntimeService {
       if (!this.mobileSubscribers.get(ptyId)?.has(clientId) && softLeaver?.clientId !== clientId) {
         return null
       }
-      return this.claimInputFloor(ptyId, clientId, (previousFloor, isCurrent) =>
+      return this.claimInputFloor(ptyId, clientId, 'mobile', (previousFloor, isCurrent) =>
         this.mobileTookFloor(ptyId, clientId, previousFloor, isCurrent)
       )
     }
-    return this.claimInputFloor(ptyId, clientId)
+    return this.claimInputFloor(ptyId, clientId, 'peer')
   }
 
   private claimInputFloor(
     ptyId: string,
     clientId: string,
+    kind: 'mobile' | 'peer',
     onCommit?: (previousFloor: DriverState, isCurrent: () => boolean) => Promise<void>
   ): { commit: () => Promise<void>; rollback: () => void } {
     const state = this.inputFloorClaims.get(ptyId) ?? {
       base: this.getDriver(ptyId),
       generation: 0,
       committedGeneration: 0,
-      pending: new Map<symbol, { clientId: string; generation: number }>()
+      pending: new Map<symbol, { clientId: string; generation: number; kind: 'mobile' | 'peer' }>()
     }
     this.inputFloorClaims.set(ptyId, state)
     const token = Symbol('input-floor')
     const generation = ++state.generation
-    state.pending.set(token, { clientId, generation })
-    this.setDriver(ptyId, { kind: 'mobile', clientId })
+    state.pending.set(token, { clientId, generation, kind })
+    this.setDriver(ptyId, { kind, clientId })
     let settled = false
     return {
       commit: async () => {
@@ -13549,13 +13560,13 @@ export class OrcaRuntimeService {
         // Why: a successful write becomes the rollback baseline for any
         // overlapping reservations that have not reached the PTY yet.
         state.committedGeneration = generation
-        state.base = { kind: 'mobile', clientId }
+        state.base = { kind, clientId }
         const isCurrent = (): boolean =>
           this.inputFloorClaims.get(ptyId) === state && state.committedGeneration === generation
         if (onCommit) {
           await onCommit(previousFloor, isCurrent)
         } else if (isCurrent()) {
-          this.setDriver(ptyId, { kind: 'mobile', clientId })
+          this.setDriver(ptyId, { kind, clientId })
         }
         if (state.pending.size === 0 && this.inputFloorClaims.get(ptyId) === state) {
           this.inputFloorClaims.delete(ptyId)
@@ -13571,11 +13582,11 @@ export class OrcaRuntimeService {
           return
         }
         const current = this.getDriver(ptyId)
-        if (current.kind === 'mobile' && current.clientId === clientId) {
-          const pendingClientId = Array.from(state.pending.values()).at(-1)?.clientId
+        if (isRemoteTerminalDriver(current) && current.clientId === clientId) {
+          const nextPending = Array.from(state.pending.values()).at(-1)
           this.setDriver(
             ptyId,
-            pendingClientId ? { kind: 'mobile', clientId: pendingClientId } : state.base
+            nextPending ? { kind: nextPending.kind, clientId: nextPending.clientId } : state.base
           )
         }
         if (state.pending.size === 0) {
@@ -13590,7 +13601,7 @@ export class OrcaRuntimeService {
   // so the caller must explicitly release when its stream tears down.
   releaseInputFloorIfHeldBy(ptyId: string, clientId: string): void {
     const driver = this.getDriver(ptyId)
-    if (driver.kind === 'mobile' && driver.clientId === clientId) {
+    if (isRemoteTerminalDriver(driver) && driver.clientId === clientId) {
       this.setDriver(ptyId, { kind: 'idle' })
     }
     const state = this.inputFloorClaims.get(ptyId)
@@ -13602,7 +13613,7 @@ export class OrcaRuntimeService {
     // disconnecting non-owner would erase another peer's live claim/rollback state.
     const ownedByOthers =
       Array.from(state.pending.values()).some((entry) => entry.clientId !== clientId) ||
-      (state.base.kind === 'mobile' && state.base.clientId !== clientId)
+      (isRemoteTerminalDriver(state.base) && state.base.clientId !== clientId)
     if (!ownedByOthers) {
       this.inputFloorClaims.delete(ptyId)
     }
@@ -13801,11 +13812,12 @@ export class OrcaRuntimeService {
       this.setMobileDisplayMode(ptyId, 'auto')
       return true
     }
-    // Why: a stale lock — driver still reads mobile with no active subscriber
-    // and no held override (e.g. reclaimed inside the soft-leave grace, or a
-    // subscriber that dropped without a clean unsubscribe). Release it so the
-    // banner can't linger; there is nothing to resize.
-    if (this.getDriver(ptyId).kind === 'mobile') {
+    // Why: a stale lock — driver still reads mobile/peer with no active
+    // subscriber and no held override (e.g. reclaimed inside the soft-leave
+    // grace, a subscriber that dropped without a clean unsubscribe, or a
+    // stalled peer connection). Release it so the banner can't linger; there
+    // is nothing to resize.
+    if (isRemoteTerminalDriver(this.getDriver(ptyId))) {
       this.releaseDesktopTakeBack(ptyId)
       return true
     }

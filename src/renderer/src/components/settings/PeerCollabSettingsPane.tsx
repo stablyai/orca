@@ -38,6 +38,8 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
   const [devices, setDevices] = useState<PairedDevice[]>([])
+  // Why: grants key off deviceId in the registry, so the paired-devices list manages them for offline devices too.
+  const [deviceGrants, setDeviceGrants] = useState<Record<string, string[]>>({})
   const [connectedClients, setConnectedClients] = useState<ConnectedPeerClient[]>([])
   const [exclusiveInputFloor, setExclusiveInputFloorState] = useState(false)
   const [hostEnabled, setHostEnabledState] = useState(false)
@@ -98,6 +100,9 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
       const result = await window.api.peerCollab.listDevices()
       if (mountedRef.current) {
         setDevices(result.devices)
+        setDeviceGrants(
+          Object.fromEntries(result.devices.map((d) => [d.deviceId, d.grantedTerminals]))
+        )
       }
     } catch {
       // Silently fail — device list is non-critical
@@ -262,17 +267,19 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
     })
   }, [loadNetworkInterfaces, loadDevices, mountedRef])
 
-  // Why: connected-clients/host-terminals polling only matters while the host
-  // share feature is on — stop it (and clear stale state) the moment it's off.
+  // Why: polling only matters while hosting is on. Devices ride the same poll —
+  // pairing lands registry-side first, and the code-consumed watcher above only
+  // fires when the devices list refreshes.
   useEffect(() => {
     if (!hostEnabled) {
       setConnectedClients([])
       return
     }
-    void loadConnectedClients()
-    const timer = window.setInterval(() => void loadConnectedClients(), CONNECTED_CLIENTS_POLL_MS)
+    const poll = (): void => void Promise.all([loadConnectedClients(), loadDevices()])
+    poll()
+    const timer = window.setInterval(poll, CONNECTED_CLIENTS_POLL_MS)
     return () => window.clearInterval(timer)
-  }, [hostEnabled, loadConnectedClients])
+  }, [hostEnabled, loadConnectedClients, loadDevices])
 
   useEffect(() => {
     if (!hostEnabled) {
@@ -314,9 +321,9 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
     }
   }
 
-  async function disconnectClient(deviceId: string, revokeDevice: boolean) {
+  async function disconnectClient(deviceId: string) {
     try {
-      await window.api.peerCollab.disconnectClient({ deviceId, revokeDevice })
+      await window.api.peerCollab.disconnectClient({ deviceId, revokeDevice: false })
       await Promise.all([loadConnectedClients(), loadDevices()])
     } catch {
       if (mountedRef.current) {
@@ -338,6 +345,7 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
         client.deviceId === deviceId ? { ...client, grantedTerminals: handles } : client
       )
     )
+    setDeviceGrants((current) => ({ ...current, [deviceId]: handles }))
     try {
       await window.api.peerCollab.setGrantedTerminals({ deviceId, handles })
     } catch {
@@ -350,7 +358,7 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
         )
       }
     } finally {
-      await loadConnectedClients()
+      await Promise.all([loadConnectedClients(), loadDevices()])
     }
   }
 
@@ -386,8 +394,12 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
             devices={devices}
             hasQrCode={qrDataUrl != null}
             onRevokeDevice={(deviceId) => void revokeDevice(deviceId)}
-            // Why: reuses the already-polled connectedClients so "connected now" doesn't need its own poll.
-            connectedDeviceIds={new Set(connectedClients.map((client) => client.deviceId))}
+            connectedClients={connectedClients}
+            grantedTerminalsByDeviceId={deviceGrants}
+            hostTerminals={ownTerminals}
+            onSetGrantedTerminals={(deviceId, handles) =>
+              void setGrantedTerminals(deviceId, handles)
+            }
           />
         ) : null}
 
@@ -396,7 +408,7 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
             exclusiveInputFloor={exclusiveInputFloor}
             onToggleExclusiveInputFloor={() => void toggleExclusiveInputFloor()}
             connectedClients={connectedClients}
-            onDisconnectClient={(deviceId, revoke) => void disconnectClient(deviceId, revoke)}
+            onDisconnectClient={(deviceId) => void disconnectClient(deviceId)}
             hostTerminals={ownTerminals}
             onSetGrantedTerminals={(deviceId, handles) =>
               void setGrantedTerminals(deviceId, handles)

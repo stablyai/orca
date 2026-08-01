@@ -2661,7 +2661,11 @@
             "f2a8b9c1d3": "来自手机",
             "c7e4a2b8f1": "手机正在控制",
             "d9f3c6e2a4": "桌面键盘已暂停。收回此终端以在此输入，收回手机控制的所有终端，或折叠以继续观看。",
-            "a6b1d8f3e2": "手机会话已结束。将此终端或手机留在手机尺寸的所有终端恢复为桌面尺寸。"
+            "a6b1d8f3e2": "手机会话已结束。将此终端或手机留在手机尺寸的所有终端恢复为桌面尺寸。",
+            "peerChipLabel": "对等桌面控制中",
+            "peerEyebrow": "来自对等桌面",
+            "peerTitle": "对等桌面正在控制",
+            "peerBody": "桌面键盘已暂停。收回此终端以在此输入，收回该对等方控制的所有终端，或折叠以继续观看。"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "复制上下文",
@@ -10140,7 +10144,8 @@
           "clientConnectedCount": "已连接 {{count}} 台主机",
           "clientAddHostTitle": "添加主机",
           "renameHostPlaceholder": "此主机的显示名称",
-          "renameHost": "重命名主机"
+          "renameHost": "重命名主机",
+          "clientHostDisconnected": "主机已结束此连接。重新连接即可再次加入。"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
@@ -14662,7 +14667,9 @@
       "disconnectFailed": "Failed to disconnect client",
       "shareToggleFailed": "Failed to update shared terminal",
       "connectedNotWatching": "{{count}} connected, not watching",
-      "shareToggle": "Share this terminal with {{name}}"
+      "shareToggle": "Share this terminal with {{name}}",
+      "grantedCount": "{{count}} 人已获得此终端的访问权限",
+      "noneGranted": "{{count}} 人已连接，尚未授予此终端的访问权限"
     }
   },
   "dashboardPopout": {

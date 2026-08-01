@@ -2661,7 +2661,11 @@
             "f2a8b9c1d3": "スマホから",
             "c7e4a2b8f1": "スマホが操作中です",
             "d9f3c6e2a4": "デスクトップのキーボードは一時停止中です。このターミナルを取り戻してここで入力するか、スマホが操作しているすべてのターミナルを取り戻すか、折りたたんで見続けてください。",
-            "a6b1d8f3e2": "スマホのセッションは終了しました。このターミナル、またはスマホが携帯サイズのまま残したすべてのターミナルをデスクトップサイズに復元してください。"
+            "a6b1d8f3e2": "スマホのセッションは終了しました。このターミナル、またはスマホが携帯サイズのまま残したすべてのターミナルをデスクトップサイズに復元してください。",
+            "peerChipLabel": "ピアデスクトップ操作中",
+            "peerEyebrow": "ピアデスクトップから",
+            "peerTitle": "ピアデスクトップが操作中です",
+            "peerBody": "デスクトップのキーボードは一時停止中です。このターミナルを取り戻してここで入力するか、このピアが操作しているすべてのターミナルを取り戻すか、折りたたんで見続けてください。"
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "コンテキストをコピーする",
@@ -10140,7 +10144,8 @@
           "clientConnectedCount": "{{count}} 台のホストに接続中",
           "clientAddHostTitle": "ホストを追加",
           "renameHostPlaceholder": "このホストの表示名",
-          "renameHost": "ホスト名を変更"
+          "renameHost": "ホスト名を変更",
+          "clientHostDisconnected": "ホストがこの接続を終了しました。再参加するには接続してください。"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
@@ -14662,7 +14667,9 @@
       "disconnectFailed": "Failed to disconnect client",
       "shareToggleFailed": "Failed to update shared terminal",
       "connectedNotWatching": "{{count}} connected, not watching",
-      "shareToggle": "Share this terminal with {{name}}"
+      "shareToggle": "Share this terminal with {{name}}",
+      "grantedCount": "このターミナルへのアクセスを許可された {{count}} 人",
+      "noneGranted": "{{count}} 人が接続中、このターミナルへのアクセス許可なし"
     }
   },
   "dashboardPopout": {

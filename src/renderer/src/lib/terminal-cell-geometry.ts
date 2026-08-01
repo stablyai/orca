@@ -8,18 +8,11 @@ export type TerminalCellGeometry = {
   originTop: number
 }
 
-/**
- * Real per-cell pixel size and grid origin, read from xterm's rendered
- * `.xterm-screen` element (xterm sizes it to cols*cellWidth x rows*cellHeight)
- * instead of approximating cell size from container.clientWidth/cols. That
- * approximation ignores the container's own padding/margin, scrollbars, and
- * sub-pixel cell sizes, which is why remote cursors/selections can drift from
- * where the user actually dragged. `.xterm-screen` is an xterm DOM
- * implementation detail (not a documented public API) — mirrors the same
- * trade-off already made in pane-lifecycle.ts's IME anchor fix — so a future
- * xterm version could rename/remove it; callers must keep a
- * container/cols fallback (approximateTerminalCellGeometry) for that case.
- */
+/** Why: `.xterm-screen`'s rendered bounds give the real per-cell pixel size,
+ *  avoiding the container.clientWidth/cols drift from padding/scrollbars. It's
+ *  an undocumented xterm DOM detail, so pane-lifecycle.ts's IME anchor shares
+ *  this same resolver rather than re-deriving it; callers must still fall
+ *  back to approximateTerminalCellGeometry if xterm ever renames/removes it. */
 export function resolveTerminalCellGeometry(
   terminal: Terminal,
   container: HTMLElement

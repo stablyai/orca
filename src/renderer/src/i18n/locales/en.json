@@ -2697,7 +2697,11 @@
             "f2a8b9c1d3": "From your phone",
             "c7e4a2b8f1": "Your phone is in control",
             "d9f3c6e2a4": "Desktop keyboard is paused. Take back this terminal to type here, take back all terminals your phone controls, or collapse to keep watching.",
-            "a6b1d8f3e2": "Your phone session ended. Restore to desktop size for this terminal, or for all terminals your phone left at phone size."
+            "a6b1d8f3e2": "Your phone session ended. Restore to desktop size for this terminal, or for all terminals your phone left at phone size.",
+            "peerChipLabel": "Peer driving",
+            "peerEyebrow": "From a peer desktop",
+            "peerTitle": "A peer desktop is in control",
+            "peerBody": "Desktop keyboard is paused. Take back this terminal to type here, take back all terminals this peer controls, or collapse to keep watching."
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copy context",
@@ -10213,7 +10217,8 @@
           "clientConnectedCount": "Connected to {{count}} host(s)",
           "clientAddHostTitle": "Add a host",
           "renameHostPlaceholder": "Display name for this host",
-          "renameHost": "Rename host"
+          "renameHost": "Rename host",
+          "clientHostDisconnected": "The host ended this connection. Connect again to rejoin."
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
@@ -14766,6 +14771,8 @@
     },
     "terminalPaneViewerBadge": {
       "viewerCount": "{{count}} viewing this terminal",
+      "grantedCount": "{{count}} granted access to this terminal",
+      "noneGranted": "{{count}} connected, no access granted to this terminal",
       "disconnect": "Disconnect",
       "disconnectFailed": "Failed to disconnect client",
       "shareToggleFailed": "Failed to update shared terminal",

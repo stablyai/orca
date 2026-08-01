@@ -2661,7 +2661,11 @@
             "f2a8b9c1d3": "휴대폰에서",
             "c7e4a2b8f1": "휴대폰이 제어 중",
             "d9f3c6e2a4": "데스크톱 키보드가 일시 중지되었습니다. 여기서 입력하려면 이 terminals을 다시 가져오거나, 휴대폰이 제어하는 모든 terminals을 다시 가져오거나, 계속 보려면 접으세요.",
-            "a6b1d8f3e2": "휴대폰 세션이 종료되었습니다. 이 terminals 또는 휴대폰이 휴대폰 크기로 남긴 모든 terminals을 데스크톱 크기로 복원하세요."
+            "a6b1d8f3e2": "휴대폰 세션이 종료되었습니다. 이 terminals 또는 휴대폰이 휴대폰 크기로 남긴 모든 terminals을 데스크톱 크기로 복원하세요.",
+            "peerChipLabel": "피어 데스크톱 조작 중",
+            "peerEyebrow": "피어 데스크톱에서",
+            "peerTitle": "피어 데스크톱이 제어 중",
+            "peerBody": "데스크톱 키보드가 일시 중지되었습니다. 여기서 입력하려면 이 terminal을 다시 가져오거나, 이 피어가 제어하는 모든 terminals을 다시 가져오거나, 계속 보려면 접으세요."
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "컨텍스트 복사",
@@ -10140,7 +10144,8 @@
           "clientConnectedCount": "호스트 {{count}}개에 접속 중",
           "clientAddHostTitle": "호스트 추가",
           "renameHostPlaceholder": "이 호스트의 표시 이름",
-          "renameHost": "호스트 이름 변경"
+          "renameHost": "호스트 이름 변경",
+          "clientHostDisconnected": "호스트가 이 연결을 종료했습니다. 다시 참여하려면 접속하세요."
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
@@ -14662,7 +14667,9 @@
       "disconnectFailed": "Failed to disconnect client",
       "shareToggleFailed": "Failed to update shared terminal",
       "connectedNotWatching": "{{count}} connected, not watching",
-      "shareToggle": "Share this terminal with {{name}}"
+      "shareToggle": "Share this terminal with {{name}}",
+      "grantedCount": "이 terminal에 권한이 부여된 {{count}}명",
+      "noneGranted": "{{count}}명 접속 중, 이 terminal에 부여된 권한 없음"
     }
   },
   "dashboardPopout": {

@@ -11,6 +11,7 @@ import {
 } from './peer-client-handshake'
 import {
   PEER_DUPLICATE_CONNECTION_CLOSE_CODE,
+  PEER_HOST_DISCONNECTED_CLOSE_CODE,
   PEER_HOSTING_DISABLED_CLOSE_CODE
 } from '../../shared/peer-connection-close-codes'
 import { PeerClientRpcChannel } from './peer-client-rpc-channel'
@@ -286,6 +287,14 @@ export class PeerClientService {
       // Why: the host turned peer hosting off — retrying is pointless until
       // the user flips it back on, so latch closed instead of reconnecting.
       this.lastErrorReason = 'host_disabled'
+      this.intentionallyClosed = true
+      this.setState('closed')
+      return
+    }
+    if (code === PEER_HOST_DISCONNECTED_CLOSE_CODE) {
+      // Why: the host user pressed disconnect — auto-reconnecting would undo
+      // their action a second later, so latch closed until the user reconnects.
+      this.lastErrorReason = 'host_disconnected'
       this.intentionallyClosed = true
       this.setState('closed')
       return

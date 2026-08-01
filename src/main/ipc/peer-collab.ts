@@ -84,7 +84,10 @@ export function registerPeerCollabHandlers(
           // dedicated placeholder for that case instead of the redundant date name.
           name: d.lastConnectedName ?? '',
           pairedAt: d.pairedAt,
-          lastSeenAt: d.lastSeenAt
+          lastSeenAt: d.lastSeenAt,
+          // Why: grants persist per device, so the host can manage them from the
+          // paired-devices list even while that device is offline.
+          grantedTerminals: d.grantedTerminalHandles ?? []
         }))
     }
   })
@@ -118,7 +121,11 @@ export function registerPeerCollabHandlers(
       // Why: tabId lets the renderer join against its own tab store and apply
       // resolveTerminalTabTitle for display, since t.title here is the
       // OSC/pane-driven live title rather than the tab's resolved name.
-      terminals: result.terminals.map((t) => ({ handle: t.handle, title: t.title, tabId: t.tabId }))
+      // Orphaned/disconnected entries (a closed tab's lingering handle) are
+      // excluded — granting a dead terminal only produces ghost list rows.
+      terminals: result.terminals
+        .filter((t) => t.connected && !t.orphaned)
+        .map((t) => ({ handle: t.handle, title: t.title, tabId: t.tabId }))
     }
   })
 

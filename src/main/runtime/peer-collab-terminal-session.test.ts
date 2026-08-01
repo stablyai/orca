@@ -124,7 +124,7 @@ function buildFakeTerminalRuntime(): {
       driverByPty.get(ptyId) ?? { kind: 'idle' },
     beginInputFloor: (ptyId: string, clientId: string) => {
       const previous = driverByPty.get(ptyId) ?? { kind: 'idle' as const }
-      driverByPty.set(ptyId, { kind: 'mobile', clientId })
+      driverByPty.set(ptyId, { kind: 'peer', clientId })
       let settled = false
       return {
         commit: async () => {
@@ -141,7 +141,7 @@ function buildFakeTerminalRuntime(): {
     },
     releaseInputFloorIfHeldBy: (ptyId: string, clientId: string) => {
       const driver = driverByPty.get(ptyId)
-      if (driver?.kind === 'mobile' && driver.clientId === clientId) {
+      if (driver?.kind === 'peer' && driver.clientId === clientId) {
         driverByPty.set(ptyId, { kind: 'idle' })
       }
     },
@@ -722,6 +722,29 @@ describe('peer-collab grant enforcement', () => {
     expect(result.ok).toBe(true)
     await waitFor(() => events.some((e) => e.type === 'error'))
     expect(events.some((e) => e.type === 'subscribed')).toBe(false)
+  })
+
+  it('rejects terminal.subscribe from a peer that omits client', async () => {
+    const { server, pairingUrl } = await startPeerHost({ grantedTerminals: [TEST_TERMINAL] })
+    servers.push(server)
+    const client = new PeerClientService()
+    clients.push(client)
+    expect(client.connect(pairingUrl, 'Client A')).toEqual({ ok: true })
+    await waitFor(() => client.getStatus().state === 'connected')
+
+    // Why: reach the raw rpc channel to omit `client`, which the real peer client
+    // (peer-client-terminal-streams.ts) always fills in — this exercises the
+    // server-side guard against a client too old (or malicious) to do the same.
+    const rpc = (
+      client as unknown as {
+        rpc: { sendRequest: (m: string, p: unknown) => Promise<{ ok: boolean }> }
+      }
+    ).rpc
+    const result = await rpc.sendRequest('terminal.subscribe', {
+      terminal: TEST_TERMINAL,
+      viewport: { cols: 80, rows: 24 }
+    })
+    expect(result.ok).toBe(false)
   })
 
   it('rejects terminal.send for a terminal the peer was not granted', async () => {

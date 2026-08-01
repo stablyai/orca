@@ -131,6 +131,36 @@ describe('E2EEChannel', () => {
       expect(ctx.onReady).toHaveBeenCalledOnce()
     })
 
+    it('caps an oversized displayName before it can reach the device registry', () => {
+      const ctx = setup({
+        resolveAuthenticatedDevice: (token) =>
+          token === 'valid-token'
+            ? { deviceId: 'device-1', deviceToken: token, scope: 'peer' }
+            : null
+      })
+      ctx.channel.handleRawMessage(
+        JSON.stringify({
+          type: 'e2ee_hello',
+          publicKeyB64: publicKeyToBase64(ctx.clientKeys.publicKey)
+        })
+      )
+      const sharedKey = deriveSharedKey(ctx.clientKeys.secretKey, ctx.serverKeys.publicKey)
+      const oversizedName = 'x'.repeat(200)
+      ctx.channel.handleRawMessage(
+        encrypt(
+          JSON.stringify({
+            type: 'e2ee_auth',
+            deviceToken: 'valid-token',
+            displayName: oversizedName
+          }),
+          sharedKey
+        )
+      )
+
+      expect(ctx.channel.displayName).toBe('x'.repeat(80))
+      expect(ctx.onReady).toHaveBeenCalledOnce()
+    })
+
     it('rejects invalid encrypted token', () => {
       const ctx = setup()
       ctx.channel.handleRawMessage(

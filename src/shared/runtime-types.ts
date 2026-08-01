@@ -59,12 +59,31 @@ export type DeviceScope = 'mobile' | 'runtime' | 'peer'
 
 // Why: presence-lock driver state crosses main/preload/renderer IPC. Keep one
 // checked source so future variants cannot drift silently across layers.
+// 'peer' is a LAN peer-collab desktop occupying the floor, distinct from a
+// paired 'mobile' device — see isRemoteTerminalDriver below.
 export type RuntimeTerminalDriverState =
   | { kind: 'idle' }
   | { kind: 'desktop' }
   | { kind: 'mobile'; clientId: string }
+  | { kind: 'peer'; clientId: string }
 
 export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
+
+export type RuntimeRemoteTerminalDriverState = Extract<
+  RuntimeTerminalDriverState,
+  { kind: 'mobile' | 'peer' }
+>
+
+// Why: 'mobile' and 'peer' both mean "a non-desktop client exclusively owns
+// this PTY's input/resize" — every exclusivity check (input gating, dedupe,
+// floor release) must treat them alike so a peer occupying the floor is
+// never mistaken for idle/desktop. Phone-fit/mobile-subscriber machinery is
+// intentionally NOT covered here; a peer never gets a "phone" layout.
+export function isRemoteTerminalDriver(
+  driver: RuntimeTerminalDriverState
+): driver is RuntimeRemoteTerminalDriverState {
+  return driver.kind === 'mobile' || driver.kind === 'peer'
+}
 
 export type RuntimeStatus = {
   runtimeId: string

@@ -2587,7 +2587,7 @@ function TerminalPane(
   const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
     const ptyIds = new Set(getMobileFitOverridePtyIds())
     for (const [ptyId, driver] of getAllDrivers()) {
-      if (driver.kind === 'mobile') {
+      if (driver.kind === 'mobile' || driver.kind === 'peer') {
         ptyIds.add(ptyId)
       }
     }

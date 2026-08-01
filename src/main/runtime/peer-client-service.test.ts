@@ -4,7 +4,10 @@ import type { Socket } from 'node:net'
 import { PeerClientService } from './peer-client-service'
 import { generateKeyPair, publicKeyToBase64 } from '../../shared/e2ee-crypto'
 import { encodePairingOffer } from '../../shared/pairing'
-import { PEER_HOSTING_DISABLED_CLOSE_CODE } from '../../shared/peer-connection-close-codes'
+import {
+  PEER_HOST_DISCONNECTED_CLOSE_CODE,
+  PEER_HOSTING_DISABLED_CLOSE_CODE
+} from '../../shared/peer-connection-close-codes'
 import { E2EEChannel } from './rpc/e2ee-channel'
 import {
   serveOnePeerConnection,
@@ -196,6 +199,42 @@ describe('PeerClientService', () => {
     expect(service.getStatus().lastErrorReason).toBe('host_disabled')
     // Why: same guarantee as the duplicate_connection case — a repeat
     // rejection must not spin the reconnect budget.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(service.getStatus().state).toBe('closed')
+  })
+
+  it('latches closed with host_disconnected instead of reconnecting when the host disconnects it', async () => {
+    const { server, endpoint } = await startServer()
+    servers.push(server)
+    const serverKeys = generateKeyPair()
+    // Why: stands in for runtime-rpc.ts's disconnectPeerClient, which closes an
+    // established connection with the host-disconnected code.
+    server.once('connection', (ws: WebSocket) => {
+      const channel = new E2EEChannel(ws, {
+        serverSecretKey: serverKeys.secretKey,
+        resolveAuthenticatedDevice: () => ({
+          deviceId: 'peer-device-1',
+          deviceToken: 'peer-token-abc',
+          scope: 'peer'
+        }),
+        onReady: () => ws.close(PEER_HOST_DISCONNECTED_CLOSE_CODE, 'Host disconnected this client'),
+        onError: (code, reason) => ws.close(code, reason)
+      })
+      ws.on('message', (raw, isBinary) =>
+        channel.handleRawMessage(isBinary ? (raw as Buffer) : raw.toString())
+      )
+      ws.on('close', () => channel.destroy())
+    })
+
+    const service = new PeerClientService()
+    services.push(service)
+    const code = makePeerOffer(endpoint, serverKeys, 'peer-token-abc')
+
+    expect(service.connect(code)).toEqual({ ok: true })
+    await waitForState(service, 'closed')
+
+    expect(service.getStatus().lastErrorReason).toBe('host_disconnected')
+    // Why: reconnecting would undo the host's disconnect a second later.
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(service.getStatus().state).toBe('closed')
   })

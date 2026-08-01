@@ -22,6 +22,11 @@ type TerminalPaneViewerBadgeProps = {
  * see who is currently watching it. Renders nothing when no client is
  * connected (or peer collab is inactive).
  */
+// Why: a freshly opened pane's PTY registers in the runtime graph after this
+// badge mounts, so a single resolve attempt would come back empty and hide the
+// badge for the pane's lifetime — keep retrying until the pane resolves.
+const HANDLE_RESOLVE_RETRY_MS = 2000
+
 export function TerminalPaneViewerBadge({
   tabId,
   leafId,
@@ -32,19 +37,36 @@ export function TerminalPaneViewerBadge({
 
   useEffect(() => {
     let disposed = false
+    let timer: number | null = null
     const callRuntime = window.api?.runtime?.call
     if (!callRuntime) {
       return
     }
-    void resolveTerminalHandleForPane({ tabId, leafId, callRuntime })
-      .then((resolved) => {
-        if (!disposed) {
-          setHandle(resolved)
-        }
-      })
-      .catch(() => undefined)
+    setHandle(null)
+    const attempt = (): void => {
+      void resolveTerminalHandleForPane({ tabId, leafId, callRuntime })
+        .then((resolved) => {
+          if (disposed) {
+            return
+          }
+          if (resolved) {
+            setHandle(resolved)
+          } else {
+            timer = window.setTimeout(attempt, HANDLE_RESOLVE_RETRY_MS)
+          }
+        })
+        .catch(() => {
+          if (!disposed) {
+            timer = window.setTimeout(attempt, HANDLE_RESOLVE_RETRY_MS)
+          }
+        })
+    }
+    attempt()
     return () => {
       disposed = true
+      if (timer !== null) {
+        window.clearTimeout(timer)
+      }
     }
   }, [tabId, leafId])
 
@@ -54,6 +76,9 @@ export function TerminalPaneViewerBadge({
 
   const viewers = connectedClients.filter((client) => client.subscribedTerminals.includes(handle))
   const others = connectedClients.filter((client) => !client.subscribedTerminals.includes(handle))
+  const grantedCount = connectedClients.filter((client) =>
+    client.grantedTerminals.includes(handle)
+  ).length
 
   async function disconnectViewer(deviceId: string): Promise<void> {
     try {
@@ -92,11 +117,17 @@ export function TerminalPaneViewerBadge({
           '{{count}} viewing this terminal',
           { count: viewers.length }
         )
-      : translate(
-          'components.terminalPaneViewerBadge.connectedNotWatching',
-          '{{count}} connected, not watching',
-          { count: connectedClients.length }
-        )
+      : grantedCount > 0
+        ? translate(
+            'components.terminalPaneViewerBadge.grantedCount',
+            '{{count}} granted access to this terminal',
+            { count: grantedCount }
+          )
+        : translate(
+            'components.terminalPaneViewerBadge.noneGranted',
+            '{{count}} connected, no access granted to this terminal',
+            { count: connectedClients.length }
+          )
 
   return (
     <Popover>
@@ -114,14 +145,22 @@ export function TerminalPaneViewerBadge({
               {viewers.length > 0 ? (
                 <Eye className="size-3" />
               ) : (
-                <Users className="text-muted-foreground size-3" />
+                <Users
+                  className={
+                    grantedCount > 0 ? 'text-foreground size-3' : 'text-muted-foreground size-3'
+                  }
+                />
               )}
               <span
                 className={
-                  viewers.length > 0 ? 'tabular-nums' : 'text-muted-foreground tabular-nums'
+                  viewers.length > 0
+                    ? 'tabular-nums'
+                    : grantedCount > 0
+                      ? 'text-foreground tabular-nums'
+                      : 'text-muted-foreground tabular-nums'
                 }
               >
-                {viewers.length > 0 ? viewers.length : connectedClients.length}
+                {viewers.length > 0 ? viewers.length : grantedCount}
               </span>
             </Button>
           </PopoverTrigger>

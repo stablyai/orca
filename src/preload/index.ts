@@ -4688,7 +4688,13 @@ const api = {
     > => ipcRenderer.invoke('peerCollab:getPairingOffer', args),
 
     listDevices: (): Promise<{
-      devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
+      devices: {
+        deviceId: string
+        name: string
+        pairedAt: number
+        lastSeenAt: number
+        grantedTerminals: string[]
+      }[]
     }> => ipcRenderer.invoke('peerCollab:listDevices'),
 
     listConnectedClients: (): Promise<{

@@ -55,4 +55,18 @@ export class PeerConnectionRegistry {
       entry.ws.close(code, reason)
     }
   }
+
+  // Why: host-initiated disconnect of one device. The graceful close carries
+  // the code across, so the client can latch closed instead of treating it as
+  // a network drop and reconnecting a second later.
+  closeByDevice(deviceId: string, code: number, reason: string): number {
+    let closed = 0
+    for (const entry of this.connections.values()) {
+      if (entry.deviceId === deviceId) {
+        entry.ws.close(code, reason)
+        closed++
+      }
+    }
+    return closed
+  }
 }

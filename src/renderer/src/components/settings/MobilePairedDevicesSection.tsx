@@ -36,6 +36,9 @@ type MobilePairedDevicesSectionProps = {
   // lastSeenAt, reusing PeerCollabSettingsPane's existing listConnectedClients poll instead
   // of a second one. Unused (and irrelevant) for the mobile variant.
   connectedDeviceIds?: ReadonlySet<string>
+  // Why: peer-collab only — slots the grant picker into each row so offline
+  // devices can be granted too; grants key off deviceId, not a live connection.
+  renderDeviceActions?: (device: PairedDevice) => React.ReactNode
 }
 
 export function MobilePairedDevicesSection({
@@ -43,7 +46,8 @@ export function MobilePairedDevicesSection({
   hasQrCode,
   onRevokeDevice,
   variant = 'mobile',
-  connectedDeviceIds
+  connectedDeviceIds,
+  renderDeviceActions
 }: MobilePairedDevicesSectionProps): React.JSX.Element {
   return (
     <div>
@@ -104,14 +108,17 @@ export function MobilePairedDevicesSection({
                   </div>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onRevokeDevice(device.deviceId)}
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
+              <div className="flex gap-1">
+                {renderDeviceActions?.(device)}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRevokeDevice(device.deviceId)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
             </div>
           ))}
         </div>

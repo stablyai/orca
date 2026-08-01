@@ -11,6 +11,7 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas
 import { assertPeerTerminalGranted, isPeerTerminalGranted } from '../peer-terminal-grant-guard'
 import { PEER_TERMINAL_GRANT_REVOKED_REASON } from '../../../../shared/peer-terminal-stream-event'
 import type { DriverState, OrcaRuntimeService } from '../../orca-runtime'
+import { isRemoteTerminalDriver } from '../../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
@@ -288,11 +289,11 @@ function isTerminalInputLockedForClient(
     return false
   }
   const driver = runtime.getDriver(ptyId)
-  if (driver.kind !== 'mobile') {
+  if (!isRemoteTerminalDriver(driver)) {
     return false
   }
   // Why: a peer that itself holds the input floor (peerInputFloorExclusive)
-  // must not be locked out by its own claim; every other non-mobile client
+  // must not be locked out by its own claim; every other non-remote client
   // (including other peers) is locked while someone else drives.
   return driver.clientId !== client.id
 }
@@ -2953,6 +2954,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         getGrantedTerminals
       } = ctx
       assertPeerTerminalGranted(ctx, params.terminal)
+      // Why: without client, subscriptionId falls back to the bare terminal handle below,
+      // so two peer subscribes collide under registerSubscriptionCleanup's same-id reuse
+      // and tear each other down.
+      if (isPeerDevice && !params.client) {
+        throw new Error('peer_terminal_subscribe_requires_client')
+      }
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
       const isPeer = isNegotiatingPeerClient(isPeerDevice, params.client)

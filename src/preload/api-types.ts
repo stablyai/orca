@@ -3657,7 +3657,13 @@ export type PreloadApi = {
         }
     >
     listDevices: () => Promise<{
-      devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
+      devices: {
+        deviceId: string
+        name: string
+        pairedAt: number
+        lastSeenAt: number
+        grantedTerminals: string[]
+      }[]
     }>
     listConnectedClients: () => Promise<{
       clients: {

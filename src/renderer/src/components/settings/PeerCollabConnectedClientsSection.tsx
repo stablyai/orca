@@ -1,19 +1,9 @@
-import { useMemo } from 'react'
-import { ShieldCheck, Trash2, Unplug } from 'lucide-react'
+import { Unplug } from 'lucide-react'
 import { SearchableSetting } from './SearchableSetting'
 import { Button } from '../ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuTrigger
-} from '../ui/dropdown-menu'
 import { SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
-import type { TerminalTab } from '../../../../shared/types'
+import { PeerTerminalGrantMenu, type HostTerminalOption } from './PeerTerminalGrantMenu'
 
 export type ConnectedPeerClient = {
   connectionId: string
@@ -24,17 +14,13 @@ export type ConnectedPeerClient = {
   grantedTerminals: string[]
 }
 
-export type HostTerminalOption = {
-  handle: string
-  title: string | null
-  tabId: string
-}
+export type { HostTerminalOption }
 
 type PeerCollabConnectedClientsSectionProps = {
   exclusiveInputFloor: boolean
   onToggleExclusiveInputFloor: () => void
   connectedClients: ConnectedPeerClient[]
-  onDisconnectClient: (deviceId: string, revokeDevice: boolean) => void
+  onDisconnectClient: (deviceId: string) => void
   hostTerminals: HostTerminalOption[]
   onSetGrantedTerminals: (deviceId: string, handles: string[]) => void
 }
@@ -47,33 +33,6 @@ export function PeerCollabConnectedClientsSection({
   hostTerminals,
   onSetGrantedTerminals
 }: PeerCollabConnectedClientsSectionProps): React.JSX.Element {
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const generatedTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
-
-  // Why: the IPC payload only carries the terminal's raw/live title (see
-  // peerCollab:listHostTerminals); the tab's actual display name (custom
-  // rename, quick-command label, generated title) lives in this store.
-  const terminalTabById = useMemo(() => {
-    const map = new Map<string, TerminalTab>()
-    for (const tabs of Object.values(tabsByWorktree)) {
-      for (const tab of tabs) {
-        map.set(tab.id, tab)
-      }
-    }
-    return map
-  }, [tabsByWorktree])
-
-  function resolveHostTerminalTitle(terminal: HostTerminalOption): string {
-    const tab = terminalTabById.get(terminal.tabId)
-    const fallback =
-      terminal.title ||
-      translate(
-        'auto.components.settings.PeerCollabSettingsPane.untitledTerminal',
-        'Untitled terminal'
-      )
-    return tab ? resolveTerminalTabTitle(tab, generatedTitlesEnabled, fallback) : fallback
-  }
-
   return (
     <SearchableSetting
       title={translate(
@@ -132,82 +91,24 @@ export function PeerCollabConnectedClientsSection({
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        title={translate(
-                          'auto.components.settings.PeerCollabSettingsPane.grantTerminals',
-                          'Share terminals'
-                        )}
-                      >
-                        <ShieldCheck className="size-3.5" />
-                        {client.grantedTerminals.length > 0
-                          ? ` ${client.grantedTerminals.length}`
-                          : ''}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>
-                        {translate(
-                          'auto.components.settings.PeerCollabSettingsPane.grantTerminalsLabel',
-                          'Terminals shared with {{name}}',
-                          { name: client.name }
-                        )}
-                      </DropdownMenuLabel>
-                      {hostTerminals.length === 0 ? (
-                        <p className="text-muted-foreground px-2 py-1.5 text-xs">
-                          {translate(
-                            'auto.components.settings.PeerCollabSettingsPane.noHostTerminalsToGrant',
-                            'No terminals available to share.'
-                          )}
-                        </p>
-                      ) : (
-                        hostTerminals.map((terminal) => {
-                          const granted = client.grantedTerminals.includes(terminal.handle)
-                          return (
-                            <DropdownMenuCheckboxItem
-                              key={terminal.handle}
-                              checked={granted}
-                              onCheckedChange={(checked) =>
-                                onSetGrantedTerminals(
-                                  client.deviceId,
-                                  checked
-                                    ? [...client.grantedTerminals, terminal.handle]
-                                    : client.grantedTerminals.filter((h) => h !== terminal.handle)
-                                )
-                              }
-                            >
-                              {resolveHostTerminalTitle(terminal)}
-                            </DropdownMenuCheckboxItem>
-                          )
-                        })
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <PeerTerminalGrantMenu
+                    deviceName={client.name}
+                    grantedTerminals={client.grantedTerminals}
+                    hostTerminals={hostTerminals}
+                    onSetGrantedTerminals={(handles) =>
+                      onSetGrantedTerminals(client.deviceId, handles)
+                    }
+                  />
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onDisconnectClient(client.deviceId, false)}
+                    onClick={() => onDisconnectClient(client.deviceId)}
                     title={translate(
                       'auto.components.settings.PeerCollabSettingsPane.disconnect',
                       'Disconnect'
                     )}
                   >
                     <Unplug className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onDisconnectClient(client.deviceId, true)}
-                    className="text-destructive hover:text-destructive"
-                    title={translate(
-                      'auto.components.settings.PeerCollabSettingsPane.disconnectAndBlock',
-                      'Disconnect and revoke device'
-                    )}
-                  >
-                    <Trash2 className="size-3.5" />
                   </Button>
                 </div>
               </div>
