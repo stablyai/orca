@@ -33,7 +33,7 @@ export function getCodexBackfillGateStatus(
   }
 }
 
-/** Registers the read-only gate query fresh codex panes check before spawning. */
+/** Why: main-side per-pane holds now gate spawns; this global query has no renderer consumers and is retained for backward-compat pending a follow-up removal review. */
 export function registerCodexBackfillStatusHandlers(runtimeHome: CodexHomeLaneResolver): void {
   ipcMain.removeHandler('codexBackfill:status')
   ipcMain.handle(

@@ -2066,7 +2066,7 @@ const api = {
     status: (): Promise<CodexConfigSyncStatus> => ipcRenderer.invoke('codexConfigSync:status')
   },
   codexBackfill: {
-    /** Go/no-go for launching codex into a fresh local pane (#11828 index gate). */
+    /** Why: main-side per-pane holds now gate spawns (see paneHold* below); this global surface is retained for backward-compat pending a follow-up removal review (#11828). */
     status: (): Promise<CodexBackfillGateStatus> => ipcRenderer.invoke('codexBackfill:status'),
     onStatusChanged: (callback: (status: CodexBackfillGateStatus) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: CodexBackfillGateStatus): void =>

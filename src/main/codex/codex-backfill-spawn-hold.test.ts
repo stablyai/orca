@@ -82,18 +82,22 @@ describe('shouldHoldCodexSpawnForBackfill', () => {
   it('holds via the real default predicate for a missing DB with >=100 session files', async () => {
     const real = await vi.importActual<typeof CodexStateDbModule>('./codex-state-db')
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-home-'))
-    const day = path.join(home, 'sessions', '2026', '07', '01')
-    fs.mkdirSync(day, { recursive: true })
-    for (let i = 0; i < 100; i++) {
-      fs.writeFileSync(path.join(day, `rollout-${i}.jsonl`), '')
+    try {
+      const day = path.join(home, 'sessions', '2026', '07', '01')
+      fs.mkdirSync(day, { recursive: true })
+      for (let i = 0; i < 100; i++) {
+        fs.writeFileSync(path.join(day, `rollout-${i}.jsonl`), '')
+      }
+      expect(
+        shouldHoldCodexSpawnForBackfill({
+          ...base,
+          codexHomePath: home,
+          isPending: real.isCodexBackfillIndexPending
+        })
+      ).toBe(true)
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true })
     }
-    expect(
-      shouldHoldCodexSpawnForBackfill({
-        ...base,
-        codexHomePath: home,
-        isPending: real.isCodexBackfillIndexPending
-      })
-    ).toBe(true)
   })
 })
 

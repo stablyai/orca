@@ -2102,8 +2102,7 @@ void app.whenReady().then(async () => {
           hooksEnabled: isAgentStatusHooksEnabled(store!.getSettings()),
           userDataPath: app.getPath('userData')
         })
-        // Why: waiting panes auto-start the moment the index completes instead of
-        // waiting out their slow re-poll interval.
+        // Why: main-side per-pane hold broadcasts now drive pane gating/overlay; this global broadcast is retained for backward-compat pending a follow-up removal review.
         if (codexRuntimeHome) {
           broadcastCodexBackfillStatusChanged(
             () => BrowserWindow.getAllWindows(),

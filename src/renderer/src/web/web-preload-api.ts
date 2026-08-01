@@ -811,8 +811,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       status: () =>
         Promise.resolve({ state: 'synced', reason: null, systemConfigPath: '' } as const)
     },
-    // Why: the web client's panes run on remote hosts whose codex homes this
-    // browser cannot inspect; never-pending keeps those spawns ungated.
+    // Why: main-side per-pane holds now gate spawns; the global status surface is a retained backward-compat stub, and never-pending is the safe default for a web client that cannot inspect codex homes.
     codexBackfill: {
       status: () => Promise.resolve({ pending: false, lastWatermark: null }),
       onStatusChanged: () => () => {},
