@@ -253,3 +253,16 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
 
   return false
 }
+
+export async function branchHasNoUnmergedChangesWithLazyTargetRefresh(
+  runGit: GitBranchCleanupExec,
+  branchName: string,
+  targetRefs: string[],
+  capabilities: GitCapabilityCache
+): Promise<boolean> {
+  if (await branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, targetRefs, capabilities)) {
+    return true
+  }
+  await refreshBranchCleanupTargetRefs(runGit, targetRefs)
+  return branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, targetRefs, capabilities)
+}

@@ -589,6 +589,7 @@ branch refs/heads/main
     expect(calls).toContain('git merge-tree --write-tree base123 refs/heads/feature/test')
     expect(calls).toContain('git update-ref -d refs/heads/feature/test def456')
     expect(calls).toContain('git config --remove-section branch.feature/test')
+    expect(calls).not.toContain('git remote')
   })
 
   it('deletes a squash-merged branch with branch-only merge commits via expected head', async () => {
@@ -722,6 +723,9 @@ branch refs/heads/main
         stdout: 'base123\n'
       },
       'git merge-tree --write-tree base123 refs/heads/feature/test': {
+        stdout: 'stale-tree\n'
+      },
+      'git merge-tree --write-tree base123 refs/heads/feature/test#2': {
         stdout: 'tree123\n'
       },
       'git rev-parse --verify --quiet base123^{tree}': {
@@ -732,13 +736,14 @@ branch refs/heads/main
     await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({})
 
     const calls = getGitCalls()
+    const mergeTreeCall = 'git merge-tree --write-tree base123 refs/heads/feature/test'
+    const mergeTreeIndexes = calls.flatMap((call, index) => (call === mergeTreeCall ? [index] : []))
+    const fetchIndex = calls.indexOf('git fetch --prune origin')
     expect(calls).toContain('git fetch --prune origin')
     expect(calls).toContain('git update-ref -d refs/heads/feature/test def456')
-    expectGitCallOrder(
-      calls,
-      'git fetch --prune origin',
-      'git merge-tree --write-tree base123 refs/heads/feature/test'
-    )
+    expect(mergeTreeIndexes).toHaveLength(2)
+    expect(fetchIndex).toBeGreaterThan(mergeTreeIndexes[0])
+    expect(fetchIndex).toBeLessThan(mergeTreeIndexes[1])
     expectGitCallOrder(
       calls,
       'git fetch --prune origin',

@@ -2,9 +2,8 @@
 import { readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, posix, resolve, win32 } from 'node:path'
 import {
-  branchHasNoUnmergedChangesOnAnyTarget,
-  getBranchCleanupTargetRefs,
-  refreshBranchCleanupTargetRefs
+  branchHasNoUnmergedChangesWithLazyTargetRefresh,
+  getBranchCleanupTargetRefs
 } from '../../shared/git-branch-cleanup'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { withSpan } from '../observability/tracer'
@@ -1267,10 +1266,9 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
       ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {})
     })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
-  await refreshBranchCleanupTargetRefs(runGit, targetRefs)
   // Why: squash merges rewrite commit IDs, so `branch -d` rejects already-merged branches; delete only when Git proves no unmerged tree changes.
   if (
-    !(await branchHasNoUnmergedChangesOnAnyTarget(
+    !(await branchHasNoUnmergedChangesWithLazyTargetRefresh(
       runGit,
       branchName,
       targetRefs,

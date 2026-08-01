@@ -217,6 +217,7 @@ describe('removeWorktreeOp branch cleanup', () => {
       ['config', '--remove-section', 'branch.feature/test'],
       expect.any(String)
     )
+    expect(git).not.toHaveBeenCalledWith(['remote'], expect.any(String))
   })
 
   it('deletes a squash-merged SSH branch with branch-only merge commits via expected head', async () => {
@@ -308,6 +309,7 @@ describe('removeWorktreeOp branch cleanup', () => {
   it('refreshes the saved remote base before deleting a safe-delete-rejected SSH branch', async () => {
     const calls: { args: string[]; cwd: string }[] = []
     let zListCount = 0
+    let mergeTreeCount = 0
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push({ args, cwd })
       if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
@@ -345,7 +347,8 @@ describe('removeWorktreeOp branch cleanup', () => {
         return { stdout: 'base123\n', stderr: '' }
       }
       if (args[0] === 'merge-tree') {
-        return { stdout: 'tree123\n', stderr: '' }
+        mergeTreeCount += 1
+        return { stdout: mergeTreeCount === 1 ? 'stale-tree\n' : 'tree123\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('base123^{tree}')) {
         return { stdout: 'tree123\n', stderr: '' }
@@ -360,17 +363,17 @@ describe('removeWorktreeOp branch cleanup', () => {
     const commandIndex = (expectedArgs: string[]) =>
       calls.findIndex(({ args }) => JSON.stringify(args) === JSON.stringify(expectedArgs))
     const fetchIndex = commandIndex(['fetch', '--prune', 'origin'])
-    const mergeTreeIndex = commandIndex([
-      'merge-tree',
-      '--write-tree',
-      'base123',
-      'refs/heads/feature/test'
-    ])
+    const mergeTreeArgs = ['merge-tree', '--write-tree', 'base123', 'refs/heads/feature/test']
+    const mergeTreeIndexes = calls.flatMap(({ args }, index) =>
+      JSON.stringify(args) === JSON.stringify(mergeTreeArgs) ? [index] : []
+    )
     const updateRefIndex = commandIndex(['update-ref', '-d', 'refs/heads/feature/test', '1'])
 
     expect(fetchIndex).toBeGreaterThanOrEqual(0)
     expect(calls[fetchIndex]?.cwd).toBe(resolvedRepoPath())
-    expect(fetchIndex).toBeLessThan(mergeTreeIndex)
+    expect(mergeTreeIndexes).toHaveLength(2)
+    expect(fetchIndex).toBeGreaterThan(mergeTreeIndexes[0])
+    expect(fetchIndex).toBeLessThan(mergeTreeIndexes[1])
     expect(fetchIndex).toBeLessThan(updateRefIndex)
   })
 
