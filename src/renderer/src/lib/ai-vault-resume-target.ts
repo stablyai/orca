@@ -7,6 +7,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isWslUncPath } from '../../../shared/wsl-paths'
@@ -157,6 +158,9 @@ export function getAiVaultResumeWorkspaceTargetStatus(
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return 'local'
+  }
   const worktree = getIndexedWorktreeMap(state.worktreesByRepo ?? {}).get(worktreeId)
   const worktreeHost = getAiVaultResumeExecutionHostTargetStatus(worktree?.hostId)
   if (worktreeHost !== 'unknown') {

@@ -6,10 +6,7 @@ import {
   type AiVaultResumeStartup
 } from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
-import {
-  activateAndRevealFolderWorkspace,
-  activateAndRevealWorktree
-} from '@/lib/worktree-activation'
+import { activateAiVaultResumeWorkspace } from './ai-vault-session-resume-activation'
 import { useAppStore } from '@/store'
 import {
   canResumeAiVaultSessionOnTarget,
@@ -306,13 +303,4 @@ function aiVaultResumeUnsupportedMessage(
     'auto.components.right.sidebar.AiVaultPanel.openSupportedWorkspace',
     'Open a workspace before resuming a session.'
   )
-}
-
-function activateAiVaultResumeWorkspace(workspaceId: string): void {
-  const workspaceScope = parseWorkspaceKey(workspaceId)
-  if (workspaceScope?.type === 'folder') {
-    activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
-    return
-  }
-  activateAndRevealWorktree(workspaceId)
 }

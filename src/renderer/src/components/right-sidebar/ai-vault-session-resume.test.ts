@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo, Worktree } from '../../../../shared/types'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { resolveAiVaultSessionLaunchTarget } from './ai-vault-session-launch-actions'
+import { activateAiVaultResumeWorkspace } from './ai-vault-session-resume-activation'
 import {
   aiVaultSessionResumeLabel,
   aiVaultSessionRowResumeGating,
@@ -10,6 +12,21 @@ import {
   resolveAiVaultSessionResumeActions,
   resolveAiVaultSessionResumeState
 } from './ai-vault-session-resume'
+
+const activationMocks = vi.hoisted(() => ({
+  activateFolder: vi.fn(),
+  activateWorktree: vi.fn(),
+  isFloatingWorkspacePanelVisible: vi.fn()
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealFolderWorkspace: activationMocks.activateFolder,
+  activateAndRevealWorktree: activationMocks.activateWorktree
+}))
+
+vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
+  isFloatingWorkspacePanelVisible: activationMocks.isFloatingWorkspacePanelVisible
+}))
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -506,6 +523,19 @@ describe('resolveAiVaultSessionResumeActions', () => {
 })
 
 describe('resolveAiVaultSessionLaunchTarget', () => {
+  it('allows direct resume into the synthetic floating workspace', () => {
+    expect(
+      resolveAiVaultSessionLaunchTarget({
+        sessionFilePath: HOST_SESSION_FILE,
+        activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        targetState: makeTargetState()
+      })
+    ).toEqual({
+      status: 'ready',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+  })
+
   it('allows direct resume into an active SSH folder workspace', () => {
     expect(
       resolveAiVaultSessionLaunchTarget({
@@ -558,6 +588,63 @@ describe('resolveAiVaultSessionLaunchTarget', () => {
       status: 'unsupported',
       targetStatus: 'runtime'
     })
+  })
+
+  it('allows direct resume into a normal local worktree', () => {
+    expect(
+      resolveAiVaultSessionLaunchTarget({
+        sessionFilePath: HOST_SESSION_FILE,
+        activeWorktreeId: 'repo-1::/repo/orca',
+        targetState: makeTargetState({
+          repos: [makeRepo()],
+          worktreesByRepo: { 'repo-1': [makeWorktree()] }
+        })
+      })
+    ).toEqual({
+      status: 'ready',
+      worktreeId: 'repo-1::/repo/orca'
+    })
+  })
+
+  it('rejects an unknown target without activating a workspace', () => {
+    expect(
+      resolveAiVaultSessionLaunchTarget({
+        sessionFilePath: HOST_SESSION_FILE,
+        activeWorktreeId: 'missing-workspace',
+        targetState: makeTargetState()
+      })
+    ).toEqual({ status: 'missing' })
+  })
+})
+
+describe('activateAiVaultResumeWorkspace', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('opens the floating workspace once and leaves an already-open panel alone', () => {
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('window', { dispatchEvent })
+    activationMocks.isFloatingWorkspacePanelVisible.mockReturnValue(false)
+
+    activateAiVaultResumeWorkspace(FLOATING_TERMINAL_WORKTREE_ID)
+    expect(dispatchEvent).toHaveBeenCalledTimes(1)
+    expect((dispatchEvent.mock.calls[0][0] as Event).type).toBe('orca-toggle-floating-terminal')
+
+    activationMocks.isFloatingWorkspacePanelVisible.mockReturnValue(true)
+    activateAiVaultResumeWorkspace(FLOATING_TERMINAL_WORKTREE_ID)
+    expect(dispatchEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves folder and normal worktree activation', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn() })
+
+    activateAiVaultResumeWorkspace(folderWorkspaceKey('folder-1'))
+    activateAiVaultResumeWorkspace('repo-1::/repo/orca')
+
+    expect(activationMocks.activateFolder).toHaveBeenCalledWith('folder-1')
+    expect(activationMocks.activateWorktree).toHaveBeenCalledWith('repo-1::/repo/orca')
   })
 })
 
