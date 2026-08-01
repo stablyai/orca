@@ -1464,7 +1464,8 @@ git commit -m "fix(terminal): explain codex backfill-timeout startup failures in
 ### Task 7: Full gates and on-machine end-to-end verification
 
 **Files:**
-- No new source files. Read-only inspection of real homes; disposable temp user-data dir.
+- No new source files. Read-only inspection of real homes; disposable sandboxed HOME +
+  user-data dir (the repo's E2E isolation lane).
 
 **Interfaces:**
 - Consumes: everything above, plus the real environment on this machine (WSL2; managed home `/home/dan/.local/share/orca/codex-runtime-home/home`; real `~/.codex` with ~4.8k rollout files, 15 GB — hardlink-shared with the managed home).
@@ -1498,50 +1499,99 @@ production behavior (same class of action as the existing index-heal stage, whic
 spawns codex with `CODEX_HOME: systemCodexHomePath`); record the observation instead of
 treating it as a violation, and let it run to completion.
 
-- [ ] **Step 3: Full repro E2E in a disposable user-data dir (the actual #11828 scenario)**
+- [ ] **Step 3: Full repro E2E in a disposable sandboxed HOME (the actual #11828 scenario)**
 
 This reproduces the reporter's exact failure and proves both halves of the fix. It takes
 tens of minutes of wall-clock time while the index runs; that is expected.
 
+Design note — why the sandbox wraps `HOME`, not just the user-data dir. Under the
+home-lane model (Key Context above), the migration scheduler runs ONLY when
+`isHostSystemDefaultRealHome()` is true — the same lane in which fresh codex panes read
+the **real** `~/.codex`. A sandbox that only redirects the user-data dir therefore can
+never show both halves at once: the prewarm would target the sandbox twin while every
+pane reads the (complete) real home. The only configuration where the prewarm AND the
+panes hit the same incomplete home — which is also exactly the reporter's situation — is
+one where the "real" home itself is disposable: fake `HOME` via the repo's E2E isolation
+lane and seed the large session history into `<sandbox home>/.codex`. The sandbox twin
+(`<userData>/codex-runtime-home/home`) stays empty, so its prewarm leg is a `not-needed`
+no-op; the twin-targeting leg is covered by Task 2's unit tests, and the system-home leg
+exercised here is the one production hits in the reporter's lane. Two mechanism facts
+(verified in source): `ORCA_USER_DATA_PATH` CANNOT create the sandbox — startup
+overwrites it (`src/main/startup/configure-process.ts:182-185`); the supported redirect
+is `ORCA_E2E_USER_DATA_DIR` + `ORCA_E2E_HOME_DIR`, which refuses to start unless
+`os.homedir()` already equals the E2E home (`configure-process.ts:141-158`) — hence the
+`HOME=` override in the launch env. This runs on Linux/WSL2 (this machine), where
+`os.homedir()` follows `$HOME`.
+
 ```bash
-E2E_DATA=$(mktemp -d /tmp/orca-e2e-11828.XXXXXX)
-mkdir -p "$E2E_DATA/codex-runtime-home/home"
+REAL_HOME="$HOME"                                 # capture before overriding
+E2E_ROOT=$(mktemp -d /tmp/orca-e2e-11828.XXXXXX)  # mktemp -d => private 0700 dir
+E2E_DATA="$E2E_ROOT/userdata"
+E2E_HOME="$E2E_DATA/home"
+mkdir -p "$E2E_HOME/.codex"
 # Why cp -a (real copies, NOT cp -al hardlinks): codex has a compression path that can
 # replace rollout .jsonl files (openai/codex rollout/src/compression.rs — ledger A14);
 # plain copies make it impossible for the E2E to touch ~/.codex originals. The 15 GB copy
 # takes a few minutes and needs the disk space — that is the accepted cost of safety.
-cp -a "$HOME/.codex/sessions" "$E2E_DATA/codex-runtime-home/home/sessions"
-ORCA_USER_DATA_PATH="$E2E_DATA" pnpm dev
+cp -a "$REAL_HOME/.codex/sessions" "$E2E_HOME/.codex/sessions"
+# Why seed credentials/config: codex must be able to start inside the sandbox, and the
+# real-home hook trust-grant must not mark the lane 'unavailable' (which would silently
+# disable the scheduler — see the eligibility HALT below). Both copies live only in the
+# 0700 temp dir and are deleted at cleanup.
+cp "$REAL_HOME/.codex/auth.json" "$E2E_HOME/.codex/auth.json"
+cp "$REAL_HOME/.codex/config.toml" "$E2E_HOME/.codex/config.toml" 2>/dev/null || true
+# Do NOT copy state_*.sqlite: the sandbox home must look like the reporter's — a large
+# session history with no completed index — so the system-home prewarm leg spawns.
+# Launch from the dev shell so the inherited PATH resolves codex and node (the
+# home-rooted fallback probes in src/main/codex-cli/command.ts find nothing under a
+# fake HOME).
+env -u CODEX_HOME -u ORCA_CODEX_HOME -u ZDOTDIR -u BASH_ENV \
+  HOME="$E2E_HOME" USERPROFILE="$E2E_HOME" \
+  ORCA_E2E_USER_DATA_DIR="$E2E_DATA" ORCA_E2E_HOME_DIR="$E2E_HOME" \
+  ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME=1 \
+  pnpm dev
 ```
 
 Observe and record (in the task's final report) each of:
 1. Within ~60s of app start, the console logs
-   `[codex-state-db-prewarm] pre-warming codex session index at ...` and
-   `pgrep -af 'app-server'` shows a codex child with `CODEX_HOME` pointing into `$E2E_DATA`
-   (check via `tr '\0' '\n' </proc/<pid>/environ | grep CODEX_HOME`).
-   Note: the dual-home prewarm runs its **system-home leg first** (against the real
-   `~/.codex`, expected `already-complete` and instant per Step 2) before the managed-home
-   leg that targets the twin — the log line to watch for is the one whose path is inside
-   `$E2E_DATA`. If a run is interrupted mid-index, expect codex starts against the twin to
-   fail for up to 15 minutes (stale backfill lease, verified behavior) before resuming.
-2. While it runs, open a Codex pane in the app: after ~30s the pane shows Codex's failure
+   `[codex-state-db-prewarm] pre-warming codex session index at $E2E_HOME/.codex ...`
+   and a codex child exists whose environment has `CODEX_HOME=$E2E_HOME/.codex`
+   (find candidates with `pgrep -af 'app-server'`, then confirm via
+   `tr '\0' '\n' </proc/<pid>/environ | grep '^CODEX_HOME='`). The log line plus the
+   exact `CODEX_HOME` value are the discriminators — Orca's rate-limits fetcher spawns
+   an identical `codex ... app-server` command line, so `pgrep` output alone proves
+   nothing. The dual-home prewarm's managed leg (the empty twin at
+   `$E2E_DATA/codex-runtime-home/home`) is a `not-needed` no-op here; only the
+   system-home leg spawns. If a run is interrupted mid-index, expect codex starts
+   against the sandbox home to fail for up to 15 minutes (stale backfill lease,
+   verified behavior) before resuming.
+2. While it runs, open a Codex pane in the app — on the real-home lane the pane's
+   `CODEX_HOME` stays unset and the pane inherits the faked `HOME`, so its codex reads
+   the same in-progress `$E2E_HOME/.codex`: after ~30s the pane shows Codex's failure
    output AND the amber toast beginning "Codex is still indexing your session history…".
-   A plain shell pane shows no toast.
+   A plain shell pane shows no toast. (If the pane instead reports
+   `codex: command not found`, the sandbox HOME lost the shell-init PATH — re-run the
+   launch with the real `codex`/`node` bin dirs prepended to `PATH`; record that
+   adjustment.)
 3. Poll until done (many minutes):
-   `sqlite3 "file:$E2E_DATA/codex-runtime-home/home/state_5.sqlite?mode=ro" "select status from backfill_state;"`
+   `sqlite3 "file:$E2E_HOME/.codex/state_5.sqlite?mode=ro" "select status from backfill_state;"`
    flips to `complete`, the console logs `[codex-state-db-prewarm] codex session index complete`,
-   and the codex child is gone (`pgrep -af 'app-server'` empty).
+   and the prewarm child is gone (no process with `CODEX_HOME=$E2E_HOME/.codex` remains).
 4. Open a new Codex pane: it starts normally (no damaged-database error, no toast).
-5. Restart the app with the same `ORCA_USER_DATA_PATH`: no new prewarm spawn (step-2 no-op
-   behavior on the now-complete twin home).
+5. Quit and relaunch with the same env block: no new prewarm spawn — the sandbox home's
+   state DB now reads `complete` (step-2 no-op behavior) and the empty twin leg is still
+   `not-needed`.
 
 If observation 1 never happens, capture the `[codex-session-migration]` console lines and
-the scheduler eligibility state and HALT with that evidence — do not fake the observations.
+the scheduler eligibility state and HALT with that evidence — do not fake the
+observations. Likeliest cause in this sandbox: the real-home hook trust-grant marked the
+lane `'unavailable'` (`isRealHomeCodexHookLaneUsable()` gate goes false, dropping the app
+to the managed lane) — that is evidence to report, not to work around.
 
 Cleanup:
 
 ```bash
-rm -rf "$E2E_DATA"   # plain copies; ~/.codex originals are unaffected
+rm -rf "$E2E_ROOT"   # plain copies (incl. the auth.json copy); ~/.codex originals are unaffected
 ```
 
 - [ ] **Step 4: Commit any fixes from the verification**
