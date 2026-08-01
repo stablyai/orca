@@ -3,6 +3,7 @@ import {
   type DashboardRevealAgentArgs,
   type DashboardSnapshot
 } from '../../shared/dashboard-snapshot'
+import { AGENT_CONTEXT_USAGE_MAX_TOKENS } from '../../shared/agent-context-pressure'
 import { BoundedMap } from '../../shared/bounded-map'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
 import {
@@ -209,9 +210,13 @@ function isDashboardContextPressure(value: unknown): boolean {
     pressure.usedPercent >= 0 &&
     pressure.usedPercent <= 100 &&
     isFiniteNumber(pressure.usedTokens) &&
+    Number.isInteger(pressure.usedTokens) &&
     pressure.usedTokens >= 0 &&
+    pressure.usedTokens <= AGENT_CONTEXT_USAGE_MAX_TOKENS &&
     isFiniteNumber(pressure.limitTokens) &&
+    Number.isInteger(pressure.limitTokens) &&
     pressure.limitTokens >= 1 &&
+    pressure.limitTokens <= AGENT_CONTEXT_USAGE_MAX_TOKENS &&
     typeof pressure.limitSource === 'string' &&
     DASHBOARD_CONTEXT_PRESSURE_LIMIT_SOURCES.has(pressure.limitSource) &&
     (pressure.usedTokensSource === undefined ||

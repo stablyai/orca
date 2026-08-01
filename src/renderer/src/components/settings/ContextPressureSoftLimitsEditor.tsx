@@ -119,6 +119,7 @@ export function ContextPressureSoftLimitsEditor({
               'auto.components.settings.ExperimentalPane.contextPressure.softLimitKeyAriaLabel',
               'Soft limit key: global, provider, model, or agent type'
             )}
+            aria-invalid={draftKeyInvalid || draftCollision || undefined}
             className="flex-1 font-mono text-xs"
             onChange={(e) => {
               const key = e.target.value
@@ -143,6 +144,7 @@ export function ContextPressureSoftLimitsEditor({
               'auto.components.settings.ExperimentalPane.contextPressure.softLimitTokensAriaLabel',
               'Soft limit in tokens'
             )}
+            aria-invalid={(draft.tokens.trim().length > 0 && draftTokens === null) || undefined}
             className="number-input-clean w-28 tabular-nums"
             onChange={(e) => {
               const tokens = e.target.value
@@ -166,6 +168,18 @@ export function ContextPressureSoftLimitsEditor({
               'Add'
             )}
           </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={translate(
+              'auto.components.settings.ExperimentalPane.contextPressure.cancelAddLimit',
+              'Cancel adding soft limit'
+            )}
+            onClick={() => setDraft(null)}
+          >
+            <X className="size-3.5" />
+          </Button>
           {draftCollision ? (
             <span className="text-xs text-destructive" role="alert">
               {translate(
@@ -181,18 +195,6 @@ export function ContextPressureSoftLimitsEditor({
               )}
             </span>
           ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={translate(
-              'auto.components.settings.ExperimentalPane.contextPressure.cancelAddLimit',
-              'Cancel adding soft limit'
-            )}
-            onClick={() => setDraft(null)}
-          >
-            <X className="size-3.5" />
-          </Button>
         </div>
       ) : null}
     </div>
@@ -270,6 +272,7 @@ function SoftLimitRow({
           'auto.components.settings.ExperimentalPane.contextPressure.softLimitKeyAriaLabel',
           'Soft limit key: global, provider, model, or agent type'
         )}
+        aria-invalid={duplicate || invalidKey || undefined}
         className="flex-1 font-mono text-xs"
         onChange={(e) => setKeyDraft(e.target.value)}
         onBlur={commit}
@@ -288,6 +291,9 @@ function SoftLimitRow({
           'auto.components.settings.ExperimentalPane.contextPressure.softLimitTokensAriaLabel',
           'Soft limit in tokens'
         )}
+        aria-invalid={
+          (tokensDraft.trim().length > 0 && parseSoftLimitTokens(tokensDraft) === null) || undefined
+        }
         className="number-input-clean w-28 tabular-nums"
         onChange={(e) => setTokensDraft(e.target.value)}
         onBlur={commit}

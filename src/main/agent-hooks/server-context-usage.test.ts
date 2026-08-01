@@ -10,6 +10,17 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
+// Passthrough spy: pins that the feature-off path never pays the second body parse.
+vi.mock('../../shared/claude-statusline-context-window', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    parseClaudeStatusLineContextUsage: vi.fn(
+      actual.parseClaudeStatusLineContextUsage as (body: unknown) => unknown
+    )
+  }
+})
+import { parseClaudeStatusLineContextUsage } from '../../shared/claude-statusline-context-window'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PANE = makePaneKey('tab-1', LEAF)
@@ -164,6 +175,18 @@ describe('AgentHookServer context-usage ingestion', () => {
     expect(server.getStatusSnapshotForPane(PANE)).toEqual([
       expect.objectContaining({ paneKey: PANE, state: 'working', contextUsage: null })
     ])
+  })
+
+  it('skips the context parse entirely while tracking is disabled', async () => {
+    const parseSpy = vi.mocked(parseClaudeStatusLineContextUsage)
+    await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'work' })
+    server.setContextPressureEnabled(false)
+    parseSpy.mockClear()
+    await postStatusLine(contextStatusLineBody(PANE, { input: 8_500, size: 200_000 }))
+    expect(parseSpy).not.toHaveBeenCalled()
+    server.setContextPressureEnabled(true)
+    await postStatusLine(contextStatusLineBody(PANE, { input: 8_500, size: 200_000 }))
+    expect(parseSpy).toHaveBeenCalledOnce()
   })
 
   it('drops a session-tagged reading until the row has an established session identity', async () => {

@@ -17101,6 +17101,17 @@ export class OrcaRuntimeService {
       // Why: hook rows win ties, but an older cached hook must not replace a
       // fresh OSC status and make a running mobile workspace look inactive.
       if (existing && existing.updatedAt > entry.receivedAt) {
+        // Why: OSC rows rarely carry a reading/model (undefined = "no update"), so the
+        // winning row inherits the losing hook row's known values — otherwise the mobile
+        // dot flaps off after every OSC ping until the next statusline post.
+        if (existing.agentType === (entry.agentType ?? null)) {
+          if (existing.contextUsage === undefined && entry.contextUsage !== undefined) {
+            existing.contextUsage = entry.contextUsage
+          }
+          if (existing.model === null && entry.model != null) {
+            existing.model = entry.model
+          }
+        }
         continue
       }
       rowSources.set(entry.paneKey, {

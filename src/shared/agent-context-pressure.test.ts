@@ -31,10 +31,13 @@ describe('resolveContextPressure', () => {
         config: CONFIG
       })
     expect(at(0)?.level).toBe('ok')
-    expect(at(699)?.level).toBe('ok')
-    // Why >= at the boundary: "at the threshold" already counts as pressure.
+    expect(at(694)?.level).toBe('ok')
+    // Why: level follows the ROUNDED percent every surface displays — 69.5% shows
+    // "70%", so it must wear the level the "warn at 70" setting promises for 70.
+    expect(at(695)?.level).toBe('warning')
     expect(at(700)?.level).toBe('warning')
-    expect(at(899)?.level).toBe('warning')
+    expect(at(894)?.level).toBe('warning')
+    expect(at(895)?.level).toBe('critical')
     expect(at(900)?.level).toBe('critical')
     expect(at(1000)?.level).toBe('critical')
     expect(at(1500)?.level).toBe('critical')

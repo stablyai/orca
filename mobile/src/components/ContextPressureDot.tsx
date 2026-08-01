@@ -26,9 +26,9 @@ export function ContextPressureDot({
     pressure.usedTokens !== undefined && pressure.limitTokens !== undefined
       ? `${approximate}${numberFormat.format(pressure.usedTokens)} / ${numberFormat.format(pressure.limitTokens)} ${copy.tokens}`
       : null
-  const sourceDetail = pressure.limitSource
-    ? `${copy.effectiveLimit}: ${copy.limitSources[pressure.limitSource]}`
-    : null
+  // Guarded lookup: an unknown limitSource from a newer desktop must not print "undefined".
+  const sourceLabel = pressure.limitSource ? copy.limitSources[pressure.limitSource] : undefined
+  const sourceDetail = sourceLabel ? `${copy.effectiveLimit}: ${sourceLabel}` : null
   const detail = [tokenDetail ?? `${percent} ${copy.used}`, sourceDetail, levelLabel]
     .filter(Boolean)
     .join('. ')

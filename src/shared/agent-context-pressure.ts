@@ -341,8 +341,11 @@ export function resolveContextPressure(input: {
   )
 
   const usedPercent = (usedTokens / bound.limitTokens) * 100
+  // Why: level on the ROUNDED percent — every display rounds, so 89.5% shows "90%"
+  // and must wear the level the user's "critical at 90" setting promises for 90.
+  const levelPercent = Math.round(usedPercent)
   const level: ContextPressureLevel =
-    usedPercent >= criticalPercent ? 'critical' : usedPercent >= warnPercent ? 'warning' : 'ok'
+    levelPercent >= criticalPercent ? 'critical' : levelPercent >= warnPercent ? 'warning' : 'ok'
   return {
     level,
     usedTokens,

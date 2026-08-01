@@ -32659,6 +32659,60 @@ describe('OrcaRuntimeService', () => {
     expect(agents.find((a) => a.prompt === 'no reading')).not.toHaveProperty('contextPressure')
   })
 
+  it('keeps the hook row reading and model when a fresher OSC ping wins the worktree.ps slot', async () => {
+    const now = Date.now()
+    const claudeLeaf = '55555555-5555-4555-8555-555555555555'
+    const codexLeaf = '66666666-6666-4666-8666-666666666666'
+    const claudePane = makePaneKey('tab-cp', claudeLeaf)
+    const codexPane = makePaneKey('tab-cx', codexLeaf)
+    const hookRow = (paneKey: string, tabId: string) => ({
+      paneKey,
+      worktreeId: TEST_WORKTREE_ID,
+      tabId,
+      state: 'working' as const,
+      prompt: 'hook row',
+      agentType: 'claude',
+      connectionId: null,
+      receivedAt: now - 5_000,
+      stateStartedAt: now - 5_000,
+      model: 'claude-opus-5',
+      contextUsage: { usedTokens: 150_000, maxTokens: 200_000 }
+    })
+    const runtime = new OrcaRuntimeService(
+      {
+        ...store,
+        getSettings: () => ({ ...store.getSettings(), experimentalContextPressure: true })
+      } as never,
+      undefined,
+      {
+        getAgentStatusSnapshot: () => [hookRow(claudePane, 'tab-cp'), hookRow(codexPane, 'tab-cx')]
+      }
+    )
+    runtime.registerPty('pty-cp', TEST_WORKTREE_ID, null, { tabId: 'tab-cp', leafId: claudeLeaf })
+    runtime.registerPty('pty-cx', TEST_WORKTREE_ID, null, { tabId: 'tab-cx', leafId: codexLeaf })
+    // Fresher OSC pings win both slots; neither carries a reading (undefined = "no update").
+    runtime.onPtyData(
+      'pty-cp',
+      '\x1b]9999;{"state":"working","prompt":"osc ping","agentType":"claude"}\x07',
+      1
+    )
+    runtime.onPtyData(
+      'pty-cx',
+      '\x1b]9999;{"state":"working","prompt":"osc ping","agentType":"codex"}\x07',
+      1
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const agents = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)?.agents ?? []
+    // Same agentType: the winning OSC row inherits the known reading — no dot flap.
+    expect(agents.find((a) => a.paneKey === claudePane)?.contextPressure).toMatchObject({
+      level: 'warning',
+      usedPercent: 75
+    })
+    // Different agentType: a successor agent never wears the predecessor's reading.
+    expect(agents.find((a) => a.paneKey === codexPane)).not.toHaveProperty('contextPressure')
+  })
+
   it('omits context pressure from agent rows when the experimental flag is off', async () => {
     const now = Date.now()
     const runtime = new OrcaRuntimeService(store, undefined, {
