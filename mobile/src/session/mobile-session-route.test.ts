@@ -97,10 +97,13 @@ describe('mobile session route', () => {
   it('routes the home Resume card through the cold-navigator-safe transition', () => {
     const start = homeSource.indexOf('{/* ─── Resume card ─── */}')
     const end = homeSource.indexOf('{/* ─── Quick actions ─── */}', start)
-    const resumeCard = homeSource.slice(start, end)
 
+    // Assert the markers first: a renamed banner would otherwise slice garbage and
+    // report a missing call instead of the real cause.
     expect(start).toBeGreaterThanOrEqual(0)
     expect(end).toBeGreaterThan(start)
+
+    const resumeCard = homeSource.slice(start, end)
     expect(resumeCard).toContain('openMobileSession({')
     expect(resumeCard).not.toContain('router.push(')
   })

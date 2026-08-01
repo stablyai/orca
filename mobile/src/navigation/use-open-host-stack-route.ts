@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useNavigation, useRouter } from 'expo-router'
 import {
   coordinateHostStackNavigation,
@@ -7,23 +7,26 @@ import {
   type PendingHostStackNavigation
 } from './host-stack-navigation'
 
+// Why: one root navigator means one pending transition. A per-hook ref would let a
+// Resume tap and a Tasks tap arm two independent pushes that cannot cancel each other.
+let pendingNavigation: PendingHostStackNavigation | null = null
+
 export function useOpenHostStackRoute(): (hostId: string, target: HostStackRouteTarget) => void {
   const navigation = useNavigation<HostStackRootNavigation>()
   const router = useRouter()
-  const pendingRef = useRef<PendingHostStackNavigation | null>(null)
 
   useEffect(
     () => () => {
-      pendingRef.current?.controller.cancel()
-      pendingRef.current = null
+      pendingNavigation?.controller.cancel()
+      pendingNavigation = null
     },
     []
   )
 
   return useCallback(
     (hostId, target) => {
-      pendingRef.current = coordinateHostStackNavigation(
-        pendingRef.current,
+      pendingNavigation = coordinateHostStackNavigation(
+        pendingNavigation,
         navigation,
         router,
         hostId,

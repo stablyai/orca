@@ -52,6 +52,22 @@ export function hostStackHostRoute(hostId: string): HostStackHostRoute {
   return `/h/${encodeURIComponent(hostId)}`
 }
 
+// Why: the host is pushed as an encoded segment, so the committed route may hold
+// either form — an id with `/`, `#`, or `%` must still match its own push.
+function hostParamMatches(param: unknown, expectedHostId: string): boolean {
+  if (typeof param !== 'string') {
+    return false
+  }
+  if (param === expectedHostId) {
+    return true
+  }
+  try {
+    return decodeURIComponent(param) === expectedHostId
+  } catch {
+    return false // Lone `%` — not our encoding.
+  }
+}
+
 function mountedHostStack(
   state: HostStackNavigationState,
   expectedHostId: string
@@ -64,7 +80,7 @@ function mountedHostStack(
     !hostState?.key ||
     hostRoute?.name !== '[hostId]/index' ||
     !hostRoute.key ||
-    hostRoute.params?.hostId !== expectedHostId
+    !hostParamMatches(hostRoute.params?.hostId, expectedHostId)
   ) {
     return null
   }
