@@ -32,7 +32,12 @@ import {
 } from './ShortcutFilterRail'
 import { ShortcutRowsList } from './ShortcutRowsList'
 import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
-import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
+import {
+  getModifierRemapSearchEntry,
+  getTerminalShortcutPolicySearchEntry
+} from './shortcuts-search'
+import { ModifierRemapControl } from './ModifierRemapControl'
+import { getShortcutPlatform } from '../../lib/shortcut-platform'
 import { matchesSettingsSearch } from './settings-search'
 import { clearRecordingActionForShortcutMutation } from './shortcut-recording-state'
 import {
@@ -58,6 +63,7 @@ export function ShortcutsPane(): React.JSX.Element {
   const terminalShortcutPolicy = useAppStore(
     (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
   )
+  const modifierRemap = useAppStore((state) => state.settings?.modifierRemap ?? 'none')
   const updateSettings = useAppStore((state) => state.updateSettings)
   const keybindings = useAppStore((state) => state.keybindings)
   const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
@@ -299,6 +305,10 @@ export function ShortcutsPane(): React.JSX.Element {
   }
 
   const showPolicy = matchesSettingsSearch(searchQuery, getTerminalShortcutPolicySearchEntry())
+  // Why: Linux/Windows already run app chords on Ctrl, so the swap has nothing to offer there.
+  const showModifierRemap =
+    getShortcutPlatform() === 'darwin' &&
+    matchesSettingsSearch(searchQuery, getModifierRemapSearchEntry())
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
@@ -307,6 +317,14 @@ export function ShortcutsPane(): React.JSX.Element {
           <ShortcutTerminalPolicyControl
             terminalShortcutPolicy={terminalShortcutPolicy}
             keywords={getTerminalShortcutPolicySearchEntry().keywords}
+            updateSettings={updateSettings}
+          />
+        ) : null}
+
+        {showModifierRemap ? (
+          <ModifierRemapControl
+            modifierRemap={modifierRemap}
+            keywords={getModifierRemapSearchEntry().keywords}
             updateSettings={updateSettings}
           />
         ) : null}

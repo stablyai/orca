@@ -34,6 +34,25 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
   })
 )
 
+export const getModifierRemapSearchEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate('settings.modifierRemap.searchTitle', 'Modifier Keys'),
+    description: translate(
+      'settings.modifierRemap.searchDescription',
+      'Swap Ctrl and Command so app shortcuts fire from Ctrl and Command reaches the terminal.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.modifierRemap.keyword.ctrl', 'ctrl'),
+      ...translateSearchKeyword('settings.modifierRemap.keyword.control', 'control'),
+      ...translateSearchKeyword('settings.modifierRemap.keyword.cmd', 'cmd'),
+      ...translateSearchKeyword('settings.modifierRemap.keyword.command', 'command'),
+      ...translateSearchKeyword('settings.modifierRemap.keyword.modifier', 'modifier'),
+      ...translateSearchKeyword('settings.modifierRemap.keyword.remap', 'remap'),
+      ...translateSearchKeyword('settings.modifierRemap.keyword.swap', 'swap')
+    ]
+  })
+)
+
 export const getShortcutsPaneSearchEntries = createLocalizedCatalog(() => [
   ...KEYBINDING_DEFINITIONS.map((item) => ({
     title: item.title,
@@ -44,5 +63,6 @@ export const getShortcutsPaneSearchEntries = createLocalizedCatalog(() => [
     ),
     keywords: [...item.searchKeywords]
   })),
-  getTerminalShortcutPolicySearchEntry()
+  getTerminalShortcutPolicySearchEntry(),
+  getModifierRemapSearchEntry()
 ])

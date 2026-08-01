@@ -43,6 +43,7 @@ import {
   type KeybindingMatchOptions,
   type KeybindingOverrides
 } from '../../shared/keybindings'
+import { applyCtrlCmdSwapToInput, isCtrlCmdSwapActive } from '../../shared/modifier-remap'
 import { getMainE2EConfig } from '../e2e-config'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
@@ -789,10 +790,16 @@ export function createMainWindow(
     return true
   }
 
-  mainWindow.webContents.on('before-input-event', (event, input) => {
+  mainWindow.webContents.on('before-input-event', (event, rawInput) => {
     if (shortcutRecorderFocused) {
       return
     }
+
+    // Why: main resolves shortcuts ahead of the renderer, so the remap has to land here too.
+    const input = applyCtrlCmdSwapToInput(
+      rawInput,
+      isCtrlCmdSwapActive(store?.getSettings().modifierRemap, process.platform)
+    )
 
     if (input.type === 'keyDown' && is.dev && input.code === 'F12') {
       event.preventDefault()
