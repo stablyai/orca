@@ -11,8 +11,10 @@ describe('workspace emoji shortcodes', () => {
     expect(searchWorkspaceEmojiShortcodes('wink', 1)).toEqual([{ emoji: '😉', shortcode: 'wink' }])
   })
 
-  it('finds the Korean flag by kr shortcode', () => {
-    expect(searchWorkspaceEmojiShortcodes('kr', 1)).toEqual([{ emoji: '🇰🇷', shortcode: 'kr' }])
+  it('finds the Korean flag by workspace shortcode', () => {
+    expect(searchWorkspaceEmojiShortcodes('flag_kr', 1)).toEqual([
+      { emoji: '🇰🇷', shortcode: 'flag_kr' }
+    ])
   })
 
   it('ranks an exact shortcode before longer aliases', () => {
@@ -43,8 +45,8 @@ describe('workspace emoji shortcodes', () => {
     })
   })
 
-  it('replaces the completed kr shortcode', () => {
-    expect(replaceCompletedWorkspaceEmojiShortcode(':kr:', 4)).toEqual({
+  it('replaces the completed Korean flag shortcode', () => {
+    expect(replaceCompletedWorkspaceEmojiShortcode(':flag_kr:', 9)).toEqual({
       value: '🇰🇷',
       cursor: 4
     })
