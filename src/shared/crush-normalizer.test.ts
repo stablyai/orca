@@ -262,6 +262,22 @@ describe('normalizeHookPayload — crush (charmbracelet/crush) SSE bridge', () =
     expect(normalized).toBeNull()
   })
 
+  it('ignores agent_event:summarize (mid-run context compression, not terminal)', () => {
+    // Why: crush emits summarize during context compaction mid-run — mapping
+    // it to done would flash the pane as finished then flip back to working
+    // on the next message:assistant event.
+    const normalized = normalizeHookPayload(
+      state(),
+      'crush',
+      crushBody({
+        hookEventName: 'agent_event',
+        hookPayload: { type: 'summarize', session_id: 's1' }
+      }),
+      'production'
+    )
+    expect(normalized).toBeNull()
+  })
+
   it('returns null for a non-crush SSE type (e.g. session)', () => {
     const normalized = normalizeHookPayload(
       state(),

@@ -104,6 +104,30 @@ describe('parseCrushSseChunk', () => {
     const { events } = parseCrushSseChunk('', 'event: noop\n\n')
     expect(events).toHaveLength(0)
   })
+
+  it('parses CRLF-terminated events (\\r\\n\\r\\n separator)', () => {
+    const { events, rest } = parseCrushSseChunk('', 'data: {"type":"run_complete"}\r\n\r\n')
+    expect(events).toHaveLength(1)
+    expect(events[0].data).toBe('{"type":"run_complete"}')
+    expect(rest).toBe('')
+  })
+
+  it('parses CR-only-terminated events (\\r\\r separator)', () => {
+    const { events, rest } = parseCrushSseChunk('', 'data: {"type":"message"}\r\r')
+    expect(events).toHaveLength(1)
+    expect(events[0].data).toBe('{"type":"message"}')
+    expect(rest).toBe('')
+  })
+
+  it('parses mixed line endings within a single chunk', () => {
+    const { events } = parseCrushSseChunk(
+      '',
+      'data: line-1\r\ndata: line-2\r\n\r\ndata: {"type":"done"}\n\n'
+    )
+    expect(events).toHaveLength(2)
+    expect(events[0].data).toBe('line-1\nline-2')
+    expect(events[1].data).toBe('{"type":"done"}')
+  })
 })
 
 describe('parseCrushSseEvent', () => {

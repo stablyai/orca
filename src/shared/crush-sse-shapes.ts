@@ -52,7 +52,7 @@ export function crushOrcaHostUrl(socketDir: string, launchToken: string): string
 /** Outer SSE envelope. `type` is the pubsub PayloadType discriminator. */
 export type CrushSseEnvelope = {
   type: 'message' | 'session' | 'permission_request' | 'agent_event' | 'run_complete' | string
-  payload?: { type: 'created' | 'updated' | 'deleted'; payload?: unknown } | unknown
+  payload?: Record<string, unknown>
 }
 
 export type CrushContentPart =
@@ -149,8 +149,9 @@ export type ParsedSseEvent = {
 
 /** Parse an SSE byte stream incrementally. Returns events fully received this
  *  call plus the leftover buffer to carry into the next call. SSE events are
- *  delimited by a blank line (`\n\n`); within an event, only `data:` lines are
- *  consumed (per spec, leading single space after `data:` is stripped). */
+ *  delimited by a blank line; per spec the line ending may be `\n`, `\r\n`,
+ *  or `\r`. Within an event, only `data:` lines are consumed (leading single
+ *  space after `data:` is stripped). */
 export function parseCrushSseChunk(
   buffer: string,
   incoming: string
@@ -158,18 +159,43 @@ export function parseCrushSseChunk(
   events: ParsedSseEvent[]
   rest: string
 } {
-  const combined = buffer + incoming
+  let combined = buffer + incoming
   const events: ParsedSseEvent[] = []
   let cursor = 0
   while (cursor < combined.length) {
-    const sep = combined.indexOf('\n\n', cursor)
-    if (sep === -1) {
+    // Why: find the next blank line — event separator. SSE allows \n, \r\n, or \r.
+    const lf = combined.indexOf('\n', cursor)
+    const cr = combined.indexOf('\r', cursor)
+    let lineEnd: number
+    let lineEndLen: number
+    if (lf === -1 && cr === -1) {
       break
+    } else if (lf === -1) {
+      lineEnd = cr
+      lineEndLen = 1
+    } else if (cr === -1) {
+      lineEnd = lf
+      lineEndLen = 1
+    } else if (cr < lf) {
+      // Why: \r\n or \r-only; skip the \n if it immediately follows \r.
+      lineEnd = cr
+      lineEndLen = lf === cr + 1 ? 2 : 1
+    } else {
+      lineEnd = lf
+      lineEndLen = 1
     }
-    const rawEvent = combined.slice(cursor, sep)
-    cursor = sep + 2
+    // Why: non-empty line — not the event separator yet. Skip ahead.
+    if (lineEnd > cursor) {
+      cursor = lineEnd + lineEndLen
+      continue
+    }
+    // Why: empty line at `cursor` — event separator. Everything up to here
+    // (minus leading content already consumed) is one complete event.
+    const rawEvent = combined.slice(0, lineEnd)
+    cursor = lineEnd + lineEndLen
+    const lines = rawEvent.split(/\r\n|\r|\n/)
     const dataLines: string[] = []
-    for (const line of rawEvent.split('\n')) {
+    for (const line of lines) {
       if (!line.startsWith('data:')) {
         continue
       }
@@ -180,6 +206,9 @@ export function parseCrushSseChunk(
     if (dataLines.length > 0) {
       events.push({ data: dataLines.join('\n') })
     }
+    // Why: drop the consumed portion, keep the remainder as new buffer.
+    combined = combined.slice(cursor)
+    cursor = 0
   }
   return { events, rest: combined.slice(cursor) }
 }

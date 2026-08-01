@@ -3228,7 +3228,7 @@ function normalizeCrushEvent(
     // confirms the agent's turn has ended; type=error/error surface agent failures.
     // Treat both as terminal `done`. run_complete (if it follows) is idempotent.
     const eventType = readString(hookPayload, 'type')
-    if (eventType === 'response' || eventType === 'error' || eventType === 'summarize') {
+    if (eventType === 'response' || eventType === 'error') {
       stateName = 'done'
       if (eventType === 'error') {
         const errMsg = readString(hookPayload, 'error')

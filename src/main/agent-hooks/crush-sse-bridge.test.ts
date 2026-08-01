@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import http from 'node:http'
 import { createServer, type Server } from 'node:http'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -267,15 +267,45 @@ describe('crushSseEnabledForLaunch', () => {
     }
   })
 
-  it('stop() is idempotent and halts reconnection', () => {
-    const bridge = startCrushSseBridge(socketPath, {
-      paneKey: 'pk',
-      launchToken: 'ltok-2',
-      onEvent: () => {}
+  it('stop() is idempotent and halts reconnection', async () => {
+    // Why: use fake timers to prove stop() actually prevents a scheduled
+    // reconnect from firing — not just that the stopped flag is set.
+    vi.useFakeTimers()
+    let connectionCount = 0
+    const stopServer = createServer((req, res) => {
+      if (req.url !== '/v1/workspaces/0/events') {
+        res.writeHead(404)
+        res.end()
+        return
+      }
+      connectionCount++
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      res.write(
+        'data: {"type":"run_complete","payload":{"payload":{"session_id":"s1","text":"hi"}}}\n\n'
+      )
     })
-    bridge.stop()
-    bridge.stop()
-    expect(bridge.stopped()).toBe(true)
+    const stopPath = join(tmp, 'halt.sock')
+    stopServer.listen(stopPath)
+    try {
+      const bridge = startCrushSseBridge(stopPath, {
+        paneKey: 'pk',
+        launchToken: 'ltok-halt',
+        onEvent: () => {}
+      })
+      // Why: allow the initial connect to succeed.
+      await vi.advanceTimersByTimeAsync(100)
+      const countAfterFirst = connectionCount
+      bridge.stop()
+      bridge.stop()
+      // Why: advance well past the max backoff window — if stop() didn't
+      // cancel the reconnect timer, a new connection would land here.
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(connectionCount).toBe(countAfterFirst)
+      expect(bridge.stopped()).toBe(true)
+    } finally {
+      vi.useRealTimers()
+      stopServer.close()
+    }
   })
 
   it('routes a connect failure (missing socket) to onError so the retry loop is observable', async () => {

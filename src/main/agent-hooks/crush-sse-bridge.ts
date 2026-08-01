@@ -128,13 +128,10 @@ export function startCrushSseBridge(socketPath: string, deps: CrushSseBridgeDeps
         }
         // Why: success — reset backoff so the next retry-after-drop starts fresh.
         backoff = SSE_INITIAL_BACKOFF_MS
-        let pending = ''
         res.setEncoding('utf-8')
         res.on('data', (chunk: string) => {
-          pending += chunk
-          const parsed = parseCrushSseChunk(buffer, pending)
+          const parsed = parseCrushSseChunk(buffer, chunk)
           buffer = parsed.rest
-          pending = ''
           for (const ev of parsed.events) {
             dispatch(ev)
           }
