@@ -226,6 +226,31 @@ describe('Claude background task status', () => {
     expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
+  it('only infers an omitted cron inventory is drained from modern lead Stop payloads', () => {
+    const createCronState = (): HookListenerState => {
+      const state = createHookListenerState()
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        session_crons: [{ id: 'cron-1' }]
+      })
+      return state
+    }
+
+    const midTurnState = createCronState()
+    claudeEvent(midTurnState, SOURCE_PANE, {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'continue',
+      background_tasks: []
+    })
+    expect(midTurnState.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
+
+    const legacyStopState = createCronState()
+    expect(claudeEvent(legacyStopState, SOURCE_PANE, { hook_event_name: 'Stop' })?.state).toBe(
+      'working'
+    )
+    expect(legacyStopState.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
+  })
+
   it('treats an interrupted StopFailure as terminal', () => {
     const state = createHookListenerState()
 
