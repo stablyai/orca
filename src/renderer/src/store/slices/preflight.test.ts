@@ -10,6 +10,10 @@ const preflightCheck = vi.fn()
 const callRuntimeRpc = vi.fn()
 const platformGet = vi.fn(() => ({ platform: 'linux' }))
 
+vi.mock('sonner', () => ({
+  toast: { warning: vi.fn(), dismiss: vi.fn() }
+}))
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
   clearRecentRuntimeCompatibilityFailure: vi.fn(),
