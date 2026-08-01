@@ -39,8 +39,16 @@ describe('getFileExplorerImportFailureToast', () => {
   })
 
   it('omits an empty description while preserving the failure count', () => {
-    expect(getFileExplorerImportFailureToast([{ reason: '  ' }])).toEqual({
+    expect(getFileExplorerImportFailureToast([{ reason: '  ' }])).toStrictEqual({
       title: 'Failed to import 1 file.'
+    })
+  })
+
+  it('dedupes before applying the cap', () => {
+    const failed = Array.from({ length: 7 }, (_, i) => ({ reason: `r-${i % 3}` }))
+    expect(getFileExplorerImportFailureToast(failed)).toStrictEqual({
+      title: 'Failed to import 7 files.',
+      description: 'r-0\nr-1\nr-2'
     })
   })
 
