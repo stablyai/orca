@@ -2049,6 +2049,10 @@ export class AgentHookServer {
           // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
           this.state.codexSubagentRosterByPaneKey.delete(paneKey)
           this.state.codexLeadStateByPaneKey.delete(paneKey)
+        } else if (deleted.payload.agentType === 'claude') {
+          this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
+          this.state.claudeLeadStateByPaneKey.delete(paneKey)
+          this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
         }
       }
     }

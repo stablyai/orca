@@ -1,11 +1,6 @@
 import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-status-types'
 import type { ClaudeBackgroundAgentTask } from './claude-background-task-inventory'
 
-export {
-  hasActiveClaudeNonAgentBackgroundWork,
-  readClaudeBackgroundAgentTasks
-} from './claude-background-task-inventory'
-
 /** Mirrors the wire-normalization id cap in agent-status-types. Enforced at
  *  upsert so an over-long id can't gate the pane 'working' while being
  *  invisible in the emitted snapshots (which drop such ids). */

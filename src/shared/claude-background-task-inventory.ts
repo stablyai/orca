@@ -2,8 +2,21 @@ import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 
 const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'idle',
+  'done',
+  'success',
+  'succeeded',
+  'complete',
   'completed',
+  'finished',
   'failed',
+  'error',
+  'stopped',
+  'terminated',
+  'exited',
+  'aborted',
+  'expired',
+  'skipped',
+  'crashed',
   'killed',
   'cancelled',
   'canceled',
@@ -21,27 +34,6 @@ export type ClaudeBackgroundAgentTask = {
    *  agent_ids and they report "running" permanently — even after the named
    *  agent finished — so they carry no per-agent state at all. */
   teammate: boolean
-}
-
-/** Shell tasks and session crons outlive a lead Stop but do not belong in the agent roster. */
-export function hasActiveClaudeNonAgentBackgroundWork(
-  hookPayload: Record<string, unknown>
-): boolean {
-  const sessionCrons = hookPayload['session_crons']
-  if (Array.isArray(sessionCrons) && sessionCrons.length > 0) {
-    return true
-  }
-  const backgroundTasks = hookPayload['background_tasks']
-  return (
-    Array.isArray(backgroundTasks) &&
-    backgroundTasks.some((item) => {
-      if (typeof item !== 'object' || item === null) {
-        return false
-      }
-      const task = item as Record<string, unknown>
-      return task.status === 'running' && task.type !== 'subagent' && task.type !== 'teammate'
-    })
-  )
 }
 
 /** Read the agent-typed entries of a hook payload's `background_tasks` field.

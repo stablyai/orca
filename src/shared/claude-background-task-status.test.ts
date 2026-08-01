@@ -9,7 +9,7 @@ import {
   type HookListenerState
 } from './agent-hook-listener'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
-import { readClaudeBackgroundAgentTasks } from './claude-subagent-roster'
+import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import { makePaneKey } from './stable-pane-id'
 
 const SOURCE_PANE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
@@ -76,6 +76,21 @@ describe('Claude background task status', () => {
     for (const backgroundTasks of [
       [{ id: 'shell-1', type: 'shell', status: 'completed' }],
       [{ id: 'shell-1', type: 'shell', status: ' Completed ' }],
+      ...[
+        'done',
+        'success',
+        'succeeded',
+        'complete',
+        'finished',
+        'error',
+        'stopped',
+        'terminated',
+        'exited',
+        'aborted',
+        'expired',
+        'skipped',
+        'crashed'
+      ].map((status) => [{ id: 'shell-1', type: 'shell', status }]),
       [{ id: 'shell-1', type: 'shell', status: 'canceled' }],
       [{ id: 'shell-1', type: 'shell', status: 'timed_out' }],
       [{ id: 'agent-1', type: ' Subagent ', status: 'running' }],
@@ -169,6 +184,18 @@ describe('Claude background task status', () => {
         hook_event_name: 'SubagentStop',
         agent_id: 'a8ab60ba5d4410c47',
         background_tasks: [RUNNING_SHELL]
+      })
+    ).toMatchObject({ state: 'done', interrupted: true })
+  })
+
+  it('keeps an interrupted Stop terminal while a session cron remains', () => {
+    const state = createHookListenerState()
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        is_interrupt: true,
+        session_crons: [{ id: 'cron-1' }]
       })
     ).toMatchObject({ state: 'done', interrupted: true })
   })

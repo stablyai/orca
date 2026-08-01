@@ -32,12 +32,12 @@ import {
   claudeTeammateIdMatchesName,
   foldClaudeBackgroundTasksIntoRoster,
   idleClaudeTeammateByName,
-  readClaudeBackgroundAgentTasks,
   reapRestoredClaudeSubagentsWithoutLiveAgent,
   stopClaudeSubagent,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
 } from './claude-subagent-roster'
+import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import {
   codexRosterEffectiveState,
   codexRosterToSnapshots,
@@ -2737,7 +2737,7 @@ function normalizeClaudeEvent(
 
   // Why: preserve upstream cron gating while the pane cache carries task evidence across child lifecycle events.
   const effectiveState =
-    stateName === 'done' && hasActiveSessionCron
+    stateName === 'done' && hasActiveSessionCron && interrupted !== true
       ? 'working'
       : resolveClaudePaneState(state, paneKey, { state: stateName, interrupted })
 
