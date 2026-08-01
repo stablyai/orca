@@ -19,6 +19,8 @@ type UrlLinkHitTestDeps = {
 type UrlLinkClickFallbackDeps = {
   worktreeId: string
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  /** Live read of the user's mouse-input gate; the suppressor restores to it. */
+  getMouseEventsRequireAlt?: () => boolean
 }
 
 export type TerminalLinkRoutingPreferenceRequester = (
@@ -210,15 +212,19 @@ export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
 ): IDisposable {
-  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(terminal, (event) => {
-    if (isTerminalLinkifierHoverActive(terminal)) {
-      return true
-    }
-    const position = getTerminalBufferPositionForMouseEvent(terminal, event)
-    return Boolean(
-      position && findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
-    )
-  })
+  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(
+    terminal,
+    (event) => {
+      if (isTerminalLinkifierHoverActive(terminal)) {
+        return true
+      }
+      const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+      return Boolean(
+        position && findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
+      )
+    },
+    deps.getMouseEventsRequireAlt
+  )
   const handleMouseUp = (event: MouseEvent): void => {
     if (!isDesktopHttpLinkFallbackActivation(event)) {
       return

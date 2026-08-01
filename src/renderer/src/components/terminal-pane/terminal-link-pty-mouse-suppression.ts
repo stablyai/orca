@@ -5,26 +5,29 @@ const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
 
 export function installTerminalLinkPtyMouseSuppression(
   terminal: Terminal,
-  shouldSuppressMouseEvent: (event: MouseEvent) => boolean
+  shouldSuppressMouseEvent: (event: MouseEvent) => boolean,
+  // Why a getter, not a snapshot: applyTerminalAppearance owns this option and can
+  // rewrite it mid-gesture, so restoring a saved value would strand the pane.
+  getMouseEventsRequireAlt: () => boolean = () => false
 ): IDisposable {
   const terminalElement = terminal.element
   const ownerDocument = terminalElement?.ownerDocument
   const ownerWindow = ownerDocument?.defaultView
-  let previousMouseEventsRequireAlt: boolean | null = null
+  let suppressing = false
   let restoreQueued = false
 
   const restore = (): void => {
     restoreQueued = false
-    if (previousMouseEventsRequireAlt === null) {
+    if (!suppressing) {
       return
     }
-    terminal.options.mouseEventsRequireAlt = previousMouseEventsRequireAlt
-    previousMouseEventsRequireAlt = null
+    terminal.options.mouseEventsRequireAlt = getMouseEventsRequireAlt()
+    suppressing = false
     ownerDocument?.removeEventListener('mouseup', queueRestore)
     ownerWindow?.removeEventListener('blur', restore)
   }
   const queueRestore = (): void => {
-    if (restoreQueued || previousMouseEventsRequireAlt === null) {
+    if (restoreQueued || !suppressing) {
       return
     }
     restoreQueued = true
@@ -39,7 +42,7 @@ export function installTerminalLinkPtyMouseSuppression(
       return
     }
     restore()
-    previousMouseEventsRequireAlt = Boolean(terminal.options.mouseEventsRequireAlt)
+    suppressing = true
     // Why: xterm otherwise forwards the same Cmd/Ctrl link gesture to a mouse-aware
     // TUI, letting the terminal and the child process both open the URL.
     terminal.options.mouseEventsRequireAlt = true
