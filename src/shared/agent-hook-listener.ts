@@ -3917,7 +3917,7 @@ export function normalizeHookPayload(
   // collapses empty to undefined, so old scripts and default installs match).
   const configDir =
     source === 'claude'
-      ? readStringField(record, 'configDir')?.slice(0, AGENT_STATUS_CONFIG_DIR_MAX_LENGTH)
+      ? normalizeOptionalField(record.configDir, AGENT_STATUS_CONFIG_DIR_MAX_LENGTH)
       : undefined
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>

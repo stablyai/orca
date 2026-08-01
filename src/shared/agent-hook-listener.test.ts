@@ -152,6 +152,21 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.configDir).toBe('/home/dev/.claude-grok')
   })
 
+  it('normalizes configDir before appending it to the transport payload', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        configDir: '  /home/dev/.claude-grok\nspoofed-status  ',
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'hello' }
+      },
+      'production'
+    )
+
+    expect(event?.payload.configDir).toBe('/home/dev/.claude-grok spoofed-status')
+  })
+
   it('keeps payloads without configDir unchanged (back-compat with installed scripts)', () => {
     // Why: already-installed scripts do not post the field, and the updated
     // script posts an EMPTY value for default installs — both must normalize

@@ -2,7 +2,7 @@
 // `posix.resolve` against a POSIX guest home. On win32 `posix.resolve` of a
 // Windows tmpdir yields an invalid path, so the whole suite is skipped there
 // (the bridge only ever runs inside a Linux WSL guest).
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import { posix } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -87,6 +87,19 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
       path: posix.join(home, 'does-not-exist.txt')
     })
     expect(result).toMatchObject({ ok: false, errno: 'ENOENT' })
+  })
+
+  it('reports symlink mode through lstat without following the marker', async () => {
+    const target = posix.join(home, 'target.json')
+    const marker = posix.join(home, 'settings.json')
+    await call(WSL_HOOK_FS_METHODS.writeFile, { path: target, content: '{}' })
+    symlinkSync(target, marker)
+
+    const followed = await call<{ mode: number }>(WSL_HOOK_FS_METHODS.stat, { path: marker })
+    const unwrapped = await call<{ mode: number }>(WSL_HOOK_FS_METHODS.lstat, { path: marker })
+
+    expect(followed.ok && followed.mode & 0o170000).toBe(0o100000)
+    expect(unwrapped.ok && unwrapped.mode & 0o170000).toBe(0o120000)
   })
 
   it('allows readdir existence probes on an ancestor of home and on /', async () => {

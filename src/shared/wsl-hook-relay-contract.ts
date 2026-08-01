@@ -37,6 +37,7 @@ export const WSL_HOOK_FS_METHODS = {
   readFile: 'wslfs.readFile',
   writeFile: 'wslfs.writeFile',
   stat: 'wslfs.stat',
+  lstat: 'wslfs.lstat',
   hardlink: 'wslfs.hardlink',
   rename: 'wslfs.rename',
   unlink: 'wslfs.unlink',

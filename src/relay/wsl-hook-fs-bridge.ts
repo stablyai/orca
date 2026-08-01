@@ -102,6 +102,18 @@ export function registerWslHookFsHandlers(
     }
   )
 
+  dispatcher.onRequest(
+    WSL_HOOK_FS_METHODS.lstat,
+    async (params): Promise<WslFsResult<{ mode: number }>> => {
+      try {
+        const stats = await fs.lstat(scoped(params.path))
+        return { ok: true, mode: stats.mode }
+      } catch (err) {
+        return failure(err)
+      }
+    }
+  )
+
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.rename, async (params): Promise<WslFsResult> => {
     try {
       // Why: POSIX rename overwrites atomically — exactly the OpenSSH

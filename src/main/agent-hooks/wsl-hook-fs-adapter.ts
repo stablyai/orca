@@ -128,6 +128,14 @@ export function createWslHookSftpAdapter(mux: SshChannelMultiplexer): SFTPWrappe
         })
       )
     },
+    lstat(path: string, callback: SftpCallback<{ mode: number }>): void {
+      call<{ mode: number }, { mode: number }>(
+        WSL_HOOK_FS_METHODS.lstat,
+        { path },
+        callback,
+        (r) => ({ mode: r.mode })
+      )
+    },
     // Why: POSIX rename overwrites atomically, which is exactly the OpenSSH
     // overwrite-rename semantics the installers prefer — so the extension is
     // "supported" here and plain rename shares the implementation.
