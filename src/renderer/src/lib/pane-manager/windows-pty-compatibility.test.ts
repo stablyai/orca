@@ -89,7 +89,9 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
     ).toEqual({})
   })
 
-  it('skips compatibility options for WSL cwd terminals', () => {
+  // WSL panes spawn wsl.exe through ConPTY; xterm.js needs the conpty backend
+  // to handle ConPTY's wrap markers or CJK text (width=2) splits per line (#11919).
+  it('includes WSL cwd terminals for ConPTY compatibility', () => {
     for (const cwd of [
       '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
       '\\\\wsl$\\Debian\\home\\me\\repo',
@@ -105,11 +107,13 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
           shellOverride: null,
           executionHostId: 'local'
         })
-      ).toEqual({})
+      ).toEqual({
+        windowsPty: { backend: 'conpty', buildNumber: 26100 }
+      })
     }
   })
 
-  it('skips compatibility options when the shell override launches WSL', () => {
+  it('includes WSL shell override terminals for ConPTY compatibility', () => {
     expect(
       buildWindowsPtyCompatibilityOptions({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -119,7 +123,9 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
         shellOverride: 'C:\\Windows\\System32\\wsl.exe',
         executionHostId: 'local'
       })
-    ).toEqual({})
+    ).toEqual({
+      windowsPty: { backend: 'conpty', buildNumber: 26100 }
+    })
   })
 
   it('returns no options outside Windows', () => {
@@ -240,6 +246,20 @@ describe('isLocalNativeWindowsConpty', () => {
     ).toBe(true)
   })
 
+  // WSL-internal Linux PTY decodes CSI-u correctly, so Kitty keyboard stays on.
+  // ConPTY wrap-marker handling is separately enabled via buildWindowsPtyCompatibilityOptions.
+  it('does NOT treat a WSL pane as a native ConPTY (Kitty keyboard stays advertised)', () => {
+    expect(
+      isLocalNativeWindowsConpty({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        connectionId: null,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      })
+    ).toBe(false)
+  })
+
   it('does NOT treat a remote-runtime (serve) pane as a native ConPTY even when the raw Windows heuristic matches', () => {
     // Regression: a serve-hosted pane on a Windows client has no SSH connectionId
     // and a Linux cwd, so isLocalNativeWindowsPty returns true. Without the
@@ -275,7 +295,7 @@ describe('isLocalNativeWindowsConpty', () => {
     ).toBe(false)
   })
 
-  it('stays false on a local host when the pane is not a native Windows PTY', () => {
+  it('stays false on a local host when the pane is not a Windows PTY', () => {
     // Non-Windows client: the raw heuristic is false, so the gate result is false
     // regardless of the local execution host.
     expect(

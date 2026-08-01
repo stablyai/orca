@@ -42,18 +42,22 @@ function buildXtermWindowsPtyOptions(
   return { backend: 'conpty', buildNumber }
 }
 
-/**
- * xterm options that select the native-Windows ConPTY backend, returned only for
- * a genuine local Windows pane and `{}` otherwise.
- *
- * Why it requires `executionHostId`: a serve/remote-runtime pane on a Windows
- * client looks local to the raw heuristic (no SSH `connectionId`, Linux `cwd`),
- * so gating on the execution host keeps the ConPTY backend off remote PTYs.
- */
+/** Windows client, no SSH connection. Check before gating on execution host. */
+function isWindowsPtyIgnoringWsl(context: WindowsPtyCompatibilityContext): boolean {
+  return isWindowsUserAgent(context.userAgent) && context.connectionId === null
+}
+
+/** Whether a pane spawns through a local Windows ConPTY — native-Windows and WSL (#11919). */
+export function isLocalWindowsConptyPane(
+  context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
+): boolean {
+  return context.executionHostId === LOCAL_EXECUTION_HOST_ID && isWindowsPtyIgnoringWsl(context)
+}
+
 export function buildWindowsPtyCompatibilityOptions(
   context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
 ): Partial<ITerminalOptions> {
-  if (!isLocalNativeWindowsConpty(context)) {
+  if (!isLocalWindowsConptyPane(context)) {
     return {}
   }
   const buildNumber = parseWindowsBuildNumber(context.osRelease)
@@ -79,21 +83,19 @@ export function resolveWindowsShellOverride(
  * local pane from a serve pane, so callers gate it with `isLocalNativeWindowsConpty`.
  */
 export function isLocalNativeWindowsPty(context: WindowsPtyCompatibilityContext): boolean {
-  if (!isWindowsUserAgent(context.userAgent)) {
-    return false
-  }
-  if (context.connectionId !== null) {
-    return false
-  }
-  if (isWslCwd(context.cwd) || isWslShellOverride(context.shellOverride)) {
-    return false
-  }
-  return true
+  return (
+    isWindowsPtyIgnoringWsl(context) &&
+    !isWslCwd(context.cwd) &&
+    !isWslShellOverride(context.shellOverride)
+  )
 }
 
 /**
  * Whether a pane is a genuine local native Windows ConPTY that needs the ConPTY
- * cursor/synchronized-output workarounds.
+ * cursor/synchronized-output workarounds and Kitty keyboard withhold. Excludes
+ * WSL panes (WSL-internal Linux PTY decodes CSI-u correctly), so Kitty keyboard
+ * stays advertised for WSL while `windowsPty` is separately enabled via
+ * `isLocalWindowsConptyPane`.
  *
  * Why this is gated on the execution host: a serve/remote-runtime pane on a
  * Windows client has no SSH `connectionId` and a Linux `cwd`, so
