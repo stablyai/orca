@@ -631,6 +631,7 @@ export class RateLimitService {
           const fresh = await fetchCodexRateLimits({
             codexHomePath: account.managedHomePath,
             allowPtyFallback: false,
+            networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
           if (
@@ -1263,6 +1264,7 @@ export class RateLimitService {
       fresh = await fetchCodexRateLimits({
         codexHomePath,
         allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+        networkProxySettings: this.networkProxySettingsResolver?.(),
         signal: controller.signal
       })
     } catch (error) {
@@ -1611,6 +1613,7 @@ export class RateLimitService {
           fetchCodexRateLimits({
             codexHomePath,
             allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           }),
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
@@ -1825,6 +1828,7 @@ export class RateLimitService {
         : fetchCodexRateLimits({
             codexHomePath,
             allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
     ).catch(

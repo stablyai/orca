@@ -36,6 +36,7 @@ import {
   createAuthFilesystemOperation,
   type SharedAuthFilesystemOperation
 } from './auth-filesystem-operation'
+import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -57,6 +58,7 @@ const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
 export type FetchCodexRateLimitsOptions = {
   codexHomePath?: string | null
   allowPtyFallback?: boolean
+  networkProxySettings?: NetworkProxySettings | null
   signal?: AbortSignal
 }
 
@@ -152,7 +154,7 @@ function shellQuote(value: string): string {
 function buildWslCodexCommand(
   codexHomePath: string,
   args: string[],
-  options?: { isolateRpcStdio?: boolean }
+  options?: { isolateRpcStdio?: boolean; proxyEnv?: Record<string, string> }
 ): {
   command: string
   args: string[]
@@ -163,6 +165,9 @@ function buildWslCodexCommand(
   }
   const setupCommands = [
     ...getHiddenRateLimitWslCwdSetupCommands(),
+    ...Object.entries(options?.proxyEnv ?? {}).map(
+      ([key, value]) => `export ${key}=${shellQuote(value)}`
+    ),
     `export CODEX_HOME=${shellQuote(wslInfo.linuxPath)}`
   ].join(' && ')
   const execSuffix = `${args.map(shellQuote).join(' ')}${
@@ -186,6 +191,19 @@ function cloneProcessEnvWithoutCodexHome(): NodeJS.ProcessEnv {
   const env = { ...process.env }
   delete env.CODEX_HOME
   return env
+}
+
+function buildCodexChildEnv(
+  options: FetchCodexRateLimitsOptions | undefined,
+  isWsl: boolean,
+  extraEnv?: Record<string, string>
+): NodeJS.ProcessEnv {
+  return {
+    ...(isWsl ? cloneProcessEnvWithoutCodexHome() : process.env),
+    ...buildConfiguredProxyEnv(options?.networkProxySettings),
+    ...(options?.codexHomePath && !isWsl ? { CODEX_HOME: options.codexHomePath } : {}),
+    ...extraEnv
+  }
 }
 
 function buildRpcMessage(id: number, method: string, params?: unknown): string {
@@ -616,8 +634,12 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let rpcId = 0
 
     const codexArgs = ['-s', 'read-only', '-a', 'untrusted', 'app-server']
+    const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
     const wslCodex = options?.codexHomePath
-      ? buildWslCodexCommand(options.codexHomePath, codexArgs, { isolateRpcStdio: true })
+      ? buildWslCodexCommand(options.codexHomePath, codexArgs, {
+          isolateRpcStdio: true,
+          proxyEnv
+        })
       : null
     // Why: cold WSL startup + app-server init can exceed the host RPC budget, causing a false "unavailable" on launch.
     const rpcTimeoutMs = wslCodex ? WSL_RPC_TIMEOUT_MS : RPC_TIMEOUT_MS
@@ -632,10 +654,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       // Why: scope the selected account to this subprocess only; never mutate process.env globally.
       // Why windowsHide: without it, background cmd.exe /c polls flash a console window on Windows.
       windowsHide: true,
-      env: {
-        ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
-        ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
-      }
+      env: buildCodexChildEnv(options, Boolean(wslCodex))
     })
 
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -906,7 +925,10 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }
-  const wslCodex = options?.codexHomePath ? buildWslCodexCommand(options.codexHomePath, []) : null
+  const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
+  const wslCodex = options?.codexHomePath
+    ? buildWslCodexCommand(options.codexHomePath, [], { proxyEnv })
+    : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
 
   // Why: on win32 route through cmd.exe (even bare 'codex') so PATHEXT resolves codex.cmd under a minimal Electron PATH.
@@ -926,11 +948,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       cols: 120,
       rows: 40,
       cwd: resolveHiddenRateLimitPtyCwd(),
-      env: {
-        ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
-        TERM: 'xterm-256color',
-        ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
-      }
+      env: buildCodexChildEnv(options, Boolean(wslCodex), { TERM: 'xterm-256color' })
     })
     const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]
 
