@@ -1907,6 +1907,12 @@ const api = {
       siteId?: string
     }): Promise<unknown[]> => ipcRenderer.invoke('jira:listAssignableUsers', args),
 
+    listAssignableUsersForProject: (args: {
+      projectIdOrKey: string
+      query?: string
+      siteId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('jira:listAssignableUsersForProject', args),
+
     listTransitions: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('jira:listTransitions', args),
     getProjectStatusOrder: (args: {

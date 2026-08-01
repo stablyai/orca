@@ -5,6 +5,7 @@ import {
   jiraGetIssue,
   jiraIssueComments,
   jiraListAssignableUsers,
+  jiraListAssignableUsersForProject,
   jiraLookupIssueSummary,
   jiraReadStatus,
   jiraSearchIssues
@@ -17,6 +18,7 @@ type RuntimeSubscribeCallbacks = Parameters<typeof window.api.runtimeEnvironment
 
 const jiraSearchIssuesLocal = vi.fn()
 const jiraListAssignableUsersLocal = vi.fn()
+const jiraListAssignableUsersForProjectLocal = vi.fn()
 const jiraReadStatusLocal = vi.fn()
 const jiraLookupIssueSummaryLocal = vi.fn()
 const jiraCancelIssueSummaryLocal = vi.fn()
@@ -27,6 +29,7 @@ beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   jiraSearchIssuesLocal.mockReset()
   jiraListAssignableUsersLocal.mockReset()
+  jiraListAssignableUsersForProjectLocal.mockReset()
   jiraReadStatusLocal.mockReset()
   jiraLookupIssueSummaryLocal.mockReset()
   jiraCancelIssueSummaryLocal.mockReset()
@@ -39,7 +42,8 @@ beforeEach(() => {
         lookupIssueSummary: jiraLookupIssueSummaryLocal,
         cancelIssueSummary: jiraCancelIssueSummaryLocal,
         searchIssues: jiraSearchIssuesLocal,
-        listAssignableUsers: jiraListAssignableUsersLocal
+        listAssignableUsers: jiraListAssignableUsersLocal,
+        listAssignableUsersForProject: jiraListAssignableUsersForProjectLocal
       },
       runtimeEnvironments: {
         call: runtimeCall,
@@ -167,6 +171,36 @@ describe('runtime Jira client search bounds', () => {
     ).resolves.toEqual([])
 
     expect(jiraListAssignableUsersLocal).not.toHaveBeenCalled()
+    expect(runtimeCall).not.toHaveBeenCalled()
+  })
+
+  it('routes create-issue reporter lookups by project through the local API', async () => {
+    jiraListAssignableUsersForProjectLocal.mockResolvedValue([
+      { accountId: 'acc-1', displayName: 'Alex Rivera' }
+    ])
+
+    await expect(
+      jiraListAssignableUsersForProject({ activeRuntimeEnvironmentId: null }, '10000', 'Alex')
+    ).resolves.toEqual([{ accountId: 'acc-1', displayName: 'Alex Rivera' }])
+
+    expect(jiraListAssignableUsersForProjectLocal).toHaveBeenCalledWith({
+      projectIdOrKey: '10000',
+      query: 'Alex',
+      siteId: undefined
+    })
+  })
+
+  it('rejects oversized project-scoped Jira assignee search before RPC', async () => {
+    await expect(
+      jiraListAssignableUsersForProject(
+        { activeRuntimeEnvironmentId: 'env-1' },
+        '10000',
+        'x'.repeat(9 * 1024),
+        'site-1'
+      )
+    ).resolves.toEqual([])
+
+    expect(jiraListAssignableUsersForProjectLocal).not.toHaveBeenCalled()
     expect(runtimeCall).not.toHaveBeenCalled()
   })
 

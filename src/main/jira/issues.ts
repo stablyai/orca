@@ -1113,17 +1113,27 @@ export async function listPriorities(siteId?: string | null): Promise<JiraPriori
   }
 }
 
-export async function listAssignableUsers(
-  key: string,
-  query?: string,
-  siteId?: string | null
+type AssignableUsersScope = { issueKey: string } | { projectIdOrKey: string }
+
+// The assignable-user-search resource requires exactly one of `issueKey` or
+// `project`; an in-progress create-issue draft has no issue key yet, so the
+// reporter/user-field picker must resolve candidates by project instead.
+async function fetchAssignableUsers(
+  scope: AssignableUsersScope,
+  query: string | undefined,
+  siteId: string | null | undefined
 ): Promise<JiraUser[]> {
   const entry = getClients(siteId)[0]
   if (!entry) {
     return []
   }
   const isServer = entry.site.authType === 'server'
-  const params = new URLSearchParams({ issueKey: key, maxResults: '50' })
+  const params = new URLSearchParams({ maxResults: '50' })
+  if ('issueKey' in scope) {
+    params.set('issueKey', scope.issueKey)
+  } else {
+    params.set('project', scope.projectIdOrKey)
+  }
   if (query?.trim()) {
     // Server/DC filters assignable users by `username`; `query` is Cloud-only.
     params.set(isServer ? 'username' : 'query', query.trim())
@@ -1145,6 +1155,22 @@ export async function listAssignableUsers(
   } finally {
     release()
   }
+}
+
+export async function listAssignableUsers(
+  key: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
+  return fetchAssignableUsers({ issueKey: key }, query, siteId)
+}
+
+export async function listAssignableUsersForProject(
+  projectIdOrKey: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
+  return fetchAssignableUsers({ projectIdOrKey }, query, siteId)
 }
 
 export async function listTransitions(

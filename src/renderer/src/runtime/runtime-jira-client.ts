@@ -280,6 +280,26 @@ export async function jiraListAssignableUsers(
     : window.api.jira.listAssignableUsers(args)
 }
 
+// Create-issue drafts have no issue key yet, so the reporter/user-field picker
+// resolves candidates by project instead of by issue.
+export async function jiraListAssignableUsersForProject(
+  settings: RuntimeJiraSettings,
+  projectIdOrKey: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
+    return []
+  }
+  const target = getJiraRuntimeTarget(settings)
+  const args = { projectIdOrKey, query, siteId: siteId ?? undefined }
+  return target.kind === 'environment'
+    ? callRuntimeRpc<JiraUser[]>(target, 'jira.listAssignableUsersForProject', args, {
+        timeoutMs: 30_000
+      })
+    : window.api.jira.listAssignableUsersForProject(args)
+}
+
 export async function jiraListTransitions(
   settings: RuntimeJiraSettings,
   key: string,

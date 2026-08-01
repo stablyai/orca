@@ -744,6 +744,7 @@ import {
   getIssueComments as getJiraIssueComments,
   getProjectStatusOrder as getJiraProjectStatusOrder,
   listAssignableUsers as listJiraAssignableUsers,
+  listAssignableUsersForProject as listJiraAssignableUsersForProject,
   listCreateFields as listJiraCreateFields,
   listIssueTypes as listJiraIssueTypes,
   listIssues as listJiraIssues,
@@ -32803,6 +32804,14 @@ export class OrcaRuntimeService {
     siteId?: string
   ): ReturnType<typeof listJiraAssignableUsers> {
     return listJiraAssignableUsers(key, query, siteId)
+  }
+
+  jiraListAssignableUsersForProject(
+    projectIdOrKey: string,
+    query?: string,
+    siteId?: string
+  ): ReturnType<typeof listJiraAssignableUsersForProject> {
+    return listJiraAssignableUsersForProject(projectIdOrKey, query, siteId)
   }
 
   jiraListTransitions(key: string, siteId?: string): ReturnType<typeof listJiraTransitions> {

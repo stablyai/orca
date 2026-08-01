@@ -14704,5 +14704,13 @@
       "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
       "settingsLink": "Settings → Voice"
     }
+  },
+  "jira": {
+    "createIssue": {
+      "userField": {
+        "loading": "Loading users…",
+        "placeholder": "Select {{value0}}"
+      }
+    }
   }
 }

@@ -10,6 +10,7 @@ import {
   getIssueComments,
   getProjectStatusOrder,
   listAssignableUsers,
+  listAssignableUsersForProject,
   listCreateFields,
   listIssueTypes,
   listIssues,
@@ -287,6 +288,20 @@ export function registerJiraHandlers(): void {
       }
       return listAssignableUsers(
         args.key.trim(),
+        typeof args.query === 'string' ? args.query : undefined,
+        normalizeSiteId(args.siteId)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'jira:listAssignableUsersForProject',
+    async (_event, args: { projectIdOrKey: string; query?: string; siteId?: string }) => {
+      if (typeof args?.projectIdOrKey !== 'string' || !args.projectIdOrKey.trim()) {
+        return []
+      }
+      return listAssignableUsersForProject(
+        args.projectIdOrKey.trim(),
         typeof args.query === 'string' ? args.query : undefined,
         normalizeSiteId(args.siteId)
       )
