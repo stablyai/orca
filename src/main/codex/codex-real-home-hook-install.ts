@@ -51,6 +51,7 @@ export type RealHomeCodexHookLane =
   | 'removed'
 
 let currentLane: RealHomeCodexHookLane = 'pending'
+let bypassIndexDeferralOnce = false
 let installRetryAfterMs = 0
 
 export function getRealHomeCodexHookLane(): RealHomeCodexHookLane {
@@ -116,6 +117,7 @@ export function ensureRealHomeCodexHookState(args: {
     args.hooksEnabled &&
     currentLane !== 'installed' &&
     currentLane !== 'unavailable' &&
+    !bypassIndexDeferralOnce &&
     isCodexBackfillIndexPending(getSystemCodexHomePath())
   ) {
     if (currentLane !== 'pending-index') {
@@ -146,6 +148,30 @@ export function ensureRealHomeCodexHookState(args: {
     }
   }
   return currentLane
+}
+
+/**
+ * Re-runs a trust grant that Task-2 deferral parked behind the codex session
+ * index (#11828). No-op for every other lane. Bypasses the pending re-check:
+ * the prewarm chain has resolved, so either the index completed (grant
+ * succeeds) or the prewarm gave up — in which case the grant runs for real
+ * and a genuine failure latches 'unavailable' exactly like a startup failure.
+ * Re-deferring here would park the lane forever: the scheduler never re-runs
+ * on prewarm failure.
+ */
+export function retryRealHomeCodexHookAfterIndex(args: {
+  hooksEnabled: boolean
+  userDataPath: string
+}): RealHomeCodexHookLane {
+  if (currentLane !== 'pending-index') {
+    return currentLane
+  }
+  bypassIndexDeferralOnce = true
+  try {
+    return ensureRealHomeCodexHookState(args)
+  } finally {
+    bypassIndexDeferralOnce = false
+  }
 }
 
 function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {

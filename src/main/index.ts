@@ -190,7 +190,8 @@ import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selec
 import { codexHookService, setSystemCodexHomeHookSweepSuppressed } from './codex/hook-service'
 import {
   ensureRealHomeCodexHookState,
-  isRealHomeCodexHookLaneUsable
+  isRealHomeCodexHookLaneUsable,
+  retryRealHomeCodexHookAfterIndex
 } from './codex/codex-real-home-hook-install'
 import { setCodexTrustGrantTelemetry } from './codex/codex-trust-grant-telemetry'
 import { startCodexSessionBackfillInBackground } from './codex/codex-session-backfill'
@@ -2089,7 +2090,16 @@ void app.whenReady().then(async () => {
     startIndexHeal: startCodexSessionIndexHealInBackground,
     // Why: #11828 — finish Codex's one-time session index in the background so panes
     // don't die in 30s slices against a large managed-home history.
-    startStateDbPrewarm: startCodexStateDbPrewarmInBackground
+    // Why: #11828 — a trust grant deferred behind the session index must run as
+    // soon as the prewarm finishes, not wait minutes for the next pane launch.
+    startStateDbPrewarm: (options, override) =>
+      startCodexStateDbPrewarmInBackground(options, override).then((summaries) => {
+        retryRealHomeCodexHookAfterIndex({
+          hooksEnabled: isAgentStatusHooksEnabled(store!.getSettings()),
+          userDataPath: app.getPath('userData')
+        })
+        return summaries
+      })
   })
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome, {
     onHostSystemDefaultSelected: codexSessionMigration.requestRun

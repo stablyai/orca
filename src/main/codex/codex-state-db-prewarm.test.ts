@@ -143,6 +143,36 @@ describe('runCodexStateDbPrewarm', () => {
     expect(children[0].kill).toHaveBeenCalled()
   })
 
+  it('spawns and supervises past a stale running lease left by a killed codex (#11828)', async () => {
+    // Why: the previous E2E proved a killed 10s trust-grant codex leaves
+    // backfill_state = 'running'; the prewarm must treat that as incomplete and
+    // spawn anyway (codex adopts idle indexes; stale leases expire <=15 min).
+    const statuses: CodexStateDbBackfillStatus[] = [
+      {
+        kind: 'incomplete',
+        stateDbPath: '/x/state_5.sqlite',
+        status: 'running',
+        lastWatermark: null
+      },
+      {
+        kind: 'incomplete',
+        stateDbPath: '/x/state_5.sqlite',
+        status: 'running',
+        lastWatermark: null
+      },
+      { kind: 'complete', stateDbPath: '/x/state_5.sqlite' }
+    ]
+    const readBackfillStatus = vi.fn(() => statuses.shift() ?? complete)
+    const { deps, spawnProcess } = createDeps({ readBackfillStatus })
+
+    const summaryPromise = runCodexStateDbPrewarm('/x', {}, deps)
+    await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS * 3)
+
+    const summary = await summaryPromise
+    expect(spawnProcess).toHaveBeenCalledTimes(1)
+    expect(summary.outcome).toBe('completed')
+  })
+
   it('respawns on fast child deaths and gives up after the fast-failure budget', async () => {
     const { deps, children, spawnProcess } = createDeps()
     const task = runCodexStateDbPrewarm('/tmp/home', {}, deps)

@@ -47,6 +47,7 @@ import {
   ensureRealHomeCodexHookState,
   getRealHomeCodexHookLane,
   isRealHomeCodexHookLaneUsable,
+  retryRealHomeCodexHookAfterIndex,
   _internals
 } from './codex-real-home-hook-install'
 import { getCodexManagedHookInstallMaterial } from './hook-service'
@@ -616,6 +617,54 @@ describe('backfill deferral (#11828)', () => {
 
     expect(lane).toBe('unavailable')
     expect(isRealHomeCodexHookLaneUsable()).toBe(false)
+    expect(grantMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('retryRealHomeCodexHookAfterIndex', () => {
+  it('re-runs the grant only from pending-index', () => {
+    pendingMock.mockReturnValue(true)
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    pendingMock.mockReturnValue(false)
+    grantSucceeds()
+
+    const lane = retryRealHomeCodexHookAfterIndex({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('installed')
+    expect(grantMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('is a no-op when the lane is not pending-index', () => {
+    _internals.setLaneForTesting('unavailable')
+
+    const lane = retryRealHomeCodexHookAfterIndex({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('unavailable')
+    expect(grantMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps unavailable semantics for a genuine failure on retry', () => {
+    pendingMock.mockReturnValue(true)
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    pendingMock.mockReturnValue(false)
+    grantUnavailable()
+
+    const lane = retryRealHomeCodexHookAfterIndex({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('unavailable')
+  })
+
+  it('runs the grant even if the pending check still reports true (prewarm resolution is authoritative)', () => {
+    // Why: the scheduler never re-runs on prewarm failure — re-deferring here
+    // would park the lane forever. After the chain resolves, the grant runs
+    // for real: success installs, genuine failure latches like today.
+    pendingMock.mockReturnValue(true)
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    grantSucceeds()
+
+    const lane = retryRealHomeCodexHookAfterIndex({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('installed')
     expect(grantMock).toHaveBeenCalledTimes(1)
   })
 })
