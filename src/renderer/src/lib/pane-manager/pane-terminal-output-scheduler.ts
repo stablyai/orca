@@ -7,6 +7,7 @@ import {
 } from './pane-terminal-foreground-render-settle'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { setTerminalOutputBacklogCensusReader } from '@/lib/terminal-output-backlog-census'
 import {
   discardInFlightTerminalOutputAckCredits,
   registerTerminalOutputAckCredits
@@ -239,6 +240,18 @@ function readQueueDebugSnapshot(): {
     queuedCharsByTerminal
   }
 }
+
+// Why unconditionally (not behind debugEnabled): the snapshot above is the only
+// place the renderer knows how many chars of un-parsed PTY output it is holding,
+// and an OOM report cannot otherwise tell a backlog blowup from a data leak.
+setTerminalOutputBacklogCensusReader(() => {
+  const snapshot = readQueueDebugSnapshot()
+  return {
+    terminals: snapshot.queuedTerminalCount,
+    chars: snapshot.queuedChars,
+    maxTerminalChars: snapshot.queuedCharsByTerminal
+  }
+})
 
 function recordQueueDebugPressure(): void {
   if (!debugEnabled) {

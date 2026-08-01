@@ -1,4 +1,6 @@
 import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
+import { registerRendererMemoryProfileContributor } from '../renderer-memory-profile'
+import { sumTerminalBufferSizes, type TerminalBufferCensus } from './pane-terminal-buffer-census'
 import type { PaneRenderingDiagnostics } from './pane-manager-types'
 
 type RegisteredPaneManager = {
@@ -8,6 +10,7 @@ type RegisteredPaneManager = {
   getRenderingDiagnostics?: () => PaneRenderingDiagnostics[]
   getPanes?: () => { id: number; terminal: unknown }[]
   getPaneCount?: () => number
+  getPaneBufferCensus?: () => TerminalBufferCensus
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -109,6 +112,58 @@ export function getLivePaneCensus(): { managers: number; panes: number } {
   }
   return { managers: liveManagers.size, panes }
 }
+
+/**
+ * Retained size of the live xterm buffers, in scrollback lines and cells.
+ *
+ * Why lines/cells and not `terminalElements`: every retained row is a BufferLine
+ * object holding a Uint32Array of 3 words per cell, so one terminal at the 50k-row
+ * scrollback preset retains 50k of them while an idle one retains ~24. A count of
+ * live terminals is therefore consistent with anything from megabytes to gigabytes
+ * — the same ambiguity the scrollback census resolves for stored buffers, for the
+ * larger live copy. Safe to run inside a near-OOM highwater breadcrumb.
+ *
+ * `lines`/`cells` count the normal buffer only; `altScreenPanes` says how many panes
+ * were additionally holding a viewport-sized alternate buffer at collection time.
+ * `droppedPanes` is what `panes` is missing, so a small `panes` cannot be read as
+ * "few terminals were live" when it really means "most reads threw".
+ */
+export function getLiveTerminalBufferCensus(): TerminalBufferCensus {
+  let panes = 0
+  let lines = 0
+  let cells = 0
+  let altScreenPanes = 0
+  let droppedPanes = 0
+  for (const manager of liveManagers) {
+    let census: TerminalBufferCensus
+    try {
+      // Why prefer the manager's own census: getPanes() allocates a public view
+      // per pane, which is waste on the crash path. Same trade as getPaneCount above.
+      census = manager.getPaneBufferCensus?.() ?? sumTerminalBufferSizes(manager.getPanes?.() ?? [])
+    } catch {
+      droppedPanes += countPanesLostToFailedCensus(manager)
+      continue
+    }
+    panes += census.panes
+    lines += census.lines
+    cells += census.cells
+    altScreenPanes += census.altScreenPanes
+    droppedPanes += census.droppedPanes
+  }
+  return { panes, lines, cells, altScreenPanes, droppedPanes }
+}
+
+/** How many panes a failed manager census lost, as a lower bound: a manager that
+ *  cannot report its count still lost at least one. */
+function countPanesLostToFailedCensus(manager: { getPaneCount?: () => number }): number {
+  try {
+    return Math.max(manager.getPaneCount?.() ?? 1, 1)
+  } catch {
+    return 1
+  }
+}
+
+registerRendererMemoryProfileContributor('liveTerminalBuffers', getLiveTerminalBufferCensus)
 
 /**
  * Iterates every live pane for the render-desync sentinel. Weakly-held manager

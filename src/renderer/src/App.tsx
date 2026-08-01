@@ -963,17 +963,18 @@ function App(): React.JSX.Element {
           actions.awaitLocalRepoCatalogSettlement()
         )
         if (!cancelled) {
+          const restoredSession = sessionRead.session
           const sessionHydrationOptions = {
-            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
+            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(restoredSession)
           }
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
-            actions.hydrateWorkspaceSession(sessionRead.session, {
+            actions.hydrateWorkspaceSession(restoredSession, {
               ...sessionHydrationOptions,
               runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey
             })
-            actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
-            actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
-            actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
+            actions.hydrateTabsSession(restoredSession, sessionHydrationOptions)
+            actions.hydrateEditorSession(restoredSession, sessionHydrationOptions)
+            actions.hydrateBrowserSession(restoredSession, sessionHydrationOptions)
           })
           // Why: prune visit timestamps AFTER hydration (earlier, worktreesByRepo may be empty and prune would drop entries for worktrees about to appear); seed the active worktree if missing.
           // See docs/cmd-j-empty-query-ordering.md.

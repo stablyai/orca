@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
+import { collectRendererMemoryProfileCounts } from '../lib/renderer-memory-profile'
 import { installStoreListenerCensus, readStoreListenerCount } from './store-listener-census'
 
 type CensusState = { n: number }
@@ -74,6 +75,18 @@ describe('store listener census', () => {
 
     keep()
     expect(readStoreListenerCount()).toBe(0)
+  })
+
+  it('reports the live count into the renderer memory profile', () => {
+    // Why: the count was already computed and then discarded. OOM crash reports
+    // need it to tell a subscriber leak apart from a data leak.
+    const { api } = createCensusStore()
+    const unsubscribe = api.subscribe(() => undefined)
+
+    expect(collectRendererMemoryProfileCounts()).toMatchObject({ 'storeSubscribers.live': 1 })
+
+    unsubscribe()
+    expect(collectRendererMemoryProfileCounts()).toMatchObject({ 'storeSubscribers.live': 0 })
   })
 
   it('still delivers state updates to a counted listener', () => {

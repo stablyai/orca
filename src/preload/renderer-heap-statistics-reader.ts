@@ -31,7 +31,11 @@ export function readRendererHeapStatistics(
     usedHeapKB: heap.usedHeapSize,
     totalHeapKB: heap.totalHeapSize,
     heapLimitKB: heap.heapSizeLimit,
+    physicalKB: heap.totalPhysicalSize,
+    availableKB: heap.totalAvailableSize,
+    executableKB: heap.totalHeapSizeExecutable,
     mallocedKB: heap.mallocedMemory,
+    peakMallocedKB: heap.peakMallocedMemory,
     blinkAllocatedKB
   }
 }

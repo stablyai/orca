@@ -47,12 +47,46 @@ describe('collectRendererMemoryProfileCounts', () => {
     expect(collectRendererMemoryProfileCounts()).toEqual({})
   })
 
+  // Why: a marker that is always present carries no information, so the negative
+  // case has to be pinned alongside the positive ones.
+  it('does not claim truncation when everything fit', () => {
+    register('store', () => ({ worktrees: 40 }))
+
+    expect(collectRendererMemoryProfileCounts()).not.toHaveProperty('profile.truncated')
+  })
+
+  // Why the two markers must stay decoupled: a real session sits on the store's own
+  // limit routinely, so wiring it to profile.truncated pins that flag to 1 forever and
+  // it stops meaning "a whole contributor is missing". The contributor reports its own
+  // drop by name instead.
+  it('reports a contributor drop by name without claiming profile truncation', () => {
+    const state = Object.fromEntries(
+      Array.from({ length: 30 }, (_, index) => [
+        `slice${index}`,
+        Array.from({ length: 5 }, () => 0)
+      ])
+    )
+    register('store', () => summarizeStateCollectionSizes(state, 20))
+
+    const counts = collectRendererMemoryProfileCounts()
+    expect(counts['store.unreportedCollections']).toBe(10)
+    expect(counts).not.toHaveProperty('profile.truncated')
+  })
+
+  it('omits the drop marker when a contributor hid nothing', () => {
+    register('store', () => summarizeStateCollectionSizes({ worktrees: [1, 2] }, 20))
+
+    expect(collectRendererMemoryProfileCounts()).toEqual({ 'store.worktrees': 2 })
+  })
+
   it('caps a runaway contributor instead of bloating the breadcrumb', () => {
     register('runaway', () =>
       Object.fromEntries(Array.from({ length: 500 }, (_, index) => [`key${index}`, index + 1]))
     )
 
-    expect(Object.keys(collectRendererMemoryProfileCounts())).toHaveLength(32)
+    const counts = collectRendererMemoryProfileCounts()
+    expect(Object.keys(counts)).toHaveLength(33)
+    expect(counts['profile.truncated']).toBe(1)
   })
 
   it('stops reading a runaway contributor after the output budget', () => {
@@ -72,7 +106,7 @@ describe('collectRendererMemoryProfileCounts', () => {
     const counts = Object.defineProperties({}, contribution) as Record<string, number>
     register('runaway', () => counts)
 
-    expect(Object.keys(collectRendererMemoryProfileCounts())).toHaveLength(32)
+    expect(Object.keys(collectRendererMemoryProfileCounts())).toHaveLength(33)
     expect(reads).toBe(32)
   })
 
@@ -86,7 +120,11 @@ describe('collectRendererMemoryProfileCounts', () => {
     const skippedContributor = vi.fn(() => ({ shouldNotRun: 1 }))
     register('skipped', skippedContributor)
 
-    expect(Object.keys(collectRendererMemoryProfileCounts())).toHaveLength(64)
+    const counts = collectRendererMemoryProfileCounts()
+    // Why the marker matters most here: 'skipped' is omitted entirely, so without it
+    // the report is indistinguishable from one where that subsystem measured zero.
+    expect(Object.keys(counts)).toHaveLength(65)
+    expect(counts['profile.truncated']).toBe(1)
     expect(skippedContributor).not.toHaveBeenCalled()
   })
 
@@ -94,6 +132,9 @@ describe('collectRendererMemoryProfileCounts', () => {
     const contributors = Array.from({ length: 100 }, () => vi.fn(() => ({})))
     contributors.forEach((contributor, index) => register(`empty-${index}`, contributor))
 
+    // Why no truncation marker: the 36 surplus contributors are refused at
+    // registration, so the registry holds exactly 64 and collection walks all of
+    // them to a natural end. The marker covers collection-time loss, not this.
     expect(collectRendererMemoryProfileCounts()).toEqual({})
     expect(contributors.filter((contributor) => contributor.mock.calls.length > 0)).toHaveLength(64)
   })
@@ -123,7 +164,7 @@ describe('collectRendererMemoryProfileCounts', () => {
 
     const counts = collectRendererMemoryProfileCounts()
     expect(hasOwnSpy).toHaveBeenCalledTimes(34)
-    expect(counts).toEqual({ 'oversized-key.valid': 2 })
+    expect(counts).toEqual({ 'oversized-key.valid': 2, 'profile.truncated': 1 })
   })
 
   it('skips an oversized contributor namespace without invoking it', () => {
@@ -146,10 +187,18 @@ describe('summarizeStateCollectionSizes', () => {
       count: 9
     }
 
+    // Why unreportedCollections is part of the expectation: 4 collections were found
+    // and 2 reported, and a report that hides the other 2 without saying so reads as
+    // "these are all of them".
     expect(summarizeStateCollectionSizes(state, 2)).toEqual({
       worktrees: 50,
-      tabs: 3
+      tabs: 3,
+      unreportedCollections: 2
     })
+  })
+
+  it('omits the marker when nothing was hidden', () => {
+    expect(summarizeStateCollectionSizes({ worktrees: [1, 2] }, 20)).toEqual({ worktrees: 2 })
   })
 
   it('skips empty collections and non-objects', () => {

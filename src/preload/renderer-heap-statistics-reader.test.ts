@@ -29,7 +29,11 @@ describe('readRendererHeapStatistics', () => {
       usedHeapKB: 1536,
       totalHeapKB: 2048,
       heapLimitKB: 4_292_608,
+      physicalKB: 2048,
+      availableKB: 4_000_000,
+      executableKB: 0,
       mallocedKB: 64,
+      peakMallocedKB: 96,
       blinkAllocatedKB: 1227
     })
   })
@@ -50,7 +54,11 @@ describe('readRendererHeapStatistics', () => {
       usedHeapKB: 1536,
       totalHeapKB: 2048,
       heapLimitKB: 4_292_608,
+      physicalKB: 2048,
+      availableKB: 4_000_000,
+      executableKB: 0,
       mallocedKB: 64,
+      peakMallocedKB: 96,
       blinkAllocatedKB: undefined
     })
   })

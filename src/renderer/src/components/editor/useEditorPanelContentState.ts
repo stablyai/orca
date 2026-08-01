@@ -20,6 +20,11 @@ import {
   type DiffContent,
   type FileContent
 } from './editor-panel-content-types'
+import {
+  measureEditorDiffContents,
+  measureEditorFileContents,
+  registerEditorContentCensusReader
+} from './editor-content-memory-census'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import {
   isReloadableSingleFileDiffTab,
@@ -101,7 +106,25 @@ export function useEditorPanelContentState({
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
   const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
   const diffContentsRef = useRef(diffContents)
-  diffContentsRef.current = diffContents
+  const fileContentsRef = useRef(fileContents)
+  // Why an effect rather than a render-time write: mutating a ref during render is a
+  // React Doctor error. Why both refs together, and declared before every effect that
+  // reads them: the census spreads both, so updating one during render and one in an
+  // effect would let a breadcrumb pair stale file sizes with current diff sizes.
+  useEffect(() => {
+    fileContentsRef.current = fileContents
+    diffContentsRef.current = diffContents
+  }, [fileContents, diffContents])
+  // Why: file bodies live in React state, which the store-only memory profile
+  // cannot walk — without this an OOM report never names them.
+  useEffect(
+    () =>
+      registerEditorContentCensusReader(() => ({
+        ...measureEditorFileContents(fileContentsRef.current),
+        ...measureEditorDiffContents(diffContentsRef.current)
+      })),
+    []
+  )
   const fileLoadRetryAttemptsRef = useRef<Record<string, number>>({})
   // Why: per-tab read generations let a forced/external reload supersede an
   // older in-flight read so a slower stale promise cannot overwrite fresh state.

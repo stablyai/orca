@@ -1256,6 +1256,36 @@ describe('pane terminal output scheduler', () => {
     expect(terminals[0].write).toHaveBeenCalledTimes(2)
   })
 
+  // Why this and not just the census unit test: that one installs a fake reader, so
+  // it proves the profile plumbing works and nothing about whether the number in an
+  // OOM report is real. This drives actual output through the queue and reads the
+  // reader the scheduler itself installed — the path a crash breadcrumb takes.
+  it('feeds the real queued backlog to the renderer memory profile', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const { readTerminalOutputBacklogCensus } = await import('@/lib/terminal-output-backlog-census')
+
+    writeTerminalOutput(createTerminal(), 'a'.repeat(10), { foreground: false })
+    writeTerminalOutput(createTerminal(), 'b'.repeat(20), { foreground: false })
+
+    expect(readTerminalOutputBacklogCensus()).toEqual({
+      terminals: 2,
+      chars: 30,
+      maxTerminalChars: 20
+    })
+
+    vi.advanceTimersByTime(50)
+
+    // Why assert the drained state too: a reader wired to a peak counter instead of
+    // the live queue would pass the assertion above and misreport a drained renderer
+    // as still holding the backlog.
+    expect(readTerminalOutputBacklogCensus()).toEqual({
+      terminals: 0,
+      chars: 0,
+      maxTerminalChars: 0
+    })
+  })
+
   it('reports current and peak queued renderer backlog in debug snapshots', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()

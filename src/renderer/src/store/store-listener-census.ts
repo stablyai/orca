@@ -1,3 +1,8 @@
+import {
+  registerRendererMemoryProfileContributor,
+  type RendererMemoryProfileCounts
+} from '../lib/renderer-memory-profile'
+
 /**
  * Live count of zustand store subscribers, for the typing-latency census.
  *
@@ -17,6 +22,13 @@ type StoreListenerCensusApi<T> = {
 }
 
 let liveListenerCount: number | null = null
+
+// Why: an OOM report cannot otherwise separate a subscriber leak (components that
+// never unmount) from a data leak, and the count is already being computed.
+registerRendererMemoryProfileContributor('storeSubscribers', (): RendererMemoryProfileCounts => {
+  const live = readStoreListenerCount()
+  return live === null ? {} : { live }
+})
 
 export function readStoreListenerCount(): number | null {
   return liveListenerCount

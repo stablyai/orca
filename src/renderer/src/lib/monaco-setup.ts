@@ -16,6 +16,7 @@ import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancella
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
+import { setMonacoModelCensusReader, summarizeMonacoModelSizes } from './monaco-model-memory-census'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -86,6 +87,11 @@ installMonacoPeekReferencesPreviewOptions()
 // blocked in Orca's sandboxed renderer. Route it through the trusted IPC bridge
 // so right-click Paste works like Cmd+V (which already works via native events).
 installMonacoContextMenuPaste(monaco)
+
+// Why: models outlive the panels that opened them, so an OOM report cannot otherwise tell
+// open-file bytes from models retained after unmount. ~0.2us per model, flat in content.
+// The sum lives in the census module because every suite mocks this file.
+setMonacoModelCensusReader(() => summarizeMonacoModelSizes(monaco.editor.getModels()))
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })

@@ -44,6 +44,18 @@ import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { installStoreListenerCensus } from './store-listener-census'
+// Why the side-effect import: the census registers on module load, and it otherwise
+// loads only if an editor panel mounts — making a missing editorContent.* key
+// ambiguous between "no editor was opened" and "the instrument never ran".
+import '@/components/editor/editor-content-memory-census'
+// Same reasoning for the live terminal and Monaco instruments: each registers from a
+// leaf whose owning subsystem (output scheduler, pane manager, monaco-setup) only
+// loads on first use, so a zeroed key means "nothing held" and a missing key means
+// the instrument never ran.
+import '@/lib/terminal-output-backlog-census'
+import '@/lib/pane-manager/pane-manager-registry'
+import '@/lib/monaco-model-memory-census'
+import { measureTerminalScrollbackBuffers } from './terminal-scrollback-memory-census'
 import {
   registerRendererMemoryProfileContributor,
   summarizeStateCollectionSizes
@@ -98,8 +110,20 @@ export const useAppStore = create<AppState>()((...a) => {
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
 
+// Why: the 'store' profile below counts keys without recursing, so a scrollback
+// blowup reads as an unchanged tab count while each tab hides leaf buffers of up
+// to 512KB. Char sums are what separate "170 tabs" from "170 tabs holding 800MB".
+registerRendererMemoryProfileContributor('terminalScrollback', () =>
+  measureTerminalScrollbackBuffers(useAppStore.getState())
+)
+
 // Why: names the fattest store slices in renderer_memory_highwater breadcrumbs
 // so OOM crash reports identify what grew without a local repro.
+//
+// Why registered last: contributors are walked in registration order, and this is the
+// only one whose key count grows with session state (up to 20 slices). Last means a
+// count-budget overrun drops slice sizes — which `store.unreportedCollections` already
+// signals — instead of silently omitting a fixed census like terminalScrollback.
 registerRendererMemoryProfileContributor('store', () =>
   summarizeStateCollectionSizes(useAppStore.getState(), 20)
 )

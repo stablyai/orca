@@ -27,6 +27,11 @@ type BrowserPerformanceMemory = {
 type HeapMetrics = BrowserPerformanceMemory & {
   mallocedBytes?: number
   blinkAllocatedBytes?: number
+  /** Highwater-only shapes; absent on the quantized `performance.memory` path. */
+  physicalBytes?: number
+  availableBytes?: number
+  executableBytes?: number
+  peakMallocedBytes?: number
   exact: boolean
 }
 
@@ -170,6 +175,12 @@ function recordRendererMemoryHighwater(
     heapSource: memory.exact ? 'v8' : 'quantized',
     mallocedMB: toMegabytes(memory.mallocedBytes),
     blinkAllocatedMB: toMegabytes(memory.blinkAllocatedBytes),
+    // Why highwater-only: these four separate fragmentation, headroom and compiled
+    // code from real object retention, and cost nothing at 60s sampling rates.
+    physicalMB: toMegabytes(memory.physicalBytes),
+    availableMB: toMegabytes(memory.availableBytes),
+    executableMB: toMegabytes(memory.executableBytes),
+    peakMallocedMB: toMegabytes(memory.peakMallocedBytes),
     domNodes: document.getElementsByTagName('*').length,
     terminalElements: document.querySelectorAll('.xterm').length,
     browserWebviews: browserWebviews.browserWebviewCount,
@@ -217,6 +228,10 @@ function readHeapMetrics(): HeapMetrics | undefined {
       totalJSHeapSize: exact.totalHeapKB * BYTES_PER_KILOBYTE,
       jsHeapSizeLimit: exact.heapLimitKB * BYTES_PER_KILOBYTE,
       mallocedBytes: exact.mallocedKB * BYTES_PER_KILOBYTE,
+      physicalBytes: exact.physicalKB * BYTES_PER_KILOBYTE,
+      availableBytes: exact.availableKB * BYTES_PER_KILOBYTE,
+      executableBytes: exact.executableKB * BYTES_PER_KILOBYTE,
+      peakMallocedBytes: exact.peakMallocedKB * BYTES_PER_KILOBYTE,
       // Why guarded: undefined * 1024 is NaN, which would emit a junk field.
       blinkAllocatedBytes:
         exact.blinkAllocatedKB === undefined

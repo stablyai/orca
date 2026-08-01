@@ -316,6 +316,43 @@ describe('renderer crash diagnostics', () => {
       })
     })
 
+    it('profiles the V8 space breakdown on highwater but keeps the interval sample lean', () => {
+      // Why: crash bundles pinned 883MB of growth with every recorded counter
+      // byte-identical. These four are the only extra shapes Electron exposes.
+      readHeapStatistics.mockReturnValue({
+        usedHeapKB: 400 * KB,
+        totalHeapKB: 800 * KB,
+        heapLimitKB: 512 * KB,
+        physicalKB: 780 * KB,
+        availableKB: 112 * KB,
+        executableKB: 9 * KB,
+        mallocedKB: 3 * KB,
+        peakMallocedKB: 64 * KB,
+        blinkAllocatedKB: 7 * KB
+      })
+      vi.stubGlobal('document', {
+        getElementsByTagName: () => ({ length: 1 }),
+        querySelectorAll: () => ({ length: 0 })
+      })
+
+      diagnostics.installRendererCrashDiagnostics()
+
+      const named = (name: string): { data: Record<string, unknown> } =>
+        recordBreadcrumbMock.mock.calls.find(
+          ([entry]) => (entry as { name: string }).name === name
+        )?.[0] as { data: Record<string, unknown> }
+      expect(named('renderer_memory_highwater').data).toMatchObject({
+        physicalMB: 780,
+        availableMB: 112,
+        executableMB: 9,
+        peakMallocedMB: 64
+      })
+      // Why: this one fires every 60s for the whole session; four more numbers
+      // per sample buys nothing the one-shot profile does not already answer.
+      expect(named('renderer_memory').data).not.toHaveProperty('physicalMB')
+      expect(named('renderer_memory').data).not.toHaveProperty('executableMB')
+    })
+
     it('omits the Blink field instead of emitting a junk value for it', () => {
       // Why: `undefined * 1024` is NaN. The breadcrumb must carry no
       // blinkAllocatedMB at all rather than a meaningless number.
