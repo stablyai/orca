@@ -173,6 +173,7 @@ describe('PR workflow parallelism', () => {
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
       'static_analysis',
+      'root_directory_guard',
       'typecheck',
       'git_compatibility',
       'shell_contracts',

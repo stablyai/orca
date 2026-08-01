@@ -117,10 +117,10 @@ import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/termi
 import { sendTerminalLiveAccessoryRawBytes } from '../../../../src/terminal/terminal-live-accessory-raw-send'
 import {
   clearTerminalLiveInputFocusTimer,
-  focusTerminalLiveInputTarget,
   isTerminalLiveInputWithinByteLimit,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import { useTerminalLiveInputFocus } from '../../../../src/terminal/use-terminal-live-input-focus'
 import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keyboard-dismiss'
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
@@ -1082,6 +1082,22 @@ export default function SessionScreen() {
     activeSessionTabType: activeSessionTab?.type
   })
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
+  const { focusLiveInput, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
+    activeHandleRef,
+    canSend,
+    inputRef: liveInputRef,
+    keyboardHeight,
+    lifecycleIdentity: client,
+    lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
+    liveInputEnabled,
+    timerRef: liveInputFocusTimerRef
+  })
+  useFocusEffect(
+    useCallback(() => {
+      // Expo retains this route while pushed screens are visible.
+      return resetLiveInputFocus
+    }, [resetLiveInputFocus])
+  )
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
   // Why: hosts without aiVault.v1 reject listSessions, so hide the header entry instead of a dead-end "update this host" panel.
   const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
@@ -3092,17 +3108,6 @@ export default function SessionScreen() {
   )
   sendLiveTerminalInputRef.current = sendLiveTerminalInput
 
-  const focusLiveInput = useCallback(() => {
-    if (!canSend || !liveInputEnabled) {
-      return
-    }
-    focusTerminalLiveInputTarget(liveInputRef.current, {
-      keyboardHeight,
-      refocus: () =>
-        scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
-    })
-  }, [canSend, keyboardHeight, liveInputEnabled])
-
   const clearSessionTabActionSheetKeyboardListener = useCallback(() => {
     sessionTabActionSheetKeyboardHideSubRef.current?.remove()
     sessionTabActionSheetKeyboardHideSubRef.current = null
@@ -3176,16 +3181,6 @@ export default function SessionScreen() {
       liveInput: liveInputRef.current
     })
   }, [])
-
-  const handleTerminalTap = useCallback(
-    (handle: string) => {
-      if (handle !== activeHandleRef.current) {
-        return
-      }
-      focusLiveInput()
-    },
-    [focusLiveInput]
-  )
 
   // Tap a terminal file path → resolve on host, open as file tab (mirrors desktop Cmd/Ctrl-click); silent on a miss.
   const handleFileTapActivationSeqRef = useRef(0)

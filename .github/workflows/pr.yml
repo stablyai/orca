@@ -93,6 +93,23 @@ jobs:
       - name: Verify macOS entitlements
         run: pnpm verify:macos-entitlements
 
+  root_directory_guard:
+    name: root directory guard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reject new root-level files and folders
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/scripts/check-root-directory-entries.sh "$BASE_SHA" "$HEAD_SHA"
+
   typecheck:
     runs-on: ubuntu-latest
 
@@ -377,6 +394,7 @@ jobs:
     if: always()
     needs:
       - static_analysis
+      - root_directory_guard
       - typecheck
       - git_compatibility
       - shell_contracts
@@ -397,6 +415,7 @@ jobs:
       - name: Require successful checks
         env:
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
+          ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
@@ -406,6 +425,7 @@ jobs:
         run: |
           for result in \
             "$STATIC_ANALYSIS" \
+            "$ROOT_DIRECTORY_GUARD" \
             "$TYPECHECK" \
             "$GIT_COMPATIBILITY" \
             "$SHELL_CONTRACTS" \

@@ -101,12 +101,14 @@ describe('startHostWorktreeRefresh', () => {
     expect(fetchRepoMetadata).not.toHaveBeenCalled()
   })
 
-  it('force-refreshes repo metadata on reposChanged', () => {
+  it('refreshes worktrees and repo metadata on reposChanged', () => {
     start()
+    fetchWorktrees.mockClear()
     fetchRepoMetadata.mockClear()
 
     eventListener?.({ type: 'reposChanged' })
 
+    expect(fetchWorktrees).toHaveBeenCalledOnce()
     expect(fetchRepoMetadata).toHaveBeenCalledOnce()
     expect(fetchRepoMetadata).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
   })

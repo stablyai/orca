@@ -28,14 +28,16 @@ import {
   stopDevApp,
   waitForStoreReady
 } from '../../config/scripts/windows-apphang-repro/electron-dev-session.mjs'
-import { createCompletedOnboardingProfile } from '../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
+import {
+  createCompletedOnboardingProfile,
+  safeRemoveLocalDirectory
+} from '../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
 import {
   pollUntil,
   rendererActionTimeoutMs,
   runWithTimeout,
   setupTimeoutMs
 } from '../../config/scripts/windows-apphang-repro/repro-timing.mjs'
-import { safeRemoveLocalDirectory } from '../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
 
 const rootDir = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const PARK_DELAY_MS = 1_500
@@ -454,7 +456,8 @@ async function main() {
       args.reportPath ??
         path.join(
           rootDir,
-          'tests', 'tools',
+          'tests',
+          'tools',
           'benchmarks',
           'results',
           `cold-park-res-${args.label}-${stamp}.json`
