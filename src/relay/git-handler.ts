@@ -523,7 +523,12 @@ export class GitHandler {
       this.clearGitMutationReadCaches()
     }
   }
-
+  /**
+   * Handler for `git.undoLastCommit`. Reads the last commit message with `git log -1`,
+   * then runs `git reset --soft HEAD~1` to undo. Returns the recovered message on success
+   * and the error details (preferring `stderr`) on failure. Clears the git mutation read
+   * caches in both the try and finally blocks.
+   */
   private async undoLastCommit(
     params: Record<string, unknown>
   ): Promise<{ success: boolean; message?: string; error?: string }> {

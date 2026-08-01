@@ -194,7 +194,13 @@ export class SshGitProvider implements IGitProvider {
         })) as { success: boolean; error?: string }
     )
   }
-
+  /**
+   * Undoes the most recent commit on the given worktree using `git reset --soft HEAD~1`,
+   * returning the commit message so it can be restored to the draft field. Delegates to
+   * the relay via `git.undoLastCommit`. Wrapped in `runWithDiffDedupeClear` to prevent
+   * stale diff reads after the mutation. Throws an actionable reconnect message if the
+   * relay does not implement `git.undoLastCommit` (method-not-found error).
+   */
   async undoLastCommit(
     worktreePath: string
   ): Promise<{ success: boolean; message?: string; error?: string }> {
