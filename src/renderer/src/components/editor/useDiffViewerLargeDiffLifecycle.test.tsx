@@ -141,4 +141,45 @@ describe('useDiffViewerLargeDiffLifecycle', () => {
       supersededModel.dispose.mock.invocationCallOrder[0]
     )
   })
+
+  it('still disposes the first superseded model when a second rotation cancels the deferred pass', async () => {
+    const modelKey = 'diff-tab'
+    const paths = ['modified-v1', 'modified-v2', 'modified-v3'].map((modifiedModelKey) =>
+      getDiffViewerMonacoModelPaths({
+        modelKey,
+        modifiedModelKey,
+        generationSuffix: ''
+      })
+    )
+    const originalModel = detachedModel()
+    const firstModel = detachedModel()
+    const thirdModel = detachedModel()
+    monacoFixture.models.set(paths[0].originalModelPath, originalModel)
+    monacoFixture.models.set(paths[0].modifiedModelPath, firstModel)
+    // Why: the v2 replacement model is absent, so the first rotation defers.
+    monacoFixture.models.delete(paths[1].modifiedModelPath)
+    const retainedEditor = diffEditorFixture(originalModel, firstModel)
+
+    const hook = renderHook(
+      ({ modifiedModelKey }) =>
+        useDiffViewerLargeDiffLifecycle({
+          limited: false,
+          modelKey,
+          modifiedModelKey,
+          diffEditorRef: retainedEditor,
+          onEnterFallback: vi.fn()
+        }),
+      { initialProps: { modifiedModelKey: 'modified-v1' } }
+    )
+
+    hook.rerender({ modifiedModelKey: 'modified-v2' })
+    expect(firstModel.dispose).not.toHaveBeenCalled()
+
+    monacoFixture.models.set(paths[2].modifiedModelPath, thirdModel)
+    hook.rerender({ modifiedModelKey: 'modified-v3' })
+    await act(() => Promise.resolve())
+
+    expect(firstModel.dispose).toHaveBeenCalledOnce()
+    expect(thirdModel.dispose).not.toHaveBeenCalled()
+  })
 })
