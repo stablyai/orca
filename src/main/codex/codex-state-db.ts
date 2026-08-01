@@ -7,7 +7,7 @@ const STATE_DB_FILE_PATTERN = /^state_(\d+)\.sqlite$/
 
 export type CodexStateDbBackfillStatus =
   | { kind: 'complete'; stateDbPath: string }
-  | { kind: 'incomplete'; stateDbPath: string; status: string }
+  | { kind: 'incomplete'; stateDbPath: string; status: string; lastWatermark: string | null }
   | { kind: 'missing' }
   | { kind: 'not-tracked'; stateDbPath: string }
   | { kind: 'unreadable'; stateDbPath: string; error: string }
@@ -52,15 +52,22 @@ export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStat
     if (!table) {
       return { kind: 'not-tracked', stateDbPath }
     }
-    const row = db.prepare('SELECT status FROM backfill_state WHERE id = 1').get() as
-      | { status?: unknown }
-      | undefined
+    const row = db
+      .prepare('SELECT status, last_watermark FROM backfill_state WHERE id = 1')
+      .get() as { status?: unknown; last_watermark?: unknown } | undefined
     if (!row || typeof row.status !== 'string') {
       return { kind: 'not-tracked', stateDbPath }
     }
     return row.status === 'complete'
       ? { kind: 'complete', stateDbPath }
-      : { kind: 'incomplete', stateDbPath, status: row.status }
+      : {
+          kind: 'incomplete',
+          stateDbPath,
+          status: row.status,
+          // Why: the backfill cursor (a sessions/... rollout path) is the only cheap
+          // progress signal codex exposes; panes show it while they wait (#11828).
+          lastWatermark: typeof row.last_watermark === 'string' ? row.last_watermark : null
+        }
   } catch (error) {
     return {
       kind: 'unreadable',
@@ -100,4 +107,29 @@ export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number):
     }
   }
   return count
+}
+
+// Why 100: mirrors the prewarm's spawn gate — below it codex indexes inside its own
+// 30s startup wait, so neither the trust grant nor a pane needs to be deferred.
+export const BACKFILL_PENDING_MIN_SESSION_FILES = 100
+
+/**
+ * True when launching codex against this home would hit the #11828 backfill wait:
+ * an unfinished index run is tracked, or no index exists yet over a large history.
+ * Unreadable DBs report false — deferral must never be the thing that hides #11830.
+ */
+export function isCodexBackfillIndexPending(codexHomePath: string): boolean {
+  const status = readCodexStateDbBackfillStatus(codexHomePath)
+  if (status.kind === 'incomplete') {
+    return true
+  }
+  if (status.kind === 'missing' || status.kind === 'not-tracked') {
+    return (
+      countCodexSessionFilesUpTo(
+        join(codexHomePath, 'sessions'),
+        BACKFILL_PENDING_MIN_SESSION_FILES
+      ) >= BACKFILL_PENDING_MIN_SESSION_FILES
+    )
+  }
+  return false
 }

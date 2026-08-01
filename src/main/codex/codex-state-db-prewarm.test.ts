@@ -23,7 +23,8 @@ function createFakeChild(): FakeChild {
 const incomplete: CodexStateDbBackfillStatus = {
   kind: 'incomplete',
   stateDbPath: '/tmp/home/state_5.sqlite',
-  status: 'running'
+  status: 'running',
+  lastWatermark: null
 }
 const complete: CodexStateDbBackfillStatus = {
   kind: 'complete',
@@ -78,6 +79,36 @@ describe('runCodexStateDbPrewarm', () => {
     })
     const result = await runCodexStateDbPrewarm('/tmp/home', {}, deps)
     expect(result.outcome).toBe('not-needed')
+    expect(spawnProcess).not.toHaveBeenCalled()
+  })
+
+  it('spawns over a not-tracked state db with a large history (#11828 deadlock fix)', async () => {
+    // Why: isCodexBackfillIndexPending calls not-tracked+large "pending"; the
+    // prewarm must agree or the deferral/gate could never clear.
+    const statuses: CodexStateDbBackfillStatus[] = [
+      { kind: 'not-tracked', stateDbPath: '/x/state_5.sqlite' }
+    ]
+    const { deps, spawnProcess } = createDeps({
+      readBackfillStatus: vi.fn(() => statuses.shift() ?? complete),
+      countSessionFiles: vi.fn(() => PREWARM_MIN_SESSION_FILES)
+    })
+    const task = runCodexStateDbPrewarm('/x', {}, deps)
+    await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS)
+    const result = await task
+    expect(result.outcome).toBe('completed')
+    expect(spawnProcess).toHaveBeenCalled()
+  })
+
+  it('reports not-needed for a not-tracked state db over a small history', async () => {
+    const { deps, spawnProcess } = createDeps({
+      readBackfillStatus: vi.fn(
+        () =>
+          ({ kind: 'not-tracked', stateDbPath: '/x/state_5.sqlite' }) as CodexStateDbBackfillStatus
+      ),
+      countSessionFiles: vi.fn(() => PREWARM_MIN_SESSION_FILES - 1)
+    })
+    const summary = await runCodexStateDbPrewarm('/x', {}, deps)
+    expect(summary.outcome).toBe('not-needed')
     expect(spawnProcess).not.toHaveBeenCalled()
   })
 

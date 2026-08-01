@@ -6,6 +6,7 @@ import { killCodexAppServerProcessTree } from './codex-app-server-session'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import type { CodexSessionBackfillOptions } from './codex-session-backfill-types'
 import {
+  BACKFILL_PENDING_MIN_SESSION_FILES,
   countCodexSessionFilesUpTo,
   readCodexStateDbBackfillStatus,
   type CodexStateDbBackfillStatus
@@ -20,8 +21,9 @@ export const PREWARM_CODEX_ARGS: readonly string[] = [
   'untrusted',
   'app-server'
 ]
-// Why: small histories index within Codex's own 30s startup wait; only pre-warm large ones.
-export const PREWARM_MIN_SESSION_FILES = 100
+// Why alias: the trust-grant deferral and the prewarm must agree on what "large
+// enough to stall codex" means, or one can defer forever waiting on the other.
+export const PREWARM_MIN_SESSION_FILES = BACKFILL_PENDING_MIN_SESSION_FILES
 export const PREWARM_POLL_INTERVAL_MS = 5_000
 export const PREWARM_SPAWN_RETRY_DELAY_MS = 2_000
 // Why: verified codex 0.146 — a non-claimant app-server exits ~30s after start (another
@@ -95,9 +97,6 @@ export async function runCodexStateDbPrewarm(
   if (status.kind === 'complete') {
     return finish('already-complete', 0)
   }
-  if (status.kind === 'not-tracked') {
-    return finish('not-needed', 0)
-  }
   if (status.kind === 'unreadable') {
     // Why: never spawn against a DB we cannot even read — #11830's corruption path.
     deps.logger.warn(
@@ -105,8 +104,11 @@ export async function runCodexStateDbPrewarm(
     )
     return finish('skipped-unreadable', 0)
   }
+  // Why: the pending predicate calls not-tracked+large "pending"; the prewarm
+  // must agree or a deferral/pane gate could engage with no mechanism that
+  // ever completes the index (#11828 deadlock).
   if (
-    status.kind === 'missing' &&
+    (status.kind === 'missing' || status.kind === 'not-tracked') &&
     deps.countSessionFiles(join(codexHomePath, 'sessions'), PREWARM_MIN_SESSION_FILES) <
       PREWARM_MIN_SESSION_FILES
   ) {
