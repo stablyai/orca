@@ -7,6 +7,7 @@ const mockSetActiveTabType = vi.fn()
 const mockSetTabBarOrder = vi.fn()
 const mockSetAgentStatus = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
+const mockWaitForAgentReady = vi.fn()
 const mockSeedNativeChatLaunchPrompt = vi.fn()
 const mockSeedNativeChatLaunchDraft = vi.fn()
 const mockMarkNativeChatLaunchPromptFailed = vi.fn()
@@ -111,6 +112,10 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
+vi.mock('@/lib/agent-ready-wait', () => ({
+  waitForAgentReady: mockWaitForAgentReady
+}))
+
 vi.mock('@/lib/telemetry', () => ({
   track: mockTrack,
   tuiAgentToAgentKind: (agent: string) => agent
@@ -170,6 +175,7 @@ describe('launchAgentInNewTab', () => {
     store.ptyIdsByTabId = {}
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
+    mockWaitForAgentReady.mockResolvedValue({ ready: true, reason: 'foreground-match' })
   })
 
   it('stamps the launched agent on the new tab for immediate provider icon bootstrap', async () => {
@@ -219,6 +225,30 @@ describe('launchAgentInNewTab', () => {
       text: 'large generated prompt',
       createdAt: expect.any(Number)
     })
+  })
+
+  it('tracks inline OpenCode continuation delivery until the agent is ready', async () => {
+    const onPromptDelivered = vi.fn()
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'opencode',
+      worktreeId: 'wt-1',
+      prompt: 'Continue from the previous session.',
+      promptDelivery: 'submit-after-ready',
+      onPromptDelivered
+    })
+
+    expect(result?.promptDeliveryResult).toBeDefined()
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
+    expect(mockWaitForAgentReady).toHaveBeenCalledWith('tab-1', 'opencode', {
+      timeoutMs: 8000
+    })
+    expect(onPromptDelivered).toHaveBeenCalledOnce()
   })
 
   it('opens local Grok submit-after-ready launches in native chat', async () => {

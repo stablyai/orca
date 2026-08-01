@@ -10,6 +10,7 @@ import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
 } from '@/lib/agent-launch-prompt-delivery'
+import { waitForAgentReady } from '@/lib/agent-ready-wait'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -29,6 +30,8 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
+
+const INLINE_PROMPT_DELIVERY_TIMEOUT_MS = 8000
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -214,7 +217,27 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     // and deliverLaunchPromptToAgentTab never seeds. Mirror it into chat here.
     seedNativeChatLaunchDraftForAgentTab({ tabId: tab.id, agent, text: trimmedPrompt })
   }
-  if (pasteDraftAfterLaunch !== null) {
+  if (hasPrompt && promptDelivery === 'submit-after-ready' && pasteDraftAfterLaunch === null) {
+    const timeoutNotice = createPasteReadinessTimeoutNotice({
+      worktreeId,
+      tabId: tab.id,
+      agent,
+      submitted: true
+    })
+    promptDeliveryResult = waitForAgentReady(tab.id, startupPlan.expectedProcess, {
+      timeoutMs: INLINE_PROMPT_DELIVERY_TIMEOUT_MS
+    }).then(({ ready }) => {
+      if (ready) {
+        onPromptDelivered?.()
+      } else {
+        timeoutNotice.onTimeout()
+      }
+      return {
+        delivered: ready,
+        failureNotified: !ready && timeoutNotice.wasNotified()
+      }
+    })
+  } else if (pasteDraftAfterLaunch !== null) {
     const timeoutNotice = createPasteReadinessTimeoutNotice({
       worktreeId,
       tabId: tab.id,
