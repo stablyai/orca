@@ -1,0 +1,35 @@
+{
+  "$schemaNote": "Consumed by config/scripts/regenerate-xterm-patches.mjs. See docs/reference/xterm-patch-regeneration.md.",
+  "upstream": {
+    "repository": "https://github.com/xtermjs/xterm.js.git",
+    "commit": "53a98a720ae4a973e384fa2440880d09537132f3",
+    "commitSource": "bin/publish.js stamps package.json.commit before npm publish, so the published tarball names its own commit. The generator asserts the two agree."
+  },
+  "sourcemaps": {
+    "policy": "include",
+    "why": "The shipped .js and .mjs move under the patch, so their maps must move with them. Excluding map hunks would ship offsets that no longer line up, which is the defect the addon patches currently have."
+  },
+  "toolchain": {
+    "why": "Pinned by the upstream package-lock at the commit above. The generator asserts these resolve as expected so a silent upstream resolution change surfaces as a toolchain error rather than a mystery patch diff.",
+    "esbuild": "0.28.1",
+    "webpack": "5.107.0",
+    "terser": "5.47.1",
+    "@typescript/native-preview": "7.0.0-dev.20260521.1"
+  },
+  "packages": [
+    {
+      "name": "@xterm/xterm",
+      "version": "6.1.0-beta.287",
+      "packageDir": ".",
+      "versionStampFile": "src/common/Version.ts",
+      "sourcePatch": "config/patches/xterm-src/@xterm__xterm@6.1.0-beta.287.src.patch",
+      "patch": "config/patches/@xterm__xterm@6.1.0-beta.287.patch",
+      "generatedPaths": ["lib/"],
+      "build": [{ "cwd": ".", "command": "npm", "args": ["run", "package"] }]
+    }
+  ],
+  "forbiddenBuildScripts": {
+    "why": "`npm run setup` runs a development esbuild (minify:false), so calling it after the packaging build overwrites lib/*.mjs with an unminified bundle and a mismatched map. Publish order is: stamp Version.ts, then `npm run package` only.",
+    "scripts": ["setup", "presetup", "postsetup", "esbuild", "esbuild-watch", "dev"]
+  }
+}

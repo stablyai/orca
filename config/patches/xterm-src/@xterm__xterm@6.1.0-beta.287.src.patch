@@ -1,0 +1,832 @@
+diff --git a/src/browser/CoreBrowserTerminal.ts b/src/browser/CoreBrowserTerminal.ts
+index 4557e1652c34737fdf853436bd9328d9918eee2b..aff6ba624523849c2a39878a2181cbd1e931791d 100644
+--- a/src/browser/CoreBrowserTerminal.ts
++++ b/src/browser/CoreBrowserTerminal.ts
+@@ -325,6 +325,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+   private _handleTextAreaBlur(): void {
+     // Text can safely be removed on blur. Doing it earlier could interfere with
+     // screen readers reading it out.
++    if (this._compositionHelper instanceof CompositionHelper) {
++      this._compositionHelper.blur();
++    }
+     this.textarea!.value = '';
+     this.refresh(this.buffer.y, this.buffer.y);
+     if (this.coreService.decPrivateModes.sendFocus) {
+@@ -425,7 +428,18 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+       this._compositionHelper!.updateCompositionElements();
+     }));
+     this._register(addDisposableListener(this.textarea!, 'compositionupdate', (e: CompositionEvent) => this._compositionHelper!.compositionupdate(e)));
+-    this._register(addDisposableListener(this.textarea!, 'compositionend', () => this._compositionHelper!.compositionend()));
++    this._register(addDisposableListener(this.textarea!, 'compositionend', (e: CompositionEvent) => {
++      if (this._compositionHelper instanceof CompositionHelper) {
++        if (this._compositionHelper.compositionend(e)) {
++          this.textarea!.dispatchEvent(new CustomEvent(
++            'xterm-composition-transaction-accepted',
++            { bubbles: true }
++          ));
++        }
++      } else {
++        this._compositionHelper!.compositionend();
++      }
++    }));
+     this._register(addDisposableListener(this.textarea!, 'input', (ev: InputEvent) => this._inputEvent(ev), true));
+     this._register(this.onRender(() => this._compositionHelper!.updateCompositionElements()));
+   }
+@@ -551,6 +565,11 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+     this._compositionView = this._document.createElement('div');
+     this._compositionView.classList.add('composition-view');
+     this._compositionHelper = this._instantiationService.createInstance(CompositionHelper, this.textarea, this._compositionView);
++    this._register(toDisposable(() => {
++      if (this._compositionHelper instanceof CompositionHelper) {
++        this._compositionHelper.dispose();
++      }
++    }));
+     this._helperContainer.appendChild(this._compositionView);
+ 
+     this._mouseCoordsService = this._instantiationService.createInstance(MouseCoordsService);
+@@ -1008,7 +1027,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+ 
+     this._onKey.fire({ key, domEvent: ev });
+     this._showCursor();
+-    this.coreService.triggerDataEvent(key, true);
++    if (!this._compositionHelper!.keypress?.(key)) {
++      this.coreService.triggerDataEvent(key, true);
++    }
+ 
+     this._keyPressHandled = true;
+ 
+@@ -1026,6 +1047,15 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+    * @param ev The input event to be handled.
+    */
+   protected _inputEvent(ev: InputEvent): boolean {
++    if (
++      ev.data &&
++      ev.inputType === 'insertText' &&
++      !this.optionsService.rawOptions.screenReaderMode &&
++      this._compositionHelper instanceof CompositionHelper &&
++      this._compositionHelper.input(ev.data)
++    ) {
++      return true;
++    }
+     // Only support emoji IMEs when screen reader mode is disabled as the event must bubble up to
+     // support reading out character input which can doubling up input characters
+     // Based on these event traces: https://github.com/xtermjs/xterm.js/issues/3679
+diff --git a/src/browser/Types.ts b/src/browser/Types.ts
+index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc07dc6b07f 100644
+--- a/src/browser/Types.ts
++++ b/src/browser/Types.ts
+@@ -41,9 +41,10 @@ export interface ICompositionHelper {
+   readonly isComposing: boolean;
+   compositionstart(): void;
+   compositionupdate(ev: CompositionEvent): void;
+-  compositionend(): void;
++  compositionend(): boolean | void;
+   updateCompositionElements(dontRecurse?: boolean): void;
+   keydown(ev: KeyboardEvent): boolean;
++  keypress?(text: string): boolean;
+ }
+ 
+ export interface IBrowser {
+diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..ef545ca0abfbda2a058e1dbe1e1c6a859dedb166 100644
+--- a/src/browser/input/CompositionHelper.ts
++++ b/src/browser/input/CompositionHelper.ts
+@@ -12,6 +12,28 @@ interface IPosition {
+   end: number;
+ }
+ 
++interface IPendingComposition {
++  transactionId: number;
++  finalizerTimer?: ReturnType<typeof setTimeout>;
++  lifecycleSettled: boolean;
++  sessionEnded: boolean;
++  position: IPosition;
++  suffix: string;
++  dataAlreadySent: string;
++  compositionData: string;
++  endData: string;
++  inputData: string;
++  keypressData: string;
++  keypressMayOverlapComposition: boolean;
++  expectsPostCompositionInput: boolean;
++  nextCompositionStart?: number;
++}
++
++const XTERM_COMPOSITION_SESSION_START_EVENT = 'xterm-composition-session-start';
++const XTERM_COMPOSITION_SESSION_END_EVENT = 'xterm-composition-session-end';
++const XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT =
++  'xterm-composition-transaction-accepted';
++
+ /**
+  * Encapsulates the logic for handling compositionstart, compositionupdate and compositionend
+  * events, displaying the in-progress composition to the UI and forwarding the final composition
+@@ -24,6 +46,15 @@ export class CompositionHelper {
+    */
+   private _isComposing: boolean;
+   public get isComposing(): boolean { return this._isComposing; }
++  public get hasPendingCompositionFinalization(): boolean {
++    return this._pendingComposition !== undefined;
++  }
++  public get _isSendingComposition(): boolean {
++    return this.hasPendingCompositionFinalization;
++  }
++  public get _pendingKeypressData(): string {
++    return this._pendingComposition?.keypressData ?? '';
++  }
+ 
+   /**
+    * The position within the input textarea's value of the current composition.
+@@ -36,22 +67,48 @@ export class CompositionHelper {
+    */
+   private _compositionSuffix: string;
+ 
+-  /**
+-   * Whether a composition is in the process of being sent, setting this to false will cancel any
+-   * in-progress composition.
+-   */
+-  private _isSendingComposition: boolean;
+-
+   /**
+    * Data already sent due to keydown event.
+    */
+   private _dataAlreadySent: string;
+ 
++  private _pendingComposition?: IPendingComposition;
++
++  private _isAwaitingCompositionEnd: boolean;
++
++  private _compositionInputData: string;
++
++  private _lastCompositionData: string;
++
++  private _compositionStartValue: string;
++
++  private _compositionStartSelection: IPosition;
++
++  private _compositionHasObservedProgress: boolean;
++
++  private _canceledKey?: Pick<KeyboardEvent, 'code' | 'timeStamp'>;
++
+   /**
+    * The pending textarea change timer, if any.
+    */
+   private _textareaChangeTimer?: number;
+ 
++  /**
++   * Identifies the composition transaction that owns deferred work.
++   */
++  private _compositionTransactionId: number;
++
++  /**
++   * Timers that still own deferred composition state.
++   */
++  private _compositionTimers: Set<ReturnType<typeof setTimeout>>;
++
++  private _compositionPositionTimer?: ReturnType<typeof setTimeout>;
++
++  private _compositionViewTimer?: ReturnType<typeof setTimeout>;
++
++  private _compositionEndTimer?: ReturnType<typeof setTimeout>;
++
+   constructor(
+     private readonly _textarea: HTMLTextAreaElement,
+     private readonly _compositionView: HTMLElement,
+@@ -61,27 +118,63 @@ export class CompositionHelper {
+     @IRenderService private readonly _renderService: IRenderService
+   ) {
+     this._isComposing = false;
+-    this._isSendingComposition = false;
++    this._isAwaitingCompositionEnd = false;
+     this._compositionPosition = { start: 0, end: 0 };
+     this._compositionSuffix = '';
+     this._dataAlreadySent = '';
++    this._compositionInputData = '';
++    this._lastCompositionData = '';
++    this._compositionStartValue = '';
++    this._compositionStartSelection = { start: 0, end: 0 };
++    this._compositionHasObservedProgress = false;
++    this._compositionTransactionId = 0;
++    this._compositionTimers = new Set();
+   }
+ 
+   /**
+    * Handles the compositionstart event, activating the composition view.
+    */
+   public compositionstart(): void {
+-    this._isComposing = true;
++    this._cancelDeferredTimer(this._compositionPositionTimer);
++    this._compositionPositionTimer = undefined;
++    this._cancelDeferredTimer(this._compositionViewTimer);
++    this._compositionViewTimer = undefined;
++    this._cancelDeferredTimer(this._compositionEndTimer);
++    this._compositionEndTimer = undefined;
++    if (this._pendingComposition) {
++      this._cancelPendingFinalizer(this._pendingComposition);
++      this._endPendingCompositionSession(this._pendingComposition);
++      this._settlePendingComposition(this._pendingComposition);
++    }
++    if (this._textareaChangeTimer !== undefined) {
++      clearTimeout(this._textareaChangeTimer);
++      this._textareaChangeTimer = undefined;
++    }
+     // It's important to use the selection here instead of textarea length to avoid conflicts with
+     // screen reader mode
+     const start = this._textarea.selectionStart ?? this._textarea.value.length;
+     const end = this._textarea.selectionEnd ?? start;
+     this._compositionPosition.start = Math.min(start, end);
+     this._compositionPosition.end = Math.max(start, end);
++    this._compositionStartValue = this._textarea.value;
++    this._compositionStartSelection = { start, end };
++    this._compositionHasObservedProgress = false;
++    if (this._pendingComposition) {
++      this._pendingComposition.nextCompositionStart = this._compositionPosition.start;
++    }
++    this._compositionTransactionId++;
++    this._isComposing = true;
++    this._isAwaitingCompositionEnd = true;
+     this._compositionSuffix = this._textarea.value.substring(this._compositionPosition.end);
+     this._compositionView.textContent = '';
+     this._dataAlreadySent = '';
++    this._compositionInputData = '';
++    this._lastCompositionData = '';
+     this._compositionView.classList.add('active');
++    this._dispatchCompositionSessionEvent(new CustomEvent(XTERM_COMPOSITION_SESSION_START_EVENT, {
++      bubbles: true,
++      detail: { id: this._compositionTransactionId }
++    }));
+   }
+ 
+   /**
+@@ -89,22 +182,87 @@ export class CompositionHelper {
+    * @param ev The event.
+    */
+   public compositionupdate(ev: Pick<CompositionEvent, 'data'>): void {
++    this._cancelDeferredTimer(this._compositionEndTimer);
++    this._compositionEndTimer = undefined;
++    this._compositionHasObservedProgress ||= this._hasCompositionProgress();
++    if (ev.data?.length > 0) {
++      this._lastCompositionData = ev.data;
++    }
+     // Mark text as LTR, direction=rtl is used in CSS so the end of the text is followed for long
+     // compositions
+-    this._compositionView.textContent = `\u200E${ev.data}\u200E`;
++    this._compositionView.textContent = `\u200E${ev.data ?? ''}\u200E`;
+     this.updateCompositionElements();
+-    setTimeout(() => {
+-      const end = this._textarea.selectionEnd ?? this._textarea.value.length;
+-      this._compositionPosition.end = Math.max( this._compositionPosition.start, end);
+-    }, 0);
++    const transactionId = this._compositionTransactionId;
++    this._cancelDeferredTimer(this._compositionPositionTimer);
++    this._compositionPositionTimer = this._defer(() => {
++      if (this._isComposing && this._compositionTransactionId === transactionId) {
++        this._compositionHasObservedProgress ||= this._hasCompositionProgress();
++        const end = this._textarea.selectionEnd ?? this._textarea.value.length;
++        this._compositionPosition.end = Math.max(this._compositionPosition.start, end);
++      }
++    });
+   }
+ 
+   /**
+    * Handles the compositionend event, hiding the composition view and sending the composition to
+    * the handler.
+    */
+-  public compositionend(): void {
+-    this._finalizeComposition(true);
++  public compositionend(ev?: Pick<CompositionEvent, 'data'>): boolean {
++    if (!this._isAwaitingCompositionEnd) {
++      return false;
++    }
++    if (!this._isComposing) {
++      const pending = this._pendingComposition;
++      if (pending?.transactionId === this._compositionTransactionId) {
++        pending.endData = ev?.data ?? '';
++        this._updatePostCompositionInputExpectation(pending);
++      }
++      return false;
++    }
++    const endData = ev?.data ?? '';
++    this._compositionHasObservedProgress ||= this._hasCompositionProgress();
++    if (!this._compositionEndBelongsToCurrentTransaction(endData)) {
++      const pending = this._pendingComposition;
++      if (pending && pending.transactionId !== this._compositionTransactionId) {
++        this._sendPendingComposition(pending);
++      }
++      this._deferCompositionEnd(endData);
++      return false;
++    }
++    this._cancelDeferredTimer(this._compositionEndTimer);
++    this._compositionEndTimer = undefined;
++    this._finalizeComposition(true, endData);
++    return true;
++  }
++
++  public blur(): void {
++    this._cancelDeferredTimer(this._compositionEndTimer);
++    this._compositionEndTimer = undefined;
++    if (this._isComposing) {
++      const end = this._textarea.selectionEnd ?? this._textarea.value.length;
++      this._compositionPosition.end = Math.max(this._compositionPosition.start, end);
++    }
++    if (this._isComposing || this.hasPendingCompositionFinalization) {
++      this._finalizeComposition(false);
++    }
++  }
++
++  public dispose(): void {
++    if (this._textareaChangeTimer !== undefined) {
++      clearTimeout(this._textareaChangeTimer);
++      this._textareaChangeTimer = undefined;
++    }
++    for (const timer of this._compositionTimers) {
++      clearTimeout(timer);
++    }
++    this._compositionTimers.clear();
++    this._compositionPositionTimer = undefined;
++    this._compositionViewTimer = undefined;
++    this._compositionEndTimer = undefined;
++    this._pendingComposition = undefined;
++    this._isAwaitingCompositionEnd = false;
++    this._isComposing = false;
++    this._compositionTransactionId++;
+   }
+ 
+   /**
+@@ -113,7 +271,16 @@ export class CompositionHelper {
+    * @returns Whether the Terminal should continue processing the keydown event.
+    */
+   public keydown(ev: KeyboardEvent): boolean {
+-    if (this._isComposing || this._isSendingComposition) {
++    if (this._canceledKey?.code === ev.code && this._canceledKey.timeStamp === ev.timeStamp) {
++      this._canceledKey = undefined;
++      return false;
++    }
++    if (ev.key === 'Escape' && (this._isComposing || this.hasPendingCompositionFinalization)) {
++      this._canceledKey = { code: ev.code, timeStamp: ev.timeStamp };
++      this._cancelComposition();
++      return false;
++    }
++    if (this._isComposing || this.hasPendingCompositionFinalization) {
+       if (ev.keyCode === 20 || ev.keyCode === 229) {
+         // 20 is CapsLock, 229 is Enter
+         // Continue composing if the keyCode is the "composition character"
+@@ -138,6 +305,54 @@ export class CompositionHelper {
+     return true;
+   }
+ 
++  /**
++   * Defers keypress text while a composition finalizer is pending so all input is emitted once
++   * after reconciliation with the final textarea candidate.
++   */
++  public keypress(text: string): boolean {
++    const pending = this._pendingComposition;
++    if (!pending) {
++      return false;
++    }
++    if (pending.keypressMayOverlapComposition) {
++      pending.keypressData += text;
++      return true;
++    }
++    if (pending.expectsPostCompositionInput && pending.keypressData.length === 0) {
++      pending.keypressData = text;
++      return true;
++    }
++    this._sendPendingComposition(pending);
++    return false;
++  }
++
++  public input(text: string): boolean {
++    if (this._isComposing) {
++      this._compositionHasObservedProgress ||= this._hasCompositionProgress();
++      this._compositionInputData += text;
++      return true;
++    }
++    const pending = this._pendingComposition;
++    if (!pending) {
++      return false;
++    }
++    if (pending.expectsPostCompositionInput) {
++      pending.inputData += text;
++      pending.expectsPostCompositionInput = false;
++      this._sendPendingComposition(pending);
++      return true;
++    }
++    const repeatsPendingTextareaInput =
++      text.length > 0 &&
++      this._getPendingTextareaInput(pending) === text &&
++      this._getPendingTextareaInput(pending, true) === text;
++    this._sendPendingComposition(pending);
++    if (!repeatsPendingTextareaInput) {
++      this._coreService.triggerDataEvent(text, true);
++    }
++    return true;
++  }
++
+   /**
+    * Finalizes the composition, resuming regular input actions. This is called when a composition
+    * is ending.
+@@ -146,23 +361,49 @@ export class CompositionHelper {
+    *   compositionend event is triggered, such as enter, so that the composition is sent before
+    *   the command is executed.
+    */
+-  private _finalizeComposition(waitForPropagation: boolean): void {
++  private _finalizeComposition(waitForPropagation: boolean, endData: string = ''): void {
++    const wasComposing = this._isComposing;
+     this._compositionView.classList.remove('active');
+     this._isComposing = false;
++    if (waitForPropagation && !wasComposing) {
++      return;
++    }
+ 
+     if (!waitForPropagation) {
+-      // Cancel any delayed composition send requests and send the input immediately.
+-      this._isSendingComposition = false;
+-      const input = this._textarea.value.substring(this._compositionPosition.start, this._compositionPosition.end);
+-      this._coreService.triggerDataEvent(input, true);
++      if (this._pendingComposition) {
++        this._sendPendingComposition(this._pendingComposition, true);
++      }
++      if (wasComposing) {
++        const input = this._getCompositionInput(
++          this._compositionPosition.start + this._dataAlreadySent.length,
++          this._compositionSuffix
++        );
++        this._sendCompositionInput(this._compositionTransactionId, input);
++      }
+     } else {
+-      // Make a deep copy of the composition position here as a new compositionstart event may
+-      // fire before the setTimeout executes.
+-      const currentCompositionPosition = {
+-        start: this._compositionPosition.start,
+-        end: this._compositionPosition.end
++      if (this._pendingComposition) {
++        this._sendPendingComposition(this._pendingComposition);
++      }
++      const pending: IPendingComposition = {
++        transactionId: this._compositionTransactionId,
++        lifecycleSettled: false,
++        sessionEnded: false,
++        position: {
++          start: this._compositionPosition.start,
++          end: this._compositionPosition.end
++        },
++        suffix: this._compositionSuffix,
++        dataAlreadySent: this._dataAlreadySent,
++        compositionData: this._lastCompositionData,
++        endData,
++        inputData: this._compositionInputData,
++        keypressData: '',
++        keypressMayOverlapComposition:
++          this._lastCompositionData.length === 0 && endData.length === 0,
++        expectsPostCompositionInput: false
+       };
+-      const currentCompositionSuffix = this._compositionSuffix;
++      this._updatePostCompositionInputExpectation(pending);
++      this._pendingComposition = pending;
+ 
+       // Since composition* events happen before the changes take place in the textarea on most
+       // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
+@@ -172,35 +413,277 @@ export class CompositionHelper {
+       // - The last compositionupdate event's data property does not always accurately describe
+       //   the character, a counter example being Korean where an ending consonsant can move to
+       //   the following character if the following input is a vowel.
+-      this._isSendingComposition = true;
+-      setTimeout(() => {
+-        // Ensure that the input has not already been sent
+-        if (this._isSendingComposition) {
+-          this._isSendingComposition = false;
+-          let input;
+-          // Add length of data already sent due to keydown event,
+-          // otherwise input characters can be duplicated. (Issue #3191)
+-          currentCompositionPosition.start += this._dataAlreadySent.length;
+-          if (this._isComposing) {
+-            // Use the start position of the new composition to get the string
+-            // if a new composition has started.
+-            input = this._textarea.value.substring(currentCompositionPosition.start, this._compositionPosition.start);
+-          } else {
+-            // Keep support for non-composition characters typed immediately after composition end
+-            // while avoiding re-sending the trailing text that was already present
+-            // before composition started.
+-            const value = this._textarea.value;
+-            const valueEnd = currentCompositionSuffix.length > 0 && value.endsWith(currentCompositionSuffix)
+-              ? value.length - currentCompositionSuffix.length
+-              : value.length;
+-            input = value.substring(currentCompositionPosition.start, Math.max(currentCompositionPosition.start, valueEnd));
+-          }
+-          if (input.length > 0) {
+-            this._coreService.triggerDataEvent(input, true);
+-          }
++      pending.finalizerTimer = this._defer(() => {
++        pending.finalizerTimer = undefined;
++        if (this._compositionTransactionId === pending.transactionId) {
++          this._isAwaitingCompositionEnd = false;
++        }
++        if (this._pendingComposition === pending) {
++          this._sendPendingComposition(pending, true);
+         }
+-      }, 0);
++      });
++    }
++  }
++
++  private _sendPendingComposition(
++    pending: IPendingComposition,
++    includeFollowingInput: boolean = false
++  ): void {
++    this._cancelPendingFinalizer(pending);
++    if (this._pendingComposition === pending) {
++      this._pendingComposition = undefined;
++    }
++    const textareaInput = this._getPendingTextareaInput(pending, includeFollowingInput);
++    const observedInput = this._removeAlreadySentData(
++      pending.inputData || pending.keypressData,
++      pending.dataAlreadySent
++    );
++    const input = this._mergeTextObservations(
++      textareaInput || pending.endData || pending.compositionData,
++      observedInput,
++      pending.keypressMayOverlapComposition
++    );
++    this._sendCompositionInput(pending.transactionId, input, !pending.sessionEnded);
++    this._settlePendingComposition(pending);
++  }
++
++  private _cancelPendingFinalizer(pending: IPendingComposition): void {
++    if (pending.finalizerTimer === undefined) {
++      return;
++    }
++    clearTimeout(pending.finalizerTimer);
++    this._compositionTimers.delete(pending.finalizerTimer);
++    pending.finalizerTimer = undefined;
++  }
++
++  private _settlePendingComposition(pending: IPendingComposition): void {
++    if (pending.lifecycleSettled) {
++      return;
++    }
++    pending.lifecycleSettled = true;
++    this._dispatchCompositionTransactionSettled();
++  }
++
++  private _mergeTextObservations(
++    candidate: string,
++    observed: string,
++    findShortestOrder: boolean
++  ): string {
++    if (!observed || candidate.includes(observed)) {
++      return candidate;
++    }
++    if (!candidate || observed.includes(candidate)) {
++      return observed;
++    }
++    if (findShortestOrder) {
++      let candidateFirstOverlap = Math.min(candidate.length, observed.length);
++      while (
++        candidateFirstOverlap > 0 &&
++        !candidate.endsWith(observed.substring(0, candidateFirstOverlap))
++      ) {
++        candidateFirstOverlap--;
++      }
++      let observedFirstOverlap = Math.min(candidate.length, observed.length);
++      while (
++        observedFirstOverlap > 0 &&
++        !observed.endsWith(candidate.substring(0, observedFirstOverlap))
++      ) {
++        observedFirstOverlap--;
++      }
++      return candidateFirstOverlap > observedFirstOverlap
++        ? candidate + observed.substring(candidateFirstOverlap)
++        : observed + candidate.substring(observedFirstOverlap);
++    }
++    let overlap = Math.min(candidate.length, observed.length);
++    while (overlap > 0 && !candidate.endsWith(observed.substring(0, overlap))) {
++      overlap--;
++    }
++    return candidate + observed.substring(overlap);
++  }
++
++  private _updatePostCompositionInputExpectation(pending: IPendingComposition): void {
++    pending.expectsPostCompositionInput =
++      (pending.endData.length > 0 || pending.compositionData.length > 0) &&
++      pending.inputData.length === 0 &&
++      this._getPendingTextareaInput(pending).length === 0;
++  }
++
++  private _getPendingTextareaInput(
++    pending: IPendingComposition,
++    includeFollowingInput: boolean = false
++  ): string {
++    const value = this._textarea.value;
++    const start = pending.position.start + pending.dataAlreadySent.length;
++    if (pending.nextCompositionStart !== undefined) {
++      return value.substring(start, Math.max(start, pending.nextCompositionStart));
++    }
++    const suffixEnd =
++      pending.suffix.length > 0 && value.endsWith(pending.suffix)
++        ? value.length - pending.suffix.length
++        : value.length;
++    const compositionLength = (pending.endData || pending.compositionData).length;
++    const observedEnd = includeFollowingInput
++      ? suffixEnd
++      : Math.max(pending.position.end, start + compositionLength);
++    return value.substring(start, Math.max(start, Math.min(suffixEnd, observedEnd)));
++  }
++
++  private _getCompositionInput(start: number, suffix: string): string {
++    const value = this._textarea.value;
++    const valueEnd =
++      suffix.length > 0 && value.endsWith(suffix) ? value.length - suffix.length : value.length;
++    return value.substring(start, Math.max(start, valueEnd));
++  }
++
++  private _removeAlreadySentData(input: string, dataAlreadySent: string): string {
++    if (dataAlreadySent.length === 0) {
++      return input;
++    }
++    if (input.startsWith(dataAlreadySent)) {
++      return input.substring(dataAlreadySent.length);
++    }
++    return dataAlreadySent.includes(input) ? '' : input;
++  }
++
++  private _cancelComposition(): void {
++    const pending = this._pendingComposition;
++    if (
++      pending &&
++      this._isComposing &&
++      pending.transactionId !== this._compositionTransactionId
++    ) {
++      this._sendPendingComposition(pending);
++    }
++    const transactionId = this._isComposing
++      ? this._compositionTransactionId
++      : this._pendingComposition?.transactionId ?? 0;
++    const settlesPending = pending !== undefined && this._pendingComposition === pending;
++    this._pendingComposition = undefined;
++    this._isAwaitingCompositionEnd = false;
++    this._isComposing = false;
++    this._compositionView.classList.remove('active');
++    this._textarea.value =
++      this._textarea.value.substring(0, this._compositionPosition.start) + this._compositionSuffix;
++    this._sendCompositionInput(transactionId, '');
++    if (settlesPending && pending) {
++      this._settlePendingComposition(pending);
++    }
++  }
++
++  private _sendCompositionInput(
++    transactionId: number,
++    input: string,
++    dispatchSessionEnd: boolean = true
++  ): void {
++    let prevented = false;
++    if (dispatchSessionEnd) {
++      const event = new CustomEvent(XTERM_COMPOSITION_SESSION_END_EVENT, {
++        bubbles: true,
++        cancelable: true,
++        detail: { id: transactionId, data: input }
++      });
++      this._dispatchCompositionSessionEvent(event);
++      prevented = event.defaultPrevented;
++    }
++    if (input.length > 0 && !prevented) {
++      this._coreService.triggerDataEvent(input, true);
++    }
++  }
++
++  private _endPendingCompositionSession(pending: IPendingComposition): void {
++    if (pending.sessionEnded) {
++      return;
++    }
++    pending.sessionEnded = true;
++    const input =
++      this._getPendingTextareaInput(pending) ||
++      pending.endData ||
++      pending.compositionData;
++    this._dispatchCompositionSessionEvent(new CustomEvent(
++      XTERM_COMPOSITION_SESSION_END_EVENT,
++      {
++        bubbles: true,
++        cancelable: true,
++        detail: {
++          id: pending.transactionId,
++          data: input,
++          dataPendingReconciliation: true
++        }
++      }
++    ));
++  }
++
++  private _dispatchCompositionSessionEvent(event: CustomEvent): void {
++    if (typeof this._textarea.dispatchEvent === 'function') {
++      this._textarea.dispatchEvent(event);
++    }
++  }
++
++  private _dispatchCompositionTransactionSettled(): void {
++    this._dispatchCompositionSessionEvent(new CustomEvent(
++      'xterm-composition-transaction-settled',
++      { bubbles: true }
++    ));
++  }
++
++  private _deferCompositionEnd(endData: string): void {
++    this._cancelDeferredTimer(this._compositionEndTimer);
++    const transactionId = this._compositionTransactionId;
++    const timer = this._defer(() => {
++      if (
++        this._compositionEndTimer !== timer ||
++        !this._isComposing ||
++        this._compositionTransactionId !== transactionId ||
++        !this._compositionEndBelongsToCurrentTransaction(endData)
++      ) {
++        return;
++      }
++      this._compositionEndTimer = undefined;
++      this._finalizeComposition(true, endData);
++      this._dispatchCompositionSessionEvent(new CustomEvent(
++        XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT,
++        { bubbles: true }
++      ));
++      const pending = this._pendingComposition;
++      if (pending?.transactionId === transactionId) {
++        this._sendPendingComposition(pending, true);
++      }
++    });
++    this._compositionEndTimer = timer;
++  }
++
++  private _hasCompositionProgress(): boolean {
++    const start = this._textarea.selectionStart ?? this._textarea.value.length;
++    const end = this._textarea.selectionEnd ?? start;
++    return this._compositionHasObservedProgress || (
++      this._textarea.value !== this._compositionStartValue ||
++      start !== this._compositionStartSelection.start ||
++      end !== this._compositionStartSelection.end
++    );
++  }
++
++  private _compositionEndBelongsToCurrentTransaction(endData: string): boolean {
++    return (
++      this._hasCompositionProgress() ||
++      (endData.length > 0 && endData === this._lastCompositionData)
++    );
++  }
++
++  private _defer(callback: () => void): ReturnType<typeof setTimeout> {
++    const timer = setTimeout(() => {
++      this._compositionTimers.delete(timer);
++      callback();
++    }, 0);
++    this._compositionTimers.add(timer);
++    return timer;
++  }
++
++  private _cancelDeferredTimer(timer?: ReturnType<typeof setTimeout>): void {
++    if (timer === undefined) {
++      return;
+     }
++    clearTimeout(timer);
++    this._compositionTimers.delete(timer);
+   }
+ 
+   /**
+@@ -278,7 +761,8 @@ export class CompositionHelper {
+     }
+ 
+     if (!dontRecurse) {
+-      setTimeout(() => this.updateCompositionElements(true), 0);
++      this._cancelDeferredTimer(this._compositionViewTimer);
++      this._compositionViewTimer = this._defer(() => this.updateCompositionElements(true));
+     }
+   }
+ }
+diff --git a/src/common/SortedList.ts b/src/common/SortedList.ts
+index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..df0761c35907ddc48eb102ba181b0dac8e61f00d 100644
+--- a/src/common/SortedList.ts
++++ b/src/common/SortedList.ts
+@@ -87,6 +87,24 @@ export class SortedList<T> {
+     if (key === undefined) {
+       return false;
+     }
++    if (this._deleteAtKey(value, key)) {
++      return true;
++    }
++    // A pending deletion whose key mutated after `delete()` (disposing a marker
++    // resets `line` to -1, and `line` is the sort key) leaves `_array` out of
++    // order, so the binary search above can miss a value that is present.
++    // Compacting those entries out restores the order; retry before reporting
++    // the value absent, else its `onDecorationRemoved` never fires and the
++    // decoration paints forever. Miss path only, so the common bulk delete
++    // keeps its O(log n) search and deferred-compaction batching.
++    if (this._deletedIndices.length === 0) {
++      return false;
++    }
++    this._flushCleanupDeleted();
++    return this._deleteAtKey(value, key);
++  }
++
++  private _deleteAtKey(value: T, key: number): boolean {
+     i = this._search(key);
+     if (i === -1) {
+       return false;
