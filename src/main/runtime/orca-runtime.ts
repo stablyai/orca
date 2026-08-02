@@ -29235,6 +29235,11 @@ export class OrcaRuntimeService {
     // as idle and erased the working->done edge completion notifications need.
     const now = hookRow.state ? hookRow.receivedAt : (pty?.lastOutputAt ?? Date.now())
     const agentType = ownerAgent ?? undefined
+    // Why: a pane the host is not streaming has no PTY record, so keying worktree
+    // attribution off one published this status with no `worktreeId` at all. Clients
+    // skip a mirrored status they cannot attribute, so every completion on an
+    // unfocused pane was dropped and only fired once the pane materialized.
+    const worktreeId = pty?.worktreeId ?? hookRow.worktreeId
     return {
       agentStatus: {
         state:
@@ -29250,7 +29255,7 @@ export class OrcaRuntimeService {
         paneKey,
         ...(terminalHandle ? { terminalHandle } : {}),
         ...(agentType ? { agentType } : {}),
-        ...(pty?.worktreeId ? { worktreeId: pty.worktreeId } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
         tabId: tab.parentTabId,
         terminalTitle,
         stateHistory: [],
@@ -29282,6 +29287,9 @@ export class OrcaRuntimeService {
     prompt: string | null
     stateStartedAt: number | null
     receivedAt: number
+    // Why: the hook payload is the only worktree attribution a non-streamed pane has —
+    // there is no PTY record to read it from. Clients key completion notifications by it.
+    worktreeId: string | null
   } {
     let session: AgentStatusIpcPayload | null = null
     let agent: AgentStatusIpcPayload | null = null
@@ -29315,7 +29323,8 @@ export class OrcaRuntimeService {
       state: agent && agent.providerSessionOnly !== true ? (agent.state ?? null) : null,
       prompt: agent && agent.providerSessionOnly !== true ? (agent.prompt ?? null) : null,
       stateStartedAt: agent?.stateStartedAt ?? null,
-      receivedAt: agent?.receivedAt ?? Date.now()
+      receivedAt: agent?.receivedAt ?? Date.now(),
+      worktreeId: agent?.worktreeId ?? session?.worktreeId ?? null
     }
   }
 

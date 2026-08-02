@@ -93,4 +93,26 @@ describe('headless agent status published from hook rows', () => {
 
     expect(published.agentStatus?.state).toBe('done')
   })
+
+  it('attributes the status to the hook worktree when the host holds no PTY for the pane', () => {
+    // Reproduces the missing remote notification: a pane the host is not streaming has no
+    // PTY record, so worktree attribution was dropped. Clients skip a mirrored status they
+    // cannot attribute, so the completion never notified until the pane materialized.
+    const runtime = new OrcaRuntimeService(null) as unknown as {
+      buildPtyMobileAgentStatus: (
+        pty: null,
+        tab: RuntimeMobileSessionTerminalTab,
+        terminalHandle: string | null,
+        retained: null,
+        getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
+      ) => { agentStatus?: { worktreeId?: string } }
+    }
+
+    const now = Date.now()
+    const published = runtime.buildPtyMobileAgentStatus(null, tab, null, null, (paneKey) =>
+      paneKey === PANE_KEY ? [hookRow('done', now)] : []
+    )
+
+    expect(published.agentStatus?.worktreeId).toBe(WORKTREE_ID)
+  })
 })

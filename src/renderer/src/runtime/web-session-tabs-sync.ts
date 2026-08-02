@@ -2694,16 +2694,72 @@ export function applyWebSessionTabsStorePatch(
   buildPatch: (state: AppState) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>
 ): void {
   let mirroredAgentStatusChanged = false
+  let observedStatuses: { paneKey: string; worktreeId: string; entry: AgentStatusEntry }[] = []
   useAppStore.setState((state) => {
     const patch = buildPatch(state)
     mirroredAgentStatusChanged =
       patch !== state && Object.prototype.hasOwnProperty.call(patch, 'agentStatusByPaneKey')
+    if (mirroredAgentStatusChanged) {
+      observedStatuses = collectChangedMirroredAgentStatuses(
+        state.agentStatusByPaneKey,
+        (patch as Partial<WebSessionTabsSyncState>).agentStatusByPaneKey ?? {}
+      )
+    }
     return patch
   })
   // Why: paired-web snapshots bypass setAgentStatus, so arm the stale-boundary timer explicitly like local hook events do.
   if (mirroredAgentStatusChanged) {
     useAppStore.getState().scheduleAgentStatusFreshness()
   }
+  // Why: a remote `orca serve` host has no ingestRemote path (only SSH and WSL do), so its
+  // agent hooks never reach the local main-process IPC that drives completion
+  // notifications. The mirror is the only carrier, so feed it the same observer the local
+  // hook path uses — on every changed status, not just completions, so the coordinator
+  // sees the working->done sequence it needs rather than a bare terminal `done`.
+  if (observedStatuses.length > 0) {
+    // Why lazy: a static import of the notification observer pulls the terminal-pane and
+    // store graph in ahead of this module and deadlocks initialization (the store's
+    // getState is undefined at module scope). Notifications are fire-and-forget, so
+    // resolving the module on first use is harmless.
+    void import('@/hooks/agent-hook-completion-notifications')
+      .then(({ observeAgentHookCompletionForNotification }) => {
+        for (const observed of observedStatuses) {
+          observeAgentHookCompletionForNotification({
+            paneKey: observed.paneKey,
+            worktreeId: observed.worktreeId,
+            payload: observed.entry
+          })
+        }
+      })
+      .catch(() => {
+        // Best-effort: a missing notification must never break snapshot application.
+      })
+  }
+}
+
+/** Mirrored pane statuses that actually changed, so the notification observer sees each
+ *  transition once rather than on every republished snapshot. */
+function collectChangedMirroredAgentStatuses(
+  previous: Readonly<Record<string, AgentStatusEntry>>,
+  next: Readonly<Record<string, AgentStatusEntry>>
+): { paneKey: string; worktreeId: string; entry: AgentStatusEntry }[] {
+  const changed: { paneKey: string; worktreeId: string; entry: AgentStatusEntry }[] = []
+  for (const [paneKey, entry] of Object.entries(next)) {
+    const parsed = parsePaneKey(paneKey)
+    if (!parsed || !isWebTerminalSurfaceTabId(parsed.tabId)) {
+      continue
+    }
+    const worktreeId = entry.worktreeId
+    if (!worktreeId) {
+      continue
+    }
+    const before = previous[paneKey]
+    if (before && agentStatusEntryEqual(before, entry)) {
+      continue
+    }
+    changed.push({ paneKey, worktreeId, entry })
+  }
+  return changed
 }
 
 export function useWebSessionTabsSync(): void {
