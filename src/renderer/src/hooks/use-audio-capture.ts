@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react'
+import { openMicrophoneCaptureStream } from './voice-microphone-devices'
 
 type BufferedAudioChunk = {
   samples: Float32Array
@@ -9,6 +10,12 @@ type BufferedAudioChunk = {
 type StartAudioCaptureOptions = {
   bufferAudio?: boolean
   sessionId?: string
+  /** null/undefined = system default input device */
+  microphoneDeviceId?: string | null
+}
+
+export type StartAudioCaptureResult = {
+  fellBackToDefaultMicrophone: boolean
 }
 
 type StopAudioCaptureOptions = {
@@ -84,7 +91,9 @@ export function useAudioCapture() {
   )
 
   const start = useCallback(
-    async (options: StartAudioCaptureOptions = {}) => {
+    async (
+      options: StartAudioCaptureOptions = {}
+    ): Promise<StartAudioCaptureResult | undefined> => {
       if (isCapturingRef.current) {
         return
       }
@@ -96,13 +105,9 @@ export function useAudioCapture() {
       resetBufferedAudio()
       capturedChunkCountRef.current = 0
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
+      const { stream, fellBackToDefaultMicrophone } = await openMicrophoneCaptureStream({
+        preferredDeviceId: options.microphoneDeviceId,
+        getUserMedia: (constraints) => navigator.mediaDevices.getUserMedia(constraints)
       })
       if (startRequestRef.current !== startRequest) {
         stream.getTracks().forEach((track) => track.stop())
@@ -178,6 +183,7 @@ export function useAudioCapture() {
         processorRef.current = processor
         sourceRef.current = source
         isCapturingRef.current = true
+        return { fellBackToDefaultMicrophone }
       } catch (err) {
         processor?.disconnect()
         source?.disconnect()

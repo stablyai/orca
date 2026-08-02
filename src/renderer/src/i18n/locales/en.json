@@ -9142,7 +9142,13 @@
               "20574cbc72": "Enable Voice Dictation",
               "322d457a0d": "transcription",
               "dcc7846641": "Configure the OpenAI API key used for cloud speech-to-text models.",
-              "ebfd0b32e5": "OpenAI Transcription"
+              "ebfd0b32e5": "OpenAI Transcription",
+              "microphoneTitle": "Microphone",
+              "microphoneDescription": "Choose which input device voice dictation uses.",
+              "micInput": "input",
+              "micDevice": "device",
+              "micAirpods": "airpods",
+              "micDefault": "system default"
             }
           }
         },
@@ -10133,6 +10139,12 @@
           "webUnavailable": "Switching builds is only available in the desktop app.",
           "devChannelMacOnlyAria": "{{value0}} (macOS only)",
           "devChannelMacOnly": "{{value0}} builds are produced only for macOS. Linux and Windows stay on Stable or RC."
+        },
+        "VoiceMicrophoneSetting": {
+          "systemDefault": "System default",
+          "unavailable": "unavailable",
+          "label": "Microphone",
+          "description": "Input device used for voice dictation. System default follows the OS microphone setting."
         }
       },
       "right": {
@@ -13322,7 +13334,8 @@
           "55127a3706": "Dictation failed: {{value0}}",
           "bb7f599ee7": "Open Settings",
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
-          "5d2c3e7ae3": "No speech detected."
+          "5d2c3e7ae3": "No speech detected.",
+          "micFallback": "Selected microphone unavailable. Using system default."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Stop dictation"

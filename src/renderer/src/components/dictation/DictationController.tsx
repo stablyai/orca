@@ -131,8 +131,20 @@ export function DictationController() {
     try {
       // Why: worker startup can take seconds after idle teardown. Capture first
       // and buffer locally so speech during "Starting..." is not discarded.
-      await startCapture({ bufferAudio: true, sessionId })
+      const captureResult = await startCapture({
+        bufferAudio: true,
+        sessionId,
+        microphoneDeviceId: settings?.voice?.microphoneDeviceId ?? null
+      })
       captureStarted = true
+      if (captureResult?.fellBackToDefaultMicrophone) {
+        toast.message(
+          translate(
+            'auto.components.dictation.DictationController.micFallback',
+            'Selected microphone unavailable. Using system default.'
+          )
+        )
+      }
       if (stopRequestedDuringStartRef.current) {
         stopCapture({ preserveBufferedAudio: true })
       }
