@@ -39,6 +39,7 @@ export {
 } from './active-agent-note-send-result'
 const ACTIVE_AGENT_SEND_TIMEOUT_MS = 8000
 const ORCA_DESKTOP_TERMINAL_CLIENT = { id: 'orca-desktop', type: 'desktop' as const }
+class ActiveAgentPostPasteStaleError extends Error {}
 
 export async function sendNotesToActiveAgentSession({
   worktreeId,
@@ -146,6 +147,10 @@ async function sendNotesToActiveAgentSessionAttempt(
     // so preserve the old active-focused send path for remote compatibility.
     return await sendPromptWithLegacyCombinedSend(runtimeTarget, terminal.handle, prompt)
   } catch (error) {
+    if (error instanceof ActiveAgentPostPasteStaleError) {
+      clearActiveAgentTerminalBinding(worktreeId, noteTarget, runtimeTarget)
+      return { status: 'partial-submit-failed' }
+    }
     if (!isRuntimeTerminalStale(error)) {
       throw error
     }
@@ -256,7 +261,7 @@ async function sendPromptWithGuardedPasteAndEnter(
     }
   } catch (error) {
     if (isRuntimeTerminalStale(error)) {
-      throw error
+      throw new ActiveAgentPostPasteStaleError()
     }
     if (isRuntimeTerminalUnavailable(error)) {
       return { status: 'partial-submit-failed' }
@@ -279,7 +284,7 @@ async function sendPromptWithGuardedPasteAndEnter(
     return send.accepted ? { status: 'sent' } : { status: 'partial-submit-failed' }
   } catch (error) {
     if (isRuntimeTerminalStale(error)) {
-      throw error
+      throw new ActiveAgentPostPasteStaleError()
     }
     if (isRuntimeTerminalUnavailable(error) || isRuntimeTerminalNotWritable(error)) {
       return { status: 'partial-submit-failed' }

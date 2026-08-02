@@ -14,7 +14,22 @@ type ActiveAgentTerminalBinding = {
   terminal: RuntimeTerminalListResult['terminals'][number]
 }
 
+const ACTIVE_AGENT_TERMINAL_BINDING_CACHE_MAX = 128
 const activeAgentTerminalBindings = new Map<string, ActiveAgentTerminalBinding>()
+
+function rememberActiveAgentTerminalBinding(
+  key: string,
+  binding: ActiveAgentTerminalBinding
+): void {
+  activeAgentTerminalBindings.set(key, binding)
+  while (activeAgentTerminalBindings.size > ACTIVE_AGENT_TERMINAL_BINDING_CACHE_MAX) {
+    const oldestKey = activeAgentTerminalBindings.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    activeAgentTerminalBindings.delete(oldestKey)
+  }
+}
 
 function getRuntimeBindingAuthority(
   state: Parameters<typeof resolveWorktreeOperationRoute>[0],
@@ -69,7 +84,7 @@ export async function resolveActiveAgentTerminal(
     ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS
   )
   if (terminal) {
-    activeAgentTerminalBindings.set(key, { authority, terminal })
+    rememberActiveAgentTerminalBinding(key, { authority, terminal })
   }
   return terminal
 }
@@ -84,4 +99,8 @@ export function clearActiveAgentTerminalBinding(
 
 export function clearActiveAgentTerminalBindingCacheForTests(): void {
   activeAgentTerminalBindings.clear()
+}
+
+export function getActiveAgentTerminalBindingCacheSizeForTests(): number {
+  return activeAgentTerminalBindings.size
 }

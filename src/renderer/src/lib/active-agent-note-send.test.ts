@@ -18,6 +18,7 @@ const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const NOW = 1_700_000_000_000
 const PASTE_BEGIN = '\x1b[200~'
 const PASTE_END = '\x1b[201~'
+type TestRuntimeTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
 
 const testState = vi.hoisted(() => ({
   appState: {
@@ -60,7 +61,7 @@ const testState = vi.hoisted(() => ({
     settings: Record<string, unknown>
   },
   callRuntimeRpc: vi.fn(),
-  getActiveRuntimeTarget: vi.fn(() => ({ kind: 'local' })),
+  getActiveRuntimeTarget: vi.fn<() => TestRuntimeTarget>(() => ({ kind: 'local' })),
   RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
     readonly code: string
     readonly response: unknown
@@ -516,8 +517,10 @@ describe('active agent note send', () => {
   it('does not replay an accepted paste when the host changes before submit', async () => {
     let listCount = 0
     let oldHandleStatusCount = 0
+    const methods: string[] = []
     const pasteHandles: string[] = []
     testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
+      methods.push(method)
       if (method === 'terminal.list') {
         listCount += 1
         const handle = listCount === 1 ? 'term-old-runtime' : 'term-new-runtime'
@@ -544,7 +547,7 @@ describe('active agent note send', () => {
       if (method === 'terminal.agentStatus') {
         if (params.terminal === 'term-old-runtime') {
           oldHandleStatusCount += 1
-          if (oldHandleStatusCount === 2) {
+          if (oldHandleStatusCount >= 2) {
             throw new testState.RuntimeRpcCallError({
               error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' }
             })
@@ -577,6 +580,18 @@ describe('active agent note send', () => {
 
     expect(listCount).toBe(1)
     expect(pasteHandles).toEqual(['term-old-runtime'])
+
+    methods.length = 0
+    await expect(
+      sendNotesToActiveAgentSession({
+        worktreeId: 'wt-1',
+        prompt: 'next notes',
+        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
+      })
+    ).resolves.toEqual({ status: 'sent' })
+
+    expect(methods[0]).toBe('terminal.list')
+    expect(pasteHandles).toEqual(['term-old-runtime', 'term-new-runtime'])
   })
 
   it('maps active-focused guarded paste permission refusal to permission', async () => {
