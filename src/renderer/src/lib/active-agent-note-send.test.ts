@@ -444,6 +444,141 @@ describe('active agent note send', () => {
     ])
   })
 
+  it('re-resolves through the current host after a stale pre-write handle', async () => {
+    const targets: unknown[] = []
+    testState.getActiveRuntimeTarget
+      .mockReturnValueOnce({ kind: 'environment', environmentId: 'host-before-restart' })
+      .mockReturnValue({ kind: 'environment', environmentId: 'host-after-restart' })
+    testState.callRuntimeRpc.mockImplementation(async (target, method, params) => {
+      targets.push(target)
+      const environmentId = target.kind === 'environment' ? target.environmentId : 'local'
+      const handle =
+        environmentId === 'host-before-restart' ? 'term-old-runtime' : 'term-new-runtime'
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle,
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-9',
+              leafId: OTHER_LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.agentStatus') {
+        if (handle === 'term-old-runtime') {
+          throw new testState.RuntimeRpcCallError({
+            error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' }
+          })
+        }
+        return { agentStatus: { handle, isRunningAgent: true, status: null } }
+      }
+      if (method === 'terminal.send') {
+        return {
+          send: {
+            handle,
+            accepted: true,
+            bytesWritten: typeof params.text === 'string' ? params.text.length : 1
+          }
+        }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    await expect(
+      sendNotesToActiveAgentSession({
+        worktreeId: 'wt-1',
+        prompt: 'notes',
+        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
+      })
+    ).resolves.toEqual({ status: 'sent' })
+
+    expect(targets).toContainEqual({
+      kind: 'environment',
+      environmentId: 'host-before-restart'
+    })
+    expect(targets).toContainEqual({
+      kind: 'environment',
+      environmentId: 'host-after-restart'
+    })
+  })
+
+  it('does not replay an accepted paste when the host changes before submit', async () => {
+    let listCount = 0
+    let oldHandleStatusCount = 0
+    const pasteHandles: string[] = []
+    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
+      if (method === 'terminal.list') {
+        listCount += 1
+        const handle = listCount === 1 ? 'term-old-runtime' : 'term-new-runtime'
+        return {
+          terminals: [
+            {
+              handle,
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-9',
+              leafId: OTHER_LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.agentStatus') {
+        if (params.terminal === 'term-old-runtime') {
+          oldHandleStatusCount += 1
+          if (oldHandleStatusCount === 2) {
+            throw new testState.RuntimeRpcCallError({
+              error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' }
+            })
+          }
+        }
+        return { agentStatus: { handle: params.terminal, isRunningAgent: true, status: null } }
+      }
+      if (method === 'terminal.send') {
+        if (typeof params.text === 'string') {
+          pasteHandles.push(params.terminal)
+        }
+        return {
+          send: {
+            handle: params.terminal,
+            accepted: true,
+            bytesWritten: typeof params.text === 'string' ? params.text.length : 1
+          }
+        }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    await expect(
+      sendNotesToActiveAgentSession({
+        worktreeId: 'wt-1',
+        prompt: 'notes',
+        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
+      })
+    ).resolves.toEqual({ status: 'partial-submit-failed' })
+
+    expect(listCount).toBe(1)
+    expect(pasteHandles).toEqual(['term-old-runtime'])
+  })
+
   it('maps active-focused guarded paste permission refusal to permission', async () => {
     testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
       if (method === 'terminal.list') {
