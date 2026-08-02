@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   agentStartupDeliveryKey as deliveryKey,
@@ -201,7 +202,9 @@ function requeueFailedAgentStartupDelivery(
   ) {
     pendingAgentStartupDeliveries.set(key, retryDelivery)
     ensurePendingAgentStartupSubscription()
+    return
   }
+  showAutomationPromptNotSentToast(retryStartup.agent)
 }
 
 function flushPendingAgentStartupDeliveries(): void {

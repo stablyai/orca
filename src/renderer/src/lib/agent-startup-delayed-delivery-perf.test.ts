@@ -1,4 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { mockShowAutomationPromptNotSentToast } = vi.hoisted(() => ({
+  mockShowAutomationPromptNotSentToast: vi.fn()
+}))
+
+vi.mock('@/lib/agent-background-session-timeout-toast', () => ({
+  showAutomationPromptNotSentToast: mockShowAutomationPromptNotSentToast
+}))
+
 import { useAppStore } from '@/store'
 import {
   queuePendingAgentStartupDelivery,
@@ -82,6 +91,7 @@ function countedLaunchConfigs(count: number): {
 afterEach(() => {
   resetAgentStartupDelayedDeliveryForTests()
   useAppStore.setState(originalState, true)
+  vi.clearAllMocks()
 })
 
 describe('delayed agent startup subscription', () => {
@@ -152,7 +162,7 @@ describe('delayed agent startup subscription', () => {
   it('does not requeue a failed delivery after its startup tab is removed', async () => {
     seedPendingState()
     let resolveDelivery!: (outcome: { kind: 'retryable'; startup: never }) => void
-    const startup = {} as never
+    const startup = { agent: 'codex' } as never
     const deliver = vi.fn(
       () =>
         new Promise<{ kind: 'retryable'; startup: never }>((resolve) => {
@@ -177,6 +187,7 @@ describe('delayed agent startup subscription', () => {
     seedPendingState()
     bindPendingPty()
     expect(deliver).toHaveBeenCalledTimes(1)
+    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledExactlyOnceWith('codex')
   })
 
   it('drops a delivery when its tab is removed before PTY binding', () => {

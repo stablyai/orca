@@ -4,7 +4,6 @@ import {
   pasteDraftToAgentPtyWhenReadyWithOutcome
 } from '@/lib/agent-paste-draft'
 import { sendFollowupPromptWhenAgentReadyWithOutcome } from '@/lib/agent-followup-delivery'
-import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import {
@@ -338,7 +337,6 @@ async function deliverAgentStartupToTerminal(
     if (followupOutcome !== 'delivered') {
       if (followupOutcome === 'not-written') {
         // Why: only a confirmed no-write can invite retry; a lost ACK may mean delivery succeeded.
-        showAutomationPromptNotSentToast(startup.agent)
         return { kind: 'retryable', startup }
       }
       return { kind: 'delivery-uncertain' }
@@ -359,9 +357,7 @@ async function deliverAgentStartupToTerminal(
       agent: startup.agent,
       // Why: startup.draftPrompt is only attached after native draft launch
       // planning is unavailable, so this paste is the first delivery attempt.
-      forcePaste: true,
-      // Why: surface a dropped draft instead of silently losing it.
-      onTimeout: () => showAutomationPromptNotSentToast(startup.agent)
+      forcePaste: true
     })
     if (draftOutcome !== 'delivered') {
       return draftOutcome === 'not-written'
