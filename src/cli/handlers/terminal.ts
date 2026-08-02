@@ -164,7 +164,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
           clientOperationId: createAgentSessionOperationId(),
           worktree,
           agent: 'codex',
-          presentation: focus ? 'focused' : 'background',
+          presentation: 'focused',
           controlledCoordinator: true
         }
       )

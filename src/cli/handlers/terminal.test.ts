@@ -120,7 +120,7 @@ describe('terminal create CLI', () => {
       clientOperationId: expect.stringMatching(/^\d+-[a-f0-9]{32}$/),
       worktree: 'id:worktree-1',
       agent: 'codex',
-      presentation: 'background',
+      presentation: 'focused',
       controlledCoordinator: true
     })
   })

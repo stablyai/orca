@@ -105,6 +105,7 @@ describe('agent-session create operation ledger', () => {
       id: 'codex-controlled',
       launchNew: vi.fn().mockResolvedValue({
         disposition: 'created',
+        surface: 'visible',
         identity: {
           conversationId: 'controlled-conversation',
           threadId: 'thread-1',
@@ -132,7 +133,7 @@ describe('agent-session create operation ledger', () => {
     await expect(
       runtime.createAgentSession(request(operationId(), { controlledCoordinator: true }))
     ).resolves.toMatchObject({
-      terminal: { ...terminal(), title: 'Codex' },
+      terminal: { ...terminal(), surface: 'visible', title: 'Codex' },
       disposition: 'created'
     })
 
@@ -144,7 +145,7 @@ describe('agent-session create operation ledger', () => {
         codexHome: '/trusted/codex-home',
         accountId: 'trusted-account',
         command: '/trusted/bin/codex',
-        presentation: 'background'
+        presentation: 'focused'
       })
     )
     await runtime.bindControlledCodexCoordinator('run-1', 3, controlledTerminal.paneKey)

@@ -30,6 +30,7 @@ export type CodexControlledSessionIdentity = {
 export type CodexControlledSessionLaunchResult = {
   identity: CodexControlledSessionIdentity
   disposition: 'created' | 'reused'
+  surface: 'visible'
 }
 
 export type CodexControlledNewSessionLaunch = Omit<CodexControlledSessionLaunch, 'threadId'> & {
@@ -49,7 +50,7 @@ type ControlledTerminalLaunch = {
   env: Record<string, string>
   conversationId: string
   threadId: string
-  presentation?: 'background' | 'focused'
+  presentation: 'focused'
 }
 
 export type CodexControlledSessionManagerOptions = {
@@ -60,6 +61,7 @@ export type CodexControlledSessionManagerOptions = {
     tabId?: string
     paneKey?: string | null
     worktreeId?: string
+    surface?: 'background' | 'visible'
   }>
   waitForVisibleTerminal: (
     terminal: CodexControlledSessionIdentity
@@ -95,7 +97,8 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
           throw new Error('controlled Codex wake is disabled')
         }
         this.assertAccountCurrent(session)
-      }
+      },
+      (input) => this.assertLaunchAllowed(input)
     )
   }
 

@@ -2343,7 +2343,10 @@ void app.whenReady().then(async () => {
       } catch {
         // The original handle remains the only cleanup target before pane registration completes.
       }
-      await runtimeService.closeTerminal(terminalHandle)
+      const closed = await runtimeService.closeTerminal(terminalHandle)
+      if (!closed.ptyKilled) {
+        throw new Error('controlled Codex terminal did not stop')
+      }
     },
     resolveCurrentAccountId: () => normalizeCodexRuntimeSelection(store!.getSettings()).host,
     isControlledLaunchEnabled: () => process.env.ORCA_FEATURE_CODEX_CONTROLLED_LAUNCH === '1',

@@ -24297,7 +24297,7 @@ export class OrcaRuntimeService {
             cwd: workspace.path,
             codexHome: authority.codexHome,
             accountId: authority.accountId,
-            presentation: request.presentation ?? 'background',
+            presentation: 'focused',
             command: authority.commandOverride,
             model: request.launchPreferences?.model,
             prompt: request.prompt
@@ -24337,7 +24337,7 @@ export class OrcaRuntimeService {
             paneKey: controlled.identity.terminalPaneKey,
             worktreeId: controlled.identity.worktreeId,
             title: 'Codex',
-            surface: request.presentation === 'background' ? 'background' : 'visible'
+            surface: controlled.surface
           }
         }
       }
@@ -24754,12 +24754,20 @@ export class OrcaRuntimeService {
     // populates this.leaves may not have arrived yet. Wait for the leaf to
     // appear so we can return a valid handle the caller can use right away.
     const handle = await this.waitForTerminalHandle(reply.tabId)
+    const record = this.handles.get(handle)
+    const leaf = record ? this.leaves.get(this.getLeafKey(record.tabId, record.leafId)) : null
+    if (!leaf?.ptyId) {
+      this.notifier?.closeTerminal(reply.tabId)
+      throw new Error('renderer-backed terminal did not register a PTY identity')
+    }
     return {
       handle,
       tabId: reply.tabId,
-      worktreeId: worktreeId ?? '',
+      paneKey: this.makeRuntimePaneKey(leaf),
+      ptyId: leaf.ptyId,
+      worktreeId: leaf.worktreeId,
       title: reply.title,
-      ...this.getPtyExecutionHostMetadata(this.handles.get(handle)?.ptyId ?? null),
+      ...this.getPtyExecutionHostMetadata(leaf.ptyId),
       surface: 'visible'
     }
   }

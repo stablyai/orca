@@ -200,7 +200,9 @@ export async function stopControlledCodexServer(
     child.kill('SIGTERM')
     if (!(await waitForExit(child, PROCESS_STOP_TIMEOUT_MS))) {
       child.kill('SIGKILL')
-      await waitForExit(child, PROCESS_STOP_TIMEOUT_MS)
+      if (!(await waitForExit(child, PROCESS_STOP_TIMEOUT_MS))) {
+        throw new Error('controlled Codex app-server did not exit after SIGKILL')
+      }
     }
   }
   if (server.socketIdentity) {
@@ -216,6 +218,33 @@ export function assertControlledServerIdentity(result: unknown, expectedHome: st
   ) {
     throw new Error('controlled Codex app-server identity mismatch')
   }
+}
+
+export function failControlledTerminalIdentity(kind: 'tab' | 'pane' | 'workspace'): never {
+  throw new Error(`controlled Codex visible terminal lacks a stable ${kind} identity`)
+}
+
+export function extractControlledThreadId(response: unknown): string {
+  if (!isRecord(response) || !isRecord(response.thread) || typeof response.thread.id !== 'string') {
+    throw new Error('controlled Codex thread/start returned an invalid response')
+  }
+  return response.thread.id
+}
+
+export async function assertControlledThreadAlive(
+  client: { request(method: string, params?: Record<string, unknown>): Promise<unknown> },
+  threadId: string
+): Promise<void> {
+  const response = await client.request('thread/read', { threadId, includeTurns: false })
+  if (!isRecord(response) || !isRecord(response.thread) || response.thread.id !== threadId) {
+    throw new Error('controlled Codex app-server thread is not ready')
+  }
+}
+
+export function controlledLaunchOutcomeUnknown(error: unknown): Error {
+  const wrapped = error instanceof Error ? error : new Error(String(error))
+  Object.assign(wrapped, { agentSessionOperationOutcome: 'unknown' as const })
+  return wrapped
 }
 
 async function waitForSocket(

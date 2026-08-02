@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,7 +12,10 @@ import {
   type CodexControlledSessionLaunch
 } from './codex-controlled-session-manager'
 import { resolveControlledCodexLaunchAuthority } from './codex-controlled-launch-authority'
-import { startControlledCodexServer } from './codex-controlled-session-launch'
+import {
+  startControlledCodexServer,
+  stopControlledCodexServer
+} from './codex-controlled-session-launch'
 
 type StubState = {
   status: 'idle' | 'active'
@@ -63,7 +66,7 @@ describe('CodexControlledSessionManager', () => {
       "'--model' 'gpt-5' '--sandbox' 'workspace-write' '--ask-for-approval' 'never'"
     )
     expect(fixture.terminalLaunches[0]?.env).toEqual({ CODEX_HOME: fixture.input.codexHome })
-    expect(fixture.terminalLaunches[0]?.presentation).toBe('background')
+    expect(fixture.terminalLaunches[0]?.presentation).toBe('focused')
     expect(Buffer.byteLength(fixture.socketPath())).toBeLessThanOrEqual(100)
     expect(statSync(fixture.socketPath()).mode & 0o777).toBe(0o600)
     await expect(fixture.manager.getState(target(fixture.input.conversationId))).resolves.toBe(
@@ -178,6 +181,109 @@ describe('CodexControlledSessionManager', () => {
     await expect(fixture.manager.launch(fixture.input)).rejects.toThrow('timeout')
     expect(fixture.closedTerminals).toHaveLength(1)
     expect(fixture.processes[0]?.exitCode).toBe(0)
+  })
+
+  it.each(['initialize', 'thread/start', 'thread/read'] as const)(
+    'fails closed when launch authority drifts after %s',
+    async (driftAfter) => {
+      const fixture = createFixture({ driftAfter })
+      const { threadId: _threadId, ...input } = fixture.input
+
+      await expect(
+        fixture.manager.launchNew({ ...input, operationId: `operation-${driftAfter}` })
+      ).rejects.toThrow('controlled Codex launch account changed')
+
+      expect(fixture.processes[0]?.exitCode).toBe(0)
+      if (driftAfter === 'initialize') {
+        expect(fixture.terminalLaunches).toHaveLength(0)
+      } else if (driftAfter === 'thread/start') {
+        expect(fixture.terminalLaunches).toHaveLength(0)
+      } else {
+        expect(fixture.terminalLaunches).toHaveLength(1)
+        expect(fixture.closedTerminals).toHaveLength(1)
+      }
+    }
+  )
+
+  it.each(['initialize', 'thread/resume', 'thread/read'] as const)(
+    'fails closed when existing-thread authority drifts after %s',
+    async (driftAfter) => {
+      const fixture = createFixture({ driftAfter })
+
+      await expect(fixture.manager.launch(fixture.input)).rejects.toThrow(
+        'controlled Codex launch account changed'
+      )
+
+      expect(fixture.processes[0]?.exitCode).toBe(0)
+      if (driftAfter === 'thread/read') {
+        expect(fixture.terminalLaunches).toHaveLength(1)
+        expect(fixture.closedTerminals).toHaveLength(1)
+      } else {
+        expect(fixture.terminalLaunches).toHaveLength(0)
+      }
+    }
+  )
+
+  it('keeps a failed terminal cleanup registered for retry', async () => {
+    const fixture = createFixture({ closeVisibleTerminalFailures: 1 })
+    await fixture.manager.launch(fixture.input)
+
+    await expect(fixture.manager.disposeConversation(fixture.input.conversationId)).rejects.toThrow(
+      'terminal close failed'
+    )
+    expect(fixture.processes[0]?.exitCode).toBeNull()
+
+    await expect(
+      fixture.manager.disposeConversation(fixture.input.conversationId)
+    ).resolves.toBeUndefined()
+    expect(fixture.closedTerminals).toHaveLength(2)
+    expect(fixture.processes[0]?.exitCode).toBe(0)
+  })
+
+  it('keeps rollback cleanup registered when terminal closure fails', async () => {
+    const fixture = createFixture({
+      readinessError: new Error('timeout'),
+      closeVisibleTerminalFailures: 1
+    })
+
+    await expect(fixture.manager.launch(fixture.input)).rejects.toThrow('timeout')
+    expect(fixture.processes[0]?.exitCode).toBeNull()
+
+    await expect(
+      fixture.manager.disposeConversation(fixture.input.conversationId)
+    ).resolves.toBeUndefined()
+    expect(fixture.closedTerminals).toHaveLength(2)
+    expect(fixture.processes[0]?.exitCode).toBe(0)
+  })
+
+  it('preserves the owned socket when SIGKILL does not terminate the controller', async () => {
+    vi.useFakeTimers()
+    const root = mkdtempSync('/tmp/ocw-stop-test-')
+    roots.push(root)
+    const socketPath = join(root, 'controller.sock')
+    const server = createServer()
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve))
+    const identity = statSync(socketPath)
+    const process = new EventEmitter() as ChildProcess & { exitCode: number | null }
+    Object.defineProperty(process, 'exitCode', { value: null, writable: true })
+    process.kill = vi.fn(() => true) as ChildProcess['kill']
+
+    const stopping = stopControlledCodexServer(
+      { process, socketIdentity: { dev: identity.dev, ino: identity.ino } },
+      socketPath
+    )
+    const stopError = stopping.then(
+      () => null,
+      (error: unknown) => error
+    )
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    const error = await stopError
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toContain('did not exit after SIGKILL')
+    expect(existsSync(socketPath)).toBe(true)
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    vi.useRealTimers()
   })
 
   it('does not unlink or compete with an existing controller socket', async () => {
@@ -303,6 +409,26 @@ describe('CodexControlledSessionManager', () => {
     })
   })
 
+  it.each(['launch', 'launchNew'] as const)(
+    'fails closed when authority drifts during reused-session refresh via %s',
+    async (method) => {
+      const fixture = createFixture()
+      await fixture.manager.launch(fixture.input)
+      fixture.driftOnNextReadiness.value = true
+
+      if (method === 'launch') {
+        await expect(fixture.manager.launch(fixture.input)).rejects.toThrow(
+          'controlled Codex launch account changed'
+        )
+      } else {
+        const { threadId: _threadId, ...input } = fixture.input
+        await expect(
+          fixture.manager.launchNew({ ...input, operationId: 'operation-reused-drift' })
+        ).rejects.toThrow('controlled Codex launch account changed')
+      }
+    }
+  )
+
   it('keeps transient reconciliation reads retryable instead of marking the session missing', async () => {
     const fixture = createFixture()
     await fixture.manager.launch(fixture.input)
@@ -353,7 +479,14 @@ describe('CodexControlledSessionManager', () => {
   })
 })
 
-function createFixture(options: { launch?: boolean; readinessError?: Error } = {}) {
+function createFixture(
+  options: {
+    launch?: boolean
+    readinessError?: Error
+    driftAfter?: 'initialize' | 'thread/start' | 'thread/resume' | 'thread/read'
+    closeVisibleTerminalFailures?: number
+  } = {}
+) {
   const root = mkdtempSync(join(tmpdir(), 'orca-controlled-codex-test-'))
   const socketRoot = mkdtempSync('/tmp/ocw-test-')
   roots.push(root)
@@ -398,14 +531,26 @@ function createFixture(options: { launch?: boolean; readinessError?: Error } = {
             platformFamily: 'unix',
             platformOs: 'macos'
           })
+          if (options.driftAfter === 'initialize') {
+            currentAccount.value = 'account-b'
+          }
         } else if (message.method === 'thread/start' || message.method === 'thread/resume') {
           send(socket, message.id, { thread: thread(stub), cwd: fixtureInput.cwd })
+          if (message.method === 'thread/start' && options.driftAfter === 'thread/start') {
+            currentAccount.value = 'account-b'
+          }
+          if (message.method === 'thread/resume' && options.driftAfter === 'thread/resume') {
+            currentAccount.value = 'account-b'
+          }
         } else if (message.method === 'thread/read') {
           if (stub.rejectNextRead) {
             stub.rejectNextRead = false
             socket.send(JSON.stringify({ id: message.id, error: { message: 'temporary read' } }))
           } else {
             send(socket, message.id, { thread: thread(stub) })
+            if (options.driftAfter === 'thread/read') {
+              currentAccount.value = 'account-b'
+            }
           }
         } else if (message.method === 'turn/start') {
           stub.turnStarts += 1
@@ -463,13 +608,14 @@ function createFixture(options: { launch?: boolean; readinessError?: Error } = {
     model: 'gpt-5',
     sandbox: 'workspace-write',
     approvalPolicy: 'never',
-    presentation: 'background'
+    presentation: 'focused'
   }
   const terminalLaunches: Record<string, unknown>[] = []
   const closedTerminals: Record<string, unknown>[] = []
   const currentAccount = { value: 'account-a' as string | null }
   const currentHandle = { value: 'handle-1' }
   const readinessChecks = { value: 0 }
+  const driftOnNextReadiness = { value: false }
   const flags = { killOpen: true }
   const manager = new CodexControlledSessionManager({
     stateRoot: join(root, 'state'),
@@ -482,11 +628,16 @@ function createFixture(options: { launch?: boolean; readinessError?: Error } = {
         ptyId: 'pty-1',
         tabId: 'tab-1',
         paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-        worktreeId: 'worktree-1'
+        worktreeId: 'worktree-1',
+        surface: 'visible'
       }
     },
     waitForVisibleTerminal: async (terminal) => {
       readinessChecks.value += 1
+      if (driftOnNextReadiness.value) {
+        driftOnNextReadiness.value = false
+        currentAccount.value = 'account-b'
+      }
       if (options.readinessError) {
         throw options.readinessError
       }
@@ -494,6 +645,9 @@ function createFixture(options: { launch?: boolean; readinessError?: Error } = {
     },
     closeVisibleTerminal: async (terminal) => {
       closedTerminals.push(terminal)
+      if ((options.closeVisibleTerminalFailures ?? 0) >= closedTerminals.length) {
+        throw new Error('terminal close failed')
+      }
     },
     resolveCurrentAccountId: () => currentAccount.value,
     isControlledLaunchEnabled: () => options.launch ?? true,
@@ -511,6 +665,7 @@ function createFixture(options: { launch?: boolean; readinessError?: Error } = {
     currentAccount,
     currentHandle,
     readinessChecks,
+    driftOnNextReadiness,
     closedTerminals,
     processes,
     flags,

@@ -3780,7 +3780,7 @@ describe('orca cli worktree awareness', () => {
       clientOperationId: expect.stringMatching(/^\d+-[a-f0-9]{32}$/),
       worktree: 'id:repo::/tmp/repo/feature',
       agent: 'codex',
-      presentation: 'background',
+      presentation: 'focused',
       controlledCoordinator: true
     })
   })

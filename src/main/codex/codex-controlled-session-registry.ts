@@ -3,9 +3,13 @@ import { submitControlledInitialTurn } from './codex-controlled-initial-turn'
 import { CodexUnixAppServerClient } from './codex-unix-app-server-client'
 import {
   assertControlledServerIdentity,
+  assertControlledThreadAlive,
   buildControlledThreadResumeParams,
   buildControlledThreadStartParams,
   buildControlledVisibleResumeCommand,
+  controlledLaunchOutcomeUnknown,
+  extractControlledThreadId,
+  failControlledTerminalIdentity,
   getControlledLaunchFingerprint,
   getControlledSocketPath,
   getControlledStatePath,
@@ -32,6 +36,7 @@ export type ControlledCodexSession = {
   state: CodexControlledSessionStateStore
   terminal: CodexControlledSessionIdentity
   missing: boolean
+  terminalClosed: boolean
 }
 
 export class CodexControlledSessionRegistry {
@@ -46,7 +51,8 @@ export class CodexControlledSessionRegistry {
       params: Record<string, unknown>
     ) => void,
     private readonly onMissing: (conversationId: string) => void,
-    private readonly assertCanSubmit: (session: ControlledCodexSession) => void
+    private readonly assertCanSubmit: (session: ControlledCodexSession) => void,
+    private readonly assertCanLaunch: (input: CodexControlledSessionLaunch) => void
   ) {}
 
   get(conversationId: string): ControlledCodexSession | undefined {
@@ -64,7 +70,8 @@ export class CodexControlledSessionRegistry {
         throw new Error('controlled Codex conversation identity mismatch')
       }
       existing.terminal = await this.refresh(existing)
-      return { identity: existing.terminal, disposition: 'reused' }
+      this.assertCanLaunch(existing.launch)
+      return { identity: existing.terminal, disposition: 'reused', surface: 'visible' }
     }
     const command = resolveControlledCodexCommand(input.command)
     const socketPath = getControlledSocketPath(this.socketRoot(), input.conversationId)
@@ -74,22 +81,28 @@ export class CodexControlledSessionRegistry {
       this.options.spawnProcess,
       command
     )
+    let client: CodexUnixAppServerClient | null = null
     let visibleIdentity: CodexControlledSessionIdentity | null = null
     try {
-      const client = await this.connect(input, socketPath)
+      this.assertCanLaunch(input)
+      client = await this.connect(input, socketPath)
+      this.assertCanLaunch(input)
       await client.request('thread/resume', buildControlledThreadResumeParams(input))
+      this.assertCanLaunch(input)
       visibleIdentity = await this.createReadyTerminal(input, socketPath, command, (created) => {
         visibleIdentity = created
       })
-      await assertThreadAlive(client, input.threadId)
+      await assertControlledThreadAlive(client, input.threadId)
+      this.assertCanLaunch(input)
       const session = this.createSession(input, socketPath, server, client, visibleIdentity)
       this.sessions.set(input.conversationId, session)
-      return { identity: visibleIdentity, disposition: 'created' }
+      return { identity: visibleIdentity, disposition: 'created', surface: 'visible' }
     } catch (error) {
-      if (visibleIdentity) {
-        await this.options.closeVisibleTerminal(visibleIdentity).catch(() => undefined)
+      try {
+        await this.rollbackFailedLaunch(input, socketPath, server, client, visibleIdentity)
+      } catch (cleanupError) {
+        Object.assign(asError(error), { cleanupError })
       }
-      await stopControlledCodexServer(server, socketPath)
       throw error
     }
   }
@@ -102,8 +115,9 @@ export class CodexControlledSessionRegistry {
     if (existing) {
       this.assertNewLaunchMatches(existing.launch, input)
       existing.terminal = await this.refresh(existing)
+      this.assertCanLaunch(existing.launch)
       await this.submitInitialPromptIfPresent(existing, input)
-      return { identity: existing.terminal, disposition: 'reused' }
+      return { identity: existing.terminal, disposition: 'reused', surface: 'visible' }
     }
     const socketPath = getControlledSocketPath(this.socketRoot(), input.conversationId)
     const provisional = { ...input, threadId: 'pending' }
@@ -113,32 +127,39 @@ export class CodexControlledSessionRegistry {
       this.options.spawnProcess,
       command
     )
+    let client: CodexUnixAppServerClient | null = null
+    let launch: CodexControlledSessionLaunch | null = null
     let identity: CodexControlledSessionIdentity | null = null
     let threadStartAttempted = false
     try {
-      const client = await this.connect(provisional, socketPath)
+      this.assertCanLaunch(provisional)
+      client = await this.connect(provisional, socketPath)
+      this.assertCanLaunch(provisional)
       threadStartAttempted = true
       const started = await client.request(
         'thread/start',
         buildControlledThreadStartParams(provisional)
       )
-      const launch: CodexControlledSessionLaunch = { ...input, threadId: extractThreadId(started) }
+      launch = { ...input, threadId: extractControlledThreadId(started) }
+      this.assertCanLaunch(launch)
       identity = await this.createReadyTerminal(launch, socketPath, command, (created) => {
         identity = created
       })
-      await assertThreadAlive(client, launch.threadId)
+      await assertControlledThreadAlive(client, launch.threadId)
+      this.assertCanLaunch(launch)
       const session = this.createSession(launch, socketPath, server, client, identity)
       this.sessions.set(input.conversationId, session)
       await this.submitInitialPromptIfPresent(session, input)
-      return { identity, disposition: 'created' }
+      return { identity, disposition: 'created', surface: 'visible' }
     } catch (error) {
       if (this.sessions.has(input.conversationId)) {
         throw controlledLaunchOutcomeUnknown(error)
       }
-      if (identity) {
-        await this.options.closeVisibleTerminal(identity).catch(() => undefined)
+      try {
+        await this.rollbackFailedLaunch(launch ?? provisional, socketPath, server, client, identity)
+      } catch (cleanupError) {
+        Object.assign(asError(error), { cleanupError })
       }
-      await stopControlledCodexServer(server, socketPath)
       throw threadStartAttempted ? controlledLaunchOutcomeUnknown(error) : error
     }
   }
@@ -160,10 +181,13 @@ export class CodexControlledSessionRegistry {
     if (!session) {
       return
     }
-    this.sessions.delete(conversationId)
     session.client.close()
-    await this.options.closeVisibleTerminal(session.terminal).catch(() => undefined)
+    if (!session.terminalClosed) {
+      await this.options.closeVisibleTerminal(session.terminal)
+      session.terminalClosed = true
+    }
     await stopControlledCodexServer(session.server, session.socketPath)
+    this.sessions.delete(conversationId)
   }
 
   async dispose(): Promise<void> {
@@ -201,19 +225,38 @@ export class CodexControlledSessionRegistry {
       env: { CODEX_HOME: input.codexHome },
       conversationId: input.conversationId,
       threadId: input.threadId,
-      presentation: input.presentation
+      presentation: 'focused'
     })
+    if (terminal.surface !== 'visible') {
+      throw new Error('controlled Codex visible terminal was not renderer-adopted')
+    }
     const identity: CodexControlledSessionIdentity = {
       conversationId: input.conversationId,
       threadId: input.threadId,
       terminalHandle: terminal.handle,
       terminalPtyId: terminal.ptyId ?? null,
-      terminalTabId: terminal.tabId ?? failIdentity('tab'),
-      terminalPaneKey: terminal.paneKey ?? failIdentity('pane'),
-      worktreeId: terminal.worktreeId ?? failIdentity('workspace')
+      terminalTabId: terminal.tabId ?? failControlledTerminalIdentity('tab'),
+      terminalPaneKey: terminal.paneKey ?? failControlledTerminalIdentity('pane'),
+      worktreeId: terminal.worktreeId ?? failControlledTerminalIdentity('workspace')
     }
     onCreated(identity)
     return this.options.waitForVisibleTerminal(identity)
+  }
+
+  private async rollbackFailedLaunch(
+    launch: CodexControlledSessionLaunch,
+    socketPath: string,
+    server: ControlledCodexServer,
+    client: CodexUnixAppServerClient | null,
+    terminal: CodexControlledSessionIdentity | null
+  ): Promise<void> {
+    if (!client || !terminal) {
+      await stopControlledCodexServer(server, socketPath)
+      return
+    }
+    const session = this.createSession(launch, socketPath, server, client, terminal)
+    this.sessions.set(launch.conversationId, session)
+    await this.disposeConversation(launch.conversationId)
   }
 
   private createSession(
@@ -238,7 +281,8 @@ export class CodexControlledSessionRegistry {
           launchFingerprint: getControlledLaunchFingerprint(launch)
         }
       ),
-      missing: false
+      missing: false,
+      terminalClosed: false
     }
     client.onNotification((method, params) => this.onNotification(session, method, params))
     server.process.once('exit', () => {
@@ -269,33 +313,6 @@ export class CodexControlledSessionRegistry {
   }
 }
 
-function failIdentity(kind: 'tab' | 'pane' | 'workspace'): never {
-  throw new Error(`controlled Codex visible terminal lacks a stable ${kind} identity`)
-}
-
-function extractThreadId(response: unknown): string {
-  if (!isRecord(response) || !isRecord(response.thread) || typeof response.thread.id !== 'string') {
-    throw new Error('controlled Codex thread/start returned an invalid response')
-  }
-  return response.thread.id
-}
-
-async function assertThreadAlive(
-  client: CodexUnixAppServerClient,
-  threadId: string
-): Promise<void> {
-  const response = await client.request('thread/read', { threadId, includeTurns: false })
-  if (!isRecord(response) || !isRecord(response.thread) || response.thread.id !== threadId) {
-    throw new Error('controlled Codex app-server thread is not ready')
-  }
-}
-
-function controlledLaunchOutcomeUnknown(error: unknown): Error {
-  const wrapped = error instanceof Error ? error : new Error(String(error))
-  Object.assign(wrapped, { agentSessionOperationOutcome: 'unknown' as const })
-  return wrapped
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
 }
