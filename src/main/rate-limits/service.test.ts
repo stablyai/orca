@@ -1404,10 +1404,14 @@ describe('RateLimitService', () => {
         authPreparation: undefined,
         allowPtyFallback: false,
         allowUsagePanelSupplement: true,
+        networkProxySettings,
         signal: expect.any(AbortSignal)
       })
     )
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchCodexRateLimits).toHaveBeenCalledWith(
+      expect.objectContaining({ networkProxySettings })
+    )
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
