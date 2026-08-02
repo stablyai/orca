@@ -223,6 +223,113 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
     harness.dispose()
   })
 
+  it('guards every keyup of a rapid double Enter press', () => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    harness.startComposition()
+
+    // Two committing Enter presses land before either release is processed.
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Process',
+        code: 'Enter',
+        keyCode: 229,
+        timeStamp: 10,
+        isComposing: true
+      })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Process',
+        code: 'Enter',
+        keyCode: 229,
+        timeStamp: 20,
+        isComposing: true
+      })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Shift',
+        code: 'ShiftLeft',
+        keyCode: 16,
+        timeStamp: 25,
+        shiftKey: true
+      })
+    )
+    for (const timeStamp of [30, 40]) {
+      harness.terminalInput.dispatchEvent(
+        keyboardEvent('keyup', {
+          key: 'Enter',
+          code: 'Enter',
+          keyCode: 13,
+          timeStamp,
+          shiftKey: true
+        })
+      )
+    }
+    vi.runAllTimers()
+
+    expect(harness.sendInput).not.toHaveBeenCalled()
+    hook.unmount()
+    harness.dispose()
+  })
+
+  it('drains one press worth of evidence per release, so a later swallowed keydown still synthesizes', () => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    harness.startComposition()
+
+    // Auto-repeat re-fires keydown with no release in between; the whole run
+    // must cost exactly one release to drain.
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Process',
+        code: 'Enter',
+        keyCode: 229,
+        timeStamp: 10,
+        isComposing: true
+      })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Process',
+        code: 'Enter',
+        keyCode: 229,
+        timeStamp: 20,
+        isComposing: true,
+        repeat: true
+      })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        timeStamp: 30,
+        shiftKey: true
+      })
+    )
+    vi.runAllTimers()
+    expect(harness.sendInput).not.toHaveBeenCalled()
+
+    // Evidence is now drained: a genuinely swallowed keydown still synthesizes.
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        timeStamp: 50,
+        shiftKey: true
+      })
+    )
+    vi.runAllTimers()
+
+    expect(harness.sendInput).toHaveBeenCalledTimes(1)
+    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r')
+    hook.unmount()
+    harness.dispose()
+  })
+
   it('still synthesizes a newline when the IME swallowed the Enter keydown entirely', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
