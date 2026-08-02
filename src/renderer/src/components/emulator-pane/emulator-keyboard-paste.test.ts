@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildEmulatorKeyboardPastePlan,
   EMULATOR_KEYBOARD_PASTE_MAX_BYTES,
@@ -9,6 +9,12 @@ import {
 } from './emulator-keyboard-paste'
 
 describe('emulator keyboard paste', () => {
+  // Why: chunk-delay tests arm fake timers with no teardown; restore so the leak can't
+  // hang a later test. Sibling idiom: src/shared/pty-startup-ingress.test.ts.
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('splits accepted text into bounded keyboard-frame chunks', () => {
     const plan = buildEmulatorKeyboardPastePlan('ab\r\nc', { maxFramesPerChunk: 4 })
 
