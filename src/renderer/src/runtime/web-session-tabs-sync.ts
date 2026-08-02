@@ -738,10 +738,22 @@ function buildMirroredAgentStatusPatch(
     }
   }
   const nextByPaneKey = new Map<string, AgentStatusEntry>()
+  // Why: a pane the host has no live handle for carries no agentStatus, and that is
+  // "unknown", not "idle" — pruning on it made a running agent render as done the moment
+  // its tab lost focus. Scoped to `pending-handle` on purpose: a `ready` pane the host IS
+  // streaming genuinely has no agent, and must still prune so a shell that reclaimed the
+  // pane clears its spinner (#1437).
+  const unreportedPaneKeys = new Set<string>()
   for (const surface of terminalSurfaceTabs) {
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
+    if (!surface.agentStatus && surface.status === 'pending-handle') {
+      const unreportedPaneKey = toMirroredPaneKey(surface, retainedSurface?.leafId)
+      if (unreportedPaneKey) {
+        unreportedPaneKeys.add(unreportedPaneKey)
+      }
+    }
     const entry = remapHostAgentStatus(surface, retainedSurface)
     if (!entry) {
       continue
@@ -778,6 +790,11 @@ function buildMirroredAgentStatusPatch(
       continue
     }
     if (nextByPaneKey.has(paneKey)) {
+      continue
+    }
+    // Why: the host has no live handle for this pane, so it reported no status.
+    // Keep what we know rather than reading silence as "the agent stopped".
+    if (unreportedPaneKeys.has(paneKey)) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
