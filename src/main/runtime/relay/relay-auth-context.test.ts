@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
 import type { OrcaCloudSession } from '../../orca-profiles/profile-cloud-session-store'
 import type { ActiveOrcaProfileState } from '../../orca-profiles/profile-index-store'
@@ -21,7 +21,10 @@ vi.mock('../../orca-profiles/profile-cloud-capability-refresh', () => ({
   refreshCurrentOrcaProfileAuth: refreshAuthMock
 }))
 
-import { readRelayAuthContext } from './relay-auth-context'
+import {
+  readRelayAuthContext,
+  resetRelayCapabilityRefreshStateForTests
+} from './relay-auth-context'
 
 const authConfig = {} as OrcaCloudAuthConfig
 
@@ -60,8 +63,13 @@ function foundSession(relayEntitled: boolean): {
 
 describe('readRelayAuthContext', () => {
   beforeEach(() => {
+    resetRelayCapabilityRefreshStateForTests()
     vi.clearAllMocks()
     refreshAuthMock.mockResolvedValue({ status: 'refreshed' })
+  })
+
+  afterEach(() => {
+    resetRelayCapabilityRefreshStateForTests()
   })
 
   it('uses an active cached relay capability without refreshing it', async () => {
@@ -133,5 +141,16 @@ describe('readRelayAuthContext', () => {
     await readRelayAuthContext(authConfig, '/data/rate-limited')
 
     expect(refreshAuthMock).toHaveBeenCalledOnce()
+  })
+
+  it('clears cooldown state so the same profile key can be reused in isolation', async () => {
+    ensureActiveMock.mockReturnValue(activeProfile('profile-reset'))
+    readFreshSessionMock.mockResolvedValue(foundSession(false))
+
+    await readRelayAuthContext(authConfig, '/data/reset')
+    resetRelayCapabilityRefreshStateForTests()
+    await readRelayAuthContext(authConfig, '/data/reset')
+
+    expect(refreshAuthMock).toHaveBeenCalledTimes(2)
   })
 })

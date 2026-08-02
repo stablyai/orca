@@ -6,7 +6,33 @@ import type { RelayAuthContext } from './relay-auth-coordinator'
 
 const RELAY_CAPABILITY_REFRESH_COOLDOWN_MS = 60_000
 const relayCapabilityRefreshes = new Map<string, Promise<void>>()
-const nextRelayCapabilityRefreshAt = new Map<string, number>()
+const relayCapabilityRefreshCooldowns = new Map<
+  string,
+  { expiresAt: number; timer: ReturnType<typeof setTimeout> }
+>()
+
+function startRelayCapabilityRefreshCooldown(key: string): void {
+  const previous = relayCapabilityRefreshCooldowns.get(key)
+  if (previous) {
+    clearTimeout(previous.timer)
+  }
+  const expiresAt = Date.now() + RELAY_CAPABILITY_REFRESH_COOLDOWN_MS
+  const timer = setTimeout(() => {
+    if (relayCapabilityRefreshCooldowns.get(key)?.expiresAt === expiresAt) {
+      relayCapabilityRefreshCooldowns.delete(key)
+    }
+  }, RELAY_CAPABILITY_REFRESH_COOLDOWN_MS)
+  timer.unref()
+  relayCapabilityRefreshCooldowns.set(key, { expiresAt, timer })
+}
+
+export function resetRelayCapabilityRefreshStateForTests(): void {
+  relayCapabilityRefreshes.clear()
+  for (const cooldown of relayCapabilityRefreshCooldowns.values()) {
+    clearTimeout(cooldown.timer)
+  }
+  relayCapabilityRefreshCooldowns.clear()
+}
 
 async function refreshInactiveRelayCapability(
   profileId: string,
@@ -18,11 +44,11 @@ async function refreshInactiveRelayCapability(
     await existing
     return true
   }
-  if ((nextRelayCapabilityRefreshAt.get(key) ?? 0) > Date.now()) {
+  if ((relayCapabilityRefreshCooldowns.get(key)?.expiresAt ?? 0) > Date.now()) {
     return false
   }
 
-  nextRelayCapabilityRefreshAt.set(key, Date.now() + RELAY_CAPABILITY_REFRESH_COOLDOWN_MS)
+  startRelayCapabilityRefreshCooldown(key)
   const refresh = Promise.resolve()
     .then(() => refreshCurrentOrcaProfileAuth(userDataPath))
     .then(() => undefined)
