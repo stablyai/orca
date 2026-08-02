@@ -325,6 +325,7 @@ describe('isTerminalImeProcessEnter', () => {
   const event = (overrides: Partial<KeyboardEvent> = {}) =>
     ({
       key: 'Process',
+      code: 'Enter',
       keyCode: 229,
       metaKey: false,
       ctrlKey: false,
@@ -340,6 +341,10 @@ describe('isTerminalImeProcessEnter', () => {
     }
   )
 
+  it('recognizes the numeric keypad Enter', () => {
+    expect(isTerminalImeProcessEnter(event({ code: 'NumpadEnter' }))).toBe(true)
+  })
+
   it.each([
     { key: 'Enter' },
     { keyCode: 13 },
@@ -348,6 +353,20 @@ describe('isTerminalImeProcessEnter', () => {
     { altKey: true }
   ])('rejects a non-IME or ambiguous Process key', (override) => {
     expect(isTerminalImeProcessEnter(event(override))).toBe(false)
+  })
+
+  // Regression: a Korean double consonant is Shift + a jamo key. The IME masks
+  // key/keyCode to Process/229 exactly as it does for Enter, so without the
+  // physical-key check the syllable was synthesized into Shift+Enter and a
+  // newline was sent mid-word.
+  it.each([
+    { code: 'KeyT', jamo: 'ㅆ' },
+    { code: 'KeyR', jamo: 'ㄲ' },
+    { code: 'KeyE', jamo: 'ㄸ' },
+    { code: 'KeyQ', jamo: 'ㅃ' },
+    { code: 'KeyW', jamo: 'ㅉ' }
+  ])('rejects Shift+$jamo typed on $code, which is not a physical Enter', ({ code }) => {
+    expect(isTerminalImeProcessEnter(event({ code, shiftKey: true }))).toBe(false)
   })
 })
 

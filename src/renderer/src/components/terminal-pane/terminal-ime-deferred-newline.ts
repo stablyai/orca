@@ -107,11 +107,20 @@ export function getTerminalImeModifiedEnterKind(
 }
 
 export function isTerminalImeProcessEnter(
-  event: Pick<KeyboardEvent, 'key' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'code' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+  >
 ): boolean {
   return (
     event.key === 'Process' &&
     event.keyCode === 229 &&
+    // key/keyCode are masked to Process/229 for *every* keystroke the IME
+    // consumes, not just Enter, so they cannot identify the key on their own.
+    // code reports the physical key and is not masked by the IME, which keeps a
+    // Shift+jamo (Korean double consonants ㄲ ㄸ ㅃ ㅆ ㅉ) from being mistaken
+    // for Shift+Enter and emitting a newline mid-word.
+    (event.code === 'Enter' || event.code === 'NumpadEnter') &&
     getTerminalImeModifiedEnterKind(event) !== null
   )
 }
