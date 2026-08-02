@@ -29,7 +29,10 @@ import {
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
 import { summarizeProviderChecks } from '../../shared/provider-check-summary'
-import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
+import {
+  isGitHubWorkItemsQueryTooLarge,
+  MAX_GITHUB_WORK_ITEMS_BATCH_REPOS
+} from '../../shared/github-work-items-query-bounds'
 import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
@@ -1479,7 +1482,11 @@ export type GitHubWorkItemsBatchInput = {
 
 type ResolvedBatchRepo = GitHubWorkItemsBatchInput & {
   issueSource: GitHubApiRepository | null
+  issueSourceFellBack: boolean
   prSource: GitHubApiRepository | null
+  originCandidate: GitHubApiRepository | null
+  upstreamCandidate: GitHubApiRepository | null
+  resolutionFailures: unknown[]
 }
 
 type BatchSourceMember = {
@@ -1503,9 +1510,13 @@ type BatchSearchPlan = {
 type BatchSearchOutcome = {
   items: GitHubWorkItem[]
   totalCount: number
+  reachableCount: number
   failedCount: number
   unavailableCount: number
   errorTypes: ClassifiedError['type'][]
+  hasSuccessfulRequest: boolean
+  searchWindowLimited: boolean
+  queryTooLarge: boolean
 }
 
 function batchExecutionKey(input: GitHubWorkItemsBatchInput, source: GitHubApiRepository): string {
@@ -1545,10 +1556,10 @@ function searchRepositoryKeyFromItem(
     }
   }
   if (!fullName && typeof item.repository_url === 'string') {
-    fullName = repositoryFullNameFromUrl(item.repository_url)
+    fullName = repositoryFullNameFromUrl(item.repository_url, 'api')
   }
   if (!fullName && typeof item.html_url === 'string') {
-    fullName = repositoryFullNameFromUrl(item.html_url)
+    fullName = repositoryFullNameFromUrl(item.html_url, 'html')
   }
   if (!fullName) {
     return null
@@ -1560,14 +1571,14 @@ function searchRepositoryKeyFromItem(
   return githubRepoIdentityKey({ owner, repo, host: sourceHost })
 }
 
-function repositoryFullNameFromUrl(value: string): string | null {
+function repositoryFullNameFromUrl(value: string, kind: 'api' | 'html'): string | null {
   try {
     const pathname = new URL(value).pathname
     const parts = pathname
       .split('/')
       .filter(Boolean)
       .map((part) => decodeURIComponent(part))
-    const reposIndex = parts.lastIndexOf('repos')
+    const reposIndex = kind === 'api' ? parts.indexOf('repos') : -1
     const start = reposIndex >= 0 ? reposIndex + 1 : 0
     return parts[start] && parts[start + 1] ? `${parts[start]}/${parts[start + 1]}` : null
   } catch {
@@ -1576,8 +1587,8 @@ function repositoryFullNameFromUrl(value: string): string | null {
 }
 
 function batchItemComparator(left: GitHubWorkItem, right: GitHubWorkItem): number {
-  const leftTime = Date.parse(left.createdAt ?? left.updatedAt)
-  const rightTime = Date.parse(right.createdAt ?? right.updatedAt)
+  const leftTime = left.createdAt ? Date.parse(left.createdAt) : Number.NaN
+  const rightTime = right.createdAt ? Date.parse(right.createdAt) : Number.NaN
   if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
     return rightTime - leftTime
   }
@@ -1586,7 +1597,7 @@ function batchItemComparator(left: GitHubWorkItem, right: GitHubWorkItem): numbe
   }
   const leftKey = `${left.repoId}\0${left.type}\0${left.number}`
   const rightKey = `${right.repoId}\0${right.type}\0${right.number}`
-  return leftKey.localeCompare(rightKey)
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
 }
 
 function batchHasPrOnlyFilter(query: ParsedTaskQuery): boolean {
@@ -1664,22 +1675,27 @@ async function fetchSearchResponse(
     ),
     ...githubHostExecOptions(source)
   }
-  const { stdout } = await ghExecFileAsync(args, ghOptions)
-  // Why: grouped requests still consume Search API budget; count cached hits
-  // conservatively so the shared guard does not let a multi-repo selection
-  // stampede the 30/minute quota.
-  noteRepositoryRateLimitSpend(source, 'search', 1, ghOptions)
-  const parsed = JSON.parse(stdout) as {
-    items?: unknown
-    totalCount?: unknown
-  }
-  return {
-    items: Array.isArray(parsed.items)
-      ? parsed.items.filter(
-          (item): item is Record<string, unknown> => typeof item === 'object' && item !== null
-        )
-      : [],
-    totalCount: typeof parsed.totalCount === 'number' ? parsed.totalCount : 0
+  await acquire()
+  try {
+    const { stdout } = await ghExecFileAsync(args, ghOptions)
+    // Why: grouped requests still consume Search API budget; count cached hits
+    // conservatively so the shared guard does not let a multi-repo selection
+    // stampede the 30/minute quota.
+    noteRepositoryRateLimitSpend(source, 'search', 1, ghOptions)
+    const parsed = JSON.parse(stdout) as {
+      items?: unknown
+      totalCount?: unknown
+    }
+    return {
+      items: Array.isArray(parsed.items)
+        ? parsed.items.filter(
+            (item): item is Record<string, unknown> => typeof item === 'object' && item !== null
+          )
+        : [],
+      totalCount: typeof parsed.totalCount === 'number' ? parsed.totalCount : 0
+    }
+  } finally {
+    release()
   }
 }
 
@@ -1703,9 +1719,13 @@ async function executeBatchSearchPlan(
     return {
       items: [],
       totalCount: 0,
+      reachableCount: 0,
       failedCount: 1,
       unavailableCount: 0,
-      errorTypes: ['unknown']
+      errorTypes: ['validation_error'],
+      hasSuccessfulRequest: false,
+      searchWindowLimited: false,
+      queryTooLarge: true
     }
   }
 
@@ -1730,10 +1750,14 @@ async function executeBatchSearchPlan(
   )
 
   let totalCount = 0
+  let reachableCount = 0
   let failedCount = 0
   let unavailableCount = 0
   const errorTypes: ClassifiedError['type'][] = []
   const items: GitHubWorkItem[] = []
+  let hasSuccessfulRequest = false
+  let searchWindowLimited = false
+  let queryTooLarge = false
   for (let index = 0; index < chunkResults.length; index += 1) {
     const result = chunkResults[index]
     if (result.status === 'rejected') {
@@ -1744,9 +1768,13 @@ async function executeBatchSearchPlan(
       if (classifyGitHubUnavailable(message)) {
         unavailableCount += 1
       }
+      queryTooLarge ||= /request budget/i.test(message)
       continue
     }
+    hasSuccessfulRequest = true
     totalCount += result.value.totalCount
+    reachableCount += Math.min(result.value.totalCount, 1000)
+    searchWindowLimited ||= result.value.totalCount > 1000
     const sourceMap = new Map(
       chunks[index].map((source) => [
         githubRepoIdentityKey(source),
@@ -1774,9 +1802,13 @@ async function executeBatchSearchPlan(
     // global merge. A single Search API stream is already globally ordered.
     items: usePrefix ? ordered : ordered.slice(0, limit),
     totalCount,
+    reachableCount,
     failedCount,
     unavailableCount,
-    errorTypes
+    errorTypes,
+    hasSuccessfulRequest,
+    searchWindowLimited,
+    queryTooLarge
   }
 }
 
@@ -1808,9 +1840,13 @@ async function hydrateBatchPullRequests(
         if (detail) {
           hydrated[current.index] = { ...detail, repoId: current.item.repoId }
         }
-      } catch {
+      } catch (err) {
         // Why: list rows remain useful when optional visible-row hydration hits
         // a rate limit, deleted fork, or provider-specific field failure.
+        console.warn(
+          `[workItems] PR hydration failed for ${current.item.repoId}#${current.item.number}:`,
+          err
+        )
       }
     }
   }
@@ -1823,18 +1859,32 @@ export async function listWorkItemsAcrossRepos(
   limit = 24,
   query?: string,
   page?: number,
-  noCache = false
+  noCache = false,
+  resolutionFailures: readonly unknown[] = []
 ): Promise<ListWorkItemsAcrossReposResult> {
+  if (inputs.length > MAX_GITHUB_WORK_ITEMS_BATCH_REPOS) {
+    throw new Error(
+      `GitHub work-item selection exceeds the ${MAX_GITHUB_WORK_ITEMS_BATCH_REPOS}-repository limit`
+    )
+  }
   const normalizedLimit = Math.max(1, Math.min(100, Math.floor(limit)))
   const requestedPage = normalizeWorkItemPage(page)
   const trimmedQuery = query?.trim() ?? ''
   if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
-    return { items: [], totalCount: 0, failedCount: 0, githubUnavailable: false }
+    return {
+      items: [],
+      totalCount: 0,
+      reachableCount: 0,
+      failedCount: 0,
+      githubUnavailable: false,
+      errorTypes: ['validation_error'],
+      queryTooLarge: true
+    }
   }
   const parsedQuery = parseTaskQuery(trimmedQuery || 'is:open')
-  const resolvedRepos = await Promise.all(
+  const resolutionResults = await Promise.allSettled(
     inputs.map(async (input): Promise<ResolvedBatchRepo> => {
-      const [issueResolved, prResolved] = await Promise.all([
+      const [issueResolved, prResolved] = await Promise.allSettled([
         resolveIssueGitHubApiRepositorySource(
           input.repoPath,
           input.preference,
@@ -1850,12 +1900,58 @@ export async function listWorkItemsAcrossRepos(
       ])
       return {
         ...input,
-        issueSource: issueResolved.source,
-        prSource: prResolved.source
+        issueSource: issueResolved.status === 'fulfilled' ? issueResolved.value.source : null,
+        issueSourceFellBack:
+          issueResolved.status === 'fulfilled' ? issueResolved.value.fellBack : false,
+        prSource: prResolved.status === 'fulfilled' ? prResolved.value.source : null,
+        originCandidate:
+          prResolved.status === 'fulfilled' ? prResolved.value.originCandidate : null,
+        upstreamCandidate:
+          prResolved.status === 'fulfilled' ? prResolved.value.upstreamCandidate : null,
+        resolutionFailures: [
+          ...(issueResolved.status === 'rejected' ? [issueResolved.reason] : []),
+          ...(prResolved.status === 'rejected' ? [prResolved.reason] : [])
+        ]
       }
     })
   )
+  const resolvedRepos: ResolvedBatchRepo[] = []
+  const allResolutionFailures = [...resolutionFailures]
+  for (const result of resolutionResults) {
+    if (result.status === 'fulfilled') {
+      resolvedRepos.push(result.value)
+      allResolutionFailures.push(...result.value.resolutionFailures)
+    } else {
+      allResolutionFailures.push(result.reason)
+    }
+  }
+  const resolutionErrorTypes = allResolutionFailures.map((failure) =>
+    classifyListIssuesError(failure instanceof Error ? failure.message : String(failure))
+  )
+  let failedCount = resolutionErrorTypes.length
+  let unavailableCount = resolutionErrorTypes.filter((error) =>
+    classifyGitHubUnavailable(error.message)
+  ).length
   const resolvedById = new Map(resolvedRepos.map((repo) => [repo.repoId, repo]))
+  const sourcesByRepo = Object.fromEntries(
+    resolvedRepos
+      .filter(
+        (repo) =>
+          repo.issueSource !== null ||
+          repo.prSource !== null ||
+          repo.resolutionFailures.length === 0
+      )
+      .map((repo) => [
+        repo.repoId,
+        {
+          issues: repo.issueSource,
+          prs: repo.prSource,
+          originCandidate: repo.originCandidate,
+          upstreamCandidate: repo.upstreamCandidate,
+          ...(repo.issueSourceFellBack ? { issueSourceFellBack: true as const } : {})
+        }
+      ])
+  )
   const groups = new Map<string, BatchSearchGroup>()
   for (const repo of resolvedRepos) {
     for (const [kind, source] of [
@@ -1881,8 +1977,13 @@ export async function listWorkItemsAcrossRepos(
     return {
       items: [],
       totalCount: 0,
-      failedCount: 0,
-      githubUnavailable: false
+      reachableCount: 0,
+      failedCount,
+      githubUnavailable: failedCount > 0 && unavailableCount === failedCount,
+      ...(resolutionErrorTypes.length > 0
+        ? { errorTypes: resolutionErrorTypes.map((error) => error.type) }
+        : {}),
+      ...(Object.keys(sourcesByRepo).length > 0 ? { sourcesByRepo } : {})
     }
   }
   // A page after the first may need a prefix when chunking is introduced; the
@@ -1896,9 +1997,16 @@ export async function listWorkItemsAcrossRepos(
   )
   const items = outcomes.flatMap((outcome) => outcome.items).sort(batchItemComparator)
   const totalCount = outcomes.reduce((sum, outcome) => sum + outcome.totalCount, 0)
-  const failedCount = outcomes.reduce((sum, outcome) => sum + outcome.failedCount, 0)
-  const unavailableCount = outcomes.reduce((sum, outcome) => sum + outcome.unavailableCount, 0)
-  const errorTypes = outcomes.flatMap((outcome) => outcome.errorTypes)
+  const reachableCount = outcomes.reduce((sum, outcome) => sum + outcome.reachableCount, 0)
+  failedCount += outcomes.reduce((sum, outcome) => sum + outcome.failedCount, 0)
+  unavailableCount += outcomes.reduce((sum, outcome) => sum + outcome.unavailableCount, 0)
+  const errorTypes = [
+    ...resolutionErrorTypes.map((error) => error.type),
+    ...outcomes.flatMap((outcome) => outcome.errorTypes)
+  ]
+  const hasSuccessfulRequest = outcomes.some((outcome) => outcome.hasSuccessfulRequest)
+  const searchWindowLimited = outcomes.some((outcome) => outcome.searchWindowLimited)
+  const queryTooLarge = outcomes.some((outcome) => outcome.queryTooLarge)
   const visible = usePrefix
     ? items.slice((requestedPage - 1) * normalizedLimit, requestedPage * normalizedLimit)
     : items.slice(0, normalizedLimit)
@@ -1906,8 +2014,12 @@ export async function listWorkItemsAcrossRepos(
     items: await hydrateBatchPullRequests(visible, resolvedById),
     totalCount,
     failedCount,
-    githubUnavailable: failedCount > 0 && unavailableCount === failedCount,
-    ...(errorTypes.length > 0 ? { errorTypes } : {})
+    reachableCount,
+    githubUnavailable: failedCount > 0 && unavailableCount === failedCount && !hasSuccessfulRequest,
+    ...(errorTypes.length > 0 ? { errorTypes } : {}),
+    ...(searchWindowLimited ? { searchWindowLimited: true as const } : {}),
+    ...(queryTooLarge ? { queryTooLarge: true as const } : {}),
+    ...(Object.keys(sourcesByRepo).length > 0 ? { sourcesByRepo } : {})
   }
 }
 
@@ -1957,7 +2069,9 @@ function buildSearchQueryString(
 }
 
 function quoteGitHubSearchValue(value: string): string {
-  return /[\s"]/.test(value) ? `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` : value
+  return /^[A-Za-z0-9@*_./-]+$/.test(value)
+    ? value
+    : `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
 }
 
 async function countWorkItemsForQuery(

@@ -6165,7 +6165,7 @@ export default function TaskPage(): React.JSX.Element {
       setPaginationLoading(true)
       setLoadingTargetPage(target)
       try {
-        const { items, failedCount, errorTypes } = await fetchWorkItemsNextPage(
+        const { items, failedCount, errorTypes, queryTooLarge } = await fetchWorkItemsNextPage(
           repoArgs,
           githubPerRepoPageLimit,
           githubPageSize,
@@ -6173,6 +6173,15 @@ export default function TaskPage(): React.JSX.Element {
           taskPageToGitHubApiPage(target)
         )
         if (paginationGenerationRef.current !== requestGeneration) {
+          return
+        }
+        if (queryTooLarge) {
+          setTasksError(
+            translate(
+              'auto.components.TaskPage.githubQueryTooLarge',
+              'GitHub search query is too large. Narrow your filters or select fewer repositories.'
+            )
+          )
           return
         }
         if (items.length === 0) {
@@ -6370,7 +6379,7 @@ export default function TaskPage(): React.JSX.Element {
     void fetchWorkItemsAcrossRepos(repoArgs, githubPerRepoPageLimit, githubPageSize, q, {
       ...deriveTaskPageGitHubWorkItemsFetchOptions(forcedFetch, shouldProbeOnLanding)
     })
-      .then(({ items, failedCount: failed, githubUnavailable: unavailable }) => {
+      .then(({ items, failedCount: failed, githubUnavailable: unavailable, queryTooLarge }) => {
         // Why: clear only the dispatch-time snapshot keys so an overlapping retry's newer source isn't wiped.
         setRetryingSourceKeys((prev) => {
           if (dispatchedRetrySourceKeys.size === 0) {
@@ -6384,6 +6393,14 @@ export default function TaskPage(): React.JSX.Element {
         })
         if (cancelled) {
           return
+        }
+        if (queryTooLarge) {
+          setTasksError(
+            translate(
+              'auto.components.TaskPage.githubQueryTooLarge',
+              'GitHub search query is too large. Narrow your filters or select fewer repositories.'
+            )
+          )
         }
         if (shouldProbeOnLanding) {
           const replaceFirstPage = shouldReplaceTaskPageItemsAfterRefresh(page0, items)
@@ -6435,7 +6452,8 @@ export default function TaskPage(): React.JSX.Element {
         sourceContext: getTaskPageRepoSourceContext(r, 'github')
       })),
       q,
-      githubPerRepoPageLimit
+      githubPerRepoPageLimit,
+      githubPageSize
     ).then(({ totalPages: countedPages }) => {
       if (!cancelled) {
         // Why: the count overwrites unconditionally — proven window limits live

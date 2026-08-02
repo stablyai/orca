@@ -13,7 +13,9 @@ export type WorkItemSearchScope = 'all' | 'issue' | 'pr'
 export const DEFAULT_WORK_ITEM_SEARCH_MAX_REQUEST_BYTES = 7_500
 
 function quoteGitHubSearchValue(value: string): string {
-  return /[\s"]/.test(value) ? `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` : value
+  return /^[A-Za-z0-9@*_./-]+$/.test(value)
+    ? value
+    : `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
 }
 
 function repositoryQualifier(repository: WorkItemSearchRepository): string {
@@ -30,9 +32,11 @@ function normalizedRepositories(
       unique.set(key, repository)
     }
   }
-  return [...unique.values()].sort((left, right) =>
-    githubRepoIdentityKey(left).localeCompare(githubRepoIdentityKey(right))
-  )
+  return [...unique.values()].sort((left, right) => {
+    const leftKey = githubRepoIdentityKey(left)
+    const rightKey = githubRepoIdentityKey(right)
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
+  })
 }
 
 export function buildWorkItemSearchQuery(
@@ -124,20 +128,27 @@ export function splitWorkItemSearchRepositories(
   for (const repository of normalized) {
     const candidate = [...current, repository]
     const candidateQuery = buildWorkItemSearchQuery(candidate, query, scope)
-    if (
-      current.length > 0 &&
-      estimateWorkItemSearchRequestBytes(candidateQuery, page, perPage) > maxRequestBytes
-    ) {
+    const candidateBytes = estimateWorkItemSearchRequestBytes(candidateQuery, page, perPage)
+    if (candidateBytes <= maxRequestBytes) {
+      current = candidate
+      continue
+    }
+    if (current.length > 0) {
       chunks.push(current)
+      const soloQuery = buildWorkItemSearchQuery([repository], query, scope)
+      if (estimateWorkItemSearchRequestBytes(soloQuery, page, perPage) > maxRequestBytes) {
+        throw new Error(
+          `GitHub repository qualifier exceeds Search API request budget: ${repository.owner}/${repository.repo}`
+        )
+      }
       current = [repository]
       continue
     }
-    if (estimateWorkItemSearchRequestBytes(candidateQuery, page, perPage) > maxRequestBytes) {
+    if (candidateBytes > maxRequestBytes) {
       throw new Error(
         `GitHub repository qualifier exceeds Search API request budget: ${repository.owner}/${repository.repo}`
       )
     }
-    current = candidate
   }
   if (current.length > 0) {
     chunks.push(current)

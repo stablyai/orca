@@ -17,6 +17,7 @@ import type {
   GitHubPRFile
 } from '../../shared/types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { MAX_GITHUB_WORK_ITEMS_BATCH_REPOS } from '../../shared/github-work-items-query-bounds'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
@@ -54,7 +55,7 @@ import {
   checkOrcaStarred,
   starOrca
 } from '../github/client'
-import type { GitHubPRBranchLookupOptions } from '../github/client'
+import type { GitHubPRBranchLookupOptions, GitHubWorkItemsBatchInput } from '../github/client'
 import {
   clearVisiblePRRefreshWindow,
   enqueuePRRefresh,
@@ -465,18 +466,36 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         noCache?: boolean
       }
     ) => {
-      const inputs = args.repos.map((selector) => {
-        const repo = assertRegisteredRepo(selector, store)
-        const localGitOptions = localGitOptionArgs(store, repo)[0]
-        return {
-          repoId: repo.id,
-          repoPath: repo.path,
-          preference: repo.issueSourcePreference,
-          connectionId: repoConnectionId(repo),
-          ...(localGitOptions ? { localGitOptions } : {})
+      if (args.repos.length > MAX_GITHUB_WORK_ITEMS_BATCH_REPOS) {
+        throw new Error(
+          `GitHub work-item selection exceeds the ${MAX_GITHUB_WORK_ITEMS_BATCH_REPOS}-repository limit`
+        )
+      }
+      const inputs: GitHubWorkItemsBatchInput[] = []
+      const resolutionFailures: unknown[] = []
+      for (const selector of args.repos) {
+        try {
+          const repo = assertRegisteredRepo(selector, store)
+          const localGitOptions = localGitOptionArgs(store, repo)[0]
+          inputs.push({
+            repoId: repo.id,
+            repoPath: repo.path,
+            preference: repo.issueSourcePreference,
+            connectionId: repoConnectionId(repo),
+            ...(localGitOptions ? { localGitOptions } : {})
+          })
+        } catch (err) {
+          resolutionFailures.push(err)
         }
-      })
-      return listWorkItemsAcrossRepos(inputs, args.limit, args.query, args.page, args.noCache)
+      }
+      return listWorkItemsAcrossRepos(
+        inputs,
+        args.limit,
+        args.query,
+        args.page,
+        args.noCache,
+        resolutionFailures
+      )
     }
   )
 

@@ -379,6 +379,149 @@ describe('listWorkItems query paging', () => {
     expect(result.totalCount).toBe(2)
   })
 
+  it('maps API and HTML URLs correctly for a repository named repos', async () => {
+    const repository = { owner: 'acme', repo: 'repos' }
+    resolveIssueSourceMock.mockResolvedValue({ source: repository, fellBack: false })
+    getIssueOwnerRepoMock.mockResolvedValue(repository)
+    getOwnerRepoMock.mockResolvedValue(repository)
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        totalCount: 1,
+        items: [
+          {
+            number: 1,
+            title: 'Repository named repos',
+            state: 'open',
+            repository_url: 'https://api.github.com/repos/acme/repos/issues/1',
+            html_url: 'https://github.com/acme/repos/issues/1',
+            labels: [],
+            created_at: '2026-08-02T12:00:00Z',
+            updated_at: '2026-08-02T12:00:00Z',
+            user: { login: 'octocat' }
+          }
+        ]
+      })
+    })
+
+    const result = await listWorkItemsAcrossRepos(
+      [{ repoId: 'repo-id', repoPath: '/repo-root' }],
+      10,
+      'is:issue is:open'
+    )
+
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.repoId).toBe('repo-id')
+  })
+
+  it('puts rows without a creation timestamp after timestamped rows', async () => {
+    const repository = { owner: 'acme', repo: 'widgets' }
+    resolveIssueSourceMock.mockResolvedValue({ source: repository, fellBack: false })
+    getIssueOwnerRepoMock.mockResolvedValue(repository)
+    getOwnerRepoMock.mockResolvedValue(repository)
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        totalCount: 2,
+        items: [
+          {
+            number: 1,
+            title: 'Missing creation time',
+            state: 'open',
+            repository: { full_name: 'acme/widgets' },
+            html_url: 'https://github.com/acme/widgets/issues/1',
+            labels: [],
+            updated_at: '2099-01-01T00:00:00Z',
+            user: { login: 'octocat' }
+          },
+          {
+            number: 2,
+            title: 'Created row',
+            state: 'open',
+            repository: { full_name: 'acme/widgets' },
+            html_url: 'https://github.com/acme/widgets/issues/2',
+            labels: [],
+            created_at: '2026-08-01T00:00:00Z',
+            updated_at: '2026-08-01T00:00:00Z',
+            user: { login: 'octocat' }
+          }
+        ]
+      })
+    })
+
+    const result = await listWorkItemsAcrossRepos(
+      [{ repoId: 'repo-id', repoPath: '/repo-root' }],
+      10,
+      'is:issue is:open'
+    )
+
+    expect(result.items.map((item) => item.number)).toEqual([2, 1])
+  })
+
+  it('reports the reachable count when Search API total exceeds its window', async () => {
+    const repository = { owner: 'acme', repo: 'widgets' }
+    resolveIssueSourceMock.mockResolvedValue({ source: repository, fellBack: false })
+    getIssueOwnerRepoMock.mockResolvedValue(repository)
+    getOwnerRepoMock.mockResolvedValue(repository)
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        totalCount: 1_500,
+        items: []
+      })
+    })
+
+    const result = await listWorkItemsAcrossRepos(
+      [{ repoId: 'repo-id', repoPath: '/repo-root' }],
+      24,
+      'is:issue is:open'
+    )
+
+    expect(result.totalCount).toBe(1_500)
+    expect(result.reachableCount).toBe(1_000)
+    expect(result.searchWindowLimited).toBe(true)
+  })
+
+  it('keeps valid repositories when one source resolver fails', async () => {
+    const repository = { owner: 'acme', repo: 'widgets' }
+    resolveIssueSourceMock.mockImplementation(async (repoPath: string) => {
+      if (repoPath === '/broken') {
+        throw new Error('HTTP 404: Not Found')
+      }
+      return { source: repository, fellBack: false }
+    })
+    getIssueOwnerRepoMock.mockResolvedValue(repository)
+    getOwnerRepoMock.mockResolvedValue(repository)
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        totalCount: 1,
+        items: [
+          {
+            number: 1,
+            title: 'Valid row',
+            state: 'open',
+            repository: { full_name: 'acme/widgets' },
+            html_url: 'https://github.com/acme/widgets/issues/1',
+            labels: [],
+            created_at: '2026-08-01T00:00:00Z',
+            updated_at: '2026-08-01T00:00:00Z',
+            user: { login: 'octocat' }
+          }
+        ]
+      })
+    })
+
+    const result = await listWorkItemsAcrossRepos(
+      [
+        { repoId: 'broken-id', repoPath: '/broken' },
+        { repoId: 'valid-id', repoPath: '/valid' }
+      ],
+      10,
+      'is:issue is:open'
+    )
+
+    expect(result.items.map((item) => item.repoId)).toEqual(['valid-id'])
+    expect(result.failedCount).toBe(1)
+    expect(result.errorTypes).toEqual(['unknown'])
+  })
+
   it('fetches a prefix when requesting a later globally merged page', async () => {
     const repository = { owner: 'acme', repo: 'widgets' }
     resolveIssueSourceMock.mockResolvedValue({ source: repository, fellBack: false })
@@ -427,5 +570,176 @@ describe('listWorkItems query paging', () => {
     )
     expect(result.items.map((item) => item.number)).toEqual([2])
     expect(result.totalCount).toBe(3)
+  })
+
+  it('keeps successful host groups when another grouped request fails', async () => {
+    const repositories = new Map([
+      ['/github', { owner: 'acme', repo: 'widgets', host: 'github.com' }],
+      ['/enterprise', { owner: 'acme', repo: 'widgets', host: 'ghe.example.com' }]
+    ])
+    resolveIssueSourceMock.mockImplementation(async (repoPath: string) => ({
+      source: repositories.get(repoPath),
+      fellBack: false
+    }))
+    getOwnerRepoMock.mockImplementation(async (repoPath: string) => repositories.get(repoPath))
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          totalCount: 1,
+          items: [
+            {
+              number: 1,
+              title: 'Reachable issue',
+              state: 'open',
+              repository: { full_name: 'acme/widgets' },
+              html_url: 'https://github.com/acme/widgets/issues/1',
+              labels: [],
+              created_at: '2026-08-02T00:00:00Z',
+              updated_at: '2026-08-02T00:00:00Z',
+              user: { login: 'octocat' }
+            }
+          ]
+        })
+      })
+      .mockRejectedValueOnce(new Error('HTTP 403: Forbidden'))
+
+    const result = await listWorkItemsAcrossRepos(
+      [
+        { repoId: 'github-id', repoPath: '/github' },
+        { repoId: 'enterprise-id', repoPath: '/enterprise' }
+      ],
+      10,
+      'is:issue is:open'
+    )
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(ghExecFileAsyncMock.mock.calls.map((call) => call[1])).toEqual([
+      { cwd: '/github', host: 'github.com' },
+      { cwd: '/enterprise', host: 'ghe.example.com' }
+    ])
+    expect(result.items.map((item) => item.repoId)).toEqual(['github-id'])
+    expect(result.failedCount).toBe(1)
+    expect(result.errorTypes).toEqual(['unknown'])
+    expect(result.githubUnavailable).toBe(false)
+  })
+
+  it('splits grouped requests at the encoded byte budget', async () => {
+    const longOwner = 'o'.repeat(1900)
+    const repositories = new Map([
+      ['/one', { owner: longOwner, repo: 'r'.repeat(1900), host: 'github.com' }],
+      ['/two', { owner: longOwner, repo: 's'.repeat(1900), host: 'github.com' }]
+    ])
+    resolveIssueSourceMock.mockImplementation(async (repoPath: string) => ({
+      source: repositories.get(repoPath),
+      fellBack: false
+    }))
+    getOwnerRepoMock.mockImplementation(async (repoPath: string) => repositories.get(repoPath))
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          totalCount: 1,
+          items: [
+            {
+              number: 1,
+              title: 'First chunk',
+              state: 'open',
+              repository: { full_name: `${longOwner}/${'r'.repeat(1900)}` },
+              html_url: 'https://github.com/acme/one/issues/1',
+              labels: [],
+              created_at: '2026-08-02T00:00:00Z',
+              updated_at: '2026-08-02T00:00:00Z',
+              user: { login: 'octocat' }
+            }
+          ]
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          totalCount: 1,
+          items: [
+            {
+              number: 2,
+              title: 'Second chunk',
+              state: 'open',
+              repository: { full_name: `${longOwner}/${'s'.repeat(1900)}` },
+              html_url: 'https://github.com/acme/one/issues/2',
+              labels: [],
+              created_at: '2026-08-01T00:00:00Z',
+              updated_at: '2026-08-01T00:00:00Z',
+              user: { login: 'octocat' }
+            }
+          ]
+        })
+      })
+
+    const result = await listWorkItemsAcrossRepos(
+      [
+        { repoId: 'one-id', repoPath: '/one' },
+        { repoId: 'two-id', repoPath: '/two' }
+      ],
+      10,
+      'is:issue is:open'
+    )
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(result.totalCount).toBe(2)
+    expect(result.items.map((item) => item.repoId)).toEqual(['one-id', 'two-id'])
+  })
+
+  it('replaces grouped PR rows with detail hydration while keeping list data on probe failure', async () => {
+    const repository = { owner: 'acme', repo: 'widgets' }
+    resolveIssueSourceMock.mockResolvedValue({ source: repository, fellBack: false })
+    getOwnerRepoMock.mockResolvedValue(repository)
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          totalCount: 1,
+          items: [
+            {
+              number: 7,
+              title: 'Search title',
+              state: 'open',
+              repository: { full_name: 'acme/widgets' },
+              html_url: 'https://github.com/acme/widgets/pull/7',
+              pull_request: { url: 'https://api.github.com/repos/acme/widgets/pulls/7' },
+              labels: [],
+              created_at: '2026-08-02T00:00:00Z',
+              updated_at: '2026-08-02T00:00:00Z',
+              user: { login: 'octocat' }
+            }
+          ]
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 7,
+          title: 'Hydrated title',
+          state: 'OPEN',
+          url: 'https://github.com/acme/widgets/pull/7',
+          labels: [],
+          createdAt: '2026-08-02T00:00:00Z',
+          updatedAt: '2026-08-02T00:00:00Z',
+          author: { login: 'octocat' },
+          isDraft: false,
+          headRefName: 'feature',
+          baseRefName: 'main',
+          headRefOid: 'sha-7'
+        })
+      })
+      .mockRejectedValueOnce(new Error('GraphQL probe unavailable'))
+
+    const result = await listWorkItemsAcrossRepos(
+      [{ repoId: 'repo-id', repoPath: '/repo-root' }],
+      10,
+      'is:pr is:open'
+    )
+
+    expect(result.items[0]).toMatchObject({
+      repoId: 'repo-id',
+      number: 7,
+      title: 'Hydrated title',
+      headSha: 'sha-7'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
   })
 })

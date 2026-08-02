@@ -59,7 +59,44 @@ describe('GitHub cross-repository work-item search queries', () => {
   })
 
   it('accounts for encoded URL bytes, not JavaScript character count', () => {
-    const query = 'repo:acme/alpha free text'
-    expect(estimateWorkItemSearchRequestBytes(query, 1, 100)).toBeGreaterThan(query.length)
+    const plain = 'repo:acme/alpha freetextx'
+    const encoded = 'repo:acme/alpha "free tex"'
+    expect(estimateWorkItemSearchRequestBytes(encoded, 1, 100)).toBeGreaterThan(
+      estimateWorkItemSearchRequestBytes(plain, 1, 100)
+    )
+  })
+
+  it('quotes qualifier values containing search syntax', () => {
+    expect(
+      buildWorkItemSearchQuery(
+        repositories,
+        parseTaskQuery('label:type:bug assignee:octo/bot'),
+        'issue'
+      )
+    ).toContain('label:"type:bug"')
+    expect(
+      buildWorkItemSearchQuery(
+        repositories,
+        parseTaskQuery('label:type:bug assignee:octo/bot'),
+        'issue'
+      )
+    ).toContain('assignee:octo/bot')
+  })
+
+  it('checks a later repository against the solo request budget', () => {
+    const first = { owner: 'acme', repo: 'alpha' }
+    const oversized = { owner: 'z'.repeat(1_000), repo: 'repo' }
+    const query = parseTaskQuery('is:open')
+    const maxRequestBytes = estimateWorkItemSearchRequestBytes(
+      buildWorkItemSearchQuery([first], query, 'all'),
+      1,
+      100
+    )
+
+    expect(() =>
+      splitWorkItemSearchRepositories([first, oversized], query, 'all', {
+        maxRequestBytes
+      })
+    ).toThrow('exceeds Search API request budget')
   })
 })

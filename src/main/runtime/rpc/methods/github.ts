@@ -2,6 +2,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { MAX_GITHUB_WORK_ITEMS_BATCH_REPOS } from '../../../../shared/github-work-items-query-bounds'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -22,7 +23,8 @@ const WorkItemsBatch = z.object({
         repoId: requiredString('Missing repo id')
       })
     )
-    .min(1),
+    .min(1)
+    .max(MAX_GITHUB_WORK_ITEMS_BATCH_REPOS, 'Too many repositories selected'),
   limit: OptionalFiniteNumber,
   query: OptionalString,
   page: z.number().int().positive().optional(),

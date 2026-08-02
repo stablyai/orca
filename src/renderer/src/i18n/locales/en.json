@@ -1900,7 +1900,8 @@
         "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
         "loadPageUnreachable": "Page {{value0}} is beyond what GitHub search can return.",
         "loadPageFailed": "Page {{value0}} could not be loaded from GitHub.",
-        "loadPageNoMoreResults": "No more results on page {{value0}}."
+        "loadPageNoMoreResults": "No more results on page {{value0}}.",
+        "githubQueryTooLarge": "GitHub search query is too large. Narrow your filters or select fewer repositories."
       },
       "Terminal": {
         "73768427cf": "Close",

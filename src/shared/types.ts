@@ -2082,11 +2082,22 @@ export type ListWorkItemsResult<T> = {
 export type ListWorkItemsAcrossReposResult = {
   items: GitHubWorkItem[]
   totalCount: number
+  /** Reachable count after applying GitHub Search's first-1000-result window. */
+  reachableCount?: number
   /** Number of source groups that could not contribute rows. */
   failedCount: number
   /** True only when every eligible source group failed for availability reasons. */
   githubUnavailable: boolean
   errorTypes?: ClassifiedError['type'][]
+  /** True when one or more grouped searches cannot expose results past 1000. */
+  searchWindowLimited?: true
+  /** True when input validation rejected the query before contacting GitHub. */
+  queryTooLarge?: true
+  /** Resolved source metadata used to hydrate per-repository renderer caches. */
+  sourcesByRepo?: Record<
+    string,
+    ListWorkItemsResult<never>['sources'] & { issueSourceFellBack?: true }
+  >
 }
 
 export type LinearWorkflowState = {
