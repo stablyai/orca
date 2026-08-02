@@ -176,6 +176,7 @@ import {
 } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import { orderLinearStatusSections, type LinearGroupSection } from '@/lib/linear-issue-grouping'
 import {
   readLinearBoardIssueDragData,
   writeLinearBoardIssueDragData
@@ -600,12 +601,6 @@ function formatRelativeTime(input: string): string {
 
 type LinearProjectTab = 'overview' | 'issues'
 
-type LinearGroupSection = {
-  key: string
-  label: string
-  issues: LinearIssue[]
-}
-
 type LinearIssueListRow =
   | { type: 'section'; key: string; label: string; count: number }
   | { type: 'issue'; issue: LinearIssue }
@@ -879,7 +874,9 @@ function groupLinearIssues(
       sections.set(group.key, { key: group.key, label: group.label, issues: [issue] })
     }
   }
-  return [...sections.values()]
+  const ordered = [...sections.values()]
+  // Status sections follow workflow order (Backlog ... Done) instead of first-appearance.
+  return groupBy === 'status' ? orderLinearStatusSections(ordered) : ordered
 }
 
 function TaskPageJiraErrorBanner({
