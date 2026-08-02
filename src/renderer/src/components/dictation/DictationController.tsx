@@ -156,7 +156,12 @@ export function DictationController() {
       })
       captureStarted = true
       if (captureResult?.fellBackToDefaultMicrophone) {
-        if (micFallbackNotifiedForRef.current !== preferredMicrophoneDeviceId) {
+        // Why: a stop requested during startup tears this capture down below, so the
+        // notice would describe a fallback that never records anything.
+        if (
+          !stopRequestedDuringStartRef.current &&
+          micFallbackNotifiedForRef.current !== preferredMicrophoneDeviceId
+        ) {
           micFallbackNotifiedForRef.current = preferredMicrophoneDeviceId
           toast.message(
             translate(

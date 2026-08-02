@@ -67,6 +67,8 @@ export function VoiceMicrophoneSetting({
     setDevices((current) => (sameDeviceList(current, next) ? current : next))
   }, [])
 
+  // Why: voiceSettings.enabled is a dependency so enabling dictation re-scans —
+  // that toggle is often when mic permission lands and real labels appear.
   useEffect(() => {
     void refreshDevices()
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.addEventListener) {
