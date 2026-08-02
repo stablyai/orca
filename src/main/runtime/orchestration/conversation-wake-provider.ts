@@ -4,7 +4,12 @@ export type ConversationWakeTarget = {
   conversationId: string
 }
 
-export type ConversationWakeProviderState = 'idle' | 'active' | 'missing' | 'unsupported'
+export type ConversationWakeProviderState =
+  | 'idle'
+  | 'active'
+  | 'missing'
+  | 'unsupported'
+  | 'unknown'
 
 export type ConversationWakeTurnRequest = ConversationWakeTarget & {
   wakeId: string
@@ -33,4 +38,6 @@ export type ConversationWakeProvider = {
    */
   prepareAndFinalizeTurn(request: ConversationWakeTurnRequest): Promise<ConversationWakeTurnResult>
   onTurnTerminal(listener: (conversationId: string) => void): () => void
+  reconcile?(): Promise<void>
+  dispose?(): void | Promise<void>
 }

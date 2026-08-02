@@ -212,6 +212,8 @@ import { startCodexSessionBackfillInBackground } from './codex/codex-session-bac
 import { startCodexSessionIndexHealInBackground } from './codex/codex-session-index-heal'
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
 import { prepareLegacySharedCodexSessionResume } from './codex/codex-legacy-session-resume'
+import { CodexControlledSessionManager } from './codex/codex-controlled-session-manager'
+import { resolveControlledCodexLaunchAuthority } from './codex/codex-controlled-launch-authority'
 import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
 import type { CodexSessionResumePreparation } from './codex/codex-session-resume-home'
 import { prepareCodexSessionResume } from './codex/codex-session-resume-preparation'
@@ -2293,7 +2295,80 @@ void app.whenReady().then(async () => {
         envelope
       )
   }
-  const runtimeService = new OrcaRuntimeService(store, stats, {
+  let runtimeService!: OrcaRuntimeService
+  const codexControlledSessionManager = new CodexControlledSessionManager({
+    stateRoot: join(app.getPath('userData'), 'codex-controlled-sessions'),
+    createVisibleTerminal: async (launch) =>
+      runtimeService.createTerminal(launch.worktreeSelector, {
+        command: launch.command,
+        cwd: launch.cwd,
+        env: launch.env,
+        title: 'Codex',
+        presentation: launch.presentation ?? 'focused',
+        launchAgent: 'codex',
+        resumeProviderSession: { key: 'session_id', id: launch.threadId }
+      }),
+    waitForVisibleTerminal: async (terminal) => {
+      const current = runtimeService.resolveTerminalPane(
+        terminal.terminalPaneKey,
+        terminal.worktreeId
+      )
+      if (current.ptyId !== terminal.terminalPtyId) {
+        throw new Error('controlled Codex terminal PTY identity changed')
+      }
+      const ready = await runtimeService.waitForTerminal(current.handle, {
+        condition: 'tui-idle',
+        timeoutMs: 15_000
+      })
+      if (!ready.satisfied || ready.status !== 'running' || ready.blockedReason) {
+        throw new Error('controlled Codex visible terminal did not become ready')
+      }
+      const refreshed = runtimeService.resolveTerminalPane(
+        terminal.terminalPaneKey,
+        terminal.worktreeId
+      )
+      return {
+        ...terminal,
+        terminalHandle: refreshed.handle,
+        terminalPtyId: refreshed.ptyId
+      }
+    },
+    closeVisibleTerminal: async (terminal) => {
+      let terminalHandle = terminal.terminalHandle
+      try {
+        terminalHandle = runtimeService.resolveTerminalPane(
+          terminal.terminalPaneKey,
+          terminal.worktreeId
+        ).handle
+      } catch {
+        // The original handle remains the only cleanup target before pane registration completes.
+      }
+      await runtimeService.closeTerminal(terminalHandle)
+    },
+    resolveCurrentAccountId: () => normalizeCodexRuntimeSelection(store!.getSettings()).host,
+    isControlledLaunchEnabled: () => process.env.ORCA_FEATURE_CODEX_CONTROLLED_LAUNCH === '1',
+    isProviderEnabled: () => process.env.ORCA_FEATURE_CODEX_CONTROLLED_PROVIDER === '1',
+    isWakeEnabled: () => process.env.ORCA_FEATURE_ORCHESTRATION_CONVERSATION_WAKE === '1',
+    isKillSwitchOpen: () =>
+      process.env.ORCA_DISABLE_CODEX_CONTROLLED_SESSION !== '1' &&
+      process.env.ORCA_DISABLE_ORCHESTRATION_CONVERSATION_WAKE !== '1'
+  })
+  runtimeService = new OrcaRuntimeService(store, stats, {
+    codexControlledSessionManager,
+    resolveControlledCodexLaunchAuthority: (workspacePath) => {
+      const settings = store!.getSettings()
+      return resolveControlledCodexLaunchAuthority({
+        workspacePath,
+        commandOverride: settings.agentCmdOverrides?.codex,
+        prepareCodexHome: (path) =>
+          prepareCodexRuntimeHomeForLaunch(undefined, undefined, {
+            launchAgent: 'codex',
+            workspacePath: path
+          }),
+        getSystemCodexHome: getSystemCodexHomePath,
+        resolveAccountId: () => normalizeCodexRuntimeSelection(settings).host
+      })
+    },
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
       getProfileUserDataPath()
@@ -2973,6 +3048,8 @@ app.on('will-quit', (e) => {
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
   browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
+  const controlledSessionShutdown =
+    runtime?.disposeOrchestrationConversationWake() ?? Promise.resolve()
   killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
   store?.flush()
@@ -3017,6 +3094,7 @@ app.on('will-quit', (e) => {
       { name: 'watchers', promise: watcherShutdown },
       { name: 'emulator', promise: emulatorShutdown },
       { name: 'plugin-hosts', promise: pluginHostShutdown },
+      { name: 'codex-controlled-sessions', promise: controlledSessionShutdown },
       { name: 'usage-cache', promise: usageCacheFlush }
     ])
       .then((pendingTeardowns) => {

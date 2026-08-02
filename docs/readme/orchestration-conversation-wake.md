@@ -6,7 +6,8 @@ Orca has a disabled-by-default runtime foundation for waking an Orca-owned contr
 
 - `ORCA_FEATURE_ORCHESTRATION_CONVERSATION_WAKE=1` enables the foundation.
 - `ORCA_DISABLE_ORCHESTRATION_CONVERSATION_WAKE=1` is the runtime kill switch and is checked before inspection, claim, submission, and acceptance persistence.
-- No production provider is registered yet. The current Codex integration opens short-lived maintenance `app-server` sessions and does not own a resumable control conversation or expose safe turn start/terminal operations.
+- The `codex-controlled` provider is production-shaped but disabled unless all three `ORCA_FEATURE_CODEX_CONTROLLED_LAUNCH=1`, `ORCA_FEATURE_CODEX_CONTROLLED_PROVIDER=1`, and `ORCA_FEATURE_ORCHESTRATION_CONVERSATION_WAKE=1` flags are set. `ORCA_DISABLE_CODEX_CONTROLLED_SESSION=1` or the global wake kill switch stops launch, inspection, acceptance, and submission.
+- Existing Codex panes remain unmanaged PTYs. Orca only registers the provider for an explicitly controlled launch; it never upgrades a legacy pane, starts a competing app-server, writes PTY input, or interrupts an active turn.
 - Unmanaged PTYs, unsupported providers, missing conversations, and stale Run consumer generations fail closed. This path never writes PTY bytes, submits Enter, or interrupts an active turn.
 
 ## Runtime contract
@@ -28,3 +29,24 @@ For eligible local `orchestration.send` events, message insertion, lifecycle rec
 Schema v24 stores bindings, trusted commit provenance, and wake jobs. Job identity includes message ID and Run consumer generation, so remint backfill cannot collide with fenced work. Startup reconciliation scans unread mail carrying trusted provenance before processing jobs, covering a crash between trusted commit and the post-commit hook.
 
 Jobs move through `pending`, `waiting_for_idle`, `retry_wait`, and `submitting`. A successful `commitPrepared` moves the job to recoverable `accepted`; only exact provider finalization moves it to `submitted`. Run remint fences work that has not reached `accepted`, while already accepted preparations remain recoverable and must finalize with their original turn ID. Result mismatches and unrecoverable accepted work become explicit `blocked_inconsistent`; ordinary unsupported work uses `blocked`, and `cancelled` and `fenced` remain terminal. Acceptance leases and retry deadlines survive restart, transient failures use bounded exponential backoff, and service disposal clears retry timers.
+
+## Controlled Codex lifecycle
+
+The controller starts one app-server for the selected conversation with an explicit short `/tmp/ocw-<uid>/<digest>.sock` path, a `0700` parent, and a `0600` socket. It does not use Codex's default control path. A visible `codex resume --remote unix://PATH` TUI rejoins the same running thread, while a separate local WebSocket-over-Unix client observes `thread/read`, `thread/status/changed`, `turn/started`, and `turn/completed` and submits only when `canAcceptDirectInput` is true.
+
+`orca terminal create --worktree <selector> --controlled-codex-coordinator` is the production entrypoint. The CLI sends `terminal.createAgentSession` with explicit `controlledCoordinator: true` Codex intent after rejecting `--command` and `--title`; ordinary `terminal create` requests retain the legacy unmanaged PTY path. The host resolves the worktree, execution host, cwd, command, `CODEX_HOME`, and account from Orca state, and caller overrides that could change controller authority fail closed before spawn.
+
+The controller creates the thread, launches the visible remote TUI, and waits for deterministic `tui-idle` readiness before registration. From that pane, `orca orchestration run-create --objective <text>` or `orca orchestration run-use --id <run_id>` binds the exact stable pane and Run generation. Renderer reload may remint a terminal handle, so the controller resolves the current handle from the stable pane plus PTY/worktree identity before each inspection.
+
+SSH, WSL, relay, folder workspaces, Windows, unsupported app-server responses, missing conversations, and account drift fail closed. Active turns remain queued until a terminal notification triggers reconciliation; there is no force-interrupt or PTY-submit fallback.
+
+Controller shutdown waits for process exit, escalates to `SIGKILL` after a bounded grace period, and removes only the Unix socket inode created by that controller. An unknown pre-existing socket is never removed or competed with. After an unclean Orca crash, that socket is a durable fence: operators must prove the old controller is gone before removing it; Orca does not auto-restart into a possibly competing thread.
+
+Codex 0.145 has no documented `turn/start` prepare/finalize transaction. Orca therefore durably writes an opaque provider operation and exact prompt, commits that operation to the wake DB, and only then calls `turn/start` with a stable `clientUserMessageId`. A lost or error response is reconciled through `thread/read` by that client ID. If no matching turn is visible, the operation stays ambiguous and is never blindly retried.
+
+## Reliability gates
+
+- Unit/integration: `pnpm exec vitest run --config config/vitest.config.ts src/main/codex/codex-controlled-session-manager.test.ts src/main/runtime/orchestration/conversation-wake-service.test.ts`
+- Static: `pnpm run typecheck:node`, `pnpm exec oxlint src/main/codex/codex-controlled-session-*.ts src/main/codex/codex-unix-app-server-client.ts`, and `pnpm run check:max-lines-ratchet`.
+- Disposable protocol smoke is disabled by default and never starts a turn: `ORCA_RUN_CODEX_CONTROLLED_SESSION_SMOKE=1 node config/scripts/codex-controlled-session-smoke.mjs <thread-id>`.
+- Promotion remains blocked until macOS and Linux live-smoke evidence exists for the pinned Codex version, crash/reload handle remint is exercised end to end, and account-switch/kill-switch soak runs remain duplicate-free.

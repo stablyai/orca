@@ -109,6 +109,8 @@ import { OrchestrationDb, type MessageRow } from './orchestration/db'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import { ConversationWakeService } from './orchestration/conversation-wake-service'
 import type { ConversationWakeProvider } from './orchestration/conversation-wake-provider'
+import type { CodexControlledSessionManager } from '../codex/codex-controlled-session-manager'
+import type { ControlledCodexLaunchAuthority } from '../codex/codex-controlled-launch-authority'
 import {
   planLegacyWorkerTerminalRecovery,
   type LegacyWorkerTerminalRecoveryPlan
@@ -2768,6 +2770,10 @@ export class OrcaRuntimeService {
   private _orchestrationDb: OrchestrationDb | null = null
   private orchestrationConversationWake: ConversationWakeService | null = null
   private readonly orchestrationConversationWakeProviders: readonly ConversationWakeProvider[]
+  private readonly codexControlledSessionManager: CodexControlledSessionManager | null
+  private readonly resolveControlledCodexLaunchAuthorityFn:
+    | ((workspacePath: string) => ControlledCodexLaunchAuthority)
+    | null
   private readonly isOrchestrationConversationWakeEnabledFn: () => boolean
   private readonly isOrchestrationConversationWakeKillSwitchOpenFn: () => boolean
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
@@ -3235,6 +3241,10 @@ export class OrcaRuntimeService {
       agentSessionClaimSigner?: AgentSessionClaimSigner
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
       orchestrationConversationWakeProviders?: readonly ConversationWakeProvider[]
+      codexControlledSessionManager?: CodexControlledSessionManager
+      resolveControlledCodexLaunchAuthority?: (
+        workspacePath: string
+      ) => ControlledCodexLaunchAuthority
       isOrchestrationConversationWakeEnabled?: () => boolean
       isOrchestrationConversationWakeKillSwitchOpen?: () => boolean
     }
@@ -3249,7 +3259,13 @@ export class OrcaRuntimeService {
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
-    this.orchestrationConversationWakeProviders = deps?.orchestrationConversationWakeProviders ?? []
+    this.codexControlledSessionManager = deps?.codexControlledSessionManager ?? null
+    this.resolveControlledCodexLaunchAuthorityFn =
+      deps?.resolveControlledCodexLaunchAuthority ?? null
+    this.orchestrationConversationWakeProviders = [
+      ...(deps?.orchestrationConversationWakeProviders ?? []),
+      ...(this.codexControlledSessionManager ? [this.codexControlledSessionManager] : [])
+    ]
     this.isOrchestrationConversationWakeEnabledFn =
       deps?.isOrchestrationConversationWakeEnabled ??
       (() => process.env.ORCA_FEATURE_ORCHESTRATION_CONVERSATION_WAKE === '1')
@@ -3760,6 +3776,50 @@ export class OrcaRuntimeService {
     return this.ensureOrchestrationConversationWake().bindTarget(params)
   }
 
+  async launchControlledCodexConversation(
+    params: Parameters<CodexControlledSessionManager['launch']>[0] & {
+      runId: string
+      consumerGeneration: number
+    }
+  ): Promise<Awaited<ReturnType<CodexControlledSessionManager['launch']>>> {
+    if (!this.codexControlledSessionManager) {
+      throw new Error('controlled Codex session manager is unavailable')
+    }
+    const result = await this.codexControlledSessionManager.launch(params)
+    try {
+      await this.bindOrchestrationConversationWake({
+        runId: params.runId,
+        consumerGeneration: params.consumerGeneration,
+        provider: this.codexControlledSessionManager.id,
+        conversationId: params.conversationId
+      })
+      return result
+    } catch (error) {
+      if (result.disposition === 'created') {
+        await this.codexControlledSessionManager.disposeConversation(params.conversationId)
+      }
+      throw error
+    }
+  }
+
+  async bindControlledCodexCoordinator(
+    runId: string,
+    consumerGeneration: number,
+    coordinatorPaneKey: string
+  ): Promise<void> {
+    const manager = this.codexControlledSessionManager
+    const conversationId = manager?.getConversationForPane(coordinatorPaneKey)
+    if (!manager || !conversationId) {
+      return
+    }
+    await this.bindOrchestrationConversationWake({
+      runId,
+      consumerGeneration,
+      provider: manager.id,
+      conversationId
+    })
+  }
+
   onOrchestrationMessageCommitted(message: MessageRow): void {
     void this.ensureOrchestrationConversationWake()
       .onMessageCommitted(message)
@@ -3769,6 +3829,13 @@ export class OrcaRuntimeService {
   reconcileOrchestrationConversationWake(): Promise<void> {
     this.getOrchestrationDb()
     return this.ensureOrchestrationConversationWake().reconcile()
+  }
+
+  async disposeOrchestrationConversationWake(): Promise<void> {
+    await (this.orchestrationConversationWake?.dispose() ??
+      this.codexControlledSessionManager?.dispose() ??
+      Promise.resolve())
+    this.orchestrationConversationWake = null
   }
 
   private ensureOrchestrationConversationWake(): ConversationWakeService {
@@ -24081,7 +24148,8 @@ export class OrcaRuntimeService {
           request.presentation ?? null,
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
-          request.viewMode ?? null
+          request.viewMode ?? null,
+          request.controlledCoordinator ?? false
         ])
       )
       .digest('base64url')
@@ -24119,6 +24187,20 @@ export class OrcaRuntimeService {
       // both observe an empty ledger and reach the execution owner independently.
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
       if (
+        request.controlledCoordinator === true &&
+        (request.agent !== 'codex' ||
+          request.promptDelivery === 'draft' ||
+          request.agentArgs !== undefined ||
+          request.startupCwd !== undefined ||
+          request.placement !== undefined ||
+          workspace.connectionId !== null ||
+          Boolean(workspace.folderWorkspace) ||
+          parseWslUncPath(workspace.path) !== null ||
+          process.platform === 'win32')
+      ) {
+        throw new Error('controlled_codex_coordinator_unsupported')
+      }
+      if (
         !(await this.executionOwnerSupportsAgentSessionOperation(
           workspace,
           'create',
@@ -24147,9 +24229,17 @@ export class OrcaRuntimeService {
             request.presentation ?? null,
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
-            request.viewMode ?? null
+            request.viewMode ?? null,
+            request.controlledCoordinator ?? false
           ])
         )
+        .digest('base64url')
+      const executionOperationId = createHash('sha256')
+        .update(this.runtimeId)
+        .update('\0')
+        .update(operationKey)
+        .update('\0')
+        .update(resolvedFingerprint)
         .digest('base64url')
       const settings = this.store!.getSettings()
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
@@ -24188,6 +24278,33 @@ export class OrcaRuntimeService {
       if (!startup) {
         throw new Error('agent_session_identity_required')
       }
+      let preparedControlledLaunch: ReturnType<
+        CodexControlledSessionManager['prepareNewLaunch']
+      > | null = null
+      if (request.controlledCoordinator === true) {
+        const manager = this.codexControlledSessionManager
+        const authority = this.resolveControlledCodexLaunchAuthorityFn?.(workspace.path)
+        if (!manager || !authority?.codexHome || !authority.commandOverride) {
+          throw new Error('controlled_codex_coordinator_unavailable')
+        }
+        preparedControlledLaunch = manager.prepareNewLaunch(
+          {
+            conversationId: `codex-controlled:${executionOperationId}`,
+            operationId: executionOperationId,
+            worktreeSelector: `id:${workspace.id}`,
+            workspaceKind: 'worktree',
+            hostKind: 'local',
+            cwd: workspace.path,
+            codexHome: authority.codexHome,
+            accountId: authority.accountId,
+            presentation: request.presentation ?? 'background',
+            command: authority.commandOverride,
+            model: request.launchPreferences?.model,
+            prompt: request.prompt
+          },
+          authority.command
+        )
+      }
       if (workspace.connectionId) {
         await this.markRemoteWorkspaceTrustedForAgent(
           request.agent,
@@ -24201,18 +24318,29 @@ export class OrcaRuntimeService {
         throw new Error('client_disconnected')
       }
       let terminal: RuntimeTerminalCreate
-      const executionOperationId = createHash('sha256')
-        .update(this.runtimeId)
-        .update('\0')
-        .update(operationKey)
-        .update('\0')
-        .update(resolvedFingerprint)
-        .digest('base64url')
       const operationTabId =
         request.placement?.tabId ?? deterministicAgentSessionUuid(`${executionOperationId}:tab`)
       const operationLeafId =
         request.placement?.leafId ?? deterministicAgentSessionUuid(`${executionOperationId}:leaf`)
       const operationHandle = `term_${deterministicAgentSessionUuid(`${executionOperationId}:handle`)}`
+      if (request.controlledCoordinator === true) {
+        retainReplayFence = true
+        const controlled = await this.codexControlledSessionManager!.launchPreparedNew(
+          preparedControlledLaunch!
+        )
+        return {
+          disposition: 'created',
+          terminal: {
+            handle: controlled.identity.terminalHandle,
+            ptyId: controlled.identity.terminalPtyId,
+            tabId: controlled.identity.terminalTabId,
+            paneKey: controlled.identity.terminalPaneKey,
+            worktreeId: controlled.identity.worktreeId,
+            title: 'Codex',
+            surface: request.presentation === 'background' ? 'background' : 'visible'
+          }
+        }
+      }
       try {
         terminal = await this.createTerminal(`id:${workspace.id}`, {
           command: startup.launchCommand,

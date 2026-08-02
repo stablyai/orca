@@ -3750,6 +3750,41 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('launches an explicitly controlled Codex coordinator through agent-session RPC', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_controlled',
+          worktreeId: 'repo::/tmp/repo/feature',
+          title: 'Codex'
+        },
+        disposition: 'created'
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'id:repo::/tmp/repo/feature',
+        '--controlled-codex-coordinator',
+        '--json'
+      ],
+      '/tmp/repo/feature'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.createAgentSession', {
+      clientOperationId: expect.stringMatching(/^\d+-[a-f0-9]{32}$/),
+      worktree: 'id:repo::/tmp/repo/feature',
+      agent: 'codex',
+      presentation: 'background',
+      controlledCoordinator: true
+    })
+  })
+
   it('collects and formats memory diagnostics', async () => {
     queueFixtures(
       callMock,

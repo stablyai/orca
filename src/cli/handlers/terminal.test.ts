@@ -61,3 +61,110 @@ describe('terminal close CLI', () => {
     expect(help).toContain('durable persistence')
   })
 })
+
+describe('terminal create CLI', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function invoke(
+    flags: Map<string, string | boolean>,
+    call = vi.fn().mockResolvedValue({
+      result: { terminal: { handle: 'term-1', worktreeId: 'worktree-1', title: 'Codex' } }
+    })
+  ) {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    return {
+      call,
+      promise: TERMINAL_HANDLERS['terminal create']({
+        flags,
+        client: { call, isRemote: false } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    }
+  }
+
+  it('keeps ordinary terminal creation on the legacy RPC by default', async () => {
+    const { call, promise } = invoke(
+      new Map<string, string | boolean>([
+        ['worktree', 'id:worktree-1'],
+        ['command', 'codex']
+      ])
+    )
+
+    await promise
+
+    expect(call).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'id:worktree-1',
+      command: 'codex',
+      title: undefined,
+      focus: false,
+      rendererBacked: true,
+      activate: false
+    })
+  })
+
+  it('routes explicit controlled coordinator creation through the agent-session RPC', async () => {
+    const { call, promise } = invoke(
+      new Map<string, string | boolean>([
+        ['worktree', 'id:worktree-1'],
+        ['controlled-codex-coordinator', true]
+      ])
+    )
+
+    await promise
+
+    expect(call).toHaveBeenCalledOnce()
+    expect(call).toHaveBeenCalledWith('terminal.createAgentSession', {
+      clientOperationId: expect.stringMatching(/^\d+-[a-f0-9]{32}$/),
+      worktree: 'id:worktree-1',
+      agent: 'codex',
+      presentation: 'background',
+      controlledCoordinator: true
+    })
+  })
+
+  it.each(['command', 'title'])(
+    'rejects controlled creation with --%s before RPC',
+    async (flag) => {
+      const { call, promise } = invoke(
+        new Map<string, string | boolean>([
+          ['worktree', 'id:worktree-1'],
+          ['controlled-codex-coordinator', true],
+          [flag, 'caller override']
+        ])
+      )
+
+      await expect(promise).rejects.toMatchObject({ code: 'invalid_argument' })
+      expect(call).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not fall back to an unmanaged terminal after a controlled RPC failure', async () => {
+    const failure = new Error('controlled Codex launch is disabled')
+    const call = vi.fn().mockRejectedValue(failure)
+    const { promise } = invoke(
+      new Map<string, string | boolean>([
+        ['worktree', 'id:worktree-1'],
+        ['controlled-codex-coordinator', true]
+      ]),
+      call
+    )
+
+    await expect(promise).rejects.toBe(failure)
+    expect(call).toHaveBeenCalledOnce()
+    expect(call.mock.calls[0]?.[0]).toBe('terminal.createAgentSession')
+  })
+
+  it('parses and documents the controlled coordinator opt-in', () => {
+    const parsed = parseArgs(['terminal', 'create', '--controlled-codex-coordinator'])
+    expect(parsed.flags.get('controlled-codex-coordinator')).toBe(true)
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    printHelp(COMMAND_SPECS, ['terminal', 'create'])
+    expect(String(log.mock.calls[0]?.[0])).toContain(
+      'orca terminal create --worktree active --controlled-codex-coordinator --json'
+    )
+  })
+})

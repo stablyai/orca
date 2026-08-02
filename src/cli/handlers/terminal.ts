@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
@@ -42,6 +43,22 @@ import {
 // timeout. Even without an explicit server timeout, the client must allow
 // long waits instead of failing at the generic 15s transport cap.
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
+
+function createAgentSessionOperationId(): string {
+  return `${Date.now()}-${randomBytes(16).toString('hex')}`
+}
+
+function assertControlledCodexCoordinatorFlags(flags: Map<string, string | boolean>): void {
+  const incompatible = ['command', 'title'].filter((flag) => flags.has(flag))
+  if (incompatible.length > 0) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--controlled-codex-coordinator cannot be combined with ${incompatible
+        .map((flag) => `--${flag}`)
+        .join(' or ')}.`
+    )
+  }
+}
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
@@ -131,12 +148,31 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         'Remote terminal create requires --worktree because the client cwd cannot identify a server worktree.'
       )
     }
+    const controlledCodexCoordinator = flags.get('controlled-codex-coordinator') === true
+    if (controlledCodexCoordinator) {
+      assertControlledCodexCoordinatorFlags(flags)
+    }
     const command = getOptionalStringFlag(flags, 'command')
     const useRendererBackedInteractiveTerminal =
       !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
+    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    if (controlledCodexCoordinator) {
+      const result = await client.call<{ terminal: RuntimeTerminalCreate }>(
+        'terminal.createAgentSession',
+        {
+          clientOperationId: createAgentSessionOperationId(),
+          worktree,
+          agent: 'codex',
+          presentation: focus ? 'focused' : 'background',
+          controlledCoordinator: true
+        }
+      )
+      printResult(result, json, formatTerminalCreate)
+      return
+    }
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-      worktree: await getBrowserWorktreeSelector(flags, cwd, client),
+      worktree,
       command,
       title: getOptionalStringFlag(flags, 'title'),
       // Why: interactive local agent TUIs need the renderer-backed terminal
