@@ -1,17 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, fromWebContentsMock, getSpeechModelManagerMock, getSpeechSttServiceMock } =
-  vi.hoisted(() => ({
-    handleMock: vi.fn(),
-    fromWebContentsMock: vi.fn(),
-    getSpeechModelManagerMock: vi.fn(),
-    getSpeechSttServiceMock: vi.fn()
-  }))
+const {
+  handleMock,
+  fromWebContentsMock,
+  getSpeechModelManagerMock,
+  getSpeechSttServiceMock,
+  deleteLocalSpeechModelMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  fromWebContentsMock: vi.fn(),
+  getSpeechModelManagerMock: vi.fn(),
+  getSpeechSttServiceMock: vi.fn(),
+  deleteLocalSpeechModelMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp/orca-speech-test') },
   BrowserWindow: { fromWebContents: fromWebContentsMock },
   ipcMain: { handle: handleMock },
+  safeStorage: {
+    decryptString: vi.fn(),
+    encryptString: vi.fn(() => Buffer.from('encrypted')),
+    isEncryptionAvailable: vi.fn(() => true)
+  },
   systemPreferences: {
     getMediaAccessStatus: vi.fn(() => 'granted'),
     askForMediaAccess: vi.fn(() => Promise.resolve(true))
@@ -26,6 +37,10 @@ vi.mock('../speech/model-catalog', () => ({
 vi.mock('../speech/speech-runtime-service', () => ({
   getSpeechModelManager: getSpeechModelManagerMock,
   getSpeechSttService: getSpeechSttServiceMock
+}))
+
+vi.mock('../speech/speech-model-deletion', () => ({
+  deleteLocalSpeechModel: deleteLocalSpeechModelMock
 }))
 
 import { registerSpeechHandlers } from './speech'
@@ -46,6 +61,7 @@ describe('registerSpeechHandlers', () => {
     fromWebContentsMock.mockReset()
     getSpeechModelManagerMock.mockReset()
     getSpeechSttServiceMock.mockReset()
+    deleteLocalSpeechModelMock.mockReset()
   })
 
   it('clears the model download progress callback after completion', async () => {
@@ -120,5 +136,24 @@ describe('registerSpeechHandlers', () => {
 
     expect(clearProgressCallback).toHaveBeenCalledTimes(1)
     expect(window.off).toHaveBeenCalledWith('closed', expect.any(Function))
+  })
+
+  it('routes desktop model deletion through the shared deletion helper', async () => {
+    const store = {} as never
+    const manager = { deleteModel: vi.fn() }
+    const sttService = { prepareModelForDeletion: vi.fn() }
+    getSpeechModelManagerMock.mockReturnValue(manager)
+    getSpeechSttServiceMock.mockReturnValue(sttService)
+    deleteLocalSpeechModelMock.mockResolvedValue(undefined)
+    registerSpeechHandlers(store)
+
+    await getHandler('speech:deleteModel')({ sender: { id: 7 } }, 'model-1')
+
+    expect(deleteLocalSpeechModelMock).toHaveBeenCalledWith({
+      store,
+      modelManager: manager,
+      sttService,
+      modelId: 'model-1'
+    })
   })
 })

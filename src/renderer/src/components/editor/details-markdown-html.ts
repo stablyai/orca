@@ -1,6 +1,28 @@
 import type { MarkdownToken } from '@tiptap/core'
 
-export const DETAILS_CLOSE_TAG = '</details>'
+// Toggle summaries can render at heading scales 1–5, mirroring the plain
+// heading levels the slash menu / toolbar dropdown offer (h1–h5).
+export type ToggleHeadingVariant =
+  | 'heading-1'
+  | 'heading-2'
+  | 'heading-3'
+  | 'heading-4'
+  | 'heading-5'
+
+export const TOGGLE_HEADING_VARIANTS: readonly ToggleHeadingVariant[] = [
+  'heading-1',
+  'heading-2',
+  'heading-3',
+  'heading-4',
+  'heading-5'
+]
+
+export function parseToggleHeadingVariant(value: unknown): ToggleHeadingVariant | null {
+  return typeof value === 'string' &&
+    TOGGLE_HEADING_VARIANTS.includes(value as ToggleHeadingVariant)
+    ? (value as ToggleHeadingVariant)
+    : null
+}
 
 export type DetailsHtmlToken = MarkdownToken & {
   attributes?: Record<string, unknown>
@@ -15,6 +37,12 @@ export type DetailsHtmlBlock = {
   hasNestedDetails: boolean
 }
 
+export type DetailsSummaryHtml = {
+  attributes: string
+  content: string
+  rawLength: number
+}
+
 export function escapeDetailsHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -24,11 +52,16 @@ export function escapeDetailsHtml(value: string): string {
 }
 
 export function parseDetailsAttributes(rawAttributes: string): Record<string, unknown> {
+  // Why: validation accepts normal HTML whitespace around `=`, so parsing
+  // must accept it too or an editable toggle loses its heading variant.
+  const variantMatch = rawAttributes.match(
+    /\sdata-orca-toggle\s*=\s*(?:"(heading-[1-5])"|'(heading-[1-5])'|(heading-[1-5]))(?:\s|$)/i
+  )
   return {
     open: /\sopen(?:\s|=|$)/i.test(rawAttributes),
-    variant: /\sdata-orca-toggle=(?:"heading-1"|'heading-1'|heading-1)(?:\s|$)/i.test(rawAttributes)
-      ? 'heading-1'
-      : null
+    variant: parseToggleHeadingVariant(
+      (variantMatch?.[1] ?? variantMatch?.[2] ?? variantMatch?.[3])?.toLowerCase()
+    )
   }
 }
 
@@ -43,8 +76,9 @@ export function detailsBodyHtmlToMarkdown(body: string): string {
 export function renderDetailsAttributes(attrs: Record<string, unknown> | undefined): string {
   const attributes = ['class="orca-details"']
 
-  if (attrs?.variant === 'heading-1') {
-    attributes.push('data-orca-toggle="heading-1"')
+  const variant = parseToggleHeadingVariant(attrs?.variant)
+  if (variant) {
+    attributes.push(`data-orca-toggle="${variant}"`)
   }
 
   if (attrs?.open === true) {
@@ -151,13 +185,86 @@ function hasOnlySupportedDetailsAttributes(rawAttributes: string): boolean {
     rawAttributes
       .replace(/\s+open(?:\s*=\s*(?:""|"open"|''|'open'|open))?(?=\s|$)/giu, '')
       .replace(/\s+class\s*=\s*(?:"orca-details"|'orca-details'|orca-details)(?=\s|$)/giu, '')
-      .replace(/\s+data-orca-toggle\s*=\s*(?:"heading-1"|'heading-1'|heading-1)(?=\s|$)/giu, '')
+      .replace(
+        /\s+data-orca-toggle\s*=\s*(?:"heading-[1-5]"|'heading-[1-5]'|heading-[1-5])(?=\s|$)/giu,
+        ''
+      )
       .trim() === ''
   )
 }
 
 function hasOnlyPlainParagraphAndBreakTags(content: string): boolean {
   return !/<p\b(?!\s*>)[^>]*>|<br\b(?!\s*\/?>)[^>]*>/iu.test(content)
+}
+
+export function extractDetailsSummaryHtml(inner: string): DetailsSummaryHtml | null {
+  let startIndex = 0
+  while (startIndex < inner.length && isHtmlWhitespace(inner.charCodeAt(startIndex))) {
+    startIndex++
+  }
+
+  const tagName = '<summary'
+  if (!startsWithAsciiIgnoreCase(inner, tagName, startIndex)) {
+    return null
+  }
+  if (isHtmlTagNamePart(inner.charCodeAt(startIndex + tagName.length))) {
+    return null
+  }
+
+  const openingEndIndex = inner.indexOf('>', startIndex + tagName.length)
+  if (openingEndIndex === -1) {
+    return null
+  }
+  const closingTag = '</summary>'
+  const closingStartIndex = indexOfAsciiIgnoreCase(inner, closingTag, openingEndIndex + 1)
+  if (closingStartIndex === -1) {
+    return null
+  }
+
+  return {
+    attributes: inner.slice(startIndex + tagName.length, openingEndIndex),
+    content: inner.slice(openingEndIndex + 1, closingStartIndex),
+    rawLength: closingStartIndex + closingTag.length
+  }
+}
+
+function isHtmlWhitespace(code: number): boolean {
+  return code === 9 || code === 10 || code === 11 || code === 12 || code === 13 || code === 32
+}
+
+function indexOfAsciiIgnoreCase(value: string, search: string, fromIndex: number): number {
+  const lastStart = value.length - search.length
+  for (let index = Math.max(0, fromIndex); index <= lastStart; index++) {
+    if (startsWithAsciiIgnoreCase(value, search, index)) {
+      return index
+    }
+  }
+  return -1
+}
+
+function startsWithAsciiIgnoreCase(value: string, search: string, startIndex: number): boolean {
+  if (startIndex < 0 || startIndex + search.length > value.length) {
+    return false
+  }
+  for (let index = 0; index < search.length; index++) {
+    if (toLowerAsciiCode(value.charCodeAt(startIndex + index)) !== search.charCodeAt(index)) {
+      return false
+    }
+  }
+  return true
+}
+
+function toLowerAsciiCode(code: number): number {
+  return code >= 65 && code <= 90 ? code + 32 : code
+}
+
+function isHtmlTagNamePart(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    code === 95 ||
+    (code >= 97 && code <= 122)
+  )
 }
 
 export function isEditableDetailsHtmlBlock(block: DetailsHtmlBlock): boolean {
@@ -169,20 +276,20 @@ export function isEditableDetailsHtmlBlock(block: DetailsHtmlBlock): boolean {
     return false
   }
 
-  const summaryMatch = block.inner.match(/^\s*<summary\b([^>]*)>([\s\S]*?)<\/summary>/i)
-  if (!summaryMatch) {
+  const summary = extractDetailsSummaryHtml(block.inner)
+  if (!summary) {
     return false
   }
 
-  if (summaryMatch[1]?.trim()) {
+  if (summary.attributes.trim()) {
     return false
   }
 
-  if (/<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/.test(summaryMatch[2] ?? '')) {
+  if (/<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/.test(summary.content)) {
     return false
   }
 
-  const bodyHtml = block.inner.replace(/^\s*<summary\b[^>]*>[\s\S]*?<\/summary>/i, '')
+  const bodyHtml = block.inner.slice(summary.rawLength)
   if (!hasOnlyPlainParagraphAndBreakTags(bodyHtml)) {
     return false
   }

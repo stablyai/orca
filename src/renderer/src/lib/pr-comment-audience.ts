@@ -1,15 +1,22 @@
 import type { PRComment } from '../../../shared/types'
+import {
+  createBotAuthorOverrideSet,
+  normalizePRCommentAuthorLogin
+} from '../../../shared/pr-bot-author-overrides'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { translate } from '@/i18n/i18n'
+
+export { createBotAuthorOverrideSet, normalizePRCommentAuthorLogin }
 
 export type PRCommentAudienceFilter = 'all' | 'human' | 'bot'
 
-export const PR_COMMENT_AUDIENCE_FILTERS: {
-  value: PRCommentAudienceFilter
-  label: string
-}[] = [
-  { value: 'all', label: 'All' },
-  { value: 'human', label: 'Humans' },
-  { value: 'bot', label: 'Bots' }
-]
+export const getPrCommentAudienceFilters = createLocalizedCatalog(
+  (): { value: PRCommentAudienceFilter; label: string }[] => [
+    { value: 'all', label: translate('auto.lib.pr.comment.audience.27ce73211c', 'All') },
+    { value: 'human', label: translate('auto.lib.pr.comment.audience.a7150a17bc', 'Humans') },
+    { value: 'bot', label: translate('auto.lib.pr.comment.audience.64deee36a9', 'Bots') }
+  ]
+)
 
 const BOT_LOGIN_SUFFIX = '[bot]'
 const AUTOMATION_LOGIN_PATTERNS = [
@@ -43,12 +50,18 @@ const KNOWN_AUTOMATION_LOGIN_SUBSTRINGS = [
   '-reviewer'
 ]
 
-export function isBotPRComment(comment: PRComment): boolean {
+export function isBotPRComment(
+  comment: PRComment,
+  botAuthorOverrides?: ReadonlySet<string>
+): boolean {
+  const author = comment.author.trim()
+  const normalized = normalizePRCommentAuthorLogin(author)
+  if (botAuthorOverrides?.has(normalized)) {
+    return true
+  }
   if (comment.isBot === true) {
     return true
   }
-  const author = comment.author.trim()
-  const normalized = author.toLowerCase()
   if (normalized.endsWith(BOT_LOGIN_SUFFIX)) {
     return true
   }
@@ -59,9 +72,10 @@ export function isBotPRComment(comment: PRComment): boolean {
 }
 
 export function getPRCommentAudienceCounts(
-  comments: PRComment[]
+  comments: PRComment[],
+  botAuthorOverrides?: ReadonlySet<string>
 ): Record<PRCommentAudienceFilter, number> {
-  const bot = comments.filter(isBotPRComment).length
+  const bot = comments.filter((comment) => isBotPRComment(comment, botAuthorOverrides)).length
   return {
     all: comments.length,
     human: comments.length - bot,
@@ -71,13 +85,14 @@ export function getPRCommentAudienceCounts(
 
 export function filterPRCommentsByAudience(
   comments: PRComment[],
-  filter: PRCommentAudienceFilter
+  filter: PRCommentAudienceFilter,
+  botAuthorOverrides?: ReadonlySet<string>
 ): PRComment[] {
   if (filter === 'bot') {
-    return comments.filter(isBotPRComment)
+    return comments.filter((comment) => isBotPRComment(comment, botAuthorOverrides))
   }
   if (filter === 'human') {
-    return comments.filter((comment) => !isBotPRComment(comment))
+    return comments.filter((comment) => !isBotPRComment(comment, botAuthorOverrides))
   }
   return comments
 }
@@ -85,10 +100,10 @@ export function filterPRCommentsByAudience(
 export function getPRCommentAudienceEmptyLabel(filter: PRCommentAudienceFilter): string {
   switch (filter) {
     case 'bot':
-      return 'No bot comments.'
+      return translate('auto.lib.pr.comment.audience.empty.bot', 'No bot comments.')
     case 'human':
-      return 'No human comments.'
+      return translate('auto.lib.pr.comment.audience.empty.human', 'No human comments.')
     case 'all':
-      return 'No comments yet.'
+      return translate('auto.lib.pr.comment.audience.empty.all', 'No comments yet.')
   }
 }

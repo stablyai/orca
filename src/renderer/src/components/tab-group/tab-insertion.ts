@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { DragEndEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
-import type { TabDragItemData } from './useTabDragSplit'
+import type { TabDragItemData } from './tab-drag-data'
 
 // Why: when a tab is dragged over another tab's sortable rect, we compute
 // which side of the hovered tab the drop will land on (before vs. after).
@@ -62,18 +62,10 @@ export function resolveTabIndicatorEdges(
   }
 
   const insertionIndex = hoveredIndex + (hoveredTabInsertion.side === 'right' ? 1 : 0)
-  const edges: TabIndicatorEdge[] = []
-
-  // Why: VS Code draws the insertion cue by marking both tabs adjacent to the
-  // slot so the two 1px edges read as one continuous bar between them.
-  if (insertionIndex > 0) {
-    edges.push({ visibleTabId: orderedVisibleTabIds[insertionIndex - 1]!, side: 'right' })
-  }
   if (insertionIndex < orderedVisibleTabIds.length) {
-    edges.push({ visibleTabId: orderedVisibleTabIds[insertionIndex]!, side: 'left' })
+    return [{ visibleTabId: orderedVisibleTabIds[insertionIndex]!, side: 'left' }]
   }
-
-  return edges
+  return [{ visibleTabId: orderedVisibleTabIds[insertionIndex - 1]!, side: 'right' }]
 }
 
 function equal(a: HoveredTabInsertion | null, b: HoveredTabInsertion | null): boolean {

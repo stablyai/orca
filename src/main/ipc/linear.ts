@@ -13,6 +13,7 @@ import {
   getIssueComments
 } from '../linear/issues'
 import {
+  createProject,
   getCustomView,
   getProject,
   listCustomViewIssues,
@@ -24,6 +25,7 @@ import {
 import { listTeams, getTeamStates, getTeamLabels, getTeamMembers } from '../linear/teams'
 import type { LinearListFilter } from '../linear/issues'
 import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
+import { optionalParsedLinearIssueAttributeFilter } from '../../shared/linear-issue-attribute-filter'
 import type {
   LinearCustomViewModel,
   LinearIssueUpdate,
@@ -54,6 +56,29 @@ function normalizeCustomViewModel(value: unknown): LinearCustomViewModel {
     throw new Error('Custom view model is required')
   }
   return value
+}
+
+function normalizeIdList(value: unknown, fieldName: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (
+    !Array.isArray(value) ||
+    !value.every((id): id is string => typeof id === 'string' && Boolean(id.trim()))
+  ) {
+    throw new Error(`Invalid ${fieldName}`)
+  }
+  return value.map((id) => id.trim())
+}
+
+function normalizeOptionalDate(value: unknown, fieldName: string): string | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    throw new Error(`Invalid ${fieldName}`)
+  }
+  return value.trim()
 }
 
 export function registerLinearHandlers(): void {
@@ -107,13 +132,26 @@ export function registerLinearHandlers(): void {
     'linear:listIssues',
     async (
       _event,
-      args?: { filter?: LinearListFilter; limit?: number; workspaceId?: LinearWorkspaceSelection }
+      args?: {
+        filter?: LinearListFilter
+        limit?: number
+        workspaceId?: LinearWorkspaceSelection
+        attributeFilter?: unknown
+      }
     ) => {
       const filter = VALID_FILTERS.has(args?.filter as LinearListFilter)
         ? (args!.filter as LinearListFilter)
         : undefined
       const limit = clampLinearIssueListLimit(args?.limit)
-      return listIssues(filter, limit, normalizeWorkspaceSelection(args?.workspaceId))
+      // Why: reject malformed filters at the trust boundary instead of
+      // normalizing them to empty (which would silently broaden results).
+      const attributeFilter =
+        args && 'attributeFilter' in args && args.attributeFilter !== undefined
+          ? optionalParsedLinearIssueAttributeFilter(args.attributeFilter)
+          : undefined
+      return listIssues(filter, limit, normalizeWorkspaceSelection(args?.workspaceId), {
+        attributeFilter
+      })
     }
   )
 
@@ -280,6 +318,72 @@ export function registerLinearHandlers(): void {
         limit,
         normalizeWorkspaceSelection(args?.workspaceId),
         args?.force === true
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'linear:createProject',
+    async (
+      _event,
+      args: {
+        name: string
+        description?: string
+        content?: string
+        teamIds?: string[]
+        leadId?: string | null
+        memberIds?: string[]
+        labelIds?: string[]
+        priority?: number
+        startDate?: string
+        targetDate?: string
+        workspaceId?: string
+      }
+    ) => {
+      if (typeof args?.name !== 'string' || !args.name.trim()) {
+        return { ok: false, error: 'Project name is required' }
+      }
+      let teamIds: string[]
+      try {
+        teamIds = normalizeIdList(args.teamIds, 'team IDs') ?? []
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : 'Invalid team IDs' }
+      }
+      if (teamIds.length === 0) {
+        return { ok: false, error: 'At least one team is required' }
+      }
+      if (
+        args.priority !== undefined &&
+        (!Number.isInteger(args.priority) || args.priority < 0 || args.priority > 4)
+      ) {
+        return { ok: false, error: 'Invalid priority' }
+      }
+      let memberIds: string[] | undefined
+      let labelIds: string[] | undefined
+      let startDate: string | undefined
+      let targetDate: string | undefined
+      try {
+        memberIds = normalizeIdList(args.memberIds, 'member IDs')
+        labelIds = normalizeIdList(args.labelIds, 'label IDs')
+        startDate = normalizeOptionalDate(args.startDate, 'start date')
+        targetDate = normalizeOptionalDate(args.targetDate, 'target date')
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : 'Invalid project' }
+      }
+      return createProject(
+        {
+          name: args.name.trim(),
+          description: args.description?.trim() || undefined,
+          content: args.content?.trim() || undefined,
+          teamIds,
+          leadId: normalizeWorkspaceId(args.leadId),
+          memberIds,
+          labelIds,
+          priority: typeof args.priority === 'number' ? args.priority : undefined,
+          startDate,
+          targetDate
+        },
+        normalizeWorkspaceId(args.workspaceId)
       )
     }
   )

@@ -4,8 +4,8 @@
 // It also owns the keepalive timer and per-connection abort signal so the
 // server-side handler can cancel long-poll dispatches when the client goes
 // away. See design doc §3.1.
-import { createServer, type Server, type Socket } from 'net'
-import { chmodSync, existsSync, rmSync } from 'fs'
+import { createServer, type Server, type Socket } from 'node:net'
+import { chmodSync, existsSync, rmSync } from 'node:fs'
 import type { RpcMessageContext, RpcTransport } from './transport'
 
 const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024

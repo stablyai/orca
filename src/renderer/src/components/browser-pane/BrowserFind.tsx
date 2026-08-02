@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
+import { getFindRequestQuery } from '@/lib/find-query-bounds'
 
 type BrowserFindProps = {
   isOpen: boolean
@@ -18,6 +20,7 @@ export default function BrowserFind({
   const [query, setQuery] = useState('')
   const [activeMatch, setActiveMatch] = useState(0)
   const [totalMatches, setTotalMatches] = useState(0)
+  const requestQuery = getFindRequestQuery(query)
 
   const safeFindInPage = useCallback(
     (text: string, opts?: Electron.FindInPageOptions): void => {
@@ -48,16 +51,16 @@ export default function BrowserFind({
   }, [webviewRef])
 
   const findNext = useCallback(() => {
-    if (query) {
-      safeFindInPage(query, { forward: true, findNext: true })
+    if (requestQuery) {
+      safeFindInPage(requestQuery, { forward: true, findNext: true })
     }
-  }, [query, safeFindInPage])
+  }, [requestQuery, safeFindInPage])
 
   const findPrevious = useCallback(() => {
-    if (query) {
-      safeFindInPage(query, { forward: false, findNext: true })
+    if (requestQuery) {
+      safeFindInPage(requestQuery, { forward: false, findNext: true })
     }
-  }, [query, safeFindInPage])
+  }, [requestQuery, safeFindInPage])
 
   useEffect(() => {
     if (isOpen) {
@@ -74,12 +77,12 @@ export default function BrowserFind({
     if (!isOpen) {
       return
     }
-    if (!query) {
+    if (!requestQuery) {
       safeStopFindInPage()
       return
     }
 
-    const runFind = (): void => safeFindInPage(query)
+    const runFind = (): void => safeFindInPage(requestQuery)
     if (!wasOpen) {
       runFind()
       return
@@ -89,7 +92,7 @@ export default function BrowserFind({
     // navigation still use the live query immediately.
     const id = window.setTimeout(runFind, 200)
     return () => window.clearTimeout(id)
-  }, [isOpen, query, safeFindInPage, safeStopFindInPage])
+  }, [isOpen, requestQuery, safeFindInPage, safeStopFindInPage])
 
   // Why: this effect captures `webviewRef.current` into a local variable, so
   // if the webview element were replaced while `isOpen` stays true the listener
@@ -116,7 +119,7 @@ export default function BrowserFind({
     }
   }, [webviewRef, isOpen])
 
-  if ((!isOpen || !query) && (activeMatch !== 0 || totalMatches !== 0)) {
+  if ((!isOpen || !requestQuery) && (activeMatch !== 0 || totalMatches !== 0)) {
     setActiveMatch(0)
     setTotalMatches(0)
   }
@@ -151,13 +154,22 @@ export default function BrowserFind({
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Find in page..."
+        placeholder={translate(
+          'auto.components.browser.pane.BrowserFind.636a69cd66',
+          'Find in page...'
+        )}
         className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
       />
 
       {query ? (
         <span className="shrink-0 text-xs text-zinc-400">
-          {totalMatches > 0 ? `${activeMatch} of ${totalMatches}` : 'No matches'}
+          {totalMatches > 0
+            ? translate(
+                'auto.components.browser.pane.BrowserFind.fc63f336aa',
+                '{{value0}} of {{value1}}',
+                { value0: activeMatch, value1: totalMatches }
+              )
+            : translate('auto.components.browser.pane.BrowserFind.7baca7b1b8', 'No matches')}
         </span>
       ) : null}
 
@@ -169,7 +181,7 @@ export default function BrowserFind({
         size="icon-xs"
         onClick={findPrevious}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title="Previous match"
+        title={translate('auto.components.browser.pane.BrowserFind.ca7aebbd7f', 'Previous match')}
       >
         <ChevronUp size={14} />
       </Button>
@@ -180,7 +192,7 @@ export default function BrowserFind({
         size="icon-xs"
         onClick={findNext}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title="Next match"
+        title={translate('auto.components.browser.pane.BrowserFind.5c0c02ae76', 'Next match')}
       >
         <ChevronDown size={14} />
       </Button>
@@ -193,7 +205,7 @@ export default function BrowserFind({
         size="icon-xs"
         onClick={onClose}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title="Close"
+        title={translate('auto.components.browser.pane.BrowserFind.c9d5f63fdc', 'Close')}
       >
         <X size={14} />
       </Button>

@@ -1,14 +1,23 @@
 import { ipcMain, shell, dialog } from 'electron'
-import { spawn } from 'node:child_process'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
-import { basename, extname, isAbsolute, normalize, win32 } from 'node:path'
+import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { ShellOpenLocalPathResult } from '../../shared/shell-open-types'
+import type {
+  ShellOpenExternalEditorRequest,
+  ShellOpenExternalEditorResult,
+  ShellOpenLocalPathResult
+} from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
-import { resolveCliCommand } from '../codex-cli/command'
-import { getSpawnArgsForWindows } from '../win32-utils'
+import type { Store } from '../persistence'
+import {
+  EXTERNAL_EDITOR_CLI_COMMAND,
+  launchExternalEditor,
+  resolveExternalEditorLaunchSpec,
+  resolveVsCodeRemoteSshLaunchSpec
+} from '../external-editor-launch'
+import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
 
-export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
+export { EXTERNAL_EDITOR_CLI_COMMAND }
 
 const REPO_ICON_IMAGE_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png'
@@ -36,7 +45,17 @@ async function validateLocalPathTarget(
   return { ok: true, path: normalizedPath }
 }
 
-async function openInFileManager(pathValue: string): Promise<ShellOpenLocalPathResult> {
+function hasActiveRuntime(store: Store): boolean {
+  return Boolean(store.getSettings().activeRuntimeEnvironmentId?.trim())
+}
+
+async function openInFileManager(
+  store: Store,
+  pathValue: string
+): Promise<ShellOpenLocalPathResult> {
+  if (hasActiveRuntime(store)) {
+    return { ok: false, reason: 'remote-runtime-unsupported' }
+  }
   const target = await validateLocalPathTarget(pathValue)
   if (!target.ok) {
     return target
@@ -51,77 +70,52 @@ async function openInFileManager(pathValue: string): Promise<ShellOpenLocalPathR
   }
 }
 
-function resolveExternalEditorCommand(command?: string): string {
-  const trimmed = command?.trim()
-  return resolveCliCommand(trimmed || EXTERNAL_EDITOR_CLI_COMMAND)
-}
-
-function getLauncherBaseName(command: string): string {
-  const name = command.includes('\\') ? win32.basename(command) : basename(command)
-  return name.replace(/\.(?:cmd|exe|bat)$/i, '').toLowerCase()
-}
-
-function buildExternalEditorArgs(editorCommand: string, pathValue: string): string[] {
-  if (getLauncherBaseName(editorCommand) === 'cursor') {
-    // Why: Cursor can route bare folder launches through the last active
-    // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
-    return ['--new-window', pathValue]
-  }
-  return [pathValue]
-}
-
-async function launchExternalEditor(pathValue: string, command?: string): Promise<void> {
-  const editorCommand = resolveExternalEditorCommand(command)
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
-    editorCommand,
-    buildExternalEditorArgs(editorCommand, pathValue)
-  )
-
-  await new Promise<void>((resolvePromise, rejectPromise) => {
-    const child = spawn(spawnCmd, spawnArgs, {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true
-    })
-    let settled = false
-
-    function cleanup(): void {
-      child.off('error', onError)
-      child.off('spawn', onSpawn)
-    }
-
-    function settle(callback: () => void): void {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      callback()
-    }
-
-    function onError(error: Error): void {
-      settle(() => rejectPromise(error))
-    }
-
-    function onSpawn(): void {
-      child.unref()
-      settle(resolvePromise)
-    }
-    child.once('error', onError)
-    child.once('spawn', onSpawn)
-  })
-}
-
 async function openInExternalEditor(
-  pathValue: string,
-  command?: string
-): Promise<ShellOpenLocalPathResult> {
-  const target = await validateLocalPathTarget(pathValue)
+  store: Store,
+  request: ShellOpenExternalEditorRequest
+): Promise<ShellOpenExternalEditorResult> {
+  if (hasActiveRuntime(store)) {
+    return { ok: false, reason: 'remote-runtime-unsupported' }
+  }
+
+  const connectionId = request.connectionId?.trim()
+  if (connectionId) {
+    const sshTarget = store.getSshTarget(connectionId)
+    if (!sshTarget) {
+      return { ok: false, reason: 'ssh-target-not-found' }
+    }
+    if (sshTarget.owner?.type === 'on-demand-runtime') {
+      return { ok: false, reason: 'remote-runtime-unsupported' }
+    }
+    if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
+      return { ok: false, reason: 'not-absolute' }
+    }
+    const authority = resolveVsCodeSshAuthority(sshTarget)
+    if (!authority.ok) {
+      return authority
+    }
+    const launchSpec = resolveVsCodeRemoteSshLaunchSpec(
+      request.command,
+      request.path,
+      authority.authority
+    )
+    if (!launchSpec) {
+      return { ok: false, reason: 'remote-editor-unsupported' }
+    }
+    try {
+      await launchExternalEditor(launchSpec)
+      return { ok: true }
+    } catch {
+      return { ok: false, reason: 'launch-failed' }
+    }
+  }
+
+  const target = await validateLocalPathTarget(request.path)
   if (!target.ok) {
     return target
   }
   try {
-    await launchExternalEditor(target.path, command)
+    await launchExternalEditor(resolveExternalEditorLaunchSpec(request.command, target.path))
     return { ok: true }
   } catch {
     return { ok: false, reason: 'launch-failed' }
@@ -141,20 +135,22 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
   }
 }
 
-export function registerShellHandlers(): void {
-  ipcMain.handle('shell:openPath', (_event, path: string) => {
-    shell.showItemInFolder(path)
+export function registerShellHandlers(store: Store): void {
+  ipcMain.handle('shell:openPath', async (_event, path: string): Promise<void> => {
+    // Why: keep the legacy fire-and-forget renderer contract while reusing the
+    // same absolute/existing path validation as the explicit file-manager API.
+    void (await openInFileManager(store, path))
   })
 
   ipcMain.handle(
     'shell:openInFileManager',
-    (_event, path: string): Promise<ShellOpenLocalPathResult> => openInFileManager(path)
+    (_event, path: string): Promise<ShellOpenLocalPathResult> => openInFileManager(store, path)
   )
 
   ipcMain.handle(
     'shell:openInExternalEditor',
-    (_event, path: string, command?: string): Promise<ShellOpenLocalPathResult> =>
-      openInExternalEditor(path, command)
+    (_event, request: ShellOpenExternalEditorRequest): Promise<ShellOpenExternalEditorResult> =>
+      openInExternalEditor(store, request)
   )
 
   ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
@@ -217,7 +213,9 @@ export function registerShellHandlers(): void {
     async (_event, args: { defaultPath?: string }): Promise<string | null> => {
       const result = await dialog.showOpenDialog({
         defaultPath: args.defaultPath,
-        properties: ['openDirectory', 'createDirectory']
+        // Why: callers only need an existing folder grant; enabling native
+        // creation can leave typed prefix directories behind on macOS.
+        properties: ['openDirectory']
       })
       if (result.canceled || result.filePaths.length === 0) {
         return null

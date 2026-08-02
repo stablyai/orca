@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Focus, shortcut, creation, and switching cases share
- * the same floating-workspace DOM/store fixtures. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { Tab, TerminalTab } from '../../../shared/types'
@@ -14,9 +12,11 @@ import {
   isFloatingWorkspacePanelShortcutTarget,
   isFloatingWorkspaceTerminalInputTarget,
   isFloatingWorkspacePanelVisible,
+  matchFloatingWorkspacePanelChord,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut,
   switchFloatingWorkspaceTab
 } from './floating-workspace-terminal-actions'
+import { matchFloatingWorkspacePanelOwnedAction } from './floating-workspace-shortcut-policy'
 
 const activateWebRuntimeSessionTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
@@ -282,6 +282,17 @@ describe('isFloatingWorkspacePanelShortcut', () => {
     ).toBe(false)
   })
 
+  it('claims customized double-tap shortcuts for the floating panel surface', () => {
+    const event = shortcutSurfaceEvent({}) as KeyboardEvent & { doubleTapModifier: 'Shift' }
+    event.doubleTapModifier = 'Shift'
+
+    expect(
+      isFloatingWorkspacePanelShortcut(event, 'linux', null, {
+        'tab.newTerminal': ['DoubleTap+Shift']
+      })
+    ).toBe(true)
+  })
+
   it('does not claim shortcuts with Alt or the wrong platform modifier', () => {
     expect(
       isFloatingWorkspacePanelShortcut(shortcutSurfaceEvent({ key: 't', metaKey: true }), false)
@@ -323,6 +334,105 @@ describe('isFloatingWorkspacePanelShortcut', () => {
   })
 })
 
+describe('matchFloatingWorkspacePanelOwnedAction', () => {
+  beforeEach(() => {
+    installFakeHTMLElement()
+  })
+
+  it('returns the matched action so one pass serves the claim check and the dispatch branch', () => {
+    expect(
+      matchFloatingWorkspacePanelOwnedAction(
+        shortcutEvent({ key: 't', code: 'KeyT', ctrlKey: true, target: makeElement({}) }),
+        'linux',
+        undefined,
+        { context: 'app' }
+      )
+    ).toBe('tab.newTerminal')
+    expect(
+      matchFloatingWorkspacePanelOwnedAction(
+        shortcutEvent({ key: 'w', code: 'KeyW', ctrlKey: true, target: makeElement({}) }),
+        'linux',
+        undefined,
+        { context: 'app' }
+      )
+    ).toBe('tab.close')
+  })
+
+  it('does not gate on the event target — the panel owns these chords from any pane it hosts', () => {
+    expect(
+      matchFloatingWorkspacePanelOwnedAction(
+        shortcutEvent({ key: 'b', code: 'KeyB', target: makeElement({}) }),
+        'linux',
+        undefined,
+        { context: 'app' }
+      )
+    ).toBeNull()
+  })
+})
+
+describe('matchFloatingWorkspacePanelChord', () => {
+  beforeEach(() => {
+    installFakeHTMLElement()
+  })
+
+  it('claims a creation chord from the shortcut surface', () => {
+    expect(
+      matchFloatingWorkspacePanelChord(
+        shortcutSurfaceEvent({ key: 't', code: 'KeyT', ctrlKey: true }),
+        'linux',
+        null,
+        undefined,
+        { context: 'app' }
+      )
+    ).toEqual({ kind: 'action', action: 'tab.newTerminal' })
+  })
+
+  it('keeps creation chords target-gated', () => {
+    expect(
+      matchFloatingWorkspacePanelChord(
+        shortcutEvent({ key: 't', code: 'KeyT', ctrlKey: true, target: makeElement({}) }),
+        'linux',
+        null,
+        undefined,
+        { context: 'app' }
+      )
+    ).toBeNull()
+  })
+
+  it('claims indexed switching and rename regardless of the event target', () => {
+    expect(
+      matchFloatingWorkspacePanelChord(
+        shortcutEvent({ key: '2', code: 'Digit2', ctrlKey: true, target: makeElement({}) }),
+        'linux',
+        null,
+        undefined,
+        { context: 'app' }
+      )
+    ).toEqual({ kind: 'index', index: 1 })
+    expect(
+      matchFloatingWorkspacePanelChord(
+        shortcutEvent({ key: 'r', code: 'KeyR', metaKey: true, target: makeElement({}) }),
+        'darwin',
+        null,
+        undefined,
+        { context: 'app' }
+      )
+    ).toEqual({ kind: 'action', action: 'tab.rename' })
+  })
+
+  it('does not claim chords the panel has no shortcut for', () => {
+    expect(
+      matchFloatingWorkspacePanelChord(
+        shortcutSurfaceEvent({ key: 'b', code: 'KeyB', ctrlKey: true }),
+        'linux',
+        null,
+        undefined,
+        { context: 'app' }
+      )
+    ).toBeNull()
+  })
+})
+
 describe('createFloatingWorkspaceTerminalTab', () => {
   beforeEach(() => {
     activateWebRuntimeSessionTabMock.mockReset()
@@ -343,14 +453,7 @@ describe('createFloatingWorkspaceTerminalTab', () => {
 
     await expect(createFloatingWorkspaceTerminalTab(store as never)).resolves.toBe(tab)
 
-    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      environmentId: undefined,
-      targetGroupId: 'floating-group',
-      command: undefined,
-      activate: true,
-      selectWorktree: false
-    })
+    expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
     expect(store.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
@@ -361,28 +464,27 @@ describe('createFloatingWorkspaceTerminalTab', () => {
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('floating-tab-1')
   })
 
-  it('leaves local tabs untouched when the web runtime accepts the floating terminal', async () => {
+  it('ignores the active runtime and keeps floating workspace terminals local', async () => {
+    const tab = makeTab('floating-tab-runtime')
     const store = {
-      activeGroupIdByWorktree: {},
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
       settings: { activeRuntimeEnvironmentId: 'env-1' },
-      createTab: vi.fn(),
+      createTab: vi.fn().mockReturnValue(tab),
       activateTab: vi.fn()
     }
     createWebRuntimeSessionTerminalMock.mockResolvedValue(true)
 
-    await expect(createFloatingWorkspaceTerminalTab(store as never, 'pwsh')).resolves.toBeNull()
+    await expect(createFloatingWorkspaceTerminalTab(store as never, 'pwsh')).resolves.toBe(tab)
 
-    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        environmentId: 'env-1',
-        command: 'pwsh',
-        selectWorktree: false
-      })
+    expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
+    expect(store.createTab).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'floating-group',
+      'pwsh',
+      { activate: false }
     )
-    expect(store.createTab).not.toHaveBeenCalled()
-    expect(store.activateTab).not.toHaveBeenCalled()
-    expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
+    expect(store.activateTab).toHaveBeenCalledWith('floating-tab-runtime')
+    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('floating-tab-runtime')
   })
 })
 
@@ -403,20 +505,15 @@ describe('createFloatingWorkspaceBrowserTab', () => {
 
     await expect(createFloatingWorkspaceBrowserTab(store as never)).resolves.toBe(browserTab)
 
-    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      environmentId: undefined,
-      url: 'about:blank',
-      targetGroupId: 'floating-group',
-      selectWorktree: false
-    })
+    expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
     expect(store.createBrowserTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'about:blank',
       {
         title: 'New Browser Tab',
         focusAddressBar: true,
-        targetGroupId: 'floating-group'
+        targetGroupId: 'floating-group',
+        browserRuntimeEnvironmentId: null
       }
     )
   })
@@ -503,7 +600,6 @@ describe('switchFloatingWorkspaceTab', () => {
       },
       openFiles: [],
       setActiveTab: vi.fn(),
-      settings: { activeRuntimeEnvironmentId: null },
       tabsByWorktree: {
         [FLOATING_TERMINAL_WORKTREE_ID]: [makeTab('tab-1'), makeTab('tab-2')]
       },
@@ -521,6 +617,70 @@ describe('switchFloatingWorkspaceTab', () => {
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-2')
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('tab-2')
     expect(activateWebRuntimeSessionTabMock).not.toHaveBeenCalled()
+  })
+
+  it('cycles browser tabs locally while a web runtime is active', () => {
+    const notifyActiveTabChanged = vi.fn()
+    vi.stubGlobal('window', { api: { browser: { notifyActiveTabChanged } } })
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    const browserTab = {
+      id: 'browser-2',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      url: 'https://example.com',
+      title: 'Browser',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 0,
+      activePageId: 'page-2'
+    }
+    const store = {
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
+      activateTab: vi.fn(),
+      browserPagesByWorkspace: {},
+      browserTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [browserTab] },
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: 'tab-1',
+            tabOrder: ['tab-1', 'tab-browser-2'],
+            recentTabIds: ['tab-1']
+          }
+        ]
+      },
+      openFiles: [],
+      setActiveTab: vi.fn(),
+      tabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [makeTab('tab-1')]
+      },
+      unifiedTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          makeUnifiedTerminalTab('tab-1'),
+          {
+            id: 'tab-browser-2',
+            entityId: 'browser-2',
+            groupId: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            contentType: 'browser',
+            label: 'Browser',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1
+          } satisfies Tab
+        ]
+      }
+    }
+
+    expect(switchFloatingWorkspaceTab(store as never, 1, 'all-types')).toBe(true)
+
+    expect(store.activateTab).toHaveBeenCalledWith('tab-browser-2')
+    expect(activateWebRuntimeSessionTabMock).not.toHaveBeenCalled()
+    expect(notifyActiveTabChanged).toHaveBeenCalledWith({ browserPageId: 'page-2' })
   })
 })
 

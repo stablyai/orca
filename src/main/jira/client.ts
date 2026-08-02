@@ -1,41 +1,90 @@
 /* eslint-disable max-lines -- Why: Jira credential storage and authenticated
 request plumbing share one boundary so encrypted token lifecycle and
 multi-site selection cannot drift between task operations. */
-import { createHash } from 'crypto'
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
-import { safeStorage } from 'electron'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { net, safeStorage, session } from 'electron'
+import {
+  CredentialDecryptionError,
+  credentialFileHasContent,
+  readStoredCredentialToken
+} from '../integration-credential-file'
+import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
+import { withSpan } from '../observability/tracer'
 import type {
+  JiraAuthType,
   JiraConnectArgs,
   JiraConnectionStatus,
   JiraSite,
   JiraSiteSelection,
   JiraViewer
 } from '../../shared/types'
+import { clearAttachmentImagesForSite } from './attachment-image-cache'
+
+// Why: Atlassian's XSRF filter rejects POST/PUT REST calls that carry a browser
+// User-Agent, failing them with "XSRF check failed" even under API-token auth.
+// Electron's net.fetch sends a Chrome UA, so issue search/create/update/comment
+// all 403'd while GET calls (connect, /myself) passed. A non-browser UA is the
+// reliable fix; X-Atlassian-Token: no-check is not honored for this case.
+const JIRA_API_USER_AGENT = 'Orca'
 
 const MAX_CONCURRENT = 4
 let running = 0
-const queue: (() => void)[] = []
+type QueuedJiraRequest = {
+  resolve: () => void
+  reject: (error: Error) => void
+  signal?: AbortSignal
+  onAbort: () => void
+}
+const queue: QueuedJiraRequest[] = []
 
-export function acquire(): Promise<void> {
+function createJiraRequestAbortError(): Error {
+  const error = new Error('Jira request aborted')
+  error.name = 'AbortError'
+  return error
+}
+
+export function acquire(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(createJiraRequestAbortError())
+  }
   if (running < MAX_CONCURRENT) {
     running += 1
     return Promise.resolve()
   }
-  return new Promise((resolve) =>
-    queue.push(() => {
-      running += 1
-      resolve()
-    })
-  )
+  return new Promise((resolve, reject) => {
+    const entry: QueuedJiraRequest = {
+      resolve,
+      reject,
+      signal,
+      onAbort: () => {
+        const index = queue.indexOf(entry)
+        if (index < 0) {
+          return
+        }
+        queue.splice(index, 1)
+        reject(createJiraRequestAbortError())
+      }
+    }
+    signal?.addEventListener('abort', entry.onAbort, { once: true })
+    queue.push(entry)
+  })
 }
 
 export function release(): void {
   running -= 1
-  const next = queue.shift()
-  if (next) {
-    next()
+  let next = queue.shift()
+  while (next) {
+    next.signal?.removeEventListener('abort', next.onAbort)
+    if (!next.signal?.aborted) {
+      running += 1
+      next.resolve()
+      return
+    }
+    next.reject(createJiraRequestAbortError())
+    next = queue.shift()
   }
 }
 
@@ -51,6 +100,13 @@ export type JiraClientForSite = {
   authorization: string
 }
 
+// Self-hosted Jira Server/Data Center only exposes REST v2; Cloud endpoints
+// in this codebase are written against v3. Callers build paths with this
+// prefix so one code path serves both deployments.
+export function apiBasePath(site: JiraSite): string {
+  return site.authType === 'server' ? '/rest/api/2' : '/rest/api/3'
+}
+
 export class JiraApiError extends Error {
   status: number | null
 
@@ -63,6 +119,9 @@ export class JiraApiError extends Error {
 let cachedSiteFile: JiraSiteFile | null = null
 let siteFileLoaded = false
 const cachedTokens = new Map<string, string>()
+// Why: decrypt failures are recorded per site so getStatus can explain
+// failing reads without re-touching the keychain on every status poll.
+const credentialErrors = new Map<string, string>()
 
 function getOrcaDir(): string {
   return join(homedir(), '.orca')
@@ -104,7 +163,7 @@ function emptySiteFile(): JiraSiteFile {
 }
 
 function hasStoredToken(siteId: string): boolean {
-  return cachedTokens.has(siteId) || existsSync(getTokenPath(siteId))
+  return cachedTokens.has(siteId) || credentialFileHasContent(getTokenPath(siteId))
 }
 
 function normalizeSite(input: unknown): JiraSite | null {
@@ -126,7 +185,9 @@ function normalizeSite(input: unknown): JiraSite | null {
     siteUrl: record.siteUrl,
     email: record.email,
     displayName: record.displayName,
-    accountId: record.accountId
+    accountId: record.accountId,
+    // Sites saved before self-hosted support have no authType; they are Cloud.
+    authType: record.authType === 'server' ? 'server' : 'cloud'
   }
 }
 
@@ -206,7 +267,7 @@ function writeEncryptedToken(path: string, apiToken: string): void {
 
 function readToken(siteId: string): string | null {
   const cached = cachedTokens.get(siteId)
-  if (cached) {
+  if (cached !== undefined) {
     return cached
   }
   const path = getTokenPath(siteId)
@@ -215,12 +276,17 @@ function readToken(siteId: string): string | null {
   }
   try {
     const raw = readFileSync(path)
-    const token = safeStorage.isEncryptionAvailable()
-      ? safeStorage.decryptString(raw)
-      : raw.toString('utf-8')
-    cachedTokens.set(siteId, token)
+    const token = readStoredCredentialToken('Jira', raw)
+    if (token) {
+      cachedTokens.set(siteId, token)
+    }
+    credentialErrors.delete(siteId)
     return token
-  } catch {
+  } catch (error) {
+    if (error instanceof CredentialDecryptionError) {
+      credentialErrors.set(siteId, error.message)
+      throw error
+    }
     return null
   }
 }
@@ -230,10 +296,12 @@ function saveToken(siteId: string, apiToken: string): void {
   ensureTokenDir()
   writeEncryptedToken(getTokenPath(siteId), apiToken)
   cachedTokens.set(siteId, apiToken)
+  credentialErrors.delete(siteId)
 }
 
 function deleteToken(siteId: string): void {
   cachedTokens.delete(siteId)
+  credentialErrors.delete(siteId)
   try {
     unlinkSync(getTokenPath(siteId))
   } catch {
@@ -260,8 +328,17 @@ function getSiteId(siteUrl: string, email: string): string {
 
 function toViewer(data: Record<string, unknown>, fallbackEmail: string): JiraViewer {
   const avatarUrls = data.avatarUrls as Record<string, unknown> | undefined
+  // Server/DC /myself has no accountId; its stable identifiers are name/key.
+  const accountId =
+    typeof data.accountId === 'string'
+      ? data.accountId
+      : typeof data.name === 'string'
+        ? data.name
+        : typeof data.key === 'string'
+          ? data.key
+          : ''
   return {
-    accountId: typeof data.accountId === 'string' ? data.accountId : '',
+    accountId,
     displayName: typeof data.displayName === 'string' ? data.displayName : fallbackEmail,
     email: typeof data.emailAddress === 'string' ? data.emailAddress : fallbackEmail,
     avatarUrl:
@@ -284,8 +361,64 @@ function siteToViewer(site: JiraSite | null): JiraViewer | null {
   }
 }
 
-function authHeader(email: string, apiToken: string): string {
+function authHeader(email: string, apiToken: string, authType?: JiraAuthType): string {
+  // Self-hosted with no username = a personal access token (Bearer); Basic auth
+  // with a PAT in the password slot is what produces the 401s users report.
+  // Self-hosted WITH a username is classic username+password Basic auth, which
+  // older Server/DC instances (predating PATs) require. Cloud is always Basic.
+  if (authType === 'server' && !email) {
+    return `Bearer ${apiToken}`
+  }
   return `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`
+}
+
+function describeErrorCause(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object' || !('cause' in error)) {
+    return undefined
+  }
+  const cause = (error as { cause?: unknown }).cause
+  if (cause instanceof Error) {
+    return `${cause.name}: ${cause.message}`
+  }
+  return cause === undefined ? undefined : String(cause)
+}
+
+async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
+  return withSpan(
+    'jira.request',
+    async (span) => {
+      span.setAttribute('jira.siteUrl', new URL(url).origin)
+      await ensureElectronProxyFromEnvironment({
+        proxySession: session.defaultSession,
+        probeUrl: url
+      }).catch((error) => {
+        span.addEvent('jira.proxySetupFailed', {
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        })
+      })
+      try {
+        // Why: Electron's network stack follows Chromium proxy/session state,
+        // avoiding undici's stale keep-alive sockets after VPN path changes.
+        return await net.fetch(url, init)
+      } catch (error) {
+        span.setAttribute(
+          'jira.transportErrorName',
+          error instanceof Error ? error.name : typeof error
+        )
+        span.setAttribute(
+          'jira.transportErrorMessage',
+          error instanceof Error ? error.message : String(error)
+        )
+        const cause = describeErrorCause(error)
+        if (cause) {
+          span.setAttribute('jira.transportErrorCause', cause)
+        }
+        throw error
+      }
+    },
+    { kind: 'client' }
+  )
 }
 
 async function requestWithCredentials(
@@ -293,13 +426,15 @@ async function requestWithCredentials(
   email: string,
   apiToken: string,
   path: string,
-  init?: RequestInit
+  init?: RequestInit,
+  authType?: JiraAuthType
 ): Promise<unknown> {
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
-  headers.set('Authorization', authHeader(email, apiToken))
-  const response = await fetch(`${siteUrl}${path}`, {
+  headers.set('User-Agent', JIRA_API_USER_AGENT)
+  headers.set('Authorization', authHeader(email, apiToken, authType))
+  const response = await jiraFetch(`${siteUrl}${path}`, {
     ...init,
     headers
   })
@@ -341,8 +476,9 @@ export async function jiraRequest<T>(
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
+  headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', client.authorization)
-  const response = await fetch(`${client.site.siteUrl}${path}`, {
+  const response = await jiraFetch(`${client.site.siteUrl}${path}`, {
     ...init,
     headers
   })
@@ -355,17 +491,60 @@ export async function jiraRequest<T>(
   return (await response.json()) as T
 }
 
+export async function jiraRequestBinary(
+  client: JiraClientForSite,
+  pathOrUrl: string
+): Promise<{ data: ArrayBuffer; contentType: string }> {
+  const siteUrl = new URL(client.site.siteUrl)
+  const requestUrl = /^https?:\/\//i.test(pathOrUrl)
+    ? new URL(pathOrUrl)
+    : new URL(`${client.site.siteUrl}${pathOrUrl}`)
+  if (requestUrl.origin !== siteUrl.origin) {
+    // Why: attachment metadata is provider-controlled; never forward Jira
+    // credentials if a malformed response points at another origin.
+    throw new JiraApiError('Jira attachment URL must use the configured site origin.', null)
+  }
+  const headers = new Headers()
+  // Why: attachment content is binary; forcing JSON Accept/Content-Type can
+  // break downloads and confuses some Atlassian edge responses.
+  headers.set('Accept', '*/*')
+  headers.set('User-Agent', JIRA_API_USER_AGENT)
+  headers.set('Authorization', client.authorization)
+  const response = await jiraFetch(requestUrl.toString(), { headers })
+  if (!response.ok) {
+    throw new JiraApiError(await readJiraError(response), response.status)
+  }
+  const contentType = response.headers.get('content-type') || 'application/octet-stream'
+  return {
+    data: await response.arrayBuffer(),
+    contentType
+  }
+}
+
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
   const file = getSiteFile()
   const selected = selection ?? file.selectedSiteId ?? file.activeSiteId
-  const sites =
-    selected === 'all'
-      ? file.sites
-      : file.sites.filter((site) => site.id === (selected ?? file.activeSiteId))
+  const isAllSelection = selected === 'all'
+  const sites = isAllSelection
+    ? file.sites
+    : file.sites.filter((site) => site.id === (selected ?? file.activeSiteId))
 
   return sites.flatMap((site) => {
-    const token = readToken(site.id)
-    return token ? [{ site, authorization: authHeader(site.email, token) }] : []
+    let token: string | null
+    try {
+      token = readToken(site.id)
+    } catch (error) {
+      // Why: under an 'all' selection one un-decryptable site must not collapse
+      // reads for the healthy ones. readToken already recorded the per-site
+      // credentialError for getStatus to surface, so skip this site like a
+      // missing token. A specific-site selection still rethrows so the renderer
+      // can surface the decrypt banner promptly.
+      if (isAllSelection && error instanceof CredentialDecryptionError) {
+        return []
+      }
+      throw error
+    }
+    return token ? [{ site, authorization: authHeader(site.email, token, site.authType) }] : []
   })
 }
 
@@ -373,12 +552,16 @@ export function getStatus(): JiraConnectionStatus {
   const file = getSiteFile()
   const sites = file.sites.filter((site) => hasStoredToken(site.id))
   const activeSite = sites.find((site) => site.id === file.activeSiteId) ?? sites[0] ?? null
+  const credentialError = sites
+    .map((site) => credentialErrors.get(site.id))
+    .find((message) => message !== undefined)
   return {
     connected: sites.length > 0,
     viewer: siteToViewer(activeSite),
     sites,
     activeSiteId: activeSite?.id ?? null,
-    selectedSiteId: file.selectedSiteId ?? activeSite?.id ?? null
+    selectedSiteId: file.selectedSiteId ?? activeSite?.id ?? null,
+    ...(credentialError ? { credentialError } : {})
   }
 }
 
@@ -392,28 +575,48 @@ export async function connect(
     return { ok: false, error: 'Enter a valid Jira site URL.' }
   }
 
+  const authType: JiraAuthType = args.authType === 'server' ? 'server' : 'cloud'
   const email = args.email.trim()
   const apiToken = args.apiToken.trim()
-  if (!email || !apiToken) {
+  if (authType === 'server') {
+    if (!apiToken) {
+      // A username present means classic Basic auth (password); its absence
+      // means the credential is a personal access token sent as Bearer.
+      return {
+        ok: false,
+        error: email ? 'Password is required.' : 'Personal access token is required.'
+      }
+    }
+  } else if (!email || !apiToken) {
     return { ok: false, error: 'Email and API token are required.' }
   }
 
   await acquire()
   try {
+    const myselfPath = authType === 'server' ? '/rest/api/2/myself' : '/rest/api/3/myself'
     const viewer = toViewer(
-      (await requestWithCredentials(siteUrl, email, apiToken, '/rest/api/3/myself')) as Record<
-        string,
-        unknown
-      >,
-      email
+      (await requestWithCredentials(
+        siteUrl,
+        email,
+        apiToken,
+        myselfPath,
+        undefined,
+        authType
+      )) as Record<string, unknown>,
+      email || siteUrl
     )
-    const id = getSiteId(siteUrl, email)
+    // PAT sites have no email, so keying on it alone would collide every PAT
+    // connection to the same host into one id (silently overwriting a prior
+    // account + token). Fall back to the verified viewer identity so distinct
+    // accounts stay distinct. Cloud/Basic keep keying on their non-empty email.
+    const id = getSiteId(siteUrl, email || viewer.accountId)
     const site: JiraSite = {
       id,
       siteUrl,
       email,
       displayName: viewer.displayName,
-      accountId: viewer.accountId
+      accountId: viewer.accountId,
+      authType
     }
     saveToken(id, apiToken)
     const file = getSiteFile()
@@ -437,6 +640,9 @@ export function disconnect(siteId?: string): void {
   for (const id of ids) {
     deleteToken(id)
   }
+  // Why: drop cached attachment data URLs for disconnected sites so main does
+  // not retain multi-MB strings after logout.
+  clearAttachmentImagesForSite(siteId)
   writeSiteFile({
     version: 1,
     activeSiteId: file.activeSiteId,
@@ -461,14 +667,19 @@ export function selectSite(siteId: JiraSiteSelection): JiraConnectionStatus {
 export async function testConnection(
   siteId?: string
 ): Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }> {
-  const client = getClients(siteId)[0]
+  let client: JiraClientForSite | undefined
+  try {
+    client = getClients(siteId)[0]
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Connection failed.' }
+  }
   if (!client) {
     return { ok: false, error: 'Not connected to Jira.' }
   }
   await acquire()
   try {
     const viewer = toViewer(
-      (await jiraRequest(client, '/rest/api/3/myself')) as Record<string, unknown>,
+      (await jiraRequest(client, `${apiBasePath(client.site)}/myself`)) as Record<string, unknown>,
       client.site.email
     )
     return { ok: true, viewer }
@@ -481,10 +692,14 @@ export async function testConnection(
 
 export function clearToken(siteId: string): void {
   deleteToken(siteId)
+  // Why: auth failure removes the site; drop cached attachment data URLs too.
+  clearAttachmentImagesForSite(siteId)
   const file = getSiteFile()
   writeSiteFile({ ...file, sites: file.sites.filter((site) => site.id !== siteId) })
 }
 
 export function isAuthError(error: unknown): boolean {
-  return error instanceof JiraApiError && (error.status === 401 || error.status === 403)
+  // Why: Jira returns 403 for project/API permission gaps even when /myself
+  // succeeds, so only 401 means the saved credential itself is invalid.
+  return error instanceof JiraApiError && error.status === 401
 }

@@ -1,17 +1,15 @@
-/* eslint-disable max-lines -- Why: this file groups all repos IPC handler
-tests (addRemote, getBaseRefDefault envelope, searchBaseRefs SSH relay) so
-fixture setup and mock plumbing can be shared. Splitting by line count would
-duplicate the hoisted mocks and the `../git/repo` partial-real/partial-stub
-setup. */
+/* eslint-disable max-lines -- groups all repos IPC handler tests so shared fixture setup and hoisted mocks aren't duplicated */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { EventEmitter } from 'events'
-import { existsSync } from 'fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { EventEmitter } from 'node:events'
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
-import { isGitRepo } from '../git/repo'
+import { getGitRepoRoot, isGitRepo } from '../git/repo'
+import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 
 const {
   handleMock,
@@ -19,7 +17,11 @@ const {
   mockGitProvider,
   mockFilesystemProvider,
   mockMultiplexer,
-  gitSpawnMock
+  gitExecFileAsyncMock,
+  gitSpawnMock,
+  listWorktreeGraphMock,
+  invalidateAuthorizedRootsCacheMock,
+  prepareLocalWorktreeRootForRepoMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   mockStore: {
@@ -28,6 +30,9 @@ const {
     removeProject: vi.fn(),
     getRepo: vi.fn(),
     updateRepo: vi.fn(),
+    getProjects: vi.fn().mockReturnValue([]),
+    getProjectHostSetups: vi.fn().mockReturnValue([]),
+    updateProjectHostSetup: vi.fn(),
     getProjectGroups: vi.fn().mockReturnValue([]),
     createProjectGroup: vi.fn(),
     updateProjectGroup: vi.fn(),
@@ -38,18 +43,36 @@ const {
   mockGitProvider: {
     isGitRepo: vi.fn().mockReturnValue(true),
     isGitRepoAsync: vi.fn().mockResolvedValue({ isRepo: true, rootPath: null }),
-    exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+    exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+    clone: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    getHostPlatform: vi.fn().mockReturnValue({
+      relayPlatform: 'linux-x64',
+      os: 'linux',
+      arch: 'x64',
+      pathFlavor: 'posix',
+      commandDialect: 'posix',
+      pathSeparator: '/',
+      pathDelimiter: ':'
+    })
   },
   mockFilesystemProvider: {
     readDir: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockRejectedValue(new Error('not found')),
-    stat: vi.fn().mockRejectedValue(new Error('not found'))
+    stat: vi.fn().mockRejectedValue(new Error('not found')),
+    createDir: vi.fn().mockResolvedValue(undefined),
+    createDirNoClobber: vi.fn().mockResolvedValue(undefined),
+    deletePath: vi.fn().mockResolvedValue(undefined)
   },
   mockMultiplexer: {
     request: vi.fn(),
     notify: vi.fn()
   },
-  gitSpawnMock: vi.fn()
+  gitSpawnMock: vi.fn(),
+  gitExecFileAsyncMock: vi.fn(),
+  listWorktreeGraphMock: vi.fn(),
+  invalidateAuthorizedRootsCacheMock: vi.fn(),
+  prepareLocalWorktreeRootForRepoMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -61,16 +84,13 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../git/repo', async () => {
-  // Why: pull real implementations of pure helpers so SSH parity tests
-  // exercise the actual probe list and query sanitizer, not frozen copies.
-  // Drift in DEFAULT_BASE_REF_PROBES or normalizeRefSearchQuery now surfaces
-  // as test failure, not silent test-passes against stale behavior.
+  // Why: use real pure helpers so SSH parity tests catch drift in DEFAULT_BASE_REF_PROBES / normalizeRefSearchQuery.
   const actual = await vi.importActual<typeof RepoModule>('../git/repo')
   return {
     ...actual,
     // Stub only the functions that spawn git / touch the filesystem.
     isGitRepo: vi.fn().mockReturnValue(true),
-    getGitUsername: vi.fn().mockReturnValue(''),
+    getGitRepoRoot: vi.fn((path: string) => path),
     getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
     getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
     getRemoteCount: vi.fn().mockResolvedValue(1),
@@ -78,16 +98,29 @@ vi.mock('../git/repo', async () => {
   }
 })
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: vi.fn(),
+vi.mock('../git/runner', async () => ({
+  // Why: keep the real env builders so the clone regression test (#7652) asserts real markers, not a mock echoing itself.
+  ...(await vi.importActual<typeof GitRunner>('../git/runner')),
+  gitExecFileAsync: gitExecFileAsyncMock,
+  gitExecFileAsyncBuffer: vi.fn(),
+  gitStreamStdout: vi.fn(),
   gitSpawn: gitSpawnMock
 }))
 
+vi.mock('../git/worktree', () => ({
+  listWorktreeGraph: listWorktreeGraphMock
+}))
+
 vi.mock('./filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+}))
+
+vi.mock('../worktree-root-preparation', () => ({
+  prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProviderGeneration: () => 0,
   getSshGitProvider: vi.fn().mockImplementation((id: string) => {
     if (id === 'conn-1') {
       return mockGitProvider
@@ -115,6 +148,18 @@ vi.mock('./ssh', () => ({
 }))
 
 import { registerRepoHandlers } from './repos'
+import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
+import { toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  getSshProviderAuthority,
+  resetSshProviderAuthorities,
+  rotateSshProviderAuthority
+} from '../ssh/ssh-provider-authority'
+
+beforeEach(() => {
+  clearGitCapabilityStateForTests()
+  resetSshProviderAuthorities()
+})
 
 describe('projectGroups IPC validation', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
@@ -134,6 +179,10 @@ describe('projectGroups IPC validation', () => {
     mockStore.updateProjectGroup.mockReset()
     mockStore.deleteProjectGroup.mockReset()
     mockStore.moveProjectToGroup.mockReset()
+    mockStore.addRepo.mockReset()
+    mockStore.getProjects.mockReset().mockReturnValue([])
+    mockStore.getProjectHostSetups.mockReset().mockReturnValue([])
+    mockStore.updateProjectHostSetup.mockReset()
     mockStore.getRepos.mockReset()
     mockStore.getRepos.mockReturnValue([])
     mockFilesystemProvider.readDir.mockReset()
@@ -144,10 +193,18 @@ describe('projectGroups IPC validation', () => {
     mockFilesystemProvider.stat.mockRejectedValue(new Error('not found'))
     mockGitProvider.isGitRepoAsync.mockReset()
     mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
+    mockGitProvider.listWorktrees.mockReset()
+    mockGitProvider.listWorktrees.mockResolvedValue([])
+    listWorktreeGraphMock.mockReset()
+    listWorktreeGraphMock.mockResolvedValue([])
     vi.mocked(isGitRepo).mockReset()
     vi.mocked(isGitRepo).mockReturnValue(true)
+    vi.mocked(getGitRepoRoot).mockReset()
+    vi.mocked(getGitRepoRoot).mockImplementation((path: string) => path)
     mockMultiplexer.notify.mockReset()
     mockMultiplexer.request.mockReset()
+    invalidateAuthorizedRootsCacheMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -158,6 +215,128 @@ describe('projectGroups IPC validation', () => {
     ).toThrow('invalid_project_group_create_args')
 
     expect(mockStore.createProjectGroup).not.toHaveBeenCalled()
+  })
+
+  it('returns an immutable repo catalog for exactly one execution host', async () => {
+    const localRepo = {
+      id: 'duplicate',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = {
+      id: 'duplicate',
+      path: '/remote/repo',
+      displayName: 'remote',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    }
+    const runtimeRepo = {
+      id: 'duplicate',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      badgeColor: '#000',
+      addedAt: 0,
+      executionHostId: 'runtime:environment-a'
+    }
+    mockStore.getRepos.mockReturnValue([localRepo, sshRepo, runtimeRepo])
+
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: getSshProviderAuthority('conn-1')
+      })
+    ).resolves.toMatchObject({
+      authoritative: true,
+      authority: {
+        kind: 'direct-ssh',
+        executionHostId: 'ssh:conn-1',
+        targetId: 'conn-1'
+      },
+      repos: [sshRepo]
+    })
+
+    const local = await handlers.get('repos:listForExecutionHost')!(null, {
+      executionHostId: 'local'
+    })
+    expect(local).toMatchObject({ authoritative: true, repos: [localRepo] })
+    expect((local as { repos: object[] }).repos[0]).not.toBe(localRepo)
+  })
+
+  it('rejects repo catalogs whose execution host contradicts their SSH connection', async () => {
+    const baseRepo = {
+      id: 'repo-1',
+      path: '/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    mockStore.getRepos.mockReturnValue([
+      {
+        ...baseRepo,
+        connectionId: 'conn-1',
+        executionHostId: 'local'
+      }
+    ])
+
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: 'local'
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: getSshProviderAuthority('conn-1')
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+
+    mockStore.getRepos.mockReturnValue([
+      {
+        ...baseRepo,
+        connectionId: 'conn-1',
+        executionHostId: toSshExecutionHostId('conn-2')
+      }
+    ])
+
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: getSshProviderAuthority('conn-1')
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+  })
+
+  it('rejects runtime, partial, mismatched, and stale catalog authority', async () => {
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: 'runtime:environment-a'
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1')
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: {
+          ...getSshProviderAuthority('other-target'),
+          targetId: 'other-target'
+        }
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+
+    const expectedAuthority = getSshProviderAuthority('conn-1')
+    const pending = handlers.get('repos:listForExecutionHost')!(null, {
+      executionHostId: toSshExecutionHostId('conn-1'),
+      expectedAuthority
+    })
+    rotateSshProviderAuthority('conn-1')
+    await expect(pending).resolves.toMatchObject({ authoritative: false, reason: 'stale' })
   })
 
   it('rejects malformed local project group update arguments before persistence', () => {
@@ -614,6 +793,75 @@ describe('projectGroups IPC validation', () => {
     })
   })
 
+  it('resolves SSH linked worktree imports through the SSH provider worktree graph', async () => {
+    const selectedPath = '/srv/platform/demo/brash-binder'
+    const secondSelectedPath = '/srv/platform/demo/quick-howler'
+    const mainPath = '/srv/source/demo-project'
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === selectedPath || path === secondSelectedPath,
+      rootPath: '/srv/provider/root'
+    }))
+    mockGitProvider.listWorktrees.mockResolvedValue([
+      {
+        path: mainPath,
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: selectedPath,
+        head: 'feature-head',
+        branch: 'refs/heads/brash-binder',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: secondSelectedPath,
+        head: 'feature-head',
+        branch: 'refs/heads/quick-howler',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === `${selectedPath}/.git` || path === `${secondSelectedPath}/.git`) {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform/demo'
+        ? [
+            { name: 'brash-binder', isDirectory: true, isSymlink: false },
+            { name: 'quick-howler', isDirectory: true, isSymlink: false }
+          ]
+        : []
+    )
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform/demo',
+      groupName: '',
+      projectPaths: [selectedPath, secondSelectedPath],
+      connectionId: 'conn-1',
+      mode: 'separate'
+    })
+
+    expect(result).toMatchObject({ importedCount: 1, alreadyKnownCount: 1, failedCount: 0 })
+    expect(mockGitProvider.listWorktrees).toHaveBeenCalledWith(selectedPath)
+    expect(mockGitProvider.listWorktrees).toHaveBeenCalledTimes(1)
+    expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: mainPath,
+        connectionId: 'conn-1'
+      })
+    )
+    expect(mockMultiplexer.notify).toHaveBeenCalledWith('session.registerRoot', {
+      rootPath: mainPath
+    })
+  })
+
   it('imports a small selection from a large nested SSH scan', async () => {
     const group = {
       id: 'group-1',
@@ -680,6 +928,67 @@ describe('projectGroups IPC validation', () => {
     )
   })
 
+  it('imports selected local linked worktrees as one project rooted at the main worktree', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-nested-linked-worktrees-'))
+    try {
+      const parentPath = join(tempRoot, 'paseo-worktrees', 'demo-project')
+      const mainPath = join(tempRoot, 'source', 'demo-project')
+      const firstWorktreePath = join(parentPath, 'brash-binder')
+      const secondWorktreePath = join(parentPath, 'quick-howler')
+      await mkdir(join(firstWorktreePath, '.git'), { recursive: true })
+      await mkdir(join(secondWorktreePath, '.git'), { recursive: true })
+      await mkdir(mainPath, { recursive: true })
+      vi.mocked(isGitRepo).mockReturnValue(false)
+      vi.mocked(isGitRepo).mockImplementation((path: string) =>
+        [firstWorktreePath, secondWorktreePath, mainPath].includes(path)
+      )
+      listWorktreeGraphMock.mockResolvedValue([
+        {
+          path: mainPath,
+          head: 'main-head',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: firstWorktreePath,
+          head: 'feature-head',
+          branch: 'refs/heads/brash-binder',
+          isBare: false,
+          isMainWorktree: false
+        },
+        {
+          path: secondWorktreePath,
+          head: 'feature-head',
+          branch: 'refs/heads/quick-howler',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+      const result = await handlers.get('projectGroups:importNested')!(null, {
+        parentPath,
+        groupName: '',
+        projectPaths: [firstWorktreePath, secondWorktreePath],
+        mode: 'separate'
+      })
+
+      expect(result).toMatchObject({
+        importedCount: 1,
+        alreadyKnownCount: 1,
+        failedCount: 0
+      })
+      expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
+      expect(mockStore.addRepo).toHaveBeenCalledWith(expect.objectContaining({ path: mainPath }))
+      expect(listWorktreeGraphMock).toHaveBeenCalledTimes(1)
+      expect((result as { projects: { projectId?: string }[] }).projects[0].projectId).toBe(
+        (result as { projects: { projectId?: string }[] }).projects[1].projectId
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it('sanitizes unexpected nested import errors before returning results', async () => {
     const group = {
       id: 'group-1',
@@ -739,6 +1048,7 @@ describe('repos:getGitUsername', () => {
     mockStore.getRepo.mockReset()
     mockGitProvider.exec.mockReset()
     mockWindow.webContents.send.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -805,13 +1115,37 @@ describe('repos:addRemote', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
+    mockStore.removeProject.mockReset()
     mockStore.getSshTarget.mockReset()
     mockStore.updateRepo.mockReset()
     mockGitProvider.isGitRepoAsync.mockReset()
     mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
+    mockGitProvider.exec.mockReset()
+    mockGitProvider.exec.mockResolvedValue({ stdout: '', stderr: '' })
+    mockGitProvider.clone.mockReset()
+    mockGitProvider.clone.mockResolvedValue({ stdout: '', stderr: '' })
+    mockGitProvider.getHostPlatform.mockReset()
+    mockGitProvider.getHostPlatform.mockReturnValue({
+      relayPlatform: 'linux-x64',
+      os: 'linux',
+      arch: 'x64',
+      pathFlavor: 'posix',
+      commandDialect: 'posix',
+      pathSeparator: '/',
+      pathDelimiter: ':'
+    })
+    mockFilesystemProvider.stat.mockReset()
+    mockFilesystemProvider.stat.mockRejectedValue(new Error('not found'))
+    mockFilesystemProvider.createDirNoClobber.mockReset()
+    mockFilesystemProvider.createDirNoClobber.mockResolvedValue(undefined)
+    mockFilesystemProvider.deletePath.mockReset()
+    mockFilesystemProvider.deletePath.mockResolvedValue(undefined)
     mockMultiplexer.request.mockReset()
     mockMultiplexer.notify.mockReset()
     gitSpawnMock.mockReset()
+    gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+    clearSubmodulePathsCacheForTests()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
@@ -825,6 +1159,14 @@ describe('repos:addRemote', () => {
 
   it('registers the repos:addRemote handler', () => {
     expect(handlers.has('repos:addRemote')).toBe(true)
+  })
+
+  it('registers the repos:cloneRemote handler', () => {
+    expect(handlers.has('repos:cloneRemote')).toBe(true)
+  })
+
+  it('registers the repos:createRemote handler', () => {
+    expect(handlers.has('repos:createRemote')).toBe(true)
   })
 
   it('creates a remote repo with connectionId', async () => {
@@ -841,7 +1183,8 @@ describe('repos:addRemote', () => {
         displayName: 'project',
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
         externalWorktreeVisibility: 'hide',
-        externalWorktreeVisibilityLegacy: false
+        externalWorktreeVisibilityLegacy: false,
+        projectHostSetupMethod: 'imported-existing-folder'
       })
     )
     expect(result).toHaveProperty('repo.id')
@@ -863,6 +1206,376 @@ describe('repos:addRemote', () => {
       })
     )
     expect(result).toHaveProperty('repo.displayName', 'My Server Repo')
+  })
+
+  it('clones a repo on an SSH target and registers the cloned path', async () => {
+    const result = await handlers.get('repos:cloneRemote')!(null, {
+      connectionId: 'conn-1',
+      url: 'https://github.com/stablyai/orca.git',
+      destination: '/home/user'
+    })
+
+    expect(mockFilesystemProvider.createDir).toHaveBeenCalledWith('/home/user')
+    expect(mockGitProvider.clone).toHaveBeenCalledWith(
+      ['clone', '--progress', '--', 'https://github.com/stablyai/orca.git', 'orca'],
+      '/home/user',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        timeoutMs: 10 * 60_000,
+        onProgress: expect.any(Function)
+      })
+    )
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/home/user/orca',
+        connectionId: 'conn-1',
+        kind: 'git',
+        displayName: 'orca',
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        externalWorktreeVisibility: 'hide',
+        externalWorktreeVisibilityLegacy: false
+      })
+    )
+    expect(mockMultiplexer.notify).toHaveBeenCalledWith('session.registerRoot', {
+      rootPath: '/home/user/orca'
+    })
+    expect(result).toHaveProperty('path', '/home/user/orca')
+    expect(result).toHaveProperty('connectionId', 'conn-1')
+  })
+
+  it('forwards SSH clone progress through the existing clone progress event', async () => {
+    mockGitProvider.clone.mockImplementationOnce(
+      async (
+        _args: string[],
+        _cwd: string,
+        options?: { onProgress?: (progress: { phase: string; percent: number }) => void }
+      ) => {
+        options?.onProgress?.({ phase: 'Receiving objects', percent: 42 })
+        return { stdout: '', stderr: '' }
+      }
+    )
+
+    await handlers.get('repos:cloneRemote')!(null, {
+      connectionId: 'conn-1',
+      url: 'https://github.com/stablyai/orca.git',
+      destination: '/home/user'
+    })
+
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:clone-progress', {
+      phase: 'Receiving objects',
+      percent: 42
+    })
+  })
+
+  it('returns an existing SSH repo instead of cloning the same target again', async () => {
+    const existing = {
+      id: 'existing-id',
+      path: '/home/user/orca',
+      connectionId: 'conn-1',
+      displayName: 'orca',
+      badgeColor: '#fff',
+      addedAt: 1000,
+      kind: 'git'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    const result = await handlers.get('repos:cloneRemote')!(null, {
+      connectionId: 'conn-1',
+      url: 'https://github.com/stablyai/orca.git',
+      destination: '/home/user'
+    })
+
+    expect(result).toBe(existing)
+    expect(mockGitProvider.clone).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('upgrades an existing SSH folder repo after cloning into that path', async () => {
+    const existing = {
+      id: 'existing-folder',
+      path: '/home/user/orca',
+      connectionId: 'conn-1',
+      displayName: 'orca',
+      badgeColor: '#fff',
+      addedAt: 1000,
+      kind: 'folder'
+    }
+    const updated = { ...existing, kind: 'git' }
+    mockStore.getRepos.mockReturnValue([existing])
+    mockStore.updateRepo.mockReturnValue(updated)
+
+    const result = await handlers.get('repos:cloneRemote')!(null, {
+      connectionId: 'conn-1',
+      url: 'https://github.com/stablyai/orca.git',
+      destination: '/home/user'
+    })
+
+    expect(mockGitProvider.clone).toHaveBeenCalledWith(
+      ['clone', '--progress', '--', 'https://github.com/stablyai/orca.git', 'orca'],
+      '/home/user',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        timeoutMs: 10 * 60_000,
+        onProgress: expect.any(Function)
+      })
+    )
+    expect(mockStore.updateRepo).toHaveBeenCalledWith('existing-folder', {
+      kind: 'git',
+      projectHostSetupMethod: 'cloned'
+    })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+    expect(result).toBe(updated)
+  })
+
+  it('does not delete a fresh SSH clone target after git clone fails', async () => {
+    mockGitProvider.clone.mockRejectedValueOnce(new Error('repository not found'))
+    mockFilesystemProvider.stat.mockRejectedValueOnce(new Error('not found'))
+
+    await expect(
+      handlers.get('repos:cloneRemote')!(null, {
+        connectionId: 'conn-1',
+        url: 'https://github.com/stablyai/orca.git',
+        destination: '/home/user'
+      })
+    ).rejects.toThrow('repository not found')
+
+    expect(mockFilesystemProvider.deletePath).not.toHaveBeenCalled()
+  })
+
+  it('rejects concurrent SSH clones to the same destination', async () => {
+    let releaseClone!: () => void
+    mockGitProvider.clone.mockImplementationOnce(
+      async () =>
+        new Promise<{ stdout: string; stderr: string }>((resolve) => {
+          releaseClone = () => resolve({ stdout: '', stderr: '' })
+        })
+    )
+
+    const firstClone = handlers.get('repos:cloneRemote')!(null, {
+      connectionId: 'conn-1',
+      url: 'https://github.com/stablyai/orca.git',
+      destination: '/home/user'
+    })
+    await waitForAssertion(() => expect(mockGitProvider.clone).toHaveBeenCalledTimes(1))
+
+    await expect(
+      handlers.get('repos:cloneRemote')!(null, {
+        connectionId: 'conn-1',
+        url: 'https://github.com/stablyai/orca.git',
+        destination: '/home/user'
+      })
+    ).rejects.toThrow('A clone is already in progress for this SSH destination')
+
+    releaseClone()
+    await firstClone
+  })
+
+  it('resolves SSH clone destinations under home before validating the path', async () => {
+    mockMultiplexer.request.mockResolvedValueOnce({ resolvedPath: '/home/ubuntu/projects' })
+
+    await handlers.get('repos:cloneRemote')!(null, {
+      connectionId: 'conn-1',
+      url: 'https://github.com/stablyai/orca.git',
+      destination: '~/projects'
+    })
+
+    expect(mockMultiplexer.request).toHaveBeenCalledWith('session.resolveHome', {
+      path: '~/projects'
+    })
+    expect(mockGitProvider.clone).toHaveBeenCalledWith(
+      ['clone', '--progress', '--', 'https://github.com/stablyai/orca.git', 'orca'],
+      '/home/ubuntu/projects',
+      expect.any(Object)
+    )
+  })
+
+  it('does not clean up a pre-existing SSH clone target after git clone fails', async () => {
+    mockGitProvider.clone.mockRejectedValueOnce(new Error('destination already exists'))
+    mockFilesystemProvider.stat.mockResolvedValueOnce({ type: 'directory', size: 0, mtime: 0 })
+
+    await expect(
+      handlers.get('repos:cloneRemote')!(null, {
+        connectionId: 'conn-1',
+        url: 'https://github.com/stablyai/orca.git',
+        destination: '/home/user'
+      })
+    ).rejects.toThrow('destination already exists')
+
+    expect(mockFilesystemProvider.deletePath).not.toHaveBeenCalled()
+  })
+
+  it('aborts an active SSH clone and reports the abort without deleting pre-existing targets', async () => {
+    mockFilesystemProvider.stat.mockResolvedValueOnce({ type: 'directory', size: 0, mtime: 0 })
+    mockGitProvider.clone.mockImplementationOnce(
+      async (_args: string[], _cwd: string, options?: { signal?: AbortSignal }) =>
+        new Promise<{ stdout: string; stderr: string }>((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(new Error('aborted by test')))
+        })
+    )
+
+    const clonePromise = handlers.get('repos:cloneRemote')!(null, {
+      connectionId: 'conn-1',
+      url: 'https://github.com/stablyai/orca.git',
+      destination: '/home/user'
+    })
+    await waitForAssertion(() => expect(mockGitProvider.clone).toHaveBeenCalledTimes(1))
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+
+    await expect(clonePromise).rejects.toThrow('Clone aborted')
+    const options = mockGitProvider.clone.mock.calls[0][2] as { signal: AbortSignal }
+    expect(options.signal.aborted).toBe(true)
+    expect(mockFilesystemProvider.deletePath).not.toHaveBeenCalled()
+  })
+
+  it('rejects SSH clone destinations that are not absolute host paths', async () => {
+    await expect(
+      handlers.get('repos:cloneRemote')!(null, {
+        connectionId: 'conn-1',
+        url: 'https://github.com/stablyai/orca.git',
+        destination: 'relative/path'
+      })
+    ).rejects.toThrow('Clone destination must be an absolute path on the SSH host')
+
+    expect(mockGitProvider.clone).not.toHaveBeenCalled()
+  })
+
+  it('creates a new git project on an SSH target', async () => {
+    const result = await handlers.get('repos:createRemote')!(null, {
+      connectionId: 'conn-1',
+      parentPath: '/home/user',
+      name: 'created',
+      kind: 'git'
+    })
+
+    expect(mockFilesystemProvider.createDirNoClobber).toHaveBeenCalledWith('/home/user/created')
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(['init'], '/home/user/created')
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(
+      ['commit', '--allow-empty', '-m', 'Initial commit'],
+      '/home/user/created'
+    )
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/home/user/created',
+        connectionId: 'conn-1',
+        kind: 'git',
+        displayName: 'created',
+        externalWorktreeVisibility: 'hide'
+      })
+    )
+    expect(result).toHaveProperty('repo.path', '/home/user/created')
+    expect(result).toHaveProperty('repo.connectionId', 'conn-1')
+  })
+
+  it('resolves SSH create parents under home before validating the path', async () => {
+    mockMultiplexer.request.mockResolvedValueOnce({ resolvedPath: '/home/ubuntu/projects' })
+
+    const result = await handlers.get('repos:createRemote')!(null, {
+      connectionId: 'conn-1',
+      parentPath: '~/projects',
+      name: 'created',
+      kind: 'folder'
+    })
+
+    expect(mockMultiplexer.request).toHaveBeenCalledWith('session.resolveHome', {
+      path: '~/projects'
+    })
+    expect(mockFilesystemProvider.createDirNoClobber).toHaveBeenCalledWith(
+      '/home/ubuntu/projects/created'
+    )
+    expect(result).toHaveProperty('repo.path', '/home/ubuntu/projects/created')
+  })
+
+  it('creates a new folder project on an SSH target without git init', async () => {
+    const result = await handlers.get('repos:createRemote')!(null, {
+      connectionId: 'conn-1',
+      parentPath: '/home/user',
+      name: 'notes',
+      kind: 'folder'
+    })
+
+    expect(mockFilesystemProvider.createDirNoClobber).toHaveBeenCalledWith('/home/user/notes')
+    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/home/user/notes',
+        connectionId: 'conn-1',
+        kind: 'folder',
+        displayName: 'notes'
+      })
+    )
+    expect(result).toHaveProperty('repo.kind', 'folder')
+  })
+
+  it('rejects SSH create parent paths that are not absolute host paths', async () => {
+    const result = await handlers.get('repos:createRemote')!(null, {
+      connectionId: 'conn-1',
+      parentPath: 'relative/path',
+      name: 'created',
+      kind: 'git'
+    })
+
+    expect(result).toEqual({ error: 'Parent directory must be an absolute path on the SSH host' })
+    expect(mockFilesystemProvider.createDirNoClobber).not.toHaveBeenCalled()
+    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-empty existing SSH create targets', async () => {
+    mockFilesystemProvider.stat.mockResolvedValueOnce({ type: 'directory', size: 0, mtime: 0 })
+    mockFilesystemProvider.readDir.mockResolvedValueOnce([
+      { name: 'package.json', isDirectory: false, isSymlink: false }
+    ])
+
+    const result = await handlers.get('repos:createRemote')!(null, {
+      connectionId: 'conn-1',
+      parentPath: '/home/user',
+      name: 'created',
+      kind: 'git'
+    })
+
+    expect(result).toEqual({
+      error: '"created" already exists at this location and is not empty.'
+    })
+    expect(mockFilesystemProvider.createDirNoClobber).not.toHaveBeenCalled()
+    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+  })
+
+  it('removes a newly created SSH directory when git init fails', async () => {
+    mockGitProvider.exec.mockRejectedValueOnce(new Error('git init failed'))
+
+    const result = await handlers.get('repos:createRemote')!(null, {
+      connectionId: 'conn-1',
+      parentPath: '/home/user',
+      name: 'created',
+      kind: 'git'
+    })
+
+    expect(result).toEqual({ error: 'Failed to initialize git repository: git init failed' })
+    expect(mockFilesystemProvider.deletePath).toHaveBeenCalledWith('/home/user/created', true)
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('preserves an existing empty SSH directory and removes only .git when commit fails', async () => {
+    mockFilesystemProvider.stat.mockResolvedValueOnce({ type: 'directory', size: 0, mtime: 0 })
+    mockFilesystemProvider.readDir.mockResolvedValueOnce([])
+    mockGitProvider.exec
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(new Error('Please tell me who you are'))
+
+    const result = await handlers.get('repos:createRemote')!(null, {
+      connectionId: 'conn-1',
+      parentPath: '/home/user',
+      name: 'created',
+      kind: 'git'
+    })
+
+    expect(result).toEqual({
+      error:
+        'Git author identity is not configured on the SSH host. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"` on that host, then try again.'
+    })
+    expect(mockFilesystemProvider.deletePath).toHaveBeenCalledWith('/home/user/created/.git', true)
+    expect(mockFilesystemProvider.deletePath).not.toHaveBeenCalledWith('/home/user/created', true)
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
   it('returns existing repo if same connectionId and path already added', async () => {
@@ -1030,6 +1743,31 @@ describe('repos:addRemote', () => {
     expect(result).toHaveProperty('repo.path', '/home/ubuntu/subdir')
   })
 
+  it('returns an existing SSH repo when a selected subdirectory resolves to the repo root', async () => {
+    const existing = {
+      id: 'existing-id',
+      path: '/home/user/orca',
+      connectionId: 'conn-1',
+      displayName: 'orca',
+      badgeColor: '#fff',
+      addedAt: 1000,
+      kind: 'git'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({
+      isRepo: true,
+      rootPath: '/home/user/orca'
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/home/user/orca/src'
+    })
+
+    expect(result).toEqual({ repo: existing })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
   it('ignores SSH target label when custom displayName is provided', async () => {
     mockMultiplexer.request.mockResolvedValueOnce({ resolvedPath: '/home/ubuntu' })
     mockStore.getSshTarget.mockReturnValueOnce({
@@ -1106,8 +1844,13 @@ describe('repos:add + repos:clone', () => {
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
     mockStore.updateRepo.mockReset()
+    mockStore.getProjects.mockReset().mockReturnValue([])
+    mockStore.getProjectHostSetups.mockReset().mockReturnValue([])
+    mockStore.updateProjectHostSetup.mockReset()
     mockWindow.webContents.send.mockReset()
     gitSpawnMock.mockReset()
+    invalidateAuthorizedRootsCacheMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = createMockCloneProcess()
       queueMicrotask(() => proc.emit('close', 0, null))
@@ -1138,10 +1881,57 @@ describe('repos:add + repos:clone', () => {
         path: '/tmp/from-add',
         kind: 'git',
         externalWorktreeVisibility: 'hide',
-        externalWorktreeVisibilityLegacy: false
+        externalWorktreeVisibilityLegacy: false,
+        projectHostSetupMethod: 'imported-existing-folder'
       })
     )
     expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
+  })
+
+  it('prepares the worktree root when adding a local git repo', async () => {
+    await handlers.get('repos:add')!(null, { path: '/tmp/from-add', kind: 'git' })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(
+      mockStore,
+      expect.objectContaining({ path: '/tmp/from-add', kind: 'git' })
+    )
+  })
+
+  it('canonicalizes local git repos:add to the detected root path', async () => {
+    vi.mocked(getGitRepoRoot).mockReturnValue('/tmp/from-add')
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add/packages/web',
+      kind: 'git'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/tmp/from-add',
+        displayName: 'from-add'
+      })
+    )
+    expect(result).toHaveProperty('repo.path', '/tmp/from-add')
+  })
+
+  it('dedupes local git repos:add after canonical root resolution', async () => {
+    const existing = {
+      id: 'repo-add-existing-root',
+      path: '/tmp/from-add',
+      displayName: 'from-add',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    vi.mocked(getGitRepoRoot).mockReturnValue('/tmp/from-add')
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add/packages/web',
+      kind: 'git'
+    })
+
+    expect(result).toEqual({ repo: existing })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
   it('returns existing badgeColor unchanged on repos:add dedupe', async () => {
@@ -1166,6 +1956,257 @@ describe('repos:add + repos:clone', () => {
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
+  it('prepares the worktree root when repos:add returns an existing local git repo', async () => {
+    const existing = {
+      id: 'repo-add-existing-git',
+      path: '/tmp/from-add-existing-git',
+      displayName: 'from-add-existing-git',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add-existing-git',
+      kind: 'git'
+    })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, existing)
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('prepares the aligned worktree root when project setup uses an existing local git repo', async () => {
+    const existing = {
+      id: 'repo-setup-existing-git',
+      path: '/tmp/from-setup-existing-git',
+      displayName: 'from-setup-existing-git',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    const aligned = { ...existing, projectHostSetupMethod: 'imported-existing-folder' }
+    const project = { id: 'project-1', displayName: 'Project' }
+    const setup = {
+      id: 'setup-1',
+      projectId: project.id,
+      repoId: existing.id,
+      hostId: 'local',
+      path: existing.path,
+      displayName: existing.displayName,
+      setupState: 'ready',
+      setupMethod: 'imported-existing-folder'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    mockStore.getProjects.mockReturnValue([project])
+    mockStore.getProjectHostSetups.mockReturnValue([setup])
+    mockStore.updateRepo.mockReturnValue(aligned)
+
+    await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: project.id,
+      hostId: 'local',
+      path: existing.path,
+      kind: 'git',
+      setupMethod: 'imported-existing-folder'
+    })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, aligned)
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('preserves the selected Enterprise host when aligning an existing folder', async () => {
+    const existing = {
+      id: 'repo-setup-enterprise',
+      path: '/tmp/from-setup-enterprise',
+      displayName: 'from-setup-enterprise',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    const existingProject = { id: 'repo:repo-setup-enterprise', displayName: 'Existing' }
+    const selectedProject = {
+      id: 'github:github.acme-corp.com/acme/orca',
+      displayName: 'Enterprise project',
+      providerIdentity: {
+        provider: 'github',
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme-corp.com'
+      }
+    }
+    const setup = {
+      id: existing.id,
+      projectId: existingProject.id,
+      repoId: existing.id,
+      hostId: 'local',
+      path: existing.path,
+      displayName: existing.displayName,
+      setupState: 'ready',
+      setupMethod: 'legacy-repo'
+    }
+    let updatedRepo = existing
+    mockStore.getRepos.mockReturnValue([existing])
+    mockStore.getProjects.mockReturnValue([existingProject, selectedProject])
+    mockStore.getProjectHostSetups.mockReturnValue([setup])
+    mockStore.updateRepo.mockImplementation((_repoId, updates) => {
+      updatedRepo = { ...updatedRepo, ...updates }
+      return updatedRepo
+    })
+
+    await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: selectedProject.id,
+      hostId: 'local',
+      path: existing.path,
+      kind: 'git',
+      setupMethod: 'imported-existing-folder'
+    })
+
+    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(1, existing.id, {
+      upstream: {
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme-corp.com'
+      }
+    })
+  })
+
+  it('sets up a folder when the selected project exists only on another host', async () => {
+    const added: Record<string, unknown>[] = []
+    mockStore.getRepos.mockImplementation(() => added)
+    mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
+    mockStore.updateRepo.mockImplementation((id, updates) => {
+      const repo = added.find((entry) => entry.id === id)
+      if (!repo) {
+        return null
+      }
+      Object.assign(repo, updates)
+      return { ...repo }
+    })
+    mockStore.getProjects.mockImplementation(() => {
+      const repo = added.find((entry) => 'upstream' in entry)
+      return repo
+        ? [
+            {
+              id: 'github:github.acme.test/acme/orca',
+              displayName: 'Orca',
+              providerIdentity: {
+                provider: 'github',
+                owner: 'acme',
+                repo: 'orca',
+                host: 'github.acme.test'
+              }
+            }
+          ]
+        : []
+    })
+
+    const result = await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: 'github:github.acme.test/acme/orca',
+      projectProviderIdentity: {
+        provider: 'github',
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme.test'
+      },
+      hostId: 'local',
+      path: '/tmp/orca-local',
+      kind: 'git'
+    })
+
+    expect(added[0]?.upstream).toEqual({
+      owner: 'acme',
+      repo: 'orca',
+      host: 'github.acme.test'
+    })
+    expect(result).toHaveProperty('project.id', 'github:github.acme.test/acme/orca')
+  })
+
+  it('rolls back a new repo when the supplied identity does not match the project', async () => {
+    const added: Record<string, unknown>[] = []
+    mockStore.getRepos.mockImplementation(() => added)
+    mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
+
+    await expect(
+      handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+        projectId: 'github:acme/orca',
+        projectProviderIdentity: { provider: 'github', owner: 'other', repo: 'orca' },
+        hostId: 'local',
+        path: '/tmp/mismatched-project',
+        kind: 'git'
+      })
+    ).rejects.toThrow('Imported folder does not match the selected project identity.')
+
+    expect(mockStore.removeProject).toHaveBeenCalledWith(added[0]?.id)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+  })
+
+  it('prepares and invalidates roots when repos:update changes worktree base path', () => {
+    const updated = {
+      id: 'repo-update-root',
+      path: '/tmp/repo-update-root',
+      displayName: 'repo-update-root',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      worktreeBasePath: '../worktrees'
+    }
+    mockStore.updateRepo.mockReturnValue(updated)
+
+    const result = handlers.get('repos:update')!(null, {
+      repoId: updated.id,
+      updates: { worktreeBasePath: ' ../worktrees ' }
+    })
+
+    expect(result).toBe(updated)
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(updated.id, {
+      worktreeBasePath: '../worktrees'
+    })
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, updated)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+  })
+
+  it('prepares and invalidates roots when project host setup update changes worktree base path', () => {
+    const repo = {
+      id: 'repo-setup-update-root',
+      path: '/tmp/repo-setup-update-root',
+      displayName: 'repo-setup-update-root',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      worktreeBasePath: '../worktrees'
+    }
+    const result = {
+      project: { id: 'project-1', displayName: 'Project' },
+      setup: { id: 'setup-1', projectId: 'project-1', repoId: repo.id, hostId: 'local' },
+      repo
+    }
+    mockStore.updateProjectHostSetup.mockReturnValue(result)
+
+    expect(
+      handlers.get('projectHostSetups:update')!(null, {
+        setupId: 'setup-1',
+        updates: { worktreeBasePath: '../worktrees' }
+      })
+    ).toBe(result)
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, repo)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+  })
+
+  it('dedupes repos:add by normalized local path on Windows', async () => {
+    const existing = {
+      id: 'repo-add-windows-existing',
+      path: 'C:\\Users\\Ava\\Repo',
+      displayName: 'Repo',
+      kind: 'folder',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: 'c:/Users/Ava/Repo',
+      kind: 'folder'
+    })
+
+    expect(result).toEqual({ repo: existing })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
   it('defaults repos:clone badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
     const destination = await createTempRoot()
 
@@ -1185,6 +2226,41 @@ describe('repos:add + repos:clone', () => {
     )
     expect(result).toHaveProperty('badgeColor', DEFAULT_REPO_BADGE_COLOR)
     expect(result).toHaveProperty('externalWorktreeVisibility', 'hide')
+  })
+
+  it('drops a same-path negative submodule cache before a local clone', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    let cloned = false
+    gitExecFileAsyncMock.mockImplementation((args: string[]) =>
+      Promise.resolve({
+        stdout:
+          args[0] === 'config' && args.includes('.gitmodules') && cloned
+            ? 'submodule.lib.path vendor/lib\n'
+            : '',
+        stderr: ''
+      })
+    )
+    gitSpawnMock.mockImplementationOnce(() => {
+      const proc = createMockCloneProcess()
+      queueMicrotask(() => {
+        cloned = true
+        proc.emit('close', 0, null)
+      })
+      return proc
+    })
+
+    await expect(listSubmodulePaths(clonePath)).resolves.toEqual([])
+    await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await expect(listSubmodulePaths(clonePath)).resolves.toEqual(['vendor/lib'])
+
+    const configReads = gitExecFileAsyncMock.mock.calls.filter(
+      ([args]) => args[0] === 'config' && args.includes('.gitmodules')
+    )
+    expect(configReads).toHaveLength(2)
   })
 
   it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {
@@ -1207,9 +2283,14 @@ describe('repos:add + repos:clone', () => {
       destination
     })
 
-    expect(mockStore.updateRepo).toHaveBeenCalledWith(existing.id, { kind: 'git' })
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(existing.id, {
+      kind: 'git',
+      projectHostSetupMethod: 'cloned'
+    })
     expect(result).toEqual(upgraded)
     expect(result).toHaveProperty('badgeColor', '#8b5cf6')
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, upgraded)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
@@ -1283,6 +2364,26 @@ describe('repos:add + repos:clone', () => {
       expect.objectContaining({ cwd: destination })
     )
     expect(result).toHaveProperty('path', join(destination, 'orca'))
+  })
+
+  it('clones with the non-interactive credential guard so Git Credential Manager cannot pop its OAuth window (#7652)', async () => {
+    const destination = await createTempRoot()
+
+    await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+
+    // Without this env, a clone needing auth makes Git Credential Manager pop and loop its OAuth window on Windows.
+    expect(gitSpawnMock).toHaveBeenCalledWith(
+      ['clone', '--progress', '--', 'https://example.com/orca.git', join(destination, 'orca')],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          GIT_TERMINAL_PROMPT: '0',
+          GCM_INTERACTIVE: 'never'
+        })
+      })
+    )
   })
 
   it('treats cloneAbort with no active clone as a no-op', async () => {
@@ -1370,6 +2471,33 @@ describe('repos:add + repos:clone', () => {
     await expect(clonePromise).rejects.toThrow('Clone failed: fatal: repository not found')
 
     expect(existsSync(clonePath)).toBe(false)
+  })
+
+  it('reports the full fatal clone error when stderr includes progress fragments', async () => {
+    const destination = await createTempRoot()
+    const proc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(proc)
+
+    const clonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+
+    proc.stderr.emit(
+      'data',
+      Buffer.from(
+        "Cloning into 'orca'...\rfatal: destination path 'orca' already exists and is not an empty directory.\r\nand the repository exists.\n"
+      )
+    )
+    proc.emit('close', 128, null)
+
+    await expect(clonePromise).rejects.toThrow(
+      `Clone failed: Destination already exists and is not empty: ${join(
+        destination,
+        'orca'
+      )}. Choose a different parent folder, delete the existing folder, or add the existing repository instead.`
+    )
   })
 
   it('removes an owned fresh clone target when git spawn emits an error', async () => {
@@ -1553,9 +2681,8 @@ describe('repos:getBaseRefDefault envelope', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
-    // Reset exec to default: later SSH tests replace this with custom mocks, and
-    // without this reset any future test added to this block would inherit the
-    // last test's exec mock — latent fragility we guard against here.
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
+    // Reset exec so a newly added test doesn't inherit the previous test's exec mock.
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -1597,19 +2724,16 @@ describe('repos:getBaseRefDefault envelope', () => {
     expect(result.remoteCount).toBe(1)
   })
 
-  // Why: the SSH handler resolves default-ref and remote-count in parallel
-  // (Promise.all) so the order of calls into provider.exec is not stable.
-  // Dispatch on argv instead of `mockResolvedValueOnce` chains so tests remain
-  // independent of which Promise in the Promise.all resolves first.
+  // Why: the handler resolves default-ref and remote-count in parallel, so dispatch on argv (not call order) to stay stable.
   type ExecResponse = { stdout: string; stderr: string }
   type ExecRule = {
-    match: (argv: string[]) => boolean
+    matches: (argv: string[]) => boolean
     respond: () => Promise<ExecResponse>
   }
   const dispatchExec = (rules: ExecRule[]): ((argv: string[]) => Promise<ExecResponse>) => {
     return (argv: string[]) => {
       for (const rule of rules) {
-        if (rule.match(argv)) {
+        if (rule.matches(argv)) {
           return rule.respond()
         }
       }
@@ -1628,11 +2752,16 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         {
-          match: isSymbolicRef,
+          matches: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
+        // origin/HEAD is verified before trusted, so it must also resolve via rev-parse.
         {
-          match: isRemoteList,
+          matches: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+        },
+        {
+          matches: isRemoteList,
           respond: () => Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
         }
       ])
@@ -1658,11 +2787,16 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         {
-          match: isSymbolicRef,
+          matches: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
+        // origin/HEAD is verified before trusted, so it must also resolve via rev-parse.
         {
-          match: isRemoteList,
+          matches: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+        },
+        {
+          matches: isRemoteList,
           respond: () => Promise.reject(new Error('relay exec failed'))
         }
       ])
@@ -1680,8 +2814,7 @@ describe('repos:getBaseRefDefault envelope', () => {
       remoteCount: number
     }
 
-    // Why: default detection must be independent of remote-count lookup.
-    // A failing count falls back to 0, but the default still resolves.
+    // Why: default detection is independent of remote-count; a failing count falls back to 0 while the default still resolves.
     expect(result.defaultBaseRef).toBe('origin/main')
     expect(result.remoteCount).toBe(0)
   })
@@ -1690,18 +2823,21 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         // symbolic-ref rejects (no origin/HEAD on the remote)
-        { match: isSymbolicRef, respond: () => Promise.reject(new Error('no symbolic-ref')) },
+        { matches: isSymbolicRef, respond: () => Promise.reject(new Error('no symbolic-ref')) },
         // probe 1: refs/remotes/origin/main — rejects
         {
-          match: isRevParseFor('refs/remotes/origin/main'),
+          matches: isRevParseFor('refs/remotes/origin/main'),
           respond: () => Promise.reject(new Error('missing'))
         },
         // probe 2: refs/remotes/origin/master — succeeds
         {
-          match: isRevParseFor('refs/remotes/origin/master'),
+          matches: isRevParseFor('refs/remotes/origin/master'),
           respond: () => Promise.resolve({ stdout: 'abc123\n', stderr: '' })
         },
-        { match: isRemoteList, respond: () => Promise.resolve({ stdout: 'origin\n', stderr: '' }) }
+        {
+          matches: isRemoteList,
+          respond: () => Promise.resolve({ stdout: 'origin\n', stderr: '' })
+        }
       ])
     )
 
@@ -1717,9 +2853,7 @@ describe('repos:getBaseRefDefault envelope', () => {
       remoteCount: number
     }
 
-    // Why: when symbolic-ref fails, the probe chain should find
-    // refs/remotes/origin/master and return 'origin/master', matching
-    // the local path's getDefaultBaseRefAsync behavior.
+    // Why: when symbolic-ref fails, the probe chain resolves origin/master, matching the local path.
     expect(result.defaultBaseRef).toBe('origin/master')
     expect(result.remoteCount).toBe(1)
   })
@@ -1740,6 +2874,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -1811,8 +2946,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: '***'
     })
 
-    // Why: normalizeRefSearchQuery still strips glob metacharacters before
-    // building argv; the resulting empty query now intentionally lists refs.
+    // Why: glob metacharacters are stripped, so the empty query intentionally lists refs.
     const [argv] = mockGitProvider.exec.mock.calls.find(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )!
@@ -1872,22 +3006,26 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: '',
       limit: 1
     })
+    const repeatedResult = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '',
+      limit: 1
+    })
 
     expect(result).toEqual(['origin/main'])
+    expect(repeatedResult).toEqual(['origin/main'])
     const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
-    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls).toHaveLength(3)
     expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).toContain('--count=104')
+    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {
-    // Why: this is the core issue-624 behavior — the SSH path must glob all
-    // remotes, not just origin. The `**` globs additionally span ref segments
-    // so slash-named branches (`user/feature`) are found by a single-word
-    // query; a single `*` would not cross `/`.
+    // Why: SSH globs all remotes and `**` crosses `/` so slash-named branches match a single-word query (issue #624).
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
 
     mockStore.getRepo.mockReturnValue({
@@ -1915,11 +3053,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
   })
 
   it('sends segmented argv for display-format queries like `upstream/main`', async () => {
-    // Why: guards against the SSH path drifting from the local path for
-    // multi-segment queries. The picker shows results as `<remote>/<branch>`
-    // and users retype that format; if the SSH argv reverts to a single
-    // `*<q>*` glob containing the literal `/`, SSH users silently see no
-    // matches for valid refs — the same shape of bug as issue #624.
+    // Why: a single `*<q>*` glob with a literal `/` makes SSH multi-segment queries silently match nothing (issue #624 shape).
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
 
     mockStore.getRepo.mockReturnValue({
@@ -1931,24 +3065,25 @@ describe('repos:searchBaseRefs SSH relay', () => {
 
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream/main' })
 
-    expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
-    const [argv] = mockGitProvider.exec.mock.calls.find(
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(3)
+    const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
-    )!
-    expect(argv).toContain('refs/remotes/*upstream*/*main*')
-    expect(argv).toContain('refs/heads/*upstream*/*main*')
-    // Regression guard: the literal slash must never appear inside a
-    // single segmented glob (would be `refs/remotes/*upstream/main*`),
-    // which fnmatch cannot match because `*` doesn't cross `/`.
-    expect(argv).not.toContain('refs/remotes/*upstream/main*/*')
-    expect(argv).not.toContain('refs/remotes/*/*upstream/main*')
+    )
+    expect(forEachRefCalls).toHaveLength(2)
+    const segmentedArgv = forEachRefCalls[0][0] as string[]
+    const branchRootArgv = forEachRefCalls[1][0] as string[]
+    expect(segmentedArgv).toContain('refs/remotes/*upstream*/*main*')
+    expect(segmentedArgv).toContain('refs/heads/*upstream*/*main*')
+    expect(branchRootArgv).toContain('refs/remotes/*/upstream/main*')
+    expect(branchRootArgv).toContain('refs/heads/upstream/main*')
+    // Regression guard: a literal slash must never appear inside a single segmented glob (`*` doesn't cross `/`).
+    expect(segmentedArgv).not.toContain('refs/remotes/*upstream/main*/*')
+    expect(segmentedArgv).not.toContain('refs/remotes/*/*upstream/main*')
     expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 
   it('parses NUL-delimited stdout and filters <remote>/HEAD pseudo-refs', async () => {
-    // Why: exercises the shared parseAndFilterSearchRefs pipeline end-to-end
-    // on the SSH path — confirms the HEAD filter works for any remote (not
-    // just origin) when results come from the relay.
+    // Why: confirms the HEAD filter works for any remote, not just origin, on the SSH path.
     const stdout = [
       'refs/remotes/origin/main\0origin/main',
       'refs/remotes/upstream/main\0upstream/main',
@@ -1989,9 +3124,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: 'main'
     })
 
-    // Why: transport failure must fall back to an empty result set — mirrors
-    // the local path's catch, so SSH users see "no matches" instead of a
-    // crashed picker when the relay drops.
+    // Why: transport failure falls back to an empty result set so the picker doesn't crash.
     expect(result).toEqual([])
   })
 

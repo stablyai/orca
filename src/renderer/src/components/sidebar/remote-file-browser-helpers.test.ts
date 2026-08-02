@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES,
   decideEnterAction,
   decideEscAction,
   filterEntries,
+  isRemoteFileBrowserFilterQueryTooLarge,
+  isRemoteFileBrowserPathResolveTextTooLarge,
   isPathMode,
+  joinPath,
   parentPath,
   parsePathInput,
   resolveSegmentStep,
+  shouldDeferRemoteFileBrowserPasteResolve,
   type DirEntry
 } from './remote-file-browser-helpers'
 
@@ -27,6 +32,27 @@ describe('filterEntries', () => {
   it('returns the full list when filter is empty or whitespace', () => {
     expect(filterEntries(entries, '')).toHaveLength(entries.length)
     expect(filterEntries(entries, '   ')).toHaveLength(entries.length)
+  })
+
+  it('rejects oversized pasted filters before reading remote entry names', () => {
+    const oversizedFilter = 'secret-remote-entry'.repeat(REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES)
+    const throwingEntries = [
+      {
+        get name(): string {
+          throw new Error('oversized remote filters must not scan entry names')
+        },
+        isDirectory: true
+      }
+    ]
+
+    expect(isRemoteFileBrowserFilterQueryTooLarge(oversizedFilter)).toBe(true)
+    expect(filterEntries(throwingEntries, oversizedFilter)).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming remote entry filters', () => {
+    expect(
+      filterEntries(entries, ' '.repeat(REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES + 1))
+    ).toEqual([])
   })
 })
 
@@ -90,6 +116,27 @@ describe('isPathMode', () => {
     expect(isPathMode('~')).toBe(true)
     expect(isPathMode('.')).toBe(true)
     expect(isPathMode('..')).toBe(true)
+  })
+})
+
+describe('shouldDeferRemoteFileBrowserPasteResolve', () => {
+  it('keeps small path and filter pastes on the immediate resolver path', () => {
+    expect(shouldDeferRemoteFileBrowserPasteResolve('/workspaces/orca/src')).toBe(false)
+    expect(shouldDeferRemoteFileBrowserPasteResolve('remote notes')).toBe(false)
+  })
+
+  it('defers large text-control pastes to the chunked paste owner', () => {
+    expect(shouldDeferRemoteFileBrowserPasteResolve('x'.repeat(70 * 1024))).toBe(true)
+  })
+
+  it('defers multibyte paste text using bounded byte measurement', () => {
+    expect(shouldDeferRemoteFileBrowserPasteResolve('😀'.repeat(20 * 1024))).toBe(true)
+  })
+
+  it('treats oversized slash-containing paste as too large for path resolving', () => {
+    const pastedPathList = 'C:/Users/alice/project/file.txt\n'.repeat(3_000)
+
+    expect(isRemoteFileBrowserPathResolveTextTooLarge(pastedPathList)).toBe(true)
   })
 })
 
@@ -288,5 +335,73 @@ describe('resolveSegmentStep', () => {
     if (r.type === 'error') {
       expect(r.message).toMatch(/multiple directories/)
     }
+  })
+})
+
+describe('Windows drive paths', () => {
+  it('isPathMode triggers on drive-anchored input', () => {
+    expect(isPathMode('M:\\', 'win32')).toBe(true)
+    expect(isPathMode('M:/', 'win32')).toBe(true)
+    expect(isPathMode('m:', 'win32')).toBe(true)
+    expect(isPathMode('M:\\dev', 'win32')).toBe(true)
+    expect(isPathMode('M', 'win32')).toBe(false)
+    expect(isPathMode('M:x', 'win32')).toBe(false)
+  })
+
+  it('keeps drive-shaped POSIX names in filter and child-path semantics', () => {
+    expect(isPathMode('M:\\', 'posix')).toBe(false)
+    expect(parsePathInput('M:\\', 'posix')).toEqual({ mode: 'filter', filter: 'M:\\' })
+    expect(joinPath('/', 'M:\\', 'posix')).toBe('/M:\\')
+    expect(parentPath('/M:\\', 'posix')).toBe('/')
+  })
+
+  it('parsePathInput anchors drive input at the normalized drive root', () => {
+    expect(parsePathInput('m:/dev/', 'win32')).toEqual({
+      mode: 'path',
+      base: 'drive',
+      driveRoot: 'M:\\',
+      committedSegments: ['dev'],
+      trailingFilter: ''
+    })
+    expect(parsePathInput('M:\\dev\\deb', 'win32')).toEqual({
+      mode: 'path',
+      base: 'drive',
+      driveRoot: 'M:\\',
+      committedSegments: ['dev'],
+      trailingFilter: 'deb'
+    })
+    expect(parsePathInput('M:', 'win32')).toEqual({
+      mode: 'path',
+      base: 'drive',
+      driveRoot: 'M:\\',
+      committedSegments: [],
+      trailingFilter: ''
+    })
+  })
+
+  it('parsePathInput rejects repeated separators in drive input, either kind', () => {
+    for (const raw of ['M:\\dev\\\\x', 'M:/dev//x', 'M:\\dev\\/x']) {
+      const parsed = parsePathInput(raw, 'win32')
+      expect(parsed.mode).toBe('path')
+      if (parsed.mode === 'path') {
+        expect(parsed.invalid).toMatch(/repeated separators/)
+      }
+    }
+  })
+
+  it('joinPath treats drive rows in the host-root listing as absolute', () => {
+    expect(joinPath('/', 'M:\\', 'win32')).toBe('M:\\')
+    expect(joinPath('/', 'usr', 'win32')).toBe('/usr')
+  })
+
+  it('joinPath appends with a backslash inside a drive', () => {
+    expect(joinPath('M:\\', 'dev', 'win32')).toBe('M:\\dev')
+    expect(joinPath('M:\\dev', 'debox', 'win32')).toBe('M:\\dev\\debox')
+  })
+
+  it('parentPath climbs drive paths and exits to the host root', () => {
+    expect(parentPath('M:\\dev\\debox', 'win32')).toBe('M:\\dev')
+    expect(parentPath('M:\\dev', 'win32')).toBe('M:\\')
+    expect(parentPath('M:\\', 'win32')).toBe('/')
   })
 })

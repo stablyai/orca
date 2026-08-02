@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { spawn } from 'child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { spawn } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import { getProcessStartedAtMs, isDaemonStaleForCurrentBundle } from './daemon-health'
 
@@ -70,7 +70,7 @@ describe('daemon bundle staleness', () => {
         { mode: 0o600 }
       )
 
-      expect(isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(true)
+      expect(await isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(true)
     } finally {
       child.kill('SIGKILL')
     }
@@ -101,7 +101,7 @@ describe('daemon bundle staleness', () => {
         { mode: 0o600 }
       )
 
-      expect(isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(false)
+      expect(await isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(false)
     } finally {
       child.kill('SIGKILL')
     }
@@ -131,7 +131,7 @@ describe('daemon bundle staleness', () => {
         { mode: 0o600 }
       )
 
-      expect(isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(true)
+      expect(await isDaemonStaleForCurrentBundle(dir, socketPath, tokenPath, '1.2.3')).toBe(true)
     } finally {
       child.kill('SIGKILL')
     }

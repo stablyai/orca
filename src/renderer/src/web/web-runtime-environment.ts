@@ -1,8 +1,10 @@
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { WebPairingOffer } from './web-pairing'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { translate } from '@/i18n/i18n'
 
 export type StoredWebRuntimeEnvironment = Omit<PublicKnownRuntimeEnvironment, 'endpoints'> & {
+  compatibleEnvironmentIds?: string[]
   endpoints: {
     id: string
     kind: 'websocket'
@@ -22,10 +24,24 @@ export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment |
   }
   try {
     const parsed = JSON.parse(raw) as StoredWebRuntimeEnvironment
-    if (!parsed.id || !parsed.name || parsed.endpoints.length === 0) {
+    if (
+      !parsed.id ||
+      !parsed.name ||
+      !Array.isArray(parsed.endpoints) ||
+      parsed.endpoints.length === 0
+    ) {
       return null
     }
-    return parsed
+    const compatibleEnvironmentIds = Array.isArray(parsed.compatibleEnvironmentIds)
+      ? parsed.compatibleEnvironmentIds.filter(
+          (environmentId): environmentId is string => typeof environmentId === 'string'
+        )
+      : []
+    const { compatibleEnvironmentIds: _unvalidatedIds, ...environment } = parsed
+    return {
+      ...environment,
+      ...(compatibleEnvironmentIds.length > 0 ? { compatibleEnvironmentIds } : {})
+    }
   } catch {
     return null
   }
@@ -42,9 +58,12 @@ export function clearStoredWebRuntimeEnvironment(): void {
 export function createStoredWebRuntimeEnvironment(args: {
   name: string
   offer: WebPairingOffer
+  previousEnvironment?: StoredWebRuntimeEnvironment | null
+  connectionDependency?: 'ssh-tunnel'
 }): StoredWebRuntimeEnvironment {
   const id = `web-${createBrowserUuid()}`
   const now = Date.now()
+  const compatibleEnvironmentIds = getCompatibleEnvironmentIds(args.previousEnvironment, args.offer)
   return {
     id,
     name: args.name.trim() || 'Orca Server',
@@ -52,12 +71,14 @@ export function createStoredWebRuntimeEnvironment(args: {
     updatedAt: now,
     lastUsedAt: null,
     runtimeId: null,
+    ...(args.connectionDependency ? { connectionDependency: args.connectionDependency } : {}),
+    ...(compatibleEnvironmentIds.length > 0 ? { compatibleEnvironmentIds } : {}),
     preferredEndpointId: `ws-${id}`,
     endpoints: [
       {
         id: `ws-${id}`,
         kind: 'websocket',
-        label: 'WebSocket',
+        label: translate('auto.web.web.runtime.environment.07f788de83', 'WebSocket'),
         endpoint: args.offer.endpoint,
         deviceToken: args.offer.deviceToken,
         publicKeyB64: args.offer.publicKeyB64
@@ -66,11 +87,22 @@ export function createStoredWebRuntimeEnvironment(args: {
   }
 }
 
+function getCompatibleEnvironmentIds(
+  previous: StoredWebRuntimeEnvironment | null | undefined,
+  offer: WebPairingOffer
+): string[] {
+  if (!previous?.endpoints.some((endpoint) => endpoint.publicKeyB64 === offer.publicKeyB64)) {
+    return []
+  }
+  return [...new Set([...(previous.compatibleEnvironmentIds ?? []), previous.id])]
+}
+
 export function redactStoredWebRuntimeEnvironment(
   environment: StoredWebRuntimeEnvironment
 ): PublicKnownRuntimeEnvironment {
+  const { compatibleEnvironmentIds: _compatibleEnvironmentIds, ...publicEnvironment } = environment
   return {
-    ...environment,
+    ...publicEnvironment,
     endpoints: environment.endpoints.map(
       ({ deviceToken: _token, publicKeyB64: _key, ...rest }) => ({
         ...rest

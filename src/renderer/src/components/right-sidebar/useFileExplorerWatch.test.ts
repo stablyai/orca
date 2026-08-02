@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { FsChangedPayload } from '../../../../shared/types'
 import {
   canonicalizeFileExplorerWatchPath,
+  getFileExplorerWatchRuntimeEnvironmentId,
   getExternalFileChangeRelativePath,
-  payloadRequiresDeferredTreeRefresh
+  resolveCachedDirPath
 } from './useFileExplorerWatch'
+import type { AppState } from '@/store/types'
 
 describe('getExternalFileChangeRelativePath', () => {
   it('returns a worktree-relative file path for external file updates', () => {
@@ -102,35 +103,106 @@ describe('canonicalizeFileExplorerWatchPath', () => {
   })
 })
 
-describe('payloadRequiresDeferredTreeRefresh', () => {
-  function payload(events: FsChangedPayload['events'], worktreePath = '/repo'): FsChangedPayload {
-    return { worktreePath, events }
+describe('resolveCachedDirPath', () => {
+  it('returns the exact cache key when present', () => {
+    const cache = { '/repo/src': { children: [] } }
+    expect(resolveCachedDirPath(cache, '/repo/src')).toBe('/repo/src')
+  })
+
+  it('matches Windows cache keys case-insensitively (#10264)', () => {
+    const cache = { 'C:\\Repo\\src': { children: [] } }
+    expect(resolveCachedDirPath(cache, 'c:\\repo\\src')).toBe('C:\\Repo\\src')
+  })
+
+  it('falls back to the worktree root path when the root is not yet cached', () => {
+    expect(resolveCachedDirPath({}, 'C:\\Repo', 'C:\\Repo')).toBe('C:\\Repo')
+  })
+
+  it('returns null when the directory is not cached and is not the worktree root', () => {
+    expect(resolveCachedDirPath({ '/repo': { children: [] } }, '/repo/src', '/repo')).toBeNull()
+  })
+})
+
+describe('getFileExplorerWatchRuntimeEnvironmentId', () => {
+  function makeState(args: {
+    activeRuntimeEnvironmentId?: string | null
+    executionHostId?: AppState['repos'][number]['executionHostId']
+    connectionId?: string | null
+  }): Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo'> {
+    return {
+      settings: {
+        activeRuntimeEnvironmentId: args.activeRuntimeEnvironmentId ?? null
+      } as AppState['settings'],
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo',
+          displayName: 'repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: args.connectionId ?? null,
+          executionHostId: args.executionHostId
+        }
+      ],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/repo/worktree'
+          } as AppState['worktreesByRepo'][string][number]
+        ]
+      }
+    }
   }
 
-  it('does not require a full tree refresh for replayable deferred changes', () => {
-    const changes = payload([
-      { kind: 'create', absolutePath: '/repo/src/new.ts', isDirectory: false },
-      { kind: 'update', absolutePath: '/repo/src', isDirectory: true },
-      { kind: 'delete', absolutePath: '/repo/src/old.ts' }
-    ])
-
-    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(false)
+  it('uses the active runtime for legacy unowned active worktrees', () => {
+    expect(
+      getFileExplorerWatchRuntimeEnvironmentId(
+        makeState({ activeRuntimeEnvironmentId: 'focused-runtime' }),
+        'wt-1'
+      )
+    ).toBe('focused-runtime')
   })
 
-  it('requires a full tree refresh for unreplayable rename payloads in the current worktree', () => {
-    const changes = payload([
-      { kind: 'rename', absolutePath: '/repo/src/old.ts', isDirectory: false }
-    ])
-
-    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(true)
+  it('uses the explicit runtime owner when another host is focused', () => {
+    expect(
+      getFileExplorerWatchRuntimeEnvironmentId(
+        makeState({
+          activeRuntimeEnvironmentId: 'focused-runtime',
+          executionHostId: 'runtime:owner-runtime'
+        }),
+        'wt-1'
+      )
+    ).toBe('owner-runtime')
   })
 
-  it('ignores stale deferred rename payloads from a previous worktree', () => {
-    const changes = payload(
-      [{ kind: 'rename', absolutePath: '/other/src/old.ts', isDirectory: false }],
-      '/other'
-    )
+  it('keeps explicitly local active worktrees local when a runtime is focused', () => {
+    expect(
+      getFileExplorerWatchRuntimeEnvironmentId(
+        makeState({
+          activeRuntimeEnvironmentId: 'focused-runtime',
+          executionHostId: 'local'
+        }),
+        'wt-1'
+      )
+    ).toBeNull()
+  })
 
-    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(false)
+  it('disables a cached watch when its listing owner no longer matches', () => {
+    expect(
+      getFileExplorerWatchRuntimeEnvironmentId(
+        makeState({
+          activeRuntimeEnvironmentId: 'focused-runtime',
+          executionHostId: 'runtime:owner-runtime'
+        }),
+        'wt-1',
+        {
+          kind: 'runtime',
+          environmentId: 'old-owner-runtime',
+          executionHostId: 'runtime:old-owner-runtime'
+        }
+      )
+    ).toBeUndefined()
   })
 })

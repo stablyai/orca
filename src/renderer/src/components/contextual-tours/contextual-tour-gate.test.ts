@@ -40,6 +40,26 @@ describe('contextual tour gate', () => {
     expect(decision).toEqual({ kind: 'blocked', reason: 'missing-start-target' })
   })
 
+  it('can start the floating workspace tour from the non-empty surface fallback', () => {
+    const tour = getContextualTour('floating-workspace')
+    const fallbackSelector =
+      '[data-contextual-tour-target="floating-workspace-new-terminal"], [data-contextual-tour-target="floating-workspace-surface"]'
+    const decision = getContextualTourRequestDecision({
+      tour,
+      persistedUIReady: true,
+      autoEligible: true,
+      onboardingVisible: false,
+      seenIds: [],
+      sessionConsumed: false,
+      activeTourId: null,
+      activeModal: 'none',
+      blockingSurfaceVisible: false,
+      targetExists: (selector) => selector === fallbackSelector
+    })
+
+    expect(decision).toEqual({ kind: 'start', stepIndex: 0 })
+  })
+
   it('returns null when selector lookup or measurement throws', () => {
     expect(
       getMeasurableContextualTourTarget('[', {
@@ -111,6 +131,79 @@ describe('contextual tour gate', () => {
 
     expect(target?.element).toBe(visibleElement)
     expect(target?.rect.width).toBe(200)
+  })
+
+  it('resolves the browser import step to the visible hint button when both targets exist', () => {
+    // The hint button precedes the overflow-menu row in the DOM, so document-order
+    // resolution must pick it even though the combined selector lists both.
+    const hintButton = {
+      closest: () => null,
+      getBoundingClientRect: () => ({
+        left: 200,
+        top: 8,
+        right: 280,
+        bottom: 36,
+        width: 80,
+        height: 28
+      })
+    }
+    const menuRow = {
+      closest: () => null,
+      getBoundingClientRect: () => ({
+        left: 300,
+        top: 8,
+        right: 332,
+        bottom: 40,
+        width: 32,
+        height: 32
+      })
+    }
+
+    const selector =
+      '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]'
+    const target = getMeasurableContextualTourTarget(selector, {
+      // querySelectorAll returns matches in document order: hint button first.
+      querySelectorAll: () => [hintButton, menuRow]
+    } as unknown as ParentNode)
+
+    expect(target?.element).toBe(hintButton)
+    expect(target?.rect.width).toBe(80)
+  })
+
+  it('falls back to the overflow-menu row when the hint button is hidden', () => {
+    // Hint dismissed: its element is inside an aria-hidden subtree (or unmounted),
+    // so resolution must fall through to the always-present menu row.
+    const hiddenHintButton = {
+      closest: (querySelector: string) => (querySelector.includes('aria-hidden') ? {} : null),
+      getBoundingClientRect: () => ({
+        left: 200,
+        top: 8,
+        right: 280,
+        bottom: 36,
+        width: 80,
+        height: 28
+      })
+    }
+    const menuRow = {
+      closest: () => null,
+      getBoundingClientRect: () => ({
+        left: 300,
+        top: 8,
+        right: 332,
+        bottom: 40,
+        width: 32,
+        height: 32
+      })
+    }
+
+    const selector =
+      '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]'
+    const target = getMeasurableContextualTourTarget(selector, {
+      querySelectorAll: () => [hiddenHintButton, menuRow]
+    } as unknown as ParentNode)
+
+    expect(target?.element).toBe(menuRow)
+    expect(target?.rect.width).toBe(32)
   })
 
   it('starts an unseen tour only when global gates pass', () => {
@@ -261,6 +354,26 @@ describe('contextual tour gate', () => {
         targetExists
       })
     ).toBe(1)
+    expect(getContextualTourStepProgress({ visibleStepIndexes, stepIndex: 1 })).toEqual({
+      current: 2,
+      total: 2
+    })
+  })
+
+  it('hides the browser cookie step until the Import Cookies menu row is measurable', () => {
+    const tour = getContextualTour('browser')
+    const cookieTarget = tour.steps[2]!.targetSelector
+    const targetExists = (selector: string): boolean => selector !== cookieTarget
+    const visibleStepIndexes = getVisibleContextualTourStepIndexes(tour, targetExists)
+
+    expect(visibleStepIndexes).toEqual([0, 1])
+    expect(
+      getNextVisibleContextualTourStepIndex({
+        tour,
+        currentStepIndex: 1,
+        targetExists
+      })
+    ).toBeNull()
     expect(getContextualTourStepProgress({ visibleStepIndexes, stepIndex: 1 })).toEqual({
       current: 2,
       total: 2

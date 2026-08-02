@@ -1,6 +1,6 @@
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Socket } from 'net'
+import type { Socket } from 'node:net'
 import { UnixSocketTransport } from './unix-socket-transport'
 
 class FakeSocket extends EventEmitter {

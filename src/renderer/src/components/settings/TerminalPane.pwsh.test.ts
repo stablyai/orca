@@ -1,6 +1,3 @@
-/* oxlint-disable max-lines -- Why: TerminalPane tests share a large mocked
-   settings harness; splitting the new Windows-shell cases would duplicate
-   brittle React/store mocks without improving coverage. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockStateValues: unknown[] = []
@@ -107,8 +104,14 @@ vi.mock('./SettingsFormControls', () => ({
   }) {
     return options?.map((option) => option.label) ?? null
   },
-  SettingsSubsectionHeader: function SettingsSubsectionHeader() {
-    return null
+  SettingsSubsectionHeader: function SettingsSubsectionHeader({
+    title,
+    description
+  }: {
+    title?: unknown
+    description?: unknown
+  }) {
+    return [title, description]
   },
   SettingsSwitchRow: function SettingsSwitchRow() {
     return null
@@ -116,10 +119,7 @@ vi.mock('./SettingsFormControls', () => ({
 }))
 
 vi.mock('./TerminalThemeSections', () => ({
-  DarkTerminalThemeSection: function DarkTerminalThemeSection() {
-    return null
-  },
-  LightTerminalThemeSection: function LightTerminalThemeSection() {
+  TerminalThemeCatalogSection: function TerminalThemeCatalogSection() {
     return null
   }
 }))
@@ -132,6 +132,30 @@ vi.mock('./TerminalWindowSection', () => ({
 
 vi.mock('./GhosttyImportModal', () => ({
   GhosttyImportModal: function GhosttyImportModal() {
+    return null
+  }
+}))
+
+vi.mock('./ManageSessionsSection', () => ({
+  ManageSessionsSection: function ManageSessionsSection() {
+    return null
+  }
+}))
+
+vi.mock('./TerminalInteractionSection', () => ({
+  TerminalInteractionSection: function TerminalInteractionSection() {
+    return null
+  }
+}))
+
+vi.mock('./TerminalRenderingSection', () => ({
+  TerminalRenderingSection: function TerminalRenderingSection() {
+    return null
+  }
+}))
+
+vi.mock('./TerminalSetupScriptSection', () => ({
+  TerminalSetupScriptSection: function TerminalSetupScriptSection() {
     return null
   }
 }))
@@ -165,6 +189,10 @@ function getPropNodes(el: ReactElementLike): unknown[] {
   return nodes
 }
 
+function renderFunctionElement(el: ReactElementLike): unknown {
+  return typeof el.type === 'function' ? el.type(el.props) : undefined
+}
+
 function collectText(node: unknown): string {
   if (node == null) {
     return ''
@@ -179,6 +207,10 @@ function collectText(node: unknown): string {
     return node.map(collectText).join('')
   }
   const el = node as ReactElementLike
+  const rendered = renderFunctionElement(el)
+  if (rendered !== undefined) {
+    return collectText(rendered)
+  }
   return getPropNodes(el).map(collectText).join('')
 }
 
@@ -203,6 +235,10 @@ function findAnchorByText(node: unknown, text: string): ReactElementLike | null 
   if (typeName === 'a' && collectText(el.props.children).includes(text)) {
     return el
   }
+  const rendered = renderFunctionElement(el)
+  if (rendered !== undefined) {
+    return findAnchorByText(rendered, text)
+  }
   for (const child of getPropNodes(el)) {
     const found = findAnchorByText(child, text)
     if (found) {
@@ -210,6 +246,25 @@ function findAnchorByText(node: unknown, text: string): ReactElementLike | null 
     }
   }
   return null
+}
+
+function hasShellIconFor(node: unknown, shell: string): boolean {
+  if (node == null || typeof node === 'string' || typeof node === 'number') {
+    return false
+  }
+  if (Array.isArray(node)) {
+    return node.some((child) => hasShellIconFor(child, shell))
+  }
+  const el = node as ReactElementLike
+  const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+  if (typeName === 'ShellIcon' && el.props.shell === shell) {
+    return true
+  }
+  const rendered = renderFunctionElement(el)
+  if (rendered !== undefined) {
+    return hasShellIconFor(rendered, shell)
+  }
+  return getPropNodes(el).some((child) => hasShellIconFor(child, shell))
 }
 
 describe('TerminalPane PowerShell version setting', () => {
@@ -222,7 +277,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('shows the PowerShell 7+ download link when pwsh is unavailable', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'powershell.exe',
         terminalWordSeparator: ''
@@ -241,10 +296,10 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(link?.props.href).toBe('https://github.com/PowerShell/PowerShell/releases/latest')
   })
 
-  it('shows WSL as a Windows default shell option when available', () => {
+  it('does not show WSL as a Windows default shell option when available', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -258,13 +313,16 @@ describe('TerminalPane PowerShell version setting', () => {
       gitBashAvailable: false
     })
 
-    expect(collectText(element)).toContain('WSL')
+    const text = collectText(element)
+    expect(text).toContain('PowerShell')
+    expect(text).toContain('Command Prompt')
+    expect(text).not.toContain('WSL')
   })
 
   it('shows Windows shell controls for a remote Windows host on a non-Windows client', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -282,13 +340,13 @@ describe('TerminalPane PowerShell version setting', () => {
     const text = collectText(element)
     expect(text).toContain('Default shell for new terminal panes on Windows')
     expect(text).toContain('Command Prompt')
-    expect(text).toContain('WSL')
+    expect(text).not.toContain('WSL')
   })
 
   it('hides WSL as a Windows default shell option when unavailable', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -304,10 +362,10 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(collectText(element)).not.toContain('WSL')
   })
 
-  it('shows WSL distro choices when WSL is the selected Windows shell', () => {
+  it('shows a persisted WSL default without PowerShell or distro sub-settings', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'wsl.exe',
         terminalWindowsWslDistro: 'Debian',
         terminalWindowsPowerShellImplementation: 'auto',
@@ -323,16 +381,21 @@ describe('TerminalPane PowerShell version setting', () => {
     })
 
     const text = collectText(element)
-    expect(text).toContain('Choose which WSL distribution')
-    expect(text).toContain('Windows default')
-    expect(text).toContain('Ubuntu')
-    expect(text).toContain('Debian')
+    expect(text).toContain('PowerShell')
+    expect(text).toContain('Command Prompt')
+    expect(text).toContain('WSL')
+    expect(hasShellIconFor(element, 'wsl.exe')).toBe(true)
+    expect(text).not.toContain('PowerShell Version')
+    expect(text).not.toContain('Choose which WSL distribution')
+    expect(text).not.toContain('Windows default')
+    expect(text).not.toContain('Ubuntu')
+    expect(text).not.toContain('Debian')
   })
 
   it('shows Git Bash as a Windows default shell option when bash.exe is detected', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -346,12 +409,13 @@ describe('TerminalPane PowerShell version setting', () => {
     })
 
     expect(collectText(element)).toContain('Git Bash')
+    expect(hasShellIconFor(element, 'git-bash')).toBe(true)
   })
 
   it('hides Git Bash as a Windows default shell option when not detected', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''

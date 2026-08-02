@@ -1,7 +1,7 @@
-import { tmpdir } from 'os'
-import { join, basename } from 'path'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { spawnSync } from 'child_process'
+import { tmpdir } from 'node:os'
+import { join, basename } from 'node:path'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { getShellReadyLaunchConfig } from '../../local-pty-shell-ready'
 import { escapeRegex } from '../../../../shared/string-utils'
 

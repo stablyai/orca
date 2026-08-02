@@ -71,7 +71,7 @@ describe('prepareSkippedOnboardingPreferences', () => {
 })
 
 describe('remapOpenOnboardingLastCompletedStep', () => {
-  it('remaps unversioned seven-step open progress to the new four-step flow', () => {
+  it('remaps unversioned seven-step open progress to the current flow', () => {
     const base = { ...getDefaultOnboardingState(), flowVersion: 1 }
 
     expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 3 })).toBe(2)
@@ -80,7 +80,7 @@ describe('remapOpenOnboardingLastCompletedStep', () => {
     expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 9 })).toBe(3)
   })
 
-  it('remaps versioned five-step open progress to the new four-step flow', () => {
+  it('remaps versioned five-step open progress to the current flow', () => {
     const base = { ...getDefaultOnboardingState(), flowVersion: 2 }
 
     expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 3 })).toBe(2)
@@ -89,7 +89,15 @@ describe('remapOpenOnboardingLastCompletedStep', () => {
     expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 9 })).toBe(3)
   })
 
-  it('keeps current four-step progress intact', () => {
+  it('remaps versioned four-step open progress around the inserted Windows step', () => {
+    const base = { ...getDefaultOnboardingState(), flowVersion: 3 }
+
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 3 })).toBe(3)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 4 })).toBe(4)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 9 })).toBe(4)
+  })
+
+  it('keeps current five-step progress intact', () => {
     expect(
       remapOpenOnboardingLastCompletedStep({
         ...getDefaultOnboardingState(),
@@ -106,6 +114,6 @@ describe('remapOpenOnboardingLastCompletedStep', () => {
         outcome: 'completed',
         lastCompletedStep: 7
       })
-    ).toBe(4)
+    ).toBe(5)
   })
 })

@@ -1,13 +1,36 @@
+import { translate } from '@/i18n/i18n'
+import { shouldHandleTextControlPaste } from '@/lib/text-control-paste'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import type { FilesystemPathFlavor } from '../../../../shared/types'
+import {
+  driveRootOf,
+  isDrivePath,
+  joinDrivePath,
+  parentOfDrivePath
+} from './remote-file-browser-drive-paths'
 export type DirEntry = {
   name: string
   isDirectory: boolean
 }
 
+export const REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES = 2 * 1024
+
+export function isRemoteFileBrowserFilterQueryTooLarge(
+  query: string,
+  maxBytes = REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 export function filterEntries(entries: DirEntry[], filter: string): DirEntry[] {
-  const q = filter.trim().toLowerCase()
-  if (!q) {
+  if (isRemoteFileBrowserFilterQueryTooLarge(filter)) {
+    return []
+  }
+  const trimmedFilter = filter.trim()
+  if (!trimmedFilter) {
     return entries
   }
+  const q = trimmedFilter.toLowerCase()
   return entries.filter((e) => e.name.toLowerCase().includes(q))
 }
 
@@ -38,11 +61,25 @@ export function decideEscAction(filter: string): EscAction {
   return filter.length > 0 ? { type: 'clearFilter' } : { type: 'cancel' }
 }
 
-export function joinPath(resolvedPath: string, name: string): string {
+export function joinPath(
+  resolvedPath: string,
+  name: string,
+  pathFlavor: FilesystemPathFlavor = 'posix'
+): string {
+  // Drive rows in a Windows host-root listing are already absolute (`M:\`).
+  if (pathFlavor === 'win32' && resolvedPath === '/' && isDrivePath(name)) {
+    return driveRootOf(name)
+  }
+  if (pathFlavor === 'win32' && isDrivePath(resolvedPath)) {
+    return joinDrivePath(resolvedPath, name)
+  }
   return resolvedPath === '/' ? `/${name}` : `${resolvedPath}/${name}`
 }
 
-export function parentPath(p: string): string {
+export function parentPath(p: string, pathFlavor: FilesystemPathFlavor = 'posix'): string {
+  if (pathFlavor === 'win32' && isDrivePath(p)) {
+    return parentOfDrivePath(p)
+  }
   if (p === '/' || p === '') {
     return '/'
   }
@@ -57,8 +94,10 @@ export type ParsedInput =
   | {
       mode: 'path'
       // `root` = absolute `/`, `home` = resolved SSH user home, `cwd` = the
-      // currently committed resolvedPath.
-      base: 'root' | 'home' | 'cwd'
+      // currently committed resolvedPath, `drive` = a Windows drive root.
+      base: 'root' | 'home' | 'cwd' | 'drive'
+      // Canonical `M:\` root; only set when `base` is 'drive'.
+      driveRoot?: string
       // Segments to resolve one-by-one from the base. Empty string segments
       // never appear here — repeated separators are surfaced via `invalid`.
       committedSegments: string[]
@@ -70,18 +109,30 @@ export type ParsedInput =
       invalid?: string
     }
 
-// Path mode triggers when the input contains `/` or is one of the three
-// base-marker literals (`~`, `.`, `..`). The literal `..` rule is required
-// because "contains /" alone would keep bare `..` in filter mode.
-export function isPathMode(raw: string): boolean {
+// Slashes, drive anchors, and standalone base markers enter path mode.
+export function isPathMode(raw: string, pathFlavor: FilesystemPathFlavor = 'posix'): boolean {
   if (raw.includes('/')) {
+    return true
+  }
+  if (pathFlavor === 'win32' && isDrivePath(raw)) {
     return true
   }
   return raw === '~' || raw === '.' || raw === '..'
 }
 
-export function parsePathInput(raw: string): ParsedInput {
-  if (!isPathMode(raw)) {
+export function isRemoteFileBrowserPathResolveTextTooLarge(text: string): boolean {
+  return shouldHandleTextControlPaste(text)
+}
+
+export function shouldDeferRemoteFileBrowserPasteResolve(text: string): boolean {
+  return isRemoteFileBrowserPathResolveTextTooLarge(text)
+}
+
+export function parsePathInput(
+  raw: string,
+  pathFlavor: FilesystemPathFlavor = 'posix'
+): ParsedInput {
+  if (!isPathMode(raw, pathFlavor)) {
     // Filter mode preserves the raw text; trimming happens inside
     // `filterEntries` so leading/trailing spaces don't alter the input shown
     // back to the user.
@@ -99,9 +150,15 @@ export function parsePathInput(raw: string): ParsedInput {
     return { mode: 'path', base: 'cwd', committedSegments: ['..'], trailingFilter: '' }
   }
 
-  let base: 'root' | 'home' | 'cwd'
+  let base: 'root' | 'home' | 'cwd' | 'drive'
+  let driveRoot: string | undefined
   let remainder: string
-  if (raw.startsWith('/')) {
+  if (pathFlavor === 'win32' && isDrivePath(raw)) {
+    base = 'drive'
+    driveRoot = driveRootOf(raw)
+    // Strip the drive anchor; segments accept either Windows separator.
+    remainder = raw.slice(2).replace(/^[\\/]/, '')
+  } else if (raw.startsWith('/')) {
     base = 'root'
     remainder = raw.slice(1)
   } else if (raw.startsWith('~/')) {
@@ -114,10 +171,13 @@ export function parsePathInput(raw: string): ParsedInput {
 
   // Don't collapse `//`: the visible input must agree with the path being
   // resolved. Report it as invalid and let the caller surface the error.
-  if (remainder.includes('//')) {
+  const hasRepeatedSeparators =
+    base === 'drive' ? /[\\/]{2,}/.test(remainder) : remainder.includes('//')
+  if (hasRepeatedSeparators) {
     return {
       mode: 'path',
       base,
+      driveRoot,
       committedSegments: [],
       trailingFilter: '',
       invalid: 'Invalid path: repeated separators'
@@ -135,6 +195,7 @@ export function parsePathInput(raw: string): ParsedInput {
     return {
       mode: 'path',
       base,
+      driveRoot,
       committedSegments: [],
       trailingFilter: '',
       invalid: 'Invalid path: control characters are not allowed'
@@ -143,11 +204,12 @@ export function parsePathInput(raw: string): ParsedInput {
 
   // `split('/')` leaves an empty string when `remainder` ends with `/`, which
   // is the only legal "empty tail" and simply means "no trailing filter".
-  const parts = remainder === '' ? [''] : remainder.split('/')
+  const parts =
+    remainder === '' ? [''] : base === 'drive' ? remainder.split(/[\\/]/) : remainder.split('/')
   const trailingFilter = parts.at(-1) ?? ''
   const committedSegments = parts.slice(0, -1)
 
-  return { mode: 'path', base, committedSegments, trailingFilter }
+  return { mode: 'path', base, driveRoot, committedSegments, trailingFilter }
 }
 
 export type SegmentOutcome =
@@ -178,7 +240,14 @@ export function resolveSegmentStep(
     }
     // Stop resolution: prefix-matching to a similarly-named folder here would
     // silently bypass a real file the user pointed at.
-    return { type: 'error', message: `${segment} isn't a directory in ${basePath}` }
+    return {
+      type: 'error',
+      message: translate(
+        'auto.components.sidebar.remote.file.browser.helpers.4dbd72a7d7',
+        "{{value0}} isn't a directory in {{value1}}",
+        { value0: segment, value1: basePath }
+      )
+    }
   }
   // Fall back to case-insensitive matching so segment resolution agrees with
   // the case-insensitive filter input. Without this, typing `documents/`
@@ -191,7 +260,14 @@ export function resolveSegmentStep(
     if (ciExact.isDirectory) {
       return { type: 'descend', name: ciExact.name }
     }
-    return { type: 'error', message: `${segment} isn't a directory in ${basePath}` }
+    return {
+      type: 'error',
+      message: translate(
+        'auto.components.sidebar.remote.file.browser.helpers.4dbd72a7d7',
+        "{{value0}} isn't a directory in {{value1}}",
+        { value0: segment, value1: basePath }
+      )
+    }
   }
   const dirMatches = baseEntries.filter(
     (e) => e.isDirectory && e.name.toLowerCase().startsWith(segLower)
@@ -200,7 +276,21 @@ export function resolveSegmentStep(
     return { type: 'descend', name: dirMatches[0].name }
   }
   if (dirMatches.length > 1) {
-    return { type: 'error', message: `${segment} matches multiple directories in ${basePath}` }
+    return {
+      type: 'error',
+      message: translate(
+        'auto.components.sidebar.remote.file.browser.helpers.be266af66c',
+        '{{value0}} matches multiple directories in {{value1}}',
+        { value0: segment, value1: basePath }
+      )
+    }
   }
-  return { type: 'error', message: `${segment} isn't a directory in ${basePath}` }
+  return {
+    type: 'error',
+    message: translate(
+      'auto.components.sidebar.remote.file.browser.helpers.4dbd72a7d7',
+      "{{value0}} isn't a directory in {{value1}}",
+      { value0: segment, value1: basePath }
+    )
+  }
 }

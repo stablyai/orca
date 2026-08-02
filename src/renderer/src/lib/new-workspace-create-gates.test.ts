@@ -44,8 +44,11 @@ describe('new workspace create gates', () => {
     ).toBe(false)
   })
 
-  it('still blocks quick create for missing form state and explicit setup choices', () => {
-    expect(getQuickComposerCreateDisabled({ ...readyInput, repoId: '' })).toBe(true)
+  it('keeps quick create clickable when no repo is selected so submit can validate inline', () => {
+    expect(getQuickComposerCreateDisabled({ ...readyInput, repoId: '' })).toBe(false)
+  })
+
+  it('still blocks quick create for other missing form state and explicit setup choices', () => {
     expect(getQuickComposerCreateDisabled({ ...readyInput, workspaceSeedName: '' })).toBe(true)
     expect(getQuickComposerCreateDisabled({ ...readyInput, creating: true })).toBe(true)
     expect(
@@ -60,6 +63,16 @@ describe('new workspace create gates', () => {
     ).toBe(true)
     expect(getQuickComposerCreateDisabled({ ...readyInput, sparseError: 'Bad sparse path' })).toBe(
       true
+    )
+  })
+
+  it('blocks full and quick create synchronously for unresolved source intent', () => {
+    const blocked = { ...readyInput, sourceIntentBlocksCreate: true }
+
+    expect(getFullComposerCreateDisabled(blocked)).toBe(true)
+    expect(getQuickComposerCreateDisabled(blocked)).toBe(true)
+    expect(getQuickComposerCreateDisabled({ ...blocked, sourceIntentBlocksCreate: false })).toBe(
+      false
     )
   })
 })

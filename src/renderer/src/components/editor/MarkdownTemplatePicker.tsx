@@ -13,6 +13,7 @@ import type {
   MarkdownTemplateSelection
 } from '@/lib/markdown-template-picker-request'
 import { subscribeMarkdownTemplatePicker } from '@/lib/markdown-template-picker-request'
+import { translate } from '@/i18n/i18n'
 
 export function MarkdownTemplatePicker(): JSX.Element {
   const [activeRequest, setActiveRequest] = useState<MarkdownTemplatePickerRequest | null>(null)
@@ -52,13 +53,26 @@ export function MarkdownTemplatePicker(): JSX.Element {
           resolveRequest({ type: 'cancel' })
         }
       }}
-      title="New Markdown"
-      description="Choose a Markdown template."
+      title={translate('auto.components.editor.MarkdownTemplatePicker.1829437fce', 'New Markdown')}
+      description={translate(
+        'auto.components.editor.MarkdownTemplatePicker.7b458e0b7f',
+        'Choose a Markdown template.'
+      )}
       contentClassName="w-[520px]"
     >
-      <CommandInput placeholder="Search templates..." />
+      <CommandInput
+        placeholder={translate(
+          'auto.components.editor.MarkdownTemplatePicker.22fd4890ad',
+          'Search templates...'
+        )}
+      />
       <CommandList>
-        <CommandEmpty>No matching templates.</CommandEmpty>
+        <CommandEmpty>
+          {translate(
+            'auto.components.editor.MarkdownTemplatePicker.df667919ca',
+            'No matching templates.'
+          )}
+        </CommandEmpty>
         <CommandGroup heading="New Document">
           <CommandItem
             value="blank markdown document"
@@ -67,8 +81,18 @@ export function MarkdownTemplatePicker(): JSX.Element {
           >
             <FileText className="mt-0.5 size-4 text-muted-foreground" />
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">Blank Markdown</span>
-              <span className="block truncate text-xs text-muted-foreground">untitled.md</span>
+              <span className="block truncate text-sm font-medium">
+                {translate(
+                  'auto.components.editor.MarkdownTemplatePicker.6e2e6c04ad',
+                  'Blank Markdown'
+                )}
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.editor.MarkdownTemplatePicker.22cd94426f',
+                  'untitled.md'
+                )}
+              </span>
             </span>
           </CommandItem>
         </CommandGroup>

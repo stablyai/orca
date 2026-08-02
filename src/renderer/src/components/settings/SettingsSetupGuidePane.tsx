@@ -5,20 +5,20 @@ import {
 } from '../../../../shared/feature-wall-setup-steps'
 import type { FeatureWallSetupStepId } from '../../../../shared/feature-wall-setup-steps'
 import { FeatureWallSetupChecklist } from '../feature-wall/FeatureWallSetupChecklist'
-import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
+import { useSettingsSetupGuideFullProgress } from './settings-setup-guide-progress'
 
 export function SettingsSetupGuidePane(): React.JSX.Element {
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
-  const [activeStepId, setActiveStepId] = useState<FeatureWallSetupStepId>(
-    () => setupSteps[0]?.id ?? 'default-agent'
-  )
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
-  const progress = useSetupGuideProgress(
+  const progress = useSettingsSetupGuideFullProgress(
     true,
     orchestrationSkillInstalled,
     browserUseSkillInstalled
+  )
+  const [activeStepId, setActiveStepId] = useState<FeatureWallSetupStepId>(() =>
+    getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
   )
   const activeStep = setupSteps.find((step) => step.id === activeStepId) ?? setupSteps[0] ?? null
 
@@ -45,8 +45,9 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
   }
 
   return (
-    <div className="h-[min(740px,calc(100vh-14rem))] min-h-[540px] p-5">
+    <div className="h-[min(740px,calc(100vh-14rem))] min-h-[540px] px-7 py-6">
       <FeatureWallSetupChecklist
+        layout="embedded"
         activeStep={activeStep}
         progress={progress}
         onSelectStep={handleSelectStep}

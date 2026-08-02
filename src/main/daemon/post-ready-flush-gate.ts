@@ -9,17 +9,17 @@
  * redraws it under the prompt — producing a visible duplicate (e.g. "claude"
  * appears twice on agent launch).
  *
- * Strategy: after arm() is called, wait for the next PTY data chunk (the
- * prompt draw) plus a short delay for the tcsetattr() that enables raw mode.
- * A wall-clock fallback covers the case where the prompt arrives in the same
- * chunk as the marker, so no follow-up notifyData() ever fires.
+ * Strategy: after arm() is called, wait for prompt bytes plus a short delay
+ * for the tcsetattr() that enables raw mode. If the marker-completing scan
+ * already saw post-marker bytes, use that same short path immediately.
+ * A conservative wall-clock fallback covers ambiguous marker-only cases.
  *
  * Mirrors the gate in local-pty-shell-ready.ts::writeStartupCommandWhenShellReady,
  * which solves the same race on the non-daemon path.
  */
 
 export const POST_READY_FLUSH_DELAY_MS = 30
-export const POST_READY_FLUSH_FALLBACK_MS = 50
+export const POST_READY_FLUSH_FALLBACK_MS = 200
 
 export class PostReadyFlushGate {
   private awaitingPromptDraw = false
@@ -35,10 +35,14 @@ export class PostReadyFlushGate {
   }
 
   /** Arm the gate after observing the shell-ready marker. Starts the
-   *  wall-clock fallback; the flush fires when the fallback elapses or when
-   *  notifyData() observes a subsequent PTY data chunk. */
-  arm(): void {
+   *  wall-clock fallback unless the marker scan already observed post-marker
+   *  bytes, in which case the short post-data settle path is enough. */
+  arm(postMarkerBytesObserved = false): void {
     this.awaitingPromptDraw = true
+    if (postMarkerBytesObserved) {
+      this.notifyData()
+      return
+    }
     this.fallbackTimer = setTimeout(() => {
       this.fallbackTimer = null
       this.awaitingPromptDraw = false

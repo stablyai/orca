@@ -108,21 +108,20 @@ test.describe('Terminal inactive cursor rendering', () => {
     await waitForPaneCount(orcaPage, 1, 30_000)
   })
 
-  test('keeps an unfocused prompt cursor rendered as one bar', async ({ orcaPage }) => {
+  test('keeps an unfocused prompt cursor rendered as one block outline', async ({ orcaPage }) => {
     await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, 2)
     await placeInactiveCursorAtPrompt(orcaPage)
 
     const fixedBehavior = await renderInactiveCursor(orcaPage)
     expect(fixedBehavior.terminalFocused).toBe(false)
-    expect(fixedBehavior.cursorStyle).toBe('bar')
-    expect(fixedBehavior.cursorInactiveStyle).toBe('bar')
-    expect(fixedBehavior.cursorClassName).toContain('bar')
-    expect(fixedBehavior.cursorClassName).not.toContain('xterm-cursor-outline')
+    expect(fixedBehavior.cursorStyle).toBe('block')
+    expect(fixedBehavior.cursorInactiveStyle).toBe('outline')
+    expect(fixedBehavior.cursorClassName).toMatch(/xterm-cursor-outline|canvas renderer: outline/)
 
     const oldBehavior = await renderInactiveCursor(orcaPage, 'outline')
     expect(oldBehavior.terminalFocused).toBe(false)
-    expect(oldBehavior.cursorStyle).toBe('bar')
+    expect(oldBehavior.cursorStyle).toBe('block')
     expect(oldBehavior.cursorInactiveStyle).toBe('outline')
   })
 })

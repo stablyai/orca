@@ -7,13 +7,30 @@ function renderMarkup(state: AgentDotState): string {
   return renderToStaticMarkup(React.createElement(AgentStateDot, { state }))
 }
 
+function renderDotClassNames(state: AgentDotState): string[] {
+  const markup = renderMarkup(state)
+  const dotClassName = markup.match(/<span class="([^"]*rounded-full[^"]*)"/)?.[1]
+
+  expect(dotClassName).toBeDefined()
+
+  return dotClassName!.split(/\s+/)
+}
+
 describe('AgentStateDot', () => {
   it('renders working as a yellow spinner', () => {
     const markup = renderMarkup('working')
 
     expect(markup).toContain('border-yellow-500')
     expect(markup).toContain('border-t-transparent')
-    expect(markup).toContain('animate-spin')
+    // Why: rotation comes from the shared agent-spinner clock (which also
+    // honors prefers-reduced-motion), not a per-element CSS animation that
+    // would keep the compositor awake.
+    expect(markup).toContain('data-agent-spinner')
+    // Why: under reduced motion the top border is filled so the static ring
+    // reads as a complete marker, not a broken partial spinner (#9515).
+    expect(markup).toContain('motion-reduce:border-t-yellow-500')
+    expect(markup).not.toContain('animate-spin')
+    expect(markup).not.toContain('animation:spin')
   })
 
   it('renders done as an emerald check icon', () => {
@@ -28,4 +45,26 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('lucide-circle-check')
     expect(markup).toContain('text-emerald-500')
   })
+
+  it.each(['permission', 'waiting'] satisfies AgentDotState[])(
+    'renders %s as an amber question glyph',
+    (state) => {
+      const markup = renderMarkup(state)
+
+      expect(markup).toContain('lucide-message-circle-question-mark')
+      expect(markup).toContain('text-amber-500')
+      expect(markup).not.toContain('bg-amber-500')
+      expect(markup).not.toContain('data-agent-spinner')
+    }
+  )
+
+  it.each(['blocked', 'interrupted'] satisfies AgentDotState[])(
+    'renders %s as a red attention dot',
+    (state) => {
+      const classNames = renderDotClassNames(state)
+
+      expect(classNames).toContain('bg-red-500')
+      expect(classNames).not.toContain('bg-amber-500')
+    }
+  )
 })

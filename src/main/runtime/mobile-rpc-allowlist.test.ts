@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync, statSync } from 'fs'
-import { join } from 'path'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ALL_RPC_METHODS } from './rpc/methods'
 
@@ -8,10 +8,47 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   // mobile source scan below, but still must stay mobile-authorized.
   'accounts.selectClaude',
   'accounts.selectCodex',
+  'accounts.selectCodexForTarget',
+  'terminal.createAgentSession',
+  'terminal.ensureAgentSession',
   'github.updateIssue',
   'github.updatePRState',
   'gitlab.updateIssue',
-  'gitlab.updateMR'
+  'gitlab.updateMR',
+  // PR-sidebar reads/mutations: the mobile github-pr-rpc/mutations wrappers pass
+  // the method name as a positional arg to sendGithubPrRead/sendMutation, so the
+  // literal sendRequest('...') scan below cannot see them. List them here so the
+  // allowlist + registration are still enforced.
+  'github.repoSlug',
+  'github.prForBranch',
+  'github.workItemDetails',
+  'github.prChecks',
+  'github.prCheckDetails',
+  'github.listAssignableUsers',
+  'github.mergePR',
+  'github.setPRAutoMerge',
+  'github.requestPRReviewers',
+  'github.removePRReviewers',
+  'github.rerunPRChecks',
+  'github.updatePRTitle',
+  'github.addPRReviewCommentReply',
+  'github.addIssueComment',
+  'github.resolveReviewThread',
+  'github.project.updateIssueCommentBySlug',
+  'github.project.deleteIssueCommentBySlug',
+  'hostedReview.forBranch'
+]
+
+const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
+  // Why: shared-control unsubscribe methods are sent from generated cleanup
+  // paths, so literal mobile source scanning cannot discover every one.
+  'accounts.unsubscribe',
+  'browser.screencast.unsubscribe',
+  'notifications.unsubscribe',
+  'runtime.clientEvents.unsubscribe',
+  'session.tabs.unsubscribe',
+  'session.tabs.unsubscribeAll',
+  'terminal.unsubscribe'
 ]
 
 function listSourceFiles(root: string): string[] {
@@ -87,5 +124,21 @@ describe('mobile RPC allowlist', () => {
     const missing = mobileRpcMethods().filter((method) => !registered.has(method))
 
     expect(missing).toEqual([])
+  })
+
+  it('allows every cleanup RPC for mobile streaming subscriptions', () => {
+    const allowed = mobileRpcAllowlist()
+    const missing = MOBILE_STREAMING_CLEANUP_RPC_METHODS.filter((method) => !allowed.has(method))
+
+    expect(missing).toEqual([])
+  })
+
+  it('does not grant mobile credentials control over host updates', () => {
+    const allowed = mobileRpcAllowlist()
+    expect(
+      ['updater.getStatus', 'updater.check', 'updater.download', 'updater.install'].filter(
+        (method) => allowed.has(method)
+      )
+    ).toEqual([])
   })
 })

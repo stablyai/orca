@@ -10,7 +10,7 @@
  * child_process.spawn is sufficient to verify the shell arguments produce
  * the correct encoding configuration.
  */
-import { execSync } from 'child_process'
+import { execSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
 const isWindows = process.platform === 'win32'
@@ -55,7 +55,7 @@ describe('Windows PTY UTF-8 encoding', () => {
     it('StringDecoder correctly handles split multi-byte sequences', () => {
       // This is what node-pty does internally — StringDecoder buffers incomplete
       // trailing bytes and prepends them to the next write.
-      const { StringDecoder } = require('string_decoder')
+      const { StringDecoder } = require('node:string_decoder')
       const decoder = new StringDecoder('utf8')
 
       const chunk1 = Buffer.from([0xe4, 0xbd])

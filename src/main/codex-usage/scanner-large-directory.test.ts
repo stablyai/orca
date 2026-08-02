@@ -1,12 +1,15 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Dirent, Stats } from 'node:fs'
-import type * as FsPromises from 'fs/promises'
-import { join } from 'path'
+import type * as FsPromises from 'node:fs/promises'
+import { join } from 'node:path'
 
-const { readdirMock, statMock } = vi.hoisted(() => ({
-  readdirMock: vi.fn<(dirPath: string) => Promise<Dirent[]>>(),
-  statMock: vi.fn<(filePath: string) => Promise<Stats>>()
-}))
+const { getLegacyCopiedCodexSessionBridgeScanPreferenceMock, readdirMock, statMock } = vi.hoisted(
+  () => ({
+    getLegacyCopiedCodexSessionBridgeScanPreferenceMock: vi.fn(),
+    readdirMock: vi.fn<(dirPath: string) => Promise<Dirent[]>>(),
+    statMock: vi.fn<(filePath: string) => Promise<Stats>>()
+  })
+)
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
@@ -25,11 +28,13 @@ const RUNTIME_BULK_DIR = join(RUNTIME_SESSIONS_ROOT, 'bulk')
 
 vi.mock('../codex/codex-home-paths', () => ({
   getOrcaManagedCodexHomePath: () => join(FAKE_ROOT, 'runtime'),
+  getOrcaUserDataPath: () => FAKE_ROOT,
   getSystemCodexHomePath: () => join(FAKE_ROOT, 'system')
 }))
 
 vi.mock('../codex/codex-session-bridge', () => ({
-  getLegacyCopiedCodexSessionBridgeScanPreference: () => null
+  getLegacyCopiedCodexSessionBridgeScanPreference:
+    getLegacyCopiedCodexSessionBridgeScanPreferenceMock
 }))
 
 function dirent(name: string, kind: 'directory' | 'file'): Dirent {
@@ -45,6 +50,13 @@ const largeSessionEntries = Array.from({ length: FILE_COUNT }, (_, index) =>
 )
 
 describe('listCodexSessionFiles large directories', () => {
+  beforeEach(() => {
+    getLegacyCopiedCodexSessionBridgeScanPreferenceMock.mockReset()
+    getLegacyCopiedCodexSessionBridgeScanPreferenceMock.mockReturnValue(null)
+    readdirMock.mockReset()
+    statMock.mockReset()
+  })
+
   it('keeps nested session scans past the JavaScript spread-argument limit', async () => {
     readdirMock.mockImplementation(async (dirPath) => {
       if (dirPath === RUNTIME_SESSIONS_ROOT) {
@@ -69,5 +81,6 @@ describe('listCodexSessionFiles large directories', () => {
     const { listCodexSessionFiles } = await import('./scanner')
 
     await expect(listCodexSessionFiles()).resolves.toHaveLength(FILE_COUNT)
+    expect(getLegacyCopiedCodexSessionBridgeScanPreferenceMock).not.toHaveBeenCalled()
   })
 })

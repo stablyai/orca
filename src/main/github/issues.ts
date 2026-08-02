@@ -6,6 +6,7 @@ import type {
   ClassifiedError,
   GitHubAssignableUser,
   GitHubCreateIssueFields,
+  GitHubCreateIssueResult,
   GitHubCommentResult,
   GitHubIssueUpdate,
   IssueInfo,
@@ -13,9 +14,14 @@ import type {
   PRComment
 } from '../../shared/types'
 import { mapIssueInfo } from './mappers'
-import type { OwnerRepo } from './gh-utils'
+import type { LocalGitExecOptions, OwnerRepo } from './gh-utils'
+import {
+  getIssueGitHubApiRepository,
+  resolveGitHubRepoExecution,
+  resolveIssueGitHubApiRepositorySource
+} from './github-api-repository'
 // prettier-ignore
-import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError, ghRepoExecOptions, githubRepoContext } from './gh-utils'
+import { ghExecFileAsync, acquire, release, classifyGhError, classifyListIssuesError, extractExecError } from './gh-utils'
 
 // Why: distinguishes a successful-empty listing from a failed fetch. The
 // previous `catch { return [] }` conflated a 403 on a private upstream with an
@@ -29,6 +35,11 @@ import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSourc
 export type IssueListResult = {
   items: IssueInfo[]
   error?: ClassifiedError
+}
+
+function githubIssueErrorMessage(error: unknown): string {
+  const { stderr, stdout } = extractExecError(error)
+  return stderr.trim() || stdout.trim()
 }
 
 /**
@@ -45,11 +56,20 @@ export type IssueListResult = {
 export async function getIssue(
   repoPath: string,
   issueNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<IssueInfo | null> {
-  const context = githubRepoContext(repoPath, connectionId)
-  const ghOptions = ghRepoExecOptions(context)
-  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
+  const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
+    repoPath,
+    () => getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
+    connectionId,
+    localGitOptions
+  )
+  // Why: a connection-backed request has no local cwd, so the non-GitHub
+  // fallback below would let gh target its default repository. Refuse instead.
+  if (connectionId && !ownerRepo) {
+    return null
+  }
   await acquire()
   try {
     if (ownerRepo) {
@@ -94,11 +114,34 @@ export async function listIssues(
   repoPath: string,
   limit = 20,
   preference?: IssueSourcePreference,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<IssueListResult> {
-  const context = githubRepoContext(repoPath, connectionId)
-  const ghOptions = ghRepoExecOptions(context)
-  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference, connectionId)
+  const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
+    repoPath,
+    async () =>
+      (
+        await resolveIssueGitHubApiRepositorySource(
+          repoPath,
+          preference,
+          connectionId,
+          localGitOptions
+        )
+      ).source,
+    connectionId,
+    localGitOptions
+  )
+  // Why: a connection-backed request has no local cwd, so the non-GitHub
+  // fallback below would let gh list its default repository. Refuse instead.
+  if (connectionId && !ownerRepo) {
+    return {
+      items: [],
+      error: {
+        type: 'not_found',
+        message: 'Could not resolve GitHub owner/repo for this repository'
+      }
+    }
+  }
   await acquire()
   try {
     if (ownerRepo) {
@@ -153,39 +196,97 @@ export async function createIssue(
   body: string,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  fields?: GitHubCreateIssueFields
-): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
+  fields?: GitHubCreateIssueFields,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<GitHubCreateIssueResult> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
   }
-  const context = githubRepoContext(repoPath, connectionId)
-  const ghOptions = ghRepoExecOptions(context)
-  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference, connectionId)
+  const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
+    repoPath,
+    async () =>
+      (
+        await resolveIssueGitHubApiRepositorySource(
+          repoPath,
+          preference,
+          connectionId,
+          localGitOptions
+        )
+      ).source,
+    connectionId,
+    localGitOptions
+  )
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
   await acquire()
   try {
-    const args = [
-      'api',
-      '-X',
-      'POST',
-      `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
-      '--raw-field',
-      `title=${trimmedTitle}`,
-      '--raw-field',
-      `body=${body}`
-    ]
-    for (const label of fields?.labels ?? []) {
-      args.push('--raw-field', `labels[]=${label}`)
-    }
-    for (const assignee of fields?.assignees ?? []) {
-      args.push('--raw-field', `assignees[]=${assignee}`)
+    const createArgs = (issueBody: string) => {
+      const args = [
+        'api',
+        '-X',
+        'POST',
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
+        '--raw-field',
+        `title=${trimmedTitle}`,
+        '--raw-field',
+        `body=${issueBody}`
+      ]
+      for (const label of fields?.labels ?? []) {
+        args.push('--raw-field', `labels[]=${label}`)
+      }
+      for (const assignee of fields?.assignees ?? []) {
+        args.push('--raw-field', `assignees[]=${assignee}`)
+      }
+      return args
     }
 
-    const { stdout } = await ghExecFileAsync(args, ghOptions)
-    const data = JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
+    const parseIssue = (stdout: string) =>
+      JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
+
+    let data: { number?: number; html_url?: string; url?: string }
+    try {
+      const { stdout } = await ghExecFileAsync(createArgs(body), ghOptions)
+      data = parseIssue(stdout)
+    } catch (err) {
+      const message = githubIssueErrorMessage(err)
+      if (!/body is too long \(maximum is \d+ characters\)/i.test(message)) {
+        return { ok: false, error: message }
+      }
+
+      // Why: GitHub rejects oversized bodies on create but accepts the same body
+      // on update, so establish the issue before attaching its body.
+      const { stdout } = await ghExecFileAsync(createArgs(''), ghOptions)
+      data = parseIssue(stdout)
+      if (typeof data.number !== 'number') {
+        return { ok: false, error: 'Unexpected response from GitHub' }
+      }
+
+      try {
+        await ghExecFileAsync(
+          [
+            'api',
+            '-X',
+            'PATCH',
+            `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${data.number}`,
+            '--raw-field',
+            `body=${body}`
+          ],
+          ghOptions
+        )
+      } catch (patchErr) {
+        const patchMessage = githubIssueErrorMessage(patchErr)
+        const identity = data.html_url ?? data.url ?? `#${data.number}`
+        return {
+          ok: true,
+          number: data.number,
+          url: String(data.html_url ?? data.url ?? ''),
+          bodySaveWarning: `Issue ${identity} was created, but saving its body failed: ${patchMessage}`
+        }
+      }
+    }
+
     if (typeof data.number !== 'number') {
       return { ok: false, error: 'Unexpected response from GitHub' }
     }
@@ -195,8 +296,7 @@ export async function createIssue(
       url: String(data.html_url ?? data.url ?? '')
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: message }
+    return { ok: false, error: githubIssueErrorMessage(err) }
   } finally {
     release()
   }
@@ -219,11 +319,15 @@ export async function updateIssue(
   repoPath: string,
   issueNumber: number,
   updates: GitHubIssueUpdate,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const context = githubRepoContext(repoPath, connectionId)
-  const ghOptions = ghRepoExecOptions(context)
-  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
+  const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
+    repoPath,
+    () => getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
+    connectionId,
+    localGitOptions
+  )
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -235,10 +339,19 @@ export async function updateIssue(
   if (updates.state) {
     await acquire()
     try {
-      const cmd = updates.state === 'closed' ? 'close' : 'reopen'
-      await ghExecFileAsync(['issue', cmd, String(issueNumber), '--repo', repo], {
-        ...ghOptions
-      })
+      if (updates.state === 'closed') {
+        const closeArgs = ['issue', 'close', String(issueNumber), '--repo', repo]
+        if (updates.stateReason === 'completed') {
+          closeArgs.push('--reason', 'completed')
+        } else if (updates.stateReason === 'not_planned') {
+          closeArgs.push('--reason', 'not planned')
+        } else if (updates.stateReason === 'duplicate' && updates.duplicateOf) {
+          closeArgs.push('--duplicate-of', String(updates.duplicateOf))
+        }
+        await ghExecFileAsync(closeArgs, ghOptions)
+      } else {
+        await ghExecFileAsync(['issue', 'reopen', String(issueNumber), '--repo', repo], ghOptions)
+      }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
       // Treat "already closed/open" as a no-op
@@ -332,11 +445,16 @@ export async function addIssueComment(
   issueNumber: number,
   body: string,
   connectionId?: string | null,
-  ownerRepoOverride?: OwnerRepo | null
+  ownerRepoOverride?: OwnerRepo | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubCommentResult> {
-  const context = githubRepoContext(repoPath, connectionId)
-  const ghOptions = ghRepoExecOptions(context)
-  const ownerRepo = ownerRepoOverride ?? (await getIssueOwnerRepo(repoPath, connectionId))
+  const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
+    repoPath,
+    ownerRepoOverride ??
+      (() => getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions)),
+    connectionId,
+    localGitOptions
+  )
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -384,11 +502,23 @@ export async function addIssueComment(
 export async function listLabels(
   repoPath: string,
   preference?: IssueSourcePreference,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<string[]> {
-  const context = githubRepoContext(repoPath, connectionId)
-  const ghOptions = ghRepoExecOptions(context)
-  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference, connectionId)
+  const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
+    repoPath,
+    async () =>
+      (
+        await resolveIssueGitHubApiRepositorySource(
+          repoPath,
+          preference,
+          connectionId,
+          localGitOptions
+        )
+      ).source,
+    connectionId,
+    localGitOptions
+  )
   if (!ownerRepo) {
     return []
   }
@@ -418,11 +548,23 @@ export async function listLabels(
 export async function listAssignableUsers(
   repoPath: string,
   preference?: IssueSourcePreference,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
-  const context = githubRepoContext(repoPath, connectionId)
-  const ghOptions = ghRepoExecOptions(context)
-  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference, connectionId)
+  const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
+    repoPath,
+    async () =>
+      (
+        await resolveIssueGitHubApiRepositorySource(
+          repoPath,
+          preference,
+          connectionId,
+          localGitOptions
+        )
+      ).source,
+    connectionId,
+    localGitOptions
+  )
   if (!ownerRepo) {
     return []
   }

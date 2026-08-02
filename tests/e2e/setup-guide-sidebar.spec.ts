@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: this regression spec keeps the deterministic IPC fakes, setup-state seeding, and frame-level flash monitor together so the flicker contract is auditable in one place. */
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import type { SkillDiscoveryResult } from '../../src/shared/skills'
 import { test, expect } from './helpers/orca-app'
@@ -36,22 +35,19 @@ test.describe('Setup guide sidebar entry', () => {
 
     await startSetupGuideFlashMonitor(orcaPage)
 
-    await orcaPage
-      .getByRole('button', { name: /^Tasks/ })
-      .first()
-      .click()
+    await setActiveViewForFlashProbe(orcaPage, 'tasks')
     await expect
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe('tasks')
     await orcaPage.waitForTimeout(500)
 
-    await orcaPage.getByRole('button', { name: /^Automations$/ }).click()
+    await setActiveViewForFlashProbe(orcaPage, 'automations')
     await expect
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe('automations')
     await orcaPage.waitForTimeout(500)
 
-    await orcaPage.getByRole('button', { name: /^Orca Mobile/ }).click()
+    await setActiveViewForFlashProbe(orcaPage, 'mobile')
     await expect
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe('mobile')
@@ -68,6 +64,17 @@ test.describe('Setup guide sidebar entry', () => {
     })
   })
 })
+
+async function setActiveViewForFlashProbe(
+  page: Page,
+  view: 'tasks' | 'automations' | 'mobile'
+): Promise<void> {
+  await page.evaluate((nextView) => {
+    // Why: this spec monitors setup-guide visibility during view transitions;
+    // CI pointer stability over sidebar nav is covered by separate nav tests.
+    window.__store?.getState().setActiveView(nextView)
+  }, view)
+}
 
 async function installBlockedCompletedCapabilityFakes(
   electronApp: ElectronApplication

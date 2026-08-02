@@ -8,6 +8,7 @@ import {
 } from '@/lib/markdown-review-notes'
 import type { NotesSendMenuScope } from './NotesSendMenu'
 import type { DiffComment } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type UseRichMarkdownReviewDataOptions = {
   allDiffComments: DiffComment[] | undefined
@@ -56,7 +57,10 @@ export function useRichMarkdownReviewData({
     return [
       {
         id: 'all',
-        label: 'All unsent notes',
+        label: translate(
+          'auto.components.editor.useRichMarkdownReviewData.f9d2acd6b0',
+          'All unsent notes'
+        ),
         notes: unsentNotes,
         prompt: formatMarkdownReviewNotes(unsentNotes, markdownReviewContent)
       }

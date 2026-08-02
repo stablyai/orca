@@ -1,7 +1,7 @@
-import { execFileSync } from 'child_process'
-import { mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import * as path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getStatus, stageFile } from './status'
 
@@ -26,9 +26,9 @@ afterEach(async () => {
 })
 
 describe('git status C-quoted paths', () => {
-  it('returns the real path for untracked files whose names contain tabs', async () => {
+  it('returns the real path for untracked UTF-8 filenames', async () => {
     const repo = await createRepo()
-    const filePath = 'tab\tfile.txt'
+    const filePath = '日本語-file.txt'
     await writeFile(path.join(repo, filePath), 'new file\n')
 
     const status = await getStatus(repo)

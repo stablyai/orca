@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { SERVE_COMMAND_SPECS } from './serve'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -9,31 +10,25 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS],
     examples: ['orca open', 'orca open --json']
   },
-  {
-    path: ['serve'],
-    summary: 'Start an Orca runtime server without opening a desktop window',
-    usage:
-      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'port', 'pairing-address', 'mobile-pairing', 'no-pairing'],
-    notes: [
-      'Runs in the foreground and prints the runtime endpoint. Stop it with Ctrl+C.',
-      'Use --pairing-address when clients should connect through a LAN, Tailscale, SSH-forward, or public tunnel address.',
-      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
-      'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.'
-    ],
-    examples: [
-      'orca serve',
-      'orca serve --json',
-      'orca serve --port 6768 --pairing-address 100.64.1.20',
-      'orca serve --pairing-address 100.64.1.20 --mobile-pairing'
-    ]
-  },
+  ...SERVE_COMMAND_SPECS,
   {
     path: ['status'],
     summary: 'Show app/runtime/graph readiness',
     usage: 'orca status [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     examples: ['orca status', 'orca status --json']
+  },
+  {
+    path: ['claude-teams'],
+    argumentMode: 'passthrough',
+    summary: 'Start Claude Code Agent Teams in the current Orca terminal',
+    usage: 'orca claude-teams [claude args...]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Passes all following arguments through to Claude Code after enabling Agent Teams native panes.',
+      'Must be run from inside an Orca terminal. Starts Claude Code Agent Teams in the current pane and opens teammates as native Orca splits.'
+    ],
+    examples: ['orca claude-teams', 'orca claude-teams --resume <session-id>']
   },
   {
     path: ['repo', 'list'],
@@ -91,15 +86,19 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --name <name> [--repo <selector>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
+      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
+      'project',
+      'host',
+      'project-host-setup',
       'name',
       'agent',
       'prompt',
       'base-branch',
       'issue',
+      'linear-issue',
       'comment',
       'setup',
       'parent-worktree',
@@ -108,12 +107,16 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'activate'
     ],
     notes: [
-      'By default, Orca records the new worktree as a child of the caller workspace when it can infer one from the Orca terminal or current directory.',
+      'This creates a new checkout. For a fresh agent in an existing worktree, use `orca terminal create --worktree active --command "codex"` instead.',
+      'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',
       'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
-      'For related work, use the inferred parent or pass --parent-worktree active to make the current workspace relationship explicit.',
-      'Use --no-parent when the new worktree should be independent of the current workspace.',
-      'By default this creates the worktree and its first terminal without switching the active Orca workspace.',
+      'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
+      'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
+      'Use --no-parent when the new worktree should be independent of the current context.',
+      '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
+      'By default this creates the worktree and its first terminal without switching the active Orca view.',
       'Pass --agent to launch an agent in the first terminal; --prompt sends initial work to that agent.',
+      'With --agent --json, read the new agent handle from result.agentTerminalHandle; older runtimes return only result.startupTerminal.handle, and may return neither for folder-based repos.',
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
       'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
       'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.'
@@ -121,7 +124,10 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     examples: [
       'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
       'orca worktree create --repo id:<repoId> --name related-task --json',
+      'orca worktree create --project github:stablyai/orca --host runtime:gpu --name benchmark --json',
+      'orca worktree create --repo id:<repoId> --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue --json',
       'orca worktree create --repo id:<repoId> --name agent-task --agent codex --prompt "hi" --json',
+      'orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json',
       'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
       'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
     ]
@@ -130,23 +136,36 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'worktree',
       'display-name',
       'issue',
+      'linear-issue',
       'comment',
       'workspace-status',
       'parent-worktree',
       'no-parent'
     ],
     notes: [
-      'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.'
+      'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
+      'Pass --linear-issue null to clear the Linear issue link.'
+    ],
+    examples: [
+      'orca worktree set --worktree active --linear-issue STA-335 --json',
+      'orca worktree set --worktree active --linear-issue null --json'
     ]
   },
   {
     path: ['worktree', 'rm'],
+    // Why: agents reach for git's `remove`/`delete` verbs; accept them as
+    // aliases so a conventional guess resolves instead of dead-ending.
+    aliases: [
+      ['worktree', 'remove'],
+      ['worktree', 'delete']
+    ],
+    destructive: true,
     summary: 'Remove a worktree from Orca and git',
     usage: 'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
@@ -213,34 +232,38 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'focus'],
     notes: [
-      'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.'
+      'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
+      'Use this, not worktree create, for a fresh agent in the current checkout.'
     ],
     examples: [
       'orca terminal create --json',
+      'orca terminal create --worktree active --command "codex" --json',
       'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
       'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus'
     ]
   },
   {
     path: ['terminal', 'switch'],
+    // Why: `focus` is the legacy verb for this action; keep it working as an
+    // alias rather than a duplicate spec + handler registration.
+    aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
   },
   {
-    path: ['terminal', 'focus'],
-    summary: 'Switch to a terminal tab in the UI (alias for terminal switch)',
-    usage: 'orca terminal focus [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
-    examples: ['orca terminal focus --terminal term_abc123']
-  },
-  {
     path: ['terminal', 'close'],
-    summary: 'Close a terminal tab (kills PTY if running)',
-    usage: 'orca terminal close [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
-    examples: ['orca terminal close --terminal term_abc123']
+    summary: 'Close a terminal pane/session, or its whole tab with --tab',
+    usage: 'orca terminal close [--terminal <handle>] [--tab] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'tab'],
+    notes: [
+      'Without --tab, preserves the existing pane/session close behavior. With --tab, waits until the whole tab is durably removed.'
+    ],
+    examples: [
+      'orca terminal close --terminal term_abc123',
+      'orca terminal close --terminal term_abc123 --tab --json'
+    ]
   },
   {
     path: ['terminal', 'rename'],

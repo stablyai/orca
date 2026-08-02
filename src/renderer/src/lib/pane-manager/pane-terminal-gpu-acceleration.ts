@@ -14,12 +14,18 @@ export function applyTerminalGpuAcceleration(
 ): void {
   const nextMode = mode ?? 'auto'
   const previousMode = options.terminalGpuAcceleration ?? 'auto'
+  const modeChanged = previousMode !== nextMode
   options.terminalGpuAcceleration = nextMode
-  if (previousMode !== nextMode) {
+  if (modeChanged) {
     resetTerminalWebglSuggestion()
   }
   for (const pane of panes) {
     pane.terminalGpuAcceleration = nextMode
+    if (modeChanged) {
+      // Why: an explicit setting change is user intent to re-evaluate the
+      // renderer; context-loss latches from the old mode should not pin DOM.
+      pane.webglDisabledAfterContextLoss = false
+    }
     if (!shouldUseTerminalWebgl(pane)) {
       disposeWebgl(pane, { refreshDimensions: true })
       continue

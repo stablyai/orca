@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: this integration spec keeps the SSH relay,
-agent-hook server, and replay/interrupt ordering fixtures together so regressions
-cover the full mux-to-main path. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Store } from '../persistence'
@@ -18,6 +15,7 @@ import {
 import { agentHookServer, _internals as agentHookInternals } from '../agent-hooks/server'
 import { getSshPtyProvider } from '../ipc/pty'
 import { toAppSshPtyId } from '../providers/ssh-pty-id'
+import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -100,6 +98,21 @@ function createFakeRelay(): FakeRelay {
   })
   relayFeed = (data) => dispatcher.feed(data)
 
+  dispatcher.onRequest('pty.openClient', async (params) => ({
+    protocolVersion: 1,
+    serverBuildId: 'test-relay-build',
+    clientGeneration: 1,
+    role: 'session-owner',
+    ownerGeneration:
+      typeof (params.resume as { ownerGeneration?: unknown } | undefined)?.ownerGeneration ===
+      'number'
+        ? (params.resume as { ownerGeneration: number }).ownerGeneration + 1
+        : 1,
+    ownerLease: 'test-owner-lease',
+    capabilities: {
+      outputFlowControl: { version: 1, windowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
+    }
+  }))
   dispatcher.onRequest('session.resolveHome', async (params) => ({
     resolvedPath: params.path === '~' ? '/home/orca' : params.path
   }))
@@ -136,9 +149,14 @@ function createFakeRelay(): FakeRelay {
 function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
   const store = {
     getRepos: vi.fn().mockReturnValue([]),
+    getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
+    upsertSshPtyConsumerRecovery: vi.fn(),
+    removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
-    markSshRemotePtyLeases: vi.fn()
+    markSshRemotePtyLeases: vi.fn(),
+    markSshRemotePtyLeasesAsync: vi.fn(),
+    markSshRemotePtyLeasesAttachedAsync: vi.fn()
   } as unknown as Store
   const portForwardManager = {
     removeAllForwards: vi.fn().mockResolvedValue(undefined)
@@ -213,6 +231,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     session = null
     relay = null
     agentHookServer.setListener(null)
+    agentHookServer.setPaneStatusClearListener(null)
     agentHookInternals.resetCachesForTests()
     warnSpy.mockRestore()
     if (previousRemoteHooksFlag === undefined) {
@@ -226,6 +245,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
     const events: CapturedStatus[] = []
@@ -275,6 +295,42 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     })
   })
 
+  it('clears stamped status on reconnect loss but not final shutdown', async () => {
+    const initialRelay = createFakeRelay()
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay)
+      .mockResolvedValueOnce({
+        transport: initialRelay.transport,
+        serverBuildId: 'test-relay-build',
+        platform: 'linux-x64'
+      })
+      .mockResolvedValueOnce({
+        transport: relay.transport,
+        serverBuildId: 'test-relay-build',
+        platform: 'linux-x64'
+      })
+    const clearListener = vi.fn()
+    agentHookServer.setPaneStatusClearListener(clearListener)
+    session = createSession('conn-clear')
+    await session.establish({} as SshConnection)
+    initialRelay.notifyAgentHook(makeEnvelope())
+    await vi.waitFor(() => expect(agentHookServer.getStatusSnapshot()).toHaveLength(1))
+
+    await session.reconnect({} as SshConnection)
+    initialRelay.dispose()
+
+    expect(agentHookServer.getStatusSnapshot()).toEqual([])
+    expect(clearListener).toHaveBeenCalledOnce()
+    expect(clearListener).toHaveBeenCalledWith({
+      transient: true,
+      connectionId: 'conn-clear',
+      clearedAt: expect.any(Number)
+    })
+    session.dispose()
+    session = null
+    expect(clearListener).toHaveBeenCalledOnce()
+  })
+
   it('asks the fake relay for cached hook replay after the session wires its listener', async () => {
     relay = createFakeRelay()
     relay.replayEnvelopes.push(
@@ -292,6 +348,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     )
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
     const events: CapturedStatus[] = []
@@ -319,6 +376,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
     const events: CapturedStatus[] = []
@@ -349,6 +407,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
 
@@ -408,6 +467,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
     const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
@@ -417,18 +477,23 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
 
     relay.notifyAgentHook(
       makeEnvelope({
-        source: 'claude',
-        hookEventName: 'PreToolUse',
+        source: 'pi',
+        hookEventName: 'session_start',
         promptInteractionKey: 'command-code-transcript-user-3',
         toolUseId: 'toolu-1',
         toolAgentId: 'agent-subagent-a',
         toolAgentType: 'Review',
+        claudeRunningNonAgentTask: true,
+        providerSessionOnly: true,
+        providerSession: {
+          key: 'session_id',
+          id: 'ssh-relay-session-1',
+          transcriptPath: '/tmp/ssh-relay-session-1.jsonl'
+        },
         payload: {
-          state: 'working',
-          prompt: 'remote prompt',
-          agentType: 'claude',
-          toolName: 'Bash',
-          toolInput: 'pnpm test'
+          state: 'done',
+          prompt: '',
+          agentType: 'pi'
         }
       })
     )
@@ -436,11 +501,18 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     await vi.waitFor(() =>
       expect(ingestSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          hookEventName: 'PreToolUse',
+          hookEventName: 'session_start',
           promptInteractionKey: 'command-code-transcript-user-3',
           toolUseId: 'toolu-1',
           toolAgentId: 'agent-subagent-a',
-          toolAgentType: 'Review'
+          toolAgentType: 'Review',
+          claudeRunningNonAgentTask: true,
+          providerSessionOnly: true,
+          providerSession: {
+            key: 'session_id',
+            id: 'ssh-relay-session-1',
+            transcriptPath: '/tmp/ssh-relay-session-1.jsonl'
+          }
         }),
         'conn-hook-metadata'
       )
@@ -452,6 +524,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
 
@@ -499,6 +572,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
 

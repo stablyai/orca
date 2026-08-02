@@ -1,6 +1,6 @@
-import { randomUUID } from 'crypto'
-import { mkdir, rm, writeFile } from 'fs/promises'
-import path from 'path'
+import { randomUUID } from 'node:crypto'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 

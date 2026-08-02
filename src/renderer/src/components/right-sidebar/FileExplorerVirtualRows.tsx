@@ -7,6 +7,7 @@ import { FileExplorerRow, InlineInputRow, type InlineInput } from './FileExplore
 import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
@@ -19,13 +20,18 @@ type FileExplorerVirtualRowsProps = {
   statusByRelativePath: Map<string, GitFileStatus>
   ignoredByRelativePath: Set<string>
   expanded: Set<string>
+  canCollapseFolderSubtree?: boolean
   dirCache: Record<string, DirCache>
   selectedPaths: Set<string>
   activeFileId: string | null
   flashingPath: string | null
   deleteShortcutLabel: string
+  connectionId?: string | null
+  runtimeDownloadContext?: RuntimeFileOperationArgs | null
+  supportsFolderDownload?: boolean
   onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
+  onViewFile: (node: TreeNode) => void
   onContextMenuSelect: (node: TreeNode) => void
   onCopyPaths: (node: TreeNode, pathKind: 'absolute' | 'relative') => void
   onStartNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
@@ -33,6 +39,7 @@ type FileExplorerVirtualRowsProps = {
   onDuplicate: (node: TreeNode) => void
   onAddFolderAsProject: (node: TreeNode) => void
   canAddFolderAsProject: (node: TreeNode) => boolean
+  onOpenInTerminal: (node: TreeNode) => void
   onRequestDelete: (node: TreeNode) => void
   onCollapseFolderSubtree: (node: TreeNode) => void
   onFindInFolder: (node: TreeNode) => void
@@ -59,13 +66,18 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     statusByRelativePath,
     ignoredByRelativePath,
     expanded,
+    canCollapseFolderSubtree = true,
     dirCache,
     selectedPaths,
     activeFileId,
     flashingPath,
     deleteShortcutLabel,
+    connectionId,
+    runtimeDownloadContext,
+    supportsFolderDownload = false,
     onClick,
     onDoubleClick,
+    onViewFile,
     onContextMenuSelect,
     onCopyPaths,
     onStartNew,
@@ -73,6 +85,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     onDuplicate,
     onAddFolderAsProject,
     canAddFolderAsProject,
+    onOpenInTerminal,
     onRequestDelete,
     onCollapseFolderSubtree,
     onFindInFolder,
@@ -163,11 +176,16 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
               isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}
+              connectionId={connectionId}
+              runtimeDownloadContext={runtimeDownloadContext}
+              supportsFolderDownload={supportsFolderDownload}
+              canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
               selectionSize={selectedPaths.has(n.path) ? visibleSelectionCount : 1}
               onClick={(event) => onClick(n, event)}
               onDoubleClick={() => onDoubleClick(n)}
+              onViewFile={() => onViewFile(n)}
               onContextMenuSelect={() => onContextMenuSelect(n)}
               onCopyPaths={(pathKind) => onCopyPaths(n, pathKind)}
               onStartNew={onStartNew}
@@ -175,6 +193,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               onDuplicate={onDuplicate}
               onAddFolderAsProject={() => onAddFolderAsProject(n)}
               canAddAsProject={canAddFolderAsProject(n)}
+              onOpenInTerminal={() => onOpenInTerminal(n)}
               onRequestDelete={() => onRequestDelete(n)}
               onCollapseFolderSubtree={() => onCollapseFolderSubtree(n)}
               onFindInFolder={() => onFindInFolder(n)}

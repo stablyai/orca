@@ -6,8 +6,13 @@ const CODEX_AUTH_ERROR_PATTERNS = [
   /please (?:log out and )?sign in again/i,
   /please reauthenticate/i,
   /not logged in/i,
+  /sign in with chatgpt/i,
   /token data is not available/i,
-  /auth (?:is missing|tokens are missing|does not expose)/i
+  /auth (?:is missing|tokens are missing|does not expose)/i,
+  // Why: app-server rejects account/rateLimits/read with this when auth.json
+  // holds only an API key; without classification the fetcher falls through to
+  // a hidden PTY probe that can only time out (15s) on every refresh.
+  /chatgpt authentication required/i
 ]
 const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, 'g')
 
@@ -20,18 +25,45 @@ export function isCodexAuthError(error: string | null | undefined): boolean {
 }
 
 export function extractCodexAuthError(output: string | null | undefined): string | null {
-  const cleanOutput = output?.replace(ANSI_ESCAPE_RE, '').trim()
-  if (!cleanOutput) {
+  if (!output) {
     return null
   }
 
-  const matchingLine = cleanOutput
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(isCodexAuthError)
-  if (matchingLine) {
-    return matchingLine
+  let cleanPrefix = ''
+  for (const rawLine of iterateCodexOutputLines(output)) {
+    const line = rawLine.replace(ANSI_ESCAPE_RE, '').trim()
+    if (!line) {
+      continue
+    }
+    if (isCodexAuthError(line)) {
+      return line.slice(0, 4_000)
+    }
+    if (cleanPrefix.length < 4_000) {
+      cleanPrefix = cleanPrefix ? `${cleanPrefix}\n${line}` : line
+      cleanPrefix = cleanPrefix.slice(0, 4_000)
+    }
   }
 
-  return isCodexAuthError(cleanOutput) ? cleanOutput.slice(0, 4_000) : null
+  return isCodexAuthError(cleanPrefix) ? cleanPrefix : null
+}
+
+function* iterateCodexOutputLines(output: string): Generator<string> {
+  let lineStart = 0
+
+  for (let index = 0; index < output.length; index++) {
+    const code = output.charCodeAt(index)
+    if (code !== 10 && code !== 13) {
+      continue
+    }
+
+    yield output.slice(lineStart, index)
+    if (code === 13 && output.charCodeAt(index + 1) === 10) {
+      index++
+    }
+    lineStart = index + 1
+  }
+
+  if (lineStart <= output.length) {
+    yield output.slice(lineStart)
+  }
 }

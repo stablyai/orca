@@ -4,8 +4,10 @@ import type {
   BrowserPopupEvent
 } from '../../../../shared/browser-guest-events'
 import type { BrowserLoadError } from '../../../../shared/types'
+import { isChromiumCertificateErrorCode } from '../../../../shared/browser-certificate-errors'
+import { translate } from '@/i18n/i18n'
 
-type LoadFailureMeta = {
+export type LoadFailureMeta = {
   host: string | null
   isLocalhostLike: boolean
 }
@@ -73,6 +75,35 @@ export function formatLoadFailureDescription(
   if (!loadError) {
     return 'The page did not respond.'
   }
+  if (isChromiumCertificateErrorCode(loadError.code)) {
+    const host = meta.host ?? 'this address'
+    if (loadError.code === -200) {
+      return translate(
+        'browser.loadFailure.certificateNameMismatch',
+        "The certificate doesn't match {{value0}}.",
+        { value0: host }
+      )
+    }
+    if (loadError.code === -201) {
+      return translate(
+        'browser.loadFailure.certificateDateInvalid',
+        "The certificate for {{value0}} isn't valid at the current date and time.",
+        { value0: host }
+      )
+    }
+    if (loadError.code === -202) {
+      return translate(
+        'browser.loadFailure.certificateAuthorityInvalid',
+        "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
+        { value0: host }
+      )
+    }
+    return translate(
+      'browser.loadFailure.certificateVerificationFailed',
+      "Orca couldn't verify the certificate for {{value0}}.",
+      { value0: host }
+    )
+  }
   if (meta.isLocalhostLike) {
     return "We couldn't connect to your local server."
   }
@@ -82,9 +113,16 @@ export function formatLoadFailureDescription(
   return "We couldn't connect to this page."
 }
 
-export function formatLoadFailureRecoveryHint(meta: LoadFailureMeta): string | null {
-  if (!meta.isLocalhostLike) {
+export function formatLoadFailureRecoveryHint(
+  meta: LoadFailureMeta,
+  loadError?: BrowserLoadErrorLike
+): string | null {
+  if (!meta.isLocalhostLike || (loadError && isChromiumCertificateErrorCode(loadError.code))) {
     return null
   }
   return 'If this should be a local app, make sure the server is running and listening on the expected port.'
+}
+
+export function isCertificateLoadError(loadError: BrowserLoadErrorLike): boolean {
+  return Boolean(loadError && isChromiumCertificateErrorCode(loadError.code))
 }

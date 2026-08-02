@@ -7,6 +7,7 @@ import { Label } from '../ui/label'
 import { PRIVACY_URL, getConsentState, setOptIn as telemetrySetOptIn } from '../../lib/telemetry'
 import { useAppStore } from '../../store'
 import { PrivacyDiagnosticsSection } from './PrivacyDiagnosticsSection'
+import { translate } from '@/i18n/i18n'
 
 export type EnvBlockedReason = 'do_not_track' | 'orca_disabled' | 'ci'
 export type BlockedReason = { kind: 'env'; reason: EnvBlockedReason }
@@ -88,17 +89,24 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <ShieldCheck className="size-4" />
-            <Label>Share anonymous usage data</Label>
+            <Label>
+              {translate(
+                'auto.components.settings.PrivacyPane.fe904ac984',
+                'Share anonymous usage data'
+              )}
+            </Label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Help us figure out what to build next. Orca sends anonymous counts of which features you
-            use and where things break.{' '}
+            {translate(
+              'auto.components.settings.PrivacyPane.8bfdd23a88',
+              'Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.'
+            )}{' '}
             <button
               type="button"
               className="underline underline-offset-2 hover:text-foreground"
               onClick={() => void window.api.shell.openUrl(PRIVACY_URL)}
             >
-              Privacy policy
+              {translate('auto.components.settings.PrivacyPane.77410e0566', 'Privacy policy')}
             </button>
             .
           </p>
@@ -106,7 +114,10 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
         <button
           role="switch"
           aria-checked={toggleChecked}
-          aria-label="Share anonymous usage data"
+          aria-label={translate(
+            'auto.components.settings.PrivacyPane.fe904ac984',
+            'Share anonymous usage data'
+          )}
           aria-describedby={blocked ? PRIVACY_PANE_BLOCKED_HELPER_ID : undefined}
           disabled={blocked !== null || inFlight}
           onClick={handleToggle}
@@ -132,14 +143,25 @@ function BlockedHelper({ blocked, id }: { blocked: BlockedReason; id: string }):
   return (
     <div id={id} className="pb-2 text-xs text-muted-foreground">
       {blocked.reason === 'ci' ? (
-        <p>Telemetry is disabled because a CI environment variable is set. Unset it and restart.</p>
+        <p>
+          {translate(
+            'auto.components.settings.PrivacyPane.e3970bbbf5',
+            'Telemetry is disabled because a CI environment variable is set. Unset it and restart.'
+          )}
+        </p>
       ) : (
         <p>
-          Telemetry is disabled by the{' '}
+          {translate(
+            'auto.components.settings.PrivacyPane.79a0f3c16c',
+            'Telemetry is disabled by the'
+          )}{' '}
           <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
             {envVarNameForReason(blocked.reason)}
           </code>{' '}
-          environment variable. Unset it and restart to re-enable.
+          {translate(
+            'auto.components.settings.PrivacyPane.36e0e2e63b',
+            'environment variable. Unset it and restart to re-enable.'
+          )}
         </p>
       )}
     </div>

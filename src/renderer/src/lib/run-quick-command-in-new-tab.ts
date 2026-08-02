@@ -59,14 +59,18 @@ export function runQuickCommandInNewTab({
       prompt: command.prompt,
       worktreeId,
       groupId: targetGroupId,
-      launchSource: 'quick_command'
+      launchSource: 'quick_command',
+      quickCommandLabel: command.label
     })
-    if (result) {
+    if (result?.tabId) {
       const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.tabId, groupId)
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, command.id)
       }
       return { tabId: result.tabId }
+    }
+    if (result) {
+      return null
     }
     return null
   }
@@ -77,7 +81,9 @@ export function runQuickCommandInNewTab({
     return null
   }
   const store = useAppStore.getState()
-  const tab = store.createTab(worktreeId, targetGroupId)
+  const tab = store.createTab(worktreeId, targetGroupId, undefined, {
+    quickCommandLabel: command.label
+  })
 
   store.queueTabStartupCommand(tab.id, {
     command: flattenTerminalQuickCommand(command).command

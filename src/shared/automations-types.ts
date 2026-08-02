@@ -1,4 +1,5 @@
-import type { TuiAgent } from './types'
+import type { SetupDecision, TuiAgent } from './types'
+import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -15,6 +16,18 @@ export type AutomationRunStatus =
   | 'skipped_needs_interactive_auth'
   | 'dispatch_failed'
 export type AutomationRunTrigger = 'scheduled' | 'manual'
+
+/** Statuses a run can never leave; only these are safe to evict from history. */
+export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean {
+  return (
+    status === 'completed' ||
+    status === 'dispatch_failed' ||
+    status === 'skipped_precheck' ||
+    status === 'skipped_missed' ||
+    status === 'skipped_unavailable' ||
+    status === 'skipped_needs_interactive_auth'
+  )
+}
 
 export type AutomationSchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
 export type AutomationRunUsageProvider = 'claude' | 'codex'
@@ -80,6 +93,17 @@ export type Automation = {
   prompt: string
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
+  /** Why: runContext carries the logical project + host setup identity for
+   *  multi-host projects; projectId remains only as the legacy repo-id storage
+   *  field for pre-host-context automations.
+   *  @deprecated Use runContext.projectId/runContext.repoId or
+   *  getAutomationRunRepoId(). */
+  runContext?: WorkspaceRunContext | null
+  /** Why: task/provider data can come from a different host/account than the
+   *  workspace run target, so automations persist it separately. */
+  sourceContext?: TaskSourceContext | null
+  /** @deprecated Legacy repo-id compatibility field. New code should persist
+   *  runContext and use getAutomationRunRepoId() for fallback reads. */
   projectId: string
   executionTargetType: AutomationExecutionTargetType
   executionTargetId: string
@@ -87,6 +111,7 @@ export type Automation = {
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string | null
   baseBranch: string | null
+  setupDecision?: SetupDecision
   reuseSession: boolean
   timezone: string
   rrule: string
@@ -103,6 +128,8 @@ export type Automation = {
 export type AutomationRun = {
   id: string
   automationId: string
+  runContext?: WorkspaceRunContext | null
+  sourceContext?: TaskSourceContext | null
   title: string
   scheduledFor: number
   status: AutomationRunStatus
@@ -114,6 +141,10 @@ export type AutomationRun = {
   sessionKind: 'terminal'
   chatSessionId: string | null
   terminalSessionId: string | null
+  /** Why: a terminal tab can later point at a different pane/PTY. Automation
+   *  run reopening must target the pane that actually executed the run. */
+  terminalPaneKey: string | null
+  terminalPtyId: string | null
   outputSnapshot: AutomationRunOutputSnapshot | null
   precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
@@ -121,6 +152,9 @@ export type AutomationRun = {
   startedAt: number | null
   dispatchedAt: number | null
   createdAt: number
+  /** Why: run titles must stay unique once retention prunes old runs, so the
+   *  number can no longer be derived from how many runs are currently kept. */
+  runNumber?: number
 }
 
 export type AutomationCreateInput = {
@@ -128,10 +162,15 @@ export type AutomationCreateInput = {
   prompt: string
   precheck?: AutomationPrecheck | null
   agentId: TuiAgent
+  runContext?: WorkspaceRunContext | null
+  sourceContext?: TaskSourceContext | null
+  /** @deprecated Legacy repo-id compatibility field required for older stored
+   *  automations and clients. Pair it with runContext for new writes. */
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId?: string | null
   baseBranch?: string | null
+  setupDecision?: SetupDecision
   reuseSession?: boolean
   timezone: string
   rrule: string
@@ -147,10 +186,13 @@ export type AutomationUpdateInput = Partial<
     | 'prompt'
     | 'precheck'
     | 'agentId'
+    | 'runContext'
+    | 'sourceContext'
     | 'projectId'
     | 'workspaceMode'
     | 'workspaceId'
     | 'baseBranch'
+    | 'setupDecision'
     | 'reuseSession'
     | 'timezone'
     | 'rrule'
@@ -163,6 +205,7 @@ export type AutomationUpdateInput = Partial<
 export type AutomationDispatchRequest = {
   automation: Automation
   run: AutomationRun
+  dispatchToken: string
 }
 
 export type AutomationDispatchResult = {
@@ -171,6 +214,8 @@ export type AutomationDispatchResult = {
   workspaceId?: string | null
   workspaceDisplayName?: string | null
   terminalSessionId?: string | null
+  terminalPaneKey?: string | null
+  terminalPtyId?: string | null
   outputSnapshot?: AutomationRunOutputSnapshot | null
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null
@@ -208,6 +253,7 @@ export type ExternalAutomationJob = {
   lastError: string | null
   workdir: string | null
   runCount: number
+  runCountSaturated?: true
   runs: ExternalAutomationRun[]
 }
 
@@ -232,6 +278,7 @@ export type ExternalAutomationRunsPage = {
   page: number
   pageSize: number
   total: number
+  totalSaturated?: true
   runs: ExternalAutomationRun[]
 }
 

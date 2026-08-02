@@ -6,12 +6,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
-import { getWorkspaceFileDragPaths, WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
-import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
-import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
+import {
+  getWorkspaceFileDragRejectionMessage,
+  readWorkspaceFileDragPaths,
+  WORKSPACE_FILE_PATH_MIME
+} from '@/lib/workspace-file-drag'
+import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { renameRuntimePath } from '@/runtime/runtime-file-client'
+import type { FileExplorerOperationOwner } from './file-explorer-types'
+import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
@@ -29,6 +32,7 @@ type UseFileExplorerDragDropParams = {
   refreshDir: (dirPath: string) => Promise<void>
   // Explorer scroll viewport used to auto-scroll while dragging near top/bottom edges
   scrollRef: RefObject<HTMLDivElement | null>
+  getOperationOwnerForPath: (path: string) => FileExplorerOperationOwner | undefined
 }
 
 type UseFileExplorerDragDropResult = {
@@ -98,10 +102,9 @@ export function useFileExplorerDragDrop({
   expanded,
   toggleDir,
   refreshDir,
-  scrollRef
+  scrollRef,
+  getOperationOwnerForPath
 }: UseFileExplorerDragDropParams): UseFileExplorerDragDropResult {
-  const openFiles = useAppStore((s) => s.openFiles)
-
   const [isRootDragOver, setIsRootDragOver] = useState(false)
   const rootDragCounterRef = useRef(0)
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null)
@@ -206,50 +209,51 @@ export function useFileExplorerDragDrop({
       }
 
       const newPath = joinPath(destDir, fileName)
-      const remapOpenTabsForMovedPath = (fromPath: string, toPath: string): void =>
-        remapOpenEditorTabsForPathChange({
-          fromPath,
-          toPath,
-          worktreePath,
-          worktreeId: activeWorktreeId
-        })
+      const operationOwner = getOperationOwnerForPath(sourcePath)
 
       const run = async (): Promise<void> => {
-        const filesToMove = openFiles.filter((file) => {
-          if (file.filePath === sourcePath) {
-            return true
-          }
-          return (
-            file.filePath.startsWith(`${sourcePath}/`) ||
-            file.filePath.startsWith(`${sourcePath}\\`)
-          )
-        })
-
-        // Why: a file move changes the write target path. Let any in-flight
-        // autosave settle first, then carry draft state forward to the new tab
-        // id so explorer drag-and-drop does not silently drop unsaved edits.
-        await Promise.all(filesToMove.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
-
         try {
-          const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+          const operationGuard = captureFileExplorerOperationGuard(activeWorktreeId, operationOwner)
+          const operationRoute = operationGuard.route
           const fileContext = {
-            settings: useAppStore.getState().settings,
+            settings: operationRoute.settings,
             worktreeId: activeWorktreeId,
             worktreePath,
-            connectionId
+            connectionId: operationRoute.connectionId,
+            expectedExecutionHostId: operationRoute.expectedExecutionHostId,
+            expectedSshTargetId: operationRoute.expectedSshTargetId,
+            expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
           }
-          await renameRuntimePath(fileContext, sourcePath, newPath)
-
+          operationGuard.assertCurrent()
+          await executeOpenEditorPathMove({
+            context: fileContext,
+            fromPath: sourcePath,
+            toPath: newPath,
+            worktreeId: activeWorktreeId,
+            worktreePath
+          })
           commitFileExplorerOp({
             undo: async () => {
-              await renameRuntimePath(fileContext, newPath, sourcePath)
+              operationGuard.assertCurrent()
+              await executeOpenEditorPathMove({
+                context: fileContext,
+                fromPath: newPath,
+                toPath: sourcePath,
+                worktreeId: activeWorktreeId,
+                worktreePath
+              })
               await Promise.all([refreshDir(destDir), refreshDir(sourceDir)])
-              remapOpenTabsForMovedPath(newPath, sourcePath)
             },
             redo: async () => {
-              await renameRuntimePath(fileContext, sourcePath, newPath)
+              operationGuard.assertCurrent()
+              await executeOpenEditorPathMove({
+                context: fileContext,
+                fromPath: sourcePath,
+                toPath: newPath,
+                worktreeId: activeWorktreeId,
+                worktreePath
+              })
               await Promise.all([refreshDir(sourceDir), refreshDir(destDir)])
-              remapOpenTabsForMovedPath(sourcePath, newPath)
             }
           })
         } catch (err) {
@@ -257,11 +261,10 @@ export function useFileExplorerDragDrop({
           return
         }
         await Promise.all([refreshDir(sourceDir), refreshDir(destDir)])
-        remapOpenTabsForMovedPath(sourcePath, newPath)
       }
       void run()
     },
-    [worktreePath, activeWorktreeId, openFiles, refreshDir]
+    [worktreePath, activeWorktreeId, refreshDir, getOperationOwnerForPath]
   )
 
   const clearNativeDragState = useCallback(() => {
@@ -340,7 +343,12 @@ export function useFileExplorerDragDrop({
         // here; the actual import is triggered from onFileDrop.
         clearNativeDragState()
         if (worktreePath) {
-          for (const sourcePath of getWorkspaceFileDragPaths(e.dataTransfer)) {
+          const dragPaths = readWorkspaceFileDragPaths(e.dataTransfer)
+          if (dragPaths.status === 'rejected') {
+            toast.error(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
+            return
+          }
+          for (const sourcePath of dragPaths.paths) {
             handleMoveDrop(sourcePath, worktreePath)
           }
         }

@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GitUsernameModule from '../git/git-username'
 
 const {
   handleMock,
   removeHandlerMock,
   listWorktreesMock,
+  assertWorktreeCleanForRemovalMock,
   addWorktreeMock,
   removeWorktreeMock,
-  getGitUsernameMock,
+  resolveLocalGitUsernameMock,
   getDefaultBaseRefMock,
+  resolveDefaultBaseRefWithLocalGitMock,
+  resolveDefaultBaseRefViaExecMock,
   getBranchConflictKindMock,
   getPRForBranchMock,
+  createGitHubPullRequestMock,
   getEffectiveHooksMock,
   getEffectiveHooksFromConfigMock,
   getDefaultTabsLaunchMock,
@@ -20,17 +25,25 @@ const {
   hasHooksFileMock,
   loadHooksMock,
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock
+  ensurePathWithinWorkspaceMock,
+  killAllProcessesForWorktreeMock,
+  clearProviderPtyStateMock,
+  getLocalPtyProviderMock,
+  deleteWorktreeHistoryDirMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   listWorktreesMock: vi.fn(),
+  assertWorktreeCleanForRemovalMock: vi.fn(),
   addWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
-  getGitUsernameMock: vi.fn(),
+  resolveLocalGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
+  resolveDefaultBaseRefWithLocalGitMock: vi.fn(),
+  resolveDefaultBaseRefViaExecMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
+  createGitHubPullRequestMock: vi.fn(),
   getEffectiveHooksMock: vi.fn(),
   getEffectiveHooksFromConfigMock: vi.fn(),
   getDefaultTabsLaunchMock: vi.fn(),
@@ -41,7 +54,11 @@ const {
   hasHooksFileMock: vi.fn(),
   loadHooksMock: vi.fn(),
   computeWorktreePathMock: vi.fn(),
-  ensurePathWithinWorkspaceMock: vi.fn()
+  ensurePathWithinWorkspaceMock: vi.fn(),
+  killAllProcessesForWorktreeMock: vi.fn(),
+  clearProviderPtyStateMock: vi.fn(),
+  getLocalPtyProviderMock: vi.fn(),
+  deleteWorktreeHistoryDirMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -53,6 +70,8 @@ vi.mock('electron', () => ({
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: listWorktreesMock,
+  listWorktreesStrict: listWorktreesMock,
+  assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
 }))
@@ -66,13 +85,20 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('../git/repo', () => ({
-  getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
+  resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
+  resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getBranchConflictKind: getBranchConflictKindMock
 }))
 
+vi.mock('../git/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+  return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
+})
+
 vi.mock('../github/client', () => ({
-  getPRForBranch: getPRForBranchMock
+  getPRForBranch: getPRForBranchMock,
+  createGitHubPullRequest: createGitHubPullRequestMock
 }))
 
 vi.mock('../hooks', () => ({
@@ -85,6 +111,19 @@ vi.mock('../hooks', () => ({
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock,
   shouldRunSetupForCreate: shouldRunSetupForCreateMock
+}))
+
+vi.mock('../runtime/worktree-teardown', () => ({
+  killAllProcessesForWorktree: killAllProcessesForWorktreeMock
+}))
+
+vi.mock('./pty', () => ({
+  clearProviderPtyState: clearProviderPtyStateMock,
+  getLocalPtyProvider: getLocalPtyProviderMock
+}))
+
+vi.mock('../terminal-history-deletion', () => ({
+  deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
 vi.mock('./worktree-logic', async (importOriginal) => {
@@ -111,6 +150,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
   const store = {
     getRepos: vi.fn(),
     getRepo: vi.fn(),
+    getProjects: vi.fn(),
+    getProjectHostSetups: vi.fn(),
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
@@ -121,12 +162,16 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     listWorktreesMock.mockReset()
+    assertWorktreeCleanForRemovalMock.mockReset()
     addWorktreeMock.mockReset()
     removeWorktreeMock.mockReset()
-    getGitUsernameMock.mockReset()
+    resolveLocalGitUsernameMock.mockReset()
     getDefaultBaseRefMock.mockReset()
+    resolveDefaultBaseRefWithLocalGitMock.mockReset()
+    resolveDefaultBaseRefViaExecMock.mockReset()
     getBranchConflictKindMock.mockReset()
     getPRForBranchMock.mockReset()
+    createGitHubPullRequestMock.mockReset()
     getEffectiveHooksMock.mockReset()
     getEffectiveHooksFromConfigMock.mockReset()
     getDefaultTabsLaunchMock.mockReset()
@@ -138,9 +183,15 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     loadHooksMock.mockReset()
     computeWorktreePathMock.mockReset()
     ensurePathWithinWorkspaceMock.mockReset()
+    killAllProcessesForWorktreeMock.mockReset()
+    clearProviderPtyStateMock.mockReset()
+    getLocalPtyProviderMock.mockReset()
+    deleteWorktreeHistoryDirMock.mockReset()
     mainWindow.webContents.send.mockReset()
     store.getRepos.mockReset()
     store.getRepo.mockReset()
+    store.getProjects.mockReset()
+    store.getProjectHostSetups.mockReset()
     store.getSettings.mockReset()
     store.getWorktreeMeta.mockReset()
     store.setWorktreeMeta.mockReset()
@@ -171,6 +222,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       addedAt: 0,
       worktreeBaseRef: null
     })
+    store.getProjects.mockReturnValue([])
+    store.getProjectHostSetups.mockReturnValue([])
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
@@ -179,8 +232,10 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     })
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.setWorktreeMeta.mockReturnValue({})
-    getGitUsernameMock.mockReturnValue('')
+    resolveLocalGitUsernameMock.mockResolvedValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
+    resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue('origin/main')
+    resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
     getEffectiveHooksMock.mockReturnValue(null)
@@ -190,6 +245,13 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     listWorktreesMock.mockResolvedValue([])
+    assertWorktreeCleanForRemovalMock.mockResolvedValue(undefined)
+    killAllProcessesForWorktreeMock.mockResolvedValue({
+      runtimeStopped: 0,
+      providerStopped: 0,
+      registryStopped: 0
+    })
+    getLocalPtyProviderMock.mockReturnValue({})
 
     // Why: createLocalWorktree routes `git fetch` through
     // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). Stub it for path tests.
@@ -202,7 +264,11 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       emitWorktreeBaseStatus: vi.fn(),
       recordOptimisticReconcileToken: vi.fn().mockReturnValue('token-1'),
       reconcileWorktreeBaseStatus: vi.fn(),
-      clearOptimisticReconcileToken: vi.fn()
+      clearOptimisticReconcileToken: vi.fn(),
+      closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
+      acquireFileWatcherRemoval: vi.fn().mockResolvedValue({
+        finish: vi.fn().mockResolvedValue(undefined)
+      })
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
@@ -230,6 +296,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       'origin/main',
       false
     )
+    expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::C:/workspaces/improve-dashboard',
       expect.objectContaining({
@@ -243,6 +310,39 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
         branch: 'refs/heads/improve-dashboard'
       })
     })
+  })
+
+  it('resolves the Git username when the configured prefix consumes it', async () => {
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'git-username',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: 'C:\\workspaces'
+    })
+    resolveLocalGitUsernameMock.mockResolvedValue('octocat')
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:/workspaces/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/octocat/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expect(resolveLocalGitUsernameMock).toHaveBeenCalledWith('C:\\repo')
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      'C:\\repo',
+      'C:\\workspaces\\improve-dashboard',
+      'octocat/improve-dashboard',
+      'origin/main',
+      false
+    )
   })
 
   it('preserves create-time metadata on the next list when Windows path formatting differs', async () => {
@@ -292,5 +392,51 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
         lastActivityAt: 123
       }
     ])
+  })
+
+  it('deletes a Windows worktree when the requested path uses different separators and drive casing', async () => {
+    const registeredWorktree = {
+      path: 'c:\\workspaces\\Improve-Dashboard',
+      head: 'feature-head',
+      branch: 'refs/heads/improve-dashboard',
+      isBare: false,
+      isMainWorktree: false
+    }
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:\\repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      registeredWorktree
+    ])
+    removeWorktreeMock.mockResolvedValue({})
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::C:/workspaces/improve-dashboard'
+    })
+
+    expect(assertWorktreeCleanForRemovalMock).toHaveBeenCalledWith(registeredWorktree.path, false)
+    expect(removeWorktreeMock).toHaveBeenCalledWith(
+      'C:\\repo',
+      registeredWorktree.path,
+      false,
+      expect.objectContaining({
+        knownRemovedWorktree: registeredWorktree
+      })
+    )
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::C:/workspaces/improve-dashboard',
+      'local'
+    )
+    // Windows history lives under a path-derived hash, so scheduling must not regress on this path only.
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(
+      'repo-1::C:/workspaces/improve-dashboard'
+    )
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
   })
 })

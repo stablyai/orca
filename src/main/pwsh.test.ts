@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileSyncMock } = vi.hoisted(() => ({
+const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
   execFileSyncMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
+  execFile: execFileMock,
   execFileSync: execFileSyncMock
 }))
 
@@ -26,6 +28,8 @@ function setPlatform(platform: NodeJS.Platform): () => void {
 describe('isPwshAvailable', () => {
   beforeEach(() => {
     vi.resetModules()
+    vi.useRealTimers()
+    execFileMock.mockReset()
     execFileSyncMock.mockReset()
   })
 
@@ -82,6 +86,72 @@ describe('isPwshAvailable', () => {
       expect(execFileSyncMock).toHaveBeenCalledTimes(1)
     } finally {
       restorePlatform()
+    }
+  })
+
+  it('repro: does not keep a cold-start timeout cached for the daemon lifetime', async () => {
+    const restorePlatform = setPlatform('win32')
+    execFileSyncMock
+      .mockImplementationOnce(() => {
+        const error = Object.assign(new Error('spawnSync pwsh.exe ETIMEDOUT'), {
+          code: 'ETIMEDOUT'
+        })
+        throw error
+      })
+      .mockReturnValue('PowerShell 7.5.0')
+
+    try {
+      const { isPwshAvailable } = await import('./pwsh')
+      expect(isPwshAvailable()).toBe(false)
+      expect(isPwshAvailable()).toBe(true)
+      expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      restorePlatform()
+    }
+  })
+
+  it('warms pwsh availability asynchronously with a longer timeout', async () => {
+    const restorePlatform = setPlatform('win32')
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
+      callback(null, 'PowerShell 7.5.0', '')
+    })
+
+    try {
+      const { isPwshAvailable, warmPwshAvailabilityCache } = await import('./pwsh')
+      await expect(warmPwshAvailabilityCache()).resolves.toBe(true)
+      expect(execFileMock).toHaveBeenCalledWith(
+        'pwsh.exe',
+        ['-Version'],
+        { timeout: 30_000 },
+        expect.any(Function)
+      )
+      expect(isPwshAvailable()).toBe(true)
+      expect(execFileSyncMock).not.toHaveBeenCalled()
+    } finally {
+      restorePlatform()
+    }
+  })
+
+  it('retries non-timeout failures after the negative cache TTL', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const restorePlatform = setPlatform('win32')
+    execFileSyncMock
+      .mockImplementationOnce(() => {
+        throw new Error('missing pwsh')
+      })
+      .mockReturnValue('PowerShell 7.5.0')
+
+    try {
+      const { isPwshAvailable } = await import('./pwsh')
+      expect(isPwshAvailable()).toBe(false)
+      expect(isPwshAvailable()).toBe(false)
+      vi.setSystemTime(31_001)
+      expect(isPwshAvailable()).toBe(true)
+      expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      restorePlatform()
+      vi.useRealTimers()
     }
   })
 })

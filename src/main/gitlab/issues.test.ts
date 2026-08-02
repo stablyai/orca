@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: GitLab issue mutation/list coverage shares glab mocks across related endpoint cases. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GlUtils from './gl-utils'
 
@@ -76,6 +75,76 @@ describe('gitlab issue operations', () => {
     )
   })
 
+  it('routes local WSL issue operations through project resolution and glab execution options', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    getIssueProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'stablyai/orca' })
+    resolveIssueSourceMock.mockResolvedValue({
+      source: { host: 'gitlab.com', path: 'stablyai/orca' },
+      fellBack: false
+    })
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          iid: 923,
+          title: 'Use WSL',
+          state: 'opened',
+          web_url: 'https://gitlab.com/stablyai/orca/-/issues/923',
+          labels: []
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '[]' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          iid: 924,
+          web_url: 'https://gitlab.com/stablyai/orca/-/issues/924'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '{}' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          id: 1,
+          author: { username: 'octo', avatar_url: '', state: 'active' },
+          body: 'Comment',
+          created_at: '2026-06-16T00:00:00.000Z'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: 'bug\nfrontend\n' })
+      .mockResolvedValueOnce({ stdout: '{"id":1,"username":"octo","avatar_url":""}\n' })
+
+    await getIssue('/repo-root', 923, null, localGitOptions)
+    await listIssues('/repo-root', 5, undefined, 'opened', undefined, null, localGitOptions)
+    await createIssue('/repo-root', 'New issue', 'Body', undefined, null, localGitOptions)
+    await updateIssue(
+      '/repo-root',
+      923,
+      { body: 'Updated' },
+      undefined,
+      null,
+      null,
+      localGitOptions
+    )
+    await addIssueComment('/repo-root', 923, 'Comment', undefined, null, null, localGitOptions)
+    await listLabels('/repo-root', undefined, null, localGitOptions)
+    await listAssignableUsers('/repo-root', undefined, null, localGitOptions)
+
+    expect(getIssueProjectRefMock).toHaveBeenCalledWith(
+      '/repo-root',
+      ['gitlab.com'],
+      null,
+      localGitOptions
+    )
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/repo-root',
+      undefined,
+      ['gitlab.com'],
+      null,
+      localGitOptions
+    )
+    expect(glabExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
+    )
+  })
+
   it('encodes nested group paths', async () => {
     getIssueProjectRefMock.mockResolvedValueOnce({
       host: 'gitlab.com',
@@ -117,31 +186,35 @@ describe('gitlab issue operations', () => {
     expect(result.error?.type).toBe('permission_denied')
   })
 
-  it('falls back to glab issue list with updated ordering for unresolved self-hosted repos', async () => {
+  it('returns an isolated not_found error (never a cwd-inferred glab call) when the project is unresolved', async () => {
+    // Why: a cwd-inferred `glab issue list` would hit `git: exit status 128`
+    // on an SSH connection and, in an "All projects" aggregate, sink the
+    // whole panel. The unresolvable project must isolate to a structured
+    // error instead, and must not spawn any glab subprocess.
     getIssueProjectRefMock.mockResolvedValueOnce(null)
+
+    const result = await listIssues('/repo-root', 5, undefined, 'opened', '@me')
+
+    expect(result.items).toEqual([])
+    expect(result.error?.type).toBe('not_found')
+    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(acquireMock).not.toHaveBeenCalled()
+  })
+
+  it('returns null for getIssue (and spawns no glab call) when the project is unresolved', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce(null)
+
+    await expect(getIssue('/repo-root', 7)).resolves.toBeNull()
+    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('threads connectionId into getGlabKnownHosts for listIssues', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
     glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
-    await expect(listIssues('/repo-root', 5, undefined, 'opened', '@me')).resolves.toEqual({
-      items: []
-    })
+    await listIssues('/repo-root', 5, undefined, 'opened', undefined, 'conn-7')
 
-    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        'issue',
-        'list',
-        '--output',
-        'json',
-        '--per-page',
-        '5',
-        '--order',
-        'updated_at',
-        '--sort',
-        'desc',
-        '--assignee',
-        '@me'
-      ],
-      { cwd: '/repo-root' }
-    )
+    expect(getGlabKnownHostsMock).toHaveBeenCalledWith('conn-7', {})
   })
 
   it('creates an issue and returns its iid + web_url', async () => {

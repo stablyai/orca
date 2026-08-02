@@ -3,15 +3,48 @@ const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
 const {
+  assertPackagedDaemonEntryExists,
+  verifyPackagedDaemonEntryBoots
+} = require('./scripts/verify-packaged-daemon-entry.cjs')
+const {
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
+const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
+const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
+const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
+const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 
-const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
+// Why: dev-channel builds must carry the *release* identity — same bundle id,
+// Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
+// swap them over an installed Orca and macOS treats each build as a new app.
+const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
+const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
+const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacAdhoc
+const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
+const localBuildVersion = isMacRelease ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
+const devChannelBuildVersion = isMacHourly
+  ? process.env.ORCA_HOURLY_BUILD_VERSION
+  : isMacAdhoc
+    ? process.env.ORCA_ADHOC_BUILD_VERSION
+    : undefined
+// Why each dev channel gets its own repo rather than tagging into the main one:
+// the releases atom feed exposes only the 10 newest entries, so 24 hourly tags a
+// day would evict every stable/RC entry and strand users on a feed with nothing
+// to install. Keeping adhoc separate from hourly too means a branch build cannot
+// be picked up by someone who only meant to ride main.
+const devChannelRepo = isMacHourly ? 'orca-hourly' : isMacAdhoc ? 'orca-adhoc' : null
+const appId = 'com.stablyai.orca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
+}
+// Why: freshness detection needs immutable identity metadata from this exact
+// app build, but never needs the skill package bytes or a runtime network read.
+const skillFreshnessResources = {
+  from: 'resources/skills',
+  to: 'skills'
 }
 // Why: SSH relay deploy resolves bundles from process.resourcesPath in packaged
 // apps. Keeping relay assets as extraResources makes them real directories
@@ -20,13 +53,17 @@ const relayExtraResource = {
   from: 'out/relay',
   to: 'relay'
 }
+// Why: bundled plugins are immutable install inputs and must remain ordinary
+// directories so the startup bootstrap can verify and publish exact bytes.
+const bundledPluginResources = {
+  from: 'resources/plugins/launch',
+  to: 'plugins/launch'
+}
 // Why: the main bundle, packaged CLI, SSH paths, and speech worker all execute
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
-const packagedRuntimeNodeModuleResources = createPackagedRuntimeNodeModuleResources()
-
-const commonExtraResources = [relayExtraResource, ...packagedRuntimeNodeModuleResources]
+const commonExtraResources = [relayExtraResource, bundledPluginResources, skillFreshnessResources]
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
@@ -42,8 +79,13 @@ const winSpeechNativeResource = {
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
-  appId: 'com.stablyai.orca',
+  appId,
   productName: 'Orca',
+  ...(devChannelBuildVersion
+    ? { extraMetadata: { version: devChannelBuildVersion } }
+    : localBuildVersion
+      ? { extraMetadata: { version: localBuildVersion } }
+      : {}),
   directories: {
     buildResources: 'resources/build'
   },
@@ -57,17 +99,42 @@ module.exports = {
     '!mobile{,/**/*}',
     '!native{,/**/*}',
     '!skills{,/**/*}',
+    // Why: guide/stub authoring sources are compiled into runtime artifacts; shipping
+    // either source tree would duplicate content without a runtime consumer.
+    '!skill-guides{,/**/*}',
+    '!skill-stubs{,/**/*}',
     '!tests{,/**/*}',
+    // Why: examples/ is plugin authoring documentation with no runtime consumer —
+    // bundled plugins ship via extraResources from resources/plugins/launch/. It also
+    // carries hostile-panel, the adversarial fixture the containment tests point at,
+    // which must never reach a user's install.
+    '!examples{,/**/*}',
+    // Why: pr-evidence/ is a local e2e screenshot output (ORCA_CAPTURE_EVIDENCE);
+    // it is gitignored, but exclude it defensively so a stray local capture at
+    // package time never bloats app.asar.
+    '!pr-evidence{,/**/*}',
     '!Casks{,/**/*}',
-    '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
+    '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
     '!out/**/*.test.js',
+    // Why: Vite's manifest is only used to project the paired web client.
+    '!out/renderer/.vite{,/**/*}',
     '!electron.vite.config.{js,ts,mjs,cjs}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
     '!tsconfig.json',
     // Why: feature-wall media is copied via extraResources so runtime can read
     // it from process.resourcesPath; exclude the source copy from app.asar.
-    '!resources/onboarding/feature-wall/**'
+    '!resources/onboarding/feature-wall/**',
+    '!resources/skills/**',
+    // Why: bundled plugins ship via extraResources to resources/plugins/launch;
+    // packing the source tree into app.asar would duplicate those exact bytes.
+    '!resources/plugins/launch/**',
+    // Why: the Windows CLI shim ships via extraResources to resources/bin/orca.cmd
+    // (beside the native resources/bin/orca.exe). Packing the source tree into
+    // app.asar too lets asarUnpack:['resources/**'] extract a second copy at
+    // app.asar.unpacked/resources/win32/bin/orca.cmd with no adjacent orca.exe,
+    // which fails to launch the CLI (#7351).
+    '!resources/win32{,/**/*}'
   ],
   // Why: the CLI entry-point lives in out/cli/ but imports shared modules
   // from out/shared/ and local hook mutators from out/main/. These paths must be
@@ -83,15 +150,19 @@ module.exports = {
   // app.asar.unpacked/node_modules/.
   // Why: remote runtime connections use WebSocket + E2EE from the packaged CLI
   // before the GUI process starts, so those deps need the same treatment.
+  // Why: out/package.json pins compiled output to CommonJS so parent
+  // package.json files with type=module cannot change the packaged CLI loader.
   // Why: sherpa-onnx native bindings (platform-specific subpackages) must be
   // unpacked because they ship .node addons + .dylib/.so files that cannot be
   // dlopen()'d from inside the asar archive.
   asarUnpack: [
+    'out/package.json',
     'out/cli/**',
     'out/shared/**',
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
+    'out/main/claude-accounts/keychain.js',
     'out/main/codex/**',
     'out/main/copilot/**',
     'out/main/cursor/**',
@@ -99,9 +170,10 @@ module.exports = {
     'out/main/gemini/**',
     'out/main/grok/**',
     'out/main/hermes/**',
-    'out/main/win32-utils.js',
     'out/main/daemon-entry.js',
+    'out/main/plugin-host-entry.js',
     'out/main/computer-sidecar.js',
+    'out/main/parcel-watcher-process-entry.js',
     'out/main/chunks/**',
     'resources/**',
     'node_modules/ws/**',
@@ -111,6 +183,12 @@ module.exports = {
     'node_modules/sherpa-onnx*/**'
   ],
   afterPack: async (context) => {
+    // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
+    // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
+    // Fail packaging if any bundled native binary exceeds the supported floor.
+    if (context.electronPlatformName === 'linux') {
+      verifyLinuxGlibcFloor(context.appOutDir)
+    }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
         ? join(
@@ -121,11 +199,61 @@ module.exports = {
           )
         : join(context.appOutDir, 'resources')
     if (!existsSync(resourcesDir)) {
-      return
+      throw new Error(`Missing packaged resources directory: ${resourcesDir}`)
     }
-    prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName)
+    if (context.electronPlatformName === 'darwin') {
+      const architectureByEnum = { 1: 'x64', 3: 'arm64' }
+      const architecture = architectureByEnum[context.arch]
+      if (!architecture) {
+        throw new Error(`Unsupported local-build compatibility architecture: ${context.arch}`)
+      }
+      const version = context.packager.appInfo.version
+      let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
+      if (commit === 'unknown') {
+        try {
+          commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
+            encoding: 'utf8'
+          }).trim()
+        } catch {
+          // Source archives can still produce a signed build with an explicit version.
+        }
+      }
+      writeMacBuildCompatibility(resourcesDir, { version, commit, architecture })
+    }
+    prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     verifyPackagedMainRuntimeDeps(resourcesDir)
+    // Why: boot the packaged daemon-entry under plain Node, but only for the
+    // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
+    // require()s the native (N-API) node-pty for the TARGET arch, which the host
+    // Node cannot load cross-arch. `Arch` enum: ia32=0, x64=1, armv7l=2,
+    // arm64=3, universal=4 (universal contains the host slice, so run it).
+    const archEnumByNodeArch = { ia32: 0, x64: 1, armv7l: 2, arm64: 3 }
+    const hostArchEnum = archEnumByNodeArch[process.arch]
+    const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
+    verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
+      executeCommands: canExecuteTargetArch
+    })
+    if (!canExecuteTargetArch) {
+      console.log(
+        `[verify-skills-cli-runtime] skipped command probes on cross-arch slice (target ${context.arch}, host ${process.arch})`
+      )
+    }
+    if (canExecuteTargetArch) {
+      verifyPackagedDaemonEntryBoots(resourcesDir)
+    } else {
+      // Why: a cross-arch slice can't be booted by the host Node, but the
+      // unpacked entry must still exist — its absence is a layout regression
+      // regardless of arch, so only the boot is skipped, not the check.
+      assertPackagedDaemonEntryExists(resourcesDir)
+      console.log(
+        `[verify-packaged-daemon-entry] skipped boot on cross-arch slice (target ${context.arch}, host ${process.arch})`
+      )
+    }
+    // Why: inspect electron-builder's real output so a broken extraResources
+    // mapping fails packaging before bundled content reaches users.
+    verifyPackagedPluginResources(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
+    chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
@@ -137,16 +265,30 @@ module.exports = {
     }
     if (context.electronPlatformName === 'darwin') {
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
+      await signMacNotificationStatusHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
+        context.packager
+      )
     }
   },
   win: {
     executableName: 'Orca',
+    // Why: Windows installers are signed after electron-builder packaging by
+    // SignPath, so the packager cannot infer the updater publisherName.
+    signtoolOptions: {
+      publisherName: 'SignPath Foundation'
+    },
     extraResources: [
       ...commonExtraResources,
+      ...createPackagedRuntimeNodeModuleResources('win32'),
       winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
+      },
+      {
+        from: 'native/windows-cli-launcher/.build/orca.exe',
+        to: 'bin/orca.exe'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
@@ -163,7 +305,11 @@ module.exports = {
     artifactName: 'orca-windows-setup.${ext}',
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
-    createDesktopShortcut: 'always'
+    createDesktopShortcut: 'always',
+    // Why: on a real uninstall, stop and remove the relocated terminal daemon
+    // (which lives outside the install dir under LOCALAPPDATA by design). Guarded
+    // by ${isUpdated} inside so it never runs during an update's uninstallOldVersion.
+    include: resolve(__dirname, 'nsis', 'daemon-host-uninstall.nsh')
   },
   mac: {
     icon: 'resources/build/icon.icns',
@@ -195,9 +341,17 @@ module.exports = {
     // explicit release path so production artifacts remain strict while dev
     // artifacts do not fail with broken ad-hoc launch behavior.
     hardenedRuntime: isMacRelease,
+    // Why dev builds notarize too, despite the ~10min notary round trip: TCC
+    // anchors a notarized Developer ID app's permission grants on identifier +
+    // team, which is cdhash-independent and so survives an update. Without a
+    // ticket there is no such stable identity, so every build reads as a
+    // different client — the grant row stays but stops matching, and file access
+    // under Documents/Desktop/Downloads fails with EPERM and no re-prompt. At 24
+    // builds a day that revokes the user's grants faster than they can re-grant.
     notarize: isMacRelease,
     extraResources: [
       ...commonExtraResources,
+      ...createPackagedRuntimeNodeModuleResources('darwin'),
       macSpeechNativeResource,
       {
         from: 'resources/darwin/bin/orca',
@@ -207,11 +361,26 @@ module.exports = {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
         to: 'agent-browser-darwin-${arch}'
       },
+      // Why: serve-sim resolves its helper binary and camera assets relative
+      // to dist/serve-sim.js, so the whole package must be a real resource dir.
+      {
+        from: 'node_modules/serve-sim',
+        to: 'serve-sim'
+      },
       {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
       },
       featureWallResources
+    ],
+    // Why: the notification-status helper must execute from Contents/MacOS —
+    // on macOS 26 UNUserNotificationCenter aborts (bundleProxyForCurrentProcess
+    // is nil) for executables launched out of Contents/Resources (#7929).
+    extraFiles: [
+      {
+        from: 'native/notification-status-macos/.build/release/orca-notification-status',
+        to: 'MacOS/orca-notification-status'
+      }
     ],
     target: [
       {
@@ -231,14 +400,22 @@ module.exports = {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
   linux: {
-    // Why: Ubuntu 26 ships GNOME Orca as the `orca` package and /usr/bin/orca.
+    // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
     // The Linux installer should not claim those system package/file names.
     executableName: 'orca-ide',
     // Why: the icns source lets electron-builder emit standard hicolor PNG
     // sizes; a single 1024px PNG is ignored by some Linux docks/launchers.
     icon: 'resources/build/icon.icns',
+    desktop: {
+      entry: {
+        // Why: Electron reports WM_CLASS=orca for the visible Linux window;
+        // GNOME docks need an exact match to group it with orca-ide.desktop.
+        StartupWMClass: 'orca'
+      }
+    },
     extraResources: [
       ...commonExtraResources,
+      ...createPackagedRuntimeNodeModuleResources('linux'),
       linuxSpeechNativeResource,
       {
         from: 'resources/linux/bin/orca-ide',
@@ -254,22 +431,51 @@ module.exports = {
       },
       featureWallResources
     ],
-    target: ['AppImage', 'deb', 'rpm'],
+    target: ['AppImage', 'deb'],
     maintainer: 'stablyai',
     category: 'Utility'
   },
   appImage: {
-    artifactName: 'orca-linux.${ext}'
+    artifactName: isLinuxArm64Release ? 'orca-linux-arm64.${ext}' : 'orca-linux.${ext}'
   },
   deb: {
     packageName: 'orca-ide',
     artifactName: 'orca-ide_${version}_${arch}.${ext}',
-    depends: ['python3', 'python3-gi', 'gir1.2-atspi-2.0', 'at-spi2-core', 'xdotool', 'xclip']
+    // Why: xvfb lets the bundled `orca serve` CLI run browser panes on a headless
+    // Linux host — Chromium needs a display server even for offscreen rendering,
+    // and serve starts Xvfb itself when present (see ensure-virtual-display.ts).
+    depends: [
+      'python3',
+      'python3-gi',
+      'gir1.2-atspi-2.0',
+      'at-spi2-core',
+      'xdotool',
+      'xclip',
+      'xvfb'
+    ],
+    // Why: symlink the bundled CLI onto PATH at install time so `orca-ide serve`
+    // works on a headless host. The in-app CLI registration (CliInstaller) is
+    // GUI-triggered and can never run on a server, so without this the CLI is
+    // unreachable from the shell on exactly the hosts that need it.
+    afterInstall: 'resources/linux/packaging/after-install.sh',
+    afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   rpm: {
     packageName: 'orca-ide',
     artifactName: 'orca-ide-${version}.${arch}.${ext}',
-    depends: ['python3', 'python3-gobject', 'at-spi2-core', 'xdotool', 'xclip']
+    // Why: see deb depends. RPM distros ship Xvfb as xorg-x11-server-Xvfb (there
+    // is no `xvfb` package), so the name differs from the deb here.
+    depends: [
+      'python3',
+      'python3-gobject',
+      'at-spi2-core',
+      'xdotool',
+      'xclip',
+      'xorg-x11-server-Xvfb'
+    ],
+    // Why: same headless CLI-on-PATH registration as deb; rpm runs these via fpm.
+    afterInstall: 'resources/linux/packaging/after-install.sh',
+    afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   beforeBuild: electronBuilderNativeRebuild,
   // Why: must be true so that electron-builder rebuilds native modules
@@ -282,8 +488,8 @@ module.exports = {
   publish: {
     provider: 'github',
     owner: 'stablyai',
-    repo: 'orca',
-    releaseType: 'release'
+    repo: devChannelRepo ?? 'orca',
+    releaseType: devChannelRepo ? 'prerelease' : 'release'
   }
 }
 
@@ -299,6 +505,23 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
     // Why: packaged Unix installs expose these extraResources as public shell
     // commands, and source/packager mode drift must not ship a non-executable CLI.
     chmodSync(launcherPath, 0o755)
+  }
+}
+
+function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
+  if (electronPlatformName !== 'darwin') {
+    return
+  }
+  const helperPaths = [
+    join(resourcesDir, 'serve-sim', 'bin', 'serve-sim-bin'),
+    join(resourcesDir, 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper'),
+    join(resourcesDir, 'node_modules', 'serve-sim', 'bin', 'serve-sim-bin'),
+    join(resourcesDir, 'node_modules', 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper')
+  ]
+  for (const helperPath of helperPaths) {
+    if (existsSync(helperPath)) {
+      chmodSync(helperPath, 0o755)
+    }
   }
 }
 
@@ -327,6 +550,37 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
   execFileSync('codesign', ['--verify', '--deep', '--strict', helperAppPath], {
     stdio: 'inherit'
   })
+}
+
+async function signMacNotificationStatusHelper(helperPath, packager) {
+  if (!existsSync(helperPath)) {
+    if (isMacRelease) {
+      throw new Error(`Missing orca-notification-status helper at ${helperPath}`)
+    }
+    return
+  }
+  const codeSigningInfo =
+    isMacRelease && process.env.CSC_LINK && packager?.codeSigningInfo?.value
+      ? await packager.codeSigningInfo.value
+      : null
+  const identity =
+    process.env.CSC_NAME ??
+    findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
+    (isMacRelease ? null : '-')
+  if (!identity) {
+    throw new Error('Missing signing identity for orca-notification-status helper')
+  }
+  // Why: macOS keys notification records to the code-signing identifier; the
+  // binary embeds the app's CFBundleIdentifier in __TEXT,__info_plist so this
+  // (and any later) `codesign --force` derives the correct identifier. Sign
+  // before the outer Orca.app is sealed, like the computer-use helper.
+  const args = ['--force', '--sign', identity]
+  if (isMacRelease) {
+    args.push('--options', 'runtime', '--timestamp')
+  }
+  args.push(helperPath)
+  execFileSync('codesign', args, { stdio: 'inherit' })
+  execFileSync('codesign', ['--verify', '--strict', helperPath], { stdio: 'inherit' })
 }
 
 function codesignArgs(identity, targetPath) {

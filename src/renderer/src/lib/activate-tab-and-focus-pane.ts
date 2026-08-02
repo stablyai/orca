@@ -19,7 +19,11 @@ export function activateTabAndFocusPane(
     scrollToBottomIfOutputSinceLastView?: boolean
   }
 ): void {
-  useAppStore.getState().setActiveTab(tabId)
+  const { setActiveTab, setActiveTabType } = useAppStore.getState()
+  // Why: selecting a terminal tab is independent from the visible surface;
+  // force Terminal first so tab-only activation reveals the full log.
+  setActiveTabType('terminal')
+  setActiveTab(tabId)
   cancelPendingFocusPaneFrame()
   if (leafId === null) {
     return

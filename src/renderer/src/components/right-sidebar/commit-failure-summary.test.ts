@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest'
-import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  COMMIT_FAILURE_SUMMARY_SCAN_CODE_UNITS,
+  hasExpandedCommitFailureDetails,
+  summarizeCommitFailure
+} from './commit-failure-summary'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('commit failure summary', () => {
   it('collapses lint-staged, husky, and oxlint failures to a lint summary', () => {
@@ -39,6 +47,23 @@ describe('commit failure summary', () => {
     expect(summarizeCommitFailure(' \n\t ')).toBe('Commit failed.')
   })
 
+  it('summarizes newline-heavy commit output without splitting the full log', () => {
+    const split = vi.spyOn(String.prototype, 'split')
+    const raw = `${'npm notice noisy line\n'.repeat(1000)}husky - pre-commit hook\noxlint failed`
+
+    expect(summarizeCommitFailure(raw)).toBe('Lint failed during commit.')
+    expect(split).not.toHaveBeenCalled()
+  })
+
+  it('bounds summary analysis for pathological single-line logs', () => {
+    const split = vi.spyOn(String.prototype, 'split')
+    const raw = 'x'.repeat(COMMIT_FAILURE_SUMMARY_SCAN_CODE_UNITS + 10_000)
+
+    expect(summarizeCommitFailure(raw)).toBe('x'.repeat(COMMIT_FAILURE_SUMMARY_SCAN_CODE_UNITS))
+    expect(hasExpandedCommitFailureDetails(raw, 'Commit failed.')).toBe(true)
+    expect(split).not.toHaveBeenCalled()
+  })
+
   it('reports whether expanded details add information beyond the summary', () => {
     expect(hasExpandedCommitFailureDetails('nothing to commit', 'nothing to commit')).toBe(false)
     expect(
@@ -48,5 +73,17 @@ describe('commit failure summary', () => {
       )
     ).toBe(true)
     expect(hasExpandedCommitFailureDetails('', 'Commit failed.')).toBe(false)
+  })
+
+  it('compares expanded details without whitespace regex replacement', () => {
+    const replace = vi.spyOn(String.prototype, 'replace')
+    const raw = ['nothing', String.fromCharCode(160), '  to\tcommit\n'].join('')
+
+    expect(hasExpandedCommitFailureDetails(raw, 'nothing to commit')).toBe(false)
+    expect(
+      replace.mock.calls.filter(
+        ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+      )
+    ).toHaveLength(0)
   })
 })

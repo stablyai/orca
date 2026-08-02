@@ -52,4 +52,25 @@ describe('buildSearchRows', () => {
 
     expect(rows.map((row) => row.type)).toEqual(['file', 'file', 'match'])
   })
+
+  it('preserves the file result object for renderer-side count normalization', () => {
+    const fileResult = {
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      matchCount: 5,
+      matches: [{ line: 1, column: 1, matchLength: 3, lineContent: 'foo' }]
+    }
+
+    const rows = buildSearchRows(
+      {
+        totalMatches: 5,
+        truncated: false,
+        files: [fileResult]
+      },
+      new Set<string>()
+    )
+
+    expect(rows[0]).toMatchObject({ type: 'file', fileResult })
+    expect(rows[1]).toMatchObject({ type: 'match', fileResult })
+  })
 })

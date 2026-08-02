@@ -3,6 +3,7 @@
  * asserted without mounting the full Electron renderer. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { KeybindingOverrides, TerminalShortcutPolicy } from '../../../../shared/keybindings'
 import type { BrowserTab, Tab, TabGroup, TerminalTab } from '../../../../shared/types'
 import type { OpenFile } from '@/store/slices/editor'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
@@ -13,6 +14,14 @@ import {
   getMaximizedFloatingTerminalBounds,
   type FloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
+import {
+  consumeFloatingTerminalOpenMaximizedIntent,
+  requestFloatingTerminalOpenMaximized
+} from '@/lib/floating-terminal'
+import {
+  clearFloatingPanelReclaimIntent,
+  consumeFloatingPanelReclaimIntent
+} from '@/lib/floating-workspace-focus-reclaim'
 
 type EffectCallback = () => void | (() => void)
 
@@ -31,6 +40,7 @@ type FloatingPanelStoreState = {
   activeGroupIdByWorktree: Record<string, string | null>
   activeTabIdByWorktree: Record<string, string | null>
   expandedPaneByTabId: Record<string, boolean>
+  renamingTabId: string | null
   createTab: (
     worktreeId: string,
     groupId?: string,
@@ -44,6 +54,7 @@ type FloatingPanelStoreState = {
       activate?: boolean
       focusAddressBar?: boolean
       sessionProfileId?: string | null
+      sessionPartition?: string | null
       title?: string
       targetGroupId?: string
     }
@@ -51,18 +62,25 @@ type FloatingPanelStoreState = {
   closeTab: (tabId: string) => void
   closeBrowserTab: (tabId: string) => void
   closeFile: (fileId: string) => void
+  closeUnifiedTab: (tabId: string) => Tab | null
   markFileDirty: (fileId: string, dirty: boolean) => void
   activateTab: (tabId: string) => void
   setActiveTab: (tabId: string) => void
   setTabCustomTitle: (tabId: string, title: string | null) => void
+  setRenamingTabId: (tabId: string | null) => void
   setTabColor: (tabId: string, color: string | null) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
   pinFile: (fileId: string, tabId?: string) => void
   openFile: (file: unknown, options?: unknown) => void
   browserDefaultUrl: string
+  keybindings?: KeybindingOverrides
   tabBarOrderByWorktree: Record<string, string[]>
-  settings: { activeRuntimeEnvironmentId?: string | null; floatingTerminalCwd?: string }
+  settings: {
+    activeRuntimeEnvironmentId?: string | null
+    floatingTerminalCwd?: string
+    terminalShortcutPolicy?: TerminalShortcutPolicy
+  }
 }
 
 const hookRuntime = vi.hoisted(() => ({
@@ -83,6 +101,21 @@ const mocks = vi.hoisted(() => ({
   closeWebRuntimeSessionTab: vi.fn(),
   closeFile: vi.fn(),
   closeTab: vi.fn(),
+  // Models terminal-tab-actions.closeTerminalTab: a real close removes the tab from the store, then
+  // runs onClosed (which arms the emptying-close reclaim intent off the now-decremented live count).
+  // Pinned/cancel paths are asserted via the mock's args or overridden with mockImplementationOnce.
+  closeTerminalTab: vi.fn((tabId: string, options?: { onClosed?: () => void }) => {
+    removeFloatingTerminalTabFromStore(tabId)
+    options?.onClosed?.()
+  }),
+  closeUnifiedTab: vi.fn(),
+  // Models pinned-tab-close-guard.guardPinnedTabClose: unpinned closes run onClose immediately;
+  // pinned closes are deferred to a confirm dialog (assert isPinned via the mock's args).
+  guardPinnedTabClose: vi.fn((options: { isPinned: boolean; onClose: () => void }) => {
+    if (!options.isPinned) {
+      options.onClose()
+    }
+  }),
   createBrowserTab: vi.fn(),
   createTab: vi.fn(),
   createWebRuntimeSessionBrowserTab: vi.fn(),
@@ -91,20 +124,29 @@ const mocks = vi.hoisted(() => ({
   getFloatingMarkdownDirectory: vi.fn(),
   getFloatingTerminalCwd: vi.fn(),
   getInstallStatus: vi.fn(),
+  isTerminalImeInputContextRefreshing: vi.fn(),
   isWebRuntimeSessionActive: vi.fn(),
   markFileDirty: vi.fn(),
   makePreviewFilePermanent: vi.fn(),
   openFile: vi.fn(),
   pickFloatingMarkdownDocument: vi.fn(),
   pinFile: vi.fn(),
+  setFloatingFocus: vi.fn(),
   setActiveTab: vi.fn(),
+  setRenamingTabId: vi.fn(),
   setTabColor: vi.fn(),
   setTabCustomTitle: vi.fn(),
-  setTabPaneExpanded: vi.fn()
+  setTabPaneExpanded: vi.fn(),
+  shouldDeferParkedPtyExitTabClose: vi.fn(),
+  useContextualTour: vi.fn()
 }))
 
 const saveDialogBox = vi.hoisted(() => ({
   fileId: null as string | null
+}))
+
+const parkingBox = vi.hoisted(() => ({
+  parkedTabIds: new Set<string>()
 }))
 
 vi.mock('react', async () => {
@@ -168,8 +210,37 @@ vi.mock('@/components/terminal-pane/TerminalPane', () => ({
   }
 }))
 
+vi.mock('@/components/terminal-pane/use-terminal-tab-cold-parking', () => ({
+  useTerminalTabColdParking: () => parkingBox.parkedTabIds
+}))
+
+vi.mock('@/components/terminal-pane/terminal-parked-tab-watchers', () => ({
+  shouldDeferParkedPtyExitTabClose: mocks.shouldDeferParkedPtyExitTabClose
+}))
+
+vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
+  isTerminalImeInputContextRefreshing: mocks.isTerminalImeInputContextRefreshing
+}))
+
+// closeFloatingItemConfirmed routes terminals through closeTerminalTab (own pin guard + F9
+// force-reenter) and non-terminals through guardPinnedTabClose; mock both to assert routing.
+vi.mock('@/components/terminal/terminal-tab-actions', () => ({
+  closeTerminalTab: mocks.closeTerminalTab
+}))
+
+vi.mock('@/store/pinned-tab-close-guard', () => ({
+  guardPinnedTabClose: mocks.guardPinnedTabClose,
+  resolvePinnedTabLabel: () => 'Floating Tab'
+}))
+
 vi.mock('@/components/browser-pane/BrowserPane', () => ({
   default: function BrowserPane() {
+    return null
+  }
+}))
+
+vi.mock('@/components/emulator-pane/EmulatorPane', () => ({
+  default: function EmulatorPane() {
     return null
   }
 }))
@@ -184,6 +255,10 @@ vi.mock('@/components/ui/button', () => ({
   Button: function Button() {
     return null
   }
+}))
+
+vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
+  useContextualTour: mocks.useContextualTour
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -335,6 +410,17 @@ function makeFile(overrides: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
+// Models terminal-tab-actions.closeTerminalTab's store mutation: the real close removes the tab from
+// the floating store *before* it fires onClosed, so the reclaim intent arms on a decremented count.
+function removeFloatingTerminalTabFromStore(entityId: string): void {
+  const state = storeBox.state as FloatingPanelStoreState
+  const current = state.tabsByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+  const remaining = current.filter((tab) => tab.id !== entityId)
+  if (remaining.length !== current.length) {
+    setFloatingTabs(remaining)
+  }
+}
+
 function setFloatingTabs(tabs: TerminalTab[]): void {
   const state = storeBox.state as FloatingPanelStoreState
   const groupId = 'floating-group'
@@ -399,6 +485,38 @@ function setFloatingEditorTabs(files: OpenFile[]): void {
   state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
 }
 
+function setFloatingSimulatorTab(): Tab {
+  const state = storeBox.state as FloatingPanelStoreState
+  const groupId = 'floating-group'
+  const tab: Tab = {
+    id: 'simulator-tab',
+    entityId: 'simulator-tab',
+    groupId,
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    contentType: 'simulator',
+    label: 'Mobile Emulator',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+  state.unifiedTabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [tab] }
+  state.groupsByWorktree = {
+    [FLOATING_TERMINAL_WORKTREE_ID]: [
+      {
+        id: groupId,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        activeTabId: tab.id,
+        tabOrder: [tab.id],
+        recentTabIds: [tab.id]
+      }
+    ]
+  }
+  state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+  state.tabBarOrderByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [tab.id] }
+  return tab
+}
+
 function resetStore(tabs: TerminalTab[] = []): void {
   storeBox.state = {
     tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs },
@@ -410,9 +528,11 @@ function resetStore(tabs: TerminalTab[] = []): void {
     activeGroupIdByWorktree: {},
     activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs[0]?.id ?? null },
     expandedPaneByTabId: {},
+    renamingTabId: null,
     activateTab: mocks.activateTab,
     closeBrowserTab: mocks.closeBrowserTab,
     closeFile: mocks.closeFile,
+    closeUnifiedTab: mocks.closeUnifiedTab,
     createTab: mocks.createTab,
     createBrowserTab: mocks.createBrowserTab,
     closeTab: mocks.closeTab,
@@ -422,9 +542,11 @@ function resetStore(tabs: TerminalTab[] = []): void {
     pinFile: mocks.pinFile,
     setActiveTab: mocks.setActiveTab,
     setTabCustomTitle: mocks.setTabCustomTitle,
+    setRenamingTabId: mocks.setRenamingTabId,
     setTabColor: mocks.setTabColor,
     setTabPaneExpanded: mocks.setTabPaneExpanded,
     browserDefaultUrl: 'about:blank',
+    keybindings: {},
     tabBarOrderByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs.map((tab) => tab.id) },
     settings: { floatingTerminalCwd: '' }
   } satisfies FloatingPanelStoreState
@@ -465,6 +587,22 @@ function findByTypeName(node: unknown, typeName: string): ReactElementLike {
   return found
 }
 
+function findAllByTypeName(node: unknown, typeName: string): ReactElementLike[] {
+  const found: ReactElementLike[] = []
+  visit(node, (entry) => {
+    const candidate =
+      typeof entry.type === 'function' || typeof entry.type === 'object'
+        ? ((entry.type as { displayName?: string; name?: string }).displayName ??
+          (entry.type as { displayName?: string; name?: string }).name ??
+          '')
+        : entry.type
+    if (candidate === typeName) {
+      found.push(entry)
+    }
+  })
+  return found
+}
+
 function findByProp(node: unknown, propName: string): ReactElementLike {
   let found: ReactElementLike | null = null
   visit(node, (entry) => {
@@ -476,6 +614,17 @@ function findByProp(node: unknown, propName: string): ReactElementLike {
     throw new Error(`${propName} not found`)
   }
   return found
+}
+
+function collectPropValues(node: unknown, propName: string): unknown[] {
+  const values: unknown[] = []
+  visit(node, (entry) => {
+    const value = entry.props[propName]
+    if (value !== undefined) {
+      values.push(value)
+    }
+  })
+  return values
 }
 
 function runEffects(): void {
@@ -502,10 +651,18 @@ async function flushAsyncWork(): Promise<void> {
   await Promise.resolve()
 }
 
-async function renderPanel(open: boolean, onOpenChange = vi.fn()): Promise<unknown> {
+async function renderPanel(
+  open: boolean,
+  onOpenChange = vi.fn(),
+  tourInteractionSnapshot?: {
+    wasPreviouslyInteracted: boolean
+    persisted?: Promise<void>
+    recordFeatureInteractionForTour: boolean
+  } | null
+): Promise<unknown> {
   hookRuntime.index = 0
   const { FloatingTerminalPanel } = await import('./FloatingTerminalPanel')
-  return FloatingTerminalPanel({ open, onOpenChange })
+  return FloatingTerminalPanel({ open, onOpenChange, tourInteractionSnapshot })
 }
 
 function getPanelStyleBounds(element: unknown): FloatingTerminalPanelBounds {
@@ -525,10 +682,12 @@ function getPanelClassName(element: unknown): string {
 }
 
 function getMockedLocalStorage(): {
+  clear: ReturnType<typeof vi.fn>
   getItem: ReturnType<typeof vi.fn>
   setItem: ReturnType<typeof vi.fn>
 } {
   return window.localStorage as unknown as {
+    clear: ReturnType<typeof vi.fn>
     getItem: ReturnType<typeof vi.fn>
     setItem: ReturnType<typeof vi.fn>
   }
@@ -569,24 +728,111 @@ function makeMacShortcutKeyEvent({
   }
 }
 
+function bindFocusedFloatingPanelKeydown(element: unknown): {
+  keydownListener: (event: unknown) => void
+  panelElement: {
+    contains: ReturnType<typeof vi.fn>
+    focus: ReturnType<typeof vi.fn>
+    closest: ReturnType<typeof vi.fn>
+  }
+} {
+  const panel = findByProp(element, 'data-floating-terminal-panel')
+  const panelElement = {
+    contains: vi.fn().mockReturnValue(true),
+    focus: vi.fn(),
+    closest: vi.fn()
+  }
+  panelElement.closest.mockImplementation((selector: string) =>
+    selector === '[data-floating-terminal-panel]' ? panelElement : null
+  )
+  Object.setPrototypeOf(panelElement, HTMLElement.prototype)
+  attachRef(panel.props.ref, panelElement)
+  vi.stubGlobal('document', {
+    activeElement: panelElement,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn()
+  })
+  runEffects()
+  const keydownListener = vi.mocked(window.addEventListener).mock.calls.find(([type]) => {
+    return type === 'keydown'
+  })?.[1] as ((event: unknown) => void) | undefined
+  if (!keydownListener) {
+    throw new Error('keydown listener not registered')
+  }
+  return { keydownListener, panelElement }
+}
+
+function makeFocusedPanelKeyEvent({
+  altKey = false,
+  code,
+  ctrlKey = false,
+  key,
+  metaKey = false,
+  preventDefault = vi.fn(),
+  shiftKey = false,
+  stopImmediatePropagation = vi.fn(),
+  stopPropagation = vi.fn(),
+  target
+}: {
+  altKey?: boolean
+  code?: string
+  ctrlKey?: boolean
+  key: string
+  metaKey?: boolean
+  preventDefault?: () => void
+  shiftKey?: boolean
+  stopImmediatePropagation?: () => void
+  stopPropagation?: () => void
+  target: unknown
+}): unknown {
+  return {
+    altKey,
+    code: code ?? (key.length === 1 && /[a-z]/i.test(key) ? `Key${key.toUpperCase()}` : key),
+    ctrlKey,
+    defaultPrevented: false,
+    key,
+    metaKey,
+    preventDefault,
+    repeat: false,
+    shiftKey,
+    stopImmediatePropagation,
+    stopPropagation,
+    target
+  }
+}
+
 describe('FloatingTerminalPanel close behavior', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     hookRuntime.effects = []
     hookRuntime.layoutEffects = []
     hookRuntime.index = 0
     hookRuntime.values = []
     saveDialogBox.fileId = null
+    parkingBox.parkedTabIds = new Set()
     resetStore()
+    // Why: the open-maximized intent is a module singleton; drain any leftover
+    // from a prior test so it cannot bleed into an unrelated render.
+    consumeFloatingTerminalOpenMaximizedIntent()
+    // Why: the reclaim intent is also a module singleton; clear it so one test's
+    // armed-but-unconsumed intent cannot trigger a reclaim in the next.
+    clearFloatingPanelReclaimIntent()
+    // Why: the focus-report dedupe cache is module state keyed on the setFloatingFocus
+    // mock identity; reset it so a prior test's last-reported value can't suppress an IPC.
+    const { clearReportedFloatingFocusCache } = await import('./FloatingTerminalPanel')
+    clearReportedFloatingFocusCache()
     mocks.createTab.mockReturnValue(makeTab({ id: 'created-tab' }))
     mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(false)
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue(false)
     mocks.getFloatingMarkdownDirectory.mockResolvedValue('/tmp/orca/floating-notes')
     mocks.getFloatingTerminalCwd.mockResolvedValue('/tmp/orca')
     mocks.getInstallStatus.mockResolvedValue({ state: 'installed', pathConfigured: true })
+    mocks.isTerminalImeInputContextRefreshing.mockReturnValue(false)
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
     mocks.pickFloatingMarkdownDocument.mockResolvedValue(null)
+    mocks.shouldDeferParkedPtyExitTabClose.mockReturnValue(false)
     const localStorage = {
+      clear: vi.fn(),
       getItem: vi.fn(() => null),
       removeItem: vi.fn(),
       setItem: vi.fn()
@@ -601,7 +847,7 @@ describe('FloatingTerminalPanel close behavior', () => {
         },
         browser: { notifyActiveTabChanged: vi.fn() },
         cli: { getInstallStatus: mocks.getInstallStatus },
-        ui: { setFloatingTerminalInputFocused: vi.fn() }
+        ui: { setFloatingFocus: mocks.setFloatingFocus }
       },
       innerHeight: 800,
       innerWidth: 1200,
@@ -615,6 +861,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     vi.stubGlobal('HTMLElement', class {})
     vi.stubGlobal('localStorage', localStorage)
+    // Default so closeFloatingItemConfirmed's isFloatingWorkspacePanelFocused() read and the
+    // panel's outside-pointerdown effect are both safe; individual tests override document with
+    // specific activeElement state (keeping addEventListener/removeEventListener for runEffects()).
+    vi.stubGlobal('document', {
+      activeElement: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
   })
 
   afterEach(() => {
@@ -632,10 +886,125 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(getPanelStyleBounds(element)).toEqual(savedBounds)
   })
 
-  it('layers below root notification cards', async () => {
+  it('layers above root notification cards but below the modal layer', async () => {
     const element = await renderPanel(true)
 
-    expect(getPanelClassName(element)).toContain('z-30')
+    expect(getPanelClassName(element)).toContain('z-[45]')
+  })
+
+  it('refreshes terminal native input focus when the floating panel opens', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+
+    await renderPanel(true)
+    runEffects()
+
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith(
+      'tab-1',
+      null,
+      expect.objectContaining({
+        onImeRefocusSkipped: expect.any(Function),
+        refreshImeContext: true
+      })
+    )
+    mocks.setFloatingFocus.mockClear()
+    mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped()
+    // No refocus target: both bits false (atomic payload, F7).
+    expect(mocks.setFloatingFocus).toHaveBeenCalledWith({
+      panelFocused: false,
+      terminalFocused: false
+    })
+
+    const newerFloatingInput = {
+      classList: { contains: (token: string) => token === 'xterm-helper-textarea' },
+      closest: vi.fn().mockReturnValue({})
+    }
+    Object.setPrototypeOf(newerFloatingInput, HTMLElement.prototype)
+    mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped(newerFloatingInput)
+    // Relatched onto the floating xterm: panel ⊇ terminal, both true.
+    expect(mocks.setFloatingFocus).toHaveBeenLastCalledWith({
+      panelFocused: true,
+      terminalFocused: true
+    })
+  })
+
+  it('preserves and reclaims terminal input ownership across window blur', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const terminalInput = {
+      blur: vi.fn(),
+      classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
+      closest: vi.fn((selector: string) => {
+        if (selector === '[data-floating-terminal-panel]') {
+          return panelElement
+        }
+        return selector === '[data-leaf-id]'
+          ? {
+              getAttribute: (attribute: string) => (attribute === 'data-leaf-id' ? 'leaf-1' : null)
+            }
+          : null
+      }),
+      isConnected: true
+    }
+    Object.setPrototypeOf(panelElement, HTMLElement.prototype)
+    Object.setPrototypeOf(terminalInput, HTMLElement.prototype)
+    attachRef(panel.props.ref, panelElement)
+    mocks.isTerminalImeInputContextRefreshing.mockReturnValueOnce(true)
+    const onBlurCapture = panel.props.onBlurCapture as (event: unknown) => void
+    onBlurCapture({
+      relatedTarget: null,
+      target: terminalInput
+    })
+    expect(mocks.setFloatingFocus).not.toHaveBeenCalled()
+    const documentState = {
+      activeElement: terminalInput as unknown as HTMLElement | null,
+      addEventListener: vi.fn(),
+      body: {} as HTMLElement,
+      removeEventListener: vi.fn()
+    }
+    vi.stubGlobal('document', documentState)
+    runEffects()
+    const blurListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.findLast(([type]) => type === 'blur')?.[1] as (() => void) | undefined
+    const focusListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'focus')?.[1] as (() => void) | undefined
+    if (!blurListener || !focusListener) {
+      throw new Error('floating terminal window focus listeners not registered')
+    }
+
+    blurListener()
+    expect(terminalInput.blur).not.toHaveBeenCalled()
+
+    focusListener()
+    expect(mocks.setFloatingFocus).toHaveBeenLastCalledWith({
+      panelFocused: true,
+      terminalFocused: true
+    })
+
+    documentState.activeElement = terminalInput as unknown as HTMLElement
+    blurListener()
+    documentState.activeElement = documentState.body
+    mocks.focusTerminalTabSurface.mockClear()
+    focusListener()
+    expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+
+    documentState.activeElement = terminalInput as unknown as HTMLElement
+    blurListener()
+    terminalInput.isConnected = false
+    documentState.activeElement = documentState.body
+    focusListener()
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith(
+      'tab-1',
+      'leaf-1',
+      expect.objectContaining({
+        onlyIfFocusUnclaimed: true,
+        onImeRefocusSkipped: expect.any(Function),
+        refreshImeContext: true
+      })
+    )
   })
 
   it('falls back to default bounds when persisted geometry is malformed', async () => {
@@ -897,6 +1266,97 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
+  it('requests the floating workspace tour only when the panel is open', async () => {
+    const persisted = Promise.resolve()
+
+    await renderPanel(false, vi.fn(), {
+      wasPreviouslyInteracted: false,
+      persisted,
+      recordFeatureInteractionForTour: false
+    })
+
+    expect(mocks.useContextualTour).toHaveBeenLastCalledWith(
+      'floating-workspace',
+      false,
+      'floating_workspace_visible',
+      {
+        recordFeatureInteraction: false,
+        featureInteractionPersisted: persisted,
+        wasFeaturePreviouslyInteracted: false
+      }
+    )
+
+    await renderPanel(true, vi.fn(), {
+      wasPreviouslyInteracted: true,
+      persisted,
+      recordFeatureInteractionForTour: false
+    })
+
+    expect(mocks.useContextualTour).toHaveBeenLastCalledWith(
+      'floating-workspace',
+      true,
+      'floating_workspace_visible',
+      {
+        recordFeatureInteraction: false,
+        featureInteractionPersisted: persisted,
+        wasFeaturePreviouslyInteracted: true
+      }
+    )
+  })
+
+  it('records the floating workspace tour interaction when the open snapshot deferred persistence', async () => {
+    await renderPanel(true, vi.fn(), {
+      wasPreviouslyInteracted: false,
+      recordFeatureInteractionForTour: true
+    })
+
+    expect(mocks.useContextualTour).toHaveBeenLastCalledWith(
+      'floating-workspace',
+      true,
+      'floating_workspace_visible',
+      {
+        recordFeatureInteraction: true,
+        featureInteractionPersisted: undefined,
+        wasFeaturePreviouslyInteracted: false
+      }
+    )
+  })
+
+  it('targets the empty-state actions without co-mounting the surface fallback', async () => {
+    const element = await renderPanel(true)
+    const emptyState = findByTypeName(element, 'FloatingTerminalEmptyState')
+    const renderedEmptyState = (
+      emptyState.type as (props: Record<string, unknown>) => ReactElementLike
+    )(emptyState.props)
+
+    expect(collectPropValues(element, 'data-contextual-tour-target')).not.toContain(
+      'floating-workspace-surface'
+    )
+    expect(collectPropValues(renderedEmptyState, 'data-contextual-tour-target')).toEqual([
+      'floating-workspace-new-terminal',
+      'floating-workspace-new-markdown'
+    ])
+  })
+
+  it('targets the non-empty panel surface when the empty-state actions are absent', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+
+    const element = await renderPanel(true)
+
+    expect(() => findByTypeName(element, 'FloatingTerminalEmptyState')).toThrow(
+      'FloatingTerminalEmptyState not found'
+    )
+    expect(collectPropValues(element, 'data-contextual-tour-target')).toContain(
+      'floating-workspace-surface'
+    )
+    expect(collectPropValues(element, 'data-contextual-tour-target')).not.toContain(
+      'floating-workspace-new-terminal'
+    )
+    expect(collectPropValues(element, 'data-contextual-tour-target')).not.toContain(
+      'floating-workspace-new-markdown'
+    )
+  })
+
   it('focuses the empty floating workspace when opened for immediate shortcuts', async () => {
     const element = await renderPanel(true)
     const panel = findByProp(element, 'data-floating-terminal-panel')
@@ -906,6 +1366,28 @@ describe('FloatingTerminalPanel close behavior', () => {
     runEffects()
 
     expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('does not crash if the preload focus bridge is stale during dev reload', async () => {
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn(),
+      api: {
+        app: {
+          getFloatingMarkdownDirectory: mocks.getFloatingMarkdownDirectory,
+          getFloatingTerminalCwd: mocks.getFloatingTerminalCwd,
+          pickFloatingMarkdownDocument: mocks.pickFloatingMarkdownDocument
+        },
+        browser: { notifyActiveTabChanged: vi.fn() },
+        cli: { getInstallStatus: mocks.getInstallStatus },
+        ui: {}
+      },
+      innerWidth: 1200,
+      removeEventListener: vi.fn()
+    })
+
+    await renderPanel(false)
+
+    expect(() => runEffects()).not.toThrow()
   })
 
   it('minimizes the empty floating workspace from the empty state', async () => {
@@ -950,6 +1432,94 @@ describe('FloatingTerminalPanel close behavior', () => {
     )
     expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
+  })
+
+  it('keeps floating browser create and duplicate local during active web runtime sessions', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    ;(storeBox.state as FloatingPanelStoreState).settings.activeRuntimeEnvironmentId = 'runtime-1'
+    ;(storeBox.state as FloatingPanelStoreState).browserTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: 'browser-1',
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          url: 'https://example.com',
+          title: 'Example',
+          loading: false,
+          faviconUrl: null,
+          canGoBack: false,
+          canGoForward: false,
+          loadError: null,
+          sessionProfileId: 'profile-1',
+          sessionPartition: 'persist:orca-browser-session-profile-1',
+          createdAt: 1
+        }
+      ]
+    }
+    mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(true)
+
+    const element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onNewBrowserTab as () => void)()
+    ;(tabBar.props.onDuplicateBrowserTab as (browserTabId: string) => void)('browser-1')
+
+    expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.createBrowserTab).toHaveBeenNthCalledWith(
+      1,
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'about:blank',
+      {
+        title: 'New Browser Tab',
+        focusAddressBar: true,
+        targetGroupId: 'floating-group',
+        browserRuntimeEnvironmentId: null
+      }
+    )
+    expect(mocks.createBrowserTab).toHaveBeenNthCalledWith(
+      2,
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'https://example.com',
+      {
+        title: 'Example',
+        sessionProfileId: 'profile-1',
+        sessionPartition: 'persist:orca-browser-session-profile-1',
+        targetGroupId: 'floating-group',
+        browserRuntimeEnvironmentId: null
+      }
+    )
+  })
+
+  it('hides the active terminal pane from the renderer while the panel is closed', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+
+    // Why: the closed panel stays mounted but CSS-hidden; gating isVisible on
+    // `open` routes the terminal through the standard hidden-terminal WebGL
+    // suspend/resume path so no live glyph atlas can corrupt while hidden.
+    await renderPanel(false)
+    runEffects()
+    await Promise.resolve()
+    const closedElement = await renderPanel(false)
+    const closedPane = findByTypeName(closedElement, 'TerminalPane')
+    expect(closedPane.props.isActive).toBe(true)
+    expect(closedPane.props.isVisible).toBe(false)
+
+    const openElement = await renderPanel(true)
+    const openPane = findByTypeName(openElement, 'TerminalPane')
+    expect(openPane.props.isVisible).toBe(true)
+  })
+
+  it('does not mount floating terminal panes selected for cold parking', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
+    parkingBox.parkedTabIds = new Set(['tab-2'])
+
+    await renderPanel(true)
+    runEffects()
+    await Promise.resolve()
+    const element = await renderPanel(true)
+
+    expect(findAllByTypeName(element, 'TerminalPane').map((pane) => pane.props.tabId)).toEqual([
+      'tab-1'
+    ])
   })
 
   it('routes titlebar Cmd+T to the floating workspace', async () => {
@@ -1004,6 +1574,143 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     expect(preventDefault).toHaveBeenCalledWith()
     expect(mocks.pickFloatingMarkdownDocument).toHaveBeenCalledWith()
+  })
+
+  it('routes focused floating terminal double-tap shortcuts to the floating workspace', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
+      'tab.newTerminal': ['DoubleTap+Shift']
+    }
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const target = {
+      classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
+      closest: vi.fn((selector: string) =>
+        selector === '[data-floating-terminal-panel]' ? panelElement : null
+      )
+    }
+    Object.setPrototypeOf(target, HTMLElement.prototype)
+    attachRef(panel.props.ref, panelElement)
+    vi.stubGlobal('document', {
+      activeElement: target,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
+      | ((event: unknown) => void)
+      | undefined
+    const keyupListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keyup')?.[1] as ((event: unknown) => void) | undefined
+    if (!keydownListener || !keyupListener) {
+      throw new Error('keyboard listeners not registered')
+    }
+
+    const modifierEvent = {
+      altKey: false,
+      code: 'ShiftLeft',
+      ctrlKey: false,
+      defaultPrevented: false,
+      key: 'Shift',
+      metaKey: false,
+      repeat: false,
+      shiftKey: true,
+      target
+    }
+    const firstPreventDefault = vi.fn()
+    keydownListener({ ...modifierEvent, preventDefault: firstPreventDefault })
+    keyupListener({ ...modifierEvent })
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+    keydownListener({
+      ...modifierEvent,
+      preventDefault,
+      stopImmediatePropagation,
+      stopPropagation
+    })
+    await flushAsyncWork()
+
+    expect(firstPreventDefault).not.toHaveBeenCalled()
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(stopPropagation).toHaveBeenCalledWith()
+    expect(stopImmediatePropagation).toHaveBeenCalledWith()
+    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+    expect(mocks.createTab).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'floating-group',
+      undefined,
+      { activate: false }
+    )
+    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+  })
+
+  it('resets focused floating terminal double-tap detection on window blur', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
+      'tab.newTerminal': ['DoubleTap+Shift']
+    }
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const target = {
+      classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
+      closest: vi.fn((selector: string) =>
+        selector === '[data-floating-terminal-panel]' ? panelElement : null
+      )
+    }
+    Object.setPrototypeOf(target, HTMLElement.prototype)
+    attachRef(panel.props.ref, panelElement)
+    vi.stubGlobal('document', {
+      activeElement: target,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
+      | ((event: unknown) => void)
+      | undefined
+    const keyupListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keyup')?.[1] as ((event: unknown) => void) | undefined
+    const blurListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'blur')?.[1] as (() => void) | undefined
+    if (!keydownListener || !keyupListener || !blurListener) {
+      throw new Error('keyboard listeners not registered')
+    }
+
+    const modifierEvent = {
+      altKey: false,
+      code: 'ShiftLeft',
+      ctrlKey: false,
+      defaultPrevented: false,
+      key: 'Shift',
+      metaKey: false,
+      repeat: false,
+      shiftKey: true,
+      target
+    }
+    keydownListener({ ...modifierEvent, preventDefault: vi.fn() })
+    keyupListener({ ...modifierEvent })
+    blurListener()
+    const preventDefault = vi.fn()
+    keydownListener({
+      ...modifierEvent,
+      preventDefault,
+      stopImmediatePropagation: vi.fn(),
+      stopPropagation: vi.fn()
+    })
+    await flushAsyncWork()
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
   it('routes focused floating tab switch shortcuts to the floating workspace', async () => {
@@ -1062,138 +1769,579 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-2')
   })
 
-  it('keeps the empty floating workspace focused after Cmd+W closes the last tab', async () => {
+  it('routes focused floating tab rename shortcuts to the active floating tab', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        key: 'r',
+        metaKey: true,
+        preventDefault,
+        stopImmediatePropagation,
+        stopPropagation,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(stopPropagation).toHaveBeenCalledWith()
+    expect(stopImmediatePropagation).toHaveBeenCalledWith()
+    expect(mocks.setRenamingTabId).toHaveBeenCalledWith('tab-1')
+    expect(mocks.setTabCustomTitle).not.toHaveBeenCalled()
+  })
+
+  it('routes focused floating tab index shortcuts to the matching visible tab', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' }), makeTab({ id: 'tab-3' })])
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        code: 'Digit3',
+        ctrlKey: true,
+        key: '3',
+        preventDefault,
+        stopImmediatePropagation,
+        stopPropagation,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(stopPropagation).toHaveBeenCalledWith()
+    expect(stopImmediatePropagation).toHaveBeenCalledWith()
+    expect(mocks.activateTab).toHaveBeenCalledWith('tab-3')
+    expect(mocks.setActiveTab).toHaveBeenCalledWith('tab-3')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-3')
+  })
+
+  it('routes focused floating tab index shortcuts across mixed visible tab types', async () => {
+    const state = storeBox.state as FloatingPanelStoreState
+    const groupId = 'floating-group'
+    const terminalTab = makeTab({ id: 'terminal-tab' })
+    const simulatorTab: Tab = {
+      id: 'simulator-tab',
+      entityId: 'simulator-tab',
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'simulator',
+      label: 'Mobile Emulator',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    const browserTab: BrowserTab = {
+      id: 'browser-tab',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      url: '',
+      title: 'Browser',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 2
+    }
+    const browserUnifiedTab: Tab = {
+      id: 'browser-unified-tab',
+      entityId: browserTab.id,
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'browser',
+      label: 'Browser',
+      customLabel: null,
+      color: null,
+      sortOrder: 2,
+      createdAt: 2
+    }
+    const terminalUnifiedTab: Tab = {
+      id: terminalTab.id,
+      entityId: terminalTab.id,
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'terminal',
+      label: terminalTab.title,
+      customLabel: terminalTab.customTitle,
+      color: terminalTab.color,
+      sortOrder: 0,
+      createdAt: terminalTab.createdAt
+    }
+    state.tabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [terminalTab] }
+    state.browserTabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [browserTab] }
+    state.unifiedTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [terminalUnifiedTab, simulatorTab, browserUnifiedTab]
+    }
+    state.groupsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: groupId,
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          activeTabId: terminalUnifiedTab.id,
+          tabOrder: [terminalUnifiedTab.id, simulatorTab.id, browserUnifiedTab.id],
+          recentTabIds: [terminalUnifiedTab.id, simulatorTab.id, browserUnifiedTab.id]
+        }
+      ]
+    }
+    state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+    state.activeTabIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: terminalTab.id }
+    state.tabBarOrderByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        terminalUnifiedTab.id,
+        simulatorTab.id,
+        browserUnifiedTab.id
+      ]
+    }
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        code: 'Digit2',
+        ctrlKey: true,
+        key: '2',
+        preventDefault,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(mocks.activateTab).toHaveBeenCalledWith('simulator-tab')
+  })
+
+  // F4: an out-of-range index chord in app context must still be CONSUMED (never leak a raw key to
+  // the shell once L1 yields it), and simply skip activation when no tab exists at that index.
+  it('consumes but does not activate a focused floating tab index shortcut past the visible tab count', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        code: 'Digit5',
+        ctrlKey: true,
+        key: '5',
+        preventDefault,
+        stopImmediatePropagation,
+        stopPropagation,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(stopImmediatePropagation).toHaveBeenCalledWith()
+    expect(mocks.activateTab).not.toHaveBeenCalled()
+    expect(mocks.setActiveTab).not.toHaveBeenCalled()
+  })
+
+  it('ignores focused floating tab rename shortcuts when no tab is active', async () => {
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        key: 'r',
+        metaKey: true,
+        preventDefault,
+        stopImmediatePropagation,
+        stopPropagation,
+        target: panelElement
+      })
+    )
+
+    expect(mocks.setRenamingTabId).not.toHaveBeenCalled()
+  })
+
+  it('leaves focused floating xterm tab index shortcuts to terminal-first terminals', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
+    ;(storeBox.state as FloatingPanelStoreState).settings = {
+      ...(storeBox.state as FloatingPanelStoreState).settings,
+      terminalShortcutPolicy: 'terminal-first'
+    }
     const element = await renderPanel(true)
     const panel = findByProp(element, 'data-floating-terminal-panel')
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
-    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
-    const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
-    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    const target = {
+      classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
+      closest: vi.fn((selector: string) =>
+        selector === '[data-floating-terminal-panel]' ? panelElement : null
+      )
+    }
     Object.setPrototypeOf(target, HTMLElement.prototype)
     attachRef(panel.props.ref, panelElement)
+    vi.stubGlobal('document', {
+      activeElement: target,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi.mocked(window.addEventListener).mock.calls.find(([type]) => {
+      return type === 'keydown'
+    })?.[1] as ((event: unknown) => void) | undefined
+    if (!keydownListener) {
+      throw new Error('keydown listener not registered')
+    }
+    const ctrlPreventDefault = vi.fn()
+    const ctrlStopPropagation = vi.fn()
+    const ctrlStopImmediatePropagation = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        code: 'Digit2',
+        ctrlKey: true,
+        key: '2',
+        preventDefault: ctrlPreventDefault,
+        stopImmediatePropagation: ctrlStopImmediatePropagation,
+        stopPropagation: ctrlStopPropagation,
+        target
+      })
+    )
+
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    const altPreventDefault = vi.fn()
+    const altStopPropagation = vi.fn()
+    const altStopImmediatePropagation = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        altKey: true,
+        code: 'Digit2',
+        key: '2',
+        preventDefault: altPreventDefault,
+        stopImmediatePropagation: altStopImmediatePropagation,
+        stopPropagation: altStopPropagation,
+        target
+      })
+    )
+
+    expect(ctrlPreventDefault).not.toHaveBeenCalled()
+    expect(ctrlStopPropagation).not.toHaveBeenCalled()
+    expect(ctrlStopImmediatePropagation).not.toHaveBeenCalled()
+    expect(altPreventDefault).not.toHaveBeenCalled()
+    expect(altStopPropagation).not.toHaveBeenCalled()
+    expect(altStopImmediatePropagation).not.toHaveBeenCalled()
+    expect(mocks.activateTab).not.toHaveBeenCalled()
+  })
+
+  it('routes focused floating workspace maximize shortcuts like the titlebar control', async () => {
+    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
+      'floatingWorkspace.maximize': ['Ctrl+Alt+M']
+    } as unknown as KeybindingOverrides
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        altKey: true,
+        ctrlKey: true,
+        key: 'm',
+        preventDefault,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(getPanelStyleBounds(await renderPanel(true))).toEqual(
+      getMaximizedFloatingTerminalBounds()
+    )
+  })
+
+  it('opens maximized when the open-maximized intent is set, ignoring saved bounds', async () => {
+    const savedBounds = { left: 120, top: 96, width: 760, height: 420 }
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
+    )
+    requestFloatingTerminalOpenMaximized()
+
+    await renderPanel(true)
+    runEffects()
+
+    expect(getPanelStyleBounds(await renderPanel(true))).toEqual(
+      getMaximizedFloatingTerminalBounds()
+    )
+    // Why: the intent is one-shot and must be consumed by the open transition.
+    expect(consumeFloatingTerminalOpenMaximizedIntent()).toBe(false)
+  })
+
+  it('does not maximize on open when no intent is set', async () => {
+    const savedBounds = { left: 120, top: 96, width: 760, height: 420 }
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
+    )
+
+    const element = await renderPanel(true)
+    runEffects()
+
+    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
+  })
+
+  it('routes focused floating workspace minimize shortcuts to close the panel', async () => {
+    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
+      'floatingWorkspace.minimize': ['Ctrl+Alt+N']
+    } as unknown as KeybindingOverrides
+    const onOpenChange = vi.fn()
+    const element = await renderPanel(true, onOpenChange)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        altKey: true,
+        ctrlKey: true,
+        key: 'n',
+        preventDefault,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('routes focused floating workspace maximize shortcuts from a custom binding on Linux', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
+      'floatingWorkspace.maximize': ['Ctrl+Alt+M']
+    } as unknown as KeybindingOverrides
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        altKey: true,
+        ctrlKey: true,
+        key: 'm',
+        preventDefault,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(getPanelStyleBounds(await renderPanel(true))).toEqual(
+      getMaximizedFloatingTerminalBounds()
+    )
+  })
+
+  // F3 (a)/(b): a panel-owned close that empties the panel reclaims keyboard focus for the next
+  // Cmd/Ctrl+T. The emptying close arms the one-shot intent (via closeTerminalTab's onClosed); the
+  // count→0 effect consumes it on the now-empty re-render and focuses the panel root.
+  it('reclaims panel keyboard focus after a focused last-pane close empties the panel', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     vi.stubGlobal('document', {
       activeElement,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     })
+    // A second render pass is needed before the active terminal pane mounts.
+    await renderPanel(true)
     runEffects()
-    const keydownListener = vi
-      .mocked(window.addEventListener)
-      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
-      | ((event: unknown) => void)
-      | undefined
-    if (!keydownListener) {
-      throw new Error('keydown listener not registered')
-    }
+    await Promise.resolve()
+    await renderPanel(true)
+    runEffects()
+    await Promise.resolve()
+    const element = await renderPanel(true)
+    attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
 
-    keydownListener({
-      altKey: false,
-      ctrlKey: false,
-      defaultPrevented: false,
-      key: 'w',
-      metaKey: true,
-      preventDefault: vi.fn(),
-      repeat: false,
-      shiftKey: false,
-      stopImmediatePropagation: vi.fn(),
-      stopPropagation: vi.fn(),
-      target
-    })
+    // The last-pane close authority (L3 → onCloseTab) closes the tab while the panel owns focus.
+    const terminalPane = findByTypeName(element, 'TerminalPane')
+    ;(terminalPane.props.onCloseTab as () => void)()
+    expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({ onClosed: expect.any(Function) })
+    )
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    // Panel is now empty: the count→0 effect consumes the armed intent and reclaims focus.
+    setFloatingTabs([])
+    const emptyElement = await renderPanel(true)
+    attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
     expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
-  it('cancels pending shortcut focus when the panel root unmounts', async () => {
-    setFloatingTabs([makeTab({ id: 'tab-1' })])
+  it('cancels the pending reclaim frame when the panel root unmounts before it runs', async () => {
     const cancelAnimationFrame = vi.fn()
     vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
     vi.mocked(window.requestAnimationFrame).mockReturnValue(42)
-    const element = await renderPanel(true)
-    const panel = findByProp(element, 'data-floating-terminal-panel')
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
     const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
-    const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
-    Object.setPrototypeOf(target, HTMLElement.prototype)
-    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
       activeElement,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     })
+    // A second render pass is needed before the active terminal pane mounts.
+    await renderPanel(true)
     runEffects()
-    const keydownListener = vi
-      .mocked(window.addEventListener)
-      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
-      | ((event: unknown) => void)
-      | undefined
-    if (!keydownListener) {
-      throw new Error('keydown listener not registered')
-    }
+    await Promise.resolve()
+    const element = await renderPanel(true)
+    attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
 
-    keydownListener({
-      altKey: false,
-      ctrlKey: false,
-      defaultPrevented: false,
-      key: 'w',
-      metaKey: true,
-      preventDefault: vi.fn(),
-      repeat: false,
-      shiftKey: false,
-      stopImmediatePropagation: vi.fn(),
-      stopPropagation: vi.fn(),
-      target
-    })
-    attachRef(panel.props.ref, null)
+    const terminalPane = findByTypeName(element, 'TerminalPane')
+    ;(terminalPane.props.onCloseTab as () => void)()
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    // Emptying schedules the reclaim frame (id 42, callback not yet run); unmounting cancels it.
+    setFloatingTabs([])
+    const emptyElement = await renderPanel(true)
+    attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
+    attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, null)
+
+    // The reclaim frame (42) is canceled on unmount so its deferred focus never runs. (The
+    // synchronous empty-panel open-focus effect is orthogonal and not scheduled through this frame.)
     expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
+  })
+
+  // F3 (g): a close that leaves another tab does not empty the panel, so no intent is armed and
+  // the surviving tab keeps focus instead of the panel root stealing it.
+  it('does not arm a reclaim when a focused close leaves another floating tab', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    vi.stubGlobal('document', {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    const element = await renderPanel(true)
+    attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
+
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onClose as (tabId: string) => void)('tab-2')
+
+    expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
+      'tab-2',
+      expect.objectContaining({ onClosed: expect.any(Function) })
+    )
+    expect(consumeFloatingPanelReclaimIntent()).toBe(false)
     expect(panelElement.focus).not.toHaveBeenCalled()
   })
 
-  it('does not steal focus from the next floating tab after Cmd+W closes one of many tabs', async () => {
-    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
-    const element = await renderPanel(true)
-    const panel = findByProp(element, 'data-floating-terminal-panel')
+  // F3 arm-timing: arming is gated on closeTerminalTab's onClosed (the *actual* close), not on
+  // close-initiation. A pinned/deferred close whose confirm is pending or cancelled never fires
+  // onClosed, so an emptying, panel-owned close must still leave the intent unarmed — otherwise a
+  // later empty-panel mount would reclaim focus for a close that never happened.
+  it('does not arm a reclaim when an emptying close is deferred and onClosed never fires', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
     const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
-    const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
-    Object.setPrototypeOf(target, HTMLElement.prototype)
-    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
       activeElement,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     })
+    // Model closeTerminalTab deferring to its pin-confirm dialog (or the user cancelling): the close
+    // does not complete this tick, so the onClosed arming callback is never invoked.
+    mocks.closeTerminalTab.mockImplementationOnce(() => {})
+    const element = await renderPanel(true)
+    attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
     runEffects()
-    const keydownListener = vi
-      .mocked(window.addEventListener)
-      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
-      | ((event: unknown) => void)
-      | undefined
-    if (!keydownListener) {
-      throw new Error('keydown listener not registered')
-    }
 
-    keydownListener({
-      altKey: false,
-      ctrlKey: false,
-      defaultPrevented: false,
-      key: 'w',
-      metaKey: true,
-      preventDefault: vi.fn(),
-      repeat: false,
-      shiftKey: false,
-      stopImmediatePropagation: vi.fn(),
-      stopPropagation: vi.fn(),
-      target
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
+
+    // The panel owned focus and this close would empty it, yet arming rides on the real close via
+    // onClosed — which never fired — so no intent is armed and nothing can reclaim later.
+    expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({ onClosed: expect.any(Function) })
+    )
+    expect(consumeFloatingPanelReclaimIntent()).toBe(false)
+  })
+
+  // A dirty editor's close is deferred to the save dialog, so its arm check must survive the queue
+  // and fire when the file actually leaves the panel — otherwise this one content type would empty
+  // the panel with no intent armed and the next Cmd/Ctrl+T would miss the floating panel.
+  it('reclaims panel keyboard focus after a deferred dirty-editor close empties the panel', async () => {
+    setFloatingEditorTabs([makeFile({ id: 'file-a', isDirty: true })])
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    vi.stubGlobal('document', {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
     })
+    const element = await renderPanel(true)
+    attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
-    expect(panelElement.focus).not.toHaveBeenCalled()
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onClose as (tabId: string) => void)('tab-file-a')
+
+    // The close is parked on the save dialog: nothing closed yet, so nothing reclaims focus yet.
+    expect(saveDialogBox.fileId).toBe('file-a')
+    expect(mocks.closeFile).not.toHaveBeenCalledWith('file-a')
+    expect(window.requestAnimationFrame).not.toHaveBeenCalled()
+
+    // The dialog resolves (save or discard) and the file leaves the panel: the parked arm runs on
+    // the now-empty count and the count→0 effect consumes it. The deferred reclaim frame is the
+    // signal here — the empty panel's own open-focus effect focuses synchronously, without a frame.
+    saveDialogBox.fileId = null
+    setFloatingEditorTabs([])
+    const emptyElement = await renderPanel(true)
+    attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
+
+    expect(window.requestAnimationFrame).toHaveBeenCalled()
+    expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('drops the deferred dirty-editor arm when the save dialog is cancelled', async () => {
+    setFloatingEditorTabs([makeFile({ id: 'file-a', isDirty: true })])
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    vi.stubGlobal('document', {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    const element = await renderPanel(true)
+    attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
+
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onClose as (tabId: string) => void)('tab-file-a')
+    ;(findByTypeName(element, 'Dialog').props.onOpenChange as (open: boolean) => void)(false)
+
+    // Cancel keeps the file open; a later close of that file (from some other path) must not
+    // resurrect this cancelled close's arm.
+    setFloatingEditorTabs([])
+    const emptyElement = await renderPanel(true)
+    attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
+
+    // No intent armed and no deferred reclaim frame; the empty panel's synchronous open-focus
+    // effect still runs, which is orthogonal to the reclaim.
+    expect(consumeFloatingPanelReclaimIntent()).toBe(false)
+    expect(window.requestAnimationFrame).not.toHaveBeenCalled()
   })
 
   it('preserves terminal focus when dragging the titlebar from inside the floating panel', async () => {
@@ -1343,7 +2491,12 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    // Terminals route through closeTerminalTab (its own pin guard + F9 force-reenter), not the raw store close.
+    expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({ onClosed: expect.any(Function) })
+    )
+    expect(mocks.closeTab).not.toHaveBeenCalled()
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
@@ -1358,7 +2511,10 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-2')
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-2')
+    expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
+      'tab-2',
+      expect.objectContaining({ onClosed: expect.any(Function) })
+    )
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
@@ -1372,17 +2528,115 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true, onOpenChange)
     const terminalPane = findByTypeName(element, 'TerminalPane')
 
-    ;(terminalPane.props.onPtyExit as () => void)()
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    ;(terminalPane.props.onPtyExit as (ptyId: string) => void)('pty-1')
+    expect(mocks.shouldDeferParkedPtyExitTabClose).toHaveBeenCalledWith('tab-1', 'pty-1')
+    expect(mocks.closeTerminalTab).toHaveBeenCalledWith('tab-1', {
+      lifecyclePtyId: 'pty-1',
+      reason: 'pty-exit'
+    })
+    expect(mocks.closeTab).not.toHaveBeenCalled()
     expect(onOpenChange).not.toHaveBeenCalled()
 
-    mocks.closeTab.mockClear()
+    mocks.closeTerminalTab.mockClear()
     ;(terminalPane.props.onCloseTab as () => void)()
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    // Explicit pane close routes through the confirmed-close authority, not a raw pty-exit prune.
+    expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({ onClosed: expect.any(Function) })
+    )
+    expect(mocks.closeTab).not.toHaveBeenCalled()
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
-  it('routes floating terminal create and close through active web runtime sessions', async () => {
+  it('preserves split siblings when a parked PTY exits during reveal', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    mocks.shouldDeferParkedPtyExitTabClose.mockReturnValueOnce(true)
+
+    await renderPanel(true)
+    runEffects()
+    await Promise.resolve()
+    const element = await renderPanel(true)
+    const terminalPane = findByTypeName(element, 'TerminalPane')
+
+    ;(terminalPane.props.onPtyExit as (ptyId: string) => void)('split-pty')
+
+    expect(mocks.shouldDeferParkedPtyExitTabClose).toHaveBeenCalledWith('tab-1', 'split-pty')
+    expect(mocks.closeTerminalTab).not.toHaveBeenCalled()
+    expect(mocks.closeTab).not.toHaveBeenCalled()
+  })
+
+  it('renders and closes simulator tabs in the floating workspace', async () => {
+    const tab = setFloatingSimulatorTab()
+
+    const element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    const emulatorPane = findByTypeName(element, 'EmulatorPane')
+    ;(tabBar.props.onCloseFile as (tabId: string) => void)(tab.id)
+
+    expect(tabBar.props.activeTabType).toBe('simulator')
+    expect(tabBar.props.activeSimulatorTabId).toBe(tab.id)
+    expect(emulatorPane.props.tab).toBe(tab)
+    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(tab.id)
+    expect(mocks.closeFile).not.toHaveBeenCalledWith(tab.id)
+  })
+
+  it('keeps simulator tabs open when closing all files', async () => {
+    const state = storeBox.state as FloatingPanelStoreState
+    const groupId = 'floating-group'
+    const file = makeFile({ id: 'file-a' })
+    const editorTab: Tab = {
+      id: 'tab-file-a',
+      entityId: file.id,
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'editor',
+      label: file.relativePath,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    const simulatorTab: Tab = {
+      id: 'simulator-tab',
+      entityId: 'simulator-tab',
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'simulator',
+      label: 'Mobile Emulator',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    state.openFiles = [file]
+    state.unifiedTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [editorTab, simulatorTab]
+    }
+    state.groupsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: groupId,
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          activeTabId: editorTab.id,
+          tabOrder: [editorTab.id, simulatorTab.id],
+          recentTabIds: [editorTab.id, simulatorTab.id]
+        }
+      ]
+    }
+    state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+    state.tabBarOrderByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [editorTab.id, simulatorTab.id]
+    }
+
+    const element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onCloseAllFiles as () => void)()
+
+    expect(mocks.closeFile).toHaveBeenCalledWith(file.id)
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalledWith(simulatorTab.id)
+  })
+
+  it('keeps floating terminal create and close local during active web runtime sessions', async () => {
     const onOpenChange = vi.fn()
     setFloatingTabs([makeTab({ id: 'tab-1' })])
     ;(storeBox.state as FloatingPanelStoreState).settings.activeRuntimeEnvironmentId = 'runtime-1'
@@ -1394,22 +2648,22 @@ describe('FloatingTerminalPanel close behavior', () => {
     ;(tabBar.props.onNewTerminalTab as () => void)()
     await flushAsyncWork()
 
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      targetGroupId: 'floating-group',
-      command: undefined,
-      activate: true,
-      selectWorktree: false
-    })
-    expect(mocks.createTab).not.toHaveBeenCalled()
+    expect(mocks.createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
+    expect(mocks.createTab).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'floating-group',
+      undefined,
+      { activate: false }
+    )
+    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
 
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
-    expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith({
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      tabId: 'tab-1',
-      environmentId: 'runtime-1'
-    })
-    expect(mocks.closeTab).not.toHaveBeenCalled()
+    expect(mocks.closeWebRuntimeSessionTab).not.toHaveBeenCalled()
+    expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({ onClosed: expect.any(Function) })
+    )
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
@@ -1462,14 +2716,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     ])
 
     ;(tabBar.props.onCloseOthers as (tabId: string) => void)('new-keep')
-    expect(mocks.closeTab).toHaveBeenCalledWith('new-left')
-    expect(mocks.closeTab).toHaveBeenCalledWith('new-right')
+    expect(mocks.closeTab).toHaveBeenCalledWith('new-left', { reason: 'cleanup' })
+    expect(mocks.closeTab).toHaveBeenCalledWith('new-right', { reason: 'cleanup' })
     expect(mocks.closeTab).not.toHaveBeenCalledWith('old-left')
 
     mocks.closeTab.mockClear()
     ;(tabBar.props.onCloseToRight as (tabId: string) => void)('new-left')
-    expect(mocks.closeTab).toHaveBeenCalledWith('new-keep')
-    expect(mocks.closeTab).toHaveBeenCalledWith('new-right')
+    expect(mocks.closeTab).toHaveBeenCalledWith('new-keep', { reason: 'cleanup' })
+    expect(mocks.closeTab).toHaveBeenCalledWith('new-right', { reason: 'cleanup' })
     expect(mocks.closeTab).not.toHaveBeenCalledWith('old-keep')
   })
 
@@ -1490,8 +2744,8 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onCloseToRight as (tabId: string) => void)('tab-c')
 
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-a')
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-b')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-a', { reason: 'cleanup' })
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-b', { reason: 'cleanup' })
     expect(mocks.closeTab).not.toHaveBeenCalledWith('tab-c')
   })
 })

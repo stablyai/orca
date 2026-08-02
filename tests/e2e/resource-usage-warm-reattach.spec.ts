@@ -26,7 +26,7 @@
  *   - SSH worktrees. Covered by unit tests in `mergeSnapshotAndSessions.test.ts`.
  */
 
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'

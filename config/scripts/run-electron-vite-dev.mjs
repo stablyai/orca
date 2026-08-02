@@ -1,7 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
-  chmodSync,
   cpSync,
   existsSync,
   lstatSync,
@@ -17,7 +16,7 @@ import {
 import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 
 // Why: Electron-based hosts (e.g. Claude Code, VS Code) set
 // ELECTRON_RUN_AS_NODE=1 in their terminal environment. If this leaks into
@@ -26,7 +25,7 @@ import { fileURLToPath } from 'node:url'
 delete process.env.ELECTRON_RUN_AS_NODE
 
 const require = createRequire(import.meta.url)
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const repoRoot = path.resolve(import.meta.dirname, '../..')
 const STABLE_NAME_FLAG = '--stable-name'
 const rawForwardedArgs = process.argv.slice(2)
 // Why: keep an escape hatch for tools that key off Electron's stock app name.
@@ -51,7 +50,7 @@ function readGitValue(args) {
 }
 
 function lastBranchSegment(value) {
-  return value.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) ?? value
+  return value.replace(/\\/g, '/').split('/').findLast(Boolean) ?? value
 }
 
 function formatDevInstanceLabel(branch, worktreeName) {
@@ -98,16 +97,6 @@ function setPlistValue(plistPath, key, value) {
   execFileSync('/usr/bin/plutil', ['-replace', key, '-string', value, plistPath])
 }
 
-function sanitizeBundleIdPart(value) {
-  return (
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9.-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 80) || 'dev'
-  )
-}
-
 function sanitizeMacAppBundleName(value) {
   return (
     Array.from(value, (char) => {
@@ -139,7 +128,8 @@ function prepareMacDevElectronApp() {
 
   const title = process.env.ORCA_DEV_DOCK_TITLE || 'Orca: dev'
   const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
-  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v4'
+  // v7: give the terminal daemon helper an Orca-specific TCC identity.
+  const bundleLayoutVersion = 'dock-title-app-preserve-framework-symlinks-v7'
   const hash = createHash('sha1')
     .update(
       `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
@@ -152,7 +142,18 @@ function prepareMacDevElectronApp() {
   const appBundleName = `${sanitizeMacAppBundleName(title)}.app`
   const appPath = path.join(distDir, appBundleName)
   const markerPath = path.join(distDir, 'orca-dev-electron-app.json')
-  const bundleId = `com.stablyai.orca.dev.${sanitizeBundleIdPart(hash)}`
+  // Why: one stable id for every dev instance. Per-instance ids registered a
+  // new macOS Notification Settings entry for each branch × Electron version,
+  // piling up "Orca: <branch>" rows forever and breaking the notification
+  // settings deep-link (System Settings can't resolve an id it has no entry
+  // for and falls back to the root list). macOS keys notification permission
+  // by bundle id, so a single id also means granting notifications to one dev
+  // instance covers all of them. Trade-off: when two dev instances run at
+  // once, macOS may route a notification click to the other instance —
+  // Electron drops clicks for notification ids it didn't create, so the
+  // click is lost, not misdirected.
+  const bundleId = 'com.stablyai.orca.dev'
+  const helperBundleId = `${bundleId}.helper`
   process.env.ORCA_DEV_MACOS_BUNDLE_ID = bundleId
   const expectedMarker = JSON.stringify(
     { title, appBundleName, bundleId, sourceAppPath, electronVersion, bundleLayoutVersion },
@@ -203,13 +204,58 @@ function prepareMacDevElectronApp() {
   restoreElectronFrameworkSymlinks(appPath)
 
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
+  const helperPlistPath = path.join(
+    appPath,
+    'Contents',
+    'Frameworks',
+    'Electron Helper.app',
+    'Contents',
+    'Info.plist'
+  )
   setPlistValue(plistPath, 'CFBundleName', title)
   setPlistValue(plistPath, 'CFBundleDisplayName', title)
   setPlistValue(plistPath, 'CFBundleIdentifier', bundleId)
+  setPlistValue(helperPlistPath, 'CFBundleIdentifier', helperBundleId)
 
-  // Why no re-sign: dev launches execute the copied Electron binary directly,
-  // and Electron's framework bundle is ambiguous to codesign when deep-signing
-  // an already-built distribution. Avoid blocking `pn dev` on local signing.
+  // Why: the notification-status helper reads the app's real macOS
+  // notification authorization (UNUserNotificationCenter has no Electron
+  // API). It must live inside the bundle and carry the dev bundle id as its
+  // embedded/code-sign identifier — macOS keys notification records to the
+  // signing identifier. Non-fatal: without swiftc the permission card falls
+  // back to delivery-probe heuristics.
+  try {
+    execFileSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'config', 'scripts', 'build-notification-status-macos.mjs'),
+        '--bundle-id',
+        bundleId,
+        '--single-arch',
+        '--output',
+        path.join(appPath, 'Contents', 'MacOS', 'orca-notification-status')
+      ],
+      { stdio: 'inherit' }
+    )
+  } catch (error) {
+    console.warn(
+      `[orca-dev] notification-status helper build failed (permission card falls back to probes): ${error?.message ?? error}`
+    )
+  }
+
+  // Why: the plist edits above (and the copy itself) break the bundle's
+  // ad-hoc seal, and macOS refuses Notification Center registration for
+  // invalidly-signed apps — every dev notification fails with UNErrorDomain
+  // error 1 and the app never appears in System Settings > Notifications.
+  // An ad-hoc re-sign restores delivery, the permission prompt, and the
+  // notification-settings deep link for dev builds. Non-fatal: a signing
+  // failure should not block `pnpm dev`.
+  try {
+    execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', appPath])
+  } catch (error) {
+    console.warn(
+      `[orca-dev] ad-hoc codesign failed (dev notifications will not deliver): ${error?.message ?? error}`
+    )
+  }
   writeFileSync(markerPath, expectedMarker, 'utf8')
   process.env.ELECTRON_EXEC_PATH = executablePath
 }
@@ -276,27 +322,12 @@ function getDevUserDataPath() {
 }
 
 function prepareDevCliWrapper() {
-  const binDir = path.join(repoRoot, 'out', 'bin')
-  mkdirSync(binDir, { recursive: true })
   const userDataPath = getDevUserDataPath()
-  const cliPath = path.join(repoRoot, 'out', 'cli', 'index.js')
-  const electronBin = getElectronExecutable()
-
-  if (process.platform === 'win32') {
-    writeFileSync(
-      path.join(binDir, 'orca-dev.cmd'),
-      `@echo off\r\nset "ORCA_USER_DATA_PATH=${userDataPath}"\r\nset "ORCA_APP_EXECUTABLE=${electronBin}"\r\nset "ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1"\r\nnode "${cliPath}" %*\r\n`,
-      'utf8'
-    )
-  } else {
-    const wrapperPath = path.join(binDir, 'orca-dev')
-    writeFileSync(
-      wrapperPath,
-      `#!/usr/bin/env bash\nexport ORCA_USER_DATA_PATH=${JSON.stringify(userDataPath)}\nexport ORCA_APP_EXECUTABLE=${JSON.stringify(electronBin)}\nexport ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1\nexec node ${JSON.stringify(cliPath)} "$@"\n`,
-      'utf8'
-    )
-    chmodSync(wrapperPath, 0o755)
-  }
+  const { binDir } = prepareDevCliTerminalWrappers({
+    repoRoot,
+    userDataPath,
+    electronExecutable: getElectronExecutable()
+  })
 
   process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ''}`
   console.log(`[orca-dev] Prepared wrapper in ${binDir}`)
@@ -426,7 +457,7 @@ function isPortFree(port) {
 async function pickDebugPort() {
   // Why: 32 bits of SHA1 (vs 16) reduces truncation bias; modulo 200 still
   // collides routinely across many worktrees, hence the probe sweep below.
-  const seed = parseInt(createHash('sha1').update(repoRoot).digest('hex').slice(0, 8), 16)
+  const seed = Number.parseInt(createHash('sha1').update(repoRoot).digest('hex').slice(0, 8), 16)
   const base = 9333 + (seed % 200) // deterministic base in 9333..9532; probe sweeps up to base+63
   for (let i = 0; i < 64; i++) {
     const p = base + i

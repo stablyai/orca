@@ -8,8 +8,12 @@ function header(key: string): { type: 'header'; key: string } {
   return { type: 'header', key }
 }
 
-function item(id: string, depth = 0): { type: 'item'; worktree: { id: string }; depth: number } {
-  return { type: 'item', worktree: { id }, depth }
+function item(
+  id: string,
+  depth = 0,
+  sectionKey = 'all'
+): { type: 'item'; worktree: { id: string }; depth: number; sectionKey: string } {
+  return { type: 'item', worktree: { id }, depth, sectionKey }
 }
 
 function importedCard(): { type: 'imported-worktrees-card' } {
@@ -62,6 +66,46 @@ describe('getWorktreeDragUnitGroups', () => {
         key: 'repo:two',
         worktreeIds: ['other'],
         units: [{ worktreeId: 'other', worktreeIds: ['other'] }]
+      }
+    ])
+  })
+
+  it('includes pinned rows when they are the only rendered copy', () => {
+    const groups = getWorktreeDragUnitGroups([
+      header('pinned'),
+      item('pinned-copy', 0, 'pinned'),
+      item('other-pinned', 0, 'pinned')
+    ])
+
+    expect(groups).toEqual([
+      {
+        key: 'pinned',
+        worktreeIds: ['pinned-copy', 'other-pinned'],
+        units: [
+          { worktreeId: 'pinned-copy', worktreeIds: ['pinned-copy'] },
+          { worktreeId: 'other-pinned', worktreeIds: ['other-pinned'] }
+        ]
+      }
+    ])
+  })
+
+  it('uses natural drag units when pinned rows have duplicate natural copies', () => {
+    const groups = getWorktreeDragUnitGroups([
+      header('pinned'),
+      item('pinned-copy', 0, 'pinned'),
+      header('all'),
+      item('pinned-copy'),
+      item('other')
+    ])
+
+    expect(groups).toEqual([
+      {
+        key: 'all',
+        worktreeIds: ['pinned-copy', 'other'],
+        units: [
+          { worktreeId: 'pinned-copy', worktreeIds: ['pinned-copy'] },
+          { worktreeId: 'other', worktreeIds: ['other'] }
+        ]
       }
     ])
   })

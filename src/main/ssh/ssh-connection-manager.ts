@@ -9,10 +9,9 @@ import { SshConnection, type SshConnectionCallbacks } from './ssh-connection'
 export class SshConnectionManager {
   private connections = new Map<string, SshConnection>()
   private callbacks: SshConnectionCallbacks
-  // Why: two concurrent connect() calls for the same target would both pass
-  // the "existing" check, create two SshConnections, and orphan the first.
-  // This set prevents a second call from racing with an in-progress one.
-  private connectingTargets = new Set<string>()
+  // Why: attempt identity lets disconnect unblock a replacement without the
+  // cancelled attempt later clearing the replacement's state.
+  private connectingTargets = new Map<string, symbol>()
 
   constructor(callbacks: SshConnectionCallbacks) {
     this.callbacks = callbacks
@@ -35,7 +34,8 @@ export class SshConnectionManager {
       throw new Error(`Connection to ${target.label} is already in progress`)
     }
 
-    this.connectingTargets.add(target.id)
+    const attempt = Symbol(target.id)
+    this.connectingTargets.set(target.id, attempt)
 
     try {
       if (existing) {
@@ -48,23 +48,32 @@ export class SshConnectionManager {
       try {
         await conn.connect()
       } catch (err) {
-        this.connections.delete(target.id)
+        if (this.connections.get(target.id) === conn) {
+          this.connections.delete(target.id)
+        }
         throw err
       }
 
       return conn
     } finally {
-      this.connectingTargets.delete(target.id)
+      if (this.connectingTargets.get(target.id) === attempt) {
+        this.connectingTargets.delete(target.id)
+      }
     }
   }
 
   async disconnect(targetId: string): Promise<void> {
+    // Why: disconnect invalidates the old attempt immediately so a reconnect
+    // need not wait for the cancelled socket's late completion.
+    this.connectingTargets.delete(targetId)
     const conn = this.connections.get(targetId)
     if (!conn) {
       return
     }
     await conn.disconnect()
-    this.connections.delete(targetId)
+    if (this.connections.get(targetId) === conn) {
+      this.connections.delete(targetId)
+    }
   }
 
   async reconnect(targetId: string): Promise<void> {

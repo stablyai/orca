@@ -1,4 +1,5 @@
 import type { PRInfo, IssueInfo, CheckStatus, PRCheckDetail } from '../../shared/types'
+import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
 
 // ── REST API check-runs mapping ───────────────────────────────────────
 // The REST check-runs endpoint returns separate status + conclusion fields
@@ -22,7 +23,9 @@ const conclusionMap: Record<string, PRCheckDetail['conclusion']> = {
   timed_out: 'timed_out',
   skipped: 'skipped',
   neutral: 'neutral',
-  action_required: 'failure'
+  action_required: 'action_required',
+  stale: 'failure',
+  startup_failure: 'failure'
 }
 
 export function mapCheckRunRESTConclusion(
@@ -36,6 +39,28 @@ export function mapCheckRunRESTConclusion(
     return null
   }
   return conclusionMap[conclusion.toLowerCase()] ?? null
+}
+
+// ── REST API commit status mapping ──────────────────────────────────────
+// Legacy Jenkins/Prow integrations report commit statuses, not check runs.
+
+export function mapCommitStatusRESTStatus(state: string): PRCheckDetail['status'] {
+  const s = state?.toLowerCase()
+  return s === 'pending' ? 'queued' : 'completed'
+}
+
+export function mapCommitStatusRESTConclusion(state: string): PRCheckDetail['conclusion'] {
+  const s = state?.toLowerCase()
+  if (s === 'success') {
+    return 'success'
+  }
+  if (s === 'failure' || s === 'error') {
+    return 'failure'
+  }
+  if (s === 'pending') {
+    return 'pending'
+  }
+  return null
 }
 
 // ── gh pr checks mapping (single "state" string) ─────────────────────
@@ -57,6 +82,12 @@ export function mapCheckConclusion(state: string): PRCheckDetail['conclusion'] {
     return 'success'
   }
   if (s === 'FAILURE' || s === 'FAIL') {
+    return 'failure'
+  }
+  if (s === 'ACTION_REQUIRED') {
+    return 'action_required'
+  }
+  if (s === 'STALE' || s === 'STARTUP_FAILURE') {
     return 'failure'
   }
   if (s === 'CANCELLED') {
@@ -113,41 +144,5 @@ export function mapIssueInfo(data: {
 }
 
 export function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckStatus {
-  if (!rollup || !Array.isArray(rollup) || rollup.length === 0) {
-    return 'neutral'
-  }
-
-  let hasFailure = false
-  let hasPending = false
-
-  for (const check of rollup as { status?: string; conclusion?: string; state?: string }[]) {
-    const conclusion = check.conclusion?.toUpperCase()
-    const status = check.status?.toUpperCase()
-    const state = check.state?.toUpperCase()
-
-    if (
-      conclusion === 'FAILURE' ||
-      conclusion === 'TIMED_OUT' ||
-      conclusion === 'CANCELLED' ||
-      state === 'FAILURE' ||
-      state === 'ERROR'
-    ) {
-      hasFailure = true
-    } else if (
-      status === 'IN_PROGRESS' ||
-      status === 'QUEUED' ||
-      status === 'PENDING' ||
-      state === 'PENDING'
-    ) {
-      hasPending = true
-    }
-  }
-
-  if (hasFailure) {
-    return 'failure'
-  }
-  if (hasPending) {
-    return 'pending'
-  }
-  return 'success'
+  return derivePRCheckStatusFromRollup(rollup)
 }

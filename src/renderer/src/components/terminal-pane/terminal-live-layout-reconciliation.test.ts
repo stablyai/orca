@@ -1,6 +1,41 @@
 import { describe, expect, it } from 'vitest'
-import { planTerminalLiveLayoutInsertions } from './terminal-live-layout-reconciliation'
+import {
+  isHostAuthoritativeLayout,
+  planTerminalLiveLayoutInsertions
+} from './terminal-live-layout-reconciliation'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+
+const LOCAL_PTY = 'pty-local-123'
+const REMOTE_PTY = 'remote:env-1@@term_abc'
+
+describe('isHostAuthoritativeLayout', () => {
+  it('is true for any web client regardless of pty ids', () => {
+    expect(isHostAuthoritativeLayout({ isWebClient: true, ptyIdsByLeafId: { a: LOCAL_PTY } })).toBe(
+      true
+    )
+  })
+
+  it('is true for a desktop client when a leaf has a remote-runtime pty (remote server tab)', () => {
+    // Why: the split-render bug — desktop viewing a remote server got the host
+    // layout but skipped reconciliation, so the split never rendered.
+    expect(
+      isHostAuthoritativeLayout({
+        isWebClient: false,
+        ptyIdsByLeafId: { a: LOCAL_PTY, b: REMOTE_PTY }
+      })
+    ).toBe(true)
+  })
+
+  it('is false for a desktop client with only local ptys (local tab splits directly)', () => {
+    expect(
+      isHostAuthoritativeLayout({ isWebClient: false, ptyIdsByLeafId: { a: LOCAL_PTY } })
+    ).toBe(false)
+  })
+
+  it('is false for a desktop client with no pty ids', () => {
+    expect(isHostAuthoritativeLayout({ isWebClient: false, ptyIdsByLeafId: undefined })).toBe(false)
+  })
+})
 
 describe('planTerminalLiveLayoutInsertions', () => {
   it('plans a host-added split leaf from an already-mounted source leaf', () => {

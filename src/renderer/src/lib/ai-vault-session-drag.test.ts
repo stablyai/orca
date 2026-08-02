@@ -1,0 +1,250 @@
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES,
+  AI_VAULT_SESSION_DRAG_TYPE,
+  clearAiVaultSessionDragData,
+  hasAiVaultSessionDragData,
+  readAiVaultSessionDragData,
+  writeAiVaultSessionDragData,
+  type AiVaultSessionDragPayload
+} from './ai-vault-session-drag'
+
+class FakeDataTransfer {
+  effectAllowed = 'all'
+  types: string[] = []
+  private readonly data = new Map<string, string>()
+
+  setData(type: string, value: string): void {
+    if (!this.types.includes(type)) {
+      this.types.push(type)
+    }
+    this.data.set(type, value)
+  }
+
+  getData(type: string): string {
+    return this.data.get(type) ?? ''
+  }
+}
+
+class TypeOnlyDataTransfer extends FakeDataTransfer {
+  override getData(_type: string): string {
+    return ''
+  }
+}
+
+function createTransfer(): DataTransfer {
+  return new FakeDataTransfer() as unknown as DataTransfer
+}
+
+describe('Session History session drag data', () => {
+  afterEach(() => {
+    clearAiVaultSessionDragData()
+  })
+
+  it('writes and reads the private session history payload', () => {
+    const transfer = createTransfer()
+    const payload: AiVaultSessionDragPayload = {
+      agent: 'claude',
+      sessionId: 'session-1',
+      title: 'Fix terminal split',
+      command: "cd '/repo' && claude --resume session-1",
+      sessionFilePath: '/Users/ada/.claude/projects/-repo/session-1.jsonl',
+      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home',
+      sessionCwd: '/repo',
+      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      launchConfig: {
+        agentCommand: 'claude --dangerously-skip-permissions',
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
+      },
+      realHomeStartup: {
+        command: "cd '/repo' && claude --resume session-1",
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
+      }
+    }
+
+    writeAiVaultSessionDragData(transfer, payload)
+
+    expect(transfer.effectAllowed).toBe('copy')
+    expect(hasAiVaultSessionDragData(transfer)).toBe(true)
+    expect(readAiVaultSessionDragData(transfer)).toEqual(payload)
+  })
+
+  it('preserves an explicit null sessionCwd across the serialized round-trip', () => {
+    const transfer = createTransfer()
+    const payload: AiVaultSessionDragPayload = {
+      agent: 'codex',
+      sessionId: 'session-3',
+      title: 'Session without a recorded cwd',
+      command: 'codex resume session-3',
+      sessionFilePath: '/tmp/orca/codex-accounts/a/home/sessions/2026/07/20/rollout-x.jsonl',
+      codexHome: '/tmp/orca/codex-accounts/a/home',
+      sessionCwd: null
+    }
+
+    writeAiVaultSessionDragData(transfer, payload)
+
+    const read = readAiVaultSessionDragData(transfer)
+    expect(read).toEqual(payload)
+    // Explicit null (no cwd) must stay distinguishable from an absent key (old serializer).
+    expect(read && 'sessionCwd' in read).toBe(true)
+  })
+
+  it('keeps sessionCwd absent when an older serializer omitted it', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'codex',
+        sessionId: 'session-4',
+        title: 'Old-window payload',
+        command: 'codex resume session-4'
+      })
+    )
+
+    const read = readAiVaultSessionDragData(transfer)
+    expect(read).not.toBeNull()
+    expect(read && 'sessionCwd' in read).toBe(false)
+  })
+
+  it('rejects blank session file paths', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'claude',
+        sessionId: 'session-1',
+        title: 'Blank session file path',
+        command: 'claude --resume session-1',
+        sessionFilePath: '   '
+      })
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects malformed payloads', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({ kind: 'ai-vault-session', version: 1, agent: 'bad', command: 'claude' })
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects array-shaped env records', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'claude',
+        sessionId: 'session-1',
+        title: 'Malformed env',
+        command: 'claude --resume session-1',
+        env: ['ANTHROPIC_BASE_URL=https://claude.example.test']
+      })
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects malformed env deletion lists', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'codex',
+        sessionId: 'session-1',
+        title: 'Malformed env deletion',
+        command: 'codex resume session-1',
+        envToDelete: ['CODEX_HOME', '']
+      })
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects array-shaped launch config env records', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'claude',
+        sessionId: 'session-1',
+        title: 'Malformed launch config env',
+        command: 'claude --resume session-1',
+        launchConfig: {
+          agentArgs: '',
+          agentEnv: ['ANTHROPIC_BASE_URL=https://claude.example.test']
+        }
+      })
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects oversized serialized payloads before parsing', () => {
+    const transfer = createTransfer()
+    const secret = 'ai-vault-drag-secret'
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      secret + 'x'.repeat(AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES)
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects multibyte oversized payloads before parsing', () => {
+    const transfer = createTransfer()
+    transfer.setData(AI_VAULT_SESSION_DRAG_TYPE, '😀'.repeat(4097))
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('does not retain an oversized internal payload for the hidden-data fallback', () => {
+    const source = createTransfer()
+    writeAiVaultSessionDragData(source, {
+      agent: 'claude',
+      sessionId: 'session-oversized',
+      title: 'Oversized payload',
+      command: 'x'.repeat(AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES)
+    })
+
+    const dropTransfer = new TypeOnlyDataTransfer() as unknown as DataTransfer
+    dropTransfer.setData(AI_VAULT_SESSION_DRAG_TYPE, '')
+
+    expect(readAiVaultSessionDragData(dropTransfer)).toBeNull()
+  })
+
+  it('falls back to the active renderer drag payload when Chromium hides custom data', () => {
+    const source = createTransfer()
+    const payload: AiVaultSessionDragPayload = {
+      agent: 'codex',
+      sessionId: 'session-2',
+      title: 'Resume a hidden payload',
+      command: "cd '/repo' && codex resume session-2"
+    }
+    writeAiVaultSessionDragData(source, payload)
+
+    const dropTransfer = new TypeOnlyDataTransfer() as unknown as DataTransfer
+    dropTransfer.setData(AI_VAULT_SESSION_DRAG_TYPE, '')
+
+    expect(hasAiVaultSessionDragData(dropTransfer)).toBe(true)
+    expect(readAiVaultSessionDragData(dropTransfer)).toEqual(payload)
+
+    clearAiVaultSessionDragData()
+    expect(readAiVaultSessionDragData(dropTransfer)).toBeNull()
+  })
+})

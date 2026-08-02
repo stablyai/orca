@@ -1,13 +1,28 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process'
-import { chmodSync, readFileSync, statSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+const OUT_COMMONJS_PACKAGE_JSON = `${JSON.stringify(
+  {
+    name: 'orca-compiled-output',
+    type: 'commonjs',
+    private: true
+  },
+  null,
+  2
+)}\n`
+
+/**
+ * Verifies the published CLI entrypoint and the module-type boundary for the
+ * compiled output tree that the packaged CLI loads at runtime.
+ */
 export function verifyPackageCliBin({
   projectDir = path.resolve(import.meta.dirname, '..', '..'),
   fixExecutable = false,
+  fixPackageJson = false,
   runHelp = false
 } = {}) {
   const packageJsonPath = path.join(projectDir, 'package.json')
@@ -31,6 +46,31 @@ export function verifyPackageCliBin({
     throw new Error(`bin.orca target must start with a Node shebang: ${binTarget}`)
   }
 
+  const outPackageJsonPath = path.join(projectDir, 'out', 'package.json')
+  if (fixPackageJson) {
+    mkdirSync(path.dirname(outPackageJsonPath), { recursive: true })
+    writeFileSync(outPackageJsonPath, OUT_COMMONJS_PACKAGE_JSON, 'utf8')
+  }
+  let outPackageJson
+  try {
+    outPackageJson = JSON.parse(readFileSync(outPackageJsonPath, 'utf8'))
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      throw new Error(
+        `compiled CLI package boundary is missing: ${path.relative(projectDir, outPackageJsonPath)}`
+      )
+    }
+    throw error
+  }
+  if (outPackageJson.type !== 'commonjs') {
+    throw new Error(
+      `compiled CLI package boundary must declare type=commonjs: ${path.relative(
+        projectDir,
+        outPackageJsonPath
+      )}`
+    )
+  }
+
   if (process.platform !== 'win32' && (stats.mode & 0o111) === 0) {
     if (!fixExecutable) {
       throw new Error(`bin.orca target is not executable: ${binTarget}`)
@@ -45,13 +85,15 @@ export function verifyPackageCliBin({
     })
   }
 
-  return { binPath, size: statSync(binPath).size }
+  return { binPath, outPackageJsonPath, size: statSync(binPath).size }
 }
 
+/** Runs CLI verification from npm scripts and local release checks. */
 function main() {
   const args = new Set(process.argv.slice(2))
   const result = verifyPackageCliBin({
     fixExecutable: args.has('--fix-executable'),
+    fixPackageJson: args.has('--fix-package-json'),
     runHelp: args.has('--run-help')
   })
   console.log(

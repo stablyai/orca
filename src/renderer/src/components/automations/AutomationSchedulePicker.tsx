@@ -20,16 +20,25 @@ import {
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationCustomCronPanel } from './AutomationCustomCronPanel'
 import { Field } from './automation-page-parts'
+import { translate } from '@/i18n/i18n'
 
 const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
 
 export const AUTOMATION_SCHEDULE_PRESET_OPTIONS = [
-  ['hourly', 'Hourly'],
-  ['daily', 'Daily'],
-  ['weekdays', 'Weekdays'],
-  ['weekly', 'Weekly'],
-  ['custom', 'Custom cron']
-] as const satisfies readonly [AutomationSchedulePreset, string][]
+  ['hourly', 'Hourly', 'auto.components.automations.AutomationSchedulePicker.55b2ef82a4'],
+  ['daily', 'Daily', 'auto.components.automations.AutomationSchedulePicker.f0202f3a89'],
+  ['weekdays', 'Weekdays', 'auto.components.automations.AutomationSchedulePicker.57e83307d0'],
+  ['weekly', 'Weekly', 'auto.components.automations.AutomationSchedulePicker.837d902bba'],
+  ['custom', 'Custom cron', 'auto.components.automations.AutomationSchedulePicker.ddba78647e']
+] as const satisfies readonly (readonly [AutomationSchedulePreset, string, string])[]
+
+export function getAutomationSchedulePresetLabel([, fallbackLabel, labelKey]: readonly [
+  AutomationSchedulePreset,
+  string,
+  string
+]): string {
+  return translate(labelKey, fallbackLabel)
+}
 
 const DAY_OPTIONS = [
   ['0', 'Sunday'],
@@ -171,7 +180,12 @@ export function AutomationSchedulePicker({
         className="popover-scroll-content scrollbar-sleek max-h-[var(--radix-popover-content-available-height)] w-[min(var(--radix-popover-trigger-width),calc(100vw-2rem))] min-w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-y-auto p-3"
       >
         <div className="grid gap-3">
-          <Field label="Cadence">
+          <Field
+            label={translate(
+              'auto.components.automations.AutomationSchedulePicker.233b8c94b6',
+              'Cadence'
+            )}
+          >
             <Select
               value={draft.preset}
               onValueChange={(preset) =>
@@ -185,9 +199,9 @@ export function AutomationSchedulePicker({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {AUTOMATION_SCHEDULE_PRESET_OPTIONS.map(([value, presetLabel]) => (
+                {AUTOMATION_SCHEDULE_PRESET_OPTIONS.map(([value, fallbackLabel, labelKey]) => (
                   <SelectItem key={value} value={value}>
-                    {presetLabel}
+                    {getAutomationSchedulePresetLabel([value, fallbackLabel, labelKey])}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -203,7 +217,12 @@ export function AutomationSchedulePicker({
           ) : (
             <>
               {draft.preset === 'weekly' ? (
-                <Field label="Day">
+                <Field
+                  label={translate(
+                    'auto.components.automations.AutomationSchedulePicker.6b914c5fbb',
+                    'Day'
+                  )}
+                >
                   <Select
                     value={draft.dayOfWeek}
                     onValueChange={(dayOfWeek) =>
@@ -224,7 +243,12 @@ export function AutomationSchedulePicker({
                 </Field>
               ) : null}
               {draft.preset === 'hourly' ? (
-                <Field label="Minute">
+                <Field
+                  label={translate(
+                    'auto.components.automations.AutomationSchedulePicker.9e677335b0',
+                    'Minute'
+                  )}
+                >
                   <Select
                     value={String(clockParts.minute)}
                     onValueChange={(minute) =>
@@ -248,7 +272,12 @@ export function AutomationSchedulePicker({
                   </Select>
                 </Field>
               ) : (
-                <Field label="Time">
+                <Field
+                  label={translate(
+                    'auto.components.automations.AutomationSchedulePicker.d90981f766',
+                    'Time'
+                  )}
+                >
                   <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)] gap-2">
                     <Select
                       value={String(clockParts.hour12)}
@@ -261,7 +290,10 @@ export function AutomationSchedulePicker({
                       }
                     >
                       <SelectTrigger
-                        aria-label="Hour"
+                        aria-label={translate(
+                          'auto.components.automations.AutomationSchedulePicker.6b802ecc99',
+                          'Hour'
+                        )}
                         className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
                       >
                         <SelectValue />
@@ -285,7 +317,10 @@ export function AutomationSchedulePicker({
                       }
                     >
                       <SelectTrigger
-                        aria-label="Minute"
+                        aria-label={translate(
+                          'auto.components.automations.AutomationSchedulePicker.9e677335b0',
+                          'Minute'
+                        )}
                         className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
                       >
                         <SelectValue />
@@ -309,7 +344,10 @@ export function AutomationSchedulePicker({
                       }
                     >
                       <SelectTrigger
-                        aria-label="AM or PM"
+                        aria-label={translate(
+                          'auto.components.automations.AutomationSchedulePicker.22359b186a',
+                          'AM or PM'
+                        )}
                         className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
                       >
                         <SelectValue />

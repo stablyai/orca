@@ -3,6 +3,7 @@ import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-sou
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
 import type { Repo, RepoHookSettings } from '../../../shared/types'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
+import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-client'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'
 
@@ -16,6 +17,13 @@ export type SetupScriptPromptInspection =
     }
   | {
       status: 'error'
+      repoId: string
+    }
+  // Why: a forbidden (mobile-scope) failure is permanent, not transient — the
+  // card must not offer a retry that re-fires repo.hooksCheck on every focus.
+  // The global scope-mismatch banner already explains the cause.
+  | {
+      status: 'forbidden'
       repoId: string
     }
 
@@ -53,6 +61,9 @@ export async function inspectSetupScriptPromptState({
       candidate: candidates[0] ?? null
     }
   } catch (error) {
+    if (isRuntimeScopeForbiddenError(error)) {
+      return { status: 'forbidden', repoId: repo.id }
+    }
     console.warn('[setup-script-prompt] Failed to inspect setup scripts:', error)
     return { status: 'error', repoId: repo.id }
   }
@@ -86,21 +97,48 @@ export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boo
   )
 }
 
-export function getSetupScriptPromptDismissalKey(repoId: string): string {
-  return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoId}`
+export function getSetupScriptPromptDismissalKey(repoHostIdentity: string): string {
+  return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoHostIdentity}`
 }
 
 export function isSetupScriptPromptDismissed(
-  repoId: string,
+  repoHostIdentity: string,
   dismissedEntries: readonly string[]
 ): boolean {
-  return dismissedEntries.includes(getSetupScriptPromptDismissalKey(repoId))
+  return dismissedEntries.includes(getSetupScriptPromptDismissalKey(repoHostIdentity))
 }
 
 export function filterSetupScriptPromptDismissalsToValidRepos(
   value: unknown,
-  validRepoIds: Set<string>
+  validRepoHostIdentities: Set<string>
 ): string[] {
+  const unambiguousIdentityByRepoId = new Map<string, string | null>()
+  for (const identity of validRepoHostIdentities) {
+    const separatorIndex = identity.indexOf('\0')
+    const repoId = separatorIndex >= 0 ? identity.slice(separatorIndex + 1) : identity
+    unambiguousIdentityByRepoId.set(
+      repoId,
+      unambiguousIdentityByRepoId.has(repoId) ? null : identity
+    )
+  }
+
+  const next: string[] = []
+  for (const entry of sanitizeSetupScriptPromptDismissals(value)) {
+    const repoHostIdentity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
+    const validIdentity = validRepoHostIdentities.has(repoHostIdentity)
+      ? repoHostIdentity
+      : unambiguousIdentityByRepoId.get(repoHostIdentity)
+    if (validIdentity) {
+      const validEntry = getSetupScriptPromptDismissalKey(validIdentity)
+      if (!next.includes(validEntry)) {
+        next.push(validEntry)
+      }
+    }
+  }
+  return next
+}
+
+export function sanitizeSetupScriptPromptDismissals(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
@@ -110,8 +148,7 @@ export function filterSetupScriptPromptDismissalsToValidRepos(
     if (typeof entry !== 'string' || !entry.startsWith(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX)) {
       continue
     }
-    const repoId = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
-    if (validRepoIds.has(repoId) && !next.includes(entry)) {
+    if (!next.includes(entry)) {
       next.push(entry)
     }
   }

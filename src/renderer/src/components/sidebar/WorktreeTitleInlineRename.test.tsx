@@ -46,7 +46,35 @@ describe('WorktreeTitleInlineRename', () => {
     expect(markup).not.toContain('cursor-text')
     expect(markup).not.toContain('title="Feature workspace"')
     expect(markup).toContain('tabindex="0"')
+    expect(markup).toContain('font-semibold text-foreground')
     expect(markup).toContain('Unread:')
     expect(markup).toContain('Feature workspace')
+  })
+
+  it('keeps read titles at the default foreground color unless requested', () => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <WorktreeTitleInlineRename displayName="Feature workspace" onRename={vi.fn()} />
+      </TooltipProvider>
+    )
+
+    expect(markup).toContain('font-normal text-foreground')
+    expect(markup).not.toContain('text-foreground/80')
+    expect(markup).not.toContain('Unread:')
+  })
+
+  it('dims read titles when requested by the experimental card style', () => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <WorktreeTitleInlineRename
+          displayName="Feature workspace"
+          dimReadTitle
+          onRename={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    expect(markup).toContain('font-normal text-foreground/80')
+    expect(markup).not.toContain('Unread:')
   })
 })

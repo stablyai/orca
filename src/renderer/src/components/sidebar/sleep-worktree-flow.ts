@@ -1,8 +1,8 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import { cancelPendingSidebarWorktreeActivation } from '@/lib/sidebar-worktree-activation'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
+import { translate } from '@/i18n/i18n'
 
 /**
  * Shared "sleep worktree" flow (close all panels to free memory / CPU)
@@ -21,13 +21,36 @@ export async function runSleepWorktree(worktreeId: string): Promise<void> {
   await runSleepWorktrees([worktreeId])
 }
 
-function findSidebarWorktreeRow(worktreeId: string): HTMLElement | null {
-  const rowKey = `wt:${worktreeId}`
-  return (
-    Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')).find(
-      (element) => element.getAttribute('data-worktree-virtual-row-key') === rowKey
-    ) ?? null
+function getSidebarWorktreeOptions(worktreeId: string): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-id]')).filter(
+    (element) => element.dataset.worktreeId === worktreeId
   )
+}
+
+function isPinnedSidebarWorktreeOption(element: HTMLElement): boolean {
+  // Why: duplicated pinned rows share a worktree id; the row-key prefix is the
+  // stable row-scoped signal that distinguishes the pinned copy from natural rows.
+  return element.dataset.worktreeRowKey?.startsWith('pinned:') === true
+}
+
+function findPrimarySidebarWorktreeOption(worktreeId: string): HTMLElement | null {
+  const options = getSidebarWorktreeOptions(worktreeId)
+  return (
+    options.find((element) =>
+      element.querySelector<HTMLElement>('[data-worktree-card-active="primary"]')
+    ) ??
+    options.find((element) => !isPinnedSidebarWorktreeOption(element)) ??
+    options[0] ??
+    null
+  )
+}
+
+function findSidebarWorktreeRow(worktreeId: string, rowKey?: string): HTMLElement | null {
+  const options = getSidebarWorktreeOptions(worktreeId)
+  const option = rowKey
+    ? (options.find((element) => element.dataset.worktreeRowKey === rowKey) ?? null)
+    : (findPrimarySidebarWorktreeOption(worktreeId) ?? null)
+  return option?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
 }
 
 function preserveSidebarWorktreePosition(worktreeId: string): () => void {
@@ -37,7 +60,9 @@ function preserveSidebarWorktreePosition(worktreeId: string): () => void {
   const getScroller = (): HTMLElement | null =>
     document.querySelector<HTMLElement>('[data-worktree-sidebar]')
   const scroller = getScroller()
-  const row = findSidebarWorktreeRow(worktreeId)
+  const activeOption = findPrimarySidebarWorktreeOption(worktreeId)
+  const activeRowKey = activeOption?.dataset.worktreeRowKey
+  const row = activeOption?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
   if (!scroller || !row) {
     return () => {}
   }
@@ -57,7 +82,7 @@ function preserveSidebarWorktreePosition(worktreeId: string): () => void {
         }
         return
       }
-      const nextRow = findSidebarWorktreeRow(worktreeId)
+      const nextRow = findSidebarWorktreeRow(worktreeId, activeRowKey)
       if (!nextRow) {
         // Why: a remount can first render the wrong virtual window. Put the
         // scroller near the same content after height changes so the row
@@ -81,13 +106,35 @@ function preserveSidebarWorktreePosition(worktreeId: string): () => void {
   }
 }
 
+function describeSleepFailure(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error)
+  if (detail.includes('legacy')) {
+    return translate(
+      'auto.components.sidebar.sleep.worktree.flow.legacy.unverified',
+      'The older host runtime could not confirm terminal shutdown. The workspace was kept open; update the host and try again.'
+    )
+  }
+  if (
+    detail.includes('terminal_') ||
+    detail.includes('runtime') ||
+    detail.includes('connection') ||
+    detail.includes('Daemon')
+  ) {
+    return translate(
+      'auto.components.sidebar.sleep.worktree.flow.host.unverified',
+      'The host could not confirm terminal shutdown. The workspace was kept open; check the connection and try again.'
+    )
+  }
+  return translate(
+    'auto.components.sidebar.sleep.worktree.flow.retry',
+    'The workspace was kept open. Try again; if the problem continues, check the host connection.'
+  )
+}
+
 export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise<void> {
   if (worktreeIds.length === 0) {
     return
   }
-  // Why: clicking a slept sidebar row queues a delayed wake. A later Sleep
-  // command is the newer intent, so do not let that stale wake respawn PTYs.
-  cancelPendingSidebarWorktreeActivation()
   const {
     activeWorktreeId,
     setActiveWorktree,
@@ -107,6 +154,7 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     restoreSidebarPosition()
   }
   const errors: string[] = []
+  const failedWorktreeIds = new Set<string>()
   try {
     for (const worktreeId of worktreeIds) {
       try {
@@ -117,7 +165,9 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // browserPagesByWorkspace entries and live webviews for the slept worktree.
         await shutdownWorktreeBrowsers(worktreeId)
       } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err))
+        console.error('[sleep-worktree] browser shutdown failed', { worktreeId, error: err })
+        failedWorktreeIds.add(worktreeId)
+        errors.push(describeSleepFailure(err))
         continue
       }
       try {
@@ -129,21 +179,39 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // serializer buffers into buffersByLeafId for SSH wake to reseed
         // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
         await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
+        if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
+          await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
+        }
       } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err))
+        console.error('[sleep-worktree] terminal or host suspension failed', {
+          worktreeId,
+          error: err
+        })
+        failedWorktreeIds.add(worktreeId)
+        errors.push(describeSleepFailure(err))
       }
     }
   } finally {
     if (activeSleepIntentWorktreeId) {
       clearWorktreeSleepIntent(activeSleepIntentWorktreeId)
+      if (failedWorktreeIds.has(activeSleepIntentWorktreeId)) {
+        // Why: any failed sleep step must leave the workspace visible and retryable.
+        setActiveWorktree(activeSleepIntentWorktreeId)
+      }
     }
   }
   if (errors.length > 0) {
-    // Why: callers are fire-and-forget; surface the failure as a toast and
-    // otherwise continue — the active-worktree reset already happened so we
-    // don't leave the UI in a stale state.
+    // Why: callers are fire-and-forget; surface actionable teardown failures after restoring retryable UI state.
     toast.error(
-      worktreeIds.length === 1 ? 'Failed to sleep workspace' : 'Failed to sleep some workspaces',
+      worktreeIds.length === 1
+        ? translate(
+            'auto.components.sidebar.sleep.worktree.flow.8bc3fc0671',
+            'Failed to sleep workspace'
+          )
+        : translate(
+            'auto.components.sidebar.sleep.worktree.flow.c460fecc4a',
+            'Failed to sleep some workspaces'
+          ),
       {
         description: errors.join('\n')
       }

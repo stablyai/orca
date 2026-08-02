@@ -6,7 +6,14 @@ import type {
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
-import { getLeftmostLeafId, normalizeTerminalLayoutSnapshot } from './terminal-layout-leaf-ids'
+import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
+import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import {
+  getLeftmostLeafId,
+  normalizeTerminalLayoutSnapshot,
+  resolveRootlessTerminalLayoutLeafId
+} from './terminal-layout-leaf-ids'
 
 export {
   collectLeafIdsInOrder,
@@ -20,75 +27,42 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
   expandedLeafId: null
 }
 
-// Why: xterm's SerializeAddon captures display state by emitting mode-setting
-// bytes (e.g. `\e[?1004h` for focus reporting) so a re-fed emulator lands in
-// the same mode as the snapshot source. That's correct for tmux-style
-// "attach to a still-running TUI" — but Orca restores scrollback against a
-// *fresh* shell, with no TUI to consume those modes. A stale focus-reporting
-// bit causes xterm to emit `\e[I`/`\e[O` on every pane click, which the
-// fresh zsh treats as unbound key input and rings the bell for.
-//
-// Reset the interactive modes most commonly left set by crashed/ended TUIs
-// so replayed mode bits do not leak into the fresh shell. ghostty achieves
-// the same end by not restoring state at all.
-//
-//   0 SP q              — DECSCUSR cursor style/blink reset (raw replay can
-//                         carry a stale steady cursor override; reset to the
-//                         user's configured xterm cursor)
-//   25                  — DECTCEM cursor visibility (SerializeAddon captures
-//                         `?25l` when the cursor was hidden at snapshot time;
-//                         without an explicit `?25h` here the cursor stays
-//                         invisible in the restored terminal)
-//   1000/1002/1003/1006 — mouse reporting variants
-//   1004                — focus event reporting (the actual bug source)
-//   2004                — bracketed paste
-//   <99u/=0u            — Kitty keyboard flags pushed by TUIs such as Codex
+// Why: SerializeAddon replays mode bits assuming reattach to a live TUI, but Orca restores against a fresh shell with none, so stale bits (e.g. focus reporting rings the bell on click) must be reset.
 export const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
 export const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
+// Every mouse mode the daemon can re-arm from a snapshot: protocols 9/1000/1002/1003 + SGR encodings 1006/1016.
+export const RESET_MOUSE_REPORTING =
+  '\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l'
 
-export const POST_REPLAY_MODE_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l`
+export const POST_REPLAY_MODE_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l\x1b[?2004l`
 
-// Why: hidden-output recovery replays a snapshot of the same live renderer
-// session. Keep cursor/focus cleanup, but preserve Kitty keyboard flags that
-// the still-running foreground TUI may rely on.
+// Why: same-session live replay; keep cursor/focus cleanup but preserve Kitty flags the running TUI relies on.
 export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1004l`
 
-// Why: daemon snapshot restore reattaches to a live session, so we avoid the
-// full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
-// rely on mouse or bracketed-paste modes. Four exceptions are safe to reset:
-//
-//   0 q  — DECSCUSR cursor style/blink reset: raw replay can contain a stale
-//          steady cursor override, while SerializeAddon does not preserve an
-//          authoritative current cursor style. Reset to the user's configured
-//          xterm cursor; the post-reattach SIGWINCH lets live TUIs repaint if
-//          they need a different cursor.
-//   25   — DECTCEM cursor visibility: SerializeAddon bakes `?25l` into the
-//          snapshot when the cursor was hidden at capture time. Without `?25h`
-//          here the cursor stays invisible after reattach. If a TUI is still
-//          running and wants the cursor hidden, the SIGWINCH sent immediately
-//          after restore triggers a repaint that re-hides it — a brief flash
-//          that is far less harmful than a permanently invisible cursor.
-//   1004 — focus event reporting: preserving `?1004h` makes restored shells
-//          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
-//          as unbound key input).
-//   <99u/=0u — Kitty keyboard mode is renderer-side xterm state; stale copies
-//              can make the next Ctrl+C encode as CSI-u after reattach.
-export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1004l`
+// Why: daemon reattach hits a live session, so skip the full reset; still clear cursor/focus/mouse/Kitty bits harmful to a plain shell after a bad TUI exit — safe for live TUIs since the post-reattach SIGWINCH repaints the cursor.
+export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l`
 
-// Cross-platform monospace fallback chain ensures the terminal always has a
-// usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are
-// harmless on other platforms (the browser skips them), while Cascadia Mono /
-// Consolas cover Windows and DejaVu Sans Mono / Liberation Mono cover Linux.
-//
-// Why Nerd Fonts are listed just before `monospace`: Powerline prompts (p10k,
-// starship, oh-my-zsh) and many shell plugins emit glyphs in the Unicode
-// Private Use Area (U+E000–U+F8FF) that no standard monospace font contains.
-// When the user's primary font (e.g. SF Mono) is missing those code points
-// the browser walks the fallback chain character-by-character, so adding
-// commonly-installed Nerd Fonts here lets PUA glyphs render correctly without
-// forcing the user to override their terminal font. Placed AFTER the regular
-// system fonts so ASCII text still renders in the user's chosen font rather
-// than being substituted by a Nerd Font variant.
+// Why: a live agent owns focus reporting; resetting ?1004h suppresses the focus-in it needs to re-anchor its cursor (IME).
+export const POST_REPLAY_LIVE_AGENT_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h`
+
+// Why: DECTCEM applies in emission order, so the payload's last ?25l/?25h is the cursor state the TUI left.
+export function replayPayloadEndsWithCursorHidden(payload: string): boolean {
+  const hideIndex = payload.lastIndexOf('\x1b[?25l')
+  return hideIndex !== -1 && hideIndex > payload.lastIndexOf('\x1b[?25h')
+}
+
+// Why: some agents hide the real cursor and draw their own, so preserve the payload's final visibility (pty-connection re-shows it if the agent was actually a dead TUI).
+export function buildPostReplayLiveAgentReattachReset(payload: string): string {
+  return replayPayloadEndsWithCursorHidden(payload)
+    ? `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
+    : POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+}
+
+// Why: a live agent owns cursor/focus here; forcing ?25h/?1004l breaks a parked agent that only arms ?1004h at startup.
+export const POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET = RESET_TERMINAL_CURSOR_STYLE
+
+// Cross-platform monospace chain: browsers skip fonts absent on the current OS, so listing all is safe.
+// Nerd Fonts come last to cover PUA glyphs (U+E000–U+F8FF) from OMP/Powerline that standard monospace fonts lack.
 const FALLBACK_FONTS = [
   'SF Mono', // macOS 10.12+
   'Menlo', // macOS (older)
@@ -97,6 +71,7 @@ const FALLBACK_FONTS = [
   'Consolas', // Windows Vista+
   'DejaVu Sans Mono', // Linux (common)
   'Liberation Mono', // Linux (common)
+  'Orca Nerd Font Symbols', // bundled PUA fallback for OMP/Powerline glyphs
   'Symbols Nerd Font Mono', // purpose-built Nerd Fonts symbols-only fallback
   'MesloLGS Nerd Font', // p10k's recommended font; very common on zsh setups
   'JetBrainsMono Nerd Font', // widely installed; Ghostty ships a JBM-derived font
@@ -108,8 +83,7 @@ export function buildFontFamily(fontFamily: string): string {
   const trimmed = fontFamily.trim()
   const parts = trimmed ? [`"${trimmed}"`] : []
   const lowerParts = parts.map((p) => p.toLowerCase())
-  // Append each fallback unless the user's font name already contains it
-  // (case-insensitive) to avoid duplicates like '"SF Mono", "SF Mono"'.
+  // Append each fallback unless already present (case-insensitive) to avoid duplicates.
   for (const fallback of FALLBACK_FONTS) {
     const lower = fallback.toLowerCase()
     if (!lowerParts.some((p) => p.includes(lower))) {
@@ -152,11 +126,10 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
   }
 
   // Capture the flex ratio so resized panes survive serialization round-trips.
-  // We read the computed flex-grow values to derive the first-child proportion.
   let ratio: number | undefined
   if (first && second) {
-    const firstGrow = parseFloat(first.style.flex) || 1
-    const secondGrow = parseFloat(second.style.flex) || 1
+    const firstGrow = Number.parseFloat(first.style.flex) || 1
+    const secondGrow = Number.parseFloat(second.style.flex) || 1
     const total = firstGrow + secondGrow
     if (total > 0) {
       const r = firstGrow / total
@@ -195,17 +168,15 @@ export function serializeTerminalLayout(
 }
 
 /**
- * Write saved scrollback buffers into the restored panes so the user sees
- * their previous terminal output after an app restart.  If a buffer was
- * captured while the alternate screen was active (e.g. an agent TUI was
- * running at shutdown), we exit alt-screen first so the user sees a usable
- * normal-mode terminal.
+ * Write saved scrollback buffers into restored panes so the user sees prior
+ * output after a restart. Exits alt-screen first if a buffer ended mid-TUI.
  */
 export function restoreScrollbackBuffers(
   manager: PaneManager,
   savedBuffers: Record<string, string> | undefined,
   restoredPaneByLeafId: Map<string, number>,
-  replayingPanesRef: ReplayingPanesRef
+  replayingPanesRef: ReplayingPanesRef,
+  restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef
 ): void {
   if (!savedBuffers) {
     return
@@ -221,31 +192,41 @@ export function restoreScrollbackBuffers(
     if (!pane) {
       continue
     }
+    // Breadcrumb: writes into a disposed xterm are silent (no throw), the suspected source of startup zombie panes.
+    if (isXtermInstanceDisposed(pane.terminal)) {
+      recordRendererCrashBreadcrumb('terminal_restore_write_target_disposed', {
+        paneId: pane.id
+      })
+      continue
+    }
     try {
+      const renderOptions = {
+        shouldRefreshViewportSynchronously: () => !manager.hasWebglRenderer(pane.id)
+      }
       let buf = buffer
-      // If buffer ends in alt-screen mode (agent TUI was running at
-      // shutdown), exit alt-screen so the user sees a usable terminal.
+      // If the buffer ends in alt-screen (agent TUI at shutdown), exit it so the terminal is usable.
       const lastOn = buf.lastIndexOf(ALT_SCREEN_ON)
       const lastOff = buf.lastIndexOf(ALT_SCREEN_OFF)
       if (lastOn > lastOff) {
         buf = buf.slice(0, lastOn)
       }
       if (buf.length > 0) {
-        // Why replayIntoTerminal: the serialized buffer can contain query
-        // sequences from the prior session (DA1, DECRQM, OSC 10/11, focus,
-        // CPR). Writing those through xterm.write would trigger auto-replies
-        // that land in the new shell's stdin. See replay-guard.ts.
-        replayIntoTerminal(pane, replayingPanesRef, buf)
-        // Ensure cursor is on a new line so the new shell prompt
-        // doesn't trigger zsh's PROMPT_EOL_MARK (%) indicator.
-        replayIntoTerminal(pane, replayingPanesRef, '\r\n')
-        // Clear any mode bits the serialized buffer replayed into xterm.
-        // The shell underneath is fresh and has no TUI consuming these modes.
-        // See POST_REPLAY_MODE_RESET comment.
-        replayIntoTerminal(pane, replayingPanesRef, POST_REPLAY_MODE_RESET)
+        // replayIntoTerminal: buffer queries (DA1/DECRQM/CPR) would auto-reply into the new shell's stdin. See replay-guard.ts.
+        replayIntoTerminal(pane, replayingPanesRef, buf, renderOptions)
+        // Newline first so the new shell prompt doesn't trigger zsh's PROMPT_EOL_MARK (%) indicator.
+        replayIntoTerminal(pane, replayingPanesRef, '\r\n', renderOptions)
+        // Clear mode bits the buffer replayed: the fresh shell has no TUI to consume them. See POST_REPLAY_MODE_RESET.
+        replayIntoTerminal(pane, replayingPanesRef, POST_REPLAY_MODE_RESET, renderOptions)
+        // Why: connection resolution runs after layout replay; only fresh-shell paths move these rows into scrollback.
+        restoredViewportBlankingPanesRef?.current.add(pane.id)
       }
-    } catch {
-      // If restore fails, continue with blank terminal.
+    } catch (error: unknown) {
+      // Breadcrumb: this catch was silent while zombie panes went undiagnosed.
+      recordRendererCrashBreadcrumb('terminal_restore_write_failed', {
+        paneId: pane.id,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error)
+      })
     }
   }
 }
@@ -259,7 +240,9 @@ export function replayTerminalLayout(
 
   const normalized = normalizeTerminalLayoutSnapshot(snapshot)
   snapshot = normalized.snapshot
-  const initialLeafId = snapshot.root ? getLeftmostLeafId(snapshot.root) : undefined
+  const initialLeafId = snapshot.root
+    ? getLeftmostLeafId(snapshot.root)
+    : (resolveRootlessTerminalLayoutLeafId(snapshot) ?? undefined)
   const initialPane = manager.createInitialPane({ focus: focusInitialPane, leafId: initialLeafId })
   if (!snapshot?.root) {
     paneByLeafId.set(initialPane.leafId, initialPane.id)

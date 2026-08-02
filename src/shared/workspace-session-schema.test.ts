@@ -14,6 +14,55 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('preserves external SSH file ownership across session parsing', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        wt: [
+          {
+            filePath: '/tmp/external.png',
+            relativePath: '/tmp/external.png',
+            worktreeId: 'wt',
+            language: 'png',
+            externalSshTargetId: 'ssh-1'
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.openFilesByWorktree?.wt?.[0]?.externalSshTargetId).toBe('ssh-1')
+    }
+  })
+
+  it('rejects blank external SSH file ownership', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        wt: [
+          {
+            filePath: '/tmp/external.png',
+            relativePath: '/tmp/external.png',
+            worktreeId: 'wt',
+            language: 'png',
+            externalSshTargetId: '   '
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(false)
+  })
+
   it('accepts a fully populated session with optional fields', () => {
     const result = parseWorkspaceSession({
       activeRepoId: 'repo1',
@@ -49,6 +98,44 @@ describe('parseWorkspaceSession', () => {
       activeWorktreeIdsOnShutdown: ['repo1::/path/wt1']
     })
     expect(result.ok).toBe(true)
+  })
+
+  it('preserves an isolated browser tab session partition across hydration', () => {
+    // Regression for #6923: the resolved partition must survive persist→load,
+    // otherwise a restored isolated tab falls back to the shared default
+    // partition when the renderer profile mirror is stale at startup.
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        wt: [
+          {
+            id: 'browser-1',
+            worktreeId: 'wt',
+            sessionProfileId: 'iso-profile',
+            sessionPartition: 'persist:orca-browser-session-iso-profile',
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.value.browserTabsByWorktree?.wt?.[0]?.sessionPartition).toBe(
+      'persist:orca-browser-session-iso-profile'
+    )
   })
 
   it('preserves a valid launchAgent on a terminal tab', () => {
@@ -182,6 +269,65 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('preserves quick command label fields while accepting older omitted fields', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'pnpm test',
+            defaultTitle: 'Terminal 1',
+            quickCommandLabel: 'Run tests',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          },
+          {
+            id: 'tab2',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'Terminal 2',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'terminal',
+            label: 'pnpm test',
+            quickCommandLabel: 'Run tests',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].quickCommandLabel).toBe('Run tests')
+      expect(result.value.tabsByWorktree.wt[1].quickCommandLabel).toBeUndefined()
+      expect(result.value.unifiedTabs?.wt[0].quickCommandLabel).toBe('Run tests')
+    }
+  })
+
   it('rejects a session with missing required top-level fields', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null
@@ -262,6 +408,70 @@ describe('parseWorkspaceSession', () => {
     if (result.ok) {
       expect(result.value.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
       expect(result.value.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
+    }
+  })
+
+  it('preserves a known viewMode on a unified tab', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'terminal',
+            label: 'Claude',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0,
+            viewMode: 'chat'
+          }
+        ]
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('chat')
+    }
+  })
+
+  it('degrades an unknown viewMode to the safe default instead of failing parse', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'terminal',
+            label: 'Claude',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0,
+            // A newer build could persist a mode this version doesn't know.
+            viewMode: 'split-future-mode'
+          }
+        ]
+      }
+    })
+    // The whole-session parse must still succeed; the unknown mode degrades.
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('terminal')
     }
   })
 })

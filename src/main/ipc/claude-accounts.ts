@@ -7,6 +7,7 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
   ipcMain.handle('claudeAccounts:add', (_event, args?: ClaudeAccountAddTarget) =>
     claudeAccounts.addAccount(args)
   )
+  ipcMain.handle('claudeAccounts:cancelPendingLogin', () => claudeAccounts.cancelPendingLogin())
   ipcMain.handle('claudeAccounts:reauthenticate', (_event, args: { accountId: string }) =>
     claudeAccounts.reauthenticateAccount(args.accountId)
   )

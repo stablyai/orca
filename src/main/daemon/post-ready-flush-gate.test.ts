@@ -34,11 +34,28 @@ describe('PostReadyFlushGate', () => {
     expect(onFlush).toHaveBeenCalledTimes(1)
   })
 
+  it('flushes via short delay when arm receives post-marker bytes evidence', () => {
+    gate.arm(true)
+    vi.advanceTimersByTime(POST_READY_FLUSH_DELAY_MS - 1)
+    expect(onFlush).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    expect(onFlush).toHaveBeenCalledTimes(1)
+  })
+
   it('flushes via wall-clock fallback when no notifyData arrives', () => {
     gate.arm()
 
     vi.advanceTimersByTime(POST_READY_FLUSH_FALLBACK_MS)
     expect(onFlush).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fallback at the old duplicate-echo race window', () => {
+    gate.arm()
+
+    vi.advanceTimersByTime(50)
+
+    expect(onFlush).not.toHaveBeenCalled()
   })
 
   it('ignores notifyData before arm()', () => {

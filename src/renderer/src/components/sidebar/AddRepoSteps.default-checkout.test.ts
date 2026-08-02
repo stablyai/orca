@@ -8,11 +8,15 @@ const mocks = vi.hoisted(() => ({
   stateIndex: 0,
   storeState: {
     repos: [] as Repo[],
+    projects: [],
+    projectHostSetups: [],
     clearOrcaHookTrustForRepo: vi.fn(),
     openModal: vi.fn(),
     cancelNestedRepoScan: vi.fn()
   },
   addRemote: vi.fn(),
+  listTargets: vi.fn(),
+  getState: vi.fn(),
   onStateChanged: vi.fn(() => vi.fn()),
   fetchWorktrees: vi.fn(),
   onGitRepoReady: vi.fn()
@@ -90,9 +94,18 @@ describe('useRemoteRepo default-checkout handoff', () => {
     mocks.stateSetters = []
     mocks.stateValues = [[], 'ssh-1', '/srv/repo', null, false, null]
     mocks.storeState.repos = []
+    mocks.storeState.projects = []
+    mocks.storeState.projectHostSetups = []
+    mocks.listTargets.mockResolvedValue([
+      { id: 'ssh-1', label: 'Builder 1' },
+      { id: 'ssh-2', label: 'Builder 2' }
+    ])
+    mocks.getState.mockResolvedValue({ status: 'connected' })
     vi.stubGlobal('window', {
       api: {
         ssh: {
+          listTargets: mocks.listTargets,
+          getState: mocks.getState,
           onStateChanged: mocks.onStateChanged
         },
         repos: {
@@ -122,9 +135,20 @@ describe('useRemoteRepo default-checkout handoff', () => {
       remotePath: '/srv/repo'
     })
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'ssh:ssh-1'
     })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+    expect(mocks.storeState.repos).toContainEqual({
+      ...repo,
+      executionHostId: 'ssh:ssh-1'
+    })
+    expect(mocks.storeState.projects).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sourceRepoIds: [repo.id] })])
+    )
+    expect(mocks.storeState.projectHostSetups).toEqual(
+      expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
+    )
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'ssh:ssh-1')
   })
 
   it('continues to completion when refresh is not authoritative after remote add', async () => {
@@ -143,11 +167,63 @@ describe('useRemoteRepo default-checkout handoff', () => {
     await result.handleAddRemoteRepo()
 
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'ssh:ssh-1'
     })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'ssh:ssh-1')
     expect(mocks.stateSetters[3]).not.toHaveBeenCalledWith(
       'Could not refresh project worktrees. Try again.'
     )
+  })
+
+  it('preselects the preferred SSH target when opening Browse for a selected host', async () => {
+    mocks.stateValues = [[], null, '~/', null, false, null]
+    const { useRemoteRepo } = await import('./AddRepoSteps')
+
+    const result = useRemoteRepo(
+      mocks.fetchWorktrees,
+      vi.fn(),
+      vi.fn(),
+      mocks.onGitRepoReady,
+      vi.fn().mockResolvedValue(null)
+    )
+    await result.handleOpenRemoteStep('ssh-2')
+
+    expect(mocks.listTargets).toHaveBeenCalled()
+    expect(mocks.getState).toHaveBeenCalledWith({ targetId: 'ssh-1' })
+    expect(mocks.getState).toHaveBeenCalledWith({ targetId: 'ssh-2' })
+    expect(mocks.stateSetters[1]).toHaveBeenCalledWith('ssh-2')
+  })
+
+  it('pins SSH nested scans and cancellation to the local provider', async () => {
+    const scanNestedRepos = vi.fn().mockResolvedValue(null)
+    mocks.addRemote.mockResolvedValue({ repo: makeRepo() })
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useRemoteRepo } = await import('./AddRepoSteps')
+
+    const result = useRemoteRepo(
+      mocks.fetchWorktrees,
+      vi.fn(),
+      vi.fn(),
+      mocks.onGitRepoReady,
+      scanNestedRepos
+    )
+    await result.handleAddRemoteRepo()
+
+    expect(scanNestedRepos).toHaveBeenCalledWith(
+      '/srv/repo',
+      'ssh-1',
+      expect.objectContaining({ runtimeEnvironmentId: null })
+    )
+
+    mocks.stateIndex = 0
+    mocks.stateValues = [[], 'ssh-1', '/srv/repo', null, false, 'scan-ssh']
+    const active = useRemoteRepo(mocks.fetchWorktrees, vi.fn(), vi.fn())
+    active.stopRemoteNestedScan()
+    active.resetRemoteState()
+
+    expect(mocks.storeState.cancelNestedRepoScan).toHaveBeenCalledWith('scan-ssh', {
+      runtimeEnvironmentId: null
+    })
   })
 })

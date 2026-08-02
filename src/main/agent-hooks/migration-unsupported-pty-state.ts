@@ -57,3 +57,21 @@ export function clearMigrationUnsupportedPtysForPaneKey(paneKey: string): void {
   }
   persistenceListener?.(getMigrationUnsupportedPtySnapshot())
 }
+
+export function clearMigrationUnsupportedPtysByTabPrefix(tabId: string): void {
+  const prefix = `${tabId}:`
+  const ptyIdsToClear: string[] = []
+  for (const [ptyId, entry] of entriesByPtyId) {
+    if (entry.paneKey?.startsWith(prefix)) {
+      ptyIdsToClear.push(ptyId)
+    }
+  }
+  if (ptyIdsToClear.length === 0) {
+    return
+  }
+  for (const ptyId of ptyIdsToClear) {
+    entriesByPtyId.delete(ptyId)
+    listener?.({ type: 'clear', ptyId })
+  }
+  persistenceListener?.(getMigrationUnsupportedPtySnapshot())
+}

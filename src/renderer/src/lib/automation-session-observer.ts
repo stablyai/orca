@@ -1,5 +1,5 @@
-import { createAgentStatusOscProcessor } from '@/components/terminal-pane/agent-status-osc'
-import { subscribeToPtyData, subscribeToPtyExit } from '@/components/terminal-pane/pty-dispatcher'
+import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
+import { subscribeToPtyExit } from '@/components/terminal-pane/pty-dispatcher'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRemoteRuntimeTerminalMultiplexer } from '@/runtime/remote-runtime-terminal-multiplexer'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
@@ -8,7 +8,10 @@ import {
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
 import { useAppStore } from '@/store'
+import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
+import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 
 export async function observeExistingAutomationSession(args: {
   ptyId: string
@@ -19,12 +22,31 @@ export async function observeExistingAutomationSession(args: {
   onExit: (code: number) => void
 }): Promise<() => void> {
   const { ptyId, paneKey, runId, onData, onExit } = args
+  // Why: for local/SSH PTYs main already parses OSC 9999 and routes it
+  // through the hook server (agentStatus:set → store); writing here too
+  // would race/duplicate that path. Remote-runtime bytes never transit local
+  // main, and the kill switch restores the legacy write. The onAgentStatus
+  // callback always fires — automation completion tracking stays here.
+  const mainOwnsAgentStatusWrites =
+    !isRemoteRuntimePtyId(ptyId) &&
+    isMainTerminalSideEffectAuthorityForPty({
+      settings: useAppStore.getState().settings,
+      runtimeEnvironmentId: null
+    })
   const processAgentStatus = createAgentStatusOscProcessor()
   const handleData = (data: string): void => {
     onData(data)
     const processed = processAgentStatus(data)
     for (const payload of processed.payloads) {
-      useAppStore.getState().setAgentStatus(paneKey, payload, undefined)
+      if (!mainOwnsAgentStatusWrites) {
+        const state = useAppStore.getState()
+        const routing = resolveLiveAgentStatusConnectionRouting({ state, paneKey, ptyId })
+        // Why: a delayed reuse observer must not write into a pane that has
+        // since rebound to another host's colliding tab/pane identifiers.
+        if (routing) {
+          state.setAgentStatus(paneKey, payload, undefined, undefined, routing)
+        }
+      }
       args.onAgentStatus(payload)
     }
   }

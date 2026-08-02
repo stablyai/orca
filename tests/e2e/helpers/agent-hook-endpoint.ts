@@ -1,6 +1,6 @@
 import { expect, type ElectronApplication } from '@stablyai/playwright-test'
-import { existsSync, readdirSync, readFileSync } from 'fs'
-import path from 'path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import {
   isAgentHookEndpointFileName,
   parseAgentHookEndpointFile,
@@ -87,5 +87,34 @@ export async function emitCodexHookStatus(
   })
   if (response.status !== 204) {
     throw new Error(`Codex hook POST returned ${response.status}`)
+  }
+}
+
+export async function emitGrokHookPayload(
+  endpoint: AgentHookEndpoint,
+  event: {
+    paneKey: string
+    worktreeId: string
+    payload: Record<string, unknown>
+  }
+): Promise<void> {
+  const [tabId] = event.paneKey.split(':')
+  const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/grok`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Orca-Agent-Hook-Token': endpoint.token
+    },
+    body: JSON.stringify({
+      paneKey: event.paneKey,
+      tabId,
+      worktreeId: event.worktreeId,
+      env: endpoint.env,
+      version: endpoint.version,
+      payload: event.payload
+    })
+  })
+  if (response.status !== 204) {
+    throw new Error(`Grok hook POST returned ${response.status}`)
   }
 }

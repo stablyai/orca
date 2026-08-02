@@ -85,19 +85,20 @@ describe('feature education telemetry helpers', () => {
 
   it('tracks setup guide step completion with bounded section and count fields', () => {
     trackSetupGuideStepCompleted({
-      stepId: 'split-terminal',
+      stepId: 'two-worktrees',
       completedCount: 99,
       totalSteps: 8,
       setupGuideVisible: true
     })
 
     expectTrackedFeatureEducationTelemetry('setup_guide_step_completed', {
-      step_id: 'split-terminal',
+      step_id: 'two-worktrees',
       section_id: 'parallel-work',
       completed_count: 8,
       total_steps: 8,
       setup_guide_visible: true
     })
+    expect(getSetupGuideStepSection('browser')).toBe('parallel-work')
     expect(getSetupGuideStepSection('notifications')).toBe('setup')
   })
 
@@ -105,11 +106,22 @@ describe('feature education telemetry helpers', () => {
     const storage = createMemoryStorage()
     vi.stubGlobal('localStorage', storage)
 
-    persistEmittedSetupGuideStepId('split-terminal')
-    persistEmittedSetupGuideStepId('split-terminal')
+    persistEmittedSetupGuideStepId('two-worktrees')
+    persistEmittedSetupGuideStepId('two-worktrees')
     persistEmittedSetupGuideStepId('setup-script')
 
-    expect([...readEmittedSetupGuideStepIds()].sort()).toEqual(['setup-script', 'split-terminal'])
+    expect([...readEmittedSetupGuideStepIds()].sort()).toEqual(['setup-script', 'two-worktrees'])
+  })
+
+  it('ignores inactive historical setup guide step ids from local storage', () => {
+    const storage = createMemoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    storage.setItem(
+      'orca.setupGuideTelemetryCompletedSteps.v1',
+      JSON.stringify(['split-terminal', 'two-worktrees'])
+    )
+
+    expect([...readEmittedSetupGuideStepIds()]).toEqual(['two-worktrees'])
   })
 
   it('tracks terminal pane split with explicit source and direction', () => {

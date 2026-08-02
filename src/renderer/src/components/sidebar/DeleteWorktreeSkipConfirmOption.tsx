@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
 import { Check } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
 
 export function DeleteWorktreeSkipConfirmOption({
   showDontAskAgain,
@@ -31,7 +32,10 @@ export function DeleteWorktreeSkipConfirmOption({
       >
         {dontAskAgain ? <Check className="size-3" strokeWidth={3} /> : null}
       </span>
-      Don&apos;t ask again
+      {translate(
+        'auto.components.sidebar.DeleteWorktreeSkipConfirmOption.29aefb7e52',
+        "Don't ask again"
+      )}
     </button>
   )
 }

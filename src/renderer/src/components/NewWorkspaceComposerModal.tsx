@@ -1,8 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
+import type { AddRepoDialogHostedController } from '@/components/sidebar/use-add-repo-hosted-controller'
 import { useComposerState } from '@/hooks/useComposerState'
 import {
   pickQuickWorkspaceAgent,
@@ -16,11 +24,24 @@ import type {
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus
 } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { translate } from '@/i18n/i18n'
+import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
+
+// Why: match App-level AddRepoDialog loading — the add flow is off the hot
+// path for the composer, so keep its clone/SSH machinery out of the entry render.
+const HostedAddRepoDialog = lazyWithRetry(() => import('@/components/sidebar/AddRepoDialog'), {
+  reloadKey: 'composer-add-repo'
+})
 
 type ComposerModalData = {
   prefilledName?: string
   initialRepoId?: string
+  initialEphemeralVmRecipeId?: string
+  initialProjectGroupId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
+  taskSourceContext?: TaskSourceContext | null
   initialBaseBranch?: string
   initialWorkspaceStatus?: WorkspaceStatus
   /** Telemetry surface that opened the composer. Set by each
@@ -74,18 +95,15 @@ function ComposerModalBody({
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex flex-col sm:max-w-lg"
+        className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
         onOpenAutoFocus={(event) => {
           // Why: Radix's FocusScope fires this once the dialog has mounted.
           // preventDefault stops it from focusing whatever first-tabbable it
-          // picks (close button), and we instead focus the repo picker so the
-          // keyboard flow starts at the top of the unified create form.
+          // picks (close button), and we instead focus the name/source field
+          // so users can start typing immediately.
           event.preventDefault()
           const content = event.currentTarget as HTMLElement
-          const trigger = content.querySelector<HTMLElement>(
-            '[data-repo-combobox-root="true"][role="combobox"]'
-          )
-          trigger?.focus({ preventScroll: true })
+          getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
         <QuickTabBody modalData={modalData} onClose={onClose} active />
@@ -110,14 +128,18 @@ function QuickTabBody({
     onComposerNodeChange,
     nameInputRef,
     submitQuick,
-    createDisabled
+    createDisabled,
+    selectAddedProjectRepo
   } = useComposerState({
     initialName: modalData.prefilledName ?? '',
     // Why: the modal is quick-create only now, so prompt-prefill state is
     // intentionally ignored even if older callers still send it.
     initialPrompt: '',
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
+    initialTaskSourceContext: modalData.taskSourceContext ?? null,
     initialRepoId: modalData.initialRepoId,
+    initialEphemeralVmRecipeId: modalData.initialEphemeralVmRecipeId,
+    initialProjectGroupId: modalData.initialProjectGroupId,
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
@@ -167,11 +189,61 @@ function QuickTabBody({
   const handleCreate = useCallback(async (): Promise<void> => {
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
-  const primaryActionLabel = cardProps.selectedRepoIsGit ? 'Create Worktree' : 'Create Workspace'
+  // Why: Add Project layers over the composer as a nested dialog instead of
+  // replacing it in the activeModal slot — closing the composer mid-flow (and
+  // losing the typed name/prompt) was the old, abrupt behavior. Once opened it
+  // stays mounted so cancel/complete plays the close animation and the
+  // dialog's close effects can abort in-flight clone/scan work. (Folder/non-git
+  // outcomes still navigate away and tear the whole modal down.)
+  const [addProjectOpen, setAddProjectOpen] = useState(false)
+  const [addProjectMounted, setAddProjectMounted] = useState(false)
+  const handleOpenAddProject = useCallback((): void => {
+    setAddProjectMounted(true)
+    setAddProjectOpen(true)
+  }, [])
+  const handleProjectAdded = useCallback(
+    (repoId: string): void => {
+      selectAddedProjectRepo(repoId)
+    },
+    [selectAddedProjectRepo]
+  )
+  const handleAddProjectCloseAutoFocus = useCallback(
+    (event: Event): void => {
+      // Why: after adding a project the next step is naming the worktree.
+      // Radix would try to restore focus to the (unmounted) combobox row that
+      // opened the dialog; send it to the name field instead — the same place
+      // picking a project from the combobox lands.
+      event.preventDefault()
+      nameInputRef?.current?.focus()
+    },
+    [nameInputRef]
+  )
+  const addProjectController = useMemo<AddRepoDialogHostedController>(
+    () => ({
+      open: addProjectOpen,
+      onOpenChange: setAddProjectOpen,
+      onProjectAdded: handleProjectAdded,
+      onCloseAutoFocus: handleAddProjectCloseAutoFocus
+    }),
+    [addProjectOpen, handleAddProjectCloseAutoFocus, handleProjectAdded]
+  )
+  const selectedProjectOption = cardProps.projectOptions.find(
+    (option) => option.id === cardProps.selectedProjectId
+  )
+  const isFolderWorkspaceTarget = selectedProjectOption?.kind === 'project-group'
+  const primaryActionLabel = isFolderWorkspaceTarget
+    ? getFolderWorkspacePrimaryActionLabel()
+    : cardProps.selectedRepoIsGit
+      ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
+      : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
   // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
+  const nestedDialogOpen = agentSettingsOpen || addProjectOpen
   useEffect(() => {
-    if (!active) {
+    if (!active || nestedDialogOpen) {
+      // Why: while a nested dialog (Add Project / Agents) is layered on top,
+      // this capture-phase handler must not steal its Escape (which should
+      // close only the nested dialog) or fire composer submit underneath it.
       return
     }
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -215,15 +287,33 @@ function QuickTabBody({
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [active, composerRef, createDisabled, handleCreate, onClose])
+  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen, onClose])
 
   return (
     <>
       <DialogHeader className="gap-1">
-        <DialogTitle className="text-base font-semibold">{primaryActionLabel}</DialogTitle>
+        <DialogTitle className="text-base font-semibold">
+          {isFolderWorkspaceTarget
+            ? translate(
+                'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
+                'Create Folder Workspace'
+              )
+            : primaryActionLabel}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          {translate(
+            'auto.components.NewWorkspaceComposerModal.fa90f739a5',
+            'Choose the project, workspace name, and agent before creating the workspace.'
+          )}
+        </DialogDescription>
       </DialogHeader>
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
+        // Why: the scroll container clips children (overflow-y-auto forces overflow-x to auto),
+        // while Orca's standard field focus ring paints 3px outside the control and the ghost
+        // "Advanced" disclosure pulls its padded hover highlight ~8px left to align its label with
+        // the field labels. Inset px-2 so both stay fully visible instead of clipped at the edge.
+        containerClassName="min-h-0 flex-1 overflow-y-auto px-2 scrollbar-sleek"
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}
@@ -233,8 +323,14 @@ function QuickTabBody({
         primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
+        onAddProjectOverride={handleOpenAddProject}
       />
       <AgentSettingsDialog open={agentSettingsOpen} onOpenChange={setAgentSettingsOpen} />
+      {addProjectMounted ? (
+        <Suspense fallback={null}>
+          <HostedAddRepoDialog hosted={addProjectController} />
+        </Suspense>
+      ) : null}
     </>
   )
 }

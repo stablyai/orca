@@ -1,0 +1,177 @@
+import { translate } from '@/i18n/i18n'
+import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import {
+  HeroFlow,
+  HeroIntro,
+  HeroPaired,
+  type PairedDevice,
+  type Platform,
+  type StepIndex
+} from './MobileHero'
+import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
+import type { MobilePageStage } from './mobile-page-stage'
+import { MobilePageToolbar } from './MobilePageToolbar'
+import { PhoneCarousel } from './PhoneCarousel'
+import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+
+type MobilePageContentProps = {
+  closeMobilePage: () => void
+  copyInstallUrl: () => void
+  copyPairingCode: () => void
+  devices: readonly PairedDevice[]
+  enterFlow: () => void
+  generatePairing: (rotate: boolean) => void
+  canGeneratePairing: boolean
+  handleAddressChange: (address: string) => void
+  customAddresses: readonly string[]
+  selectedAddressIsCustom: boolean
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
+  beforeCustomAddressChange: (address: string) => Promise<boolean>
+  handleBack: () => void
+  handleContinue: () => void
+  installQrUrl: string | null
+  iosChannel: IosChannel
+  setIosChannel: (channel: IosChannel) => void
+  loadNetworkInterfaces: () => void
+  networkInterfaces: MobileNetworkInterface[]
+  openInstallUrl: () => void
+  pairAnotherDevice: () => void
+  pairLoading: boolean
+  connectionMode: MobilePairingConnectionMode
+  handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
+  pairQrDataUrl: string | null
+  pairingUrl: string | null
+  pairingQrError: boolean
+  relayMintFailure: MobileRelayMintFailure | null
+  onUseLan: () => void
+  onRetryRelay: () => void
+  onCopyRelayDiagnostics: () => void
+  platform: Platform
+  refreshingNetworkInterfaces: boolean
+  revokeDevice: (id: string) => void
+  revokingDeviceIds: readonly string[]
+  selectedAddress: string | undefined
+  setPlatform: (platform: Platform) => void
+  showMobileButton: boolean
+  showPairedDevices: (deviceCount: number) => void
+  stage: MobilePageStage | null
+  stepIdx: StepIndex
+  toggleMobileSidebarButton: () => void
+}
+
+export function MobilePageContent({
+  closeMobilePage,
+  copyInstallUrl,
+  copyPairingCode,
+  devices,
+  enterFlow,
+  generatePairing,
+  canGeneratePairing,
+  handleAddressChange,
+  customAddresses,
+  selectedAddressIsCustom,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
+  beforeCustomAddressChange,
+  handleBack,
+  handleContinue,
+  installQrUrl,
+  iosChannel,
+  setIosChannel,
+  loadNetworkInterfaces,
+  networkInterfaces,
+  openInstallUrl,
+  pairAnotherDevice,
+  pairLoading,
+  connectionMode,
+  handleConnectionModeChange,
+  pairQrDataUrl,
+  pairingUrl,
+  pairingQrError,
+  relayMintFailure,
+  onUseLan,
+  onRetryRelay,
+  onCopyRelayDiagnostics,
+  platform,
+  refreshingNetworkInterfaces,
+  revokeDevice,
+  revokingDeviceIds,
+  selectedAddress,
+  setPlatform,
+  showMobileButton,
+  showPairedDevices,
+  stage,
+  stepIdx,
+  toggleMobileSidebarButton
+}: MobilePageContentProps): React.JSX.Element {
+  return (
+    <div className="mobile-page-root scrollbar-sleek">
+      <MobilePageToolbar
+        showMobileButton={showMobileButton}
+        onClose={closeMobilePage}
+        onToggleMobileSidebarButton={toggleMobileSidebarButton}
+      />
+      <section className="mp-hero">
+        <div className="mp-hero-copy">
+          {stage === null ? null : stage === 'intro' ? (
+            <HeroIntro onStart={enterFlow} />
+          ) : stage === 'paired' ? (
+            <HeroPaired
+              devices={devices}
+              onPairAnother={pairAnotherDevice}
+              onRevoke={(id) => revokeDevice(id)}
+              revokingDeviceIds={revokingDeviceIds}
+            />
+          ) : (
+            <HeroFlow
+              stepIdx={stepIdx}
+              platform={platform}
+              onPlatformChange={setPlatform}
+              installQrUrl={installQrUrl}
+              installCopy={getInstallCopy(platform, iosChannel)}
+              iosChannel={iosChannel}
+              onIosChannelChange={setIosChannel}
+              onOpenInstallUrl={openInstallUrl}
+              onCopyInstallUrl={copyInstallUrl}
+              pairQrDataUrl={pairQrDataUrl}
+              pairingUrl={pairingUrl}
+              pairingQrError={pairingQrError}
+              relayMintFailure={relayMintFailure}
+              onUseLan={onUseLan}
+              onRetryRelay={onRetryRelay}
+              onCopyRelayDiagnostics={onCopyRelayDiagnostics}
+              pairLoading={pairLoading}
+              connectionMode={connectionMode}
+              onConnectionModeChange={handleConnectionModeChange}
+              onRegeneratePairing={() => generatePairing(true)}
+              canGeneratePairing={canGeneratePairing}
+              onCopyPairingCode={copyPairingCode}
+              networkInterfaces={networkInterfaces}
+              customAddresses={customAddresses}
+              selectedAddress={selectedAddress}
+              selectedAddressIsCustom={selectedAddressIsCustom}
+              onSelectedAddressChange={handleAddressChange}
+              onCustomAddressSelect={onCustomAddressSelect}
+              onCustomAddressRemove={onCustomAddressRemove}
+              beforeCustomAddressChange={beforeCustomAddressChange}
+              onRefreshNetworkInterfaces={loadNetworkInterfaces}
+              refreshingNetworkInterfaces={refreshingNetworkInterfaces}
+              onBack={handleBack}
+              onContinue={handleContinue}
+              onDone={devices.length > 0 ? () => showPairedDevices(devices.length) : undefined}
+            />
+          )}
+        </div>
+
+        <div
+          className="mp-stage"
+          aria-label={translate('auto.components.mobile.MobilePage.e17393c6a3', 'Phone preview')}
+        >
+          <PhoneCarousel />
+        </div>
+      </section>
+    </div>
+  )
+}

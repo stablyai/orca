@@ -6,12 +6,14 @@ type MockAppState = {
   browserTabsByWorktree: Record<string, readonly BrowserTabState[]>
   unifiedTabsByWorktree: Record<string, readonly Tab[]>
   groupsByWorktree: Record<string, readonly TabGroup[]>
+  activeGroupIdByWorktree: Record<string, string>
   focusGroup: (worktreeId: string, groupId: string) => void
 }
 
 const mocks = vi.hoisted(() => ({
   state: null as MockAppState | null,
   automationVisiblePageIds: new Set<string>(),
+  mobileDrivenPageIds: new Set<string>(),
   focusGroup: vi.fn()
 }))
 
@@ -29,11 +31,25 @@ vi.mock('./browser-automation-visibility', () => ({
     pageIds.some((pageId) => mocks.automationVisiblePageIds.has(pageId))
 }))
 
+vi.mock('@/lib/pane-manager/browser-mobile-driver-state', () => ({
+  useBrowserMobileDriverForAny: (pageIds: readonly string[]) =>
+    pageIds.some((pageId) => mocks.mobileDrivenPageIds.has(pageId))
+}))
+
 vi.mock('./BrowserPane', () => ({
-  default: ({ browserTab, isActive }: { browserTab: BrowserTabState; isActive: boolean }) => (
+  default: ({
+    browserTab,
+    isActive,
+    findShortcutScope
+  }: {
+    browserTab: BrowserTabState
+    isActive: boolean
+    findShortcutScope?: string
+  }) => (
     <span
       data-browser-pane-id={browserTab.id}
       data-browser-pane-active={isActive ? 'true' : 'false'}
+      data-browser-find-shortcut-scope={findShortcutScope}
     />
   )
 }))
@@ -43,6 +59,7 @@ import BrowserPaneOverlayLayer from './BrowserPaneOverlayLayer'
 describe('BrowserPaneOverlayLayer', () => {
   beforeEach(() => {
     mocks.automationVisiblePageIds.clear()
+    mocks.mobileDrivenPageIds.clear()
     mocks.focusGroup.mockClear()
     mocks.state = createState()
   })
@@ -56,6 +73,88 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-active="false"')
   })
 
+  it('marks the active browser pane focused when its own group holds focus', () => {
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    // browser-a is the active tab of group-1, and group-1 is the focused split.
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="focused"'
+    )
+  })
+
+  it('keeps an active browser pane unfocused when another split holds focus (#11348)', () => {
+    mocks.state = createState()
+    mocks.state.groupsByWorktree = {
+      'wt-1': [
+        ...mocks.state.groupsByWorktree['wt-1'],
+        {
+          id: 'group-2',
+          worktreeId: 'wt-1',
+          activeTabId: null,
+          tabOrder: []
+        }
+      ]
+    }
+    mocks.state.activeGroupIdByWorktree = { 'wt-1': 'group-2' }
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="inactive"'
+    )
+  })
+
+  it('limits Find to the owning target while focused-group state is unavailable', () => {
+    mocks.state = createState()
+    mocks.state.activeGroupIdByWorktree = {}
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="owned-target"'
+    )
+  })
+
+  it('limits Find to the owning target when the focused-group ID is stale', () => {
+    mocks.state = createState()
+    mocks.state.activeGroupIdByWorktree = { 'wt-1': 'removed-group' }
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="owned-target"'
+    )
+  })
+
+  it('keeps Find ownership with group identities after split order changes', () => {
+    mocks.state = createState()
+    const [tabA, tabB] = mocks.state.unifiedTabsByWorktree['wt-1']
+    const [groupA] = mocks.state.groupsByWorktree['wt-1']
+    mocks.state.unifiedTabsByWorktree = {
+      'wt-1': [{ ...tabB, groupId: 'group-2' }, tabA]
+    }
+    mocks.state.groupsByWorktree = {
+      'wt-1': [
+        {
+          id: 'group-2',
+          worktreeId: 'wt-1',
+          activeTabId: tabB.id,
+          tabOrder: [tabB.id]
+        },
+        { ...groupA, tabOrder: [tabA.id] }
+      ]
+    }
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="focused"'
+    )
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-b" data-browser-pane-active="true" data-browser-find-shortcut-scope="inactive"'
+    )
+  })
+
   it('marks automation-visible inactive browser panes paintable without remounting them', () => {
     mocks.automationVisiblePageIds.add('page-b')
 
@@ -66,12 +165,31 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-active="false"')
   })
 
-  it('keeps the selected browser pane mounted but inactive when its worktree is not visible', () => {
+  it('parks browser panes when their worktree is hidden', () => {
     const markup = renderOverlay({ isWorktreeActive: false })
 
-    expect(markup).toContain('data-browser-pane-id="browser-a"')
-    expect(markup).toContain('data-browser-pane-active="false"')
+    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
+    expect(markup).not.toContain('data-browser-pane-id="browser-b"')
+  })
+
+  it('keeps an automation-visible hidden browser pane mounted', () => {
+    mocks.automationVisiblePageIds.add('page-b')
+
+    const markup = renderOverlay({ isWorktreeActive: false })
+
+    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
     expect(markup).toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-pane-active="false"')
+  })
+
+  it('keeps a mobile-controlled hidden browser pane mounted', () => {
+    mocks.mobileDrivenPageIds.add('page-b')
+
+    const markup = renderOverlay({ isWorktreeActive: false })
+
+    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
+    expect(markup).toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-pane-active="false"')
   })
 })
 
@@ -100,6 +218,8 @@ function createState(): MockAppState {
         }
       ]
     },
+    // Default: the browser's own group holds focus, so active === focused.
+    activeGroupIdByWorktree: { 'wt-1': 'group-1' },
     focusGroup: mocks.focusGroup
   }
 }

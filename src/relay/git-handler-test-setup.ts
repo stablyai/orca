@@ -6,8 +6,11 @@
  * so multiple test files can reuse them without duplication.
  */
 import { vi } from 'vitest'
-import { execFileSync } from 'child_process'
+import { execFileSync } from 'node:child_process'
 import type { RelayDispatcher } from './dispatcher'
+
+const TEST_GIT_USER_EMAIL = 'test@test.com'
+const TEST_GIT_USER_NAME = 'Test'
 
 // Why: declare an explicit type so the inferred return type of
 // createMockDispatcher doesn't transitively reference `@vitest/spy`'s
@@ -19,22 +22,32 @@ export type MockDispatcher = {
     method: string,
     handler: (
       params: Record<string, unknown>,
-      context: { isStale: () => boolean }
+      context: { isStale: () => boolean; signal?: AbortSignal }
     ) => Promise<unknown>
   ) => void
   onNotification: (method: string, handler: (params: Record<string, unknown>) => void) => void
   notify: (method: string, params?: Record<string, unknown>) => void
   _requestHandlers: Map<
     string,
-    (params: Record<string, unknown>, context: { isStale: () => boolean }) => Promise<unknown>
+    (
+      params: Record<string, unknown>,
+      context: { isStale: () => boolean; signal?: AbortSignal }
+    ) => Promise<unknown>
   >
-  callRequest(method: string, params?: Record<string, unknown>): Promise<unknown>
+  callRequest(
+    method: string,
+    params?: Record<string, unknown>,
+    context?: { isStale: () => boolean; signal?: AbortSignal }
+  ): Promise<unknown>
 }
 
 export function createMockDispatcher(): MockDispatcher {
   const requestHandlers = new Map<
     string,
-    (params: Record<string, unknown>, context: { isStale: () => boolean }) => Promise<unknown>
+    (
+      params: Record<string, unknown>,
+      context: { isStale: () => boolean; signal?: AbortSignal }
+    ) => Promise<unknown>
   >()
 
   return {
@@ -43,7 +56,7 @@ export function createMockDispatcher(): MockDispatcher {
         method: string,
         handler: (
           params: Record<string, unknown>,
-          context: { isStale: () => boolean }
+          context: { isStale: () => boolean; signal?: AbortSignal }
         ) => Promise<unknown>
       ) => {
         requestHandlers.set(method, handler)
@@ -52,25 +65,44 @@ export function createMockDispatcher(): MockDispatcher {
     onNotification: vi.fn(),
     notify: vi.fn(),
     _requestHandlers: requestHandlers,
-    async callRequest(method: string, params: Record<string, unknown> = {}) {
+    async callRequest(
+      method: string,
+      params: Record<string, unknown> = {},
+      context: { isStale: () => boolean; signal?: AbortSignal } = { isStale: () => false }
+    ) {
       const handler = requestHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      return handler(params, { isStale: () => false })
+      return handler(params, context)
     }
   }
 }
 
 export function gitInit(dir: string): void {
   execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.email', TEST_GIT_USER_EMAIL], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.name', TEST_GIT_USER_NAME], { cwd: dir, stdio: 'pipe' })
 }
 
 export function gitCommit(dir: string, message: string): void {
   execFileSync('git', ['add', '.'], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-m', message, '--allow-empty'], { cwd: dir, stdio: 'pipe' })
+  // Why: `git submodule add` creates a checkout that does not inherit the
+  // source repo's local identity config, and CI may have no global identity.
+  execFileSync(
+    'git',
+    [
+      '-c',
+      `user.email=${TEST_GIT_USER_EMAIL}`,
+      '-c',
+      `user.name=${TEST_GIT_USER_NAME}`,
+      'commit',
+      '-m',
+      message,
+      '--allow-empty'
+    ],
+    { cwd: dir, stdio: 'pipe' }
+  )
 }
 
 export type { RelayDispatcher }

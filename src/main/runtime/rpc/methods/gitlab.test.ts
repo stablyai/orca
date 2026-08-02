@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: one routing test exercises the full GitLab RPC surface so provider parity regressions show up in a single contract fixture. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'

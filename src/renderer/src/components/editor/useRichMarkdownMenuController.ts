@@ -3,6 +3,7 @@ import type React from 'react'
 import type { MarkdownDocument } from '../../../../shared/types'
 import { getMarkdownDocCompletionDocuments } from './markdown-doc-completions'
 import type { DocLinkMenuRow, DocLinkMenuState } from './rich-markdown-commands'
+import { filterRichMarkdownSlashCommands } from './rich-markdown-slash-command-filter'
 import {
   slashCommands,
   type SlashCommand,
@@ -72,14 +73,7 @@ export function useRichMarkdownMenuController({
   )
 
   const filteredSlashCommands = useMemo(() => {
-    const query = slashMenu?.query.trim().toLowerCase() ?? ''
-    if (!query) {
-      return slashCommands
-    }
-    return slashCommands.filter((command) => {
-      const haystack = [command.label, ...command.aliases].join(' ').toLowerCase()
-      return haystack.includes(query)
-    })
+    return filterRichMarkdownSlashCommands(slashCommands, slashMenu?.query ?? '')
   }, [slashMenu?.query])
   const selectedCommandIndex = resolveSelectedMenuIndex(
     slashSelection,

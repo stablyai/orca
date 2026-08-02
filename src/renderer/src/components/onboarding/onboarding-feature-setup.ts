@@ -5,6 +5,7 @@ import type {
 } from '../../../../shared/computer-use-permissions-types'
 import {
   COMPUTER_USE_SKILL_NAME,
+  ORCA_LINEAR_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME,
   buildAgentFeatureSkillInstallCommand
@@ -19,17 +20,29 @@ import {
 } from '@/lib/orchestration-setup-state'
 import type { EventProps } from '../../../../shared/telemetry-events'
 
-export type OnboardingFeatureSetupId = 'browserUse' | 'computerUse' | 'orchestration'
+export type OnboardingFeatureSetupId =
+  | 'browserUse'
+  | 'computerUse'
+  | 'orchestration'
+  | 'linearTickets'
 
 export type OnboardingFeatureSetupSelection = Record<OnboardingFeatureSetupId, boolean>
 
 export const DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION: OnboardingFeatureSetupSelection = {
   browserUse: true,
   computerUse: true,
-  orchestration: true
+  orchestration: true,
+  linearTickets: false
 }
 
 export const ONBOARDING_FEATURE_SETUP_IDS: readonly OnboardingFeatureSetupId[] = [
+  'browserUse',
+  'computerUse',
+  'orchestration',
+  'linearTickets'
+]
+
+const ONBOARDING_PROGRESS_FEATURE_SETUP_IDS: readonly OnboardingFeatureSetupId[] = [
   'browserUse',
   'computerUse',
   'orchestration'
@@ -38,7 +51,8 @@ export const ONBOARDING_FEATURE_SETUP_IDS: readonly OnboardingFeatureSetupId[] =
 const FEATURE_SKILL_NAMES: Record<OnboardingFeatureSetupId, string> = {
   browserUse: ORCA_CLI_SKILL_NAME,
   computerUse: COMPUTER_USE_SKILL_NAME,
-  orchestration: ORCHESTRATION_SKILL_NAME
+  orchestration: ORCHESTRATION_SKILL_NAME,
+  linearTickets: ORCA_LINEAR_SKILL_NAME
 }
 
 const FEATURE_TELEMETRY_IDS: Record<
@@ -47,7 +61,8 @@ const FEATURE_TELEMETRY_IDS: Record<
 > = {
   browserUse: 'browser_use',
   computerUse: 'computer_use',
-  orchestration: 'orchestration'
+  orchestration: 'orchestration',
+  linearTickets: 'linear_tickets'
 }
 
 export type OnboardingFeatureSetupWarning = {
@@ -118,9 +133,17 @@ export function onboardingFeatureSetupTelemetrySelection(
   return {
     browser_use: selection.browserUse,
     computer_use: selection.computerUse,
+    linear_tickets: selection.linearTickets,
     orchestration: selection.orchestration,
-    selected_count: selectedOnboardingFeatureSetupIds(selection).length
+    // Why: Linear skill setup is a recommended add-on, not onboarding progress.
+    selected_count: selectedOnboardingProgressFeatureSetupIds(selection).length
   }
+}
+
+function selectedOnboardingProgressFeatureSetupIds(
+  selection: OnboardingFeatureSetupSelection
+): OnboardingFeatureSetupId[] {
+  return ONBOARDING_PROGRESS_FEATURE_SETUP_IDS.filter((id) => selection[id])
 }
 
 export function onboardingFeatureSetupRunTelemetry(
@@ -202,7 +225,13 @@ export async function runOnboardingFeatureSetup(
         featureId: 'cli',
         message: status.detail ?? 'Orca CLI registration is not available on this platform.'
       })
-    } else if (status.state !== 'installed' || !status.pathConfigured) {
+    } else if (status.pathConfigured === null) {
+      // Why: an unknown registry read cannot safely drive a PATH read-modify-write.
+      warnings.push({
+        featureId: 'cli',
+        message: status.detail ?? 'Orca could not check your Windows user PATH.'
+      })
+    } else if (status.state !== 'installed' || status.pathConfigured === false) {
       await deps.showCliRegistrationPrompt?.()
       const next = await deps.installCli()
       cliTouched = true
@@ -211,7 +240,7 @@ export async function runOnboardingFeatureSetup(
           featureId: 'cli',
           message: next.detail ?? 'Orca CLI registration needs attention.'
         })
-      } else if (!next.pathConfigured && next.detail) {
+      } else if (next.pathConfigured !== true && next.detail) {
         warnings.push({ featureId: 'cli', message: next.detail })
       }
     }
@@ -222,12 +251,24 @@ export async function runOnboardingFeatureSetup(
   if (selection.computerUse) {
     try {
       const status = await deps.getComputerUsePermissionStatus()
-      const needsMacPermissions =
-        status.platform === 'darwin' &&
-        status.permissions.some((permission) => permission.status !== 'granted')
-      if (needsMacPermissions) {
-        await deps.openComputerUsePermissionSetup()
-        computerUsePermissionsOpened = true
+      // Why: when the macOS helper app is missing (e.g. dev builds without
+      // `pnpm build:computer-macos`), the status reports all permissions as
+      // not-granted alongside a helperUnavailableReason. Without this guard we
+      // would call openSetup, which throws an IPC handler error instead of
+      // degrading gracefully.
+      if (status.helperUnavailableReason) {
+        warnings.push({
+          featureId: 'computerUse',
+          message: status.helperUnavailableReason
+        })
+      } else {
+        const needsMacPermissions =
+          status.platform === 'darwin' &&
+          status.permissions.some((permission) => permission.status !== 'granted')
+        if (needsMacPermissions) {
+          await deps.openComputerUsePermissionSetup()
+          computerUsePermissionsOpened = true
+        }
       }
     } catch (error) {
       warnings.push({

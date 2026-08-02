@@ -1,10 +1,12 @@
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
-import { captureScrollState, restoreScrollState, safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { getPaneOwnedActiveHelperTextarea } from './regular-terminal-focus-ownership'
 
 type FontZoomDeps = {
   isActive: boolean
+  containerRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
   paneFontSizesRef: React.RefObject<Map<number, number>>
   settingsRef: React.RefObject<{ terminalFontSize?: number } | null>
@@ -12,6 +14,7 @@ type FontZoomDeps = {
 
 export function useTerminalFontZoom({
   isActive,
+  containerRef,
   managerRef,
   paneFontSizesRef,
   settingsRef
@@ -25,6 +28,10 @@ export function useTerminalFontZoom({
     const FONT_SIZE_STEP = 1
 
     return window.api.ui.onTerminalZoom((direction) => {
+      const container = containerRef.current
+      if (!container || !getPaneOwnedActiveHelperTextarea(container, document.activeElement)) {
+        return
+      }
       const manager = managerRef.current
       if (!manager) {
         return
@@ -50,16 +57,10 @@ export function useTerminalFontZoom({
       }
 
       pane.terminal.options.fontSize = nextSize
-      try {
-        const state = captureScrollState(pane.terminal)
-        safeFit(pane)
-        restoreScrollState(pane.terminal, state)
-      } catch {
-        /* ignore */
-      }
+      safeFit(pane)
 
       const percent = Math.round((nextSize / globalSize) * 100)
       dispatchZoomLevelChanged('terminal', percent)
     })
-  }, [isActive, managerRef, paneFontSizesRef, settingsRef])
+  }, [containerRef, isActive, managerRef, paneFontSizesRef, settingsRef])
 }

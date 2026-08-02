@@ -1,63 +1,64 @@
+import type {
+  ConfirmForegroundProcessRequest,
+  GetForegroundProcessRequest,
+  InspectProcessRequest
+} from './daemon-foreground-process-protocol'
+
+export type {
+  ConfirmForegroundProcessRequest,
+  GetForegroundProcessRequest,
+  InspectProcessRequest
+} from './daemon-foreground-process-protocol'
+
 // ─── Protocol Version ────────────────────────────────────────────────
-// Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
-// when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
-// Why: bump when adding daemon wire behavior so same-version old daemons do
-// not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 11
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
+import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TuiAgent } from '../../shared/types'
+import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import type {
+  AgentSessionExecutionClaim,
+  AgentSessionOwnerBinding,
+  AgentSessionSurfaceBinding
+} from '../../shared/agent-session-host-authority'
+import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
+export type { TerminalModes } from './terminal-modes'
+import type { TerminalSnapshot } from './terminal-snapshot'
+export type { TerminalSnapshot } from './terminal-snapshot'
+export {
+  AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
+  CLEAN_DISCONNECT_PROTOCOL_VERSION,
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
+  PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
+  PROTOCOL_VERSION,
+  PTY_STARTUP_INGRESS_PROTOCOL_VERSION,
+  MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION,
+  supportsMode2031UnsubscribeFact,
+  supportsPtyStartupIngress
+} from './daemon-protocol-version'
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
 
 export type ShellReadyState = 'pending' | 'ready' | 'timed_out' | 'unsupported'
 
-// ─── Terminal Snapshot ──────────────────────────────────────────────
-export type TerminalSnapshot = {
-  snapshotAnsi: string
-  /** Scrollback portion only (rows above the visible viewport). Write this
-   *  to preserve history without interfering with TUI repaints. */
-  scrollbackAnsi: string
-  rehydrateSequences: string
-  cwd: string | null
-  modes: TerminalModes
-  cols: number
-  rows: number
-  scrollbackLines: number
-}
-
-export type TerminalModes = {
-  bracketedPaste: boolean
-  mouseTracking: boolean
-  mouseTrackingMode?: 'none' | 'x10' | 'vt200' | 'drag' | 'any'
-  sgrMouseMode?: boolean
-  sgrMousePixelsMode?: boolean
-  applicationCursor: boolean
-  alternateScreen: boolean
-}
+// The on-disk checkpoint.json shape lives in daemon-checkpoint-file.ts (it
+// depends only on TerminalModes here) — re-exported so existing importers of
+// `./types` keep working.
+export type { TerminalCheckpointFile } from './daemon-checkpoint-file'
 
 // ─── NDJSON Protocol Messages ───────────────────────────────────────
 
 // Hello handshake (first message on each socket)
-export type HelloMessage = {
-  type: 'hello'
-  version: number
-  token: string
-  clientId: string
-  role: 'control' | 'stream'
-}
-
-export type HelloResponse = {
-  type: 'hello'
-  ok: boolean
-  error?: string
-}
+export type { DaemonEndpointIdentity, HelloMessage, HelloResponse } from './daemon-hello-protocol'
 
 // ─── RPC Requests (Client → Daemon, on control socket) ─────────────
 
 export type CreateOrAttachRequest = {
   id: string
   type: 'createOrAttach'
-  payload: {
+  payload: HistorySeedProtocol.CreateOrAttachHistorySeedPayload & {
     sessionId: string
     cols: number
     rows: number
@@ -65,6 +66,8 @@ export type CreateOrAttachRequest = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    startupCommandDelivery?: StartupCommandDelivery
+    launchAgent?: TuiAgent
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
      *  The daemon forwards this to its subprocess spawner so each tab honors
      *  the shell picked in the "+" menu or the persisted default-shell setting,
@@ -79,15 +82,25 @@ export type CreateOrAttachRequest = {
      *  PTY path resolves the same effective executable as LocalPtyProvider. */
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
+    shellReadyTimeoutMs?: number
+    startupIngress?: PtyStartupIngressIntent
+    agentSessionEnsure?: {
+      claim: AgentSessionExecutionClaim
+      surface: AgentSessionSurfaceBinding
+    }
   }
+}
+
+export type CloseStartupQueryAuthorityRequest = {
+  id: string
+  type: 'closeStartupQueryAuthority'
+  payload: { sessionId: string }
 }
 
 export type CancelCreateOrAttachRequest = {
   id: string
   type: 'cancelCreateOrAttach'
-  payload: {
-    sessionId: string
-  }
+  payload: { sessionId: string }
 }
 
 export type WriteRequest = {
@@ -109,11 +122,44 @@ export type ResizeRequest = {
   }
 }
 
+// ─── Producer flow control (v19+) ───────────────────────────────────
+// Why fire-and-forget notifications (like write/resize): pause/resume ride the
+// hot data path and are best-effort — the daemon-side 5s failsafe, not an RPC
+// reply, is what guarantees a paused shell can never stay wedged.
+export type PausePtyRequest = {
+  id: string
+  type: 'pausePty'
+  payload: {
+    sessionId: string
+  }
+}
+
+export type ResumePtyRequest = {
+  id: string
+  type: 'resumePty'
+  payload: {
+    sessionId: string
+  }
+}
+
+// Why the notification stays backward-tolerated: unknown notify types are
+// swallowed by old daemons. The adapter's v20 capability gate separately
+// prevents v19 thinning without a sequence-safe recovery snapshot.
+export type SetSessionBackgroundRequest = {
+  id: string
+  type: 'setSessionBackground'
+  payload: {
+    sessionId: string
+    background: boolean
+  }
+}
+
 export type KillRequest = {
   id: string
   type: 'kill'
   payload: {
     sessionId: string
+    immediate?: boolean
   }
 }
 
@@ -131,6 +177,11 @@ export type ListSessionsRequest = {
   type: 'listSessions'
 }
 
+export type ShutdownIfIdleRequest = {
+  id: string
+  type: 'shutdownIfIdle'
+}
+
 export type DetachRequest = {
   id: string
   type: 'detach'
@@ -142,14 +193,6 @@ export type DetachRequest = {
 export type GetCwdRequest = {
   id: string
   type: 'getCwd'
-  payload: {
-    sessionId: string
-  }
-}
-
-export type GetForegroundProcessRequest = {
-  id: string
-  type: 'getForegroundProcess'
   payload: {
     sessionId: string
   }
@@ -181,30 +224,99 @@ export type SystemResolverHealthRequest = {
   type: 'systemResolverHealth'
 }
 
+export type PtySpawnHealthRequest = {
+  id: string
+  type: 'ptySpawnHealth'
+}
+
 export type GetSnapshotRequest = {
   id: string
   type: 'getSnapshot'
   payload: {
     sessionId: string
+    scrollbackRows?: number
   }
+}
+
+// Why: read-only readback of the size the PTY actually applied (vs the size the
+// renderer last requested via the fire-and-forget resize notify). Lets the
+// renderer's resume drift-check re-assert a resize the daemon dropped/coerced.
+export type GetSizeRequest = {
+  id: string
+  type: 'getSize'
+  payload: {
+    sessionId: string
+  }
+}
+
+// ─── Incremental checkpoint records (v13+) ──────────────────────────
+// Why: the 5s checkpoint used to re-serialize the full emulator buffer per
+// tick, stalling the daemon's PTY pump for O(buffer). Incremental checkpoints
+// take only the raw records accumulated since the last take; the emulator is
+// serialized only when a full snapshot is explicitly requested (clean
+// shutdown, pending-buffer overflow, or the on-disk log reaching its cap).
+export type PendingOutputRecord =
+  | { kind: 'output'; data: string }
+  | { kind: 'resize'; cols: number; rows: number }
+  | { kind: 'clear' }
+
+export type TakePendingOutputRequest = {
+  id: string
+  type: 'takePendingOutput'
+  payload: {
+    sessionId: string
+    /** When true, the daemon serializes a full snapshot in the SAME
+     *  synchronous turn as the take. This atomicity is load-bearing: a
+     *  snapshot taken in a separate request could include bytes that a later
+     *  take would replay again, duplicating content on cold restore. */
+    includeSnapshot?: boolean
+    /** True only for final checkpoints taken immediately before PTY teardown.
+     *  This lets the daemon release pending parser-state bytes that should be
+     *  preserved before the backing PTY is destroyed, without disturbing live
+     *  full checkpoints or warm-reconnect checkpoints. */
+    teardownSnapshot?: boolean
+  }
+}
+
+export type TakePendingOutputResult = {
+  records: PendingOutputRecord[]
+  /** Monotonic per-session batch sequence. The history log stores it so the
+   *  cold-restore reader can detect a lost batch (gap) and discard the log
+   *  instead of replaying a stream with missing bytes. */
+  seq: number
+  /** True when the session's pending buffer exceeded its cap and records were
+   *  dropped. The caller must fall back to a full snapshot checkpoint. */
+  overflowed: boolean
+  snapshot: TerminalSnapshot | null
 }
 
 export type DaemonRequest =
   | CreateOrAttachRequest
+  | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest
   | WriteRequest
   | ResizeRequest
+  | PausePtyRequest
+  | ResumePtyRequest
+  | SetSessionBackgroundRequest
   | KillRequest
   | SignalRequest
   | ListSessionsRequest
+  | ShutdownIfIdleRequest
   | DetachRequest
   | GetCwdRequest
   | GetForegroundProcessRequest
+  | InspectProcessRequest
+  | ConfirmForegroundProcessRequest
   | ClearScrollbackRequest
   | ShutdownRequest
   | PingRequest
   | SystemResolverHealthRequest
+  | PtySpawnHealthRequest
   | GetSnapshotRequest
+  | GetSizeRequest
+  | TakePendingOutputRequest
+  | CloseStartupQueryAuthorityRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 
@@ -222,19 +334,17 @@ export type RpcResponseError = {
 
 export type RpcResponse<T = unknown> = RpcResponseOk<T> | RpcResponseError
 
-export type CreateOrAttachResult = {
-  isNew: boolean
-  snapshot: TerminalSnapshot | null
-  pid: number | null
-  shellState: ShellReadyState
-}
-
+export type { DaemonCreateOrAttachResult as CreateOrAttachResult } from './daemon-create-or-attach-result'
 export type GetSnapshotResult = {
   snapshot: TerminalSnapshot | null
 }
 
 export type ListSessionsResult = {
   sessions: SessionInfo[]
+}
+
+export type ShutdownIfIdleResult = {
+  retiring: boolean
 }
 
 export type SystemResolverHealth = 'healthy' | 'unhealthy' | 'unknown'
@@ -245,14 +355,18 @@ export type SystemResolverHealthResult = {
 
 export type SessionInfo = {
   sessionId: string
+  incarnationId?: string
   state: SessionState
   shellState: ShellReadyState
   isAlive: boolean
+  terminalHandle?: string
+  wslDistro?: string | null
   pid: number | null
   cwd: string | null
   cols: number
   rows: number
   createdAt: number
+  agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
 // Why: SessionInfo + source protocol version, so the Manage Sessions UI can
@@ -263,30 +377,9 @@ export type DaemonSessionInfo = SessionInfo & {
   protocolVersion: number
 }
 
-// ─── Events (Daemon → Client, on stream socket) ────────────────────
-
-export type DataEvent = {
-  type: 'event'
-  event: 'data'
-  sessionId: string
-  payload: { data: string }
-}
-
-export type ExitEvent = {
-  type: 'event'
-  event: 'exit'
-  sessionId: string
-  payload: { code: number }
-}
-
-export type TerminalErrorEvent = {
-  type: 'event'
-  event: 'terminalError'
-  sessionId: string
-  payload: { message: string }
-}
-
-export type DaemonEvent = DataEvent | ExitEvent | TerminalErrorEvent
+// Stream-socket event shapes live in daemon-stream-events.ts; re-exported so
+// existing importers keep one types entry point.
+export * from './daemon-stream-events'
 
 // ─── Binary Frame Protocol (Daemon ↔ PTY Subprocess) ────────────────
 //
@@ -311,23 +404,10 @@ export const FRAME_MAX_PAYLOAD = 1024 * 1024 // 1MB
 export const NOTIFY_PREFIX = 'notify_'
 
 // ─── Error types ────────────────────────────────────────────────────
-export class TerminalAttachCanceledError extends Error {
-  constructor(sessionId: string) {
-    super(`Attach canceled for session ${sessionId}`)
-    this.name = 'TerminalAttachCanceledError'
-  }
-}
-
-export class DaemonProtocolError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'DaemonProtocolError'
-  }
-}
-
-export class SessionNotFoundError extends Error {
-  constructor(sessionId: string) {
-    super(`Session not found: ${sessionId}`)
-    this.name = 'SessionNotFoundError'
-  }
-}
+// Re-exported so existing importers of `./types` keep working; the classes
+// live in daemon-errors.ts (this file is capped for wire-shape declarations).
+export {
+  TerminalAttachCanceledError,
+  DaemonProtocolError,
+  SessionNotFoundError
+} from './daemon-errors'

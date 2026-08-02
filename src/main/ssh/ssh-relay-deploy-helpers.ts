@@ -1,20 +1,21 @@
 import type { ClientChannel } from 'ssh2'
-import type { SshConnection } from './ssh-connection'
+import { createSshOperationAbortError } from './ssh-connection-utils'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
-import {
-  RelayVersionMismatchError,
-  RELAY_EXIT_CODE_VERSION_MISMATCH
-} from './ssh-relay-version-mismatch-error'
+import { buildRelayVersionMismatchError } from './ssh-relay-handshake-mismatch'
 
 export { uploadFile, uploadDirectory, mkdirSftp } from './sftp-upload'
+export { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 
 // ── Sentinel detection ────────────────────────────────────────────────
 
 const MAX_RELAY_STARTUP_BUFFER_BYTES = 64 * 1024
 const RELAY_SENTINEL_BUFFER = Buffer.from(RELAY_SENTINEL, 'utf-8')
 
-export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTransport> {
+export function waitForSentinel(
+  channel: ClientChannel,
+  signal?: AbortSignal
+): Promise<MultiplexerTransport> {
   return new Promise<MultiplexerTransport>((resolve, reject) => {
     let sentinelReceived = false
     let settled = false
@@ -41,17 +42,14 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 
     const timeout = setTimeout(() => {
       timeoutFired = true
-      channel.close()
       timeoutGraceTimer = setTimeout(() => {
-        if (!settled) {
-          settled = true
-          reject(
-            new Error(
-              `Relay failed to start within ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
-            )
+        rejectStartup(
+          new Error(
+            `Relay failed to start within ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
           )
-        }
+        )
       }, TIMEOUT_GRACE_MS)
+      channel.close()
     }, RELAY_SENTINEL_TIMEOUT_MS)
 
     const cancelTimers = (): void => {
@@ -60,6 +58,31 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
         clearTimeout(timeoutGraceTimer)
         timeoutGraceTimer = null
       }
+    }
+    const cleanupStartup = (): void => {
+      cancelTimers()
+      signal?.removeEventListener('abort', onAbort)
+    }
+    const rejectStartup = (err: Error): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanupStartup()
+      reject(err)
+    }
+    const onAbort = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanupStartup()
+      channel.close()
+      reject(createSshOperationAbortError())
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
     }
 
     channel.on('exit', (code: number | null) => {
@@ -89,12 +112,8 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
     }
 
     const failOrClose = (err: Error): void => {
-      cancelTimers()
       if (!sentinelReceived) {
-        if (!settled) {
-          settled = true
-          reject(err)
-        }
+        rejectStartup(err)
         return
       }
       notifyClosed()
@@ -115,9 +134,7 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 
     channel.on('close', () => {
       if (!sentinelReceived) {
-        cancelTimers()
         if (!settled) {
-          settled = true
           // Why: a wire-handshake mismatch on the daemon side closes the
           // socket; --connect prints the mismatch detail to stderr and exits
           // with code 42 BEFORE writing the sentinel. Translate that into a
@@ -126,15 +143,15 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
           // condition and skip backoff. The check still wins over a fired
           // timeout because the timeout handler defers settling for a small
           // grace window so the close handler can deliver the exit code.
-          if (lastExitCode === RELAY_EXIT_CODE_VERSION_MISMATCH) {
-            const { expected, got } = parseHandshakeMismatchStderr(stderrOutput)
-            reject(new RelayVersionMismatchError(expected, got, stderrOutput.trim()))
+          const versionMismatchError = buildRelayVersionMismatchError(lastExitCode, stderrOutput)
+          if (versionMismatchError) {
+            rejectStartup(versionMismatchError)
             return
           }
           const timeoutSuffix = timeoutFired
             ? ` (after ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s sentinel timeout)`
             : ''
-          reject(
+          rejectStartup(
             new Error(
               `Relay process exited before ready${timeoutSuffix}.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
             )
@@ -186,7 +203,8 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 
       if (sentinelIdx !== -1) {
         sentinelReceived = true
-        cancelTimers()
+        settled = true
+        cleanupStartup()
 
         const afterSentinelOffset =
           sentinelIdx + RELAY_SENTINEL_BUFFER.length - bufferedStdout.length
@@ -195,10 +213,17 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
         if (afterSentinel.length > 0) {
           pendingAfterSentinel = afterSentinel
         }
-        settled = true
-
         const transport: MultiplexerTransport = {
-          write: (buf: Buffer) => channel.stdin.write(buf),
+          write: (buf: Buffer, onSettled) => {
+            return channel.stdin.write(buf, (error?: Error | null) => {
+              onSettled?.(error ? { ok: false, error } : { ok: true })
+            })
+          },
+          supportsWriteSettlement: true,
+          onDrain: (cb) => {
+            channel.stdin.on('drain', cb)
+            return () => channel.stdin.off('drain', cb)
+          },
           onData: (cb) => {
             dataCallbacks.push(cb)
             // Why: deliver buffered post-sentinel data to the first
@@ -217,6 +242,8 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
               cb()
             }
           },
+          pauseReads: () => channel.pause(),
+          resumeReads: () => channel.resume(),
           close: () => {
             channel.close()
           }
@@ -234,132 +261,4 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
       bufferedStdout = bufferedStdout.length === 0 ? data : Buffer.concat([bufferedStdout, data])
     })
   })
-}
-
-// ── Remote command execution ──────────────────────────────────────────
-
-const EXEC_TIMEOUT_MS = 30_000
-
-export async function execCommand(conn: SshConnection, command: string): Promise<string> {
-  const channel = await conn.exec(command)
-  return new Promise((resolve, reject) => {
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-
-    const cleanup = (): void => {
-      clearTimeout(timeout)
-      channel.off('error', fail)
-      channel.stderr.off('error', fail)
-      channel.off('data', onStdoutData)
-      channel.stderr.off('data', onStderrData)
-      channel.off('close', onClose)
-    }
-    const settle = (fn: typeof resolve | typeof reject, val: string | Error): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      fn(val as never)
-    }
-    const fail = (err: Error): void => {
-      settle(reject, err)
-    }
-    const onStdoutData = (data: Buffer): void => {
-      stdout += data.toString('utf-8')
-    }
-    const onStderrData = (data: Buffer): void => {
-      stderr += data.toString('utf-8')
-    }
-    const onClose = (code: number): void => {
-      if (code !== 0) {
-        settle(reject, new Error(`Command "${command}" failed (exit ${code}): ${stderr.trim()}`))
-      } else {
-        settle(resolve, stdout)
-      }
-    }
-    const timeout = setTimeout(() => {
-      channel.close()
-      settle(reject, new Error(`Command "${command}" timed out after ${EXEC_TIMEOUT_MS / 1000}s`))
-    }, EXEC_TIMEOUT_MS)
-
-    // Why: remote reboot tears down exec channels with stream errors. Without
-    // scoped listeners, Node treats those as uncaught exceptions.
-    channel.on('error', fail)
-    channel.stderr.on('error', fail)
-    channel.on('data', onStdoutData)
-    channel.stderr.on('data', onStderrData)
-    channel.on('close', onClose)
-  })
-}
-
-// ── Remote Node.js resolution ─────────────────────────────────────────
-
-// Why: non-login SSH shells (the default for `exec`) don't source
-// .bashrc/.zshrc, so node installed via nvm/fnm/Homebrew isn't in PATH.
-// We try common locations and fall back to a login-shell `which`.
-export async function resolveRemoteNodePath(conn: SshConnection): Promise<string> {
-  // Why: non-login SSH exec channels don't source .bashrc/.zshrc, so node
-  // installed via nvm/fnm/Homebrew may not be in PATH. We probe common
-  // locations directly, then fall back to sourcing the profile explicitly.
-  // The glob in $HOME/.nvm/... is expanded by the shell, not by `command -v`.
-  const script = [
-    'command -v node 2>/dev/null',
-    'command -v /usr/local/bin/node 2>/dev/null',
-    'command -v /opt/homebrew/bin/node 2>/dev/null',
-    // Why: nvm installs into a versioned directory. `ls -1` sorts
-    // alphabetically, which misorders versions (e.g. v9 > v18). Pipe
-    // through `sort -V` (version sort) so we pick the highest version.
-    'ls -1 $HOME/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1',
-    'command -v $HOME/.local/bin/node 2>/dev/null',
-    'command -v $HOME/.fnm/aliases/default/bin/node 2>/dev/null'
-  ].join(' || ')
-
-  try {
-    const result = await execCommand(conn, script)
-    const nodePath = result.trim().split('\n')[0]
-    if (nodePath) {
-      console.log(`[ssh-relay] Found node at: ${nodePath}`)
-      return nodePath
-    }
-  } catch {
-    // Fall through to login shell attempt
-  }
-
-  // Why: last resort — source the full login profile. This is separated into
-  // its own exec because `bash -lc` can hang on remotes with interactive
-  // shell configs (conda prompts, etc.). If this times out, the error message
-  // from execCommand will tell us it was the login shell attempt.
-  try {
-    console.log('[ssh-relay] Trying login shell to find node...')
-    const result = await execCommand(conn, "bash -lc 'command -v node' 2>/dev/null")
-    const nodePath = result.trim().split('\n')[0]
-    if (nodePath) {
-      console.log(`[ssh-relay] Found node via login shell: ${nodePath}`)
-      return nodePath
-    }
-  } catch {
-    // Fall through
-  }
-
-  throw new Error(
-    'Node.js not found on remote host. Orca relay requires Node.js 18+. ' +
-      'Install Node.js on the remote and try again.'
-  )
-}
-
-// Why: extract the expected/got version pair from --connect's stderr line
-// "Handshake mismatch: expected=<x>, daemon=<y>" so the typed error carries
-// actionable detail. Best-effort: returns undefined fields if the regex
-// doesn't match, preserving the raw stderr verbatim for diagnostics.
-function parseHandshakeMismatchStderr(stderr: string): {
-  expected: string | undefined
-  got: string | undefined
-} {
-  const match = /expected=([^,\s]+),\s*daemon=([^\s;]+)/.exec(stderr)
-  if (!match) {
-    return { expected: undefined, got: undefined }
-  }
-  return { expected: match[1], got: match[2] }
 }

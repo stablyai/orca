@@ -1,4 +1,7 @@
+import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
+
 export const QUICK_OPEN_RESULT_LIMIT = 50
+export const QUICK_OPEN_QUERY_MAX_BYTES = 2 * 1024
 
 export type QuickOpenIndexedFile = {
   path: string
@@ -25,12 +28,22 @@ export function prepareQuickOpenFiles(files: readonly string[]): QuickOpenIndexe
   })
 }
 
+export function isQuickOpenQueryTooLarge(
+  query: string,
+  maxBytes = QUICK_OPEN_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 export function rankQuickOpenFiles(
   query: string,
   files: readonly QuickOpenIndexedFile[],
   limit = QUICK_OPEN_RESULT_LIMIT
 ): QuickOpenSearchResult[] {
   if (limit <= 0) {
+    return []
+  }
+  if (isQuickOpenQueryTooLarge(query)) {
     return []
   }
 

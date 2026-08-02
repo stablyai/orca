@@ -1,8 +1,7 @@
-/* eslint-disable max-lines -- Why: this onboarding step owns the full notification setup surface, including macOS guidance, sound choices, and upload controls. */
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { BellRing, FileAudio, Settings, Upload } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
+import { BellRing, FileAudio, Upload } from 'lucide-react'
 import { toast } from 'sonner'
-import type { GlobalSettings, NotificationPermissionStatusResult } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -14,13 +13,12 @@ import {
 } from '@/components/ui/select'
 import { sendNotificationSettingsTestNotification } from '@/components/settings/NotificationsPane'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import {
+  MacNotificationPermissionCard,
+  useMacNotificationPermissionState
+} from '@/components/notifications/mac-notification-permission-card'
 import { useMountedRef } from '@/hooks/useMountedRef'
-
-export type NotificationDraft = {
-  agentTaskComplete: boolean
-  terminalBell: boolean
-  notifyWhenFocused: boolean
-}
+import { translate } from '@/i18n/i18n'
 
 type NotificationStepProps = {
   settings: GlobalSettings | null
@@ -45,8 +43,11 @@ export function NotificationStep({
 }: NotificationStepProps): React.JSX.Element {
   const notificationSettings = settings?.notifications
   const notificationSettingsRef = useRef(notificationSettings)
-  const [permissionStatus, setPermissionStatus] =
-    useState<NotificationPermissionStatusResult | null>(null)
+  // Why: undefined settings are still loading — assume enabled (the default)
+  // so the fresh-install permission flow starts without waiting.
+  const [macPermissionState, setMacPermissionState] = useMacNotificationPermissionState(
+    notificationSettings?.enabled !== false
+  )
   const [isPickingSound, setIsPickingSound] = useState(false)
   const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
   const syncedNotificationSettingsRef = useRef(notificationSettings)
@@ -63,18 +64,6 @@ export function NotificationStep({
     // Why: onboarding sits above body-level portals, so the select menu must
     // portal into the overlay to stay clickable.
     setSelectPortalRoot(node?.closest<HTMLElement>('[data-onboarding-overlay]') ?? node)
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    void window.api.notifications.getPermissionStatus().then((status) => {
-      if (!cancelled) {
-        setPermissionStatus(status)
-      }
-    })
-    return () => {
-      cancelled = true
-    }
   }, [])
 
   const updateNotificationSettings = async (
@@ -97,14 +86,6 @@ export function NotificationStep({
   const getCustomSoundVolume = (): number =>
     notificationSettingsRef.current?.customSoundVolume ?? 100
 
-  const handleMacPermission = async (): Promise<void> => {
-    const status = await window.api.notifications.requestPermission()
-    if (mountedRef.current) {
-      setPermissionStatus(status)
-    }
-    await window.api.notifications.openSystemSettings()
-  }
-
   const previewSound = async (
     customSoundId: GlobalSettings['notifications']['customSoundId']
   ): Promise<void> => {
@@ -117,7 +98,12 @@ export function NotificationStep({
     })
     if (!result.played) {
       if (mountedRef.current) {
-        toast.error('Notification sound could not be played')
+        toast.error(
+          translate(
+            'auto.components.onboarding.NotificationStep.b6a994e36e',
+            'Notification sound could not be played'
+          )
+        )
       }
     }
   }
@@ -148,16 +134,39 @@ export function NotificationStep({
 
   const handleSendTestNotification = async (): Promise<void> => {
     if (!notificationSettings) {
-      toast.error('Notification settings are still loading')
+      toast.error(
+        translate(
+          'auto.components.onboarding.NotificationStep.3cd5374e22',
+          'Notification settings are still loading'
+        )
+      )
       return
     }
-    await sendNotificationSettingsTestNotification(notificationSettings, getCustomSoundVolume())
+    const showsMacPermissionCard = macPermissionState !== null
+    const outcome = await sendNotificationSettingsTestNotification(
+      notificationSettings,
+      getCustomSoundVolume(),
+      showsMacPermissionCard ? { suppressSystemPermissionToasts: true } : undefined
+    )
+    if (!mountedRef.current || !showsMacPermissionCard) {
+      return
+    }
+    // Why: the test doubles as a permission re-check — its confirmed outcome
+    // is fresher than whatever the mount-time probe reported.
+    if (outcome === 'delivered') {
+      setMacPermissionState('enabled')
+    } else if (outcome === 'not-displayed') {
+      setMacPermissionState('blocked')
+    }
   }
 
   if (!notificationSettings) {
     return (
       <div className="rounded-xl border border-border bg-muted/20 px-5 py-4 text-sm text-muted-foreground">
-        Loading notification settings…
+        {translate(
+          'auto.components.onboarding.NotificationStep.e52aacf380',
+          'Loading notification settings…'
+        )}
       </div>
     )
   }
@@ -165,47 +174,31 @@ export function NotificationStep({
   const customPath = notificationSettings.customSoundPath
   const selectedSoundId = notificationSettings.customSoundId
   const soundOptions = getNotificationSoundOptions(customPath)
-  const isMac = permissionStatus?.platform === 'darwin'
 
   return (
     <div ref={setSelectPortalHost} className="space-y-5">
-      {isMac ? (
-        <section className="rounded-xl border border-border bg-card px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 space-y-1">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Settings className="size-4" />
-                Allow Orca in macOS
-              </div>
-              <p className="max-w-[58ch] text-[13px] leading-relaxed text-muted-foreground">
-                Open System Settings and make sure Orca is allowed to send notifications.
-              </p>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              className="gap-2"
-              onClick={() => void handleMacPermission()}
-            >
-              <Settings className="size-3.5" />
-              Open Mac Settings
-            </Button>
-          </div>
-        </section>
-      ) : null}
+      <MacNotificationPermissionCard state={macPermissionState} />
 
       <section className="space-y-3">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-foreground">Choose a sound</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            {translate('auto.components.onboarding.NotificationStep.0af746e41f', 'Choose a sound')}
+          </h2>
           <p className="text-[13px] leading-relaxed text-muted-foreground">
-            Pick the alert Orca plays after a desktop notification is delivered.
+            {translate(
+              'auto.components.onboarding.NotificationStep.0fe570690c',
+              'Pick the alert Orca plays after a desktop notification is delivered.'
+            )}
           </p>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <FileAudio className="size-4" />
-            Notification Sound
+            {translate(
+              'auto.components.onboarding.NotificationStep.53aaffe49a',
+              'Notification Sound'
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select
@@ -216,7 +209,12 @@ export function NotificationStep({
               }
             >
               <SelectTrigger className="w-[360px] max-w-full" size="sm">
-                <SelectValue placeholder="Choose notification sound" />
+                <SelectValue
+                  placeholder={translate(
+                    'auto.components.onboarding.NotificationStep.dc897423e1',
+                    'Choose notification sound'
+                  )}
+                />
               </SelectTrigger>
               <SelectContent
                 portalContainer={selectPortalRoot}
@@ -235,7 +233,17 @@ export function NotificationStep({
                 <SelectSeparator />
                 <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
                   <Upload className="size-4" />
-                  <span>{customPath ? 'Change Custom File' : 'Choose Custom File'}</span>
+                  <span>
+                    {customPath
+                      ? translate(
+                          'auto.components.onboarding.NotificationStep.ac80d97e02',
+                          'Change Custom File'
+                        )
+                      : translate(
+                          'auto.components.onboarding.NotificationStep.c0692baa52',
+                          'Choose Custom File'
+                        )}
+                  </span>
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -247,7 +255,10 @@ export function NotificationStep({
               onClick={() => void handleSendTestNotification()}
             >
               <BellRing className="size-3.5" />
-              Send Test Notification
+              {translate(
+                'auto.components.onboarding.NotificationStep.3bede04483',
+                'Send Test Notification'
+              )}
             </Button>
           </div>
         </div>

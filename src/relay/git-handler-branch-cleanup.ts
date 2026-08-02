@@ -1,8 +1,8 @@
 import {
-  branchHasNoUnmergedChangesOnAnyTarget,
-  getBranchCleanupTargetRefs,
-  refreshBranchCleanupTargetRefs
+  branchHasNoUnmergedChangesWithLazyTargetRefresh,
+  getBranchCleanupTargetRefs
 } from '../shared/git-branch-cleanup'
+import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { parseWorktreeList } from './git-handler-utils'
 
@@ -10,31 +10,65 @@ export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
   git: GitExec,
   repoPath: string,
   branchName: string,
-  branchHead: string
+  branchHead: string,
+  capabilities: GitCapabilityCache
 ): Promise<boolean> {
-  const runGit = (args: string[]) => git(args, repoPath)
+  const runGit = (args: string[], options?: { stdin?: string }) =>
+    options ? git(args, repoPath, options) : git(args, repoPath)
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
-  await refreshBranchCleanupTargetRefs(runGit, targetRefs)
   // Why: SSH worktrees hit the same squash-merge shape as local worktrees.
   // Git's no-op merge proof lets us clean up only branches whose changes
   // already exist on the saved base ref.
-  if (!(await branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, targetRefs))) {
+  if (
+    !(await branchHasNoUnmergedChangesWithLazyTargetRefresh(
+      runGit,
+      branchName,
+      targetRefs,
+      capabilities
+    ))
+  ) {
     return false
   }
   await deleteRelayBranchAtExpectedHead(git, repoPath, branchName, branchHead)
   return true
 }
 
-async function deleteRelayBranchAtExpectedHead(
+export async function forceDeletePreservedRelayBranch(
   git: GitExec,
   repoPath: string,
   branchName: string,
   expectedHead: string
 ): Promise<void> {
+  if (!branchName || branchName.includes('\0') || branchName.startsWith('-')) {
+    throw new Error('Invalid branch name for preserved branch delete.')
+  }
+  if (!expectedHead) {
+    throw new Error('Expected branch head is required for preserved branch delete.')
+  }
+  await deleteRelayBranchAtExpectedHead(git, repoPath, branchName, expectedHead, () => {
+    return new Error(
+      `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
+    )
+  })
+}
+
+async function deleteRelayBranchAtExpectedHead(
+  git: GitExec,
+  repoPath: string,
+  branchName: string,
+  expectedHead: string,
+  mapUpdateRefError?: (error: unknown) => Error
+): Promise<void> {
   if (await isRelayBranchCheckedOut(git, repoPath, branchName)) {
     throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
   }
-  await git(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
+  try {
+    await git(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
+  } catch (error) {
+    // Why: only stale ref writes get the force-delete message; checkout guards
+    // and removeWorktree cleanup still rely on their distinct/raw failures.
+    throw mapUpdateRefError?.(error) ?? error
+  }
   if (await isRelayBranchCheckedOut(git, repoPath, branchName)) {
     try {
       await git(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)

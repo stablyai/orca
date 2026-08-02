@@ -6,11 +6,14 @@ import {
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type {
   WorkspacePort,
   WorkspacePortKillResult,
   WorkspacePortScanResult
 } from '../../../shared/workspace-ports'
+import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
+import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
 import { browserUrlForPort } from './workspace-port-urls'
 
 export { addressForPort } from './workspace-port-urls'
@@ -28,6 +31,9 @@ type RemoteBrowserPageHandleSetter = ReturnType<
   typeof useAppStore.getState
 >['setRemoteBrowserPageHandle']
 type WorkspacePortScanSetter = ReturnType<typeof useAppStore.getState>['setWorkspacePortScan']
+type WorkspacePortScanByKeySetter = ReturnType<
+  typeof useAppStore.getState
+>['setWorkspacePortScanForKey']
 type WorkspacePortScanRefreshingSetter = ReturnType<
   typeof useAppStore.getState
 >['setWorkspacePortScanRefreshing']
@@ -39,7 +45,38 @@ function delay(ms: number): Promise<void> {
 export function shouldOpenWorkspacePortInOrcaBrowser(
   settings: { openLinksInApp?: boolean } | null | undefined
 ): boolean {
-  return settings?.openLinksInApp !== false
+  return settings?.openLinksInApp === true
+}
+
+function isMacShortcutPlatform(): boolean {
+  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+}
+
+export function getPortSystemBrowserHint(isMac: boolean = isMacShortcutPlatform()): string {
+  return isMac ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
+}
+
+export function getPortOpenBrowserTooltipLabel(openLabel: string, isMac?: boolean): string {
+  return `${openLabel}. ${getPortSystemBrowserHint(isMac)}`
+}
+
+type PortOpenClickEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>
+
+export function resolvePortOpenInOrcaBrowser({
+  settings,
+  event,
+  isMac
+}: {
+  settings: { openLinksInApp?: boolean } | null | undefined
+  event?: PortOpenClickEvent | null
+  isMac: boolean
+}): boolean {
+  // Why: Shift+Cmd/Ctrl is the external-browser escape hatch; no pointer
+  // event means context-menu and keyboard opens should keep the saved setting.
+  if (event?.shiftKey && (isMac ? event.metaKey : event.ctrlKey)) {
+    return false
+  }
+  return shouldOpenWorkspacePortInOrcaBrowser(settings)
 }
 
 export function workspacePortOwnerWorktreeId(port: WorkspacePort): string | null {
@@ -58,8 +95,17 @@ export async function openWorkspacePortInBrowser(args: {
   createBrowserTab: BrowserTabCreator
   setRemoteBrowserPageHandle: RemoteBrowserPageHandleSetter
   openInOrcaBrowser?: boolean
+  localhostLabelRoute?: LocalhostWorktreeLabelRoute | null
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const url = browserUrlForPort(args.port)
+  const rawUrl = browserUrlForPort(args.port)
+  let url = rawUrl
+  if (args.runtimeTarget.kind === 'local' && args.localhostLabelRoute) {
+    try {
+      url = (await window.api.localhostWorktreeLabels.register(args.localhostLabelRoute)).url
+    } catch {
+      url = rawUrl
+    }
+  }
   if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
     try {
       await window.api.shell.openUrl(url)
@@ -102,29 +148,23 @@ export async function openWorkspacePortInBrowser(args: {
   return { ok: true }
 }
 
-export async function refreshWorkspacePortScanState(args: {
-  runtimeTarget: RuntimeClientTarget
-  setWorkspacePortScan: WorkspacePortScanSetter
-  setWorkspacePortScanRefreshing: WorkspacePortScanRefreshingSetter
-}): Promise<WorkspacePortScanResult> {
-  args.setWorkspacePortScanRefreshing(true)
-  try {
-    const scan = await scanWorkspacePortsForTarget(args.runtimeTarget)
-    args.setWorkspacePortScan({
-      key: `${workspacePortRuntimeTargetKey(args.runtimeTarget)}:all`,
-      result: scan
-    })
-    return scan
-  } finally {
-    args.setWorkspacePortScanRefreshing(false)
-  }
-}
-
 export async function refreshWorkspacePortScanAfterStop(args: {
   runtimeTarget: RuntimeClientTarget
   setWorkspacePortScan: WorkspacePortScanSetter
+  setWorkspacePortScanForKey?: WorkspacePortScanByKeySetter
   setWorkspacePortScanRefreshing: WorkspacePortScanRefreshingSetter
+  getWorkspacePortScansByKey?: () => Record<string, WorkspacePortScanResult>
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const scanKey = workspacePortScanKeyForTarget(args.runtimeTarget)
+  const publishScan = (scan: WorkspacePortScanResult): void => {
+    args.setWorkspacePortScanForKey?.(scanKey, scan)
+    const currentScans = args.getWorkspacePortScansByKey?.() ?? {}
+    const merged = mergeWorkspacePortScans({ ...currentScans, [scanKey]: scan })
+    args.setWorkspacePortScan({
+      key: merged && Object.keys(currentScans).length > 0 ? 'all-hosts:all' : scanKey,
+      result: merged ?? scan
+    })
+  }
   args.setWorkspacePortScanRefreshing(true)
   try {
     let firstScan: WorkspacePortScanResult
@@ -134,10 +174,7 @@ export async function refreshWorkspacePortScanAfterStop(args: {
       const message = error instanceof Error ? error.message : String(error)
       return { ok: false, reason: message || 'Workspace port scan failed.' }
     }
-    args.setWorkspacePortScan({
-      key: `${workspacePortRuntimeTargetKey(args.runtimeTarget)}:all`,
-      result: firstScan
-    })
+    publishScan(firstScan)
 
     // Why: stopping sends SIGTERM, and the listener can remain visible for a
     // short window. A settled re-scan keeps worktree cards from showing a stale
@@ -147,10 +184,7 @@ export async function refreshWorkspacePortScanAfterStop(args: {
     await delay(WORKSPACE_PORT_STOP_SETTLE_MS)
     try {
       const settledScan = await scanWorkspacePortsForTarget(args.runtimeTarget)
-      args.setWorkspacePortScan({
-        key: `${workspacePortRuntimeTargetKey(args.runtimeTarget)}:all`,
-        result: settledScan
-      })
+      publishScan(settledScan)
     } catch {
       // Intentionally ignored: first scan already updated the UI.
     }
@@ -164,35 +198,60 @@ export function workspacePortRuntimeTargetKey(target: RuntimeClientTarget): stri
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
+export function runtimeTargetForExecutionHostId(
+  hostId: ExecutionHostId
+): RuntimeClientTarget | null {
+  const parsed = parseExecutionHostId(hostId)
+  if (parsed?.kind === 'local') {
+    return { kind: 'local' }
+  }
+  if (parsed?.kind === 'runtime') {
+    return { kind: 'environment', environmentId: parsed.environmentId }
+  }
+  return null
+}
+
+export function workspacePortScanKeyForTarget(target: RuntimeClientTarget): string {
+  return `${workspacePortRuntimeTargetKey(target)}:all`
+}
+
+export function mergeWorkspacePortScans(
+  scansByKey: Record<string, WorkspacePortScanResult>
+): WorkspacePortScanResult | null {
+  const entries = Object.entries(scansByKey)
+    .filter(([, scan]) => scan)
+    .sort(([a], [b]) => a.localeCompare(b))
+  if (entries.length === 0) {
+    return null
+  }
+  if (entries.length === 1) {
+    return entries[0][1]
+  }
+  const ports = entries.flatMap(([key, scan]) =>
+    scan.ports.map((port) => ({
+      ...port,
+      // Why: local and runtime scanners can both report simple ids like
+      // `tcp:3000`; aggregate All-hosts views need stable unique row keys.
+      id: `${key}:${port.id}`
+    }))
+  )
+  const unavailable = entries
+    .map(([key, scan]) => (scan.unavailableReason ? `${key}: ${scan.unavailableReason}` : null))
+    .filter((entry): entry is string => entry !== null)
+  return {
+    platform: 'unknown',
+    scannedAt: Math.max(...entries.map(([, scan]) => scan.scannedAt)),
+    ports,
+    ...(unavailable.length === entries.length && unavailable.length > 0
+      ? { unavailableReason: unavailable.join('; ') }
+      : {})
+  }
+}
+
 const inFlightWorkspacePortScans = new Map<string, Promise<WorkspacePortScanResult>>()
 
 function workspacePortScanRequestKey(target: RuntimeClientTarget, repoId?: string): string {
   return JSON.stringify([workspacePortRuntimeTargetKey(target), repoId ?? null])
-}
-
-async function runWorkspacePortScanForTarget(
-  target: RuntimeClientTarget,
-  repoId?: string
-): Promise<WorkspacePortScanResult> {
-  const params = repoId ? { repoId } : {}
-  if (target.kind === 'local') {
-    return window.api.workspacePorts.scan(params)
-  }
-  try {
-    return await callRuntimeRpc<WorkspacePortScanResult>(target, 'workspacePorts.scan', params, {
-      timeoutMs: 15_000
-    })
-  } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return {
-        platform: 'unknown',
-        scannedAt: Date.now(),
-        ports: [],
-        unavailableReason: 'The connected runtime does not support workspace port management yet.'
-      }
-    }
-    throw error
-  }
 }
 
 export async function scanWorkspacePortsForTarget(

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   encodePairingOffer,
   decodePairingOffer,
@@ -20,6 +20,33 @@ describe('pairing offer', () => {
 
     const decoded = decodePairingOffer(url)
     expect(decoded).toEqual(offer)
+  })
+
+  it('decodes in browser runtimes without Buffer', () => {
+    const url = encodePairingOffer(offer)
+    const nodeBuffer = Buffer
+    let decoded: PairingOffer | null = null
+    try {
+      vi.stubGlobal('Buffer', undefined)
+      decoded = decodePairingOffer(url)
+    } finally {
+      vi.stubGlobal('Buffer', nodeBuffer)
+    }
+    expect(decoded).toEqual(offer)
+  })
+
+  it('preserves optional device scope metadata', () => {
+    const scopedOffer: PairingOffer = { ...offer, scope: 'mobile' }
+    expect(decodePairingOffer(encodePairingOffer(scopedOffer))).toEqual(scopedOffer)
+  })
+
+  it('round-trips a TLS reverse-proxy endpoint with an explicit port and path', () => {
+    const proxiedOffer = {
+      ...offer,
+      endpoint: 'wss://proxy.example:443/orca/runtime'
+    }
+
+    expect(decodePairingOffer(encodePairingOffer(proxiedOffer))).toEqual(proxiedOffer)
   })
 
   it('encoded URL uses base64url (no +, /, or = characters)', () => {

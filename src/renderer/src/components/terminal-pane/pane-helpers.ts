@@ -4,29 +4,6 @@ export function fitPanes(manager: PaneManager): void {
   manager.fitAllPanes()
 }
 
-/**
- * Returns true if any pane's proposed dimensions differ from its current
- * terminal cols/rows, meaning a fit() call would actually change layout.
- * Used by the epoch-based deduplication in use-terminal-pane-global-effects
- * to allow legitimate resize fits while suppressing redundant ones.
- */
-export function hasDimensionsChanged(manager: PaneManager): boolean {
-  for (const pane of manager.getPanes()) {
-    try {
-      const dims = pane.fitAddon.proposeDimensions()
-      if (!dims) {
-        return true // can't determine — assume changed
-      }
-      if (dims.cols !== pane.terminal.cols || dims.rows !== pane.terminal.rows) {
-        return true
-      }
-    } catch {
-      return true
-    }
-  }
-  return false
-}
-
 export function focusActivePane(manager: PaneManager): void {
   // Why: tab rename focuses the input on the next frame. A queued terminal
   // layout focus can land in between mount and focus, blurring rename closed.

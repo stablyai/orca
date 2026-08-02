@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process'
+import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import { buildDispatchPreamble } from './preamble'
 
@@ -8,8 +8,19 @@ function baseParams(overrides: Partial<Parameters<typeof buildDispatchPreamble>[
     dispatchId: 'ctx_def456',
     taskSpec: 'Implement the login form',
     coordinatorHandle: 'term_coord',
+    workerHandle: 'term_worker',
     ...overrides
   }
+}
+
+function afterWorkerDoneSection(result: string) {
+  const sectionStart = result.indexOf('=== AFTER YOU SEND worker_done ===')
+  const sectionEnd = result.indexOf('=== TASK ===')
+
+  expect(sectionStart).toBeGreaterThan(-1)
+  expect(sectionEnd).toBeGreaterThan(sectionStart)
+
+  return result.slice(sectionStart, sectionEnd)
 }
 
 describe('buildDispatchPreamble', () => {
@@ -34,29 +45,37 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('reportPath')
     expect(result).toContain('--task-id task_abc123')
     expect(result).toContain('--dispatch-id ctx_def456')
+    expect(result).toContain('--outcome succeeded')
+    expect(result).toContain('replace it with --outcome failed')
     expect(result).toContain('--files-modified "path/a,path/b"')
     expect(result).toContain('--report-path "<optional: path to the full artifact>"')
+    expect(result).toMatch(/orchestration send --from term_worker/)
+    expect(result).not.toContain('orchestration send --to term_coord')
   })
 
-  it('CLI examples parse as valid shell (bash -n on the extracted block)', () => {
-    const result = buildDispatchPreamble(baseParams())
-    // Why: feeding `bash -n` the full preamble falsely fails on apostrophes
-    // in the surrounding prose. Slice between the CLI markers and strip
-    // shell-style comment lines so we only syntax-check the commands.
-    const cliStart = result.indexOf('=== CLI COMMANDS ===')
-    const cliEnd = result.indexOf('=== AFTER YOU SEND worker_done ===')
-    expect(cliStart).toBeGreaterThan(-1)
-    expect(cliEnd).toBeGreaterThan(cliStart)
-    const block = result.slice(cliStart, cliEnd)
-    const stripped = block
-      .split('\n')
-      .filter((line) => !line.trim().startsWith('#'))
-      .filter((line) => !line.trim().startsWith('==='))
-      .join('\n')
+  it(
+    'CLI examples parse as valid shell (bash -n on the extracted block)',
+    { timeout: 15_000 },
+    () => {
+      const result = buildDispatchPreamble(baseParams())
+      // Why: feeding `bash -n` the full preamble falsely fails on apostrophes
+      // in the surrounding prose. Slice between the CLI markers and strip
+      // shell-style comment lines so we only syntax-check the commands.
+      const cliStart = result.indexOf('=== CLI COMMANDS ===')
+      const cliEnd = result.indexOf('=== AFTER YOU SEND worker_done ===')
+      expect(cliStart).toBeGreaterThan(-1)
+      expect(cliEnd).toBeGreaterThan(cliStart)
+      const block = result.slice(cliStart, cliEnd)
+      const stripped = block
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('#'))
+        .filter((line) => !line.trim().startsWith('==='))
+        .join('\n')
 
-    const check = spawnSync('bash', ['-n'], { input: stripped, encoding: 'utf8' })
-    expect(check.status).toBe(0)
-  })
+      const check = spawnSync('bash', ['-n'], { input: stripped, encoding: 'utf8' })
+      expect(check.status).toBe(0)
+    }
+  )
 
   it('includes heartbeat CLI block with taskId and dispatchId and 5-minute cadence', () => {
     const result = buildDispatchPreamble(baseParams())
@@ -69,11 +88,12 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('--task-id task_abc123')
     expect(result).toContain('--dispatch-id ctx_def456')
     expect(result).toContain('--phase "<short: investigating|implementing|reviewing|waiting>"')
+    expect(result).toMatch(/orchestration send --from term_worker/)
   })
 
   it('includes ask block with BEHAVIOR RULE #1 forbidding AskUserQuestion', () => {
     const result = buildDispatchPreamble(baseParams())
-    expect(result).toContain('orchestration ask')
+    expect(result).toMatch(/orchestration ask --from term_worker/)
     expect(result).toContain('--question')
     expect(result).toContain('--timeout-ms 600000')
     // Why: the exact phrase is asserted so the rule can't be trimmed away by
@@ -84,16 +104,54 @@ describe('buildDispatchPreamble', () => {
     // else (e.g., not in an example payload or header). Count occurrences
     // of the exact token as a sanity check.
     const occurrences = (result.match(/AskUserQuestion/g) ?? []).length
-    // Three mentions: the one-liner ban, the TUI-prompt rationale, and the
-    // "when tempted to reach for AskUserQuestion" closing line.
-    expect(occurrences).toBe(3)
+    expect(occurrences).toBe(2)
   })
 
-  it('includes AFTER YOU SEND block with 2-minute poll cadence and release signal', () => {
+  it('binds every injected worker command to the dispatched terminal', () => {
     const result = buildDispatchPreamble(baseParams())
-    expect(result).toContain('=== AFTER YOU SEND worker_done ===')
-    expect(result).toMatch(/2 minutes/)
-    expect(result).toMatch(/may exit/)
+
+    expect(result).toMatch(/orchestration ask --from term_worker/)
+    expect(result).toMatch(/orchestration send --from term_worker \\\n    --type escalation/)
+    expect(result).toContain('orchestration check --terminal term_worker')
+  })
+
+  it('carries the minted Dispatch capability on lifecycle and question commands', () => {
+    const result = buildDispatchPreamble({
+      ...baseParams(),
+      dispatchCapability: 'dcap_test_secret'
+    })
+
+    expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(4)
+    expect(result).not.toContain('"dispatchCapability"')
+  })
+
+  it('tells prompt-returning workers to idle without post-done polling', () => {
+    const result = buildDispatchPreamble(baseParams())
+    const section = afterWorkerDoneSection(result)
+
+    expect(section).toContain('=== AFTER YOU SEND worker_done ===')
+    expect(section).toContain('worker_done ends your turn for this task')
+    expect(section).toContain('return to an idle prompt')
+    expect(section).toContain('Do not exit the shell')
+    expect(section).toContain('do NOT run a sleep/poll loop')
+    expect(section).toContain('do NOT keep calling')
+    expect(section).toMatch(/fresh\s+preamble \+ TASK block/)
+    expect(section).not.toMatch(/2 minutes/)
+    expect(section).not.toMatch(/10 minutes/)
+    expect(section).not.toMatch(/may exit/)
+    expect(section).not.toMatch(/grace period/)
+  })
+
+  it('tells bare-shell workers to exit after worker_done', () => {
+    const result = buildDispatchPreamble(baseParams({ workerKind: 'bare-shell' }))
+    const section = afterWorkerDoneSection(result)
+
+    expect(section).toContain('Exit the shell after completion')
+    expect(section).toContain('Bare-shell workers have no idle agent')
+    expect(section).toContain('do NOT run a sleep/poll loop')
+    expect(section).not.toContain('Do not exit the shell')
+    expect(section).not.toMatch(/2 minutes/)
+    expect(section).not.toMatch(/may exit/)
   })
 
   it('uses === TASK === separator with the task spec appended', () => {
@@ -110,7 +168,7 @@ describe('buildDispatchPreamble', () => {
   })
 
   it('uses orca-dev CLI when devMode is true', () => {
-    const result = buildDispatchPreamble(baseParams({ devMode: true }))
+    const result = buildDispatchPreamble(baseParams({ devMode: true, cliCommand: 'orca-ide' }))
     expect(result).toContain('orca-dev orchestration send')
     expect(result).toContain('orca-dev orchestration check')
     expect(result).toContain('orca-dev orchestration ask')
@@ -126,12 +184,22 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('orca orchestration check')
   })
 
+  it('uses the exact orca-ide command for packaged WSL workers', () => {
+    const result = buildDispatchPreamble(baseParams({ cliCommand: 'orca-ide' }))
+
+    expect(result).toContain('orca-ide orchestration send')
+    expect(result).toContain('orca-ide orchestration check')
+    expect(result).toContain('orca-ide orchestration ask')
+    expect(result).not.toMatch(/(^|\s)orca orchestration/m)
+  })
+
   it('appends a BASE DRIFT section when baseDrift.behind > 0', () => {
     const result = buildDispatchPreamble({
       taskId: 'task_x',
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
+      workerHandle: 'term_w',
       baseDrift: {
         base: 'origin/main',
         behind: 7,
@@ -154,6 +222,7 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
+      workerHandle: 'term_w',
       baseDrift: {
         base: 'origin/main',
         behind: 0,
@@ -170,7 +239,8 @@ describe('buildDispatchPreamble', () => {
       taskId: 'task_x',
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
-      coordinatorHandle: 'term_c'
+      coordinatorHandle: 'term_c',
+      workerHandle: 'term_w'
     })
 
     expect(result).not.toContain('--- BASE DRIFT ---')
@@ -183,6 +253,7 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
+      workerHandle: 'term_w',
       baseDrift: {
         base: 'origin/main',
         behind: 3,
@@ -205,7 +276,8 @@ describe('buildDispatchPreamble', () => {
       taskId: 'task_SNAP',
       dispatchId: 'ctx_SNAP',
       taskSpec: 'TASK_BODY',
-      coordinatorHandle: 'term_COORD'
+      coordinatorHandle: 'term_COORD',
+      workerHandle: 'term_WORKER'
     })
     expect(result).toMatchSnapshot()
   })

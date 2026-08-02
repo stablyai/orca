@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -9,25 +9,19 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import {
+  ConfirmationDialogContext,
+  type ConfirmationDialogContextValue,
+  type ConfirmationDialogOptions
+} from '@/components/confirmation-dialog-context'
 import { useAppStore } from '@/store'
-
-type ConfirmationDialogOptions = {
-  title: string
-  description?: string
-  confirmLabel?: string
-  cancelLabel?: string
-  confirmVariant?: 'default' | 'destructive'
-}
+import { translate } from '@/i18n/i18n'
 
 type ConfirmationDialogRequest = {
   id: number
   options: ConfirmationDialogOptions
   resolve: (confirmed: boolean) => void
 }
-
-type ConfirmationDialogContextValue = (options: ConfirmationDialogOptions) => Promise<boolean>
-
-const ConfirmationDialogContext = createContext<ConfirmationDialogContextValue | null>(null)
 
 export function ConfirmationDialogProvider({
   children
@@ -98,26 +92,20 @@ export function ConfirmationDialogProvider({
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => settleActiveRequest(false)}>
-              {displayedRequest?.options.cancelLabel ?? 'Cancel'}
+              {displayedRequest?.options.cancelLabel ??
+                translate('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
             </Button>
             <Button
               type="button"
               variant={displayedRequest?.options.confirmVariant ?? 'default'}
               onClick={() => settleActiveRequest(true)}
             >
-              {displayedRequest?.options.confirmLabel ?? 'Confirm'}
+              {displayedRequest?.options.confirmLabel ??
+                translate('auto.components.confirmation.dialog.8490e5d36a', 'Confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </ConfirmationDialogContext.Provider>
   )
-}
-
-export function useConfirmationDialog(): ConfirmationDialogContextValue {
-  const confirm = useContext(ConfirmationDialogContext)
-  if (!confirm) {
-    throw new Error('useConfirmationDialog must be used inside ConfirmationDialogProvider')
-  }
-  return confirm
 }

@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { describe, expect, it, vi } from 'vitest'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   buildGitGrepArgs,
   buildRgArgs,
@@ -13,6 +13,7 @@ import {
   ingestRgJsonLine,
   MAX_LINE_CONTENT_LENGTH,
   normalizeRelativePath,
+  SEARCH_JSON_STRUCTURE_LIMITS,
   splitSearchGlobPatterns,
   toGitGlobPathspec
 } from './text-search'
@@ -100,6 +101,7 @@ describe('ingestRgJsonLine', () => {
     expect(acc.totalMatches).toBe(1)
     const files = Array.from(acc.fileMap.values())
     expect(files[0].relativePath).toBe('src/a.ts')
+    expect(files[0].matchCount).toBe(1)
     expect(files[0].matches[0]).toEqual({ line: 2, column: 1, matchLength: 3, lineContent: 'abc' })
   })
 
@@ -116,12 +118,29 @@ describe('ingestRgJsonLine', () => {
     expect(acc.totalMatches).toBe(0)
   })
 
+  it('rejects excessive nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const acc = createAccumulator()
+    try {
+      const amplified = `${'['.repeat(SEARCH_JSON_STRUCTURE_LIMITS.nestingDepth + 1)}0${']'.repeat(
+        SEARCH_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+      )}`
+
+      expect(ingestRgJsonLine(amplified, '/root', acc, 100)).toBe('continue')
+      expect(parseSpy).not.toHaveBeenCalled()
+      expect(acc.totalMatches).toBe(0)
+    } finally {
+      parseSpy.mockRestore()
+    }
+  })
+
   it('creates a navigable fallback match when rg omits submatch ranges', () => {
     const acc = createAccumulator()
     const verdict = ingestRgJsonLine(makeMatch('/root/a.ts', 4, [], 'foobar'), '/root', acc, 100)
     expect(verdict).toBe('continue')
     expect(acc.totalMatches).toBe(1)
     const file = Array.from(acc.fileMap.values())[0]
+    expect(file.matchCount).toBe(1)
     expect(file.matches).toEqual([{ line: 4, column: 1, matchLength: 1, lineContent: 'foobar' }])
   })
 
@@ -129,6 +148,7 @@ describe('ingestRgJsonLine', () => {
     const acc = createAccumulator()
     ingestRgJsonLine(makeMatch('/root/a.ts', 5, [], ''), '/root', acc, 100)
     const file = Array.from(acc.fileMap.values())[0]
+    expect(file.matchCount).toBe(1)
     expect(file.matches).toEqual([{ line: 5, column: 1, matchLength: 0, lineContent: '' }])
   })
 
@@ -147,6 +167,7 @@ describe('ingestRgJsonLine', () => {
     expect(verdict).toBe('stop')
     expect(acc.truncated).toBe(true)
     expect(acc.totalMatches).toBe(2)
+    expect(Array.from(acc.fileMap.values())[0].matchCount).toBe(2)
   })
 
   it('clamps huge lineContent around the match to bound payload size', () => {
@@ -290,6 +311,7 @@ describe('ingestGitGrepLine', () => {
       expect(result.totalMatches).toBe(3)
       expect(result.files).toHaveLength(1)
       expect(result.files[0].relativePath).toBe('src/a.ts')
+      expect(result.files[0].matchCount).toBe(3)
       expect(result.files[0].matches.map((match) => [match.line, match.column])).toEqual([
         [1, 1],
         [2, 1],
@@ -306,6 +328,7 @@ describe('ingestGitGrepLine', () => {
     const verdict = ingestGitGrepLine('src/a.ts\x005\x00foo and foo again\n', '/root', re, acc, 100)
     expect(verdict).toBe('continue')
     const f = Array.from(acc.fileMap.values())[0]
+    expect(f.matchCount).toBe(2)
     expect(f.matches).toHaveLength(2)
     expect(f.matches[0]).toMatchObject({ line: 5, column: 1 })
     expect(f.matches[1]).toMatchObject({ line: 5, column: 9 })
@@ -316,6 +339,7 @@ describe('ingestGitGrepLine', () => {
     const re = buildSubmatchRegex('foo', {})
     ingestGitGrepLine('src/a.ts\x005:foo', '/root', re, acc, 100)
     const f = Array.from(acc.fileMap.values())[0]
+    expect(f.matchCount).toBe(1)
     expect(f.matches[0]).toMatchObject({ line: 5, column: 1 })
   })
 
@@ -330,6 +354,7 @@ describe('ingestGitGrepLine', () => {
       100
     )
     const f = Array.from(acc.fileMap.values())[0]
+    expect(f.matchCount).toBe(1)
     expect(f.matches).toHaveLength(1)
     expect(f.matches[0]).toMatchObject({ line: 10, column: 1, matchLength: 12 })
   })
@@ -367,6 +392,7 @@ describe('ingestGitGrepLine', () => {
     expect(verdict).toBe('stop')
     expect(acc.truncated).toBe(true)
     expect(acc.totalMatches).toBe(2)
+    expect(Array.from(acc.fileMap.values())[0].matchCount).toBe(2)
   })
 
   it('falls back to whole-line highlight when submatchRegex is null', () => {
@@ -374,6 +400,7 @@ describe('ingestGitGrepLine', () => {
     const verdict = ingestGitGrepLine('a.ts\x003\x00hello world', '/r', null, acc, 100)
     expect(verdict).toBe('continue')
     const f = Array.from(acc.fileMap.values())[0]
+    expect(f.matchCount).toBe(1)
     expect(f.matches).toHaveLength(1)
     expect(f.matches[0]).toMatchObject({
       line: 3,
@@ -381,6 +408,23 @@ describe('ingestGitGrepLine', () => {
       matchLength: 'hello world'.length,
       lineContent: 'hello world'
     })
+  })
+
+  it('falls back to whole-line highlight when a valid JS regex finds no submatch', () => {
+    const acc = createAccumulator()
+    const re = /nomatch/g
+    const verdict = ingestGitGrepLine('a.ts\x003\x00git reported this line', '/r', re, acc, 100)
+    expect(verdict).toBe('continue')
+    const f = Array.from(acc.fileMap.values())[0]
+    expect(f.matchCount).toBe(1)
+    expect(f.matches).toEqual([
+      {
+        line: 3,
+        column: 1,
+        matchLength: 'git reported this line'.length,
+        lineContent: 'git reported this line'
+      }
+    ])
   })
 })
 
@@ -390,6 +434,7 @@ describe('finalize', () => {
     acc.fileMap.set('/r/a.ts', {
       filePath: '/r/a.ts',
       relativePath: 'a.ts',
+      matchCount: 1,
       matches: [{ line: 1, column: 1, matchLength: 3, lineContent: 'foo' }]
     })
     acc.totalMatches = 1
@@ -399,6 +444,7 @@ describe('finalize', () => {
         {
           filePath: '/r/a.ts',
           relativePath: 'a.ts',
+          matchCount: 1,
           matches: [{ line: 1, column: 1, matchLength: 3, lineContent: 'foo' }]
         }
       ],
@@ -417,5 +463,40 @@ describe('finalize', () => {
     })
     acc.totalMatches = 1
     expect(finalize(acc).files.map((file) => file.relativePath)).toEqual(['b.ts'])
+  })
+
+  it('normalizes missing and too-low per-file match counts', () => {
+    const acc = createAccumulator()
+    acc.fileMap.set('/r/a.ts', {
+      filePath: '/r/a.ts',
+      relativePath: 'a.ts',
+      matches: [
+        { line: 1, column: 1, matchLength: 3, lineContent: 'foo' },
+        { line: 2, column: 1, matchLength: 3, lineContent: 'foo' }
+      ]
+    })
+    acc.fileMap.set('/r/b.ts', {
+      filePath: '/r/b.ts',
+      relativePath: 'b.ts',
+      matchCount: 0,
+      matches: [{ line: 3, column: 1, matchLength: 3, lineContent: 'foo' }]
+    })
+    acc.totalMatches = 3
+
+    expect(finalize(acc).files.map((file) => [file.relativePath, file.matchCount])).toEqual([
+      ['a.ts', 2],
+      ['b.ts', 1]
+    ])
+  })
+
+  it('filters empty files even when malformed payloads claim matches', () => {
+    const acc = createAccumulator()
+    acc.fileMap.set('/r/a.ts', {
+      filePath: '/r/a.ts',
+      relativePath: 'a.ts',
+      matchCount: 2,
+      matches: []
+    })
+    expect(finalize(acc).files).toEqual([])
   })
 })

@@ -7,9 +7,10 @@ const ANCHOR_PREFIX = '--orca-tab-group-body-'
 
 /**
  * Returns the CSS anchor name for a given tab-group id. Anchor names must be
- * `<dashed-ident>`; groupIds are UUIDs (hex + `-`) so they are already safe
- * as suffixes. Prefixed so they cannot collide with unrelated anchors.
+ * `<dashed-ident>`; remote/runtime groups can include path-like ids, so encode
+ * the full id into hex code points before appending it to the custom prefix.
  */
 export function tabGroupBodyAnchorName(groupId: string): string {
-  return `${ANCHOR_PREFIX}${groupId}`
+  const encoded = Array.from(groupId, (char) => char.codePointAt(0)?.toString(16) ?? '').join('-')
+  return `${ANCHOR_PREFIX}${encoded || 'empty'}`
 }

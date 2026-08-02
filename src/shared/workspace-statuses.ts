@@ -9,7 +9,6 @@ export { DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 
 const WORKSPACE_STATUS_GROUP_PREFIX = 'workspace-status:'
 const MAX_STATUS_LABEL_LENGTH = 32
-const MAX_WORKSPACE_STATUSES = 12
 type WorkspaceStatusNormalizationOptions = {
   migrateDefaultWorkflowStatuses?: boolean
   migrateLegacyDefaultStatusVisuals?: boolean
@@ -169,7 +168,7 @@ function normalizeWorkspaceStatusesInternal(
 
   const statuses: WorkspaceStatusDefinition[] = []
   const usedIds = new Set<string>()
-  for (const rawStatus of value.slice(0, MAX_WORKSPACE_STATUSES)) {
+  for (const rawStatus of value) {
     if (!rawStatus || typeof rawStatus !== 'object' || Array.isArray(rawStatus)) {
       continue
     }
@@ -214,7 +213,7 @@ export function normalizePersistedWorkspaceStatuses(
   ) {
     return cloneDefaultWorkspaceStatuses()
   }
-  // Why: this PR briefly wrote the default columns in reverse workflow order.
+  // Why: a previous build briefly wrote the default columns in reverse order.
   // The repair is one-shot and checks the raw payload, because normalized
   // IDs/labels are indistinguishable from a user-authored column reorder.
   if (

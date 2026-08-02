@@ -6,10 +6,19 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ScrollArea } from '../ui/scroll-area'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
-import { BUILTIN_TERMINAL_THEME_NAMES, normalizeColor } from '@/lib/terminal-theme'
+import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
+import {
+  filterFontSuggestions,
+  filterTerminalThemeOptions,
+  getRenderedFontSuggestions,
+  isSettingsFormOptionQueryTooLarge
+} from './settings-form-option-filter'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type SettingsSwitchProps = {
   checked: boolean
@@ -54,6 +63,7 @@ type SettingsRowProps = {
   label: React.ReactNode
   description?: React.ReactNode
   control: React.ReactNode
+  className?: string
   /** Optional id applied to the label so the control can reference it via aria-labelledby. */
   labelId?: string
   /** When true, top-align label/description and control. Useful for tall control columns. */
@@ -65,16 +75,26 @@ export function SettingsRow({
   label,
   description,
   control,
+  className,
   labelId,
   alignTop
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
-      className={cn('flex gap-4 py-2', alignTop ? 'items-start' : 'items-center justify-between')}
+      className={cn(
+        'flex gap-4',
+        description ? 'py-3' : 'py-2',
+        alignTop ? 'items-start' : 'items-center justify-between',
+        className
+      )}
     >
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <Label id={labelId}>{label}</Label>
-        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      <div className={cn('min-w-0 flex-1', description ? 'space-y-1' : 'space-y-0.5')}>
+        <Label id={labelId} className="select-text">
+          {label}
+        </Label>
+        {description ? (
+          <p className="select-text text-xs text-muted-foreground">{description}</p>
+        ) : null}
       </div>
       <div className="shrink-0">{control}</div>
     </div>
@@ -86,6 +106,7 @@ type SettingsSwitchRowProps = {
   description?: React.ReactNode
   checked: boolean
   onChange: () => void
+  className?: string
   ariaLabel?: string
 }
 
@@ -94,12 +115,14 @@ export function SettingsSwitchRow({
   description,
   checked,
   onChange,
+  className,
   ariaLabel
 }: SettingsSwitchRowProps): React.JSX.Element {
   return (
     <SettingsRow
       label={label}
       description={description}
+      className={className}
       control={
         <SettingsSwitch
           checked={checked}
@@ -116,6 +139,8 @@ type SegmentedOption<T extends string | number> = {
   label: React.ReactNode
   disabled?: boolean
   ariaLabel?: string
+  /** Optional hover label describing what the option does. */
+  tooltip?: React.ReactNode
 }
 
 type SettingsSegmentedControlProps<T extends string | number> = {
@@ -147,14 +172,17 @@ export function SettingsSegmentedControl<T extends string | number>({
     >
       {options.map((opt) => {
         const active = opt.value === value
-        return (
+        const button = (
           <button
             key={String(opt.value)}
             type="button"
             role="radio"
             aria-checked={active}
             aria-label={opt.ariaLabel}
-            disabled={opt.disabled}
+            // Why aria-disabled, not disabled: a native disabled button leaves the tab
+            // order, so keyboard users can never focus it to open the tooltip explaining
+            // why the option is unavailable. The click guard below keeps it inert.
+            aria-disabled={opt.disabled}
             onClick={() => {
               if (!opt.disabled) {
                 onChange(opt.value)
@@ -173,6 +201,15 @@ export function SettingsSegmentedControl<T extends string | number>({
           >
             {opt.label}
           </button>
+        )
+        if (opt.tooltip == null) {
+          return button
+        }
+        return (
+          <Tooltip key={String(opt.value)}>
+            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipContent>{opt.tooltip}</TooltipContent>
+          </Tooltip>
         )
       })}
     </div>
@@ -212,16 +249,18 @@ type SettingsSubsectionHeaderProps = {
   title: React.ReactNode
   description?: React.ReactNode
   action?: React.ReactNode
+  className?: string
 }
 
 /** Consistent subsection header: h3 text-sm font-semibold + optional muted description. */
 export function SettingsSubsectionHeader({
   title,
   description,
-  action
+  action,
+  className
 }: SettingsSubsectionHeaderProps): React.JSX.Element {
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className={cn('flex items-start justify-between gap-3', className)}>
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">{title}</h3>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
@@ -235,9 +274,13 @@ type ThemePickerProps = {
   label: string
   description: string
   selectedTheme: string
+  themeOptions: TerminalThemeOption[]
   query: string
   onQueryChange: (value: string) => void
   onSelectTheme: (theme: string) => void
+  /** Bumps when themes are imported; scrolls the Imported group into view and
+   *  briefly highlights it so freshly-imported themes are easy to find. */
+  importedHighlightSignal?: number
 }
 
 type ColorFieldProps = {
@@ -265,6 +308,7 @@ type FontAutocompleteProps = {
   suggestions: string[]
   onChange: (value: string) => void
   placeholder?: string
+  onRequestSuggestions?: () => void
   /** Fires with whichever option the user is currently highlighting in the
    *  dropdown (via mouse hover or keyboard arrow), or null when nothing is
    *  highlighted / the dropdown is closed. Lets a consumer show a live
@@ -276,14 +320,49 @@ export function ThemePicker({
   label,
   description,
   selectedTheme,
+  themeOptions,
   query,
   onQueryChange,
-  onSelectTheme
+  onSelectTheme,
+  importedHighlightSignal
 }: ThemePickerProps): React.JSX.Element {
-  const normalizedQuery = query.trim().toLowerCase()
-  const filteredThemes = BUILTIN_TERMINAL_THEME_NAMES.filter((theme) =>
-    theme.toLowerCase().includes(normalizedQuery)
-  ).slice(0, MAX_THEME_RESULTS)
+  const importedGroupRef = useRef<HTMLDivElement | null>(null)
+  const [highlightImported, setHighlightImported] = useState(false)
+
+  // Why: imported themes render below the built-in list inside a fixed-height
+  // scroll area, so after an import they sit off-screen. On each import signal,
+  // scroll the Imported group into view and flash a highlight so it's easy to spot.
+  useEffect(() => {
+    if (!importedHighlightSignal) {
+      return
+    }
+    importedGroupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    setHighlightImported(true)
+    const timer = setTimeout(() => setHighlightImported(false), 2000)
+    return () => clearTimeout(timer)
+  }, [importedHighlightSignal])
+
+  const themeQuery = query.trim()
+  const shouldShowThemeQueryLabel =
+    themeQuery.length > 0 && !isSettingsFormOptionQueryTooLarge(themeQuery)
+  const matchingThemes = filterTerminalThemeOptions(themeOptions, query)
+  const selectedThemeLabel =
+    themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
+  const groupedThemes = [
+    {
+      label: translate('auto.components.settings.SettingsFormControls.builtin_themes', 'Built-in'),
+      themes: matchingThemes
+        .filter((theme) => theme.group === 'built-in')
+        .slice(0, MAX_THEME_RESULTS)
+    },
+    {
+      label: translate('auto.components.settings.SettingsFormControls.imported_themes', 'Imported'),
+      themes: matchingThemes
+        .filter((theme) => theme.group === 'imported')
+        .slice(0, MAX_THEME_RESULTS)
+    }
+  ].filter((group) => group.themes.length > 0)
+  const visibleThemeCount = groupedThemes.reduce((sum, group) => sum + group.themes.length, 0)
 
   return (
     <div className="space-y-3">
@@ -294,40 +373,122 @@ export function ThemePicker({
       <Input
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
-        placeholder="Search builtin themes"
+        placeholder={translate(
+          'auto.components.settings.SettingsFormControls.search_terminal_themes',
+          'Search terminal themes'
+        )}
       />
       <div className="rounded-lg border border-border/50">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
-          <span>Selected: {selectedTheme}</span>
           <span>
-            Showing {filteredThemes.length}
-            {normalizedQuery
-              ? ` matching "${query.trim()}"`
-              : ` of ${BUILTIN_TERMINAL_THEME_NAMES.length}`}
+            {translate('auto.components.settings.SettingsFormControls.fbb428db98', 'Selected:')}{' '}
+            {selectedThemeLabel}
+          </span>
+          <span>
+            {translate('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
+            {visibleThemeCount}
+            {shouldShowThemeQueryLabel
+              ? translate(
+                  'auto.components.settings.SettingsFormControls.c822571b2e',
+                  ' matching "{{value0}}"',
+                  { value0: themeQuery }
+                )
+              : translate(
+                  'auto.components.settings.SettingsFormControls.cb330ef7f8',
+                  ' of {{value0}}',
+                  { value0: themeOptions.length }
+                )}
           </span>
         </div>
         <ScrollArea className="h-64">
           <div className="space-y-1 p-2">
-            {filteredThemes.map((theme) => (
-              <button
-                key={theme}
-                onClick={() => onSelectTheme(theme)}
-                className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                  selectedTheme === theme
-                    ? 'bg-accent font-medium text-accent-foreground'
-                    : 'hover:bg-muted/60'
-                }`}
-              >
-                <span className="truncate">{theme}</span>
-                {selectedTheme === theme ? (
-                  <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
-                    Current
-                  </span>
-                ) : null}
-              </button>
-            ))}
-            {filteredThemes.length === 0 ? (
-              <div className="px-3 py-6 text-sm text-muted-foreground">No themes found.</div>
+            {groupedThemes.map((group) => {
+              const isImported =
+                group.label ===
+                translate(
+                  'auto.components.settings.SettingsFormControls.imported_themes',
+                  'Imported'
+                )
+              return (
+                <div
+                  key={group.label}
+                  ref={isImported ? importedGroupRef : undefined}
+                  className={cn(
+                    'space-y-1 rounded-md transition-colors duration-500',
+                    isImported && highlightImported && 'bg-accent/40 ring-1 ring-accent'
+                  )}
+                >
+                  <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                    {group.label}
+                  </p>
+                  {group.themes.map((theme) => (
+                    <button
+                      key={theme.value}
+                      onClick={() => onSelectTheme(theme.value)}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        selectedTheme === theme.value
+                          ? 'bg-accent font-medium text-accent-foreground'
+                          : 'hover:bg-accent'
+                      )}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{theme.label}</span>
+                        {theme.sourceLabel ? (
+                          <span className="block truncate text-[11px] font-normal text-muted-foreground">
+                            {translate(
+                              'auto.components.settings.SettingsFormControls.imported_from',
+                              'Imported from {{value0}}',
+                              { value0: theme.sourceLabel }
+                            )}
+                            {theme.mode && theme.mode !== 'unknown' ? ` · ${theme.mode}` : ''}
+                          </span>
+                        ) : null}
+                      </span>
+                      {/* Why: hide swatches on the current row so the color grid
+                        doesn't shift left to make room for the "Current" label. */}
+                      {theme.group === 'imported' &&
+                      theme.previewTheme &&
+                      selectedTheme !== theme.value ? (
+                        <span className="flex shrink-0 overflow-hidden rounded-sm border border-border/60">
+                          {[
+                            theme.previewTheme.black,
+                            theme.previewTheme.red,
+                            theme.previewTheme.green,
+                            theme.previewTheme.yellow,
+                            theme.previewTheme.blue,
+                            theme.previewTheme.magenta,
+                            theme.previewTheme.cyan,
+                            theme.previewTheme.white
+                          ].map((color, index) => (
+                            <span
+                              key={index}
+                              className="h-3 w-2"
+                              style={{ backgroundColor: color ?? 'transparent' }}
+                            />
+                          ))}
+                        </span>
+                      ) : null}
+                      {selectedTheme === theme.value ? (
+                        <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
+                          {translate(
+                            'auto.components.settings.SettingsFormControls.9119fb2268',
+                            'Current'
+                          )}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              )
+            })}
+            {visibleThemeCount === 0 ? (
+              <div className="px-3 py-6 text-sm text-muted-foreground">
+                {translate(
+                  'auto.components.settings.SettingsFormControls.ceefb9d7f1',
+                  'No themes found.'
+                )}
+              </div>
             ) : null}
           </div>
         </ScrollArea>
@@ -414,7 +575,10 @@ export function NumberField({
         <>
           {description}
           {defaultValue !== undefined ? (
-            <span className="ml-1 text-muted-foreground/70">· Default: {defaultValue}</span>
+            <span className="ml-1 text-muted-foreground/70">
+              {translate('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
+              {defaultValue}
+            </span>
           ) : null}
         </>
       }
@@ -447,12 +611,14 @@ export function FontAutocomplete({
   suggestions,
   onChange,
   placeholder = 'SF Mono',
+  onRequestSuggestions,
   onPreviewFontFamily
 }: FontAutocompleteProps): React.JSX.Element {
   const [query, setQuery] = useState(value)
   const [prevValue, setPrevValue] = useState(value)
   const [open, setOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const [isFilteringQuery, setIsFilteringQuery] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const previewFontFamilyRef = useRef(onPreviewFontFamily)
@@ -472,52 +638,58 @@ export function FontAutocomplete({
   if (value !== prevValue) {
     setPrevValue(value)
     setQuery(value)
+    if (value !== query) {
+      setIsFilteringQuery(false)
+    }
   }
 
-  useEffect(() => {
-    if (!open) {
-      return
-    }
+  const requestSuggestions = useCallback((): void => {
+    onRequestSuggestions?.()
+  }, [onRequestSuggestions])
 
-    const handlePointerDown = (event: MouseEvent): void => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false)
-      }
+  const handleOpenChange = (nextOpen: boolean): void => {
+    setOpen(nextOpen)
+    if (nextOpen) {
+      requestSuggestions()
     }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [open])
+    if (!nextOpen) {
+      setIsFilteringQuery(false)
+    }
+  }
 
   const normalizedQuery = query.trim().toLowerCase()
-  const filteredSuggestions = useMemo(() => {
-    const startsWith = suggestions.filter((font) => font.toLowerCase().startsWith(normalizedQuery))
-    const includes = suggestions.filter(
-      (font) =>
-        !font.toLowerCase().startsWith(normalizedQuery) &&
-        font.toLowerCase().includes(normalizedQuery)
-    )
-    return normalizedQuery ? [...startsWith, ...includes] : suggestions
-  }, [suggestions, normalizedQuery])
+  const normalizedValue = value.trim().toLowerCase()
+  const filteredSuggestions = useMemo(
+    () => filterFontSuggestions(suggestions, query),
+    [suggestions, query]
+  )
+  // Why: the committed font fills the input, but opening the chooser should
+  // still reveal every installed font instead of only fonts sharing that name.
+  const visibleSuggestions =
+    !isFilteringQuery && normalizedQuery === normalizedValue ? suggestions : filteredSuggestions
+  const renderedSuggestions = useMemo(
+    () => getRenderedFontSuggestions(visibleSuggestions, highlightedIndex),
+    [visibleSuggestions, highlightedIndex]
+  )
 
   // Why: sync the highlighted index during render rather than via useEffect so
   // the correct item is highlighted on the very first paint after open/filter
   // changes — useEffect would leave one render with the stale index visible.
-  const [prevFilteredSuggestions, setPrevFilteredSuggestions] = useState(filteredSuggestions)
+  const [prevVisibleSuggestions, setPrevVisibleSuggestions] = useState(visibleSuggestions)
   const [prevOpen, setPrevOpen] = useState(open)
   const [prevHighlightedValue, setPrevHighlightedValue] = useState(value)
   if (
-    filteredSuggestions !== prevFilteredSuggestions ||
+    visibleSuggestions !== prevVisibleSuggestions ||
     open !== prevOpen ||
     value !== prevHighlightedValue
   ) {
-    setPrevFilteredSuggestions(filteredSuggestions)
+    setPrevVisibleSuggestions(visibleSuggestions)
     setPrevOpen(open)
     setPrevHighlightedValue(value)
-    if (!open || filteredSuggestions.length === 0) {
+    if (!open || visibleSuggestions.length === 0) {
       setHighlightedIndex(-1)
     } else {
-      const selectedIndex = filteredSuggestions.findIndex((font) => font === value)
+      const selectedIndex = visibleSuggestions.indexOf(value)
       setHighlightedIndex(Math.max(selectedIndex, 0))
     }
   }
@@ -533,11 +705,12 @@ export function FontAutocomplete({
       onPreviewFontFamily(null)
       return
     }
-    onPreviewFontFamily(filteredSuggestions[highlightedIndex] ?? null)
-  }, [filteredSuggestions, highlightedIndex, onPreviewFontFamily, open])
+    onPreviewFontFamily(visibleSuggestions[highlightedIndex] ?? null)
+  }, [visibleSuggestions, highlightedIndex, onPreviewFontFamily, open])
 
   const commitValue = (nextValue: string): void => {
     setQuery(nextValue)
+    setIsFilteringQuery(false)
     onChange(nextValue)
     setOpen(false)
   }
@@ -545,128 +718,180 @@ export function FontAutocomplete({
   const focusInput = (): void => {
     inputRef.current?.focus()
   }
+  const popoverAvailableHeightStyle = {
+    // Why: tailwind-merge rewrites this arbitrary max-height class on the
+    // ScrollArea root, so keep the Radix available-height clamp as inline style.
+    maxHeight: 'var(--radix-popover-content-available-height)'
+  } as React.CSSProperties
 
   return (
     <div ref={setRootNode} className="relative max-w-sm">
-      <div className="relative">
-        <Input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => {
-            const next = e.target.value
-            setQuery(next)
-            onChange(next)
-            setOpen(true)
-          }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              if (open) {
-                e.preventDefault()
-                setOpen(false)
-              }
-              return
-            }
-
-            if (e.key === 'ArrowDown') {
-              e.preventDefault()
-              setOpen(true)
-              if (filteredSuggestions.length > 0) {
-                setHighlightedIndex((current) =>
-                  current < 0 ? 0 : Math.min(current + 1, filteredSuggestions.length - 1)
-                )
-              }
-              return
-            }
-
-            if (e.key === 'ArrowUp') {
-              e.preventDefault()
-              setOpen(true)
-              if (filteredSuggestions.length > 0) {
-                setHighlightedIndex((current) =>
-                  current < 0 ? filteredSuggestions.length - 1 : Math.max(current - 1, 0)
-                )
-              }
-              return
-            }
-
-            if (e.key === 'Enter' && open && highlightedIndex >= 0) {
-              const highlightedFont = filteredSuggestions[highlightedIndex]
-              if (highlightedFont) {
-                e.preventDefault()
-                commitValue(highlightedFont)
-              }
-            }
-          }}
-          placeholder={placeholder}
-          className="pr-18"
-          role="combobox"
-          aria-autocomplete="list"
-          aria-expanded={open}
-          aria-controls={listboxId}
-          aria-activedescendant={
-            open && highlightedIndex >= 0 ? `${listboxId}-option-${highlightedIndex}` : undefined
-          }
-        />
-        <div className="absolute inset-y-0 right-2 flex items-center gap-1">
-          {query ? (
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                setQuery('')
-                onChange('')
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverAnchor asChild>
+          <div className="relative">
+            <Input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => {
+                const next = e.target.value
+                requestSuggestions()
+                setQuery(next)
+                setIsFilteringQuery(true)
+                onChange(next)
                 setOpen(true)
-                focusInput()
               }}
-              className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="Clear font selection"
-              title="Clear"
-            >
-              <CircleX className="size-3.5" />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              const nextOpen = !open
-              setOpen(nextOpen)
-              if (nextOpen) {
-                focusInput()
-              }
-            }}
-            className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Toggle font suggestions"
-            title="Fonts"
-          >
-            <ChevronsUpDown className="size-3.5" />
-          </button>
-        </div>
-      </div>
+              onFocus={() => {
+                requestSuggestions()
+                setIsFilteringQuery(false)
+                setOpen(true)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  if (open) {
+                    e.preventDefault()
+                    setOpen(false)
+                    setIsFilteringQuery(false)
+                  }
+                  return
+                }
 
-      {open ? (
-        <div className="absolute top-full z-20 mt-2 w-full overflow-hidden rounded-md border border-border/50 bg-popover shadow-md">
-          <ScrollArea className={filteredSuggestions.length > 8 ? 'h-64' : undefined}>
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  setOpen(true)
+                  if (visibleSuggestions.length > 0) {
+                    setHighlightedIndex((current) =>
+                      current < 0 ? 0 : Math.min(current + 1, visibleSuggestions.length - 1)
+                    )
+                  }
+                  return
+                }
+
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  setOpen(true)
+                  if (visibleSuggestions.length > 0) {
+                    setHighlightedIndex((current) =>
+                      current < 0 ? visibleSuggestions.length - 1 : Math.max(current - 1, 0)
+                    )
+                  }
+                  return
+                }
+
+                if (e.key === 'Enter' && open && highlightedIndex >= 0) {
+                  const highlightedFont = visibleSuggestions[highlightedIndex]
+                  if (highlightedFont) {
+                    e.preventDefault()
+                    commitValue(highlightedFont)
+                  }
+                }
+              }}
+              placeholder={placeholder}
+              className="pr-18"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={open}
+              aria-controls={listboxId}
+              aria-activedescendant={
+                open && highlightedIndex >= 0
+                  ? `${listboxId}-option-${highlightedIndex}`
+                  : undefined
+              }
+            />
+            <div className="absolute inset-y-0 right-2 flex items-center gap-1">
+              {query ? (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setQuery('')
+                    setIsFilteringQuery(false)
+                    onChange('')
+                    setOpen(true)
+                    focusInput()
+                  }}
+                  className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label={translate(
+                    'auto.components.settings.SettingsFormControls.a4ff6143f8',
+                    'Clear font selection'
+                  )}
+                  title={translate(
+                    'auto.components.settings.SettingsFormControls.74bcecd5ec',
+                    'Clear'
+                  )}
+                >
+                  <CircleX className="size-3.5" />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  const nextOpen = !open
+                  setOpen(nextOpen)
+                  if (!nextOpen) {
+                    setIsFilteringQuery(false)
+                  }
+                  if (nextOpen) {
+                    requestSuggestions()
+                    focusInput()
+                  }
+                }}
+                className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label={translate(
+                  'auto.components.settings.SettingsFormControls.c766f8ac75',
+                  'Toggle font suggestions'
+                )}
+                title={translate(
+                  'auto.components.settings.SettingsFormControls.b55371ea18',
+                  'Fonts'
+                )}
+              >
+                <ChevronsUpDown className="size-3.5" />
+              </button>
+            </div>
+          </div>
+        </PopoverAnchor>
+
+        {/* Why: portal the dropdown outside the settings section — an in-flow
+          absolute panel makes the highlighted option's scrollIntoView scroll
+          the whole settings pane, pushing the section content out of view. */}
+        <PopoverContent
+          align="start"
+          className="w-[var(--radix-popover-trigger-width)]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            // Why: the input and its clear/toggle buttons are the anchor, not
+            // the content, so Radix would otherwise dismiss on every click there.
+            if (rootRef.current?.contains(e.target as Node)) {
+              e.preventDefault()
+            }
+          }}
+        >
+          <ScrollArea
+            className={renderedSuggestions.length > 8 ? 'h-64' : undefined}
+            style={popoverAvailableHeightStyle}
+            viewportProps={{ style: popoverAvailableHeightStyle }}
+          >
             <div id={listboxId} role="listbox" className="p-1">
-              {filteredSuggestions.length > 0 ? (
-                filteredSuggestions.map((font, index) => (
+              {visibleSuggestions.length > 0 ? (
+                renderedSuggestions.map(({ font, sourceIndex }) => (
                   <button
                     key={font}
                     type="button"
-                    id={`${listboxId}-option-${index}`}
+                    id={`${listboxId}-option-${sourceIndex}`}
                     role="option"
-                    aria-selected={index === highlightedIndex}
+                    aria-selected={sourceIndex === highlightedIndex}
                     ref={(element) => {
-                      if (element && index === highlightedIndex) {
+                      if (element && sourceIndex === highlightedIndex) {
                         element.scrollIntoView({ block: 'nearest' })
                       }
                     }}
                     onMouseDown={(e) => e.preventDefault()}
-                    onMouseEnter={() => setHighlightedIndex(index)}
+                    onMouseEnter={() => setHighlightedIndex(sourceIndex)}
                     onClick={() => commitValue(font)}
                     className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors ${
-                      index === highlightedIndex
+                      sourceIndex === highlightedIndex
                         ? 'bg-accent text-accent-foreground'
                         : 'hover:bg-muted/60'
                     }`}
@@ -676,12 +901,17 @@ export function FontAutocomplete({
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-3 text-sm text-muted-foreground">No matching fonts.</div>
+                <div className="px-3 py-3 text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SettingsFormControls.42a4d15a30',
+                    'No matching fonts.'
+                  )}
+                </div>
               )}
             </div>
           </ScrollArea>
-        </div>
-      ) : null}
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }

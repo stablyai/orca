@@ -1,0 +1,127 @@
+# Localization Audit
+
+This is the pre-work artifact for migrating Orca to a localized UI. The goal is
+to make coverage repeatable: every detected user-facing string is either moved
+behind the localization layer or explicitly excluded with a reason.
+
+The accepted translation-source architecture and staged migration are recorded
+in [`i18n-translation-source.md`](./i18n-translation-source.md).
+
+## Coverage Contract
+
+Coverage means all strings matching the audit scope below are accounted for:
+
+- JSX text rendered in the renderer.
+- Accessibility and form attributes such as `aria-label`, `ariaLabel`, `alt`,
+  `placeholder`, `title`, `label`, `description`, `subtitle`, and `tooltip`.
+- User-facing object metadata such as Settings search `title`, `description`,
+  `keywords`, labels, badges, helper text, and tooltips.
+- User-facing calls such as `toast.success(...)`, `toast.error(...)`, browser
+  `alert(...)`, `confirm(...)`, and `prompt(...)`.
+
+The audit intentionally does not treat these as localization misses unless they
+are surfaced directly as UI copy:
+
+- Terminal output, agent output, git output, provider API errors, and shell
+  commands.
+- File paths, URLs, environment variables, telemetry event names, IDs, and
+  protocol names.
+- Developer logs, internal diagnostics, test fixtures, and snapshots.
+- Brand, provider, model, command, and product names that should remain exact.
+
+## Inventory Command
+
+Generate a machine-readable inventory:
+
+```sh
+node config/scripts/audit-localization-coverage.mjs --json --output tmp/localization-candidates.json
+```
+
+Generate a reviewable Markdown inventory:
+
+```sh
+node config/scripts/audit-localization-coverage.mjs --markdown --output tmp/localization-candidates.md
+```
+
+Run the maintained coverage gate:
+
+```sh
+pnpm run verify:localization-coverage
+```
+
+Sync catalog keys after adding or removing `translate(...)` calls:
+
+```sh
+pnpm run sync:localization-catalog
+```
+
+The sync command adds missing `en.json` entries from each call's string fallback.
+It never edits target catalogs: missing values remain absent and use the existing
+runtime English fallback. Existing placeholder mismatches fail validation until
+a localization PR fixes or retires the target entry.
+
+Run maintained source extraction without committing a second English catalog:
+
+```sh
+pnpm run verify:localization-extraction
+```
+
+Extraction fails when a statically extracted key is absent from `en.json` or an
+inline default has incompatible placeholders. Existing unreferenced English keys
+and wording-only fallback drift are reported as migration debt; the permanent
+bilingual translation source will reconcile them without a large disposition
+database. Reviewed and stale translation state is likewise deferred to that
+source rather than inferred permanently from Git history.
+
+The legacy free-endpoint bootstrap and whole-catalog repair scripts intentionally
+have no package-script entry points. Ordinary product and localization work must
+not invoke tools that can overwrite an entire target catalog.
+
+The coverage gate compares current candidates against
+`config/localization-coverage-allowlist.json`. The committed allowlist is
+small (10 reviewed entries — one test fixture title, five non-English
+language-name search keywords, and four reviewed product-name search
+keywords): new candidates fail the check and must be localized or added with
+a reviewed reason in the same change.
+
+The script scans `src/renderer/src` by default. That is the primary UI surface.
+Use `--source-root src` for a wider audit when checking renderer-adjacent shared
+copy, then classify non-renderer findings carefully because many are diagnostics
+or external tool text.
+
+## Migration States
+
+Each candidate should end in one of these states:
+
+- `localized`: the component reads the string from the locale catalog.
+- `excluded`: the string is intentionally not localized, with a reason from the
+  coverage contract.
+- `deferred`: the string is user-facing but belongs to a later PR wave.
+
+`deferred` is acceptable for planning, but not for the localization coverage
+gate.
+
+## PR Waves
+
+Recommended migration order:
+
+1. Infrastructure, English catalog, language setting, and language selector.
+2. Settings shell, Settings search metadata, and Appearance.
+3. App shell, sidebars, titlebar, status bar, command surfaces, and global
+   dialogs/toasts.
+4. Task pages, source control, hosted review, and provider-specific UI.
+5. Terminal chrome, onboarding, feature tips, mobile, browser, and remaining
+   secondary surfaces.
+
+## Proof Strategy
+
+The final gate should combine three checks:
+
+1. Scanner coverage: no unclassified localizable candidates remain.
+2. Catalog correctness: existing translations have matching interpolation
+   variables; missing target entries are reported rather than rejected.
+3. Runtime coverage: pseudo-localization and real locale smoke tests show no
+   obvious English leftovers or layout clipping in core screens.
+
+Subagent or human review should verify ambiguous exclusions, but the scanner is
+the coverage source of truth.

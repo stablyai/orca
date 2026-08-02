@@ -1,5 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import type { SshCredentialKind } from '../ssh/ssh-connection-utils'
 
 const CREDENTIAL_TIMEOUT_MS = 120_000

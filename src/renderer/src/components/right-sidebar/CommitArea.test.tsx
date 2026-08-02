@@ -1,14 +1,44 @@
-import { describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+import React from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CommitArea, ConflictSummaryCard, OperationBanner } from './SourceControl'
-import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
+import { fireEvent, render } from '@testing-library/react'
+import {
+  CommitArea,
+  ConflictSummaryCard,
+  handleSourceControlCommitShortcut,
+  OperationBanner
+} from './SourceControl'
+import {
+  resolveCommitAreaPrimaryAction,
+  type PrimaryActionInputs
+} from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { deriveSourceControlPushRecovery } from './source-control-push-recovery'
+
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div className={className}>{children}</div>
+  ),
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>
+}))
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+function setUserAgent(userAgent: string): void {
+  vi.stubGlobal('navigator', { userAgent })
+}
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
     stagedCount: 1,
     hasUnstagedChanges: false,
+    hasStageableChanges: false,
     hasPartiallyStagedChanges: false,
     hasMessage: true,
     hasUnresolvedConflicts: false,
@@ -27,29 +57,56 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
     commitFailureRecoveryPrompt: null as string | null,
+    pushRecovery: null as ReturnType<typeof deriveSourceControlPushRecovery>,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     isFixingCommitFailureWithAI: false,
-    aiEnabled: false,
+    isFixingPushFailureWithAI: false,
+    sourceControlAiActionsVisible: true,
     aiAgentConfigured: false,
     isGenerating: false,
     generateError: null as string | null,
     stagedCount: inputs.stagedCount,
+    hasPartiallyStagedChanges: inputs.hasPartiallyStagedChanges,
     hasUnresolvedConflicts: inputs.hasUnresolvedConflicts,
     isRemoteOperationActive: inputs.isRemoteOperationActive,
     inFlightRemoteOpKind: inputs.inFlightRemoteOpKind ?? null,
-    primaryAction: resolvePrimaryAction(inputs),
+    primaryAction: resolveCommitAreaPrimaryAction(inputs),
     dropdownItems: resolveDropdownItems(inputs),
     onCommitMessageChange: vi.fn(),
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
     onFixCommitFailureWithAI: vi.fn(),
+    onFixPushFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }
 }
 
-function renderCommitArea(props: ReturnType<typeof baseProps>): string {
+function buildPushRecovery(
+  rawError: string
+): NonNullable<ReturnType<typeof deriveSourceControlPushRecovery>> {
+  const recovery = deriveSourceControlPushRecovery({
+    actionError: {
+      kind: 'push',
+      message: 'Push blocked',
+      rawError,
+      branchName: 'main',
+      worktreePath: '/repo',
+      entriesSnapshot: [],
+      entriesSnapshotTotalCount: 0,
+      sequence: 1
+    },
+    currentBranchName: 'main',
+    currentSequence: 1
+  })
+  if (!recovery) {
+    throw new Error('push recovery was not derived')
+  }
+  return recovery
+}
+
+function renderCommitArea(props: Parameters<typeof CommitArea>[0]): string {
   return renderToStaticMarkup(
     <TooltipProvider>
       <CommitArea {...props} />
@@ -58,11 +115,13 @@ function renderCommitArea(props: ReturnType<typeof baseProps>): string {
 }
 
 function firstButton(markup: string): string {
-  const match = markup.match(/<button\b[\s\S]*?<\/button>/)
-  if (!match) {
+  const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+    .map((match) => match[0])
+    .find((entry) => entry.includes('data-slot="button"'))
+  if (!button) {
     throw new Error('button not found')
   }
-  return match[0]
+  return button
 }
 
 function buttonContaining(markup: string, label: string): string {
@@ -112,12 +171,127 @@ describe('CommitArea', () => {
     expect(hasDisabledAttribute(firstButton(renderCommitArea(baseProps())))).toBe(false)
   })
 
-  it('keeps the textarea enabled while the commit is in flight', () => {
+  it('renders the Commit shortcut key indicator (⌘Enter) in primary button tooltip on macOS', () => {
+    const props = baseProps()
+    setUserAgent('Macintosh')
+    const markupMac = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
+    })
+    expect(markupMac).toContain('Commit changes')
+    expect(markupMac).toContain('⌘')
+    expect(markupMac).toContain('Enter')
+  })
+
+  it('renders the Commit shortcut key indicator (Ctrl+Enter) in primary button tooltip on Windows/Linux', () => {
+    const props = baseProps()
+    setUserAgent('Windows NT')
+    const markupWin = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
+    })
+    expect(markupWin).toContain('Commit changes')
+    expect(markupWin).toContain('Ctrl')
+    expect(markupWin).toContain('+')
+    expect(markupWin).toContain('Enter')
+  })
+
+  it('only handles Cmd+Enter when focus is within the Source Control sidebar', () => {
+    setUserAgent('Macintosh')
+    const onPrimaryAction = vi.fn()
+    const primaryAction = {
+      kind: 'commit' as const,
+      disabled: false
+    }
+    const { getByTestId } = render(
+      <>
+        <div
+          data-testid="source-control-sidebar"
+          onKeyDown={(event) =>
+            handleSourceControlCommitShortcut(event, primaryAction, onPrimaryAction)
+          }
+        >
+          <button type="button" data-testid="inside-sidebar">
+            Inside
+          </button>
+        </div>
+        <button type="button" data-testid="outside-sidebar">
+          Outside
+        </button>
+      </>
+    )
+
+    const outside = getByTestId('outside-sidebar')
+    outside.focus()
+    fireEvent.keyDown(outside, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).not.toHaveBeenCalled()
+
+    const inside = getByTestId('inside-sidebar')
+    inside.focus()
+    fireEvent.keyDown(inside, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('handles Ctrl+Enter, but not Cmd+Enter, inside the sidebar on Windows/Linux', () => {
+    setUserAgent('Linux')
+    const onPrimaryAction = vi.fn()
+    const primaryAction = {
+      kind: 'commit' as const,
+      disabled: false
+    }
+    const { getByRole } = render(
+      <button
+        type="button"
+        onKeyDown={(event) =>
+          handleSourceControlCommitShortcut(event, primaryAction, onPrimaryAction)
+        }
+      >
+        Commit scope
+      </button>
+    )
+    const target = getByRole('button', { name: 'Commit scope' })
+
+    fireEvent.keyDown(target, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(target, { key: 'Enter', ctrlKey: true })
+    expect(onPrimaryAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not render the Commit shortcut keys inside the primary button tooltip when the action is not commit', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'push', disabled: false, label: 'Push', title: 'Push changes' }
+    })
+    expect(markup).not.toContain('Enter')
+  })
+
+  it('disables the textarea while the commit is in flight', () => {
     const markup = renderCommitArea({
       ...baseProps({ isCommitting: true }),
       isCommitting: true
     })
-    expect(textarea(markup)).not.toContain('disabled')
+    expect(hasDisabledAttribute(textarea(markup))).toBe(true)
+  })
+
+  it('disables the textarea when no files are staged', () => {
+    expect(hasDisabledAttribute(textarea(renderCommitArea(baseProps({ stagedCount: 0 }))))).toBe(
+      true
+    )
+  })
+
+  it('disables the textarea when unresolved conflicts exist', () => {
+    expect(
+      hasDisabledAttribute(textarea(renderCommitArea(baseProps({ hasUnresolvedConflicts: true }))))
+    ).toBe(true)
+  })
+
+  it('keeps the textarea enabled when staged files need a commit message', () => {
+    const props = baseProps({ hasMessage: false })
+    expect(hasDisabledAttribute(textarea(renderCommitArea({ ...props, commitMessage: '' })))).toBe(
+      false
+    )
   })
 
   it('clears the message and keeps error hidden after a successful commit lifecycle', () => {
@@ -173,6 +347,19 @@ describe('CommitArea', () => {
     expect(button).toContain('animate-spin')
   })
 
+  it('hides commit failure AI actions when Source Control AI actions are hidden', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      commitError: 'husky - pre-commit hook failed',
+      commitFailureRecoveryPrompt: 'Fix this commit failure.',
+      sourceControlAiActionsVisible: false
+    })
+
+    expect(markup).not.toContain('AI Fix')
+    expect(markup).not.toContain('Fix commit failure with AI')
+    expect(markup).toContain('Commit blocked')
+  })
+
   it('enables the agent picker when commit failure context is available', () => {
     const markup = renderCommitArea({
       ...baseProps(),
@@ -201,6 +388,49 @@ describe('CommitArea', () => {
       remoteActionError: 'Fetch failed. network timeout'
     })
     expect(markup).toContain('Fetch failed. network timeout')
+    expect(markup).toContain('commit-area-remote-error')
+  })
+
+  it('shows a compact push hook summary and AI fix action when push fails on a hook', () => {
+    const raw =
+      "error: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+    const markup = renderCommitArea({
+      ...baseProps(),
+      pushRecovery: buildPushRecovery(raw)
+    })
+
+    expect(markup).toContain('id="commit-area-push-error"')
+    expect(markup).toContain('Push blocked')
+    expect(markup).toContain('Lint failed during push.')
+    expect(markup).not.toContain('eslint found 2 errors')
+    expect(markup).toContain('aria-label="Fix push failure with AI"')
+    expect(markup).toContain('Details')
+  })
+
+  it('hides push failure AI actions when Source Control AI actions are hidden', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      pushRecovery: buildPushRecovery('husky - pre-push hook failed'),
+      sourceControlAiActionsVisible: false
+    })
+
+    expect(markup).not.toContain('Fix push failure with AI')
+    expect(markup).toContain('Push blocked')
+  })
+
+  it('formats pull policy errors with command options', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      remoteActionError:
+        'Pull needs a Git pull policy for divergent branches. Configure one for this repository or host, then try again: git config pull.rebase false (merge), git config pull.rebase true (rebase), or git config pull.ff only (fast-forward only).'
+    })
+
+    expect(markup).toContain('Pull needs a policy')
+    expect(markup).toContain('Diverged')
+    expect(markup).toContain('git config pull.rebase false')
+    expect(markup).toContain('git config pull.rebase true')
+    expect(markup).toContain('git config pull.ff only')
+    expect(markup).toContain('aria-label="Copy merge pull policy command"')
     expect(markup).toContain('commit-area-remote-error')
   })
 
@@ -326,6 +556,102 @@ describe('CommitArea', () => {
     expect(button).toContain('animate-spin')
     expect(button).not.toContain('lucide-check')
   })
+
+  it('keeps Stage All as the commit-area primary when review prep can stage changes', () => {
+    const input = buildInputs({
+      stagedCount: 0,
+      hasUnstagedChanges: true,
+      hasStageableChanges: true,
+      hasPartiallyStagedChanges: false,
+      hasMessage: false,
+      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'dirty',
+        nextAction: 'commit',
+        reviewLookupOutcome: 'not_found'
+      }
+    })
+    const markup = renderCommitArea(baseProps(input))
+
+    const stageAllButton = firstButton(markup)
+    expect(stageAllButton).toContain('Stage All')
+    expect(stageAllButton).toContain('data-variant="outline"')
+    expect(stageAllButton).not.toContain('disabled=""')
+    expect(stageAllButton).toContain('lucide-plus')
+    expect(stageAllButton).toContain('rounded-r-none')
+    expect(markup).toContain('aria-label="More commit and remote actions"')
+    expect(markup).toContain('Stage all changes')
+    expect(
+      (markup.match(/<button\b[\s\S]*?<\/button>/g) ?? []).some((button) =>
+        button.includes('Commit</button>')
+      )
+    ).toBe(false)
+  })
+
+  it('keeps Push as the commit-area primary when review prep can create after pushing', () => {
+    const input = buildInputs({
+      stagedCount: 0,
+      hasUnstagedChanges: false,
+      hasStageableChanges: false,
+      hasPartiallyStagedChanges: false,
+      hasMessage: false,
+      upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'needs_push',
+        nextAction: 'push',
+        reviewLookupOutcome: 'not_found'
+      }
+    })
+    const markup = renderCommitArea(baseProps(input))
+
+    const pushButton = firstButton(markup)
+    expect(pushButton).toContain('Push')
+    expect(pushButton).toContain('data-variant="outline"')
+    expect(pushButton).not.toContain('disabled=""')
+    expect(pushButton).toContain('lucide-arrow-up')
+    expect(pushButton).toContain('rounded-r-none')
+    expect(markup).toContain('aria-label="More commit and remote actions"')
+  })
+
+  it('hides the composer generate affordance while Create PR intent is in flight', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      aiAgentConfigured: true,
+      isGenerating: true,
+      isCreatePrIntentInFlight: true,
+      createPrIntentNotice: {
+        tone: 'muted',
+        message: 'Generating commit message…'
+      }
+    })
+
+    expect(markup).not.toContain('lucide-sparkles')
+    expect(markup).not.toContain('animate-spin')
+    expect(markup).toContain('Generating commit message…')
+  })
+
+  it('renders Create PR failures in the visible inline notice', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      createPrIntentNotice: {
+        tone: 'destructive',
+        message: 'Create PR failed: push this branch first.'
+      }
+    })
+
+    expect(markup).toContain('id="commit-area-create-pr-intent"')
+    expect(markup).toContain('role="alert"')
+    expect(markup).toContain('Create PR failed: push this branch first.')
+    const notice = markup.match(/id="commit-area-create-pr-intent"[\s\S]*?<\/div>/)?.[0] ?? ''
+    expect(notice).toContain('break-words')
+    expect(notice).not.toContain('truncate')
+  })
 })
 
 describe('ConflictSummaryCard', () => {
@@ -334,6 +660,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="rebase"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -348,6 +675,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="merge"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -358,6 +686,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="rebase"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -368,6 +697,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="cherry-pick"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -383,11 +713,23 @@ describe('ConflictSummaryCard', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
-  it('renders rebase abort with the quiet outline review-conflicts button treatment', () => {
-    const markup = renderToStaticMarkup(
+  it('renders abort actions with the quiet outline review-conflicts button treatment', () => {
+    const mergeMarkup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="merge"
+        unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
+        isResolvingWithAI={false}
+        onAbortOperation={vi.fn()}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+    const rebaseMarkup = renderToStaticMarkup(
       <ConflictSummaryCard
         conflictOperation="rebase"
         unresolvedCount={1}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
@@ -395,8 +737,10 @@ describe('ConflictSummaryCard', () => {
       />
     )
 
-    expect(buttonContaining(markup, 'Review conflicts')).toContain('data-variant="outline"')
-    expect(buttonContaining(markup, 'Abort rebase')).toContain('data-variant="outline"')
+    expect(buttonContaining(mergeMarkup, 'Review conflicts')).toContain('data-variant="outline"')
+    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
+    expect(buttonContaining(rebaseMarkup, 'Review conflicts')).toContain('data-variant="outline"')
+    expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
   })
 
   it('renders the Sparkles icon on the idle Resolve with AI button', () => {
@@ -404,6 +748,7 @@ describe('ConflictSummaryCard', () => {
       <ConflictSummaryCard
         conflictOperation="merge"
         unresolvedCount={2}
+        sourceControlAiActionsVisible={true}
         isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -413,6 +758,22 @@ describe('ConflictSummaryCard', () => {
     expect(markup).toContain('Resolve with AI')
     expect(markup).toContain('lucide-sparkles')
     expect(markup).not.toMatch(/\blucide-sparkle(?!s)\b/)
+  })
+
+  it('hides Resolve with AI when Source Control AI actions are hidden', () => {
+    const markup = renderToStaticMarkup(
+      <ConflictSummaryCard
+        conflictOperation="merge"
+        unresolvedCount={2}
+        sourceControlAiActionsVisible={false}
+        isResolvingWithAI={false}
+        onResolveWithAI={vi.fn()}
+        onReview={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('Resolve with AI')
+    expect(markup).toContain('Review conflicts')
   })
 })
 
@@ -434,7 +795,7 @@ describe('OperationBanner', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
-  it('keeps rebase abort non-destructive while preserving merge abort styling', () => {
+  it('renders abort actions with the quiet outline button treatment', () => {
     const mergeMarkup = renderToStaticMarkup(
       <OperationBanner conflictOperation="merge" onAbortOperation={vi.fn()} />
     )
@@ -442,7 +803,7 @@ describe('OperationBanner', () => {
       <OperationBanner conflictOperation="rebase" onAbortOperation={vi.fn()} />
     )
 
-    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="destructive"')
+    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
     expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
   })
 })

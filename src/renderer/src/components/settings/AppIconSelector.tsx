@@ -6,6 +6,7 @@ import blueIconUrl from '../../../../../resources/app-icons/orca-blue.png?url'
 import { APP_ICON_OPTIONS, normalizeAppIconId, type AppIconId } from '../../../../shared/app-icon'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { translate } from '@/i18n/i18n'
 
 const APP_ICON_URLS = {
   classic: classicIconUrl,
@@ -55,15 +56,21 @@ export function AppIconSelector({ value, onChange }: AppIconSelectorProps): Reac
 
   return (
     <div className="flex items-center justify-center gap-2">
-      <IconCycleButton label="Previous icon" onClick={() => onChange(getOffsetIcon(selected, -1))}>
+      <IconCycleButton
+        label={translate('auto.components.settings.AppIconSelector.5f5142a62a', 'Previous icon')}
+        onClick={() => onChange(getOffsetIcon(selected, -1))}
+      >
         <ChevronLeft className="size-4" />
       </IconCycleButton>
       <img
         src={APP_ICON_URLS[selected]}
-        alt="Selected app icon"
+        alt={translate('auto.components.settings.AppIconSelector.415fa76f64', 'Selected app icon')}
         className="size-24 rounded-2xl object-contain"
       />
-      <IconCycleButton label="Next icon" onClick={() => onChange(getOffsetIcon(selected, 1))}>
+      <IconCycleButton
+        label={translate('auto.components.settings.AppIconSelector.d5a112dc9b', 'Next icon')}
+        onClick={() => onChange(getOffsetIcon(selected, 1))}
+      >
         <ChevronRight className="size-4" />
       </IconCycleButton>
     </div>

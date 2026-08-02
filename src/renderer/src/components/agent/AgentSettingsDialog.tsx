@@ -8,6 +8,13 @@ import {
 } from '@/components/ui/dialog'
 import { AgentsPane } from '@/components/settings/AgentsPane'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
+import {
+  isWindowsTerminalCapabilityHost,
+  useLocalWindowsTerminalCapabilities
+} from '@/lib/windows-terminal-capabilities'
+import { isWebClientLocation } from '@/lib/web-client-location'
+import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 
 type AgentSettingsDialogProps = {
   open: boolean
@@ -20,6 +27,24 @@ export default function AgentSettingsDialog({
 }: AgentSettingsDialogProps): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const isWindowsRenderer =
+    typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
+  const isWebClient = isWebClientLocation()
+  const runtimeCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
+    settings?.activeRuntimeEnvironmentId
+  )
+  const localCapabilityOwnerKey = isWebClient ? runtimeCapabilityOwnerKey : 'local'
+  const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(
+    open && (isWindowsRenderer || isWebClient),
+    false,
+    localCapabilityOwnerKey
+  )
+  const wslSupportedPlatform = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer,
+    isWebClient,
+    target: { kind: 'local' },
+    hostPlatform: localWindowsTerminalCapabilities.hostPlatform
+  })
 
   if (!settings) {
     return null
@@ -33,13 +58,25 @@ export default function AgentSettingsDialog({
           agents are detected. */}
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-sm">Agents</DialogTitle>
+          <DialogTitle className="text-sm">
+            {translate('auto.components.agent.AgentSettingsDialog.fc0268e4ed', 'Agents')}
+          </DialogTitle>
           <DialogDescription className="text-xs">
-            Manage AI agents, set a default, and customize commands.
+            {translate(
+              'auto.components.agent.AgentSettingsDialog.50cdb57c03',
+              'Manage AI agents, set a default, and customize commands.'
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="scrollbar-sleek -mr-2 max-h-[70vh] overflow-y-auto pr-2">
-          <AgentsPane settings={settings} updateSettings={updateSettings} />
+          <AgentsPane
+            settings={settings}
+            updateSettings={updateSettings}
+            wslSupportedPlatform={wslSupportedPlatform}
+            wslAvailable={localWindowsTerminalCapabilities.wslAvailable}
+            wslDistros={localWindowsTerminalCapabilities.wslDistros}
+            wslCapabilitiesLoading={localWindowsTerminalCapabilities.isLoading}
+          />
         </div>
       </DialogContent>
     </Dialog>

@@ -1,7 +1,8 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '../types'
-import type { Worktree } from '../../../../shared/types'
+import type { FolderWorkspace, Worktree } from '../../../../shared/types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory,
@@ -19,6 +20,7 @@ type MinimalState = Pick<
   | 'goBackWorktree'
   | 'goForwardWorktree'
   | 'worktreesByRepo'
+  | 'folderWorkspaces'
 >
 
 function makeWorktree(id: string): Worktree {
@@ -27,12 +29,34 @@ function makeWorktree(id: string): Worktree {
   return { id } as unknown as Worktree
 }
 
-function createHistoryStore(worktreeIds: string[] = []): StoreApi<MinimalState> {
+function makeFolderWorkspace(id: string): FolderWorkspace {
+  return {
+    id,
+    name: id,
+    folderPath: `/folders/${id}`,
+    projectGroupId: 'group-1',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    createdAt: 1,
+    lastActivityAt: 1,
+    updatedAt: 1
+  }
+}
+
+function createHistoryStore(
+  worktreeIds: string[] = [],
+  folderWorkspaceIds: string[] = []
+): StoreApi<MinimalState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return createStore<any>()((set, get, api) => ({
     worktreesByRepo: {
       'repo-1': worktreeIds.map(makeWorktree)
     },
+    folderWorkspaces: folderWorkspaceIds.map(makeFolderWorkspace),
     ...createWorktreeNavHistorySlice(
       set as Parameters<typeof createWorktreeNavHistorySlice>[0],
       get as Parameters<typeof createWorktreeNavHistorySlice>[1],
@@ -145,6 +169,25 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
 
     store.getState().goBackWorktree()
     expect(activated).toEqual(['a'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('treats folder workspaces as live history entries', () => {
+    const folderKey = folderWorkspaceKey('folder-1')
+    const store = createHistoryStore(['child'], ['folder-1'])
+    const activated: string[] = []
+    setWorktreeNavActivator((id) => {
+      activated.push(id as string)
+      return { primaryTabId: null }
+    })
+
+    store.setState({
+      worktreeNavHistory: [folderKey, 'child'],
+      worktreeNavHistoryIndex: 1
+    })
+
+    store.getState().goBackWorktree()
+    expect(activated).toEqual([folderKey])
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
   })
 

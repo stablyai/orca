@@ -1,7 +1,7 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { spawnSync } from 'child_process'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 
@@ -96,6 +96,32 @@ describe('getRelayShellLaunchConfig', () => {
     }
   )
 
+  it('does not pass POSIX login flags to Windows shells', () => {
+    expect(
+      getRelayShellLaunchConfig('C:\\Windows\\System32\\cmd.exe', { HOME: homeDir }, 'win32')
+    ).toEqual({
+      args: [],
+      env: {}
+    })
+    expect(
+      getRelayShellLaunchConfig(
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        { HOME: homeDir },
+        'win32'
+      )
+    ).toEqual({
+      args: ['-NoLogo'],
+      env: {}
+    })
+  })
+
+  it('keeps PowerShell Core on POSIX remotes as a login shell', () => {
+    expect(getRelayShellLaunchConfig('/usr/bin/pwsh', { HOME: homeDir }, 'linux')).toEqual({
+      args: ['-l'],
+      env: {}
+    })
+  })
+
   it.skipIf(process.platform === 'win32')('rewrites stale persistent wrapper files', () => {
     const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
     mkdirSync(zshRoot, { recursive: true })
@@ -112,6 +138,24 @@ describe('getRelayShellLaunchConfig', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
+    'wraps zsh when MiMo home must survive shell startup',
+    () => {
+      const config = getRelayShellLaunchConfig('/bin/zsh', {
+        HOME: homeDir,
+        ORCA_MIMOCODE_HOME: '/tmp/orca-mimocode-overlay'
+      })
+      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zshrc = readFileSync(join(zshRoot, '.zshrc'), 'utf8')
+
+      expect(config.args).toEqual(['-l'])
+      expect(config.env.ZDOTDIR).toBe(zshRoot)
+      expect(zshrc).toContain(
+        '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
+      )
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'wraps bash even without overlay env for OSC 133 lifecycle markers',
     () => {
       const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir })
@@ -122,6 +166,37 @@ describe('getRelayShellLaunchConfig', () => {
       expect(config.env).toEqual({})
       expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
       expect(bashRc).toContain('printf "\\033]133;C\\007"')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'enables the shell-ready marker for requested zsh startup delivery',
+    () => {
+      const config = getRelayShellLaunchConfig('/bin/zsh', { HOME: homeDir }, 'linux', {
+        emitReadyMarker: true
+      })
+      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zlogin = readFileSync(join(zshRoot, '.zlogin'), 'utf8')
+
+      expect(config.args).toEqual(['-l'])
+      expect(config.env.ZDOTDIR).toBe(zshRoot)
+      expect(config.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(zlogin).toContain('zle -N zle-line-init __orca_prompt_mark')
+      expect(zlogin).toContain('printf "\\033]777;orca-shell-ready\\007"')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'enables the shell-ready marker for requested bash startup delivery',
+    () => {
+      const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir }, 'linux', {
+        emitReadyMarker: true
+      })
+      const bashRc = readFileSync(config.args[1] as string, 'utf8')
+
+      expect(config.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(bashRc).toContain('__orca_append_prompt_command "__orca_prompt_mark"')
+      expect(bashRc).toContain('printf "\\033]777;orca-shell-ready\\007"')
     }
   )
 
@@ -157,6 +232,23 @@ describe('getRelayShellLaunchConfig', () => {
     const output = runInteractiveBashRcfile(config.args[1] as string, homeDir)
 
     expect(output).toContain('PROMPT_ARRAY')
+    expectBashOsc133Lifecycle(output)
+  })
+
+  // Why: RHEL-family /etc/bashrc prepends "history -a; " to PROMPT_COMMAND
+  // outside its BASHRCSOURCED guard (repeated across re-sources), so the value
+  // Orca inherits ends in a ";"+whitespace separator. Prepend/append must not
+  // splice an empty command (";;") that breaks the prompt with a syntax error.
+  itWithBash('normalizes an inherited PROMPT_COMMAND ending in a separator', () => {
+    writeFileSync(
+      join(homeDir, '.bash_profile'),
+      'PROMPT_COMMAND=\'AFTER_SEP_PROMPT=1; printf "PROMPT_SEP\\n"; \'\n'
+    )
+    const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir })
+    const output = runInteractiveBashRcfile(config.args[1] as string, homeDir)
+
+    expect(output).not.toContain('syntax error')
+    expect(output).toContain('PROMPT_SEP')
     expectBashOsc133Lifecycle(output)
   })
 })

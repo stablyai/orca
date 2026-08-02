@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import { gitExecFileAsync } from './git/runner'
 import { detectRepoIcon, detectRepoIconAndUpstream } from './repo-icon-autodetect'
@@ -34,6 +34,36 @@ describe('detectRepoIcon', () => {
       src: `data:image/png;base64,${PNG_1X1_BASE64}`,
       source: 'file',
       label: 'favicon.png'
+    })
+  })
+
+  it('detects Tauri bundle icons under src-tauri/icons', async () => {
+    const repoPath = await makeTempRepoDir()
+    await mkdir(join(repoPath, 'src-tauri', 'icons'), { recursive: true })
+    await writeFile(
+      join(repoPath, 'src-tauri', 'icons', 'icon.png'),
+      Buffer.from(PNG_1X1_BASE64, 'base64')
+    )
+
+    await expect(detectRepoIcon({ repoPath, kind: 'folder' })).resolves.toEqual({
+      type: 'image',
+      src: `data:image/png;base64,${PNG_1X1_BASE64}`,
+      source: 'file',
+      label: 'src-tauri/icons/icon.png'
+    })
+  })
+
+  it('detects public WebP icons used by CLI tools', async () => {
+    const repoPath = await makeTempRepoDir()
+    const webpBase64 = 'UklGRhoAAABXRUJQVlA4IA4AAAAwAQCdASoBAAEAAQIlSkwAAA=='
+    await mkdir(join(repoPath, 'public'), { recursive: true })
+    await writeFile(join(repoPath, 'public', 'icon.webp'), Buffer.from(webpBase64, 'base64'))
+
+    await expect(detectRepoIcon({ repoPath, kind: 'folder' })).resolves.toEqual({
+      type: 'image',
+      src: `data:image/webp;base64,${webpBase64}`,
+      source: 'file',
+      label: 'public/icon.webp'
     })
   })
 
@@ -168,13 +198,37 @@ describe('detectRepoIcon', () => {
     })
 
     await expect(detectRepoIconAndUpstream({ repoPath, kind: 'git' })).resolves.toEqual({
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/stablyai/orca',
+        remoteName: 'upstream',
+        remoteUrl: 'git@github.com:stablyai/orca.git'
+      },
       repoIcon: {
         type: 'image',
         src: 'https://github.com/stablyai.png?size=64',
         source: 'github',
         label: 'stablyai/orca'
       },
-      upstream: { owner: 'stablyai', repo: 'orca' }
+      // Why: fork parents resolve host-qualified so avatars/links stay on the fork's server.
+      upstream: { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+    })
+  })
+
+  it('detects a provider-neutral git remote identity for non-GitHub remotes', async () => {
+    const repoPath = await makeTempRepoDir()
+    await gitExecFileAsync(['init'], { cwd: repoPath })
+    await gitExecFileAsync(
+      ['remote', 'add', 'origin', 'git@git.company.test:platform/tools/sample-app.git'],
+      { cwd: repoPath }
+    )
+
+    await expect(detectRepoIconAndUpstream({ repoPath, kind: 'git' })).resolves.toMatchObject({
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/platform/tools/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'git@git.company.test:platform/tools/sample-app.git'
+      },
+      upstream: null
     })
   })
 })

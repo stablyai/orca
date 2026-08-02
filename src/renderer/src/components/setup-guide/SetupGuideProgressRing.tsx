@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
 
 type SetupGuideProgressRingProps = {
   done: number
@@ -37,7 +38,11 @@ export function SetupGuideProgressRing({
             sizeClassName,
             className
           )}
-          aria-label={`${boundedDone} of ${boundedTotal} setup steps complete`}
+          aria-label={translate(
+            'auto.components.setup.guide.SetupGuideProgressRing.dac3a4724a',
+            '{{value0}} of {{value1}} setup steps complete',
+            { value0: boundedDone, value1: boundedTotal }
+          )}
         >
           <svg className={cn('-rotate-90', sizeClassName)} viewBox="0 0 20 20" aria-hidden>
             <circle

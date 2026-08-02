@@ -1,17 +1,18 @@
+// @vitest-environment happy-dom
+
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   SETUP_GUIDE_PROJECT_PROMPT,
-  activateWorktreeTerminalForSetupTour,
+  WorkspacesAction,
   cancelPendingSetupGuideTourRequest,
   getSetupGuideGitRepo,
   isSetupGuideWorkspaceComposerRequestCurrent,
   promptForSetupGuideProject,
-  requestSetupGuideTourAfterFrame,
   requestSetupGuideTourWhenReady
 } from './FeatureWallSetupWorkflowActions'
 import { useAppStore } from '@/store'
-import * as worktreeActivation from '@/lib/worktree-activation'
-import * as webRuntimeSession from '@/runtime/web-runtime-session'
 import { toast } from 'sonner'
 import type { Repo } from '../../../../shared/types'
 
@@ -23,23 +24,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
-}))
-
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
-  focusTerminalTabSurface: vi.fn()
-}))
-
-vi.mock('@/runtime/web-runtime-session', () => ({
-  isWebRuntimeSessionActive: vi.fn(() => false)
-}))
-
-vi.mock('./FeatureWallSetupStepVisuals', () => ({
-  SetupTwoAgentsVisual: () => <div />,
-  SetupWorkspacesVisual: () => <div />,
-  SetupMultipleReposVisual: () => <div />
-}))
+const mountedRoots: Root[] = []
 
 function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
@@ -53,17 +38,30 @@ function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
   }
 }
 
-describe('TwoAgentsAction', () => {
-  afterEach(() => {
+describe('setup guide workflow actions', () => {
+  afterEach(async () => {
+    await act(async () => {
+      for (const root of mountedRoots.splice(0)) {
+        root.unmount()
+      }
+    })
+    document.body.innerHTML = ''
+    cancelPendingSetupGuideTourRequest()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    vi.useRealTimers()
     useAppStore.setState({
+      activeModal: 'none',
+      modalData: {},
       activeWorktreeId: null,
       worktreesByRepo: {},
       tabsByWorktree: {},
       activeTabId: null,
       activeGroupIdByWorktree: {},
-      terminalLayoutsByTabId: {}
+      terminalLayoutsByTabId: {},
+      repos: [],
+      activeRepoId: null,
+      activeContextualTourId: null
     })
   })
 
@@ -94,77 +92,49 @@ describe('TwoAgentsAction', () => {
     expect(getSetupGuideGitRepo([makeRepo('folder', { kind: 'folder' })], 'folder')).toBeNull()
   })
 
-  it('creates a terminal tab before requesting the split tour when a worktree has only editor/browser tabs', () => {
-    const createTab = vi.fn(() => ({ id: 'terminal-tab-1' }))
-    const setActiveTab = vi.fn()
-    const setActiveTabType = vi.fn()
-    vi.mocked(worktreeActivation.activateAndRevealWorktree).mockReturnValue({ primaryTabId: null })
+  it('opens the workspace composer with setup-guide tour context from Multi-task', async () => {
+    vi.useFakeTimers()
+    const requestContextualTour = vi.fn()
     useAppStore.setState({
-      activeWorktreeId: 'worktree-1',
-      worktreesByRepo: {
-        'repo-1': [{ id: 'worktree-1', repoId: 'repo-1' }]
-      } as never,
-      tabsByWorktree: { 'worktree-1': [] },
-      activeTabId: 'editor-tab-1',
-      activeGroupIdByWorktree: { 'worktree-1': 'group-1' },
-      terminalLayoutsByTabId: {},
-      closeModal: vi.fn(),
-      createTab: createTab as never,
-      setActiveTabType: setActiveTabType as never,
-      setActiveTab: setActiveTab as never
+      activeModal: 'none',
+      modalData: {},
+      repos: [makeRepo('repo-1')],
+      activeRepoId: 'repo-1',
+      activeContextualTourId: null,
+      requestContextualTour: requestContextualTour as never
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mountedRoots.push(root)
+
+    await act(async () => {
+      root.render(<WorkspacesAction done={false} />)
+    })
+    const button = container.querySelector('button')
+    expect(button?.textContent).toContain('Try it out')
+
+    await act(async () => {
+      button?.click()
     })
 
-    const tabId = activateWorktreeTerminalForSetupTour('worktree-1')
-
-    expect(tabId).toBe('terminal-tab-1')
-    expect(createTab).toHaveBeenCalledWith('worktree-1', 'group-1')
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(setActiveTab).toHaveBeenCalledWith('terminal-tab-1')
-  })
-
-  it('does not create a local fallback terminal for paired web runtime sessions', () => {
-    const createTab = vi.fn(() => ({ id: 'terminal-tab-1' }))
-    const setActiveTab = vi.fn()
-    vi.mocked(webRuntimeSession.isWebRuntimeSessionActive).mockReturnValue(true)
-    vi.mocked(worktreeActivation.activateAndRevealWorktree).mockReturnValue({ primaryTabId: null })
-    useAppStore.setState({
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never,
-      activeWorktreeId: 'worktree-1',
-      worktreesByRepo: {
-        'repo-1': [{ id: 'worktree-1', repoId: 'repo-1' }]
-      } as never,
-      tabsByWorktree: { 'worktree-1': [] },
-      activeTabId: 'editor-tab-1',
-      activeGroupIdByWorktree: { 'worktree-1': 'group-1' },
-      terminalLayoutsByTabId: {},
-      createTab: createTab as never,
-      setActiveTab: setActiveTab as never
+    expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
+    expect(useAppStore.getState().modalData).toMatchObject({
+      initialRepoId: 'repo-1',
+      telemetrySource: 'unknown',
+      contextualTourSource: 'setup_guide_parallel_work'
     })
 
-    const tabId = activateWorktreeTerminalForSetupTour('worktree-1')
-
-    expect(tabId).toBeNull()
-    expect(createTab).not.toHaveBeenCalled()
-    expect(setActiveTab).not.toHaveBeenCalled()
-  })
-
-  it('keeps setup-guide tour work alive across the modal transition that unmounts the action', () => {
-    const callbacks: FrameRequestCallback[] = []
-    const callback = vi.fn()
-    vi.stubGlobal('window', {
-      requestAnimationFrame: vi.fn((frameCallback: FrameRequestCallback) => {
-        callbacks.push(frameCallback)
-        return callbacks.length
-      }),
-      cancelAnimationFrame: vi.fn()
+    await act(async () => {
+      vi.runOnlyPendingTimers()
     })
 
-    requestSetupGuideTourAfterFrame(callback)
-    callbacks[0]?.(1)
-
-    expect(callback).toHaveBeenCalledTimes(1)
-
-    cancelPendingSetupGuideTourRequest()
+    expect(requestContextualTour).toHaveBeenCalledWith(
+      'workspace-creation',
+      'setup_guide_parallel_work',
+      false,
+      { force: true }
+    )
   })
 
   it('gates setup-guide tour retries on the expected destination surface', () => {

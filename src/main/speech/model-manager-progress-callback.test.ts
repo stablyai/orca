@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ModelManager } from './model-manager'
 
@@ -41,6 +41,32 @@ describe('ModelManager progress callbacks', () => {
       expect(second).toHaveBeenCalledTimes(2)
       expect(second).toHaveBeenNthCalledWith(1, 'model-a', 0.25)
       expect(second).toHaveBeenNthCalledWith(2, 'model-a', 0.95)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('coalesces per-chunk download progress to whole percent', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manager = new ModelManager(dir)
+      const internals = manager as unknown as ModelManagerInternals
+      const listener = vi.fn()
+      manager.setProgressCallback(listener)
+
+      // A 500MB model over a 64KB chunk stream reports this many times.
+      for (let chunk = 0; chunk < 8_000; chunk += 1) {
+        internals.updateState('model-a', 'downloading', chunk / 8_000)
+      }
+
+      expect(listener.mock.calls.map(([, progress]) => progress)).toEqual(
+        Array.from({ length: 101 }, (_unused, percent) => percent / 100)
+      )
+      const afterDownload = listener.mock.calls.length
+      internals.updateState('model-a', 'extracting')
+      internals.updateState('model-a', 'ready')
+      internals.updateState('model-a', 'ready')
+      expect(listener.mock.calls.length).toBe(afterDownload + 3)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

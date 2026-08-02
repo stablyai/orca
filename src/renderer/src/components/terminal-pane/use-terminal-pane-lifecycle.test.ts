@@ -1,9 +1,179 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  applyTerminalPaneCloseRequest,
+  applyTerminalScrollbackRowsToMountedPanes,
+  clearQueuedInitialCwdAfterFirstPane,
+  getPreviousVisibleForTerminalPane,
+  isTerminalPaneVisibilityResume,
+  mapRestoredPaneTitlesByPaneId,
+  resolvePaneLinkCwd,
+  resolvePaneSeedCwd,
+  resolveQueuedInitialCwd,
+  resetTerminalKeyboardProtocolAfterInterrupt,
+  retireMountedTerminalPaneSurface,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
   suppressIntentionalPaneCloseExit
 } from './use-terminal-pane-lifecycle'
+
+describe('applyTerminalPaneCloseRequest', () => {
+  it('detaches a rolled-back split surface without closing its PTY', () => {
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
+      getNumericIdForLeaf: vi.fn(() => 2),
+      closePane: vi.fn(),
+      detachPaneForExternalMove: vi.fn(() => true),
+      retirePanePreservingPty: vi.fn(() => true)
+    }
+    const closeTab = vi.fn()
+    const closeTabPreservingPty = vi.fn()
+
+    expect(
+      applyTerminalPaneCloseRequest({
+        detail: {
+          tabId: 'legacy-worker',
+          leafId: '11111111-1111-4111-8111-111111111111',
+          preservePty: true
+        },
+        manager,
+        closeTab,
+        closeTabPreservingPty
+      })
+    ).toBe('pane')
+    expect(manager.detachPaneForExternalMove).toHaveBeenCalledWith(2)
+    expect(manager.closePane).not.toHaveBeenCalled()
+    expect(closeTab).not.toHaveBeenCalled()
+    expect(closeTabPreservingPty).not.toHaveBeenCalled()
+  })
+
+  it('uses non-destructive tab close semantics for the last rolled-back pane', () => {
+    const closeTab = vi.fn()
+    const closeTabPreservingPty = vi.fn()
+
+    expect(
+      applyTerminalPaneCloseRequest({
+        detail: {
+          tabId: 'legacy-worker',
+          paneRuntimeId: 1,
+          preservePty: true
+        },
+        manager: {
+          getPanes: vi.fn(() => [{ id: 1 }]),
+          getNumericIdForLeaf: vi.fn(() => 1),
+          closePane: vi.fn(),
+          detachPaneForExternalMove: vi.fn(() => true),
+          retirePanePreservingPty: vi.fn(() => true)
+        },
+        closeTab,
+        closeTabPreservingPty
+      })
+    ).toBe('tab')
+    expect(closeTabPreservingPty).toHaveBeenCalledOnce()
+    expect(closeTab).not.toHaveBeenCalled()
+  })
+
+  it('ignores a delayed rollback after the pane PTY identity changed', () => {
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1 }]),
+      getNumericIdForLeaf: vi.fn(() => 1),
+      closePane: vi.fn(),
+      detachPaneForExternalMove: vi.fn(() => true),
+      retirePanePreservingPty: vi.fn(() => true)
+    }
+    const closeTab = vi.fn()
+    const closeTabPreservingPty = vi.fn()
+
+    expect(
+      applyTerminalPaneCloseRequest({
+        detail: {
+          tabId: 'legacy-worker',
+          leafId: '11111111-1111-4111-8111-111111111111',
+          preservePty: true,
+          expectedPtyId: 'pty-legacy'
+        },
+        manager,
+        closeTab,
+        closeTabPreservingPty,
+        getPtyIdForLeaf: () => 'pty-replacement'
+      })
+    ).toBe('ignored')
+    expect(manager.detachPaneForExternalMove).not.toHaveBeenCalled()
+    expect(closeTabPreservingPty).not.toHaveBeenCalled()
+  })
+
+  it('retires a mounted rollback pane without detaching it as a movable surface', () => {
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
+      getNumericIdForLeaf: vi.fn(() => 2),
+      closePane: vi.fn(),
+      detachPaneForExternalMove: vi.fn(() => true),
+      retirePanePreservingPty: vi.fn(() => true)
+    }
+
+    expect(
+      applyTerminalPaneCloseRequest({
+        detail: {
+          tabId: 'legacy-worker',
+          leafId: '11111111-1111-4111-8111-111111111111',
+          preservePty: true,
+          retireSurface: true,
+          expectedPtyId: 'pty-legacy'
+        },
+        manager,
+        closeTab: vi.fn(),
+        closeTabPreservingPty: vi.fn(),
+        getPtyIdForLeaf: () => 'pty-legacy'
+      })
+    ).toBe('pane')
+    expect(manager.retirePanePreservingPty).toHaveBeenCalledWith(2)
+    expect(manager.detachPaneForExternalMove).not.toHaveBeenCalled()
+    expect(manager.closePane).not.toHaveBeenCalled()
+  })
+
+  it('retires mounted authority and binding while preserving the process and sleeping fence', () => {
+    const retireAgentPaneAuthority = vi.fn()
+    const syncPanePtyLayoutBinding = vi.fn()
+    const clearTabPtyId = vi.fn()
+    const transport = { detach: vi.fn(), destroy: vi.fn() }
+
+    retireMountedTerminalPaneSurface({
+      paneKey: 'legacy-worker:11111111-1111-4111-8111-111111111111',
+      paneId: 2,
+      tabId: 'legacy-worker',
+      ptyId: 'pty-legacy',
+      retireAgentPaneAuthority,
+      syncPanePtyLayoutBinding,
+      clearTabPtyId,
+      transport
+    })
+
+    expect(retireAgentPaneAuthority).toHaveBeenCalledWith(
+      'legacy-worker:11111111-1111-4111-8111-111111111111',
+      { preserveSleepingAgentSession: true }
+    )
+    expect(syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, null)
+    expect(clearTabPtyId).toHaveBeenCalledWith('legacy-worker', 'pty-legacy')
+    expect(transport.detach).toHaveBeenCalledOnce()
+    expect(transport.destroy).not.toHaveBeenCalled()
+  })
+})
+
+describe('resetTerminalKeyboardProtocolAfterInterrupt', () => {
+  it('does not write to an xterm whose pipeline is certified dead', async () => {
+    const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
+      await import('@/lib/pane-manager/terminal-write-pipeline-health')
+    const terminal = { write: vi.fn() }
+    try {
+      notifyUndeliverableWrite(terminal, 'replay-wedged')
+
+      resetTerminalKeyboardProtocolAfterInterrupt(terminal as never)
+
+      expect(terminal.write).not.toHaveBeenCalled()
+    } finally {
+      _resetWritePipelineHealthForTests(terminal)
+    }
+  })
+})
 
 describe('splitPaneWithOneShotStartup', () => {
   it('only exposes startup to the intentional split and clears it afterwards', () => {
@@ -78,6 +248,36 @@ describe('splitPaneWithOneShotStartup', () => {
   })
 })
 
+describe('applyTerminalScrollbackRowsToMountedPanes', () => {
+  it('updates mounted pane xterm scrollback options only when needed', () => {
+    const firstOptions = { scrollback: 1_000 }
+    const secondOptions = { scrollback: 5_000 }
+    const firstTerminal = { options: firstOptions }
+    let secondWrites = 0
+    const secondTerminal = {
+      options: {
+        get scrollback() {
+          return secondOptions.scrollback
+        },
+        set scrollback(value: number | undefined) {
+          secondWrites += 1
+          secondOptions.scrollback = value ?? 0
+        }
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [{ terminal: firstTerminal }, { terminal: secondTerminal }])
+    }
+
+    applyTerminalScrollbackRowsToMountedPanes(manager, 5_000)
+
+    expect(firstTerminal.options.scrollback).toBe(5_000)
+    expect(secondOptions.scrollback).toBe(5_000)
+    expect(secondWrites).toBe(0)
+    expect(manager.getPanes).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('shouldDetachPaneTransportOnUnmount', () => {
   it('detaches when the tab still owns the transport PTY', () => {
     expect(
@@ -113,7 +313,7 @@ describe('shouldDetachPaneTransportOnUnmount', () => {
     ).toBe(true)
   })
 
-  it('destroys when the tab is gone and no replacement owns the PTY', () => {
+  it('detaches when closeTab already owns provider shutdown for the removed tab', () => {
     expect(
       shouldDetachPaneTransportOnUnmount({
         tabStillExists: false,
@@ -121,7 +321,145 @@ describe('shouldDetachPaneTransportOnUnmount', () => {
         ptyId: 'remote:env@@term-1',
         worktreeTabs: []
       })
+    ).toBe(true)
+  })
+
+  it('destroys an ID-less transport so a pending spawn cannot outlive unmount', () => {
+    expect(
+      shouldDetachPaneTransportOnUnmount({
+        tabStillExists: false,
+        tabId: 'tab-1',
+        ptyId: null,
+        worktreeTabs: []
+      })
     ).toBe(false)
+  })
+
+  it('detaches a removed automation pane after closeTab takes teardown authority', () => {
+    expect(
+      shouldDetachPaneTransportOnUnmount({
+        tabStillExists: false,
+        tabId: 'automation-tab',
+        ptyId: 'automation-pty',
+        worktreeTabs: [
+          {
+            id: 'unrelated-tab',
+            ptyId: 'unrelated-pty',
+            worktreeId: 'wt-1',
+            title: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      })
+    ).toBe(true)
+  })
+})
+
+describe('mapRestoredPaneTitlesByPaneId', () => {
+  it('restores persisted pane titles onto newly-created pane ids', () => {
+    const restoredPaneByLeafId = new Map([
+      ['11111111-1111-4111-8111-111111111111', 7],
+      ['22222222-2222-4222-8222-222222222222', 3]
+    ])
+
+    expect(
+      mapRestoredPaneTitlesByPaneId(
+        {
+          '11111111-1111-4111-8111-111111111111': 'build logs',
+          '22222222-2222-4222-8222-222222222222': 'test runner'
+        },
+        restoredPaneByLeafId
+      )
+    ).toEqual({
+      7: 'build logs',
+      3: 'test runner'
+    })
+  })
+
+  it('ignores stale leaf ids and empty persisted titles', () => {
+    expect(
+      mapRestoredPaneTitlesByPaneId(
+        {
+          '11111111-1111-4111-8111-111111111111': 'build logs',
+          '22222222-2222-4222-8222-222222222222': '',
+          '33333333-3333-4333-8333-333333333333': 'closed pane'
+        },
+        new Map([['11111111-1111-4111-8111-111111111111', 2]])
+      )
+    ).toEqual({ 2: 'build logs' })
+  })
+})
+
+describe('resolveQueuedInitialCwd', () => {
+  it('consumes the queued initial cwd once when the ref is unset', () => {
+    const consumeTabInitialCwd = vi.fn(() => '/repo/packages/web')
+
+    expect(resolveQueuedInitialCwd(undefined, consumeTabInitialCwd, '/repo')).toEqual({
+      queuedInitialCwd: '/repo/packages/web',
+      startupCwd: '/repo/packages/web'
+    })
+    expect(consumeTabInitialCwd).toHaveBeenCalledTimes(1)
+  })
+
+  it('reuses the existing queued state without re-reading the store', () => {
+    const consumeTabInitialCwd = vi.fn(() => '/repo/packages/web')
+
+    expect(resolveQueuedInitialCwd(null, consumeTabInitialCwd, '/repo')).toEqual({
+      queuedInitialCwd: null,
+      startupCwd: '/repo'
+    })
+    expect(resolveQueuedInitialCwd('/repo/packages/web', consumeTabInitialCwd, '/repo')).toEqual({
+      queuedInitialCwd: '/repo/packages/web',
+      startupCwd: '/repo/packages/web'
+    })
+    expect(consumeTabInitialCwd).not.toHaveBeenCalled()
+  })
+})
+
+describe('clearQueuedInitialCwdAfterFirstPane', () => {
+  it('clears the one-shot cwd and restores the default cwd after the first pane', () => {
+    expect(
+      clearQueuedInitialCwdAfterFirstPane('/repo/packages/web', '/repo', '/repo/packages/web')
+    ).toEqual({
+      queuedInitialCwd: null,
+      ptyCwd: '/repo'
+    })
+  })
+
+  it('leaves the cwd unchanged when no one-shot override is queued', () => {
+    expect(clearQueuedInitialCwdAfterFirstPane(null, '/repo', '/repo')).toEqual({
+      queuedInitialCwd: null,
+      ptyCwd: '/repo'
+    })
+  })
+})
+
+describe('resolvePaneLinkCwd', () => {
+  it('prefers the pane-specific cwd when one has been seeded or confirmed', () => {
+    expect(
+      resolvePaneLinkCwd(
+        new Map([[2, { cwd: '/repo/packages/web', confirmed: false }]]),
+        2,
+        '/repo'
+      )
+    ).toBe('/repo/packages/web')
+  })
+
+  it('falls back to the lifecycle startup cwd when the pane has no cached cwd yet', () => {
+    expect(resolvePaneLinkCwd(new Map(), 2, '/repo')).toBe('/repo')
+  })
+})
+
+describe('resolvePaneSeedCwd', () => {
+  it('prefers the inherited split cwd before OSC 7 confirms the pane cwd', () => {
+    expect(resolvePaneSeedCwd('/repo/packages/web', '/repo')).toBe('/repo/packages/web')
+  })
+
+  it('falls back to the lifecycle cwd when the pane has no split override', () => {
+    expect(resolvePaneSeedCwd(undefined, '/repo')).toBe('/repo')
   })
 })
 
@@ -144,5 +482,40 @@ describe('suppressIntentionalPaneCloseExit', () => {
 
     expect(suppressIntentionalPaneCloseExit(transport, suppressPtyExit)).toBeNull()
     expect(suppressPtyExit).not.toHaveBeenCalled()
+  })
+})
+
+describe('terminal pane visibility resume tracking', () => {
+  it('ignores previous visibility from a different terminal identity', () => {
+    expect(
+      getPreviousVisibleForTerminalPane({
+        previous: { tabId: 'tab-old', cwd: '/repo', isVisible: false },
+        tabId: 'tab-new',
+        cwd: '/repo'
+      })
+    ).toBeNull()
+    expect(
+      getPreviousVisibleForTerminalPane({
+        previous: { tabId: 'tab-1', cwd: '/repo-old', isVisible: false },
+        tabId: 'tab-1',
+        cwd: '/repo-new'
+      })
+    ).toBeNull()
+    expect(
+      getPreviousVisibleForTerminalPane({
+        previous: { tabId: 'tab-1', cwd: '/repo', isVisible: false },
+        tabId: 'tab-1',
+        cwd: '/repo'
+      })
+    ).toBe(false)
+  })
+
+  it('identifies only hidden-to-visible changes as visibility resumes', () => {
+    expect(isTerminalPaneVisibilityResume({ previousIsVisible: null, isVisible: true })).toBe(false)
+    expect(isTerminalPaneVisibilityResume({ previousIsVisible: true, isVisible: true })).toBe(false)
+    expect(isTerminalPaneVisibilityResume({ previousIsVisible: true, isVisible: false })).toBe(
+      false
+    )
+    expect(isTerminalPaneVisibilityResume({ previousIsVisible: false, isVisible: true })).toBe(true)
   })
 })

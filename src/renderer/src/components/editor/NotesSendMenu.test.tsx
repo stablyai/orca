@@ -63,8 +63,18 @@ vi.mock('@/store', () => ({
     selector({
       openAgentSendPopoverTargetMode: storeMocks.openAgentSendPopoverTargetMode,
       closeAgentSendPopoverTargetMode: storeMocks.closeAgentSendPopoverTargetMode,
-      agentSendPopoverTargetMode: storeMocks.state.agentSendPopoverTargetMode
+      agentSendPopoverTargetMode: storeMocks.state.agentSendPopoverTargetMode,
+      agentStatusByPaneKey: {},
+      agentStatusEpoch: 0,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      ptyIdsByTabId: {},
+      runtimePaneTitlesByTabId: {}
     })
+}))
+
+vi.mock('zustand/react/shallow', () => ({
+  useShallow: (selector: unknown) => selector
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -115,10 +125,16 @@ vi.mock('@/components/tab-bar/QuickLaunchButton', () => ({
   }
 }))
 
+vi.mock('./ReviewNotesSendMenuContent', () => ({
+  ReviewNotesSendMenuContent: function ReviewNotesSendMenuContent(props: Record<string, unknown>) {
+    return { type: 'ReviewNotesSendMenuContent', props }
+  }
+}))
+
 vi.mock('@/lib/active-agent-note-send', () => ({
   activeAgentNotesSendFailureMessage: (status: string) => status,
-  sendNotesToActiveAgentSession: vi.fn(),
-  useCanSendNotesToActiveTerminal: () => false
+  getActiveTerminalNoteTarget: () => null,
+  sendNotesToActiveAgentSession: vi.fn()
 }))
 
 vi.mock('sonner', () => ({
@@ -309,11 +325,10 @@ describe('NotesSendMenu', () => {
     )
   })
 
-  it('offers the active session action alongside new agent launchers', () => {
+  it('passes the default scope to review note send content', () => {
     const tree = renderMenu()
 
-    expect(findByType(tree, 'DropdownMenuItem').props.disabled).toBe(true)
-    expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
+    expect(findByType(tree, 'ReviewNotesSendMenuContent').props).toMatchObject({
       worktreeId: 'wt-1',
       groupId: 'group-1',
       prompt: 'prompt-all',
@@ -343,6 +358,36 @@ describe('NotesSendMenu', () => {
       2,
       expect.objectContaining({ prompt: 'prompt-all', label: 'All unsent notes' })
     )
+  })
+
+  it('opens and reports handled when an open request arrives with deliverable notes', () => {
+    const onOpenRequestHandled = vi.fn()
+    renderMenu({ openRequestNonce: 1, onOpenRequestHandled })
+
+    expect(storeMocks.openAgentSendPopoverTargetMode).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: 'prompt-all', label: 'All unsent notes' })
+    )
+    expect(onOpenRequestHandled).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports the open request handled without opening when nothing is deliverable', () => {
+    const onOpenRequestHandled = vi.fn()
+    renderMenu({
+      openRequestNonce: 1,
+      onOpenRequestHandled,
+      scopes: [{ id: 'all', label: 'All unsent notes', notes: [], prompt: '' }]
+    })
+
+    expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
+    expect(onOpenRequestHandled).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a null open request', () => {
+    const onOpenRequestHandled = vi.fn()
+    renderMenu({ openRequestNonce: null, onOpenRequestHandled })
+
+    expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
+    expect(onOpenRequestHandled).not.toHaveBeenCalled()
   })
 
   it('closes when another target mode becomes active and cleans up on unmount', () => {

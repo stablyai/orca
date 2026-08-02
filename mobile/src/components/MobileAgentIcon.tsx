@@ -1,8 +1,11 @@
 import { Image, StyleSheet, Text, View } from 'react-native'
+import type { ImageSourcePropType } from 'react-native'
 import { Terminal } from 'lucide-react-native'
+import type { TuiAgent } from '../../../src/shared/types'
 import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg'
 import { colors } from '../theme/mobile-theme'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
+import { MOBILE_AGENT_ICON_ASSETS } from './mobile-agent-icon-assets'
 import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
 
 // Why: agent branding should match the desktop/new-worktree picker everywhere
@@ -49,6 +52,10 @@ function AiderIcon({ size = 16 }: { size?: number }) {
   )
 }
 
+function BundledIcon({ source, size = 16 }: { source: ImageSourcePropType; size?: number }) {
+  return <Image source={source} style={{ width: size, height: size, borderRadius: 2 }} />
+}
+
 function FaviconIcon({ domain, size = 16 }: { domain: string; size?: number }) {
   return (
     <Image
@@ -79,7 +86,7 @@ function AgentLetterIcon({ letter, size = 16 }: { letter: string; size?: number 
 }
 
 export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?: number }) {
-  if (agentId === 'claude') {
+  if (agentId === 'claude' || agentId === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />
   }
   if (agentId === 'codex') {
@@ -98,6 +105,12 @@ export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?
     return <Terminal size={size} color={colors.textMuted} />
   }
 
+  // Why: prefer the favicon bundled into the app over Google's favicon service,
+  // which is unreachable in some regions and offline (#8451).
+  const bundledIcon = MOBILE_AGENT_ICON_ASSETS[agentId as TuiAgent]
+  if (bundledIcon) {
+    return <BundledIcon source={bundledIcon} size={size} />
+  }
   const agent = MOBILE_AGENT_CATALOG.find((entry) => entry.id === agentId)
   if (agent?.faviconDomain) {
     return <FaviconIcon domain={agent.faviconDomain} size={size} />

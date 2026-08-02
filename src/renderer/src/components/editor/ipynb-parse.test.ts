@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   concatIpynbMultilineString,
   deleteIpynbCell,
@@ -11,6 +11,10 @@ import {
   updateIpynbCellSource,
   updateIpynbCellSources
 } from './ipynb-parse'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('ipynb parsing', () => {
   it('normalizes multiline strings like VS Code notebooks', () => {
@@ -96,6 +100,26 @@ describe('ipynb parsing', () => {
     const updated = JSON.parse(updateIpynbCellSource(content, 0, 'print("hi")\nprint("bye")'))
     expect(updated.metadata).toEqual({ custom: true })
     expect(updated.cells[0].source).toEqual(['print("hi")\n', 'print("bye")'])
+  })
+
+  it('serializes newline-heavy cell sources without regex match or split helpers', () => {
+    const content = JSON.stringify({
+      nbformat: 4,
+      nbformat_minor: 5,
+      metadata: {},
+      cells: [{ cell_type: 'code', metadata: {}, execution_count: null, outputs: [], source: [] }]
+    })
+    const split = vi.spyOn(String.prototype, 'split')
+    const match = vi.spyOn(String.prototype, 'match')
+    const source = `${'print(1)\n'.repeat(5000)}last`
+
+    const updated = JSON.parse(updateIpynbCellSource(content, 0, source))
+
+    expect(updated.cells[0].source).toHaveLength(5001)
+    expect(updated.cells[0].source[0]).toBe('print(1)\n')
+    expect(updated.cells[0].source.at(-1)).toBe('last')
+    expect(split).not.toHaveBeenCalled()
+    expect(match).not.toHaveBeenCalled()
   })
 
   it('serializes batched source edits with one notebook mutation', () => {
@@ -193,5 +217,29 @@ describe('ipynb parsing', () => {
     expect(updated.cells[0].outputs).toEqual([
       { output_type: 'stream', name: 'stdout', text: ['hello\n'] }
     ])
+  })
+
+  it('serializes newline-heavy run output without regex match or split helpers', () => {
+    const content = JSON.stringify({
+      nbformat: 4,
+      nbformat_minor: 5,
+      metadata: {},
+      cells: [{ cell_type: 'code', metadata: {}, execution_count: null, outputs: [], source: [] }]
+    })
+    const split = vi.spyOn(String.prototype, 'split')
+    const match = vi.spyOn(String.prototype, 'match')
+
+    const updated = JSON.parse(
+      updateIpynbCellOutputs(content, 0, {
+        stdout: `${'line\n'.repeat(5000)}tail`,
+        stderr: '',
+        exitCode: 0
+      })
+    )
+
+    expect(updated.cells[0].outputs[0].text).toHaveLength(5001)
+    expect(updated.cells[0].outputs[0].text.at(-1)).toBe('tail')
+    expect(split).not.toHaveBeenCalled()
+    expect(match).not.toHaveBeenCalled()
   })
 })

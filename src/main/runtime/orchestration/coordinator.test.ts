@@ -1,6 +1,6 @@
-/* eslint-disable max-lines -- Why: coordinator tests cover dispatch, DAG ordering, escalation, decision gates, concurrency, and stop — splitting by category would scatter shared setup without improving clarity. */
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
+import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 import {
   Coordinator,
   DISPATCH_STALE_THRESHOLD,
@@ -18,8 +18,10 @@ function createMockRuntime(): CoordinatorRuntime & {
   sentMessages: { handle: string; text: string }[]
   terminals: { handle: string; worktreeId: string; connected: boolean; writable: boolean }[]
   createdTerminals: string[]
+  createdTerminalOptions: { title?: string }[]
   probeDriftCalls: string[]
   probeDriftResult: DriftResult
+  cliCommand: 'orca' | 'orca-ide'
   setProbeDrift(result: DriftResult): void
   throwProbeDrift: Error | null
 } {
@@ -32,14 +34,16 @@ function createMockRuntime(): CoordinatorRuntime & {
       writable: boolean
     }[],
     createdTerminals: [] as string[],
+    createdTerminalOptions: [] as { title?: string }[],
     probeDriftCalls: [] as string[],
     probeDriftResult: null as DriftResult,
+    cliCommand: 'orca' as 'orca' | 'orca-ide',
     throwProbeDrift: null as Error | null,
     setProbeDrift(result: DriftResult): void {
       mock.probeDriftResult = result
     },
-    async sendTerminal(handle: string, action: { text?: string }) {
-      mock.sentMessages.push({ handle, text: action.text ?? '' })
+    async sendTerminalAgentPrompt(handle: string, prompt: string) {
+      mock.sentMessages.push({ handle, text: prompt })
       return { handle, accepted: true, bytesWritten: 0 }
     },
     async listTerminals() {
@@ -48,6 +52,7 @@ function createMockRuntime(): CoordinatorRuntime & {
     async createTerminal(_worktree?: string, opts?: { title?: string }) {
       const handle = `term_worker_${mock.createdTerminals.length}`
       mock.createdTerminals.push(handle)
+      mock.createdTerminalOptions.push(opts ?? {})
       mock.terminals.push({ handle, worktreeId: 'wt1', connected: true, writable: true })
       return { handle, worktreeId: 'wt1', title: opts?.title ?? '' }
     },
@@ -60,6 +65,9 @@ function createMockRuntime(): CoordinatorRuntime & {
         throw mock.throwProbeDrift
       }
       return mock.probeDriftResult
+    },
+    getTerminalOrchestrationCliCommand() {
+      return mock.cliCommand
     }
   }
   return mock
@@ -73,6 +81,7 @@ function insertWorkerDone(
     from?: string
     dispatchId?: string
     filesModified?: string[]
+    senderPaneKey?: string
   }
 ): void {
   const dispatch = db.getDispatchContext(params.taskId)
@@ -80,16 +89,21 @@ function insertWorkerDone(
   if (!dispatchId) {
     throw new Error(`No dispatch for task ${params.taskId}`)
   }
+  const from = params.from ?? dispatch?.assignee_handle ?? 'term_unknown'
   db.insertMessage({
-    from: params.from ?? dispatch?.assignee_handle ?? 'term_unknown',
+    from,
     to: params.to ?? 'coord',
     subject: 'Done',
     type: 'worker_done',
     payload: JSON.stringify({
       taskId: params.taskId,
       dispatchId,
+      outcome: 'succeeded',
       ...(params.filesModified ? { filesModified: params.filesModified } : {})
-    })
+    }),
+    senderPaneKey:
+      params.senderPaneKey ??
+      (from === dispatch?.assignee_handle ? (dispatch.assignee_pane_key ?? undefined) : undefined)
   })
 }
 
@@ -113,6 +127,7 @@ describe('Coordinator', () => {
   it('dispatches a ready task to an available terminal', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
+    runtime.cliCommand = 'orca-ide'
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
 
     const task = db.createTask({ spec: 'implement feature' })
@@ -139,6 +154,98 @@ describe('Coordinator', () => {
     expect(result.status).toBe('completed')
     expect(result.completedTasks).toContain(task.id)
     expect(runtime.sentMessages.length).toBeGreaterThan(0)
+    expect(runtime.sentMessages[0].text).toContain('orca-ide orchestration send')
+  })
+
+  it('records the assignee pane key when the runtime can resolve one', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+    const withPaneLookup = Object.assign(runtime, {
+      getTerminalPaneKey: (handle: string) => (handle === 'term_a' ? 'tab_a:leaf_a' : null)
+    })
+
+    const task = db.createTask({ spec: 'implement feature' })
+    const coordinator = new Coordinator(db, withPaneLookup, {
+      spec: 'build it',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 50
+    })
+    const runPromise = coordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 100)
+    })
+
+    expect(db.getDispatchContext(task.id)?.assignee_pane_key).toBe('tab_a:leaf_a')
+
+    insertWorkerDone(db, { taskId: task.id })
+    await runPromise
+  })
+
+  it('records completedTasks when send reconciled worker_done before coordinator read', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+
+    const task = db.createTask({ spec: 'send-driven completion' })
+    const dispatch = db.createDispatchContext(task.id, 'term_a')
+    const msg = db.insertMessage({
+      from: 'term_a',
+      to: 'coord',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
+    })
+
+    reconcileLifecycleMessage(db, msg)
+
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 20
+    })
+    const result = await coordinator.run()
+
+    expect(result.status).toBe('completed')
+    expect(result.completedTasks).toContain(task.id)
+  })
+
+  it('does not duplicate completedTasks for repeated completed worker_done messages', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+
+    const task = db.createTask({ spec: 'duplicate completion' })
+    const dispatch = db.createDispatchContext(task.id, 'term_a')
+    const payload = JSON.stringify({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded'
+    })
+    const first = db.insertMessage({
+      from: 'term_a',
+      to: 'coord',
+      subject: 'Done',
+      type: 'worker_done',
+      payload
+    })
+    db.insertMessage({
+      from: 'term_a',
+      to: 'coord',
+      subject: 'Done again',
+      type: 'worker_done',
+      payload
+    })
+
+    reconcileLifecycleMessage(db, first)
+
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 20
+    })
+    const result = await coordinator.run()
+
+    expect(result.status).toBe('completed')
+    expect(result.completedTasks.filter((id) => id === task.id)).toHaveLength(1)
   })
 
   it('creates a terminal when none are available', async () => {
@@ -160,6 +267,7 @@ describe('Coordinator', () => {
     })
 
     expect(runtime.createdTerminals.length).toBe(1)
+    expect(runtime.createdTerminalOptions[0]).not.toHaveProperty('presentation')
 
     // Complete the task
     insertWorkerDone(db, { taskId: task.id, from: runtime.createdTerminals[0] })
@@ -209,7 +317,7 @@ describe('Coordinator', () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
-    runtime.sendTerminal = async () => {
+    runtime.sendTerminalAgentPrompt = async () => {
       throw new Error('terminal_not_writable')
     }
 
@@ -466,7 +574,11 @@ describe('Coordinator', () => {
       to: 'coord',
       subject: 'Late done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: staleCtx.id })
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: staleCtx.id,
+        outcome: 'succeeded'
+      })
     })
 
     const staleCoordinator = new Coordinator(db, runtime, {
@@ -504,20 +616,22 @@ describe('Coordinator', () => {
     expect(db.getDispatchContextById(activeCtx.id)?.status).toBe('completed')
   })
 
-  it('ignores worker_done sent by a terminal that does not own the dispatch', async () => {
+  it('accepts worker_done pane provenance after an assignee handle changes', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
     const logs: string[] = []
 
     const task = db.createTask({ spec: 'owned work' })
-    const ctx = db.createDispatchContext(task.id, 'term_owner')
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const ctx = db.createDispatchContext(task.id, 'term_owner', `tab_before:${leafId}`)
 
     db.insertMessage({
-      from: 'term_intruder',
+      from: 'term_reminted',
       to: 'coord',
-      subject: 'Spoofed done',
+      subject: 'Done after restart',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id })
+      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id, outcome: 'succeeded' }),
+      senderPaneKey: `tab_after:${leafId}`
     })
 
     const coordinator = new Coordinator(db, runtime, {
@@ -526,16 +640,12 @@ describe('Coordinator', () => {
       pollIntervalMs: 20,
       onLog: (m) => logs.push(m)
     })
-    const runPromise = coordinator.run()
-    await new Promise((r) => {
-      setTimeout(r, 80)
-    })
-    coordinator.stop()
-    await runPromise
+    const result = await coordinator.run()
 
-    expect(db.getTask(task.id)?.status).toBe('dispatched')
-    expect(db.getDispatchContextById(ctx.id)?.status).toBe('dispatched')
-    expect(logs.some((m) => m.includes('expected term_owner'))).toBe(true)
+    expect(result.status).toBe('completed')
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getDispatchContextById(ctx.id)?.status).toBe('completed')
+    expect(logs.some((m) => m.includes('Task') && m.includes('completed'))).toBe(true)
   })
 
   it('can be stopped', async () => {
@@ -624,8 +734,8 @@ describe('Coordinator', () => {
       const result = await runPromise
 
       // Why: silent-skip must NOT burn the circuit-breaker budget. Task must
-      // stay in `ready`; failDispatch must NOT be called; sendTerminal must
-      // NOT be called; no dispatch context should exist.
+      // stay in `ready`; failDispatch must NOT be called; no prompt injection
+      // should happen; no dispatch context should exist.
       expect(runtime.sentMessages).toHaveLength(0)
       expect(db.getTask(task.id)?.status).toBe('ready')
       expect(db.getDispatchContext(task.id)).toBeUndefined()

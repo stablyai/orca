@@ -3,6 +3,7 @@ import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { requestScrollToCurrentWorkspaceReveal } from '@/lib/scroll-to-current-workspace-status'
+import { translate } from '@/i18n/i18n'
 
 export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
   return (
@@ -12,7 +13,10 @@ export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
           variant="ghost"
           size="icon-xs"
           type="button"
-          aria-label="Reveal active workspace"
+          aria-label={translate(
+            'auto.components.sidebar.ScrollToCurrentWorkspaceToolbarButton.23989bb663',
+            'Reveal active workspace'
+          )}
           onClick={requestScrollToCurrentWorkspaceReveal}
           className="text-muted-foreground"
         >
@@ -20,7 +24,10 @@ export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        Reveal active workspace
+        {translate(
+          'auto.components.sidebar.ScrollToCurrentWorkspaceToolbarButton.23989bb663',
+          'Reveal active workspace'
+        )}
       </TooltipContent>
     </Tooltip>
   )

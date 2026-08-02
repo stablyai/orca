@@ -11,6 +11,7 @@ describe('getSmartGitHubSubmitIntent', () => {
   it('treats GitHub issue and pull URLs as submit-time source intent', () => {
     expect(getSmartGitHubSubmitIntent('https://github.com/stablyai/orca/pull/2049')).toEqual({
       kind: 'link',
+      host: 'github.com',
       owner: 'stablyai',
       repo: 'orca',
       number: 2049,
@@ -18,6 +19,7 @@ describe('getSmartGitHubSubmitIntent', () => {
     })
     expect(getSmartGitHubSubmitIntent('https://github.com/stablyai/orca/issues/2050')).toEqual({
       kind: 'link',
+      host: 'github.com',
       owner: 'stablyai',
       repo: 'orca',
       number: 2050,
@@ -32,10 +34,26 @@ describe('getSmartGitHubSubmitIntent', () => {
       )
     ).toEqual({
       kind: 'link',
+      host: 'github.com',
       owner: 'mvanhorn',
       repo: 'cli-printing-press',
       number: 2635,
       type: 'issue'
+    })
+  })
+
+  it('finds an embedded GitHub Enterprise item URL', () => {
+    expect(
+      getSmartGitHubSubmitIntent(
+        'please review https://github.acme.test/platform/widgets/pull/2049 before release'
+      )
+    ).toEqual({
+      kind: 'link',
+      host: 'github.acme.test',
+      owner: 'platform',
+      repo: 'widgets',
+      number: 2049,
+      type: 'pr'
     })
   })
 
@@ -44,6 +62,7 @@ describe('getSmartGitHubSubmitIntent', () => {
       getSmartGitHubSubmitIntent('review (https://github.com/stablyai/orca/pull/2049), please')
     ).toEqual({
       kind: 'link',
+      host: 'github.com',
       owner: 'stablyai',
       repo: 'orca',
       number: 2049,
@@ -53,6 +72,7 @@ describe('getSmartGitHubSubmitIntent', () => {
     expect(getSmartGitHubSubmitIntent('fix https://github.com/stablyai/orca/issues/2050.')).toEqual(
       {
         kind: 'link',
+        host: 'github.com',
         owner: 'stablyai',
         repo: 'orca',
         number: 2050,
@@ -264,20 +284,17 @@ describe('lookupSmartGitHubSubmitItem', () => {
 })
 
 describe('getSmartGitHubSubmitResolution', () => {
-  it('uses short intent identity for workspace name, display name, and linked PR metadata', () => {
+  it('uses the resolved PR title for workspace name, display name, and linked PR metadata', () => {
     expect(
-      getSmartGitHubSubmitResolution(
-        {
-          type: 'pr',
-          number: 2049,
-          title: 'Fix smart resolution delay',
-          url: 'https://github.com/stablyai/orca/pull/2049'
-        },
-        { sourceText: 'review https://github.com/stablyai/orca/pull/2049' }
-      )
+      getSmartGitHubSubmitResolution({
+        type: 'pr',
+        number: 2049,
+        title: 'Fix smart resolution delay',
+        url: 'https://github.com/stablyai/orca/pull/2049'
+      })
     ).toEqual({
-      workspaceName: 'review-pr-2049',
-      displayName: 'Review PR 2049',
+      workspaceName: 'fix-smart-resolution-delay',
+      displayName: 'Fix smart resolution delay',
       linkedWorkItem: {
         type: 'pr',
         number: 2049,
@@ -289,20 +306,39 @@ describe('getSmartGitHubSubmitResolution', () => {
     })
   })
 
-  it('uses user intent instead of the raw title for linked issue metadata', () => {
-    const resolution = getSmartGitHubSubmitResolution(
-      {
-        type: 'issue',
-        number: 2050,
-        title: 'Issue #2050: Make create feel instant',
-        url: 'https://github.com/stablyai/orca/issues/2050'
-      },
-      { sourceText: 'https://github.com/stablyai/orca/issues/2050 and fix it' }
-    )
+  it('strips duplicated issue prefixes while preserving linked issue metadata', () => {
+    const resolution = getSmartGitHubSubmitResolution({
+      type: 'issue',
+      number: 2050,
+      title: 'Issue #2050: Make create feel instant',
+      url: 'https://github.com/stablyai/orca/issues/2050'
+    })
 
-    expect(resolution.workspaceName).toBe('fix-issue-2050')
-    expect(resolution.displayName).toBe('Fix Issue 2050')
+    expect(resolution.workspaceName).toBe('make-create-feel-instant')
+    expect(resolution.displayName).toBe('Make create feel instant')
     expect(resolution.linkedIssueNumber).toBe(2050)
     expect(resolution.linkedPR).toBeNull()
+  })
+
+  it('uses the URL path to normalize stale PR-typed issue results', () => {
+    expect(
+      getSmartGitHubSubmitResolution({
+        type: 'pr',
+        number: 6933,
+        title: 'The board columns are displayed backwards',
+        url: 'https://github.com/stablyai/orca/issues/6933'
+      })
+    ).toEqual({
+      workspaceName: 'the-board-columns-are-displayed-backwards',
+      displayName: 'The board columns are displayed backwards',
+      linkedWorkItem: {
+        type: 'issue',
+        number: 6933,
+        title: 'The board columns are displayed backwards',
+        url: 'https://github.com/stablyai/orca/issues/6933'
+      },
+      linkedIssueNumber: 6933,
+      linkedPR: null
+    })
   })
 })

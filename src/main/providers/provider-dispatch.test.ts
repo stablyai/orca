@@ -17,6 +17,9 @@ vi.mock('electron', () => ({
     on: onMock,
     removeHandler: removeHandlerMock,
     removeAllListeners: removeAllListenersMock
+  },
+  powerMonitor: {
+    on: vi.fn()
   }
 }))
 
@@ -66,6 +69,7 @@ describe('PTY provider dispatch', () => {
     isDestroyed: () => false,
     webContents: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
   }
+  const mainWindowIpcEvent = { sender: mainWindow.webContents }
 
   function setup(): void {
     handlers.clear()
@@ -137,12 +141,20 @@ describe('PTY provider dispatch', () => {
     })) as { id: string }
 
     expect(result.id).toBe('ssh-pty-1')
-    expect(mockSshProvider.spawn).toHaveBeenCalledWith({
-      cols: 80,
-      rows: 24,
-      cwd: undefined,
-      env: undefined
-    })
+    // Why: the relay host can be launched from a Claude session too, so the stamps are
+    // stripped on the SSH path as well. Compared as a set — envToDelete is consumed by
+    // membership only, so a reordering of the merge sources must not fail this.
+    const sshSpawnArgs = vi.mocked(mockSshProvider.spawn).mock.calls.at(-1)![0]
+    expect([...(sshSpawnArgs.envToDelete ?? [])].sort()).toEqual(
+      [
+        'CLAUDE_CODE_CHILD_SESSION',
+        'CLAUDE_CODE_SESSION_ID',
+        'CLAUDE_CODE_BRIDGE_SESSION_ID'
+      ].sort()
+    )
+    expect(mockSshProvider.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ cols: 80, rows: 24, cwd: undefined, env: undefined })
+    )
 
     unregisterSshPtyProvider('conn-123')
   })
@@ -185,8 +197,8 @@ describe('PTY provider dispatch', () => {
 
     try {
       const write = handlers.get('pty:write') as (event: unknown, args: unknown) => void
-      write(null, { id: 'ssh:conn-a@@pty-1', data: 'a' })
-      write(null, { id: 'ssh:conn-b@@pty-1', data: 'b' })
+      write(mainWindowIpcEvent, { id: 'ssh:conn-a@@pty-1', data: 'a' })
+      write(mainWindowIpcEvent, { id: 'ssh:conn-b@@pty-1', data: 'b' })
 
       expect(providerA.write).toHaveBeenCalledWith('ssh:conn-a@@pty-1', 'a')
       expect(providerB.write).toHaveBeenCalledWith('ssh:conn-b@@pty-1', 'b')

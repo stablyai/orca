@@ -158,7 +158,7 @@ test.describe('Setup script import prompt', () => {
 
     await expect(
       orcaPage.getByText(
-        /Found a setup command in Superset \(\.superset\/config\.json \+1\)\. Save it to run for new worktrees\./
+        /Found a setup command in\s*Superset \(\.superset\/config\.json \+1\)\. Save it to run for new worktrees\./
       )
     ).toBeVisible({ timeout: 15_000 })
 
@@ -187,7 +187,7 @@ test.describe('Setup script import prompt', () => {
 
     await expect(
       orcaPage.getByText(
-        /Found a setup command in cmux \(\.cmux\/cmux\.json\)\. Save it to run for new worktrees\./
+        /Found a setup command in\s*cmux \(\.cmux\/cmux\.json\)\. Save it to run for new worktrees\./
       )
     ).toBeVisible({ timeout: 15_000 })
 

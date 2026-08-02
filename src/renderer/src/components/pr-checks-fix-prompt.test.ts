@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { buildFixBrokenChecksPrompt, getCheckDetailsPromptKey } from './pr-checks-fix-prompt'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  PROMPT_LOG_TAIL_LINES,
+  PROMPT_LOG_TAIL_SCAN_CODE_UNITS,
+  buildFixBrokenChecksPrompt,
+  getCheckDetailsPromptKey,
+  truncateLogTailForPrompt
+} from './pr-checks-fix-prompt'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/types'
 
 const failingCheck: PRCheckDetail = {
@@ -23,6 +29,10 @@ function buildPrompt(overrides: {
     checkRunDetailsByCheckKey: overrides.checkRunDetailsByCheckKey
   })
 }
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('buildFixBrokenChecksPrompt', () => {
   it('keeps names-only broken check data when no details are provided', () => {
@@ -136,5 +146,32 @@ describe('buildFixBrokenChecksPrompt', () => {
       { name: 'build', checkRunId: 101, logTail: 'linux failed' },
       { name: 'build', checkRunId: 102, logTail: 'windows failed' }
     ])
+  })
+})
+
+describe('truncateLogTailForPrompt', () => {
+  it('keeps the last prompt log lines and normalizes CRLF', () => {
+    expect(truncateLogTailForPrompt('one\r\ntwo\r\nthree')).toBe('one\ntwo\nthree')
+  })
+
+  it('truncates newline-heavy logs without splitting the full payload', () => {
+    const logTail = Array.from(
+      { length: PROMPT_LOG_TAIL_LINES + 3 },
+      (_, index) => `line ${index}`
+    ).join('\n')
+    const split = vi.spyOn(String.prototype, 'split')
+
+    expect(truncateLogTailForPrompt(logTail).startsWith('line 3\n')).toBe(true)
+
+    expect(split).not.toHaveBeenCalled()
+  })
+
+  it('caps scans for pathological single-line logs', () => {
+    const split = vi.spyOn(String.prototype, 'split')
+    const logTail = 'x'.repeat(PROMPT_LOG_TAIL_SCAN_CODE_UNITS + 10_000)
+
+    expect(truncateLogTailForPrompt(logTail)).toHaveLength(PROMPT_LOG_TAIL_SCAN_CODE_UNITS)
+
+    expect(split).not.toHaveBeenCalled()
   })
 })

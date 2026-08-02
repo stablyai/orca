@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { linearUpdateIssue } from '@/runtime/runtime-linear-client'
 import type { LinearIssue } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
 import {
   getLinearIssueTextSavePlan,
   type LinearIssueTextField
@@ -17,36 +18,25 @@ import {
   createLinearIssueTextDraftState,
   resolveLinearIssueTextDraftState
 } from './linear-issue-text-draft-state'
+import { translate } from '@/i18n/i18n'
 
 type LinearIssueTextEditorProps = {
   issue: LinearIssue
   onIssueChange: (patch: Pick<LinearIssue, 'title'> | Pick<LinearIssue, 'description'>) => void
   density?: 'page' | 'drawer'
   fields?: 'all' | 'title' | 'description'
-}
-
-function useAutosizeTextArea(value: string): React.RefObject<HTMLTextAreaElement | null> {
-  const ref = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    const textarea = ref.current
-    if (!textarea) {
-      return
-    }
-    textarea.style.height = 'auto'
-    textarea.style.height = `${textarea.scrollHeight}px`
-  }, [value])
-
-  return ref
+  sourceContext?: TaskSourceContext | null
 }
 
 export function LinearIssueTextEditor({
   issue,
   onIssueChange,
   density = 'page',
-  fields = 'all'
+  fields = 'all',
+  sourceContext
 }: LinearIssueTextEditorProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const [draftState, setDraftState] = useState(() => createLinearIssueTextDraftState(issue))
   const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)
@@ -66,7 +56,6 @@ export function LinearIssueTextEditor({
   const titleDraft = resolvedDraftState.title
   const descriptionDraft = resolvedDraftState.description
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
-  const titleRef = useAutosizeTextArea(titleDraft)
   const updateTitleDraft = useCallback(
     (title: string): void => {
       setDraftState((current) => ({
@@ -96,7 +85,9 @@ export function LinearIssueTextEditor({
       })
       if (savePlan.kind === 'empty-title') {
         updateTitleDraft(issue.title)
-        toast.error('Title is required')
+        toast.error(
+          translate('auto.components.LinearIssueTextEditor.1e08a1ec80', 'Title is required')
+        )
         return
       }
       if (savePlan.kind === 'unchanged') {
@@ -108,7 +99,7 @@ export function LinearIssueTextEditor({
       onIssueChange(patch)
       patchLinearIssue(issue.id, patch)
       try {
-        const result = await linearUpdateIssue(settings, issue.id, patch, issue.workspaceId)
+        const result = await linearUpdateIssue(providerSettings, issue.id, patch, issue.workspaceId)
         if (!result.ok) {
           throw new Error(result.error)
         }
@@ -129,7 +120,15 @@ export function LinearIssueTextEditor({
             updateDescriptionDraft(issue.description ?? '')
           }
         }
-        toast.error(error instanceof Error ? error.message : `Failed to update ${field}`)
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.LinearIssueTextEditor.e8ff595db3',
+                'Failed to update {{value0}}',
+                { value0: field }
+              )
+        )
       } finally {
         if (mountedRef.current && lastIssueIdRef.current === issue.id) {
           setSavingField(null)
@@ -145,7 +144,7 @@ export function LinearIssueTextEditor({
       mountedRef,
       onIssueChange,
       patchLinearIssue,
-      settings,
+      providerSettings,
       titleDraft,
       updateDescriptionDraft,
       updateTitleDraft
@@ -192,16 +191,21 @@ export function LinearIssueTextEditor({
       {fields !== 'description' ? (
         <div className="relative">
           <textarea
-            ref={titleRef}
             value={titleDraft}
             onChange={(event) => updateTitleDraft(event.target.value)}
             onBlur={() => void saveField('title')}
             onKeyDown={handleTitleKeyDown}
             disabled={savingField === 'title'}
             rows={1}
-            aria-label="Issue title"
+            aria-label={translate(
+              'auto.components.LinearIssueTextEditor.04d73b72dc',
+              'Issue title'
+            )}
+            // field-sizing:content grows the title with its text and re-wraps on
+            // container resize without a JS measure pass.
             className={cn(
               'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0 text-foreground outline-none transition hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
+              '[field-sizing:content]',
               titleClass
             )}
           />
@@ -209,7 +213,7 @@ export function LinearIssueTextEditor({
             <kbd className="inline-flex h-4 min-w-4 select-none items-center justify-center rounded border border-border bg-muted/70 px-1 font-mono text-[9px] font-medium shadow-xs">
               ↵
             </kbd>
-            <span>to save</span>
+            <span>{translate('auto.components.LinearIssueTextEditor.947ba2d6f4', 'to save')}</span>
           </div>
           {savingField === 'title' ? (
             <LoaderCircle className="absolute right-2 top-2 size-4 animate-spin text-muted-foreground" />

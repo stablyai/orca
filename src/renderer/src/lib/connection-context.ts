@@ -1,5 +1,11 @@
 import { useAppStore } from '@/store'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  getConnectionIdForFileFromState,
+  getConnectionIdFromState
+} from './connection-owner-resolution'
+
+export { getConnectionIdFromState } from './connection-owner-resolution'
 
 /**
  * Resolve the SSH connectionId for a worktree. Returns null for local repos,
@@ -7,18 +13,34 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
  * cannot be found (e.g., store not yet hydrated).
  */
 export function getConnectionId(worktreeId: string | null): string | null | undefined {
+  return getConnectionIdFromState(useAppStore.getState(), worktreeId)
+}
+
+/**
+ * True when we can determine the owning host (local vs. a specific SSH target)
+ * for a worktree. False means the backing repo has not landed in the store yet
+ * — e.g. right after a session restore while the SSH connection is still
+ * establishing. Callers must not fall back to a LOCAL read of a remote path in
+ * that window; doing so denies the path with a terminal "access denied" (#6648).
+ */
+export function isWorktreeConnectionResolved(worktreeId: string | null): boolean {
   if (!worktreeId) {
-    return null
+    return true
   }
-  const state = useAppStore.getState()
-  const allWorktrees = Object.values(state.worktreesByRepo ?? {}).flat()
-  const worktree = allWorktrees.find((w) => w.id === worktreeId)
-  // Why: SSH worktrees can be restored from session IDs before relay discovery
-  // repopulates worktreesByRepo. The composite ID still carries the repo ID.
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = state.repos?.find((r) => r.id === repoId)
-  if (!repo) {
-    return undefined
+  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+  if (parsedWorkspaceKey?.type === 'folder') {
+    // Folder workspaces resolve per-file; treat them as resolved here and let
+    // getConnectionIdForFile decide ownership for the concrete path.
+    return true
   }
-  return repo.connectionId ?? null
+  // Why: getConnectionId returns undefined only when the backing repo is absent;
+  // any found repo yields a string or null, so this mirrors "repo has hydrated".
+  return getConnectionId(worktreeId) !== undefined
+}
+
+export function getConnectionIdForFile(
+  worktreeId: string | null,
+  filePath: string
+): string | null | undefined {
+  return getConnectionIdForFileFromState(useAppStore.getState(), worktreeId, filePath)
 }

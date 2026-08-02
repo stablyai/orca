@@ -8,6 +8,7 @@ import {
   buildAgentFeatureSkillInstallCommand,
   COMPUTER_USE_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
+  ORCA_LINEAR_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
@@ -29,7 +30,8 @@ import {
 const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME,
   COMPUTER_USE_SKILL_NAME,
-  ORCHESTRATION_SKILL_NAME
+  ORCHESTRATION_SKILL_NAME,
+  ORCA_LINEAR_SKILL_NAME
 ])
 const ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME
@@ -102,20 +104,22 @@ describe('onboarding feature setup runner', () => {
     expect(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION).toEqual({
       browserUse: true,
       computerUse: true,
-      orchestration: true
+      orchestration: true,
+      linearTickets: false
     })
   })
 
-  it('builds one skill command for the selected Browser Use, Computer Use, and Orchestration features', () => {
+  it('builds one skill command for selected onboarding feature setup skills', () => {
     const text = buildOnboardingFeatureSetupClipboardText({
       browserUse: true,
       computerUse: true,
-      orchestration: true
+      orchestration: true,
+      linearTickets: true
     })
 
     expect(text).toBe(ALL_SKILL_INSTALL_COMMAND)
     expect(text).toBe(
-      'npx skills add https://github.com/stablyai/orca --skill orca-cli computer-use orchestration --global'
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli --skill computer-use --skill orchestration --skill orca-linear --global'
     )
   })
 
@@ -123,19 +127,21 @@ describe('onboarding feature setup runner', () => {
     const selection: OnboardingFeatureSetupSelection = {
       browserUse: true,
       computerUse: false,
-      orchestration: true
+      orchestration: true,
+      linearTickets: true
     }
 
     expect(onboardingFeatureSetupTelemetryFeature('browserUse')).toBe('browser_use')
     expect(onboardingFeatureSetupTelemetrySelection(selection)).toEqual({
       browser_use: true,
       computer_use: false,
+      linear_tickets: true,
       orchestration: true,
       selected_count: 2
     })
     expect(
       onboardingFeatureSetupRunTelemetry(selection, {
-        selectedIds: ['browserUse', 'orchestration'],
+        selectedIds: ['browserUse', 'orchestration', 'linearTickets'],
         cliTouched: true,
         skillCommandsCopied: false,
         skillInstallCommand: ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND,
@@ -145,6 +151,7 @@ describe('onboarding feature setup runner', () => {
     ).toEqual({
       browser_use: true,
       computer_use: false,
+      linear_tickets: true,
       orchestration: true,
       selected_count: 2,
       cli_touched: true,
@@ -155,7 +162,7 @@ describe('onboarding feature setup runner', () => {
     })
   })
 
-  it('runs selected Browser Use, Computer Use, and Orchestration setup through injected deps only', async () => {
+  it('runs selected feature setup through injected deps only', async () => {
     const deps = createDeps({
       getComputerUsePermissionStatus: vi.fn(
         async (): Promise<ComputerUsePermissionStatusResult> => ({
@@ -171,12 +178,12 @@ describe('onboarding feature setup runner', () => {
     })
 
     const result = await runOnboardingFeatureSetup(
-      { browserUse: true, computerUse: true, orchestration: true },
+      { browserUse: true, computerUse: true, orchestration: true, linearTickets: true },
       deps
     )
 
     expect(result).toEqual({
-      selectedIds: ['browserUse', 'computerUse', 'orchestration'],
+      selectedIds: ['browserUse', 'computerUse', 'orchestration', 'linearTickets'],
       cliTouched: false,
       skillCommandsCopied: true,
       skillInstallCommand: ALL_SKILL_INSTALL_COMMAND,
@@ -200,7 +207,8 @@ describe('onboarding feature setup runner', () => {
     const selection: OnboardingFeatureSetupSelection = {
       browserUse: false,
       computerUse: false,
-      orchestration: true
+      orchestration: true,
+      linearTickets: false
     }
 
     const result = await runOnboardingFeatureSetup(selection, deps)
@@ -223,7 +231,7 @@ describe('onboarding feature setup runner', () => {
     const deps = createDeps()
 
     const result = await runOnboardingFeatureSetup(
-      { browserUse: false, computerUse: false, orchestration: false },
+      { browserUse: false, computerUse: false, orchestration: false, linearTickets: false },
       deps
     )
 
@@ -251,7 +259,7 @@ describe('onboarding feature setup runner', () => {
     })
 
     const result = await runOnboardingFeatureSetup(
-      { browserUse: false, computerUse: false, orchestration: true },
+      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
       deps
     )
 
@@ -264,6 +272,39 @@ describe('onboarding feature setup runner', () => {
       }
     ])
     expect(deps.clipboardWrites).toEqual([])
+  })
+
+  it('skips openSetup and warns when the macOS Computer Use helper app is unavailable', async () => {
+    // Why: getComputerUsePermissionStatus reports helperUnavailableReason with
+    // all permissions set to not-granted when the helper app is missing (e.g.
+    // a dev build that never ran `pnpm build:computer-macos`). The runner must
+    // not call openSetup in that case, or the IPC handler throws.
+    const unavailableStatus: ComputerUsePermissionStatusResult = {
+      platform: 'darwin',
+      helperAppPath: null,
+      helperUnavailableReason: 'Orca Computer Use.app was not found',
+      permissions: [
+        { id: 'accessibility', status: 'not-granted' },
+        { id: 'screenshots', status: 'not-granted' }
+      ]
+    }
+    const openComputerUsePermissionSetup = vi.fn(async () => OPENED_COMPUTER_USE_SETUP)
+    const deps = createDeps({
+      getComputerUsePermissionStatus: vi.fn(async () => unavailableStatus),
+      openComputerUsePermissionSetup
+    })
+
+    const result = await runOnboardingFeatureSetup(
+      { browserUse: true, computerUse: true, orchestration: true, linearTickets: true },
+      deps
+    )
+
+    expect(result.computerUsePermissionsOpened).toBe(false)
+    expect(openComputerUsePermissionSetup).not.toHaveBeenCalled()
+    expect(result.warnings).toContainEqual({
+      featureId: 'computerUse',
+      message: 'Orca Computer Use.app was not found'
+    })
   })
 
   it('shows CLI registration context before installing a missing CLI during onboarding', async () => {
@@ -282,7 +323,7 @@ describe('onboarding feature setup runner', () => {
     })
 
     const result = await runOnboardingFeatureSetup(
-      { browserUse: true, computerUse: false, orchestration: false },
+      { browserUse: true, computerUse: false, orchestration: false, linearTickets: false },
       deps
     )
 
@@ -292,5 +333,25 @@ describe('onboarding feature setup runner', () => {
     expect(showCliRegistrationPrompt.mock.invocationCallOrder[0]).toBeLessThan(
       installCli.mock.invocationCallOrder[0]
     )
+  })
+
+  it('warns without changing PATH when the Windows registry read is unknown', async () => {
+    const unknownStatus: CliInstallStatus = {
+      ...INSTALLED_CLI_STATUS,
+      platform: 'win32',
+      pathConfigured: null,
+      detail: 'Orca could not read the Windows user PATH registry value.'
+    }
+    const deps = createDeps({ getCliStatus: vi.fn(async () => unknownStatus) })
+
+    const result = await runOnboardingFeatureSetup(
+      { browserUse: true, computerUse: false, orchestration: false, linearTickets: false },
+      deps
+    )
+
+    expect(result.cliTouched).toBe(false)
+    expect(result.warnings).toContainEqual({ featureId: 'cli', message: unknownStatus.detail })
+    expect(deps.showCliRegistrationPrompt).not.toHaveBeenCalled()
+    expect(deps.installCli).not.toHaveBeenCalled()
   })
 })

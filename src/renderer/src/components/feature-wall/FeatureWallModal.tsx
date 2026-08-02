@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
 import { FeatureWallTourSurface } from './FeatureWallTourSurface'
+import { translate } from '@/i18n/i18n'
 
 export default function FeatureWallModal(): JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -34,11 +35,19 @@ export default function FeatureWallModal(): JSX.Element | null {
         tabIndex={-1}
       >
         <DialogHeader className="gap-1 border-b border-border px-7 py-4">
-          <DialogTitle className="text-lg">Get to know Orca</DialogTitle>
+          <DialogTitle className="text-lg">
+            {translate(
+              'auto.components.feature.wall.FeatureWallModal.3567e147c8',
+              'Get to know Orca'
+            )}
+          </DialogTitle>
           {/* Why: Radix requires a description for the dialog to be a11y-compliant,
               but we don't want it visible - the rail and step copy already orient users. */}
           <DialogDescription className="sr-only">
-            A short, workflow-by-workflow tour of Orca.
+            {translate(
+              'auto.components.feature.wall.FeatureWallModal.33dca8bbbe',
+              'A short, workflow-by-workflow tour of Orca.'
+            )}
           </DialogDescription>
         </DialogHeader>
 

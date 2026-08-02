@@ -1,6 +1,9 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import {
+  createAgentCompletionCoordinator,
+  resetAgentCompletionCoordinatorIdentitiesForTest
+} from './agent-completion-coordinator'
 import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
@@ -10,8 +13,11 @@ async function flushAsyncTicks(count = 4): Promise<void> {
   }
 }
 
-function processResult(foregroundProcess: string | null): RuntimeTerminalProcessInspection {
-  return { foregroundProcess, hasChildProcesses: foregroundProcess !== null }
+function processResult(
+  foregroundProcess: string | null,
+  hasChildProcesses = foregroundProcess !== null
+): RuntimeTerminalProcessInspection {
+  return { foregroundProcess, hasChildProcesses }
 }
 
 function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -34,6 +40,7 @@ function createRejectableDeferred<T>(): {
 }
 
 const HOOK_DONE_QUIET_MS = 1_500
+const CODEX_ATTENTION_QUIET_MS = 1_500
 
 describe('agent completion coordinator', () => {
   beforeEach(() => {
@@ -43,6 +50,7 @@ describe('agent completion coordinator', () => {
 
   afterEach(() => {
     resetAgentProcessInspectionQueueForTests()
+    resetAgentCompletionCoordinatorIdentitiesForTest()
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
@@ -82,10 +90,126 @@ describe('agent completion coordinator', () => {
     expect(vi.getTimerCount()).toBe(0)
 
     coordinator.observeTitle('Codex working')
-    vi.advanceTimersByTime(2_000)
+    // Why: hidden panes poll the backstop at the throttled 3s cadence, not the
+    // 2s idle / 750ms active cadence reserved for visible panes.
+    vi.advanceTimersByTime(3_000)
     await flushAsyncTicks()
 
     expect(inspectProcess).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: regression guard for the hidden-pane throttle (follow-up to #6288 /
+  // PR #6667). A hidden pane with a live agent kept polling the OS process
+  // table at full 750ms cadence purely as a backstop, wasting idle CPU on
+  // shared SSH relays. It now polls at the 3s hidden cadence. Pre-fix this
+  // counted ~78 inspections over 60s; post-fix ~20. The assertion fails on the
+  // pre-fix code (>25) and passes after, so it locks in the reduction.
+  it('throttles a hidden agent pane to the 3s backstop cadence over a 60s window', async () => {
+    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true,
+      shouldPollProcessCadence: () => false
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    const hiddenCalls = inspectProcess.mock.calls.length
+    // ~60_000 / 3_000 = 20 (jitter pinned to 1.0 via the Math.random spy).
+    expect(hiddenCalls).toBeGreaterThanOrEqual(15)
+    expect(hiddenCalls).toBeLessThanOrEqual(25)
+  })
+
+  it('keeps a visible agent pane at full 750ms cadence over a 60s window', async () => {
+    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true,
+      shouldPollProcessCadence: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    // ~60_000 / 750 ≈ 78; the hidden throttle must not regress visible panes.
+    expect(inspectProcess.mock.calls.length).toBeGreaterThanOrEqual(70)
+  })
+
+  it('re-arms full cadence immediately when a throttled hidden pane becomes visible', async () => {
+    let visible = false
+    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true,
+      shouldPollProcessCadence: () => visible
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    // First hidden poll runs and arms the next 3s backstop timer.
+    await vi.advanceTimersByTimeAsync(3_000)
+    const callsBeforeFlip = inspectProcess.mock.calls.length
+    expect(callsBeforeFlip).toBeGreaterThanOrEqual(1)
+
+    // 600ms into the 3s hidden interval: no new inspection yet.
+    await vi.advanceTimersByTimeAsync(600)
+    expect(inspectProcess.mock.calls.length).toBe(callsBeforeFlip)
+
+    // Becoming visible (lifecycle calls startProcessTracking) must drop the slow
+    // pending timer and re-arm at full cadence rather than wait out the ~2.4s left.
+    visible = true
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(900)
+
+    expect(inspectProcess.mock.calls.length).toBeGreaterThan(callsBeforeFlip)
+  })
+
+  it('still detects an unannounced process exit while hidden, at the slower cadence', async () => {
+    let foregroundProcess: string | null = 'codex'
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      dispatchCompletion,
+      isLive: () => true,
+      shouldPollProcessCadence: () => false
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    // Agent exits with no completion title/hook — only the poll can notice.
+    foregroundProcess = null
+    // First idle sample requires a repeat before announcing (no dispatch yet).
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    // Second idle sample confirms the exit ~2 hidden polls (~6s) after it happened.
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
+      source: 'process-exit',
+      quietedHookDone: false,
+      terminalIdleConfirmed: true
+    })
   })
 
   it('clears process evidence after agent exit so later non-agent spinner titles do not notify', async () => {
@@ -118,6 +242,198 @@ describe('agent completion coordinator', () => {
     coordinator.observeTitle('experimental-agent-observability')
     await flushAsyncTicks()
 
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+  })
+
+  it('does not dispatch process-exit while an agent terminal still has child processes', async () => {
+    let result = processResult('codex')
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => result),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    result = processResult('zsh', true)
+    vi.advanceTimersByTime(750)
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    result = processResult('zsh', false)
+    vi.advanceTimersByTime(750)
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(750)
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
+      source: 'process-exit',
+      quietedHookDone: false,
+      terminalIdleConfirmed: true
+    })
+  })
+
+  it('keeps hook working evidence across unavailable inspections', async () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => ({
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        unavailable: true as const
+      })),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeHookStatus({ state: 'working', agentType: 'codex', prompt: 'test' })
+    await vi.advanceTimersByTimeAsync(2_000)
+    coordinator.observeHookStatus({ state: 'done', agentType: 'codex', prompt: 'test' })
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps explicit-title evidence across unavailable inspections', async () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => ({
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        unavailable: true as const
+      })),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(2_000)
+    coordinator.observeClassifiedTitleCompletion('done')
+
+    expect(dispatchCompletion).toHaveBeenCalledExactlyOnceWith('done')
+  })
+
+  it('resets exit confirmation across an unavailable inspection', async () => {
+    let result: RuntimeTerminalProcessInspection = processResult('codex')
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => result),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(2_000)
+    result = processResult(null, false)
+    await vi.advanceTimersByTimeAsync(750)
+    result = { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
+    await vi.advanceTimersByTimeAsync(750)
+    result = processResult(null, false)
+    await vi.advanceTimersByTimeAsync(1_500)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(750)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not mark an agent-to-agent process replacement as terminal idle', async () => {
+    let foregroundProcess = 'codex'
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    foregroundProcess = 'claude'
+    await vi.advanceTimersByTimeAsync(750)
+
+    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
+      source: 'process-exit',
+      quietedHookDone: false
+    })
+  })
+
+  it('suppresses replacement completion before coordinator state mutation', async () => {
+    let foregroundProcess = 'codex'
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      dispatchCompletion,
+      shouldSuppressProcessReplacementCompletion: () => true,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    foregroundProcess = 'claude'
+    await vi.advanceTimersByTimeAsync(750)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    coordinator.observeTitle('Claude done')
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith('Claude done')
+  })
+
+  it('suppresses confirmed process exit when the owner vetoes the exited process', async () => {
+    let foregroundProcess: string | null = 'codex'
+    const dispatchCompletion = vi.fn()
+    const shouldSuppressConfirmedProcessExitCompletion = vi.fn(() => true)
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      dispatchCompletion,
+      shouldSuppressConfirmedProcessExitCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    foregroundProcess = null
+    await vi.advanceTimersByTimeAsync(1_500)
+
+    expect(shouldSuppressConfirmedProcessExitCompletion).toHaveBeenCalledWith({
+      agent: 'codex',
+      processName: 'codex'
+    })
     expect(dispatchCompletion).not.toHaveBeenCalled()
   })
 
@@ -444,6 +760,56 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledWith('codex')
   })
 
+  it('suppresses process-exit in another coordinator after a hook completion notified', async () => {
+    const paneKey = 'tab-1:leaf-1'
+    const dispatchCompletion = vi.fn()
+    const hookCoordinator = createAgentCompletionCoordinator({
+      paneKey,
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(null)),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    hookCoordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'say OK only',
+      agentType: 'codex'
+    })
+    hookCoordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'say OK only',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_000_000
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    let result = processResult('codex')
+    const processCoordinator = createAgentCompletionCoordinator({
+      paneKey,
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => result),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    processCoordinator.startProcessTracking()
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    result = processResult('zsh', false)
+    vi.advanceTimersByTime(750)
+    await flushAsyncTicks()
+    vi.advanceTimersByTime(750)
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps duplicate done-only hooks inside replay guard suppressed after process inspection', async () => {
     const inspection = createDeferred<RuntimeTerminalProcessInspection>()
     const dispatchCompletion = vi.fn()
@@ -586,12 +952,14 @@ describe('agent completion coordinator', () => {
     coordinator.observeHookStatus({
       state: 'done',
       prompt: 'first task',
-      agentType: 'codex'
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_000_000
     })
     coordinator.observeHookStatus({
       state: 'done',
       prompt: 'first task',
-      agentType: 'codex'
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_000_000
     })
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
 
@@ -599,9 +967,201 @@ describe('agent completion coordinator', () => {
     coordinator.observeHookStatus({
       state: 'done',
       prompt: 'second task',
-      agentType: 'codex'
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_010_000
     })
 
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+  })
+
+  it('suppresses delayed replays of the same hook completion snapshot', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    const completion = {
+      state: 'done' as const,
+      prompt: 'same task',
+      agentType: 'codex' as const,
+      stateStartedAt: 1_700_000_000_000
+    }
+    coordinator.observeHookStatus(completion)
+    vi.advanceTimersByTime(5_000)
+    coordinator.observeHookStatus(completion)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('suppresses the same hook completion replay after fresh work starts', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    const completedTurn = {
+      state: 'done' as const,
+      prompt: 'same task',
+      agentType: 'codex' as const,
+      stateStartedAt: 1_700_000_000_000
+    }
+    coordinator.observeHookStatus(completedTurn)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'next task',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_010_000
+    })
+    vi.advanceTimersByTime(5_000)
+    coordinator.observeHookStatus(completedTurn)
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'next task',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_020_000
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+  })
+
+  it('suppresses same-agent title replay after hook-backed fresh work starts', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'same task',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_000_000
+    })
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'same task',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_010_000
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'next task',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_020_000
+    })
+    coordinator.observeClassifiedTitleCompletion('Codex done')
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'next task',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_030_000
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+  })
+
+  it('suppresses stale title completion replay after a pane remount until fresh work appears', () => {
+    const dispatchCompletion = vi.fn()
+    const firstCoordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    firstCoordinator.observeTitleWorking()
+    firstCoordinator.observeClassifiedTitleCompletion('Codex done')
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    firstCoordinator.dispose()
+
+    const remountedCoordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    remountedCoordinator.observeClassifiedTitleCompletion('Codex done')
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    remountedCoordinator.observeTitleWorking()
+    remountedCoordinator.observeClassifiedTitleCompletion('Codex done')
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+  })
+
+  it('suppresses stale title completion replay after a hook completion remount', () => {
+    const dispatchCompletion = vi.fn()
+    const firstCoordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    firstCoordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'ship it',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_000_000
+    })
+    firstCoordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'ship it',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_010_000
+    })
+    vi.advanceTimersByTime(5_000)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    firstCoordinator.dispose()
+
+    const remountedCoordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    remountedCoordinator.observeClassifiedTitleCompletion('Codex done')
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    remountedCoordinator.observeTitleWorking()
+    remountedCoordinator.observeClassifiedTitleCompletion('Codex done')
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
 
@@ -697,10 +1257,9 @@ describe('agent completion coordinator', () => {
     'gemini',
     'opencode',
     'cursor',
-    'pi',
-    'omp',
     'droid',
     'grok',
+    'devin',
     'copilot',
     'hermes'
   ])('recognizes %s hook agent ids even when the binary name differs', (agentType) => {
@@ -723,6 +1282,729 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledWith(agentType)
   })
 
+  it.each(['pi', 'omp'])(
+    'defers a %s milestone done without prior working through the quiet window',
+    (agentType) => {
+      const dispatchCompletion = vi.fn()
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey: 'tab-1:leaf-1',
+        getPtyId: () => 'pty-1',
+        getSettings: () => null,
+        inspectProcess: vi.fn(),
+        dispatchCompletion,
+        isLive: () => true
+      })
+
+      // Pi/OMP emit agent_end ('done') between milestones with no prior 'working';
+      // the done must wait out the quiet window instead of firing immediately.
+      coordinator.observeHookStatus({
+        state: 'done',
+        prompt: 'run the mission',
+        agentType
+      })
+      expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS - 1)
+      expect(dispatchCompletion).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+      expect(dispatchCompletion).toHaveBeenCalledWith(
+        agentType,
+        expect.objectContaining({ source: 'hook', quietedHookDone: true })
+      )
+    }
+  )
+
+  it('suppresses a Pi milestone done when work resumes before the quiet window', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'run the mission',
+      agentType: 'pi'
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+
+    // Pi resumes (a tool_call mapped to 'working') before the window elapses,
+    // which must cancel the premature "finished".
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'run the mission',
+      agentType: 'pi'
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(false)
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+  })
+
+  it('still dispatches a Codex done-without-prior-working immediately', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    // Codex only emits 'done' at turn end, so it must keep its immediate dispatch.
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'fix the bug',
+      agentType: 'codex'
+    })
+
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(false)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('still fires a pending Pi done when process inspection sees the agent exit first', async () => {
+    // Why: a process-exit probe landing inside the quiet window must not tear
+    // down agent evidence, or the pending hook 'done' would be silently dropped.
+    let foregroundProcess: string | null = 'pi'
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'run the mission',
+      agentType: 'pi'
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+
+    // The agent process disappears mid-window; the cadence poll must not drop
+    // the pending completion.
+    foregroundProcess = null
+    vi.advanceTimersByTime(750)
+    await flushAsyncTicks()
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'pi',
+      expect.objectContaining({ source: 'hook' })
+    )
+  })
+
+  it('notifies once after a Cursor tool-heavy turn, not on each shell hook', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'cursor' as const
+    }
+
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Read',
+      toolInput: '/repo/src/app.ts'
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'git status'
+    })
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    coordinator.observeHookStatus({ state: 'done', ...turn, lastAssistantMessage: 'Fixed.' })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not dispatch completion when waiting states arrive mid-turn', () => {
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'cursor' as const
+    }
+
+    // 'waiting' (e.g. a PermissionRequest) is mid-turn, not a completion.
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Read',
+      toolInput: '/repo/src/app.ts'
+    })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'git status'
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).toHaveBeenCalledTimes(2)
+    expect(dispatchAttention).toHaveBeenLastCalledWith(
+      'cursor',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'cursor',
+          toolInput: 'git status'
+        })
+      })
+    )
+  })
+
+  it('suppresses the attention dispatch when shouldSuppressHookCompletion matches', () => {
+    // Why: guards the merge seam where the suppressor must short-circuit before
+    // the attention path, so auto-approved Codex pauses never notify.
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true,
+      shouldSuppressHookCompletion: (payload) =>
+        payload.state === 'waiting' || payload.state === 'blocked'
+    })
+
+    const turn = {
+      prompt: 'implement notifications',
+      agentType: 'codex' as const
+    }
+
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'git status'
+    })
+    coordinator.observeHookStatus({
+      state: 'blocked',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'rm file'
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchAttention).not.toHaveBeenCalled()
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+  })
+
+  it('does not dispatch completion when a blocked state arrives mid-turn', () => {
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'copilot' as const
+    }
+
+    // 'blocked' (e.g. a Copilot elicitation dialog) is mid-turn, not a completion.
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'blocked',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'npm install'
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).toHaveBeenCalledWith(
+      'copilot',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'blocked',
+          agentType: 'copilot',
+          toolInput: 'npm install'
+        })
+      })
+    )
+  })
+
+  it('cancels a pending done timer when a waiting state arrives before the quiet window', () => {
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'cursor' as const
+    }
+
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({ state: 'done', ...turn, lastAssistantMessage: 'Done.' })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+
+    // A permission/elicitation pause arrives before the 1.5s quiet window
+    // expires; it must cancel the pending 'done' so no completion fires.
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(false)
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).toHaveBeenCalledWith(
+      'cursor',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'cursor',
+          toolInput: 'pnpm test'
+        })
+      })
+    )
+  })
+
+  it('cancels a pending done timer when a suppressed attention state arrives before the quiet window', () => {
+    // Why: a suppressed Codex auto-approval pause must still cancel a provisional
+    // 'done' so the quiet-window timer never fires a false completion notification.
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true,
+      shouldSuppressHookCompletion: (payload) =>
+        payload.state === 'waiting' || payload.state === 'blocked'
+    })
+
+    const turn = {
+      prompt: 'implement notifications',
+      agentType: 'codex' as const
+    }
+
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({ state: 'done', ...turn, lastAssistantMessage: 'Done.' })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'git status'
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(false)
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).not.toHaveBeenCalled()
+  })
+
+  it('still dispatches completion on done after an intervening waiting state in the same turn', () => {
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'cursor' as const
+    }
+
+    // Realistic flow: the agent pauses for a permission prompt mid-turn, resumes,
+    // then genuinely finishes. The intervening attention state must surface as
+    // attention only and must not suppress the final completion. This fails if
+    // 'waiting' is treated as a completion state (issue #5698).
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({ state: 'done', ...turn, lastAssistantMessage: 'Done.' })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels the debounced Codex attention notification when work resumes in the quiet window', () => {
+    // Why: Codex fires PermissionRequest at the human-input boundary *before* the
+    // approval decision. Under "Approve for me" the review agent approves and
+    // Codex resumes within the quiet window, so the OS notification must be
+    // debounced and canceled — no false "approval required" banner (issue #8387).
+    const dispatchAttention = vi.fn()
+    const dispatchHookLifecycle = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      dispatchHookLifecycle,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'git status'
+    })
+
+    // Visual status still updates immediately even though the notification waits.
+    expect(dispatchHookLifecycle).toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'waiting', agentType: 'codex' })
+    )
+    expect(dispatchAttention).not.toHaveBeenCalled()
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'git status'
+    })
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+
+    expect(dispatchAttention).not.toHaveBeenCalled()
+  })
+
+  it('dispatches the debounced Codex attention notification after the quiet window elapses', () => {
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'apply patch'
+    })
+    expect(dispatchAttention).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+    expect(dispatchAttention).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'codex',
+          toolInput: 'apply patch'
+        })
+      })
+    )
+  })
+
+  it('dispatches a non-Codex attention notification immediately without debounce', () => {
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'cursor' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+    // Non-Codex attention must not arm the debounce timer at all.
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('debounces a blocked Codex pause like waiting and fires after the quiet window', () => {
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({ state: 'blocked', ...turn, toolName: 'exec_command' })
+    expect(dispatchAttention).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels the debounced Codex attention when a completion lands in the window (no double notify)', () => {
+    const dispatchAttention = vi.fn()
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({ state: 'waiting', ...turn, toolName: 'exec_command' })
+    // A 'done' completing the turn inside the window must cancel the pending
+    // attention so the pause never co-fires with the completion notification.
+    coordinator.observeHookStatus({ state: 'done', ...turn })
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+
+    expect(dispatchAttention).not.toHaveBeenCalled()
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears the pending Codex attention timer on dispose (no leak, no late fire)', () => {
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({ state: 'waiting', ...turn, toolName: 'exec_command' })
+    expect(vi.getTimerCount()).toBe(1)
+
+    coordinator.dispose()
+    expect(vi.getTimerCount()).toBe(0)
+
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+    expect(dispatchAttention).not.toHaveBeenCalled()
+  })
+
+  it('re-arms and fires a second distinct Codex pause after work resumed', () => {
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'ls'
+    })
+    // First pause auto-resolves before the window elapses.
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'ls'
+    })
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+    expect(dispatchAttention).not.toHaveBeenCalled()
+
+    // A later, genuinely-distinct pause must re-arm the debounce and fire.
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'apply_patch',
+      toolInput: 'diff'
+    })
+    expect(dispatchAttention).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels the debounced Codex attention when a working-spinner title resumes', () => {
+    // Why: a Codex resume can surface as a working title before the resume
+    // 'working' hook lands; that title must also cancel the pending attention
+    // so the self-resolving pause never fires a false banner (issue #8387).
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({ state: 'waiting', ...turn, toolName: 'exec_command' })
+    expect(vi.getTimerCount()).toBe(1)
+
+    coordinator.observeTitleWorking()
+    expect(vi.getTimerCount()).toBe(0)
+
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+    expect(dispatchAttention).not.toHaveBeenCalled()
+  })
+
+  it('does not let a null-foreground inspection blip drop the debounced Codex attention', async () => {
+    // Why: guard for #8387 fail-open. In the pty-connection coordinator (real
+    // process polling), a transient null/shell foreground blip — or a remote
+    // inspection that cannot resolve the foreground — must not convert a genuine
+    // Codex pause into a process-exit completion while the attention debounce is
+    // still pending. Mirrors the pendingHookDoneTimer evidence-teardown guard.
+    let foreground: string | null = 'codex'
+    const dispatchAttention = vi.fn()
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(foreground)),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    // First cadence poll recognizes Codex as the foreground agent (active tier).
+    await vi.advanceTimersByTimeAsync(2_000)
+    await flushAsyncTicks()
+
+    // Codex pauses for a permission decision: the OS attention is debounced.
+    const turn = { prompt: 'apply patch', agentType: 'codex' as const }
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'rm -rf build'
+    })
+    expect(dispatchAttention).not.toHaveBeenCalled()
+
+    // Foreground reads null for the whole window; without the guard this would
+    // land a false process-exit completion racing/duplicating the pause banner.
+    foreground = null
+    await vi.advanceTimersByTimeAsync(CODEX_ATTENTION_QUIET_MS + 100)
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps a generic title completion pending long enough for the first remote inspection', async () => {
     const inspection = createDeferred<RuntimeTerminalProcessInspection>()
     const dispatchCompletion = vi.fn()
@@ -742,5 +2024,59 @@ describe('agent completion coordinator', () => {
     await flushAsyncTicks()
 
     expect(dispatchCompletion).toHaveBeenCalledWith('experimental-agent-observability')
+  })
+
+  it('does not mutate completion state when hook completion is suppressed', () => {
+    const dispatchCompletion = vi.fn()
+    const shouldSuppressHookCompletion = vi.fn(
+      (payload: { state: string }) => payload.state === 'waiting' || payload.state === 'blocked'
+    )
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true,
+      shouldSuppressHookCompletion
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'implement notifications',
+      agentType: 'codex'
+    })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      prompt: 'implement notifications',
+      agentType: 'codex',
+      toolName: 'exec_command',
+      toolInput: 'git status'
+    })
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(shouldSuppressHookCompletion).toHaveBeenCalled()
+
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'implement notifications',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_010_000,
+      lastAssistantMessage: 'Done.'
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        quietedHookDone: true,
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'codex'
+        })
+      })
+    )
   })
 })

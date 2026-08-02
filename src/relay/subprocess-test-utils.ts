@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess, type SpawnOptions } from 'child_process'
+import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -25,7 +25,7 @@ export type RelayProcess = {
 export function spawnRelay(
   entryPath: string,
   args: string[] = [],
-  options: Pick<SpawnOptions, 'env'> = {}
+  options: Pick<SpawnOptions, 'cwd' | 'env'> = {}
 ): RelayProcess {
   const proc = spawn('node', [entryPath, ...args], {
     stdio: ['pipe', 'pipe', 'pipe'],

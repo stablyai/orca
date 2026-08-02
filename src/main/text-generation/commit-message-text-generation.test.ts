@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: local/remote generation, cancellation, and
    env propagation share subprocess mocks; splitting would obscure the
    cross-path invariants these tests protect. */
-import { spawn } from 'child_process'
-import type * as ChildProcess from 'child_process'
-import { EventEmitter } from 'events'
+import { exec, spawn } from 'node:child_process'
+import type * as ChildProcess from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { sourceControlAiSettingsFromLegacy } from '../../shared/source-control-ai'
@@ -24,10 +24,17 @@ vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
   return {
     ...actual,
+    exec: vi.fn((_command, callback) => {
+      if (typeof callback === 'function') {
+        callback(null, '', '')
+      }
+      return new actual.ChildProcess()
+    }),
     spawn: vi.fn(actual.spawn)
   }
 })
 
+const execMock = vi.mocked(exec)
 const spawnMock = vi.mocked(spawn)
 
 type MockDiscoveryChild = EventEmitter & {
@@ -62,7 +69,17 @@ function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   }
 }
 
+function expectChildTerminated(child: { pid: number; kill: ReturnType<typeof vi.fn> }): void {
+  if (process.platform === 'win32') {
+    expect(execMock).toHaveBeenCalledWith(`taskkill /pid ${child.pid} /T /F`, expect.any(Function))
+    expect(child.kill).not.toHaveBeenCalled()
+    return
+  }
+  expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+}
+
 beforeEach(() => {
+  execMock.mockClear()
   spawnMock.mockClear()
 })
 
@@ -88,7 +105,8 @@ describe('resolveCommitMessageSettings', () => {
         agentId: 'codex',
         model: 'gpt-5.5',
         thinkingLevel: 'low',
-        customPrompt: 'Use Conventional Commits.'
+        customPrompt: 'Use Conventional Commits.',
+        commandInputTemplate: '{basePrompt}\n\nUse Conventional Commits.'
       }
     })
   })
@@ -280,7 +298,7 @@ describe('resolveCommitMessageSettings', () => {
 
     expect(resolveCommitMessageSettings(settings)).toEqual({
       ok: false,
-      error: 'Custom command is empty. Add one in Settings -> Git -> Git AI Author.'
+      error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
     })
   })
 })
@@ -349,11 +367,60 @@ describe('discoverCommitMessageModelsLocal', () => {
       success: true,
       defaultModelId: 'auto'
     })
-    expect(spawnMock).toHaveBeenCalledWith(
-      'npx',
-      ['cursor-agent', '--list-models'],
-      expect.objectContaining({ windowsHide: true })
-    )
+    if (process.platform === 'win32') {
+      expect(spawnMock).toHaveBeenCalledWith(
+        expect.stringMatching(/cmd\.exe$/i),
+        ['/d', '/c', expect.stringMatching(/npx\.cmd$/i), 'cursor-agent', '--list-models'],
+        expect.objectContaining({ windowsHide: true })
+      )
+    } else {
+      expect(spawnMock).toHaveBeenCalledWith(
+        'npx',
+        ['cursor-agent', '--list-models'],
+        expect.objectContaining({ windowsHide: true })
+      )
+    }
+  })
+
+  it('discovers dynamic models through the selected WSL distro login shell', async () => {
+    await withPlatform('win32', async () => {
+      const listeners = new Map<string, (value: unknown) => void>()
+      const child = {
+        pid: 123,
+        kill: vi.fn(),
+        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+        stdin: { end: vi.fn() },
+        on: vi.fn((event, callback) => listeners.set(event, callback))
+      }
+      spawnMock.mockReturnValue(child as never)
+
+      const pending = discoverCommitMessageModelsLocal('cursor', undefined, undefined, {
+        cwd: 'C:\\repo',
+        wslDistro: 'Ubuntu'
+      })
+
+      listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
+      listeners.get('close')?.(0)
+
+      await expect(pending).resolves.toMatchObject({
+        success: true,
+        defaultModelId: 'auto'
+      })
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu', '--', 'sh', '-lc', expect.any(String)],
+        expect.objectContaining({
+          cwd: undefined,
+          windowsHide: true
+        })
+      )
+      const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
+      expect(shellCommand).toContain('getent passwd')
+      expect(shellCommand).toContain('/mnt/c/repo')
+      expect(shellCommand).toContain("'cursor-agent'")
+      expect(shellCommand).toContain('--list-models')
+    })
   })
 
   it('falls back to static models when dynamic discovery returns no parseable models', async () => {
@@ -427,7 +494,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       await vi.advanceTimersByTimeAsync(60_000)
 
       await assertion
-      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      expectChildTerminated(child)
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
@@ -449,7 +516,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       success: false,
       error: 'Cursor returned too much model data.'
     })
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildTerminated(child)
     expect(child.stdout.listenerCount('data')).toBe(0)
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
@@ -548,7 +615,7 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
-  it('does not fall back to raw agent stdout or stderr on failures', async () => {
+  it('exposes raw CLI failure output only after path sanitization', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -566,7 +633,7 @@ describe('generateCommitMessageFromContext', () => {
         missingBinaryLocation: 'remote PATH',
         execute: async () => ({
           stdout: 'You are generating a single git commit message for /secret/repo',
-          stderr: 'raw failure output with /secret/repo',
+          stderr: 'raw failure output with /Users/thebr/My Repo/secret/file.ts',
           exitCode: 1,
           timedOut: false
         })
@@ -575,11 +642,11 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error: 'agent CLI command failed with code 1: raw failure output with [path]'
     })
   })
 
-  it('does not expose extracted agent error details to the renderer', async () => {
+  it('formats nonzero exit failures with extracted sanitized CLI details', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -596,7 +663,7 @@ describe('generateCommitMessageFromContext', () => {
         cwd: '/repo',
         missingBinaryLocation: 'remote PATH',
         execute: async () => ({
-          stdout: 'ERROR: fatal: /secret/repo/config failed',
+          stdout: 'ERROR: fatal: C:\\Users\\Brennan Doe\\secret\\file.ts failed',
           stderr: '',
           exitCode: 1,
           timedOut: false
@@ -606,11 +673,42 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error: 'agent CLI command failed with code 1: ERROR: fatal: [path] failed'
     })
   })
 
-  it('treats empty stdout plus an error on stderr as an agent failure', async () => {
+  it('redacts UNC paths in CLI failure details', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: 'ERROR: failed at \\\\server\\share\\Brennan Repo\\secret\\file.ts',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'agent CLI command failed with code 1: ERROR: failed at [path]'
+    })
+  })
+
+  it('reports an empty result with the stderr excerpt when exit 0 produces no stdout', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -637,8 +735,273 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error: 'agent returned an empty message. CLI output: Error: No payment method'
     })
+  })
+
+  it('surfaces pi auth failure detail end-to-end through the adjusted path sanitizer', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: [
+            'No API key found for github-copilot.',
+            '',
+            'Use /login to log into a provider via OAuth or API key. See:',
+            '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/providers.md',
+            '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/models.md'
+          ].join('\n'),
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        'Pi CLI command failed with code 1: No API key found for github-copilot. Use /login to log into a provider via OAuth or API key. See: … [path]'
+    })
+  })
+
+  it('preserves slash-commands while redacting multi-segment paths in failure detail', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: 'ERROR: run /login then check /Users/name/repo',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'agent CLI command failed with code 1: ERROR: run /login then check [path]'
+    })
+  })
+
+  it('redacts a filesystem path embedded in a pi HTTP 401 payload', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: '401: {"message":"Invalid key loaded from /Users/name/.config/pi/auth.json"}',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Pi CLI command failed with code 1: 401: {"message":"Invalid key loaded from [path]"}'
+    })
+  })
+
+  it('redacts a Windows drive path with JSON-escaped backslashes in a payload', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: '401: {"message":"Invalid key loaded from C:\\\\Users\\\\name\\\\auth.json"}',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Pi CLI command failed with code 1: 401: {"message":"Invalid key loaded from [path]"}'
+    })
+  })
+
+  it('keeps a scheme:// remedy URL intact while still redacting paths', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr:
+            '401: Visit https://console.anthropic.com/settings/keys then check /Users/name/.config/pi/auth.json',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        'Pi CLI command failed with code 1: 401: Visit https://console.anthropic.com/settings/keys then check [path]'
+    })
+  })
+
+  it('redacts key=/path shapes in provider bodies', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: '401: {"message":"rejected credential_path=/Users/name/.config/pi/auth.json"}',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Pi CLI command failed with code 1: 401: {"message":"rejected credential_path=[path]"}'
+    })
+  })
+
+  it.each([
+    [
+      'comma-prefixed list path',
+      '401: {"message":"candidate list a,/Users/name/creds rejected"}',
+      'Pi CLI command failed with code 1: 401: {"message":"candidate list a,[path] rejected"}'
+    ],
+    [
+      'non-drive colon-prefixed path',
+      '401: {"message":"slot 1:/Users/name/alt failed"}',
+      'Pi CLI command failed with code 1: 401: {"message":"slot 1:[path] failed"}'
+    ]
+  ])('redacts a %s in provider bodies', async (_shape, stderr, expected) => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr,
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({ success: false, error: expected })
+  })
+
+  it('passes the live colonless 400 gateway payload through the sanitizer unmangled', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr:
+            '400 {"type":"error","error":{"type":"invalid_request_error","message":"Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going."},"request_id":"req_011CcsZLJ5ZiLLNvpxcxDuU4"}',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result.success).toBe(false)
+    if (result.success) {
+      throw new Error('expected a failure result')
+    }
+    expect(result.error.startsWith('Pi CLI command failed with code 1: 400 {"type":"error"')).toBe(
+      true
+    )
+    // The bare domain link survives path redaction so the remedy stays usable.
+    expect(result.error).toContain('claude.ai/settings/usage')
+    expect(result.error.length).toBeLessThanOrEqual(300)
   })
 
   it('preserves the structured subject and body when formatting the final response', async () => {
@@ -772,9 +1135,10 @@ describe('generateCommitMessageFromContext', () => {
 
     await expect(pending).resolves.toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error:
+        'agent CLI command produced too much output. Check the agent CLI configuration and try again.'
     })
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildTerminated(child)
   })
 
   it('passes prepared provider environment to local agent subprocesses', async () => {
@@ -823,8 +1187,70 @@ describe('generateCommitMessageFromContext', () => {
     )
   })
 
+  it('routes WSL local commit generation through the selected distro login shell', async () => {
+    await withPlatform('win32', async () => {
+      process.env.ORCA_HOST_ONLY_SECRET = 'do-not-leak'
+      const listeners = new Map<string, (value: unknown) => void>()
+      const child = {
+        pid: 123,
+        kill: vi.fn(),
+        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+        stdin: { end: vi.fn() },
+        on: vi.fn((event, callback) => listeners.set(event, callback))
+      }
+      spawnMock.mockReturnValue(child as never)
+
+      const pending = generateCommitMessageFromContext(
+        {
+          branch: 'main',
+          stagedSummary: 'M\tREADME.md',
+          stagedPatch: '+hello'
+        },
+        {
+          agentId: 'custom',
+          model: '',
+          customAgentCommand: 'agent --mode fast'
+        },
+        {
+          kind: 'local',
+          cwd: 'C:\\repo',
+          wslDistro: 'Ubuntu 24.04',
+          env: { ...process.env, CODEX_HOME: '/home/tester/.codex' }
+        }
+      )
+
+      listeners.get('stdout:data')?.(Buffer.from('Update README\n'))
+      listeners.get('close')?.(0)
+
+      await expect(pending).resolves.toMatchObject({
+        success: true,
+        message: 'Update README'
+      })
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu 24.04', '--', 'sh', '-lc', expect.any(String)],
+        expect.objectContaining({
+          cwd: undefined,
+          windowsHide: true,
+          env: expect.objectContaining({ CODEX_HOME: '/home/tester/.codex' })
+        })
+      )
+      const spawnEnv = spawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
+      expect(spawnEnv.ORCA_HOST_ONLY_SECRET).toBeUndefined()
+      const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
+      expect(shellCommand).toContain('getent passwd')
+      expect(shellCommand).toContain('exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('/mnt/c/repo')
+      expect(shellCommand).toContain("'agent'")
+      expect(shellCommand).toContain('--mode')
+      expect(shellCommand).toContain('fast')
+    })
+  })
+
   it('keeps local commit-message and pull-request cancellation lanes separate', async () => {
     const children: {
+      pid: number
       kill: ReturnType<typeof vi.fn>
       listeners: Map<string, (value: unknown) => void>
     }[] = []
@@ -838,7 +1264,7 @@ describe('generateCommitMessageFromContext', () => {
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
-      children.push({ kill: child.kill, listeners })
+      children.push({ pid: child.pid, kill: child.kill, listeners })
       return child as never
     })
 
@@ -883,7 +1309,7 @@ describe('generateCommitMessageFromContext', () => {
 
     cancelGenerateCommitMessageLocal('/repo')
 
-    expect(children[0]?.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildTerminated(children[0]!)
     expect(children[1]?.kill).not.toHaveBeenCalled()
 
     children[0]?.listeners.get('close')?.(null)
@@ -914,6 +1340,7 @@ describe('generateCommitMessageFromContext', () => {
 
   it('keeps local pull-request cancellation from stopping commit-message generation', async () => {
     const children: {
+      pid: number
       kill: ReturnType<typeof vi.fn>
       listeners: Map<string, (value: unknown) => void>
     }[] = []
@@ -927,7 +1354,7 @@ describe('generateCommitMessageFromContext', () => {
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
-      children.push({ kill: child.kill, listeners })
+      children.push({ pid: child.pid, kill: child.kill, listeners })
       return child as never
     })
 
@@ -973,7 +1400,7 @@ describe('generateCommitMessageFromContext', () => {
     cancelGeneratePullRequestFieldsLocal('/repo')
 
     expect(children[0]?.kill).not.toHaveBeenCalled()
-    expect(children[1]?.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildTerminated(children[1]!)
 
     const commitStdout = children[0]?.listeners.get('stdout:data')
     commitStdout?.(Buffer.from('Update README\n'))
@@ -1118,7 +1545,7 @@ describe('generateCommitMessageFromContext', () => {
     cancelGeneratePullRequestFieldsLocal('/repo')
     listeners.get('close')?.(null)
 
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildTerminated(child)
     await expect(pullRequest).resolves.toEqual({
       success: false,
       error: 'Generation canceled.',
@@ -1174,7 +1601,7 @@ describe('generateCommitMessageFromContext', () => {
       )
 
       cancelGenerateCommitMessageLocal('/repo')
-      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      expectChildTerminated(child)
       await Promise.resolve()
       await Promise.resolve()
       await Promise.resolve()
@@ -1330,11 +1757,103 @@ describe('generateBranchNameFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Generated branch name was empty after sanitization.'
+      error: 'Generated branch name was empty after sanitization.',
+      failureOutput: { label: 'agent', exitCode: 0, stdout: '!!! ___', stderr: '' }
     })
   })
 
-  it('includes the branch-name custom prompt in the generated prompt', async () => {
+  it('carries the full CLI output on failures for the local on-demand view', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: 'partial',
+          stderr: 'No API key found for github-copilot.',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result.success).toBe(false)
+    if (result.success) {
+      throw new Error('expected a failure result')
+    }
+    expect(result.failureOutput).toEqual({
+      label: 'Pi',
+      exitCode: 1,
+      stdout: 'partial',
+      stderr: 'No API key found for github-copilot.'
+    })
+  })
+
+  it('does not persist stdout-only branch failure detail that may echo the prompt', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Customer secret in the first prompt' },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: 'Customer secret in the first prompt',
+          stderr: '',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'agent CLI command failed with code 1.',
+      failureOutput: {
+        label: 'agent',
+        exitCode: 1,
+        stdout: 'Customer secret in the first prompt',
+        stderr: ''
+      }
+    })
+  })
+
+  it('describes a signal-terminated generator without a null exit code', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: 'Process killed by host',
+          exitCode: null,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      error: 'Pi CLI command was terminated before exiting: Process killed by host'
+    })
+  })
+
+  it('keeps branch-name guidance first without dropping the output contract', async () => {
     let prompt = ''
     await generateBranchNameFromContext(
       { firstPrompt: 'Fix login flow' },
@@ -1342,7 +1861,8 @@ describe('generateBranchNameFromContext', () => {
         agentId: 'custom',
         model: '',
         customAgentCommand: 'agent',
-        customPrompt: 'Prefer auth terminology.'
+        customPrompt: 'Prefer auth terminology.',
+        commandInputTemplate: 'Prefer auth terminology.\n\n{basePrompt}'
       },
       {
         kind: 'remote',
@@ -1360,8 +1880,173 @@ describe('generateBranchNameFromContext', () => {
       }
     )
 
-    expect(prompt).toContain('Additional user prompt:')
+    expect(prompt.startsWith('Prefer auth terminology.')).toBe(true)
     expect(prompt).toContain('Prefer auth terminology.')
+    expect(prompt).not.toContain('Additional user prompt:')
+    expect(prompt).toContain('Generate a short git branch name')
+    expect(prompt).toContain('Output ONLY the branch name on a single line')
+  })
+})
+
+describe('linkedIssue template substitution', () => {
+  const COMMIT_CONTEXT = {
+    branch: 'feature/login',
+    stagedSummary: 'M src/login.ts',
+    stagedPatch: 'diff --git a/src/login.ts b/src/login.ts'
+  }
+  const PULL_REQUEST_CONTEXT = {
+    branch: 'feature/login',
+    base: 'main',
+    branchChangedByPreparation: false,
+    currentTitle: 'Fix login',
+    currentBody: '',
+    currentDraft: false,
+    commitSummary: 'a1b2c3d Fix login',
+    changeSummary: 'src/login.ts | 4 ++--',
+    patch: 'diff --git a/src/login.ts b/src/login.ts'
+  }
+
+  function capturingTarget(capture: (prompt: string) => void): {
+    kind: 'remote'
+    cwd: string
+    missingBinaryLocation: string
+    execute: (plan: { stdinPayload: string | null }) => Promise<{
+      stdout: string
+      stderr: string
+      exitCode: number
+      timedOut: boolean
+    }>
+  } {
+    return {
+      kind: 'remote',
+      cwd: '/repo',
+      missingBinaryLocation: 'remote PATH',
+      execute: async (plan) => {
+        capture(plan.stdinPayload ?? '')
+        return {
+          stdout: '{"base":"main","title":"Fix login","body":"body","draft":false}',
+          stderr: '',
+          exitCode: 0,
+          timedOut: false
+        }
+      }
+    }
+  }
+
+  const templateParams = {
+    agentId: 'custom' as const,
+    model: '',
+    customAgentCommand: 'agent',
+    commandInputTemplate: '{basePrompt}\n\nFixes #{linkedIssue}'
+  }
+
+  it('substitutes the linked issue into the commit-message prompt', async () => {
+    let prompt = ''
+    await generateCommitMessageFromContext(
+      { ...COMMIT_CONTEXT, linkedIssue: 42 },
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #42')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('renders an empty commit-message issue for null and omitted fields', async () => {
+    for (const context of [{ ...COMMIT_CONTEXT, linkedIssue: null }, COMMIT_CONTEXT]) {
+      let prompt = ''
+      await generateCommitMessageFromContext(
+        context,
+        templateParams,
+        capturingTarget((value) => {
+          prompt = value
+        })
+      )
+
+      expect(prompt).toContain('Fixes #')
+      expect(prompt).not.toContain('{linkedIssue}')
+    }
+  })
+
+  // Why: a fixture-unique sentinel — a short number like 42 also appears in the
+  // character counts that truncateDiffForPrompt/limitSection emit, so growing any
+  // fixture past its limit would fail these guards for reasons unrelated to leakage.
+  const BUILT_IN_PROMPT_SENTINEL_ISSUE = 987654
+  const builtInPromptParams = {
+    agentId: 'custom' as const,
+    model: '',
+    customAgentCommand: 'agent'
+  }
+
+  it('leaves the built-in commit prompt free of issue guidance', async () => {
+    let prompt = ''
+    await generateCommitMessageFromContext(
+      { ...COMMIT_CONTEXT, linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE },
+      builtInPromptParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).not.toContain(String(BUILT_IN_PROMPT_SENTINEL_ISSUE))
+    expect(prompt).not.toContain('linkedIssue')
+  })
+
+  it('leaves the built-in pull-request prompt free of issue guidance', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      { ...PULL_REQUEST_CONTEXT, linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE },
+      builtInPromptParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).not.toContain(String(BUILT_IN_PROMPT_SENTINEL_ISSUE))
+    expect(prompt).not.toContain('linkedIssue')
+  })
+
+  it('substitutes the linked issue into the pull-request prompt', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      { ...PULL_REQUEST_CONTEXT, linkedIssue: 7 },
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #7')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('renders an empty pull-request issue when none resolves', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      PULL_REQUEST_CONTEXT,
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('leaves a hand-typed linkedIssue literal in branch-name templates', async () => {
+    let prompt = ''
+    await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      { ...templateParams, commandInputTemplate: '{basePrompt}\n\nIssue {linkedIssue}' },
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Issue {linkedIssue}')
   })
 })
 

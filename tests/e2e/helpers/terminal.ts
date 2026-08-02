@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Terminal E2E helpers share one PaneManager-backed path for PTY IO, split actions, and stable pane identity snapshots. */
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
+import { buildFreshShellProbeInputSequence } from '../terminal-probe-input-sequence'
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
@@ -20,6 +21,36 @@ export type PaneIdentitySnapshot = {
 export type ActivePaneHookDescriptor = {
   paneKey: string
   worktreeId: string
+}
+
+// Why: typing-latency specs must type into xterm's helper textarea, not the
+// page body — keyboard.type only reaches the PTY when that textarea has focus.
+export async function focusActiveTerminalInput(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('No active terminal pane to focus')
+    }
+    state?.setActiveTab(tabId)
+    state?.setActiveTabType('terminal')
+    pane.terminal.focus()
+    const textarea = pane.container.querySelector(
+      '.xterm-helper-textarea'
+    ) as HTMLTextAreaElement | null
+    if (!textarea) {
+      throw new Error('Active terminal has no xterm helper textarea')
+    }
+    textarea.focus()
+  })
 }
 
 // Why: worktree restoration can render the terminal surface before the legacy
@@ -88,6 +119,7 @@ export async function getTerminalContent(page: Page, charLimit = 4000): Promise<
 }
 
 export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Promise<string> {
+  let resolvedPtyId: string | null = null
   await expect
     .poll(
       async () => {
@@ -96,11 +128,12 @@ export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Pr
           return null
         }
 
-        return page.evaluate((tabId) => {
+        resolvedPtyId = await page.evaluate((tabId) => {
           const manager = window.__paneManagers?.get(tabId)
           const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
           return activePane?.container?.dataset?.ptyId ?? null
         }, tabId)
+        return resolvedPtyId
       },
       {
         timeout: timeoutMs,
@@ -109,21 +142,10 @@ export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Pr
     )
     .not.toBeNull()
 
-  const tabId = await resolveActiveTabId(page)
-  if (!tabId) {
-    throw new Error('waitForActivePanePtyId: no active terminal tab')
-  }
-
-  const ptyId = await page.evaluate((tabId) => {
-    const manager = window.__paneManagers?.get(tabId)
-    const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    return activePane?.container?.dataset?.ptyId ?? null
-  }, tabId)
-
-  if (!ptyId) {
+  if (!resolvedPtyId) {
     throw new Error('waitForActivePanePtyId: active pane has no PTY binding')
   }
-  return ptyId
+  return resolvedPtyId
 }
 
 export async function waitForActivePaneHookDescriptor(
@@ -236,15 +258,21 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
     throw new Error('discoverActivePtyId: active tab has no PTY candidates in store')
   }
 
+  const candidateInputs = candidateIds.map((_id, index) =>
+    buildFreshShellProbeInputSequence(`echo ${marker}_${index}\r`)
+  )
+
   await page.evaluate(
-    ({ marker, candidateIds }) => {
+    ({ candidateIds, candidateInputs }) => {
       // Why: daemon PTY IDs can contain path separators and shell metacharacters.
       // Echo a numeric probe index, then map it back to the opaque ID in Node.
       for (const [index, id] of candidateIds.entries()) {
-        window.api.pty.write(String(id), `\x03\x15echo ${marker}_${index}\r`)
+        for (const input of candidateInputs[index] ?? []) {
+          window.api.pty.write(String(id), input)
+        }
       }
     },
-    { marker, candidateIds }
+    { candidateIds, candidateInputs }
   )
 
   let foundPtyId: string | null = null
@@ -532,10 +560,11 @@ export async function countVisibleTerminalPanes(page: Page): Promise<number> {
 export async function waitForTerminalOutput(
   page: Page,
   expected: string,
-  timeoutMs = 10_000
+  timeoutMs = 10_000,
+  charLimit = 4000
 ): Promise<void> {
   await expect
-    .poll(async () => (await getTerminalContent(page)).includes(expected), {
+    .poll(async () => (await getTerminalContent(page, charLimit)).includes(expected), {
       timeout: timeoutMs,
       message: `Terminal did not contain "${expected}"`
     })

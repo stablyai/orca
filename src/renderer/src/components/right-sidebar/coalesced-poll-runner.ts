@@ -1,21 +1,111 @@
+export type CoalescedPollRunnerTrigger = {
+  // True when the caller has evidence something changed (file-watch event,
+  // repo metadata push signal, finished terminal command) rather than a bare
+  // timer tick. Change signals wait out a shorter slow-task backoff.
+  changeSignal?: boolean
+}
+
 export type CoalescedPollRunner = {
-  run: () => void
+  run: (trigger?: CoalescedPollRunnerTrigger) => void
   dispose: () => void
 }
 
-export function createCoalescedPollRunner(task: () => Promise<void>): CoalescedPollRunner {
+export type SlowTaskBackoffOptions = {
+  // Idle gap before an evidence-free timer tick may re-run, as a multiple of
+  // the previous run's duration.
+  idleMultiplier: number
+  // Idle gap before a change-signal run may re-run. Kept low so slow repos
+  // still refresh promptly after real changes, while sustained churn can
+  // never keep the task running back-to-back.
+  changeSignalMultiplier: number
+  maxIntervalMs: number
+}
+
+// Why: on large monorepos a poll task (git status) can take tens of seconds,
+// so a fixed idle gap makes polling effectively continuous (#7983). Scale the
+// gap with the previous run's duration — aggressively for evidence-free timer
+// ticks, mildly for change signals — capped so results never go minutes-stale.
+// Shared with the git-status refresh scheduler so both pacing machines keep
+// the same guarantee: sustained triggers can never run the task back-to-back.
+export function slowTaskRequiredIdleMs(
+  lastRunDurationMs: number,
+  multiplier: number,
+  minIntervalMs: number,
+  maxIntervalMs: number
+): number {
+  return Math.max(minIntervalMs, Math.min(lastRunDurationMs * multiplier, maxIntervalMs))
+}
+
+export function createCoalescedPollRunner(
+  task: () => Promise<void>,
+  options?: {
+    minIntervalMs?: number
+    slowTaskBackoff?: SlowTaskBackoffOptions
+  }
+): CoalescedPollRunner {
   let disposed = false
   let inFlight = false
-  let rerun = false
+  let rerunTrigger: CoalescedPollRunnerTrigger | null = null
+  let lastRunEndedAt = -Infinity
+  let lastRunDurationMs = 0
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  let timeoutFiresAt = Infinity
+  const minIntervalMs = options?.minIntervalMs ?? 0
 
-  const run = (): void => {
+  const requiredIdleMsFor = (trigger?: CoalescedPollRunnerTrigger): number => {
+    const backoff = options?.slowTaskBackoff
+    if (!backoff) {
+      return minIntervalMs
+    }
+    const multiplier = trigger?.changeSignal
+      ? backoff.changeSignalMultiplier
+      : backoff.idleMultiplier
+    return slowTaskRequiredIdleMs(
+      lastRunDurationMs,
+      multiplier,
+      minIntervalMs,
+      backoff.maxIntervalMs
+    )
+  }
+
+  const clearScheduledRun = (): void => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+      timeoutFiresAt = Infinity
+    }
+  }
+
+  const run = (trigger?: CoalescedPollRunnerTrigger): void => {
     if (disposed) {
       return
     }
     if (inFlight) {
-      rerun = true
+      // Why: keep the strongest pending trigger so a change signal arriving
+      // mid-run is not downgraded to tick pacing by a later timer tick.
+      rerunTrigger = { changeSignal: rerunTrigger?.changeSignal || trigger?.changeSignal }
       return
     }
+
+    const now = Date.now()
+    const allowedAt = lastRunEndedAt + requiredIdleMsFor(trigger)
+    if (now < allowedAt) {
+      // Why: a change signal may pull an already-scheduled evidence-free run
+      // earlier; a weaker trigger must never push a scheduled run later.
+      if (allowedAt >= timeoutFiresAt) {
+        return
+      }
+      clearScheduledRun()
+      timeoutFiresAt = allowedAt
+      timeoutId = setTimeout(() => {
+        timeoutId = null
+        timeoutFiresAt = Infinity
+        run(trigger)
+      }, allowedAt - now)
+      return
+    }
+
+    clearScheduledRun()
     inFlight = true
     void task()
       .catch(() => {
@@ -24,12 +114,13 @@ export function createCoalescedPollRunner(task: () => Promise<void>): CoalescedP
       })
       .finally(() => {
         inFlight = false
-        if (rerun && !disposed) {
-          rerun = false
-          run()
-          return
+        lastRunEndedAt = Date.now()
+        lastRunDurationMs = lastRunEndedAt - now
+        const trailingTrigger = disposed ? null : rerunTrigger
+        rerunTrigger = null
+        if (trailingTrigger) {
+          run(trailingTrigger)
         }
-        rerun = false
       })
   }
 
@@ -37,7 +128,8 @@ export function createCoalescedPollRunner(task: () => Promise<void>): CoalescedP
     run,
     dispose: () => {
       disposed = true
-      rerun = false
+      rerunTrigger = null
+      clearScheduledRun()
     }
   }
 }

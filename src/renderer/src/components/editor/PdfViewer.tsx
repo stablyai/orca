@@ -16,12 +16,19 @@ import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { translate } from '@/i18n/i18n'
+import {
+  applyPdfScalePreference,
+  stepPdfScalePreference,
+  type PdfScalePreference
+} from './pdf-scale-preference'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
 const MIN_SCALE = 0.25
 const MAX_SCALE = 5
 const SCALE_STEP = 1.25
+const SCALE_BOUNDS = { min: MIN_SCALE, max: MAX_SCALE, step: SCALE_STEP }
 
 type PdfViewerProps = {
   content: string
@@ -39,9 +46,23 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
   const eventBusRef = useRef<InstanceType<typeof EventBus> | null>(null)
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null)
   const pdfViewerRef = useRef<InstanceType<typeof PdfJsViewer> | null>(null)
+  // Why: content reloads rebuild the pdf.js viewer; keep zoom across updates of
+  // the same file, and only reset when the open path changes.
+  const scalePreferenceRef = useRef<PdfScalePreference>('page-width')
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
+
+  // Why: reset zoom to fit-width when the open path changes. An effect keeps the
+  // reset out of render (refs mutated in render can leak from discarded renders)
+  // and covers same-content/different-path opens the load effect skips.
+  useEffect(() => {
+    scalePreferenceRef.current = 'page-width'
+    const viewer = pdfViewerRef.current
+    if (viewer) {
+      applyPdfScalePreference(viewer, 'page-width', SCALE_BOUNDS)
+    }
+  }, [filePath])
 
   useEffect(() => {
     const container = containerRef.current
@@ -106,7 +127,7 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
         viewer.setDocument(doc)
         linkService.setDocument(doc)
         findController.setDocument(doc)
-        viewer.currentScaleValue = 'page-width'
+        applyPdfScalePreference(viewer, scalePreferenceRef.current, SCALE_BOUNDS)
       })
       .catch((err) => {
         if (cancelled) {
@@ -147,6 +168,30 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
     setFindOpen(false)
   }, [])
 
+  // Why: every zoom entry point (toolbar + keyboard) must record the scale
+  // preference so the next content reload restores it (see scalePreferenceRef).
+  const stepZoom = useCallback((direction: 'in' | 'out') => {
+    const viewer = pdfViewerRef.current
+    if (!viewer) {
+      return
+    }
+    const next = stepPdfScalePreference(viewer.currentScale, direction, SCALE_BOUNDS)
+    viewer.currentScale = next.scale
+    scalePreferenceRef.current = next.preference
+  }, [])
+
+  const zoomIn = useCallback(() => stepZoom('in'), [stepZoom])
+  const zoomOut = useCallback(() => stepZoom('out'), [stepZoom])
+
+  const zoomReset = useCallback(() => {
+    const viewer = pdfViewerRef.current
+    if (!viewer) {
+      return
+    }
+    scalePreferenceRef.current = 'page-width'
+    applyPdfScalePreference(viewer, 'page-width', SCALE_BOUNDS)
+  }, [])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       const platform = getShortcutPlatform()
@@ -158,48 +203,18 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
       }
       if (keybindingMatchesAction('zoom.in', e, platform, keybindings)) {
         e.preventDefault()
-        const viewer = pdfViewerRef.current
-        if (viewer) {
-          viewer.currentScale = Math.min(MAX_SCALE, viewer.currentScale * SCALE_STEP)
-        }
+        zoomIn()
       } else if (keybindingMatchesAction('zoom.out', e, platform, keybindings)) {
         e.preventDefault()
-        const viewer = pdfViewerRef.current
-        if (viewer) {
-          viewer.currentScale = Math.max(MIN_SCALE, viewer.currentScale / SCALE_STEP)
-        }
+        zoomOut()
       } else if (keybindingMatchesAction('zoom.reset', e, platform, keybindings)) {
         e.preventDefault()
-        const viewer = pdfViewerRef.current
-        if (viewer) {
-          viewer.currentScaleValue = 'page-width'
-        }
+        zoomReset()
       }
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [keybindings])
-
-  const zoomIn = useCallback(() => {
-    const viewer = pdfViewerRef.current
-    if (viewer) {
-      viewer.currentScale = Math.min(MAX_SCALE, viewer.currentScale * SCALE_STEP)
-    }
-  }, [])
-
-  const zoomOut = useCallback(() => {
-    const viewer = pdfViewerRef.current
-    if (viewer) {
-      viewer.currentScale = Math.max(MIN_SCALE, viewer.currentScale / SCALE_STEP)
-    }
-  }, [])
-
-  const zoomReset = useCallback(() => {
-    const viewer = pdfViewerRef.current
-    if (viewer) {
-      viewer.currentScaleValue = 'page-width'
-    }
-  }, [])
+  }, [keybindings, zoomIn, zoomOut, zoomReset])
 
   const zoomPercent = Math.round(scale * 100)
 
@@ -215,7 +230,7 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
           <span className="min-w-0 truncate" title={filename}>
             {filename}
           </span>
-          <span>PDF preview</span>
+          <span>{translate('auto.components.editor.PdfViewer.3e98d500d2', 'PDF preview')}</span>
         </div>
       </div>
     )
@@ -251,7 +266,7 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
             className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
             onClick={zoomOut}
             disabled={scale <= MIN_SCALE}
-            title="Zoom out"
+            title={translate('auto.components.editor.PdfViewer.fa5d096b00', 'Zoom out')}
           >
             <ZoomOut size={14} />
           </button>
@@ -259,7 +274,7 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
             type="button"
             className="rounded p-1 hover:bg-accent hover:text-foreground"
             onClick={zoomReset}
-            title="Fit to width"
+            title={translate('auto.components.editor.PdfViewer.c0119616d6', 'Fit to width')}
           >
             <RotateCcw size={14} />
           </button>
@@ -268,7 +283,7 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
             className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
             onClick={zoomIn}
             disabled={scale >= MAX_SCALE}
-            title="Zoom in"
+            title={translate('auto.components.editor.PdfViewer.2b6eb1ccd6', 'Zoom in')}
           >
             <ZoomIn size={14} />
           </button>
@@ -278,14 +293,18 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
           type="button"
           className="rounded p-1 hover:bg-accent hover:text-foreground"
           onClick={() => setFindOpen(true)}
-          title={`Find in PDF (${findShortcutLabel})`}
+          title={translate(
+            'auto.components.editor.PdfViewer.069ff59932',
+            'Find in PDF ({{value0}})',
+            { value0: findShortcutLabel }
+          )}
         >
           <Search size={14} />
         </button>
         <span className="min-w-0 truncate" title={filename}>
           {filename}
         </span>
-        <span>PDF preview</span>
+        <span>{translate('auto.components.editor.PdfViewer.3e98d500d2', 'PDF preview')}</span>
       </div>
     </div>
   )

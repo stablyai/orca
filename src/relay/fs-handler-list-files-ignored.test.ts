@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn()
@@ -8,11 +8,21 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-import { EventEmitter } from 'events'
-import type { ChildProcess } from 'child_process'
+import { EventEmitter } from 'node:events'
+import type { ChildProcess } from 'node:child_process'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { listFilesWithGit } from './fs-handler-git-fallback'
 import { listFilesWithRg } from './fs-handler-list-files'
 import { searchWithRg } from './fs-handler-utils'
+
+const tempDirs: string[] = []
+const SHA1 = '0123456789abcdef0123456789abcdef01234567'
+
+function staged(mode: string, path: string): string {
+  return `${mode} ${SHA1} 0\t${path}`
+}
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
@@ -29,9 +39,25 @@ function createMockProcess(): ChildProcess {
   return p
 }
 
+async function makeTempRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'orca-relay-git-list-files-'))
+  tempDirs.push(root)
+  return root
+}
+
+async function writeRel(root: string, relPath: string, content = 'x'): Promise<void> {
+  const absPath = join(root, ...relPath.split('/'))
+  await mkdir(dirname(absPath), { recursive: true })
+  await writeFile(absPath, content)
+}
+
 describe('relay quick open ignored file listing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
   })
 
   it('rg ignored pass includes ignored non-env files and keeps blocklists/excludes', async () => {
@@ -71,7 +97,27 @@ describe('relay quick open ignored file listing', () => {
     expect(ignoredArgs).toContain('!packages/other/**')
   })
 
+  it('stops after the primary relay rg pass fills the result budget', async () => {
+    const primaryProc = createMockProcess()
+    const ignoredProc = createMockProcess()
+    let callIndex = 0
+    spawnMock.mockImplementation(() => (++callIndex === 1 ? primaryProc : ignoredProc))
+
+    const promise = listFilesWithRg('/remote/root', [], { maxResults: 2 })
+    ;(primaryProc.stdout as unknown as EventEmitter).emit(
+      'data',
+      'src/one.ts\nsrc/two.ts\nsrc/three.ts\n'
+    )
+
+    await expect(promise).resolves.toEqual(['src/one.ts', 'src/two.ts'])
+    expect(primaryProc.kill).toHaveBeenCalled()
+    expect(ignoredProc.kill).not.toHaveBeenCalled()
+    expect(callIndex).toBe(1)
+  })
+
   it('git fallback ignored pass includes ignored non-env files', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'dist/generated.js')
     const primaryProc = createMockProcess()
     const ignoredProc = createMockProcess()
     let callIndex = 0
@@ -81,35 +127,167 @@ describe('relay quick open ignored file listing', () => {
       return callIndex === 1 ? primaryProc : ignoredProc
     })
 
-    const promise = listFilesWithGit('/remote/root', ['packages/other'])
+    const promise = listFilesWithGit(root, ['packages/other'])
 
     setTimeout(() => {
-      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
-      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'tab\tfile.txt\0')
+      ;(primaryProc.stdout as unknown as EventEmitter).emit(
+        'data',
+        `${staged('100644', 'src/index.ts')}\0`
+      )
+      ;(primaryProc.stdout as unknown as EventEmitter).emit(
+        'data',
+        `${staged('100644', 'tab\tfile.txt')}\0`
+      )
       primaryProc.emit('close', 0, null)
 
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/\0')
       ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\0')
       ignoredProc.emit('close', 0, null)
     }, 10)
 
-    await expect(promise).resolves.toEqual(['src/index.ts', 'tab\tfile.txt', 'dist/generated.js'])
+    await expect(promise).resolves.toEqual(['dist/generated.js', 'src/index.ts', 'tab\tfile.txt'])
 
     const ignoredArgs = spawnMock.mock.calls[1][1] as string[]
-    expect(ignoredArgs).toEqual([
+    expect(ignoredArgs.slice(0, 6)).toEqual([
       'ls-files',
       '-z',
+      '-s',
       '--others',
       '--ignored',
-      '--exclude-standard',
-      '--',
-      '.',
-      ':(exclude,glob)packages/other',
-      ':(exclude,glob)packages/other/**'
+      '--exclude-standard'
+    ])
+    expect(ignoredArgs).toContain('--')
+    expect(ignoredArgs).toContain('.')
+    expect(ignoredArgs).toContain('--directory')
+    expect(ignoredArgs).toContain('--no-empty-directory')
+    expect(ignoredArgs).toContain(':(exclude,glob)packages/other')
+    expect(ignoredArgs).toContain(':(exclude,glob)packages/other/**')
+  })
+
+  it('stops after primary relay Git files fill the result budget', async () => {
+    const primaryProc = createMockProcess()
+    const ignoredProc = createMockProcess()
+    let callIndex = 0
+    spawnMock.mockImplementation(() => (++callIndex === 1 ? primaryProc : ignoredProc))
+
+    const promise = listFilesWithGit('/remote/root', [], { maxResults: 2 })
+    ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/one.ts\0src/two.ts')
+    primaryProc.emit('close', 0, null)
+    await expect(promise).resolves.toEqual(['src/one.ts', 'src/two.ts'])
+    expect(primaryProc.kill).toHaveBeenCalled()
+    expect(ignoredProc.kill).not.toHaveBeenCalled()
+    expect(callIndex).toBe(1)
+  })
+
+  it('does not let a discarded relay Git placeholder consume the result budget', async () => {
+    const primaryProc = createMockProcess()
+    spawnMock.mockReturnValue(primaryProc)
+
+    const promise = listFilesWithGit('/remote/root', [], { maxResults: 1 })
+    ;(primaryProc.stdout as unknown as EventEmitter).emit(
+      'data',
+      `discarded/\0${staged('100644', 'src/kept.ts')}\0`
+    )
+
+    await expect(promise).resolves.toEqual(['src/kept.ts'])
+    expect(primaryProc.kill).toHaveBeenCalled()
+  })
+
+  it('git fallback fills nested git repos returned as root-relative placeholders', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'README.md')
+    await mkdir(join(root, 'packages', 'app', '.git'), { recursive: true })
+    await writeRel(root, 'packages/app/src/main.ts')
+    await mkdir(join(root, 'packages', 'lib'), { recursive: true })
+    await writeFile(join(root, 'packages', 'lib', '.git'), 'gitdir: ../.git/worktrees/lib')
+    await writeRel(root, 'packages/lib/src/lib.ts')
+
+    const primaryProc = createMockProcess()
+    const ignoredProc = createMockProcess()
+    let callIndex = 0
+
+    spawnMock.mockImplementation(() => {
+      callIndex++
+      return callIndex === 1 ? primaryProc : ignoredProc
+    })
+
+    const promise = listFilesWithGit(root)
+
+    setTimeout(() => {
+      ;(primaryProc.stdout as unknown as EventEmitter).emit(
+        'data',
+        `${staged('100644', 'README.md')}\0${staged('160000', 'packages/app')}\0packages/lib/\0`
+      )
+      primaryProc.emit('close', 0, null)
+      ignoredProc.emit('close', 0, null)
+    }, 10)
+
+    await expect(promise).resolves.toEqual([
+      'README.md',
+      'packages/app/src/main.ts',
+      'packages/lib/src/lib.ts'
     ])
   })
 
-  it('git fallback rejects signal exits instead of returning partial results', async () => {
+  it('git fallback keeps primary results when the ignored pass is killed', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const primaryProc = createMockProcess()
+      const ignoredProc = createMockProcess()
+      let callIndex = 0
+
+      spawnMock.mockImplementation(() => {
+        callIndex++
+        return callIndex === 1 ? primaryProc : ignoredProc
+      })
+
+      const promise = listFilesWithGit('/remote/root')
+
+      setTimeout(() => {
+        ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
+        primaryProc.emit('close', 0, null)
+
+        // Entries streamed before the kill are kept alongside the primary pass.
+        ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+        ignoredProc.emit('close', null, 'SIGTERM')
+      }, 10)
+
+      await expect(promise).resolves.toEqual(['dist/generated.js', 'src/index.ts'])
+      expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('git fallback keeps primary results when the ignored pass exits non-zero', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const primaryProc = createMockProcess()
+      const ignoredProc = createMockProcess()
+      let callIndex = 0
+
+      spawnMock.mockImplementation(() => {
+        callIndex++
+        return callIndex === 1 ? primaryProc : ignoredProc
+      })
+
+      const promise = listFilesWithGit('/remote/root')
+
+      setTimeout(() => {
+        ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
+        primaryProc.emit('close', 0, null)
+
+        ignoredProc.emit('close', 128, null)
+      }, 10)
+
+      await expect(promise).resolves.toEqual(['src/index.ts'])
+      expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('git fallback rejects when the primary pass is killed', async () => {
     const primaryProc = createMockProcess()
     const ignoredProc = createMockProcess()
     let callIndex = 0
@@ -123,13 +301,35 @@ describe('relay quick open ignored file listing', () => {
 
     setTimeout(() => {
       ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
-      primaryProc.emit('close', 0, null)
+      primaryProc.emit('close', null, 'SIGTERM')
 
       ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
-      ignoredProc.emit('close', null, 'SIGTERM')
+      ignoredProc.emit('close', 0, null)
     }, 10)
 
     await expect(promise).rejects.toThrow('git ls-files killed by SIGTERM')
+  })
+
+  it('git fallback rejects when the primary pass exits non-zero', async () => {
+    const primaryProc = createMockProcess()
+    const ignoredProc = createMockProcess()
+    let callIndex = 0
+
+    spawnMock.mockImplementation(() => {
+      callIndex++
+      return callIndex === 1 ? primaryProc : ignoredProc
+    })
+
+    const promise = listFilesWithGit('/remote/root')
+
+    setTimeout(() => {
+      primaryProc.emit('close', 128, null)
+
+      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+      ignoredProc.emit('close', 0, null)
+    }, 10)
+
+    await expect(promise).rejects.toThrow('git ls-files exited with code 128')
   })
 
   it('git fallback rejects when a timed-out child does not emit close', async () => {

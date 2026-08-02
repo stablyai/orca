@@ -1,12 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildMarkdownTableOfContents,
   stripInlineMarkdownForToc
 } from './markdown-table-of-contents'
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('markdown table of contents', () => {
-  it('builds a nested h1-h3 outline', () => {
-    const toc = buildMarkdownTableOfContents('# Intro\n\n## Setup\n\n### Install\n\n## Usage')
+  it('builds a nested h1-h5 outline', () => {
+    const toc = buildMarkdownTableOfContents(
+      '# Intro\n\n## Setup\n\n### Install\n\n#### Configure\n\n##### Options\n\n## Usage'
+    )
 
     expect(toc).toEqual([
       {
@@ -23,7 +29,21 @@ describe('markdown table of contents', () => {
                 id: 'install',
                 level: 3,
                 title: 'Install',
-                children: []
+                children: [
+                  {
+                    id: 'configure',
+                    level: 4,
+                    title: 'Configure',
+                    children: [
+                      {
+                        id: 'options',
+                        level: 5,
+                        title: 'Options',
+                        children: []
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           },
@@ -39,7 +59,7 @@ describe('markdown table of contents', () => {
   })
 
   it('skips front matter and unsupported heading depths', () => {
-    const toc = buildMarkdownTableOfContents('---\ntitle: Doc\n---\n# Visible\n#### Hidden')
+    const toc = buildMarkdownTableOfContents('---\ntitle: Doc\n---\n# Visible\n###### Hidden')
 
     expect(toc.map((item) => item.title)).toEqual(['Visible'])
   })
@@ -97,5 +117,16 @@ describe('markdown table of contents', () => {
     expect(stripInlineMarkdownForToc('Use **bold** [links](./x) and [[docs|Docs]]')).toBe(
       'Use bold links and Docs'
     )
+  })
+
+  it('folds large pasted heading whitespace without global whitespace replacement', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const toc = buildMarkdownTableOfContents(`# ${'Large   heading\ttext '.repeat(120)}`)
+
+    expect(toc[0].title).toContain('Large heading text Large heading text')
+    const usedWhitespaceReplace = replaceSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+    )
+    expect(usedWhitespaceReplace).toBe(false)
   })
 })

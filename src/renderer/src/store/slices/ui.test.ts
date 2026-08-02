@@ -1,14 +1,17 @@
 /* eslint-disable max-lines */
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultUIState } from '../../../../shared/constants'
+import { getDefaultUIState, getWorktreeCardModeProperties } from '../../../../shared/constants'
 import type {
   GitHubWorkItem,
+  JiraIssue,
+  LinearIssue,
   PersistedUIState,
+  Repo,
   TerminalTab,
-  Worktree,
-  WorktreeCardProperty
+  Worktree
 } from '../../../../shared/types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createSettingsSearchState } from './settings-search-state'
@@ -18,17 +21,24 @@ import type { FeatureInteractionState } from '../../../../shared/feature-interac
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
+import { getRepoHostIdentityForParts } from './repo-host-identity'
 
 const mocks = vi.hoisted(() => ({
-  sendBracketedPasteToRunningAgent: vi.fn(),
+  sendNotesToActiveAgentSession: vi.fn(),
   track: vi.fn(),
   toastMessage: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn()
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
-  sendBracketedPasteToRunningAgent: mocks.sendBracketedPasteToRunningAgent
+vi.mock('@/lib/active-agent-note-send', () => ({
+  activeAgentNotesSendFailureMessage: (
+    status: string,
+    options: { explicitTarget?: boolean } = {}
+  ) => (options.explicitTarget ? `selected:${status}` : status),
+  sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
 }))
 
 vi.mock('@/lib/telemetry', () => ({
@@ -49,7 +59,8 @@ afterEach(() => {
 })
 
 beforeEach(() => {
-  mocks.sendBracketedPasteToRunningAgent.mockReset()
+  mocks.sendNotesToActiveAgentSession.mockReset()
+  mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'sent' })
   mocks.track.mockReset()
   mocks.toastMessage.mockReset()
   mocks.toastSuccess.mockReset()
@@ -66,6 +77,10 @@ function createUIStore(): StoreApi<AppState> {
     worktreesByRepo: {},
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
+    markdownTocPanelWidth: 240,
+    combinedDiffFileTreeWidth: 256,
+    rightSidebarTab: 'explorer',
+    rightSidebarExplorerView: 'files',
     ...createSettingsSearchState(args[0]),
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
@@ -113,6 +128,60 @@ function makeGitHubWorkItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWork
     updatedAt: '2026-05-20T00:00:00.000Z',
     author: 'octocat',
     repoId: 'repo-1',
+    ...overrides
+  }
+}
+
+function makeLinearIssue(overrides: Partial<LinearIssue> = {}): LinearIssue {
+  return {
+    id: 'lin-1',
+    identifier: 'ORC-1',
+    title: 'Fix task flow',
+    url: 'https://linear.app/orca/issue/ORC-1/fix-task-flow',
+    state: { name: 'Todo', type: 'unstarted', color: '#999' },
+    priority: 0,
+    estimate: null,
+    assignee: null,
+    labels: [],
+    labelIds: [],
+    team: { id: 'team-1', name: 'Orca', key: 'ORC' },
+    workspaceId: 'workspace-1',
+    updatedAt: '2026-05-30T00:00:00.000Z',
+    createdAt: '2026-05-30T00:00:00.000Z',
+    ...overrides
+  } as LinearIssue
+}
+
+function makeGitLabWorkItem(overrides: Partial<GitLabWorkItem> = {}): GitLabWorkItem {
+  return {
+    id: 'mr-12',
+    type: 'mr',
+    number: 12,
+    title: 'Fix runner routing',
+    state: 'opened',
+    url: 'https://gitlab.com/acme/repo/-/merge_requests/12',
+    labels: [],
+    updatedAt: '2026-05-30T00:00:00.000Z',
+    author: 'gitlab-user',
+    repoId: 'repo-1',
+    ...overrides
+  }
+}
+
+function makeJiraIssue(overrides: Partial<JiraIssue> = {}): JiraIssue {
+  return {
+    id: 'ORC-1',
+    key: 'ORC-1',
+    title: 'Fix task source context',
+    url: 'https://example.atlassian.net/browse/ORC-1',
+    siteId: 'site-1',
+    siteName: 'Example Jira',
+    project: { id: '10000', key: 'ORC', name: 'Orca', siteId: 'site-1' },
+    issueType: { id: '10001', name: 'Bug' },
+    status: { id: '1', name: 'Todo', categoryKey: 'new', categoryName: 'To Do' },
+    labels: [],
+    createdAt: '2026-05-30T00:00:00.000Z',
+    updatedAt: '2026-05-30T00:00:00.000Z',
     ...overrides
   }
 }
@@ -173,6 +242,9 @@ describe('createUISlice agent send target mode', () => {
           }
         }
       },
+      ptyIdsByTabId: {
+        [tabId]: ['pty-ready', 'pty-working']
+      },
       agentStatusByPaneKey: {
         [readyPaneKey]: {
           state: 'done',
@@ -211,10 +283,8 @@ describe('createUISlice agent send target mode', () => {
 
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
       id: 'send-1',
-      eligiblePaneKeys: [readyPaneKey],
-      disabledPaneKeys: {
-        [workingPaneKey]: 'Agent is working'
-      },
+      eligiblePaneKeys: [readyPaneKey, workingPaneKey],
+      disabledPaneKeys: {},
       status: 'open'
     })
     expect(store.getState().pendingRevealWorktree).toMatchObject({
@@ -222,6 +292,43 @@ describe('createUISlice agent send target mode', () => {
       behavior: 'auto',
       highlight: true
     })
+  })
+
+  it('disables sidebar target rows that need permission', async () => {
+    const store = createUIStore()
+    seedAgentSendState(store)
+    const agentStatusByPaneKey = store.getState().agentStatusByPaneKey
+    store.setState({
+      agentStatusByPaneKey: {
+        ...agentStatusByPaneKey,
+        [workingPaneKey]: {
+          ...agentStatusByPaneKey[workingPaneKey]!,
+          state: 'blocked'
+        }
+      }
+    } as Partial<AppState>)
+
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      eligiblePaneKeys: [readyPaneKey],
+      disabledPaneKeys: {
+        [workingPaneKey]: 'Agent needs permission'
+      },
+      status: 'open'
+    })
+    await expect(store.getState().sendPromptToSidebarAgentTarget(workingPaneKey)).resolves.toBe(
+      false
+    )
+    expect(mocks.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
   })
 
   it('does not reveal the sidebar when the current workspace has no eligible targets', () => {
@@ -238,8 +345,14 @@ describe('createUISlice agent send target mode', () => {
           },
           activeLeafId: readyLeafId,
           expandedLeafId: null,
-          ptyIdsByLeafId: {}
+          ptyIdsByLeafId: {
+            [readyLeafId]: 'pty-ready',
+            [workingLeafId]: 'pty-working'
+          }
         }
+      },
+      ptyIdsByTabId: {
+        [tabId]: []
       }
     })
 
@@ -267,7 +380,6 @@ describe('createUISlice agent send target mode', () => {
     const store = createUIStore()
     const onPromptDelivered = vi.fn()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(true)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -280,9 +392,10 @@ describe('createUISlice agent send target mode', () => {
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)).resolves.toBe(true)
 
-    expect(mocks.sendBracketedPasteToRunningAgent).toHaveBeenCalledWith({
-      ptyId: 'pty-ready',
-      content: 'Review this'
+    expect(mocks.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
+      worktreeId,
+      prompt: 'Review this',
+      noteTarget: { tabId, leafId: readyLeafId }
     })
     expect(onPromptDelivered).toHaveBeenCalledTimes(1)
     expect(mocks.track).toHaveBeenCalledWith('agent_prompt_sent', {
@@ -298,7 +411,7 @@ describe('createUISlice agent send target mode', () => {
     const store = createUIStore()
     const onPromptDelivered = vi.fn()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(false)
+    mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'not-ready' })
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -314,19 +427,18 @@ describe('createUISlice agent send target mode', () => {
     expect(onPromptDelivered).not.toHaveBeenCalled()
     expect(mocks.track).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith("Couldn't send to Codex", {
-      description: 'Terminal is no longer available'
+      description: 'selected:not-ready'
     })
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
       id: 'send-1',
       status: 'error',
-      error: 'Terminal is no longer available'
+      error: 'selected:not-ready'
     })
   })
 
-  it('does not send to a working agent row', async () => {
+  it('sends to a working agent row through the selected-target note helper', async () => {
     const store = createUIStore()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(true)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -337,29 +449,32 @@ describe('createUISlice agent send target mode', () => {
     })
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(workingPaneKey)).resolves.toBe(
-      false
+      true
     )
 
-    expect(mocks.sendBracketedPasteToRunningAgent).not.toHaveBeenCalled()
-    expect(mocks.toastSuccess).not.toHaveBeenCalled()
-    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
-      id: 'send-1',
-      status: 'open'
+    expect(mocks.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
+      worktreeId,
+      prompt: 'Review this',
+      noteTarget: { tabId, leafId: workingLeafId }
     })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Codex')
+    expect(store.getState().agentSendPopoverTargetMode).toBeNull()
   })
 
   it('does not let an older send close a reopened popover with the same id', async () => {
     const store = createUIStore()
-    const write = deferred<boolean>()
+    const onPromptDelivered = vi.fn()
+    const write = deferred<{ status: 'sent' }>()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockReturnValue(write.promise)
+    mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
       source: 'diff-notes',
       prompt: 'Review this',
       label: 'All unsent notes',
-      launchSource: 'notes_send'
+      launchSource: 'notes_send',
+      onPromptDelivered
     })
 
     const send = store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)
@@ -374,8 +489,8 @@ describe('createUISlice agent send target mode', () => {
     })
     const reopenedMode = store.getState().agentSendPopoverTargetMode
 
-    write.resolve(true)
-    await expect(send).resolves.toBe(true)
+    write.resolve({ status: 'sent' })
+    await expect(send).resolves.toBe(false)
 
     expect(store.getState().agentSendPopoverTargetMode).toBe(reopenedMode)
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
@@ -383,13 +498,60 @@ describe('createUISlice agent send target mode', () => {
       prompt: 'Review this again',
       status: 'open'
     })
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+    expect(mocks.track).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('does not let an older send failure mutate a reopened popover with the same id', async () => {
+    const store = createUIStore()
+    const onPromptDelivered = vi.fn()
+    const write = deferred<{ status: 'not-ready' }>()
+    seedAgentSendState(store)
+    mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send',
+      onPromptDelivered
+    })
+
+    const send = store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)
+    store.getState().closeAgentSendPopoverTargetMode('send-1')
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this again',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+    const reopenedMode = store.getState().agentSendPopoverTargetMode
+
+    write.resolve({ status: 'not-ready' })
+    await expect(send).resolves.toBe(false)
+
+    expect(store.getState().agentSendPopoverTargetMode).toBe(reopenedMode)
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      prompt: 'Review this again',
+      status: 'open'
+    })
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+    expect(mocks.track).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('does not retarget the same popover while a send is in progress', async () => {
     const store = createUIStore()
-    const write = deferred<boolean>()
+    const write = deferred<{ status: 'sent' }>()
     seedAgentSendState(store)
-    mocks.sendBracketedPasteToRunningAgent.mockReturnValue(write.promise)
+    mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -418,7 +580,7 @@ describe('createUISlice agent send target mode', () => {
       sendingPaneKey: readyPaneKey
     })
 
-    write.resolve(true)
+    write.resolve({ status: 'sent' })
     await expect(send).resolves.toBe(true)
   })
 })
@@ -559,6 +721,107 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().showSleepingWorkspaces).toBe(true)
   })
 
+  it('defaults workspace host scope to all hosts', () => {
+    expect(getDefaultUIState().workspaceHostScope).toBe('all')
+    expect(createUIStore().getState().workspaceHostScope).toBe('all')
+    expect(getDefaultUIState().visibleWorkspaceHostIds).toBeNull()
+    expect(createUIStore().getState().visibleWorkspaceHostIds).toBeNull()
+    expect(getDefaultUIState().workspaceHostOrder).toEqual([])
+    expect(createUIStore().getState().workspaceHostOrder).toEqual([])
+    expect(getDefaultUIState().manualRepoOrder).toEqual([])
+    expect(createUIStore().getState().manualRepoOrder).toEqual([])
+  })
+
+  it('defaults the persisted active view to terminal', () => {
+    expect(getDefaultUIState().activeView).toBe('terminal')
+    expect(createUIStore().getState().activeView).toBe('terminal')
+  })
+
+  it('restores the persisted active top-level view on hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'tasks' }), 'startup')
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('falls back to terminal when persisted active view is missing (older data)', () => {
+    const store = createUIStore()
+    store.setState({ activeView: 'tasks' })
+
+    store.getState().hydratePersistedUI(
+      {
+        ...makePersistedUI(),
+        activeView: undefined as unknown as PersistedUIState['activeView']
+      },
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('falls back to terminal when the persisted active view is not a known view', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        activeView: 'not-a-real-view' as unknown as PersistedUIState['activeView']
+      }),
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('drops a persisted activity view when experimental activity is disabled', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { experimentalActivity: false } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('restores a persisted activity view when experimental activity is enabled', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { experimentalActivity: true } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
+
+    expect(store.getState().activeView).toBe('activity')
+  })
+
+  it('restores a default-on view (mobile) even when its nav button is hidden', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { showMobileButton: false } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'mobile' }), 'startup')
+
+    expect(store.getState().activeView).toBe('mobile')
+  })
+
+  it('does not overwrite the current view on a later cross-window sync hydration', () => {
+    const store = createUIStore()
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'tasks' }), 'startup')
+    expect(store.getState().activeView).toBe('tasks')
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ activeView: 'terminal', rightSidebarOpen: false }),
+        'sync'
+      )
+
+    expect(store.getState().activeView).toBe('tasks')
+    expect(store.getState().rightSidebarOpen).toBe(false)
+  })
+
   it('preserves the current right sidebar width when older persisted UI omits it', () => {
     const store = createUIStore()
 
@@ -593,6 +856,255 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'checks' }))
 
     expect(store.getState().rightSidebarTab).toBe('checks')
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+  })
+
+  it('preserves persisted repo filters until repos are loaded', () => {
+    const store = createUIStore()
+    const remoteDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('remote-repo', 'runtime:env-1')
+    )
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterRepoIds: ['remote-repo', 12 as never, 'stale-repo'],
+        trustedOrcaHooks: {
+          'remote-repo': { all: { approvedAt: 1 } },
+          'bad-shape': 'yes' as never
+        },
+        setupScriptPromptDismissedRepoIds: [remoteDismissalKey, 'remote-repo', remoteDismissalKey]
+      })
+    )
+
+    expect(store.getState().filterRepoIds).toEqual(['remote-repo', 'stale-repo'])
+    expect(store.getState().trustedOrcaHooks).toEqual({
+      'remote-repo': { all: { approvedAt: 1 } }
+    })
+    expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([remoteDismissalKey])
+  })
+
+  it('validates persisted repo filters when repos are already loaded', () => {
+    const store = createUIStore()
+    const localDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('local-repo', 'local')
+    )
+    const staleDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('stale-repo', 'local')
+    )
+    store.setState({
+      repos: [
+        { id: 'local-repo', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 1 }
+      ]
+    } as Partial<AppState>)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterRepoIds: ['local-repo', 'stale-repo'],
+        trustedOrcaHooks: {
+          'local-repo': { all: { approvedAt: 1 } },
+          'stale-repo': { all: { approvedAt: 2 } }
+        },
+        setupScriptPromptDismissedRepoIds: [localDismissalKey, staleDismissalKey]
+      })
+    )
+
+    expect(store.getState().filterRepoIds).toEqual(['local-repo'])
+    expect(store.getState().trustedOrcaHooks).toEqual({
+      'local-repo': { all: { approvedAt: 1 } }
+    })
+    expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([localDismissalKey])
+  })
+
+  it('hydrates legacy persisted search tab as Explorer search', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'search' }))
+
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
+  })
+
+  it('hydrates persisted Explorer search view', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ rightSidebarTab: 'explorer', rightSidebarExplorerView: 'search' })
+      )
+
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
+  })
+
+  it('hydrates a persisted workspace host scope', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ workspaceHostScope: 'ssh:win%20vm' }))
+
+    expect(store.getState().workspaceHostScope).toBe('ssh:win%20vm')
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['ssh:win%20vm'])
+  })
+
+  it('hydrates a persisted visible workspace host set', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceHostScope: 'ssh:win%20vm',
+        visibleWorkspaceHostIds: [
+          'local',
+          'ssh:win%20vm',
+          'bogus' as NonNullable<PersistedUIState['visibleWorkspaceHostIds']>[number],
+          'local'
+        ]
+      })
+    )
+
+    expect(store.getState().workspaceHostScope).toBe('ssh:win%20vm')
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['local', 'ssh:win%20vm'])
+  })
+
+  it('hydrates a persisted workspace host order', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceHostOrder: [
+          'ssh:win%20vm',
+          'bogus' as NonNullable<PersistedUIState['workspaceHostOrder']>[number],
+          'local',
+          'ssh:win%20vm'
+        ]
+      })
+    )
+
+    expect(store.getState().workspaceHostOrder).toEqual(['ssh:win%20vm', 'local'])
+  })
+
+  it('hydrates and immediately applies the manual cross-host repo order', () => {
+    const store = createUIStore()
+    const local: Repo = {
+      id: 'same',
+      path: '/local',
+      displayName: 'Local',
+      badgeColor: '#000',
+      addedAt: 1,
+      executionHostId: 'local'
+    }
+    const remote: Repo = {
+      ...local,
+      path: '/remote',
+      displayName: 'Remote',
+      executionHostId: 'runtime:node-b'
+    }
+    store.setState({ repos: [local, remote] })
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        manualRepoOrder: [
+          { hostId: 'runtime:node-b', repoId: 'same' },
+          { hostId: 'invalid' as never, repoId: 'ignored' },
+          { hostId: 'local', repoId: 'same' }
+        ]
+      })
+    )
+
+    expect(store.getState().manualRepoOrder).toEqual([
+      { hostId: 'runtime:node-b', repoId: 'same' },
+      { hostId: 'local', repoId: 'same' }
+    ])
+    expect(store.getState().repos).toEqual([remote, local])
+  })
+
+  it('falls back to all hosts for invalid persisted workspace host scopes', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ workspaceHostScope: 'bogus' as PersistedUIState['workspaceHostScope'] })
+      )
+
+    expect(store.getState().workspaceHostScope).toBe('all')
+    expect(store.getState().visibleWorkspaceHostIds).toBeNull()
+  })
+
+  it('tracks the per-project settings host selection without persisting it', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setSettingsProjectHostSelection('git:acme/app', 'runtime:home-mac')
+
+    expect(store.getState().settingsProjectHostSelection).toEqual({
+      'git:acme/app': 'runtime:home-mac'
+    })
+    expect(store.getState().settingsProjectSetupSelection).toEqual({})
+
+    store
+      .getState()
+      .setSettingsProjectHostSelection('git:acme/app', 'runtime:home-mac', 'jump-setup')
+    expect(store.getState().settingsProjectSetupSelection).toEqual({
+      'git:acme/app': 'jump-setup'
+    })
+    // Ephemeral: never written through the UI persistence pipeline.
+    expect(setUI).not.toHaveBeenCalled()
+  })
+
+  it('persists workspace host scope changes', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setWorkspaceHostScope('runtime:env-1')
+
+    expect(store.getState().workspaceHostScope).toBe('runtime:env-1')
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['runtime:env-1'])
+    expect(setUI).toHaveBeenCalledWith({
+      workspaceHostScope: 'runtime:env-1',
+      visibleWorkspaceHostIds: ['runtime:env-1']
+    })
+  })
+
+  it('persists visible workspace host changes independently of focused host', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setWorkspaceHostScope('runtime:env-1')
+    store.getState().setVisibleWorkspaceHostIds(['local', 'runtime:env-1'])
+
+    expect(store.getState().workspaceHostScope).toBe('runtime:env-1')
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['local', 'runtime:env-1'])
+    expect(setUI).toHaveBeenLastCalledWith({
+      workspaceHostScope: 'runtime:env-1',
+      visibleWorkspaceHostIds: ['local', 'runtime:env-1']
+    })
+  })
+
+  it('persists workspace host order changes', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setWorkspaceHostOrder(['ssh:win%20vm', 'bogus' as never, 'local'])
+
+    expect(store.getState().workspaceHostOrder).toEqual(['ssh:win%20vm', 'local'])
+    expect(setUI).toHaveBeenCalledWith({ workspaceHostOrder: ['ssh:win%20vm', 'local'] })
+  })
+
+  it('persists group changes with collapsed groups cleared', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({ collapsedGroups: new Set(['repo:old']) })
+    store.getState().setGroupBy('none')
+
+    expect(store.getState().groupBy).toBe('none')
+    expect([...store.getState().collapsedGroups]).toEqual([])
+    expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
   })
 
   it('hydrates persisted per-worktree dotfile visibility', () => {
@@ -611,6 +1123,42 @@ describe('createUISlice hydratePersistedUI', () => {
       'repo-1::/repo': false,
       'repo-2::/repo': true
     })
+  })
+
+  it('does not churn persisted UI references when hydration is identical by value', () => {
+    const store = createUIStore()
+    const persistedUI = makePersistedUI({
+      featureTipsSeenIds: ['voice-dictation'],
+      contextualToursSeenIds: ['tasks'],
+      showDotfilesByWorktree: { 'repo-1::/repo': false },
+      collapsedGroups: ['repo:one'],
+      workspaceHostOrder: ['local'],
+      worktreeCardProperties: ['status', 'unread', 'ports'],
+      acknowledgedAgentsByPaneKey: { 'tab-1::pane-1': Date.now() }
+    })
+
+    store.getState().hydratePersistedUI(persistedUI)
+    const before = store.getState()
+    const references = {
+      acknowledgedAgentsByPaneKey: before.acknowledgedAgentsByPaneKey,
+      featureTipsSeenIds: before.featureTipsSeenIds,
+      contextualToursSeenIds: before.contextualToursSeenIds,
+      workspaceHostOrder: before.workspaceHostOrder,
+      showDotfilesByWorktree: before.showDotfilesByWorktree,
+      collapsedGroups: before.collapsedGroups,
+      worktreeCardProperties: before.worktreeCardProperties
+    }
+
+    store.getState().hydratePersistedUI(makePersistedUI({ ...persistedUI }))
+    const after = store.getState()
+
+    expect(after.acknowledgedAgentsByPaneKey).toBe(references.acknowledgedAgentsByPaneKey)
+    expect(after.featureTipsSeenIds).toBe(references.featureTipsSeenIds)
+    expect(after.contextualToursSeenIds).toBe(references.contextualToursSeenIds)
+    expect(after.workspaceHostOrder).toBe(references.workspaceHostOrder)
+    expect(after.showDotfilesByWorktree).toBe(references.showDotfilesByWorktree)
+    expect(after.collapsedGroups).toBe(references.collapsedGroups)
+    expect(after.worktreeCardProperties).toBe(references.worktreeCardProperties)
   })
 
   it('drops invalid persisted per-worktree dotfile visibility entries', () => {
@@ -659,6 +1207,7 @@ describe('createUISlice hydratePersistedUI', () => {
       )
 
     expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
   })
 
   it('clamps persisted sidebar widths into the supported range', () => {
@@ -673,6 +1222,28 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().sidebarWidth).toBe(220)
     expect(store.getState().rightSidebarWidth).toBe(220)
+  })
+
+  it('clamps persisted markdown toc panel widths into the supported range', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        markdownTocPanelWidth: 100
+      })
+    )
+
+    expect(store.getState().markdownTocPanelWidth).toBe(200)
+  })
+
+  it('clamps persisted combined diff file tree widths into the supported range', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeWidth: 100 }))
+    expect(store.getState().combinedDiffFileTreeWidth).toBe(200)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeWidth: 5_000 }))
+    expect(store.getState().combinedDiffFileTreeWidth).toBe(640)
   })
 
   it('preserves right sidebar widths above the former 500px cap', () => {
@@ -786,7 +1357,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
-  it('restores fixed card properties during hydration', () => {
+  it('restores selected card properties during hydration', () => {
     const store = createUIStore()
 
     store.getState().hydratePersistedUI(
@@ -798,7 +1369,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
   })
 
-  it('adds the default-on Ports status item once for older persisted UI', () => {
+  it('adds default-on status items once for older persisted UI', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -810,14 +1381,34 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports'])
+    expect(store.getState().statusBarItems).toEqual([
+      'claude',
+      'resource-usage',
+      'ports',
+      'kimi',
+      'minimax',
+      'antigravity',
+      'grok'
+    ])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports'],
-      _portsStatusBarDefaultAdded: true
+      statusBarItems: [
+        'claude',
+        'resource-usage',
+        'ports',
+        'kimi',
+        'minimax',
+        'antigravity',
+        'grok'
+      ],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true,
+      _minimaxStatusBarDefaultAdded: true,
+      _antigravityStatusBarDefaultAdded: true,
+      _grokStatusBarDefaultAdded: true
     })
   })
 
-  it('preserves a user-hidden Ports status item after the one-shot migration ran', () => {
+  it('preserves user-hidden default-on status items after one-shot migrations ran', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -825,12 +1416,94 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(
       makePersistedUI({
         statusBarItems: ['claude', 'resource-usage'],
-        _portsStatusBarDefaultAdded: true
+        _portsStatusBarDefaultAdded: true,
+        _kimiStatusBarDefaultAdded: true,
+        _minimaxStatusBarDefaultAdded: true,
+        _antigravityStatusBarDefaultAdded: true,
+        _grokStatusBarDefaultAdded: true
       })
     )
 
     expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage'])
     expect(setUI).not.toHaveBeenCalled()
+  })
+
+  it('persists and hydrates the usage percentage display preference', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setUsagePercentageDisplay('used')
+
+    expect(store.getState().usagePercentageDisplay).toBe('used')
+    // Why: adapting the control also permanently dismisses the one-time change notice.
+    expect(setUI).toHaveBeenCalledWith({
+      usagePercentageDisplay: 'used',
+      usagePercentageDisplayChangeNoticeDismissed: true
+    })
+    expect(store.getState().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ usagePercentageDisplay: 'remaining' }))
+    expect(store.getState().usagePercentageDisplay).toBe('remaining')
+  })
+
+  it('hydrates and dismisses the usage percentage display change notice', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ usagePercentageDisplayChangeNoticeDismissed: false }))
+    expect(store.getState().usagePercentageDisplayChangeNoticeDismissed).toBe(false)
+
+    store.getState().dismissUsagePercentageDisplayChangeNotice()
+    expect(store.getState().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
+    expect(setUI).toHaveBeenCalledWith({ usagePercentageDisplayChangeNoticeDismissed: true })
+
+    setUI.mockClear()
+    store.getState().dismissUsagePercentageDisplayChangeNotice()
+    expect(setUI).not.toHaveBeenCalled()
+  })
+
+  it('defaults invalid usage percentage display values to used', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        usagePercentageDisplay: 'left' as PersistedUIState['usagePercentageDisplay']
+      })
+    )
+
+    expect(store.getState().usagePercentageDisplay).toBe('used')
+  })
+
+  it('persists and hydrates the status bar usage mode', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    expect(store.getState().statusBarUsageMode).toBe('verbose')
+
+    store.getState().setStatusBarUsageMode('compact')
+
+    expect(store.getState().statusBarUsageMode).toBe('compact')
+    expect(setUI).toHaveBeenCalledWith({ statusBarUsageMode: 'compact' })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ statusBarUsageMode: 'verbose' }))
+    expect(store.getState().statusBarUsageMode).toBe('verbose')
+  })
+
+  it('defaults invalid status bar usage modes to verbose', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarUsageMode: 'expanded' as PersistedUIState['statusBarUsageMode']
+      })
+    )
+
+    expect(store.getState().statusBarUsageMode).toBe('verbose')
   })
 
   it('clamps persisted workspace board column width', () => {
@@ -845,6 +1518,26 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().workspaceBoardColumnWidth).toBe(520)
   })
 
+  it('defaults workspace board task status sync off and persists changes', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    expect(store.getState().syncTaskStatusFromWorkspaceBoard).toBe(false)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        syncTaskStatusFromWorkspaceBoard: true
+      })
+    )
+    expect(store.getState().syncTaskStatusFromWorkspaceBoard).toBe(true)
+
+    store.getState().setSyncTaskStatusFromWorkspaceBoard(false)
+
+    expect(store.getState().syncTaskStatusFromWorkspaceBoard).toBe(false)
+    expect(setUI).toHaveBeenCalledWith({ syncTaskStatusFromWorkspaceBoard: false })
+  })
+
   it('hydrates a valid Kagi session link', () => {
     const store = createUIStore()
 
@@ -855,6 +1548,29 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().browserKagiSessionLink).toBe('https://kagi.com/search?token=secret')
+  })
+
+  it('hydrates and normalizes the default browser zoom level', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        browserDefaultZoomLevel: 1.26
+      })
+    )
+
+    expect(store.getState().browserDefaultZoomLevel).toBe(1.5)
+  })
+
+  it('persists normalized default browser zoom changes', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setBrowserDefaultZoomLevel(10)
+
+    expect(store.getState().browserDefaultZoomLevel).toBe(5)
+    expect(setUI).toHaveBeenCalledWith({ browserDefaultZoomLevel: 5 })
   })
 
   it('drops an invalid Kagi session link during hydration', () => {
@@ -1121,17 +1837,69 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ taskResumeState: expected })
   })
 
-  it('keeps fixed card properties when toggling Agent activity', () => {
+  it('sets Default worktree card mode with matching settings and UI writes', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    const setSettings = vi.fn().mockResolvedValue({ compactWorktreeCards: false })
+    vi.stubGlobal('window', {
+      api: { ui: { set: setUI }, settings: { set: setSettings } }
+    })
+    const store = createUIStore()
+    store.setState({
+      settings: { compactWorktreeCards: true } as AppState['settings'],
+      worktreeCardProperties: ['status', 'branch']
+    })
+
+    store.getState().setWorktreeCardMode('Default')
+
+    const expected = getWorktreeCardModeProperties('Default')
+    expect(store.getState().settings?.compactWorktreeCards).toBe(false)
+    expect(store.getState().worktreeCardProperties).toEqual(expected)
+    expect(setSettings).toHaveBeenCalledWith({ compactWorktreeCards: false })
+    expect(setUI).toHaveBeenCalledWith({
+      worktreeCardProperties: expected,
+      _worktreeCardModeDefaulted: true
+    })
+  })
+
+  it('sets Compact worktree card mode and removes migrated branch', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    const setSettings = vi.fn().mockResolvedValue({ compactWorktreeCards: true })
+    vi.stubGlobal('window', {
+      api: { ui: { set: setUI }, settings: { set: setSettings } }
+    })
+    const store = createUIStore()
+    store.setState({
+      settings: { compactWorktreeCards: false } as AppState['settings'],
+      worktreeCardProperties: ['status', 'branch', 'inline-agents']
+    })
+
+    store.getState().setWorktreeCardMode('Compact')
+
+    const expected = getWorktreeCardModeProperties('Compact')
+    expect(store.getState().settings?.compactWorktreeCards).toBe(true)
+    expect(store.getState().worktreeCardProperties).toEqual(expected)
+    expect(store.getState().worktreeCardProperties).not.toContain('branch')
+    expect(store.getState().worktreeCardProperties).not.toContain('inline-agents')
+    expect(setSettings).toHaveBeenCalledWith({ compactWorktreeCards: true })
+    expect(setUI).toHaveBeenCalledWith({
+      worktreeCardProperties: expected,
+      _worktreeCardModeDefaulted: true
+    })
+  })
+
+  it('sets custom worktree card properties', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
 
-    store.setState({ worktreeCardProperties: ['inline-agents'] })
-    store.getState().toggleWorktreeCardProperty('inline-agents')
+    store.getState().setWorktreeCardProperties(['inline-agents', 'inline-agents'])
 
-    const expected: WorktreeCardProperty[] = ['status', 'unread']
-    expect(store.getState().worktreeCardProperties).toEqual(expected)
-    expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
+    expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
+    expect(store.getState()._worktreeCardModeDefaulted).toBe(false)
+    expect(setUI).toHaveBeenCalledWith({
+      worktreeCardProperties: ['status', 'unread', 'inline-agents'],
+      _worktreeCardModeDefaulted: false
+    })
   })
 
   it('persists the agent activity display mode', () => {
@@ -1159,6 +1927,28 @@ describe('createUISlice hydratePersistedUI', () => {
 })
 
 describe('createUISlice settings navigation', () => {
+  it('accepts a host-qualified setup guide target', () => {
+    const store = createUIStore()
+    store.getState().openSettingsTarget({ pane: 'setup-guide', repoId: null, hostId: 'ssh:host-1' })
+    expect(store.getState().settingsNavigationTarget).toEqual({
+      pane: 'setup-guide',
+      repoId: null,
+      hostId: 'ssh:host-1'
+    })
+  })
+
+  it('rejects malformed settings targets before storing them', () => {
+    const store = createUIStore()
+    const openSettingsTarget = store.getState().openSettingsTarget as unknown as (
+      target: unknown
+    ) => void
+
+    expect(() =>
+      openSettingsTarget({ pane: 'repo', repoId: 'repo-1', hostId: 'invalid' })
+    ).toThrowError('openSettingsTarget received an invalid navigation target')
+    expect(store.getState().settingsNavigationTarget).toBeNull()
+  })
+
   it('prefetches the restored default task source when provider settings drifted', () => {
     const store = createUIStore()
     const prefetchWorkItems = vi.fn()
@@ -1192,9 +1982,92 @@ describe('createUISlice settings navigation', () => {
       'repo-1',
       '/repo',
       expect.any(Number),
-      'is:issue is:open'
+      'is:issue is:open',
+      { sourceContext: null }
     )
     expect(prefetchLinearIssues).not.toHaveBeenCalled()
+  })
+
+  it('prefetches direct GitHub task opens with their source context', () => {
+    const store = createUIStore()
+    const prefetchWorkItems = vi.fn()
+    const workItem = makeGitHubWorkItem()
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'github',
+      projectId: 'project-1',
+      hostId: 'ssh:devbox',
+      projectHostSetupId: 'setup-1',
+      repoId: 'repo-1',
+      providerIdentity: { provider: 'github', owner: 'acme', repo: 'repo' }
+    }
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          kind: 'git'
+        }
+      ],
+      settings: {
+        visibleTaskProviders: ['github'],
+        defaultTaskSource: 'github',
+        defaultTaskViewPreset: 'all'
+      } as unknown as AppState['settings'],
+      prefetchWorkItems
+    } as unknown as Partial<AppState>)
+
+    store.getState().openTaskPage({
+      taskSource: 'github',
+      preselectedRepoId: 'repo-1',
+      openGitHubWorkItem: workItem,
+      openGitHubSourceContext: sourceContext
+    })
+
+    expect(prefetchWorkItems).toHaveBeenCalledWith(
+      'repo-1',
+      '/repo',
+      expect.any(Number),
+      'is:issue is:open',
+      { sourceContext }
+    )
+  })
+
+  it('prefetches direct Linear task opens with their source context', () => {
+    const store = createUIStore()
+    const prefetchLinearIssues = vi.fn()
+    const linearIssue = makeLinearIssue()
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'linear',
+      projectId: 'project-1',
+      hostId: 'runtime:remote-server',
+      providerIdentity: { provider: 'linear', workspaceId: 'workspace-1' }
+    }
+
+    store.setState({
+      settings: {
+        visibleTaskProviders: ['linear'],
+        defaultTaskSource: 'linear'
+      } as unknown as AppState['settings'],
+      linearStatus: { connected: true } as AppState['linearStatus'],
+      prefetchLinearIssues
+    } as unknown as Partial<AppState>)
+
+    store.getState().openTaskPage({
+      taskSource: 'linear',
+      openLinearIssue: linearIssue,
+      openLinearSourceContext: sourceContext
+    })
+
+    expect(prefetchLinearIssues).toHaveBeenCalledWith(
+      { kind: 'list', filter: 'all', limit: expect.any(Number) },
+      { sourceContext }
+    )
   })
 
   it('returns to the tasks page after visiting settings from an in-progress draft', () => {
@@ -1238,7 +2111,7 @@ describe('createUISlice settings navigation', () => {
 })
 
 describe('createUISlice new workspace draft', () => {
-  it('preserves Linear linked work item metadata and context', () => {
+  it('preserves Linear linked work item metadata', () => {
     const store = createUIStore()
 
     store.getState().setNewWorkspaceDraft({
@@ -1252,12 +2125,7 @@ describe('createUISlice new workspace draft', () => {
         number: 0,
         title: 'Fix launch context handoff',
         url: 'https://linear.app/acme/issue/ENG-123/fix-launch-context-handoff',
-        linearIdentifier: 'ENG-123',
-        linkedContext: {
-          provider: 'linear',
-          version: 1,
-          renderedText: 'Identifier: ENG-123'
-        }
+        linearIdentifier: 'ENG-123'
       },
       agent: 'claude',
       linkedIssue: '',
@@ -1267,12 +2135,7 @@ describe('createUISlice new workspace draft', () => {
     })
 
     expect(store.getState().newWorkspaceDraft?.linkedWorkItem).toMatchObject({
-      linearIdentifier: 'ENG-123',
-      linkedContext: {
-        provider: 'linear',
-        version: 1,
-        renderedText: 'Identifier: ENG-123'
-      }
+      linearIdentifier: 'ENG-123'
     })
   })
 
@@ -1305,6 +2168,53 @@ describe('createUISlice new workspace draft', () => {
       url: 'https://github.com/acme/repo/issues/42'
     })
   })
+
+  it('preserves serializable Jira identity and bound source context in drafts', () => {
+    const store = createUIStore()
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'ada@example.com'
+    }
+
+    store.getState().setNewWorkspaceDraft({
+      repoId: 'repo-1',
+      name: 'orca-123-link-jira',
+      prompt: '',
+      note: '',
+      attachments: [],
+      linkedWorkItem: {
+        provider: 'jira',
+        type: 'issue',
+        number: 0,
+        title: 'ORCA-123 Link Jira',
+        url: 'https://company.atlassian.net/browse/ORCA-123',
+        jiraIdentifier: 'ORCA-123'
+      },
+      linkedTaskSourceContext,
+      agent: 'claude',
+      linkedIssue: '',
+      linkedPR: null,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null
+    })
+
+    expect(store.getState().newWorkspaceDraft).toMatchObject({
+      linkedWorkItem: {
+        provider: 'jira',
+        jiraIdentifier: 'ORCA-123'
+      },
+      linkedTaskSourceContext
+    })
+  })
 })
 
 describe('createUISlice page navigation history', () => {
@@ -1332,7 +2242,13 @@ describe('createUISlice page navigation history', () => {
     expect(store.getState().worktreeNavHistory).toEqual([
       'a',
       'tasks',
-      { kind: 'task-detail', source: 'github', workItem, initialTab: undefined }
+      {
+        kind: 'task-detail',
+        source: 'github',
+        workItem,
+        sourceContext: undefined,
+        initialTab: undefined
+      }
     ])
     expect(store.getState().worktreeNavHistoryIndex).toBe(2)
 
@@ -1341,6 +2257,163 @@ describe('createUISlice page navigation history', () => {
     expect(store.getState().taskPageData).toEqual({})
     expect(store.getState().githubTaskDrawerWorkItem).toBeNull()
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('records provider-depth interactions for direct Tasks detail opens', () => {
+    const store = createUIStore()
+    const recordFeatureInteraction = vi.fn()
+    store.setState({ recordFeatureInteraction } as Partial<AppState>)
+    const workItem = makeGitHubWorkItem()
+    const linearIssue = makeLinearIssue()
+    const jiraIssue = makeJiraIssue()
+
+    store.getState().openTaskPage({ taskSource: 'github', openGitHubWorkItem: workItem })
+    store.getState().openTaskPage({ taskSource: 'linear', openLinearIssue: linearIssue })
+    store.getState().openTaskPage({ taskSource: 'jira', openJiraIssue: jiraIssue })
+
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('github-tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('linear-tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('jira-tasks')
+  })
+
+  it('preserves GitHub task detail source context in navigation history', () => {
+    const store = createUIStore()
+    const workItem = makeGitHubWorkItem({ repoId: 'repo-remote' })
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'github',
+      projectId: 'project-1',
+      hostId: 'ssh:devbox',
+      projectHostSetupId: 'setup-1',
+      repoId: 'repo-remote',
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+    }
+
+    store.getState().openTaskPage({
+      taskSource: 'github',
+      openGitHubWorkItem: workItem,
+      openGitHubSourceContext: sourceContext
+    })
+
+    expect(store.getState().worktreeNavHistory.at(-1)).toEqual({
+      kind: 'task-detail',
+      source: 'github',
+      workItem,
+      sourceContext,
+      initialTab: undefined
+    })
+  })
+
+  it('preserves Linear task detail source context in navigation history', () => {
+    const store = createUIStore()
+    const linearIssue = makeLinearIssue()
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'linear',
+      projectId: 'project-1',
+      hostId: 'runtime:remote-server',
+      providerIdentity: { provider: 'linear', workspaceId: 'workspace-1' }
+    }
+
+    store.getState().openTaskPage({
+      taskSource: 'linear',
+      openLinearIssue: linearIssue,
+      openLinearSourceContext: sourceContext
+    })
+
+    expect(store.getState().worktreeNavHistory.at(-1)).toEqual({
+      kind: 'task-detail',
+      source: 'linear',
+      issue: linearIssue,
+      sourceContext
+    })
+  })
+
+  it('preserves GitLab task detail source context in navigation history', () => {
+    const store = createUIStore()
+    const workItem = makeGitLabWorkItem({ repoId: 'repo-remote' })
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'gitlab',
+      projectId: 'project-1',
+      hostId: 'ssh:devbox',
+      projectHostSetupId: 'setup-1',
+      repoId: 'repo-remote',
+      providerIdentity: { provider: 'gitlab', projectId: '1234' }
+    }
+
+    store.getState().openTaskPage({
+      taskSource: 'gitlab',
+      openGitLabWorkItem: workItem,
+      openGitLabSourceContext: sourceContext
+    })
+
+    expect(store.getState().worktreeNavHistory.at(-1)).toEqual({
+      kind: 'task-detail',
+      source: 'gitlab',
+      workItem,
+      sourceContext
+    })
+  })
+
+  it('preserves Jira task detail source context in navigation history', () => {
+    const store = createUIStore()
+    const issue = makeJiraIssue()
+    const sourceContext: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'jira',
+      projectId: 'project-1',
+      hostId: 'runtime:remote-server',
+      providerIdentity: { provider: 'jira', siteId: 'site-1' },
+      accountLabel: 'Example Jira'
+    }
+
+    store.getState().openTaskPage({
+      taskSource: 'jira',
+      openJiraIssue: issue,
+      openJiraSourceContext: sourceContext
+    })
+
+    expect(store.getState().worktreeNavHistory.at(-1)).toEqual({
+      kind: 'task-detail',
+      source: 'jira',
+      issue,
+      sourceContext
+    })
+  })
+
+  it('can suppress the Tasks surface interaction for in-page provider navigation', () => {
+    const store = createUIStore()
+    const recordFeatureInteraction = vi.fn()
+    store.setState({ recordFeatureInteraction } as Partial<AppState>)
+    const workItem = makeGitHubWorkItem()
+    const linearIssue = makeLinearIssue()
+    const jiraIssue = makeJiraIssue()
+
+    store
+      .getState()
+      .openTaskPage(
+        { taskSource: 'github', openGitHubWorkItem: workItem },
+        { recordTasksInteraction: false }
+      )
+    store
+      .getState()
+      .openTaskPage(
+        { taskSource: 'linear', openLinearIssue: linearIssue },
+        { recordTasksInteraction: false }
+      )
+    store
+      .getState()
+      .openTaskPage(
+        { taskSource: 'jira', openJiraIssue: jiraIssue },
+        { recordTasksInteraction: false }
+      )
+
+    expect(recordFeatureInteraction).not.toHaveBeenCalledWith('tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('github-tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('linear-tasks')
+    expect(recordFeatureInteraction).toHaveBeenCalledWith('jira-tasks')
   })
 
   it('skips the whole Tasks detail stack on close', () => {
@@ -1354,7 +2427,13 @@ describe('createUISlice page navigation history', () => {
     expect(store.getState().worktreeNavHistory).toEqual([
       'a',
       'tasks',
-      { kind: 'task-detail', source: 'github', workItem, initialTab: undefined },
+      {
+        kind: 'task-detail',
+        source: 'github',
+        workItem,
+        sourceContext: undefined,
+        initialTab: undefined
+      },
       'tasks'
     ])
 
@@ -1479,6 +2558,150 @@ describe('createUISlice setup guide sidebar dismissal', () => {
 
     store.getState().hydratePersistedUI(makePersistedUI({ setupGuideSidebarDismissed: undefined }))
     expect(store.getState().setupGuideSidebarDismissed).toBe(false)
+  })
+
+  it('persists browser milestone migration result once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().markSetupGuideBrowserMilestoneMigrated(true)
+    store.getState().markSetupGuideBrowserMilestoneMigrated(true)
+
+    expect(store.getState().setupGuideBrowserMilestoneMigrated).toBe(true)
+    expect(store.getState().setupGuideBrowserMilestoneLegacyComplete).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({
+      setupGuideBrowserMilestoneMigrated: true,
+      setupGuideBrowserMilestoneLegacyComplete: true
+    })
+  })
+
+  it('hydrates browser milestone migration fields explicitly', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        setupGuideBrowserMilestoneMigrated: true,
+        setupGuideBrowserMilestoneLegacyComplete: true
+      })
+    )
+    expect(store.getState().setupGuideBrowserMilestoneMigrated).toBe(true)
+    expect(store.getState().setupGuideBrowserMilestoneLegacyComplete).toBe(true)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        setupGuideBrowserMilestoneMigrated: undefined,
+        setupGuideBrowserMilestoneLegacyComplete: undefined
+      })
+    )
+    expect(store.getState().setupGuideBrowserMilestoneMigrated).toBe(false)
+    expect(store.getState().setupGuideBrowserMilestoneLegacyComplete).toBe(false)
+  })
+})
+
+describe('createUISlice mobile emulator agent setup dismissal', () => {
+  it('persists mobile emulator agent setup dismissal once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().dismissMobileEmulatorAgentSetup()
+    store.getState().dismissMobileEmulatorAgentSetup()
+
+    expect(store.getState().mobileEmulatorAgentSetupDismissed).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ mobileEmulatorAgentSetupDismissed: true })
+  })
+
+  it('hydrates only explicit mobile emulator agent setup dismissals', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ mobileEmulatorAgentSetupDismissed: true }))
+    expect(store.getState().mobileEmulatorAgentSetupDismissed).toBe(true)
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ mobileEmulatorAgentSetupDismissed: undefined }))
+    expect(store.getState().mobileEmulatorAgentSetupDismissed).toBe(false)
+  })
+})
+
+describe('createUISlice mobile emulator tab intro dismissal', () => {
+  it('persists mobile emulator tab intro dismissal once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().dismissMobileEmulatorTabIntro()
+    store.getState().dismissMobileEmulatorTabIntro()
+
+    expect(store.getState().mobileEmulatorTabIntroDismissed).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ mobileEmulatorTabIntroDismissed: true })
+  })
+
+  it('hydrates only explicit mobile emulator tab intro dismissals', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ mobileEmulatorTabIntroDismissed: true }))
+    expect(store.getState().mobileEmulatorTabIntroDismissed).toBe(true)
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ mobileEmulatorTabIntroDismissed: undefined }))
+    expect(store.getState().mobileEmulatorTabIntroDismissed).toBe(false)
+  })
+})
+
+describe('createUISlice browser import hint dismissal', () => {
+  it('persists browser import hint dismissal changes once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().setBrowserImportHintHidden(true)
+    store.getState().setBrowserImportHintHidden(true)
+
+    expect(store.getState().browserImportHintHidden).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ browserImportHintHidden: true })
+  })
+
+  it('hydrates only explicit browser import hint dismissals as hidden', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ browserImportHintHidden: true }))
+    expect(store.getState().browserImportHintHidden).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ browserImportHintHidden: undefined }))
+    expect(store.getState().browserImportHintHidden).toBe(false)
   })
 })
 
@@ -1904,7 +3127,8 @@ describe('createUISlice contextual tours', () => {
     const store = createUIStore()
     const visibleSelectors = [
       '[data-contextual-tour-target="browser-grab-control"]',
-      '[data-contextual-tour-target="browser-annotation-control"]'
+      '[data-contextual-tour-target="browser-annotation-control"]',
+      '[data-contextual-tour-target="browser-import-cookies-control"]'
     ]
     stubContextualTourTargets(visibleSelectors)
     store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
@@ -1915,7 +3139,24 @@ describe('createUISlice contextual tours', () => {
 
     store.getState().advanceContextualTour()
     expect(store.getState().activeContextualTourId).toBe('browser')
+    expect(store.getState().activeContextualTourStepIndex).toBe(2)
+  })
+
+  it('advances the browser tour to the cookie step before Import Cookies is measurable', () => {
+    const store = createUIStore()
+    const visibleSelectors = [
+      '[data-contextual-tour-target="browser-grab-control"]',
+      '[data-contextual-tour-target="browser-annotation-control"]'
+    ]
+    stubContextualTourTargets(visibleSelectors)
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    store.getState().requestContextualTour('browser', 'browser_visible')
+
+    store.getState().advanceContextualTour()
     expect(store.getState().activeContextualTourStepIndex).toBe(1)
+
+    store.getState().advanceContextualTour()
+    expect(store.getState().activeContextualTourStepIndex).toBe(2)
   })
 
   it('advances the active split step when the split command interaction is recorded', () => {
@@ -2177,5 +3418,97 @@ describe('createUISlice space navigation', () => {
     store.getState().closeSpacePage()
 
     expect(store.getState().activeView).toBe('tasks')
+  })
+})
+
+describe('openDiffNotesSendMenuForActiveWorktree', () => {
+  function stubDiffNotesStore(
+    comments: { sentAt?: number }[],
+    activeWorktreeId: string | null = 'wt-1'
+  ): { store: StoreApi<AppState>; setRightSidebarTab: ReturnType<typeof vi.fn> } {
+    const store = createUIStore()
+    const setRightSidebarTab = vi.fn()
+    store.setState({
+      activeWorktreeId,
+      getDiffComments: () => comments,
+      setRightSidebarTab,
+      setRightSidebarOpen: vi.fn()
+    } as unknown as Partial<AppState>)
+    return { store, setRightSidebarTab }
+  }
+
+  it('reveals Source Control and bumps the open request when unsent notes exist', () => {
+    const { store, setRightSidebarTab } = stubDiffNotesStore([{ sentAt: 10 }, {}])
+
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(true)
+    expect(setRightSidebarTab).toHaveBeenCalledWith('source-control')
+    expect(store.getState().diffNotesSendMenuOpenRequest).toMatchObject({
+      worktreeId: 'wt-1',
+      nonce: 1
+    })
+    expect(store.getState().diffNotesSendMenuOpenRequest?.issuedAt).toBeTypeOf('number')
+
+    // A second request increments the nonce so the menu reopens.
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(true)
+    expect(store.getState().diffNotesSendMenuOpenRequest).toMatchObject({
+      worktreeId: 'wt-1',
+      nonce: 2
+    })
+  })
+
+  it('is a no-op when every note is already sent', () => {
+    const { store, setRightSidebarTab } = stubDiffNotesStore([{ sentAt: 10 }])
+
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(false)
+    expect(setRightSidebarTab).not.toHaveBeenCalled()
+    expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
+  })
+
+  it('is a no-op when there is no active worktree', () => {
+    const { store } = stubDiffNotesStore([{}], null)
+
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(false)
+    expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
+  })
+
+  it('clears the request only for the matching worktree', () => {
+    const { store } = stubDiffNotesStore([{}])
+    store.getState().openDiffNotesSendMenuForActiveWorktree()
+
+    store.getState().consumeDiffNotesSendMenuOpenRequest('other-wt')
+    expect(store.getState().diffNotesSendMenuOpenRequest).not.toBeNull()
+
+    store.getState().consumeDiffNotesSendMenuOpenRequest('wt-1')
+    expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
+  })
+})
+
+describe('createUISlice clearOsc52ClipboardDefaultOnNotice', () => {
+  it('restores the armed notice from persisted UI', () => {
+    const store = createUIStore()
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(false)
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ osc52ClipboardDefaultOnNoticePending: true }))
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('stops the toast this session even when the persist fails', () => {
+    // Why local-first: the flag is the only thing keeping the toast off screen, and a
+    // rejected ui.set must not leave it re-firing on every render of this session. Losing
+    // the persist just re-arms the notice next launch, which is the safe direction.
+    const setUI = vi.fn(() => Promise.reject(new Error('runtime offline')))
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ osc52ClipboardDefaultOnNoticePending: true }))
+
+    store.getState().clearOsc52ClipboardDefaultOnNotice()
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(false)
+    expect(setUI).toHaveBeenCalledWith({ osc52ClipboardDefaultOnNoticePending: false })
   })
 })

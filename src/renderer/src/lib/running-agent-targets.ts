@@ -1,16 +1,16 @@
 import type { AppState } from '@/store/types'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { isExplicitAgentStatusFresh } from './agent-status'
+import { resolvePaneAgentActivity } from '@/lib/pane-agent-evidence'
+import { detectAgentSendTitleStatus } from './agent-send-title-status'
+import { resolveRuntimePaneTitleLeafResolution } from './runtime-pane-title-leaf-id'
 
-type RunningAgentTargetState = Pick<
+export type RunningAgentTargetState = Pick<
   AppState,
-  'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId'
->
+  'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId' | 'ptyIdsByTabId'
+> &
+  Partial<Pick<AppState, 'runtimePaneTitlesByTabId'>>
 
 export type RunningAgentSendTarget = {
   paneKey: string
@@ -46,16 +46,43 @@ export function deriveRunningAgentSendTargets(
       continue
     }
 
+    const layoutPtyId =
+      state.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
+    const tabPtyIds = state.ptyIdsByTabId?.[parsed.tabId]
     const ptyId =
-      state.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
+      layoutPtyId && (tabPtyIds === undefined || tabPtyIds.includes(layoutPtyId))
+        ? layoutPtyId
+        : null
     let disabledReason: string | undefined
 
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-      disabledReason = 'Agent status is stale'
+    // Why: the shared resolver gates hook freshness; a null hookState means the
+    // entry is stale (entries here always exist), and otherwise carries the
+    // fresh entry.state. The live-title layer stays local because it needs the
+    // send-gated detector (label + strict idle-send gate), which the resolver's
+    // raw titleStatus does not reproduce.
+    const decision = resolvePaneAgentActivity({
+      explicitEntry: entry,
+      liveTitle: null,
+      hasLivePty: ptyId !== null,
+      now
+    })
+    // Why: hook-backed rows can go stale while the same PTY is still a live
+    // agent; live titles are the runtime proof that the row remains targetable.
+    const liveTitleStatus = ptyId
+      ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
+      : null
+    if (decision.hookState === null) {
+      if (liveTitleStatus === 'permission') {
+        disabledReason = 'Agent needs permission'
+      } else if (liveTitleStatus === null) {
+        disabledReason = 'Agent status is stale'
+      }
     } else if (!ptyId) {
       disabledReason = 'Terminal is no longer available'
-    } else if (entry.state === 'working') {
-      disabledReason = 'Agent is working'
+    } else if (decision.hookState === 'blocked' || decision.hookState === 'waiting') {
+      disabledReason = 'Agent needs permission'
+    } else if (liveTitleStatus === 'permission') {
+      disabledReason = 'Agent needs permission'
     }
 
     targets.push({
@@ -71,6 +98,24 @@ export function deriveRunningAgentSendTargets(
   }
 
   return targets
+}
+
+function detectLiveAgentPaneStatus(
+  state: RunningAgentTargetState,
+  tabId: string,
+  leafId: string,
+  tabTitle: string
+): ReturnType<typeof detectAgentSendTitleStatus> {
+  const layout = state.terminalLayoutsByTabId[tabId]
+  const paneTitles = state.runtimePaneTitlesByTabId?.[tabId]
+  const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
+  // Why: runtime pane titles are the freshest title signal for split panes; use
+  // the tab title only before the runtime has reported a pane title for the leaf.
+  const title = paneTitleResolution.title ?? (paneTitleResolution.hasAnyPaneTitle ? null : tabTitle)
+  if (title === null) {
+    return null
+  }
+  return detectAgentSendTitleStatus(title)
 }
 
 export function resolveRunningAgentSendTarget(

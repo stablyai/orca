@@ -1,25 +1,49 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraClientForSite } from './client'
+import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
+import { getJiraSummaryLookupErrorCode } from '../../shared/jira-summary-lookup'
 
-const { clearTokenMock, getClientsMock, jiraRequestMock } = vi.hoisted(() => ({
+const {
+  clearTokenMock,
+  getClientsMock,
+  isAuthErrorMock,
+  jiraRequestMock,
+  jiraRequestBinaryMock,
+  acquireMock,
+  releaseMock
+} = vi.hoisted(() => ({
   clearTokenMock: vi.fn(),
   getClientsMock: vi.fn(),
-  jiraRequestMock: vi.fn()
+  isAuthErrorMock: vi.fn(),
+  jiraRequestMock: vi.fn(),
+  jiraRequestBinaryMock: vi.fn(),
+  acquireMock: vi.fn().mockResolvedValue(undefined),
+  releaseMock: vi.fn()
 }))
 
 vi.mock('./client', () => ({
-  acquire: vi.fn().mockResolvedValue(undefined),
-  release: vi.fn(),
+  acquire: (...args: unknown[]) => acquireMock(...args),
+  release: (...args: unknown[]) => releaseMock(...args),
+  apiBasePath: (site: { authType?: string }) =>
+    site.authType === 'server' ? '/rest/api/2' : '/rest/api/3',
   clearToken: (...args: unknown[]) => clearTokenMock(...args),
   getClients: (...args: unknown[]) => getClientsMock(...args),
-  isAuthError: vi.fn().mockReturnValue(false),
-  jiraRequest: (...args: unknown[]) => jiraRequestMock(...args)
+  isAuthError: (...args: unknown[]) => isAuthErrorMock(...args),
+  jiraRequest: (...args: unknown[]) => jiraRequestMock(...args),
+  jiraRequestBinary: (...args: unknown[]) => jiraRequestBinaryMock(...args),
+  JiraApiError: class JiraApiError extends Error {
+    status: number | null
+    constructor(message: string, status: number | null = null) {
+      super(message)
+      this.status = status
+    }
+  }
 }))
 
-function makeEntry(): JiraClientForSite {
+function makeEntry(id = 'site-1'): JiraClientForSite {
   return {
     site: {
-      id: 'site-1',
+      id,
       siteUrl: 'https://example.atlassian.net',
       email: 'ada@example.com',
       displayName: 'Example Jira',
@@ -29,10 +53,235 @@ function makeEntry(): JiraClientForSite {
   }
 }
 
+function makeServerEntry(id = 'server-1'): JiraClientForSite {
+  return {
+    site: {
+      id,
+      siteUrl: 'https://jira.example.com',
+      email: '',
+      displayName: 'Self-hosted Jira',
+      accountId: 'wquintal',
+      authType: 'server'
+    },
+    authorization: 'Bearer pat-token'
+  }
+}
+
 describe('Jira issue operations', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
+    isAuthErrorMock.mockReturnValue(false)
     getClientsMock.mockReturnValue([makeEntry()])
+    acquireMock.mockResolvedValue(undefined)
+    releaseMock.mockImplementation(() => {})
+    jiraRequestBinaryMock.mockReset()
+    jiraRequestMock.mockReset()
+    const { _resetAttachmentImageCache } = await import('./attachment-image-cache')
+    _resetAttachmentImageCache()
+  })
+
+  it('surfaces Jira credential decrypt errors on active issue, metadata, and mutation paths', async () => {
+    const error = new Error(credentialDecryptionMessage('Jira'))
+    getClientsMock.mockImplementation(() => {
+      throw error
+    })
+    const { createIssue, getIssue, listIssueTypes, listProjects, searchIssues } =
+      await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'site-1')).rejects.toThrow(error.message)
+    await expect(getIssue('ALP-1', 'site-1')).rejects.toThrow(error.message)
+    await expect(listProjects('site-1')).rejects.toThrow(error.message)
+    await expect(listIssueTypes('10000', 'site-1')).rejects.toThrow(error.message)
+    await expect(
+      createIssue({
+        siteId: 'site-1',
+        projectId: '10000',
+        issueTypeId: '10001',
+        title: 'Fix auth'
+      })
+    ).rejects.toThrow(error.message)
+  })
+
+  it('uses classic /search and REST v2 for self-hosted sites', async () => {
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock.mockResolvedValueOnce({ issues: [] })
+    const { searchIssues } = await import('./issues')
+
+    await searchIssues('project = ALP', 20, 'server-1')
+
+    expect(jiraRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ site: expect.objectContaining({ authType: 'server' }) }),
+      '/rest/api/2/search',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
+  it('loads Jira summaries without descriptions, rendered fields, or attachment media', async () => {
+    jiraRequestMock.mockResolvedValueOnce({
+      id: 'issue-1',
+      key: 'ALP-1',
+      fields: {
+        summary: 'Lightweight lookup',
+        project: { id: '10000', key: 'ALP', name: 'Alpha' },
+        issuetype: { id: '10001', name: 'Bug' },
+        status: { id: '1', name: 'To Do', statusCategory: { key: 'new', name: 'To Do' } },
+        labels: [],
+        created: '2026-07-27T00:00:00.000Z',
+        updated: '2026-07-28T11:22:33.000Z'
+      }
+    })
+    const { getIssueSummary } = await import('./issues')
+    await expect(getIssueSummary('ALP-1', 'site-1')).resolves.toMatchObject({
+      key: 'ALP-1',
+      title: 'Lightweight lookup',
+      siteId: 'site-1',
+      createdAt: '2026-07-27T00:00:00.000Z',
+      updatedAt: '2026-07-28T11:22:33.000Z'
+    })
+    const requestPath = String(jiraRequestMock.mock.calls[0]?.[1])
+    const query = new URL(requestPath, 'https://example.atlassian.net').searchParams
+    const fields = query.get('fields')?.split(',') ?? []
+    expect(fields).toEqual(['summary', 'project', 'issuetype', 'status', 'created', 'updated'])
+    expect(query.has('expand')).toBe(false)
+    expect(jiraRequestBinaryMock).not.toHaveBeenCalled()
+    expect(clearTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('returns typed summary errors without clearing Jira credentials', async () => {
+    const authError = Object.assign(new Error('Unauthorized'), { status: 401 })
+    isAuthErrorMock.mockImplementation((error) => error === authError)
+    jiraRequestMock.mockRejectedValueOnce(authError)
+    const { getIssueSummary } = await import('./issues')
+    const read = getIssueSummary('ALP-1', 'site-1')
+    await expect(read).rejects.toSatisfy(
+      (error: unknown) => getJiraSummaryLookupErrorCode(error) === 'auth'
+    )
+    jiraRequestMock.mockRejectedValueOnce(Object.assign(new Error('Missing'), { status: 404 }))
+    await expect(getIssueSummary('ALP-404', 'site-1')).rejects.toSatisfy(
+      (error: unknown) => getJiraSummaryLookupErrorCode(error) === 'not-found'
+    )
+    expect(clearTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('reports an explicit disconnected summary scope before issuing a request', async () => {
+    getClientsMock.mockReturnValueOnce([])
+    const { getIssueSummary } = await import('./issues')
+    await expect(getIssueSummary('ALP-1', 'site-1')).rejects.toSatisfy(
+      (error: unknown) => getJiraSummaryLookupErrorCode(error) === 'disconnected'
+    )
+    expect(jiraRequestMock).not.toHaveBeenCalled()
+  })
+
+  it('sends plain-text bodies and v2 paths for self-hosted issue creation', async () => {
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock.mockResolvedValueOnce({ id: '1', key: 'ALP-1', self: '' })
+    const { createIssue } = await import('./issues')
+
+    await createIssue({
+      siteId: 'server-1',
+      projectId: '10000',
+      issueTypeId: '10001',
+      title: 'Fix auth',
+      description: 'Body text'
+    })
+
+    const [, path, init] = jiraRequestMock.mock.calls[0]
+    expect(path).toBe('/rest/api/2/issue')
+    const body = JSON.parse((init as { body: string }).body) as {
+      fields: { description: unknown }
+    }
+    // REST v2 rejects ADF documents; the description must stay a plain string.
+    expect(body.fields.description).toBe('Body text')
+  })
+
+  it('assigns by username on self-hosted sites', async () => {
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock.mockResolvedValue(null)
+    const { updateIssue } = await import('./issues')
+
+    await updateIssue('ALP-1', { assigneeAccountId: 'wquintal' }, 'server-1')
+
+    expect(jiraRequestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      '/rest/api/2/issue/ALP-1/assignee',
+      expect.objectContaining({ body: JSON.stringify({ name: 'wquintal' }) })
+    )
+  })
+
+  it('lists self-hosted projects from the unpaged /project resource', async () => {
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock.mockResolvedValueOnce([{ id: '1', key: 'ALP', name: 'Alpha' }])
+    const { listProjects } = await import('./issues')
+
+    const projects = await listProjects('server-1')
+
+    expect(jiraRequestMock).toHaveBeenCalledWith(expect.anything(), '/rest/api/2/project')
+    expect(projects).toMatchObject([{ key: 'ALP', name: 'Alpha' }])
+  })
+
+  it('rejects single-site search failures so the UI can surface them', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1')])
+    jiraRequestMock.mockRejectedValueOnce(new Error('Forbidden'))
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'site-1')).rejects.toThrow('Forbidden')
+  })
+
+  it('includes Jira status codes in surfaced single-site search failures', async () => {
+    const error = Object.assign(new Error('Forbidden'), { status: 403 })
+    getClientsMock.mockReturnValue([makeEntry('site-1')])
+    jiraRequestMock.mockRejectedValueOnce(error)
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'site-1')).rejects.toThrow(
+      'Error 403: Forbidden'
+    )
+  })
+
+  it('keeps healthy sites when one site fails under an "all" search', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    jiraRequestMock.mockRejectedValueOnce(new Error('Forbidden')).mockResolvedValueOnce({
+      issues: [{ id: '1', key: 'BRV-1', fields: { summary: 'Healthy' } }]
+    })
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'all')).resolves.toMatchObject([
+      { key: 'BRV-1', title: 'Healthy' }
+    ])
+  })
+
+  it('keeps healthy sites when the saved selection fans out without an explicit site', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    jiraRequestMock.mockRejectedValueOnce(new Error('Forbidden')).mockResolvedValueOnce({
+      issues: [{ id: '1', key: 'BRV-1', fields: { summary: 'Healthy' } }]
+    })
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20)).resolves.toMatchObject([
+      { key: 'BRV-1', title: 'Healthy' }
+    ])
+  })
+
+  it('surfaces an error when every site fails under an "all" search', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    jiraRequestMock
+      .mockRejectedValueOnce(new Error('Forbidden'))
+      .mockRejectedValueOnce(new Error('Service Unavailable'))
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'all')).rejects.toThrow('Forbidden')
+  })
+
+  it('prefers operational failures when every "all" search site fails', async () => {
+    const authError = new Error('Unauthorized')
+    const operationalError = new Error('Service Unavailable')
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    isAuthErrorMock.mockImplementation((error) => error === authError)
+    jiraRequestMock.mockRejectedValueOnce(authError).mockRejectedValueOnce(operationalError)
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'all')).rejects.toThrow('Service Unavailable')
+    expect(clearTokenMock).toHaveBeenCalledWith('site-1')
   })
 
   it('paginates Jira project search results before sorting them', async () => {
@@ -174,6 +423,174 @@ describe('Jira issue operations', () => {
     })
   })
 
+  it('embeds resolved attachment images into getIssue descriptions', async () => {
+    const pngBytes = Uint8Array.from([137, 80, 78, 71])
+    jiraRequestBinaryMock.mockResolvedValue({
+      data: pngBytes.buffer,
+      contentType: 'image/png'
+    })
+    jiraRequestMock.mockResolvedValue({
+      id: 'issue-9',
+      key: 'CAM-9',
+      fields: {
+        summary: 'UI with screenshot',
+        description: {
+          type: 'doc',
+          version: 1,
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'See image' }] },
+            {
+              type: 'mediaSingle',
+              content: [
+                {
+                  type: 'media',
+                  attrs: { id: 'media-uuid', type: 'file', alt: 'ui.png' }
+                }
+              ]
+            }
+          ]
+        },
+        attachment: [
+          {
+            id: '10001',
+            filename: 'ui.png',
+            mimeType: 'image/png',
+            size: 4
+          }
+        ],
+        project: { id: '1', key: 'CAM', name: 'CAM' },
+        issuetype: { id: '1', name: 'Story' },
+        status: {
+          id: '1',
+          name: 'To Do',
+          statusCategory: { key: 'new', name: 'To Do' }
+        },
+        labels: [],
+        created: '2026-06-18T00:00:00.000Z',
+        updated: '2026-06-18T00:00:00.000Z'
+      },
+      renderedFields: {
+        description:
+          '<p>See image</p><img src="https://example.atlassian.net/rest/api/3/attachment/content/10001" />'
+      }
+    })
+
+    const { getIssue } = await import('./issues')
+    const issue = await getIssue('CAM-9', 'site-1')
+
+    expect(jiraRequestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('expand=renderedFields')
+    )
+    expect(jiraRequestBinaryMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'https://example.atlassian.net/rest/api/3/attachment/content/10001?redirect=false'
+    )
+    expect(issue?.description).toContain('See image')
+    expect(issue?.description).toContain('![ui.png](data:image/png;base64,')
+  })
+
+  it('maps Jira ADF descriptions into Markdown blocks and lists', async () => {
+    const { mapJiraIssue } = await import('./issues')
+
+    const issue = mapJiraIssue(makeEntry().site, {
+      id: 'issue-33',
+      key: 'PM-33',
+      fields: {
+        summary: 'BE - Tests E2E/Cleanup',
+        description: {
+          type: 'doc',
+          version: 1,
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'História' },
+                { type: 'hardBreak' },
+                { type: 'text', text: 'Coverage ownership' }
+              ]
+            },
+            {
+              type: 'bulletList',
+              content: [
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'admin - JOAO' }]
+                    }
+                  ]
+                },
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'attachment batch - JOAO' }]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              type: 'orderedList',
+              content: [
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'API module' }]
+                    }
+                  ]
+                },
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'UI module' }]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: 'Done' }]
+            }
+          ]
+        },
+        project: { id: '10000', key: 'PM', name: 'Project Management' },
+        issuetype: { id: '10001', name: 'Task' },
+        status: {
+          id: '1',
+          name: 'To Do',
+          statusCategory: { key: 'new', name: 'To Do' }
+        },
+        labels: [],
+        created: '2026-06-18T00:00:00.000Z',
+        updated: '2026-06-18T00:00:00.000Z'
+      }
+    })
+
+    expect(issue.description).toBe(
+      [
+        'História',
+        'Coverage ownership',
+        '',
+        '- admin - JOAO',
+        '- attachment batch - JOAO',
+        '',
+        '1. API module',
+        '2. UI module',
+        '',
+        'Done'
+      ].join('\n')
+    )
+  })
+
   it('maps comments from the Jira comments page key', async () => {
     jiraRequestMock.mockResolvedValueOnce({
       comments: [
@@ -206,5 +623,256 @@ describe('Jira issue operations', () => {
         updatedAt: undefined
       }
     ])
+    expect(jiraRequestMock).toHaveBeenCalledTimes(1)
+    expect(String(jiraRequestMock.mock.calls[0]?.[1])).toContain('expand=renderedBody')
+    expect(jiraRequestBinaryMock).not.toHaveBeenCalled()
+  })
+
+  it('releases the Jira slot before downloading issue attachment binaries', async () => {
+    const order: string[] = []
+    acquireMock.mockImplementation(async () => {
+      order.push('acquire')
+    })
+    releaseMock.mockImplementation(() => {
+      order.push('release')
+    })
+    jiraRequestMock.mockImplementation(async () => {
+      order.push('json')
+      return {
+        id: 'issue-9',
+        key: 'CAM-9',
+        fields: {
+          summary: 'UI with screenshot',
+          description: {
+            type: 'doc',
+            version: 1,
+            content: [
+              {
+                type: 'mediaSingle',
+                content: [
+                  { type: 'media', attrs: { id: 'media-uuid', type: 'file', alt: 'ui.png' } }
+                ]
+              }
+            ]
+          },
+          attachment: [{ id: '10001', filename: 'ui.png', mimeType: 'image/png', size: 4 }],
+          project: { id: '1', key: 'CAM', name: 'CAM' },
+          issuetype: { id: '1', name: 'Bug' },
+          status: { id: '1', name: 'To Do', statusCategory: { key: 'new' } },
+          labels: [],
+          created: '2026-05-01T00:00:00.000Z',
+          updated: '2026-05-01T00:00:00.000Z'
+        },
+        renderedFields: {
+          description:
+            '<img src="https://example.atlassian.net/rest/api/3/attachment/content/10001" />'
+        }
+      }
+    })
+    jiraRequestBinaryMock.mockImplementation(async () => {
+      order.push('binary')
+      return { data: Uint8Array.from([1]).buffer, contentType: 'image/png' }
+    })
+    const { getIssue } = await import('./issues')
+    await getIssue('CAM-9', 'site-1')
+    expect(order.indexOf('release')).toBeLessThan(order.indexOf('binary'))
+    expect(order.indexOf('json')).toBeLessThan(order.indexOf('release'))
+  })
+
+  it('uses Server/DC api base path for comment attachment metadata lookup', async () => {
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock
+      .mockResolvedValueOnce({
+        comments: [
+          {
+            id: 'c1',
+            body: {
+              type: 'doc',
+              version: 1,
+              content: [
+                {
+                  type: 'mediaSingle',
+                  content: [{ type: 'media', attrs: { id: 'm1', type: 'file', alt: 'shot.png' } }]
+                }
+              ]
+            },
+            renderedBody: '<img src="https://jira.example.com/secure/attachment/9/shot.png" />',
+            created: '2026-05-30T12:00:00.000Z',
+            author: { accountId: 'u1', displayName: 'Ada' }
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        fields: {
+          attachment: [
+            {
+              id: '9',
+              filename: 'shot.png',
+              mimeType: 'image/png',
+              size: 4,
+              content: 'https://jira.example.com/secure/attachment/9/shot.png'
+            }
+          ]
+        }
+      })
+    jiraRequestBinaryMock.mockResolvedValue({
+      data: Uint8Array.from([1]).buffer,
+      contentType: 'image/png'
+    })
+    const { getIssueComments } = await import('./issues')
+    await getIssueComments('ALP-1', 'server-1')
+    const attachmentLookup = jiraRequestMock.mock.calls.find((call) =>
+      String(call[1]).includes('fields=attachment')
+    )
+    expect(String(attachmentLookup?.[1])).toContain('/rest/api/2/issue/')
+    expect(String(attachmentLookup?.[1])).not.toContain('/rest/api/3/issue/')
+  })
+
+  it('embeds only attachments referenced by rendered Jira comments', async () => {
+    jiraRequestMock
+      .mockResolvedValueOnce({
+        comments: [
+          {
+            id: 'comment-1',
+            body: {
+              type: 'doc',
+              version: 1,
+              content: [
+                {
+                  type: 'mediaSingle',
+                  content: [
+                    {
+                      type: 'media',
+                      attrs: { id: 'media-uuid', type: 'file', alt: 'comment.png' }
+                    }
+                  ]
+                }
+              ]
+            },
+            renderedBody:
+              '<img src="https://example.atlassian.net/rest/api/3/attachment/content/20002" />',
+            created: '2026-05-30T12:00:00.000Z',
+            author: { accountId: 'user-1', displayName: 'Ada' }
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        fields: {
+          attachment: [
+            { id: '20001', filename: 'unrelated.png', mimeType: 'image/png', size: 4 },
+            { id: '20002', filename: 'comment.png', mimeType: 'image/png', size: 4 }
+          ]
+        }
+      })
+    jiraRequestBinaryMock.mockResolvedValue({
+      data: Uint8Array.from([137, 80, 78, 71]).buffer,
+      contentType: 'image/png'
+    })
+    const { getIssueComments } = await import('./issues')
+
+    const comments = await getIssueComments('ALP-1', 'site-1')
+
+    expect(comments[0]?.body).toContain('![comment.png](data:image/png;base64,')
+    expect(jiraRequestBinaryMock).toHaveBeenCalledTimes(1)
+    expect(jiraRequestBinaryMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'https://example.atlassian.net/rest/api/3/attachment/content/20002?redirect=false'
+    )
+  })
+
+  describe('getProjectStatusOrder', () => {
+    it('returns an empty order when no clients are available', async () => {
+      getClientsMock.mockReturnValue([])
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: []
+      })
+    })
+
+    it('returns an empty order when an omitted site resolves to multiple clients', async () => {
+      getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP')).resolves.toEqual({ statusIdsByColumn: [] })
+      expect(jiraRequestMock).not.toHaveBeenCalled()
+    })
+
+    it('returns an empty order when the project has no accessible board', async () => {
+      jiraRequestMock.mockResolvedValueOnce({ values: [] })
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP & OPS', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: []
+      })
+      expect(String(jiraRequestMock.mock.calls[0][1])).toContain(
+        '/rest/agile/1.0/board?projectKeyOrId=ALP+%26+OPS&maxResults=2'
+      )
+    })
+
+    it('keeps alphabetical fallback when a project has multiple boards', async () => {
+      jiraRequestMock.mockResolvedValueOnce({
+        total: 2,
+        values: [{ id: 42 }, { id: 43 }]
+      })
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: []
+      })
+      expect(jiraRequestMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps alphabetical fallback when Jira reports another board page', async () => {
+      jiraRequestMock.mockResolvedValueOnce({
+        isLast: false,
+        values: [{ id: 42 }]
+      })
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: []
+      })
+      expect(jiraRequestMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('returns status IDs grouped by Jira board column order', async () => {
+      jiraRequestMock
+        .mockResolvedValueOnce({ total: 1, values: [{ id: 42 }] })
+        .mockResolvedValueOnce({
+          columnConfig: {
+            columns: [
+              { statuses: [{ id: '1' }, { id: '2' }] },
+              { statuses: [{ id: '3' }, { id: '2' }] },
+              { statuses: [] }
+            ]
+          }
+        })
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: [['1', '2'], ['3']]
+      })
+      expect(jiraRequestMock.mock.calls[1]?.[1]).toBe('/rest/agile/1.0/board/42/configuration')
+    })
+
+    it('clears the token and surfaces credential failures', async () => {
+      const authError = new Error('Unauthorized')
+      isAuthErrorMock.mockReturnValue(true)
+      jiraRequestMock.mockRejectedValueOnce(authError)
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).rejects.toThrow('Unauthorized')
+      expect(clearTokenMock).toHaveBeenCalledWith('site-1')
+    })
+
+    it('falls back to an empty order on operational errors', async () => {
+      jiraRequestMock.mockRejectedValueOnce(new Error('Service Unavailable'))
+      const { getProjectStatusOrder } = await import('./issues')
+
+      await expect(getProjectStatusOrder('ALP', 'site-1')).resolves.toEqual({
+        statusIdsByColumn: []
+      })
+    })
   })
 })

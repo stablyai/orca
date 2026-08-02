@@ -1,4 +1,5 @@
 import { cn } from '../../../lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type Indicator = 'spinner' | 'green' | 'muted' | 'red'
 
@@ -19,26 +20,38 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
     <div className="mp-device-screen">
       <div className="mp-wl-chrome">
         <div className="mp-wl-statusrow">
-          <button type="button" className="mp-wl-back" aria-label="Back">
+          <button
+            type="button"
+            className="mp-wl-back"
+            aria-label={translate(
+              'auto.components.mobile.slides.WorktreeListSlide.cefd048225',
+              'Back'
+            )}
+          >
             <ChevronLeftIcon />
           </button>
           <div className="mp-wl-host">
             <span className="mp-status-dot is-green" />
-            <span className="mp-wl-host-name">MacBook Pro</span>
+            <span className="mp-wl-host-name">
+              {translate(
+                'auto.components.mobile.slides.WorktreeListSlide.b4271864bd',
+                'MacBook Pro'
+              )}
+            </span>
           </div>
         </div>
         <div className="mp-wl-toolbar">
           <button type="button" className="mp-wl-chip">
             <FilterIcon />
-            Filter
+            {translate('auto.components.mobile.slides.WorktreeListSlide.0e3e809a4b', 'Filter')}
           </button>
           <button type="button" className="mp-wl-button">
             <SortIcon />
-            Recent
+            {translate('auto.components.mobile.slides.WorktreeListSlide.17f9e0d226', 'Recent')}
           </button>
           <button type="button" className="mp-wl-button">
             <GroupIcon />
-            Repo
+            {translate('auto.components.mobile.slides.WorktreeListSlide.22971156df', 'Repo')}
           </button>
           <span className="mp-wl-spacer" />
           <span className="mp-wl-icon">
@@ -56,7 +69,9 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
       <div className="mp-wl-section">
         <CaretIcon />
         <PinIcon />
-        <span style={{ marginLeft: 4 }}>Pinned</span>
+        <span style={{ marginLeft: 4 }}>
+          {translate('auto.components.mobile.slides.WorktreeListSlide.79a24ff530', 'Pinned')}
+        </span>
         <span style={{ marginLeft: 4, color: 'var(--m-text-muted)' }}>3</span>
       </div>
 
@@ -97,7 +112,9 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
 
       <div className="mp-wl-section">
         <CaretIcon />
-        <span>Active</span>
+        <span>
+          {translate('auto.components.mobile.slides.WorktreeListSlide.357a519567', 'Active')}
+        </span>
         <span style={{ marginLeft: 4, color: 'var(--m-text-muted)' }}>37</span>
       </div>
       <div className="mp-wl-list">

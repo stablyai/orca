@@ -11,7 +11,7 @@ vi.mock('./e2ee', () => ({
   publicKeyFromBase64: () => new Uint8Array(32),
   publicKeyToBase64: () => 'client-public-key',
   encrypt: (plaintext: string) => `encrypted:${plaintext}`,
-  decrypt: (raw: string) => raw.replace(/^encrypted:/, ''),
+  decrypt: (raw: string) => (raw === 'undecryptable' ? null : raw.replace(/^encrypted:/, '')),
   decryptBytes: (bytes: Uint8Array) => bytes
 }))
 
@@ -217,6 +217,23 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
+  it('does not resend a stream subscribed from the connected-state listener', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key', (state) => {
+      if (state === 'connected') {
+        client.subscribe('notifications.subscribe', {}, () => {})
+      }
+    })
+    const socket = mockSockets[0]!
+
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    expect(sentRequests(socket, 'notifications.subscribe')).toHaveLength(1)
+
+    client.close()
+  })
+
   it('routes browser screencast binary frames to the browser subscriber', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!
@@ -243,11 +260,14 @@ describe('mobile rpc-client connection timeout', () => {
       })}`
     )
 
+    client.notifyForeground()
     socket.receive(encodeBrowserFrame())
     await Promise.resolve()
     await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(8_000)
 
     expect(frames).toHaveLength(1)
+    expect(socket.close).not.toHaveBeenCalled()
     expect(frames[0]).toMatchObject({
       seq: 7,
       format: 'jpeg',
@@ -477,6 +497,42 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
+  it('replays terminal subscribe with the latest viewport after reconnect', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const firstSocket = mockSockets[0]!
+
+    firstSocket.open()
+    firstSocket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    firstSocket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    client.subscribe(
+      'terminal.subscribe',
+      {
+        terminal: 'term-1',
+        client: { id: 'phone-1', type: 'mobile' },
+        viewport: { cols: 45, rows: 20 }
+      },
+      () => {}
+    )
+    expect(sentRequest(firstSocket, 'terminal.subscribe').params).toMatchObject({
+      viewport: { cols: 45, rows: 20 }
+    })
+
+    client.updateTerminalSubscriptionViewport('term-1', { cols: 60, rows: 24 })
+    firstSocket.close()
+    vi.advanceTimersByTime(500)
+    const secondSocket = mockSockets[1]!
+    secondSocket.open()
+    secondSocket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    secondSocket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    expect(sentRequest(secondSocket, 'terminal.subscribe').params).toMatchObject({
+      viewport: { cols: 60, rows: 24 }
+    })
+
+    client.close()
+  })
+
   it('honors per-request timeout overrides', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!
@@ -545,6 +601,371 @@ describe('mobile rpc-client connection timeout', () => {
     }
   })
 
+  // Repro for issue #5049: Android sessions that appear connected (or stuck
+  // "Reconnecting…") after the app returns to the foreground, recoverable
+  // only by restarting the app. notifyForeground is the recovery hook the
+  // provider invokes on AppState 'active'.
+  describe('foreground recovery', () => {
+    function openAndAuthenticate(socket: MockWebSocket) {
+      socket.open()
+      socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+      socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+    }
+    function connectAuthenticated() {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = mockSockets[0]!
+      openAndAuthenticate(socket)
+      return { client, socket }
+    }
+
+    // Why 520_000ms: the 12 fast attempts cost Σ(RECONNECT_DELAYS) 360.5s of
+    // backoff plus 13 × 12s connect timeouts ≈ 516.5s, so 520s lands just
+    // past the give-up cap with the first trickle timer armed.
+    const PAST_GIVE_UP_CAP_MS = 520_000
+
+    it('keeps trickle-retrying after the give-up cap instead of parking', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      openAndAuthenticate(mockSockets[0]!)
+      mockSockets[0]!.close()
+
+      await vi.advanceTimersByTimeAsync(PAST_GIVE_UP_CAP_MS)
+      expect(client.getState()).toBe('reconnecting')
+      expect(client.getReconnectAttempt()).toBeGreaterThanOrEqual(12)
+
+      // A wedged VPN produces no revival nudge (issue #7824) — the loop must
+      // keep dialing on its own at the 90s trickle cadence.
+      const socketsBefore = mockSockets.length
+      await vi.advanceTimersByTimeAsync(102_000)
+      expect(mockSockets.length).toBeGreaterThan(socketsBefore)
+
+      // Once the tunnel heals, a trickle dial restores the session without
+      // any user action. 75s lands inside the next dial's 12s connect window
+      // (the prior dial failed mid-advance above, re-arming the 90s timer).
+      await vi.advanceTimersByTimeAsync(75_000)
+      openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+      expect(client.getReconnectAttempt()).toBe(0)
+
+      client.close()
+    })
+
+    it('restarts a backed-off reconnect loop on foreground without waiting out the trickle', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      openAndAuthenticate(mockSockets[0]!)
+      mockSockets[0]!.close()
+      await vi.advanceTimersByTimeAsync(PAST_GIVE_UP_CAP_MS)
+      expect(client.getReconnectAttempt()).toBe(12)
+
+      const socketsBefore = mockSockets.length
+      client.notifyForeground()
+
+      expect(mockSockets.length).toBe(socketsBefore + 1)
+      expect(client.getReconnectAttempt()).toBe(0)
+      openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('fast-forwards a pending backoff timer on foreground', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      openAndAuthenticate(mockSockets[0]!)
+      mockSockets[0]!.close()
+      expect(client.getState()).toBe('reconnecting')
+
+      const socketsBefore = mockSockets.length
+      client.notifyForeground()
+
+      expect(mockSockets.length).toBe(socketsBefore + 1)
+      openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+
+      // The cleared backoff timer must not fire a duplicate attempt.
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(mockSockets.length).toBe(socketsBefore + 1)
+
+      client.close()
+    })
+
+    it('reaps a half-open socket within 8s of foreground', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = mockSockets[0]!
+      openAndAuthenticate(socket)
+
+      // Half-open: readyState stays OPEN but the server never answers.
+      client.notifyForeground()
+      expect(sentRequests(socket, 'status.get')).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).toHaveBeenCalled()
+      expect(client.getState()).toBe('reconnecting')
+
+      await vi.advanceTimersByTimeAsync(500)
+      openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('reconnects when the half-open socket omits its close callback', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = mockSockets[0]!
+      openAndAuthenticate(socket)
+      socket.emitCloseOnClose = false
+
+      client.notifyForeground()
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(socket.close).toHaveBeenCalledTimes(1)
+      expect(client.getState()).toBe('reconnecting')
+      socket.onclose?.()
+      expect(client.getState()).toBe('reconnecting')
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(mockSockets).toHaveLength(2)
+      openAndAuthenticate(mockSockets[1]!)
+      expect(client.getState()).toBe('connected')
+      expect(client.getReconnectAttempt()).toBe(0)
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(mockSockets).toHaveLength(2)
+
+      client.close()
+    })
+
+    it('coalesces repeated foreground probes while one probe is pending', async () => {
+      const client = connectAuthenticated().client
+      const socket = mockSockets[0]!
+      client.notifyForeground()
+      client.notifyForeground()
+      client.notifyForeground()
+      expect(sentRequests(socket, 'status.get')).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).toHaveBeenCalledTimes(1)
+      expect(client.getState()).toBe('reconnecting')
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(mockSockets).toHaveLength(2)
+      client.close()
+    })
+    it('keeps a healthy connection when the foreground probe is answered', async () => {
+      const { client, socket } = connectAuthenticated()
+
+      client.notifyForeground()
+      const probe = sentRequest(socket, 'status.get')
+      socket.receive(`encrypted:${JSON.stringify({ id: probe.id, ok: true, result: {} })}`)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(socket.close).not.toHaveBeenCalled()
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('keeps a healthy connection when another response arrives while the probe is pending', async () => {
+      const { client, socket } = connectAuthenticated()
+
+      client.notifyForeground()
+      expect(sentRequests(socket, 'status.get')).toHaveLength(1)
+
+      const poll = client.sendRequest('speech.models.list')
+      await Promise.resolve()
+      const pollRequest = sentRequest(socket, 'speech.models.list')
+      socket.receive(
+        `encrypted:${JSON.stringify({
+          id: pollRequest.id,
+          ok: true,
+          result: { enabled: false, selectedModelId: '', dictationMode: 'toggle', models: [] }
+        })}`
+      )
+      await expect(poll).resolves.toMatchObject({ ok: true })
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).not.toHaveBeenCalled()
+      expect(client.getState()).toBe('connected')
+
+      await vi.advanceTimersByTimeAsync(12_000)
+      expect(sentRequests(socket, 'status.get')).toHaveLength(2)
+      await vi.advanceTimersByTimeAsync(7_999)
+      expect(socket.close).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(socket.close).toHaveBeenCalled()
+      expect(client.getState()).toBe('reconnecting')
+
+      client.close()
+    })
+
+    it('keeps a healthy connection when a non-auth RPC failure arrives while the probe is pending', async () => {
+      const { client, socket } = connectAuthenticated()
+
+      client.notifyForeground()
+      expect(sentRequests(socket, 'status.get')).toHaveLength(1)
+
+      const poll = client.sendRequest('speech.models.list')
+      await Promise.resolve()
+      const pollRequest = sentRequest(socket, 'speech.models.list')
+      socket.receive(
+        `encrypted:${JSON.stringify({
+          id: pollRequest.id,
+          ok: false,
+          error: { code: 'download_failed', message: 'model download failed' }
+        })}`
+      )
+      await expect(poll).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'download_failed' }
+      })
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).not.toHaveBeenCalled()
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('keeps a healthy connection when a binary stream frame arrives while the probe is pending', async () => {
+      const { client, socket } = connectAuthenticated()
+      const events: unknown[] = []
+
+      client.subscribe('terminal.subscribe', { terminal: 'term-1' }, (event) => {
+        events.push(event)
+      })
+      const subscribe = sentRequest(socket, 'terminal.subscribe')
+      socket.receive(
+        `encrypted:${JSON.stringify({
+          id: subscribe.id,
+          ok: true,
+          streaming: true,
+          result: { type: 'subscribed', streamId: 42 }
+        })}`
+      )
+
+      client.notifyForeground()
+      socket.receive(encodeTerminalOutput(42, 'still alive'))
+      await Promise.resolve()
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(events).toContainEqual({ type: 'data', streamId: 42, chunk: 'still alive' })
+      expect(socket.close).not.toHaveBeenCalled()
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('does not count malformed or undecryptable inbound payloads as probe activity', async () => {
+      const { client, socket } = connectAuthenticated()
+
+      client.notifyForeground()
+      socket.receive('undecryptable')
+      socket.receive('encrypted:{"unexpected":true}')
+      socket.receive('encrypted:{"id":"rpc-incomplete","ok":true}')
+      socket.receive(new Uint8Array([0xff, 0x00, 0x01]))
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).toHaveBeenCalled()
+      expect(client.getState()).toBe('reconnecting')
+
+      client.close()
+    })
+
+    it('is a no-op after the client is closed', () => {
+      const { client } = connectAuthenticated()
+      client.close()
+
+      const socketsBefore = mockSockets.length
+      client.notifyForeground()
+      expect(mockSockets.length).toBe(socketsBefore)
+      expect(client.getState()).toBe('disconnected')
+    })
+  })
+
+  // Issue #5200: a single auth rejection used to latch 'auth-failed'
+  // permanently, forcing a needless re-pair even when the desktop still
+  // listed the device with a valid token. The client now retries the
+  // handshake a bounded number of times before declaring auth dead.
+  describe('auth rejection retry (issue #5200)', () => {
+    function authenticate(socket: MockWebSocket) {
+      socket.open()
+      socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+      socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+    }
+    function unauthorizedResponsePayload(id: string): string {
+      return `encrypted:${JSON.stringify({ id, ok: false, error: { code: 'unauthorized', message: 'Unauthorized' } })}`
+    }
+
+    it('retries the handshake on a transient e2ee_error instead of latching auth-failed', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const first = mockSockets[0]!
+      first.open()
+      first.receive(JSON.stringify({ type: 'e2ee_ready' }))
+
+      // Transient rejection during handshake — must NOT latch auth-failed.
+      first.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
+      expect(client.getState()).toBe('reconnecting')
+
+      // A fresh socket gets a fresh handshake; this time it authenticates.
+      await vi.advanceTimersByTimeAsync(500)
+      authenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('latches auth-failed once the retry budget is exhausted', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+
+      // Three consecutive handshake rejections (AUTH_RETRY_BUDGET = 3).
+      // Why 1_000: failed handshakes grow the backoff since issue #10119 —
+      // cycle 2 waits RECONNECT_DELAYS[1].
+      for (let i = 0; i < 3; i++) {
+        if (i > 0) {
+          await vi.advanceTimersByTimeAsync(1_000)
+        }
+        const socket = mockSockets[mockSockets.length - 1]!
+        socket.open()
+        socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+        socket.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
+      }
+
+      expect(client.getState()).toBe('auth-failed')
+
+      client.close()
+    })
+
+    it('resets the budget after a successful connect between rejections', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+
+      // Two rejections, then a clean connect resets the budget...
+      // Why 1_000: failed handshakes grow the backoff since issue #10119.
+      for (let i = 0; i < 2; i++) {
+        if (i > 0) {
+          await vi.advanceTimersByTimeAsync(1_000)
+        }
+        const socket = mockSockets[mockSockets.length - 1]!
+        socket.open()
+        socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+        socket.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
+      }
+      await vi.advanceTimersByTimeAsync(1_000)
+      authenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+
+      // ...so a later mid-session rejection gets the full budget again
+      // rather than immediately latching auth-failed.
+      const live = mockSockets[mockSockets.length - 1]!
+      const request = client.sendRequest('status.get').catch(() => undefined)
+      // sendRequest awaits waitForConnected before sending — let it flush.
+      await Promise.resolve()
+      const id = sentRequest(live, 'status.get').id
+      live.receive(unauthorizedResponsePayload(id))
+      await request
+      expect(client.getState()).toBe('reconnecting')
+
+      client.close()
+    })
+  })
+
   it('rejects requests waiting for reconnect after the retry cap', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!
@@ -558,7 +979,7 @@ describe('mobile rpc-client connection timeout', () => {
       () => null,
       (error: Error) => error
     )
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(520_000)
 
     expect(client.getState()).toBe('reconnecting')
     expect(client.getReconnectAttempt()).toBe(12)

@@ -1,18 +1,31 @@
-export type SpeechModelType = 'transducer' | 'paraformer' | 'whisper'
+export type SpeechModelType =
+  | 'transducer'
+  | 'paraformer'
+  | 'whisper'
+  | 'senseVoice'
+  | 'nemo-ctc'
+  | 'openai'
+export type SpeechModelProvider = 'local' | 'openai'
 
 export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
+
+export type SpeechModelDownloadFile = {
+  name: string
+  url: string
+  sizeBytes: number
+  sha256: string
+}
 
 export type SpeechModelManifest = {
   id: string
   label: string
   description: string
   type: SpeechModelType
+  provider: SpeechModelProvider
   language: string
-  sizeBytes: number
-  downloadUrl: string
-  archiveSha256: string
-  archiveFormat: 'tar.bz2'
-  files: string[]
+  sizeBytes?: number
+  downloadFiles?: SpeechModelDownloadFile[]
+  files?: string[]
   sampleRate: number
   streaming: boolean
   modelingUnit?: ModelingUnit
@@ -61,4 +74,5 @@ export type VoiceSettings = {
   dictationMode: DictationMode
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]
+  openAiApiKeyConfigured: boolean
 }

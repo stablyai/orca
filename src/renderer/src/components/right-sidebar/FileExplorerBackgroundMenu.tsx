@@ -1,11 +1,13 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { FilePlus, FolderPlus } from 'lucide-react'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { translate } from '@/i18n/i18n'
 
 function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
@@ -30,6 +32,12 @@ export function FileExplorerBackgroundMenu({
   worktreePath: string
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
 }): React.JSX.Element {
+  useEffect(() => {
+    const close = (): void => onOpenChange(false)
+    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
+    return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
+  }, [onOpenChange])
+
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
@@ -49,11 +57,17 @@ export function FileExplorerBackgroundMenu({
       >
         <DropdownMenuItem onSelect={() => onStartNew('file', worktreePath, 0)}>
           <FilePlus />
-          New File
+          {translate(
+            'auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36',
+            'New File'
+          )}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onStartNew('folder', worktreePath, 0)}>
           <FolderPlus />
-          New Folder
+          {translate(
+            'auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d',
+            'New Folder'
+          )}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

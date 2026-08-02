@@ -1,19 +1,17 @@
 import { defineMethod, type RpcMethod } from '../core'
-import { BrowserTarget } from '../schemas'
+import { BrowserTarget, requiredString } from '../schemas'
 import {
   Check,
   Drag,
   Element,
   Eval,
   Exec,
-  Fill,
   Find,
   FullScreenshot,
   Get,
   Goto,
   Highlight,
   Is,
-  KeyboardInsert,
   Keypress,
   LimitParam,
   ProfileCreate,
@@ -31,10 +29,14 @@ import {
   TabProfileClone,
   TabShow,
   TabSwitch,
-  Type,
   Upload,
   Wait
 } from './browser-schemas'
+import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
+
+const CertificateProceed = BrowserTarget.extend({
+  challengeId: requiredString('Missing required challengeId')
+})
 
 export const BROWSER_CORE_METHODS: RpcMethod[] = [
   defineMethod({
@@ -53,15 +55,11 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.browserGoto(params)
   }),
   defineMethod({
-    name: 'browser.fill',
-    params: Fill,
-    handler: async (params, { runtime }) => runtime.browserFill(params)
+    name: 'browser.certificate.proceed',
+    params: CertificateProceed,
+    handler: async (params, { runtime }) => runtime.browserProceedCertificate(params)
   }),
-  defineMethod({
-    name: 'browser.type',
-    params: Type,
-    handler: async (params, { runtime }) => runtime.browserType(params)
-  }),
+  ...BROWSER_TEXT_METHODS,
   defineMethod({
     name: 'browser.select',
     params: Select,
@@ -246,11 +244,6 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
     name: 'browser.is',
     params: Is,
     handler: async (params, { runtime }) => runtime.browserIs(params)
-  }),
-  defineMethod({
-    name: 'browser.keyboardInsertText',
-    params: KeyboardInsert,
-    handler: async (params, { runtime }) => runtime.browserKeyboardInsertText(params)
   }),
   defineMethod({
     name: 'browser.find',

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { access, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import * as path from 'path'
-import { tmpdir } from 'os'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import * as path from 'node:path'
+import { tmpdir } from 'node:os'
 import { removeSafeUntrackedDiscardTarget } from './git-discard-path-safety'
 
 const tempRoots: string[] = []

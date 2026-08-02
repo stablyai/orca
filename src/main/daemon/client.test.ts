@@ -1,16 +1,26 @@
-/* eslint-disable max-lines -- Why: daemon connection, RPC, event, and disconnect behavior share one socket test harness. */
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createServer, type Server, type Socket } from 'net'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, writeFileSync, rmSync } from 'fs'
+import { createServer, type Server, type Socket } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { DaemonClient } from './client'
-import { encodeNdjson } from './ndjson'
+import { encodeNdjson, NDJSON_MAX_LINE_BYTES, NdjsonLineTooLongError } from './ndjson'
 import type { HelloMessage, DaemonRequest, DaemonEvent } from './types'
+import { getDaemonSocketPath } from './daemon-spawner'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-client-test-'))
+}
+
+function splitInsideUtf8Sequence(payload: string, needle: string): [Buffer, Buffer] {
+  const encoded = Buffer.from(payload, 'utf8')
+  const encodedNeedle = Buffer.from(needle, 'utf8')
+  const offset = encoded.indexOf(encodedNeedle)
+  if (offset === -1 || encodedNeedle.length < 2) {
+    throw new Error(`Unable to split payload inside ${needle}`)
+  }
+  return [encoded.subarray(0, offset + 1), encoded.subarray(offset + 1)]
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
@@ -32,7 +42,7 @@ describe('DaemonClient', () => {
 
   beforeEach(() => {
     dir = createTestDir()
-    socketPath = join(dir, 'test.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
     writeFileSync(tokenPath, 'test-token-123')
   })
@@ -58,6 +68,12 @@ describe('DaemonClient', () => {
     onStreamHello?: (msg: HelloMessage) => void
     rejectVersion?: boolean
     suppressHelloResponse?: boolean
+    omitHelloIdentity?: boolean
+    helloIdentity?: (role: 'control' | 'stream') => {
+      pid: number
+      startedAtMs: number
+      launchNonce: string
+    }
   }): Promise<void> {
     return new Promise((resolve) => {
       server = createServer((socket) => {
@@ -93,7 +109,19 @@ describe('DaemonClient', () => {
                 socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Version mismatch' }))
                 return
               }
-              socket.write(encodeNdjson({ type: 'hello', ok: true }))
+              socket.write(
+                encodeNdjson({
+                  type: 'hello',
+                  ok: true,
+                  ...(!opts?.omitHelloIdentity
+                    ? {
+                        daemonIdentity: opts?.helloIdentity
+                          ? opts.helloIdentity(hello.role)
+                          : { pid: 123, startedAtMs: 456, launchNonce: 'default-launch' }
+                      }
+                    : {})
+                })
+              )
               if (hello.role === 'stream') {
                 opts?.onStreamHello?.(hello)
               }
@@ -124,6 +152,48 @@ describe('DaemonClient', () => {
       expect(client.isConnected()).toBe(true)
       // Both control and stream sockets should have sent hello
       await waitFor(() => hellos.length > 0)
+    })
+
+    it('captures one matching endpoint identity from both authenticated sockets', async () => {
+      const identity = { pid: 123, startedAtMs: 456, launchNonce: 'launch-a' }
+      await startMockDaemon({ helloIdentity: () => identity })
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+
+      expect(client.getDaemonIdentity()).toEqual(identity)
+    })
+
+    it('rejects a v24 daemon that omits endpoint identity', async () => {
+      await startMockDaemon({ omitHelloIdentity: true })
+      client = new DaemonClient({ socketPath, tokenPath })
+
+      await expect(client.ensureConnected()).rejects.toThrow('Invalid daemon identity')
+    })
+
+    it('allows a legacy v23 daemon to omit endpoint identity', async () => {
+      await startMockDaemon({ omitHelloIdentity: true })
+      client = new DaemonClient({ socketPath, tokenPath, protocolVersion: 23 })
+
+      await expect(client.ensureConnected()).resolves.toBeUndefined()
+      expect(client.getDaemonIdentity()).toBeNull()
+    })
+
+    it('rejects when control and stream sockets report different daemon identities', async () => {
+      await startMockDaemon({
+        helloIdentity: (role) => ({
+          pid: role === 'control' ? 123 : 124,
+          startedAtMs: 456,
+          launchNonce: 'launch-a'
+        })
+      })
+
+      client = new DaemonClient({ socketPath, tokenPath })
+
+      await expect(client.ensureConnected()).rejects.toThrow(
+        'Daemon identity changed during connection'
+      )
+      expect(client.getDaemonIdentity()).toBeNull()
     })
 
     it('removes socket startup listeners after connecting', async () => {
@@ -179,6 +249,35 @@ describe('DaemonClient', () => {
       }
     })
 
+    it('bounds a waiter on an existing connection attempt and prevents socket resurrection', async () => {
+      let resolveHello: () => void = () => {}
+      const helloReceived = new Promise<void>((resolve) => {
+        resolveHello = resolve
+      })
+      await startMockDaemon({
+        suppressHelloResponse: true,
+        onHello: resolveHello
+      })
+      client = new DaemonClient({ socketPath, tokenPath })
+      const ownerAttempt = client.ensureConnected().catch((error: Error) => error)
+      await helloReceived
+
+      await expect(client.ensureConnectedWithin(25)).rejects.toThrow(
+        'Connection attempt wait timed out'
+      )
+      client.disconnect()
+      await expect(ownerAttempt).resolves.toBeInstanceOf(Error)
+      await new Promise((resolve) => setTimeout(resolve, 25))
+
+      const disconnected = client as unknown as {
+        controlSocket: Socket | null
+        streamSocket: Socket | null
+      }
+      expect(client.isConnected()).toBe(false)
+      expect(disconnected.controlSocket).toBeNull()
+      expect(disconnected.streamSocket).toBeNull()
+    })
+
     it('removes hello startup listeners after timeout', async () => {
       vi.useFakeTimers()
 
@@ -190,11 +289,16 @@ describe('DaemonClient', () => {
       socket.destroy = destroy as unknown as Socket['destroy']
       const sendHello = (
         client as unknown as {
-          sendHello(socket: Socket, token: string, role: 'control' | 'stream'): Promise<void>
+          sendHello(
+            socket: Socket,
+            token: string,
+            role: 'control' | 'stream',
+            timeoutMs: number
+          ): Promise<void>
         }
       ).sendHello.bind(client)
 
-      const promise = sendHello(socket, 'test-token-123', 'control')
+      const promise = sendHello(socket, 'test-token-123', 'control', 5000)
       const rejection = expect(promise).rejects.toThrow('Hello response timed out')
       await vi.advanceTimersByTimeAsync(5000)
 
@@ -224,6 +328,30 @@ describe('DaemonClient', () => {
   })
 
   describe('RPC', () => {
+    it('rejects an oversized request before installing a timer or writing', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const internals = client as unknown as {
+        controlSocket: Socket
+        pendingRequests: Map<string, unknown>
+      }
+      const writeSpy = vi.spyOn(internals.controlSocket, 'write')
+      const timerSpy = vi.spyOn(globalThis, 'setTimeout')
+      try {
+        await expect(
+          client.request('write', { data: 'x'.repeat(NDJSON_MAX_LINE_BYTES) })
+        ).rejects.toBeInstanceOf(NdjsonLineTooLongError)
+
+        expect(timerSpy).not.toHaveBeenCalled()
+        expect(writeSpy).not.toHaveBeenCalled()
+        expect(internals.pendingRequests.size).toBe(0)
+      } finally {
+        timerSpy.mockRestore()
+        writeSpy.mockRestore()
+      }
+    })
+
     it('sends request and receives response', async () => {
       await startMockDaemon({
         onControlMessage: (msg) => {
@@ -332,6 +460,48 @@ describe('DaemonClient', () => {
         sessionId: 'session-1'
       })
     })
+
+    it('preserves UTF-8 stream events split inside multibyte characters', async () => {
+      let streamSocket: Socket | null = null
+      await startMockDaemon()
+
+      const origListener = server.listeners('connection')[0] as (s: Socket) => void
+      server.removeAllListeners('connection')
+      let socketCount = 0
+      server.on('connection', (socket) => {
+        socketCount++
+        if (socketCount === 2) {
+          streamSocket = socket
+        }
+        origListener(socket)
+      })
+
+      const events: DaemonEvent[] = []
+      client = new DaemonClient({ socketPath, tokenPath })
+      client.onEvent((event) => events.push(event as DaemonEvent))
+      await client.ensureConnected()
+      await waitFor(() => streamSocket !== null)
+
+      const tableRow = '│OpenCode│🧩│┼────────┤'
+      const event: DaemonEvent = {
+        type: 'event',
+        event: 'data',
+        sessionId: 'session-1',
+        payload: { data: tableRow }
+      }
+      const [first, second] = splitInsideUtf8Sequence(encodeNdjson(event), '🧩')
+      streamSocket!.write(first)
+      streamSocket!.write(second)
+
+      await waitFor(() => events.length > 0)
+      expect(events[0]).toMatchObject({
+        type: 'event',
+        event: 'data',
+        sessionId: 'session-1',
+        payload: { data: tableRow }
+      })
+      expect(JSON.stringify(events[0])).not.toContain('\ufffd')
+    })
   })
 
   describe('disconnect', () => {
@@ -402,12 +572,43 @@ describe('DaemonClient', () => {
       client = new DaemonClient({ socketPath, tokenPath })
       await client.ensureConnected()
 
-      client.notify('write', { sessionId: 'session-1', data: 'hello' })
+      const delivered = client.notify('write', { sessionId: 'session-1', data: 'hello' })
+      expect(delivered).toBe(true)
 
       await waitFor(() => received.length > 0)
       const msg = received[0] as { id: string; type: string }
       expect(msg.id).toMatch(/^notify_/)
       expect(msg.type).toBe('write')
+    })
+
+    it('reports a dropped delivery when not connected', () => {
+      // Why: STA-2373 relies on this false to detect a write silently swallowed by a dead socket.
+      client = new DaemonClient({ socketPath, tokenPath })
+      expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
+    })
+
+    it('reports a dropped delivery for an oversized payload without writing', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const internals = client as unknown as { controlSocket: Socket }
+      const writeSpy = vi.spyOn(internals.controlSocket, 'write')
+
+      expect(client.notify('write', { data: 'x'.repeat(NDJSON_MAX_LINE_BYTES) })).toBe(false)
+      expect(writeSpy).not.toHaveBeenCalled()
+    })
+
+    it('reports a dropped delivery when the socket write throws', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const internals = client as unknown as { controlSocket: Socket }
+      vi.spyOn(internals.controlSocket, 'write').mockImplementation(() => {
+        throw new Error('EPIPE')
+      })
+
+      // Swallowed, not rethrown: a dead socket must not tear down the caller.
+      expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
     })
   })
 })

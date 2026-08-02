@@ -8,8 +8,8 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-import { EventEmitter } from 'events'
-import type { ChildProcess } from 'child_process'
+import { EventEmitter } from 'node:events'
+import type { ChildProcess } from 'node:child_process'
 import { searchWithGitGrep } from './fs-handler-git-fallback'
 
 function createMockProcess(): ChildProcess {
@@ -46,6 +46,7 @@ describe('relay git grep fallback', () => {
       const result = await promise
       expect(result.truncated).toBe(true)
       expect(result.files).toHaveLength(1)
+      expect(result.files[0].matchCount).toBe(1)
       expect(proc.kill).toHaveBeenCalled()
       expect((proc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect((proc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)

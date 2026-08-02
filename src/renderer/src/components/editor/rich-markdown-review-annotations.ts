@@ -9,6 +9,18 @@ import {
 } from './rich-markdown-range-bounds'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { findRichMarkdownSelectedTextRanges } from './rich-markdown-review-text-ranges'
+import { getRichMarkdownSelectionVisibleText } from './rich-markdown-visible-text-map'
+import { countRichMarkdownReviewMarkdownLines } from './rich-markdown-review-line-count'
+export { countRichMarkdownReviewMarkdownLines } from './rich-markdown-review-line-count'
+
+const RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX = 24
+const RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX = 8
+const RICH_MARKDOWN_ANNOTATION_SELECTION_GAP_PX = 8
+const RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX = 56
+const RICH_MARKDOWN_ANNOTATION_RIGHT_OFFSET_PX = 42
+const RICH_MARKDOWN_ANNOTATION_POPOVER_WIDTH_PX = 420
+const RICH_MARKDOWN_ANNOTATION_POPOVER_RIGHT_OFFSET_PX = 24
+const RICH_MARKDOWN_ANNOTATION_POPOVER_MIN_HEIGHT_PX = 220
 
 export type RichMarkdownCommentBlock = {
   key: string
@@ -33,13 +45,6 @@ export type RichMarkdownAnnotationTarget = RichMarkdownComposerState & {
   buttonLeft: number
 }
 
-function countMarkdownLines(value: string): number {
-  if (value.length === 0) {
-    return 1
-  }
-  return value.split(/\r\n|\r|\n/).length
-}
-
 function serializeRichMarkdownJson(editor: Editor, content: JSONContent[]): string {
   return (editor.markdown?.serialize({ type: 'doc', content }) ?? '').trimEnd()
 }
@@ -57,12 +62,12 @@ export function buildRichMarkdownCommentBlocks(editor: Editor): RichMarkdownComm
       return
     }
     const nodeMarkdown = serializeRichMarkdownJson(editor, [nodeJson])
-    const nodeLineCount = countMarkdownLines(nodeMarkdown)
+    const nodeLineCount = countRichMarkdownReviewMarkdownLines(nodeMarkdown)
     if (previousNodeJson) {
       const pairMarkdown = serializeRichMarkdownJson(editor, [previousNodeJson, nodeJson])
       const separatorLineCount = Math.max(
         0,
-        countMarkdownLines(pairMarkdown) - previousNodeLineCount - nodeLineCount
+        countRichMarkdownReviewMarkdownLines(pairMarkdown) - previousNodeLineCount - nodeLineCount
       )
       nextLine += separatorLineCount
     }
@@ -114,17 +119,29 @@ export function getRichMarkdownAnnotationHighlightRanges(
   comments: readonly DiffComment[],
   markdownSourceLineOffset: number
 ): RichMarkdownAnnotationHighlightRange[] {
+  if (comments.length === 0) {
+    return []
+  }
+  // Why once: block resolution re-serializes the doc; per comment it was O(n*doc).
+  const blocks = buildRichMarkdownCommentBlocks(editor)
   return comments.flatMap((comment) =>
-    getRichMarkdownAnnotationHighlightRangesForComment(editor, comment, markdownSourceLineOffset)
+    getRichMarkdownAnnotationHighlightRangesForComment(
+      editor,
+      comment,
+      markdownSourceLineOffset,
+      blocks
+    )
   )
 }
 
 export function getRichMarkdownAnnotationHighlightRangesForComment(
   editor: Editor,
   comment: DiffComment,
-  markdownSourceLineOffset: number
+  markdownSourceLineOffset: number,
+  // Why optional: callers looping over comments pass one shared build.
+  prebuiltBlocks?: RichMarkdownCommentBlock[]
 ): RichMarkdownAnnotationHighlightRange[] {
-  const blocks = buildRichMarkdownCommentBlocks(editor)
+  const blocks = prebuiltBlocks ?? buildRichMarkdownCommentBlocks(editor)
   const selectedText = comment.selectedText?.trim()
   if (!selectedText) {
     return []
@@ -153,12 +170,17 @@ export function getRichMarkdownCommentAtPos(
   markdownSourceLineOffset: number,
   pos: number
 ): DiffComment | null {
+  if (comments.length === 0) {
+    return null
+  }
+  const blocks = buildRichMarkdownCommentBlocks(editor)
   return (
     comments.find((comment) =>
       getRichMarkdownAnnotationHighlightRangesForComment(
         editor,
         comment,
-        markdownSourceLineOffset
+        markdownSourceLineOffset,
+        blocks
       ).some((range) => range.from <= pos && pos <= range.to)
     ) ?? null
   )
@@ -235,6 +257,30 @@ function getCurrentRichMarkdownSelectionRect(root: HTMLElement): DOMRect | null 
   return Array.from(range.getClientRects()).find((candidate) => candidate.width > 0) ?? null
 }
 
+export function getRichMarkdownAnnotationButtonTop(
+  selectionBottomInRoot: number,
+  rootHeight: number
+): number {
+  const preferredTop = selectionBottomInRoot + RICH_MARKDOWN_ANNOTATION_SELECTION_GAP_PX
+  const maxTop = Math.max(
+    RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX,
+    rootHeight - RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX - RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX
+  )
+  return Math.max(RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX, Math.min(preferredTop, maxTop))
+}
+
+export function getRichMarkdownAnnotationButtonLeft(rootWidth: number): number {
+  const preferredLeft = Math.max(
+    RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX,
+    rootWidth - RICH_MARKDOWN_ANNOTATION_RIGHT_OFFSET_PX
+  )
+  const maxLeft = Math.max(
+    RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX,
+    rootWidth - RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX - RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX
+  )
+  return Math.min(preferredLeft, maxLeft)
+}
+
 export function getRichMarkdownAnnotationTarget(
   editor: Editor,
   root: HTMLElement
@@ -246,15 +292,27 @@ export function getRichMarkdownAnnotationTarget(
   if (!rect) {
     return null
   }
-  const selectedText = window.getSelection()?.toString().trim() ?? ''
+  const selectedText = getRichMarkdownSelectionVisibleText(editor.state)
   if (!selectedText) {
     return null
   }
   const rootRect = root.getBoundingClientRect()
-  const popoverWidth = 420
-  const left = Math.max(56, rootRect.width - popoverWidth - 24)
-  const buttonTop = Math.max(8, rect.bottom - rootRect.top + 6)
-  const popoverTop = Math.max(8, Math.min(buttonTop + 28, rootRect.height - 220))
+  // Why: long selections can extend below the visible editor shell; keep the
+  // add-note affordance reachable instead of anchoring to hidden selection area.
+  const buttonTop = getRichMarkdownAnnotationButtonTop(rect.bottom - rootRect.top, rootRect.height)
+  const left = Math.max(
+    RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX,
+    rootRect.width -
+      RICH_MARKDOWN_ANNOTATION_POPOVER_WIDTH_PX -
+      RICH_MARKDOWN_ANNOTATION_POPOVER_RIGHT_OFFSET_PX
+  )
+  const popoverTop = Math.max(
+    RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX,
+    Math.min(
+      buttonTop + RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX + 6,
+      rootRect.height - RICH_MARKDOWN_ANNOTATION_POPOVER_MIN_HEIGHT_PX
+    )
+  )
   return {
     ...getRichMarkdownSelectionRange(editor),
     from: editor.state.selection.from,
@@ -263,6 +321,6 @@ export function getRichMarkdownAnnotationTarget(
     top: popoverTop,
     left,
     buttonTop,
-    buttonLeft: Math.max(56, rootRect.width - 42)
+    buttonLeft: getRichMarkdownAnnotationButtonLeft(rootRect.width)
   }
 }

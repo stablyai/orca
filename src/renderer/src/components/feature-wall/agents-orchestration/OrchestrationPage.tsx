@@ -20,6 +20,7 @@ import {
 } from './orchestration-types'
 import { arrowPathFromCoordTo, bubblePathBetweenRows } from './orchestration-bubble-path'
 import { AgentRow, WorkspaceCard } from './orchestration-cards'
+import { translate } from '@/i18n/i18n'
 
 // Children start pending (no agent row visible) and reveal as the orchestrator
 // dispatches a message to them. This mirrors the "agents arrive when assigned"
@@ -291,7 +292,10 @@ export function OrchestrationPage(props: {
       <div className="relative flex min-w-0 flex-col gap-1.5">
         <WorkspaceCard
           variant="coordinator"
-          name="redesign auth flow"
+          name={translate(
+            'auto.components.feature.wall.agents.orchestration.OrchestrationPage.coordinatorName',
+            'redesign auth flow'
+          )}
           dataCard="coord"
           rows={[
             <AgentRow
@@ -319,10 +323,18 @@ export function OrchestrationPage(props: {
           <span
             className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-1.5 text-muted-foreground"
             style={{ height: 18, fontSize: 10, fontWeight: 500 }}
-            aria-label="2 child workspaces"
+            aria-label={translate(
+              'auto.components.feature.wall.agents.orchestration.OrchestrationPage.862605d066',
+              '2 child workspaces'
+            )}
           >
             <Workflow className="size-2.5" aria-hidden />
-            <span className="truncate">2 children</span>
+            <span className="truncate">
+              {translate(
+                'auto.components.feature.wall.agents.orchestration.OrchestrationPage.30b509a467',
+                '2 children'
+              )}
+            </span>
             <ChevronDown className="size-2.5" aria-hidden />
           </span>
         </div>
@@ -342,7 +354,10 @@ export function OrchestrationPage(props: {
             <div className="feature-wall-child-card-shell">
               <WorkspaceCard
                 variant="default"
-                name="PR 1/2: migrate users.sql"
+                name={translate(
+                  'auto.components.feature.wall.agents.orchestration.OrchestrationPage.childPr1Name',
+                  'PR 1/2: migrate users.sql'
+                )}
                 dataCard="child"
                 childPadding
                 rows={[
@@ -367,7 +382,10 @@ export function OrchestrationPage(props: {
             <div className="feature-wall-child-card-shell">
               <WorkspaceCard
                 variant="default"
-                name="PR 2/2: withSession middleware"
+                name={translate(
+                  'auto.components.feature.wall.agents.orchestration.OrchestrationPage.childPr2Name',
+                  'PR 2/2: withSession middleware'
+                )}
                 dataCard="child-claude"
                 childPadding
                 rows={[

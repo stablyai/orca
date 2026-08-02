@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: GitLab remote parsing coverage needs many URL/host fixtures against the same mocked git/glab helpers. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, glabExecFileAsyncMock, sshExecMock } = vi.hoisted(() => ({
@@ -22,95 +21,13 @@ import {
   getGlabKnownHosts,
   getProjectRef,
   getProjectRefForRemote,
-  parseGitLabProjectRef,
   parseGlabApiResponse,
   parseGlabAuthStatusHosts,
   resolveIssueSource
 } from './gl-utils'
+import { rememberGlabKnownHost, rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
-
-describe('gitlab project ref parsing', () => {
-  it('parses HTTPS and SSH GitLab.com remotes', () => {
-    expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-    expect(parseGitLabProjectRef('git@gitlab.com:stablyai/orca.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'stablyai/orca'
-    })
-  })
-
-  it('preserves nested group paths', () => {
-    expect(parseGitLabProjectRef('git@gitlab.com:group/subgroup/project.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'group/subgroup/project'
-    })
-    expect(parseGitLabProjectRef('https://gitlab.com/g1/g2/g3/proj.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'g1/g2/g3/proj'
-    })
-  })
-
-  it('returns null for non-GitLab hosts when host not in knownHosts', () => {
-    expect(parseGitLabProjectRef('git@github.com:stablyai/orca.git')).toBeNull()
-    expect(parseGitLabProjectRef('git@example.com:foo/bar.git')).toBeNull()
-  })
-
-  it('matches self-hosted hosts when included in knownHosts', () => {
-    expect(
-      parseGitLabProjectRef('git@gitlab.example.com:team/api.git', [
-        'gitlab.com',
-        'gitlab.example.com'
-      ])
-    ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
-  })
-
-  it('parses GitLab remotes with non-standard ports without treating the port as a path segment', () => {
-    expect(
-      parseGitLabProjectRef('ssh://git@gitlab.example.com:2222/team/api.git', [
-        'gitlab.com',
-        'gitlab.example.com'
-      ])
-    ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
-    expect(
-      parseGitLabProjectRef('https://gitlab.example.com:8443/team/api.git', [
-        'gitlab.com',
-        'gitlab.example.com'
-      ])
-    ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
-  })
-
-  it('rejects single-segment paths (host root or user-only)', () => {
-    expect(parseGitLabProjectRef('git@gitlab.com:foo.git')).toBeNull()
-    expect(parseGitLabProjectRef('https://gitlab.com/foo.git')).toBeNull()
-  })
-
-  it('handles missing .git suffix', () => {
-    expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-  })
-
-  it('strips trailing slashes after .git suffixes', () => {
-    expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets.git/')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-    expect(parseGitLabProjectRef('ssh://git@gitlab.com/acme/widgets.git/')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-  })
-
-  it('preserves git protocol remote support', () => {
-    expect(parseGitLabProjectRef('git://gitlab.com/acme/widgets.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-  })
-})
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 
 describe('gitlab project ref resolution', () => {
   beforeEach(() => {
@@ -134,7 +51,8 @@ describe('gitlab project ref resolution', () => {
       path: 'fork/orca'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -148,7 +66,8 @@ describe('gitlab project ref resolution', () => {
       path: 'stablyai/orca'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -178,6 +97,40 @@ describe('gitlab project ref resolution', () => {
     })
   })
 
+  it('keeps local host and local WSL project-ref cache entries separate for the same path', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:host/orca.git\n' })
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:wsl/orca.git\n' })
+
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'host/orca'
+    })
+    await expect(getProjectRef('/repo', undefined, null, { wslDistro: 'Ubuntu' })).resolves.toEqual(
+      {
+        host: 'gitlab.com',
+        path: 'wsl/orca'
+      }
+    )
+    await expect(getProjectRef('/repo', undefined, null, { wslDistro: 'Ubuntu' })).resolves.toEqual(
+      {
+        host: 'gitlab.com',
+        path: 'wsl/orca'
+      }
+    )
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
+    })
+  })
+
   it('coalesces concurrent missing remote probes for the same repo and remote', async () => {
     gitExecFileAsyncMock.mockImplementation(async () => {
       await Promise.resolve()
@@ -195,7 +148,8 @@ describe('gitlab project ref resolution', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
 
     await expect(getProjectRefForRemote('/repo', 'upstream')).resolves.toBeNull()
@@ -211,7 +165,9 @@ describe('gitlab project ref resolution', () => {
       path: 'remote/orca'
     })
 
-    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
+    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo', {
+      signal: expect.any(AbortSignal)
+    })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
@@ -307,7 +263,8 @@ describe('resolveIssueSource', () => {
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -376,8 +333,50 @@ gitlab.example.com:
     expect(parseGlabAuthStatusHosts(out)).toContain('gitlab.example.com')
   })
 
+  it('extracts hosts from bare auth-status section headers', () => {
+    const out = `
+gitlab.com
+  ✓ Logged in to gitlab.com as user1 (/home/user/.config/glab-cli/config.yml)
+  ✓ Token: **************************
+gitlab.internal
+  ✓ Logged in as user2
+  ✓ Token: **************************
+Self-hosted-git
+  ✓ Logged in as user3
+    `
+    expect(parseGlabAuthStatusHosts(out).sort()).toEqual([
+      'gitlab.com',
+      'gitlab.internal',
+      'self-hosted-git'
+    ])
+  })
+
   it('returns empty list for output with no hosts', () => {
     expect(parseGlabAuthStatusHosts('Not logged in.')).toEqual([])
+  })
+
+  it('captures a non-default port on "Logged in to" lines', () => {
+    const out = '✓ Logged in to gitlab.example.com:8080 as user (token)'
+    expect(parseGlabAuthStatusHosts(out)).toEqual(['gitlab.example.com:8080'])
+  })
+
+  it('captures a non-default port on header-style lines', () => {
+    const out = `
+gitlab.example.com:8080:
+  ✓ Logged in as user
+    `
+    expect(parseGlabAuthStatusHosts(out)).toContain('gitlab.example.com:8080')
+  })
+
+  it('keeps two services on the same host distinct by port', () => {
+    const out = `
+✓ Logged in to gitlab.example.com:8443 as user (token)
+✓ Logged in to gitlab.example.com:3030 as user (token)
+    `
+    expect(parseGlabAuthStatusHosts(out).sort()).toEqual([
+      'gitlab.example.com:3030',
+      'gitlab.example.com:8443'
+    ])
   })
 })
 
@@ -394,6 +393,19 @@ describe('parseGlabApiResponse', () => {
     const parsed = parseGlabApiResponse(stdout)
     expect(parsed.headers['x-total']).toBe('7')
     expect(parsed.body).toBe('[]')
+  })
+
+  it('splits large bodies without full-output separator matching', () => {
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const body = '[{"iid":1}]'.repeat(10_000)
+    const parsed = parseGlabApiResponse(`HTTP/2.0 200 OK\r\nX-Total: 7\r\n\r\n${body}`)
+
+    expect(parsed.headers['x-total']).toBe('7')
+    expect(parsed.body).toBe(body)
+    const usedSeparatorMatch = matchSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r?\\n\\r?\\n'
+    )
+    expect(usedSeparatorMatch).toBe(false)
   })
 
   it('lowercases header names for stable lookup', () => {
@@ -432,6 +444,7 @@ describe('getGlabKnownHosts', () => {
     })
 
     await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.example.com'])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], { timeout: 10_000 })
   })
 
   it('falls back to default when glab auth status fails', async () => {
@@ -449,5 +462,233 @@ describe('getGlabKnownHosts', () => {
     await getGlabKnownHosts()
     await getGlabKnownHosts()
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('coalesces many simultaneous callers in one execution context', async () => {
+    let resolveProbe!: (value: { stdout: string; stderr: string }) => void
+    glabExecFileAsyncMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveProbe = resolve
+        })
+    )
+
+    const probes = Array.from({ length: 64 }, () => getGlabKnownHosts())
+
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    resolveProbe({ stdout: 'Logged in to gitlab.concurrent.test as user\n', stderr: '' })
+    const results = await Promise.all(probes)
+    expect(results.every((result) => result === results[0])).toBe(true)
+    expect(results[0]).toEqual(['gitlab.com', 'gitlab.concurrent.test'])
+  })
+
+  it('keeps simultaneous native, WSL distro, and connection probes isolated', async () => {
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'Logged in to ubuntu.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to debian.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to native.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to ssh.test as user\n', stderr: '' })
+
+    const [ubuntu, ubuntuAgain, debian, native, ssh] = await Promise.all([
+      getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' }),
+      getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' }),
+      getGlabKnownHosts(undefined, { wslDistro: 'Debian' }),
+      getGlabKnownHosts(),
+      getGlabKnownHosts('conn-1')
+    ])
+
+    expect(ubuntuAgain).toBe(ubuntu)
+    expect(ubuntu).toEqual(['gitlab.com', 'ubuntu.test'])
+    expect(debian).toEqual(['gitlab.com', 'debian.test'])
+    expect(native).toEqual(['gitlab.com', 'native.test'])
+    expect(ssh).toEqual(['gitlab.com', 'ssh.test'])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    expect(glabExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['auth', 'status'], {
+      timeout: 10_000,
+      wslDistro: 'Ubuntu'
+    })
+    expect(glabExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['auth', 'status'], {
+      timeout: 10_000,
+      wslDistro: 'Debian'
+    })
+  })
+
+  it('preserves a native auth refresh while an older native probe is in flight', async () => {
+    let resolveProbe!: (value: { stdout: string; stderr: string }) => void
+    glabExecFileAsyncMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveProbe = resolve
+        })
+    )
+
+    const staleProbe = getGlabKnownHosts()
+    rememberGlabKnownHost('gitlab.refreshed.test')
+    resolveProbe({ stdout: 'Logged in to gitlab.com as user\n', stderr: '' })
+
+    await expect(staleProbe).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+  })
+
+  it('preserves a native auth refresh when an older native probe fails', async () => {
+    let rejectProbe!: (error: Error) => void
+    glabExecFileAsyncMock.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectProbe = reject
+        })
+    )
+
+    const staleProbe = getGlabKnownHosts()
+    rememberGlabKnownHost('gitlab.refreshed.test')
+    rejectProbe(new Error('stale auth probe failed'))
+
+    await expect(staleProbe).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+  })
+
+  it('keeps a remembered native host out of WSL and SSH caches', async () => {
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'Logged in to native.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to wsl.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to ssh.test as user\n', stderr: '' })
+
+    await Promise.all([
+      getGlabKnownHosts(),
+      getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' }),
+      getGlabKnownHosts('conn-1')
+    ])
+    rememberGlabKnownHost('gitlab.refreshed.test')
+
+    await expect(getGlabKnownHosts()).resolves.toEqual([
+      'gitlab.com',
+      'native.test',
+      'gitlab.refreshed.test'
+    ])
+    await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'gitlab.com',
+      'wsl.test'
+    ])
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual(['gitlab.com', 'ssh.test'])
+  })
+
+  it('batch-normalizes and deduplicates hosts in first-seen order per execution context', async () => {
+    rememberGlabKnownHosts([' Native-B.test ', 'native-a.test', 'NATIVE-B.TEST'])
+    rememberGlabKnownHosts(['WSL-B.test', ' wsl-a.test ', 'wsl-b.test'], undefined, {
+      wslDistro: 'Ubuntu'
+    })
+    rememberGlabKnownHosts(['SSH-B.test', 'ssh-a.test', ' ssh-b.test '], 'conn-batch')
+
+    await expect(getGlabKnownHosts()).resolves.toEqual([
+      'gitlab.com',
+      'native-b.test',
+      'native-a.test'
+    ])
+    await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'gitlab.com',
+      'wsl-b.test',
+      'wsl-a.test'
+    ])
+    await expect(getGlabKnownHosts('conn-batch')).resolves.toEqual([
+      'gitlab.com',
+      'ssh-b.test',
+      'ssh-a.test'
+    ])
+    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('recognizes a self-hosted host on a non-default port', async () => {
+    glabExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '✓ Logged in to gitlab.example.com:8080 as user\n',
+      stderr: ''
+    })
+
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.example.com:8080'])
+  })
+
+  it('caches per connection — the local probe does not satisfy a connection probe', async () => {
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '✓ Logged in to gitlab.com as user\n', stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: '✓ Logged in to gitlab.example.com:8080 as user\n',
+        stderr: ''
+      })
+
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com'])
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
+      'gitlab.com',
+      'gitlab.example.com:8080'
+    ])
+    // A second probe for the same connection is served from cache.
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
+      'gitlab.com',
+      'gitlab.example.com:8080'
+    ])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not permanently cache the failure fallback — a later probe can re-discover hosts', async () => {
+    glabExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('ssh tunnel not ready'))
+      .mockResolvedValueOnce({
+        stdout: '✓ Logged in to gitlab.example.com:8080 as user\n',
+        stderr: ''
+      })
+
+    // First probe fails → canonical default, NOT cached.
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual(['gitlab.com'])
+    // Re-probe (e.g. after tunnel comes up) discovers the real host.
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
+      'gitlab.com',
+      'gitlab.example.com:8080'
+    ])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('removes a timed-out probe from in-flight state so a later call retries', async () => {
+    let rejectProbe!: (error: Error) => void
+    glabExecFileAsyncMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectProbe = reject
+          })
+      )
+      .mockResolvedValueOnce({ stdout: 'Logged in to recovered.test as user\n', stderr: '' })
+
+    const first = getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })
+    const concurrent = getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    rejectProbe(new Error('wsl.exe timed out.'))
+
+    await expect(Promise.all([first, concurrent])).resolves.toEqual([
+      ['gitlab.com'],
+      ['gitlab.com']
+    ])
+    await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'gitlab.com',
+      'recovered.test'
+    ])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not reuse a successful result after an SSH provider reconnects', async () => {
+    const connectionId = 'conn-reconnected'
+    registerSshGitProvider(connectionId, {} as never)
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'Logged in to old-tunnel.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to new-tunnel.test as user\n', stderr: '' })
+
+    await expect(getGlabKnownHosts(connectionId)).resolves.toEqual([
+      'gitlab.com',
+      'old-tunnel.test'
+    ])
+    registerSshGitProvider(connectionId, {} as never)
+    await expect(getGlabKnownHosts(connectionId)).resolves.toEqual([
+      'gitlab.com',
+      'new-tunnel.test'
+    ])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    unregisterSshGitProvider(connectionId)
   })
 })

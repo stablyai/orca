@@ -19,6 +19,8 @@ import {
   useAgentCapabilitySetupStatus,
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
+import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
+import { translate } from '@/i18n/i18n'
 
 export function AgentCapabilitiesSetupAction(props: {
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
@@ -75,17 +77,37 @@ export function AgentCapabilitiesSetupAction(props: {
       }
       const firstWarning = result.warnings[0]
       if (firstWarning) {
-        toast.warning('Some capability setup needs attention', {
-          description: firstWarning.message
-        })
+        toast.warning(
+          translate(
+            'auto.components.feature.wall.AgentCapabilitiesSetupAction.1aa657d8f4',
+            'Some capability setup needs attention'
+          ),
+          {
+            description: firstWarning.message
+          }
+        )
       }
       if (result.skillCommandsCopied) {
-        toast.success('Capability setup ready', {
-          description: 'Skill command copied and inserted below for review.'
-        })
+        toast.success(
+          translate(
+            'auto.components.feature.wall.AgentCapabilitiesSetupAction.c605f51f2b',
+            'Capability setup ready'
+          ),
+          {
+            description: translate(
+              'auto.components.feature.wall.AgentCapabilitiesSetupAction.3a59452a67',
+              'Skill command copied and inserted below for review.'
+            )
+          }
+        )
       }
       if (result.computerUsePermissionsOpened) {
-        toast.message('Opened Computer Use permissions')
+        toast.message(
+          translate(
+            'auto.components.feature.wall.AgentCapabilitiesSetupAction.e9eb197e12',
+            'Opened Computer Use permissions'
+          )
+        )
       }
       if (result.skillInstallCommand) {
         setFeatureSetupCommandSelection(featureSetup)
@@ -121,23 +143,50 @@ type AgentCapabilitySetupRow = {
 const AGENT_CAPABILITY_SETUP_ROWS: readonly AgentCapabilitySetupRow[] = [
   {
     id: 'orchestration',
-    title: 'Agent Orchestration',
-    description:
-      'Let agents coordinate through Orca to keep large, multi-step tasks moving to completion.',
+    get title() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.ac07f8887f',
+        'Agent Orchestration'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.c61c91e642',
+        'Let agents coordinate through Orca to keep large, multi-step tasks moving to completion.'
+      )
+    },
     icon: <Workflow className="size-4" />
   },
   {
     id: 'browserUse',
-    title: 'Agent Browser Use',
-    description:
-      "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see.",
+    get title() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.e638da007a',
+        'Agent Browser Use'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.5e8fe5a72d',
+        "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see."
+      )
+    },
     icon: <Globe2 className="size-4" />
   },
   {
     id: 'computerUse',
-    title: 'Computer Use',
-    description:
-      'Let agents control the desktop, moving the cursor, clicking, and typing in any app.',
+    get title() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.362a07517d',
+        'Computer Use'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.1b51644c2d',
+        'Let agents control the desktop, moving the cursor, clicking, and typing in any app.'
+      )
+    },
     icon: <MonitorCog className="size-4" />
   }
 ]
@@ -161,6 +210,7 @@ function AgentCapabilitySetupControls(props: {
         onChange={props.onFeatureSetupChange}
         installStatus={props.installStatus}
       />
+      <FullDiskAccessSetupPrompt />
       {showSetupAction ? (
         <div className="mt-6 flex items-center">
           <Button
@@ -175,7 +225,11 @@ function AgentCapabilitySetupControls(props: {
             ) : (
               <Terminal className="size-4" />
             )}
-            {props.setupBusyLabel ?? 'Install CLI & Skills'}
+            {props.setupBusyLabel ??
+              translate(
+                'auto.components.feature.wall.AgentCapabilitiesSetupAction.c89534cbe9',
+                'Install CLI & Skills'
+              )}
           </Button>
         </div>
       ) : null}
@@ -259,9 +313,12 @@ function AgentCapabilityStatusNote(props: {
     return (
       <span className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className="rounded-full border border-green-500/45 bg-green-500/10 px-2 py-0.5 text-[11px] font-semibold leading-none text-green-700 dark:text-green-300">
-          Installed
+          {translate(
+            'auto.components.feature.wall.AgentCapabilitiesSetupAction.b8dc9dd8a2',
+            'Installed'
+          )}
         </span>
-        {props.status.label !== 'Installed' ? (
+        {props.status.tone !== 'ready' ? (
           <span
             className={cn(
               'text-xs font-medium',

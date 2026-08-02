@@ -1,7 +1,16 @@
+import {
+  finishAutomationWorkspaceProvenanceRequest,
+  releaseAutomationWorkspaceProvenanceRequest,
+  resolveAutomationWorkspaceProvenance
+} from '../../../automations/workspace-provenance'
+import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { defineMethod, type RpcMethod } from '../core'
+import { resolveWorktreeCatalogSnapshot } from '../worktree-catalog-snapshot'
+import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import {
   WorktreeCreate,
   WorktreeDetectedListParams,
+  WorktreeActivate,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
   WorktreePrefetchCreateBase,
@@ -11,14 +20,22 @@ import {
   WorktreeResolvePrBase,
   WorktreeSelector,
   WorktreeSet,
-  WorktreeSortOrder
+  WorktreeSortOrder,
+  WorktreeTeardownMissingTerminalsParams
 } from './worktree-schemas'
 
 export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.ps',
     params: WorktreePsParams,
-    handler: async (params, { runtime }) => runtime.getWorktreePs(params.limit)
+    handler: async (params, { runtime }) => {
+      const result = await runtime.getWorktreePs(params.limit)
+      // Why: callers that never send the field get the byte-exact legacy response.
+      if (params.afterSnapshotId === undefined) {
+        return result
+      }
+      return resolveWorktreeCatalogSnapshot(result, params.afterSnapshotId)
+    }
   }),
   defineMethod({
     name: 'worktree.list',
@@ -31,9 +48,22 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.listDetectedManagedWorktrees(params.repo)
   }),
   defineMethod({
+    name: 'worktree.teardownMissingTerminals',
+    params: WorktreeTeardownMissingTerminalsParams,
+    handler: async (params, { runtime }) =>
+      runtime.teardownMissingManagedWorktreeTerminals(
+        params.repo,
+        params.worktreeIds,
+        params.connectionId
+      )
+  }),
+  defineMethod({
     name: 'worktree.lineageList',
     params: null,
-    handler: async (_params, { runtime }) => ({ lineage: await runtime.listWorktreeLineage() })
+    handler: async (_params, { runtime }) => ({
+      lineage: await runtime.listWorktreeLineage(),
+      workspaceLineage: await runtime.listWorkspaceLineage()
+    })
   }),
   defineMethod({
     name: 'worktree.show',
@@ -49,49 +79,106 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'worktree.activate',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.activateManagedWorktree(params.worktree)
+    params: WorktreeActivate,
+    handler: async (params, { runtime, clientKind }) =>
+      // Why: clientKind ('mobile'|'runtime') scopes the host-renderer slept-agent
+      // wake to phones so web/desktop activation behavior is unchanged.
+      runtime.activateManagedWorktree(params.worktree, {
+        notifyClients: params.notifyClients !== false,
+        clientKind,
+        navigation: resolveRuntimeNavigationTarget({
+          navigation: params.navigation,
+          notifyClients: params.notifyClients,
+          clientKind
+        })
+      })
   }),
   defineMethod({
     name: 'worktree.create',
     params: WorktreeCreate,
     handler: async (params, { runtime }) =>
-      runtime.createManagedWorktree({
-        repoSelector: params.repo,
-        name: params.name ?? '',
-        baseBranch: params.baseBranch,
-        branchNameOverride: params.branchNameOverride,
-        linkedIssue: params.linkedIssue,
-        linkedPR: params.linkedPR,
-        linkedLinearIssue: params.linkedLinearIssue,
-        linkedGitLabMR: params.linkedGitLabMR,
-        linkedGitLabIssue: params.linkedGitLabIssue,
-        comment: params.comment,
-        displayName: params.displayName,
-        telemetrySource: params.telemetrySource,
-        workspaceStatus: params.workspaceStatus,
-        manualOrder: params.manualOrder,
-        sparseCheckout: params.sparseCheckout,
-        pushTarget: params.pushTarget,
-        runHooks: params.runHooks === true,
-        activate: params.activate === true,
-        setupDecision: params.setupDecision,
-        createdWithAgent: params.createdWithAgent ?? params.startupAgent,
-        startup: params.startupCommand
-          ? {
-              command: params.startupCommand,
-              ...(params.startupEnv ? { env: params.startupEnv } : {})
+      // Why: a mobile create interrupted by a connection migration is retried with
+      // the same clientMutationId; dedupe so the host returns the in-flight/created
+      // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
+      runtime.dedupeWorktreeCreate(params.repo, params.clientMutationId, async () => {
+        const repo = await runtime.showRepo(params.repo)
+        const automationProvenance = resolveAutomationWorkspaceProvenance({
+          authority: runtime,
+          repoSelector: params.repo,
+          repo,
+          request: params.automationProvenanceRequest
+        })
+        // Why: provenance tokens are reserved before creation so retries can recover,
+        // but failed create attempts must release the reservation for a safe retry.
+        try {
+          const result = await runtime.createManagedWorktree({
+            repoSelector: params.repo,
+            name: params.name ?? '',
+            baseBranch: params.baseBranch,
+            compareBaseRef: params.compareBaseRef,
+            branchNameOverride: params.branchNameOverride,
+            linkedIssue: params.linkedIssue,
+            linkedPR: params.linkedPR,
+            linkedLinearIssue: params.linkedLinearIssue,
+            linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
+            linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
+            linkedGitLabMR: params.linkedGitLabMR,
+            linkedGitLabIssue: params.linkedGitLabIssue,
+            linkedBitbucketPR: params.linkedBitbucketPR,
+            linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
+            linkedGiteaPR: params.linkedGiteaPR,
+            linkedWorkItem: params.linkedWorkItem,
+            linkedTaskSourceContext: params.linkedTaskSourceContext,
+            comment: params.comment,
+            displayName: params.displayName,
+            telemetrySource: params.telemetrySource,
+            workspaceStatus: params.workspaceStatus,
+            manualOrder: params.manualOrder,
+            sparseCheckout: params.sparseCheckout,
+            pushTarget: params.pushTarget,
+            runHooks: params.runHooks === true,
+            activate: params.activate === true,
+            setupDecision: params.setupDecision,
+            createdWithAgent: params.createdWithAgent ?? params.startupAgent,
+            automationProvenance,
+            cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
+              startupAgent: params.startupAgent ?? params.createdWithAgent,
+              createdAt: Date.now()
+            }),
+            startup: params.startupCommand
+              ? {
+                  command: params.startupCommand,
+                  ...(params.startupEnv ? { env: params.startupEnv } : {}),
+                  ...(params.startupLaunchConfig
+                    ? { launchConfig: params.startupLaunchConfig }
+                    : {}),
+                  ...(params.startupCommandDelivery
+                    ? { startupCommandDelivery: params.startupCommandDelivery }
+                    : {})
+                }
+              : undefined,
+            ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
+            ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
+            startupDraft: params.startupDraft,
+            lineage: {
+              parentWorkspace: params.parentWorkspace,
+              envParentWorkspace: params.envParentWorkspace,
+              parentWorktree: params.parentWorktree,
+              ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
+              noParent: params.noParent === true,
+              callerTerminalHandle: params.callerTerminalHandle,
+              orchestrationContext: params.orchestrationContext
             }
-          : undefined,
-        ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
-        ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
-        startupDraft: params.startupDraft,
-        lineage: {
-          parentWorktree: params.parentWorktree,
-          ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
-          noParent: params.noParent === true,
-          callerTerminalHandle: params.callerTerminalHandle,
-          orchestrationContext: params.orchestrationContext
+          })
+          finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
+          // Why: agent callers need a stable dispatch target without traversing
+          // terminal-list layout duplicates after creating the worktree.
+          return params.startupAgent && result.startupTerminal?.handle
+            ? { ...result, agentTerminalHandle: result.startupTerminal.handle }
+            : result
+        } catch (error) {
+          releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
+          throw error
         }
       })
   }),
@@ -115,8 +202,15 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
         linkedLinearIssue: params.linkedLinearIssue,
+        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
+        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
         linkedGitLabMR: params.linkedGitLabMR,
         linkedGitLabIssue: params.linkedGitLabIssue,
+        linkedBitbucketPR: params.linkedBitbucketPR,
+        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
+        linkedGiteaPR: params.linkedGiteaPR,
+        linkedWorkItem: params.linkedWorkItem,
+        linkedTaskSourceContext: params.linkedTaskSourceContext,
         comment: params.comment,
         isArchived: params.isArchived,
         isUnread: params.isUnread,
@@ -132,6 +226,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         workspaceStatus: params.workspaceStatus,
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
+        mobileDiffReview: params.mobileDiffReview,
         lineage:
           params.parentWorktree || params.noParent === true
             ? {
@@ -156,6 +251,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         repoSelector: params.repo,
         prNumber: params.prNumber,
         headRefName: params.headRefName,
+        baseRefName: params.baseRefName,
         isCrossRepository: params.isCrossRepository
       })
   }),
@@ -167,6 +263,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         repoSelector: params.repo,
         mrIid: params.mrIid,
         sourceBranch: params.sourceBranch,
+        targetBranch: params.targetBranch,
         isCrossRepository: params.isCrossRepository
       })
   }),

@@ -1,7 +1,7 @@
-import { EventEmitter } from 'events'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { netConnectMock } = vi.hoisted(() => ({
@@ -42,7 +42,12 @@ describe('daemon health socket listener cleanup', () => {
 
     const result = healthCheckDaemon(socketPath, tokenPath)
     socket.emit('connect')
-    socket.emit('data', Buffer.from('{"type":"hello","ok":true}\n{"id":"health-1","ok":true}\n'))
+    socket.emit(
+      'data',
+      Buffer.from(
+        '{"type":"hello","ok":true}\n{"id":"health-1","ok":true}\n{"id":"health-2","ok":true}\n'
+      )
+    )
 
     await expect(result).resolves.toBe(true)
     expect(socket.listenerCount('connect')).toBe(0)

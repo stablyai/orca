@@ -9,6 +9,7 @@ import type { getEditorPanelRenderModel } from './editor-panel-render-model'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
+import { translate } from '@/i18n/i18n'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
 
@@ -43,9 +44,9 @@ type EditorPanelShellProps = {
   onContentChange: (content: string) => void
   onContentChangeForFile: (file: OpenFile, content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
-  onSave: (content: string) => Promise<void>
-  onSaveForFile: (file: OpenFile, content: string) => Promise<void>
-  onReloadFileContent: (file: OpenFile) => void
+  onSave: (content: string) => Promise<boolean>
+  onSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
+  onReloadContent: (file: OpenFile) => void
   onCloseMarkdownTableOfContents: () => void
   onCloseRenameDialog: () => void
   onRenameConfirm: (newRelPath: string) => Promise<void>
@@ -85,7 +86,7 @@ export function EditorPanelShell({
   onDirtyStateHint,
   onSave,
   onSaveForFile,
-  onReloadFileContent,
+  onReloadContent,
   onCloseMarkdownTableOfContents,
   onCloseRenameDialog,
   onRenameConfirm,
@@ -93,7 +94,7 @@ export function EditorPanelShell({
 }: EditorPanelShellProps): JSX.Element {
   return (
     <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
-      {!model.isCombinedDiff && (
+      {!model.isCombinedDiff && activeFile.mode !== 'check-details' && (
         <EditorPanelHeader
           activeFile={activeFile}
           copiedPathVisible={copiedPathVisible}
@@ -105,12 +106,12 @@ export function EditorPanelShell({
           hasEditorToggle={model.hasEditorToggle}
           availableEditorToggleModes={model.availableEditorToggleModes}
           effectiveToggleValue={model.effectiveToggleValue}
-          mdViewMode={model.mdViewMode}
-          hasViewModeToggle={model.hasViewModeToggle}
           canOpenPreviewToSide={model.canOpenPreviewToSide}
           canShowMarkdownPreview={model.canShowMarkdownPreview}
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
+          shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
+          canExportMarkdownToPdf={model.canExportMarkdownToPdf}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
           canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
           markdownFrontmatterVisible={markdownFrontmatterVisible}
@@ -151,7 +152,7 @@ export function EditorPanelShell({
           handleDirtyStateHint={onDirtyStateHint}
           handleSave={onSave}
           handleSaveForFile={onSaveForFile}
-          reloadFileContent={onReloadFileContent}
+          reloadContent={onReloadContent}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
           showMarkdownFrontmatter={markdownFrontmatterVisible}
           onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
@@ -184,7 +185,7 @@ export function EditorPanelShell({
 function EditorLoadingFallback(): JSX.Element {
   return (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-      Loading editor...
+      {translate('auto.components.editor.EditorPanelShell.e2c4dec350', 'Loading editor...')}
     </div>
   )
 }

@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
-import { Loader2, Mic } from 'lucide-react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
-import type { FeatureTip } from '../../../../shared/feature-tips'
-import { Button } from '@/components/ui/button'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -17,92 +14,29 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { CliFeatureTipVisual } from './CliFeatureTipVisual'
+import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
+import { FeatureTipActions } from './FeatureTipActions'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
 import {
   getOrcaCliFeatureTipTelemetrySource,
+  trackCmdJPaletteFeatureTipAcknowledged,
   trackOrcaCliFeatureTipSetupClicked,
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
-
-const WAVEFORM_BAR_HEIGHTS = [30, 60, 90, 70, 100, 50, 80, 35, 65]
+import { translate } from '@/i18n/i18n'
+import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
 
 function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
   return (
     <span className="rounded-sm bg-foreground/10 px-1 py-0.5 font-medium text-foreground">
       {children}
     </span>
-  )
-}
-
-function FeatureTipVisual({ tip }: { tip: FeatureTip }): JSX.Element {
-  if (tip.action === 'setup-cli') {
-    return <CliFeatureTipVisual />
-  }
-
-  switch (tip.action) {
-    case 'enable-voice':
-      return (
-        <div className="flex flex-col items-center gap-2.5">
-          <div className="flex size-14 items-center justify-center rounded-full bg-foreground text-background">
-            <Mic className="size-5" />
-          </div>
-          {/* Animated waveform — purely decorative, signals "voice" without copy */}
-          <div className="flex h-6 items-center justify-center gap-1" aria-hidden="true">
-            {WAVEFORM_BAR_HEIGHTS.map((height, i) => (
-              <span
-                key={i}
-                className="block w-[3px] rounded-[2px] bg-foreground/60 animate-waveform"
-                style={{ height: `${height}%`, animationDelay: `${i * 0.1}s` }}
-              />
-            ))}
-          </div>
-        </div>
-      )
-  }
-}
-
-function FeatureTipActions({
-  currentTip,
-  primaryBusy,
-  onPrimaryAction,
-  onSkip,
-  showSkip = true,
-  fullWidth = false
-}: {
-  currentTip: FeatureTip
-  primaryBusy: boolean
-  onPrimaryAction: () => void
-  onSkip: () => void
-  showSkip?: boolean
-  fullWidth?: boolean
-}): JSX.Element {
-  return (
-    <>
-      {showSkip ? (
-        <Button variant="ghost" onClick={onSkip} disabled={primaryBusy}>
-          Maybe Later
-        </Button>
-      ) : null}
-      <Button
-        className={fullWidth ? 'w-full' : undefined}
-        onClick={onPrimaryAction}
-        disabled={primaryBusy}
-      >
-        {primaryBusy ? (
-          <>
-            <Loader2 className="size-4 animate-spin" />
-            Installing...
-          </>
-        ) : (
-          currentTip.ctaLabel
-        )}
-      </Button>
-    </>
   )
 }
 
@@ -164,6 +98,23 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
+  const openShortcutsSettings = (): void => {
+    // Why: dismiss the tip when navigating away — the tip's job is done once
+    // the user clicks through to rebind, and leaving it mounted behind the
+    // settings page would re-appear on close.
+    markCurrentTipSeen()
+    closeModal()
+    openSettingsTarget({ pane: 'shortcuts', repoId: null })
+    openSettingsPage()
+  }
+
+  const openVoiceSettings = (): void => {
+    markCurrentTipSeen()
+    closeModal()
+    openSettingsTarget({ pane: 'voice', repoId: null })
+    openSettingsPage()
+  }
+
   const enableOrchestrationSkillSetup = (): void => {
     localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
     localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
@@ -177,6 +128,15 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
     markFeatureTipsSeen([currentTip.id])
     switch (currentTip.action) {
+      case 'learn-cmd-j-palette': {
+        // Why: passive education tip — acknowledging just dismisses; the rebind
+        // path lives in Settings and is reachable from the palette itself.
+        trackCmdJPaletteFeatureTipAcknowledged(
+          getOrcaCliFeatureTipTelemetrySource(modalData.source)
+        )
+        closeModal()
+        break
+      }
       case 'enable-voice': {
         const voice = settings?.voice ?? getDefaultVoiceSettings()
         void updateSettings({
@@ -210,7 +170,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
               return
             }
             enableOrchestrationSkillSetup()
-            toast.success('Registered `orca` in PATH.')
+            toast.success(
+              translate(
+                'auto.components.feature.tips.FeatureTipsModal.ce13a742d0',
+                'Registered `orca` in PATH.'
+              )
+            )
             setSkillTerminalOpen(true)
             return
           }
@@ -219,9 +184,20 @@ export default function FeatureTipsModal(): JSX.Element | null {
           if (!canApplySetupResult()) {
             return
           }
-          toast.warning('Orca CLI needs attention', {
-            description: result.status.detail ?? 'Open Settings to finish CLI setup.'
-          })
+          toast.warning(
+            translate(
+              'auto.components.feature.tips.FeatureTipsModal.1da82af45b',
+              'Orca CLI needs attention'
+            ),
+            {
+              description:
+                result.status.detail ??
+                translate(
+                  'auto.components.feature.tips.FeatureTipsModal.d1a86c7eb5',
+                  'Open Settings to finish CLI setup.'
+                )
+            }
+          )
           closeModal()
           openCliSettings()
         } catch (error) {
@@ -235,7 +211,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
               return
             }
             enableOrchestrationSkillSetup()
-            toast.info('Development preview: opening skills setup terminal.')
+            toast.info(
+              translate(
+                'auto.components.feature.tips.FeatureTipsModal.53905bd076',
+                'Development preview: opening skills setup terminal.'
+              )
+            )
             setSkillTerminalOpen(true)
             return
           }
@@ -290,14 +271,43 @@ export default function FeatureTipsModal(): JSX.Element | null {
                       : 'mt-3 max-h-64 translate-y-0 border-border/70 bg-muted/35 p-3 opacity-100'
                   }`}
                 >
-                  <p className="font-medium text-foreground">Try asking:</p>
-                  <p>
-                    “Split this PR into two <WorktreePromptTerm>worktrees</WorktreePromptTerm> and
-                    create PRs for each.”
+                  <p className="font-medium text-foreground">
+                    {translate(
+                      'auto.components.feature.tips.FeatureTipsModal.4795ac2d4a',
+                      'Try asking:'
+                    )}
                   </p>
                   <p>
-                    “When the agent in <WorktreePromptTerm>worktree</WorktreePromptTerm> X finishes,
-                    send it the review task.”
+                    {translate(
+                      'auto.components.feature.tips.FeatureTipsModal.55846c7f95',
+                      '“Split this PR into two'
+                    )}
+                    <WorktreePromptTerm>
+                      {translate(
+                        'auto.components.feature.tips.FeatureTipsModal.27c567a89c',
+                        'worktrees'
+                      )}
+                    </WorktreePromptTerm>{' '}
+                    {translate(
+                      'auto.components.feature.tips.FeatureTipsModal.7fc6f02099',
+                      'and create PRs for each.”'
+                    )}
+                  </p>
+                  <p>
+                    {translate(
+                      'auto.components.feature.tips.FeatureTipsModal.864e2db28f',
+                      '“When the agent in'
+                    )}
+                    <WorktreePromptTerm>
+                      {translate(
+                        'auto.components.feature.tips.FeatureTipsModal.298301b7a0',
+                        'worktree'
+                      )}
+                    </WorktreePromptTerm>{' '}
+                    {translate(
+                      'auto.components.feature.tips.FeatureTipsModal.3c6c478462',
+                      'X finishes, send it the review task.”'
+                    )}
                   </p>
                 </div>
               </div>
@@ -307,7 +317,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             <DialogFooter className="mt-8 flex sm:justify-stretch">
               {skillTerminalOpen ? (
                 <Button className="w-full" onClick={handleSkip}>
-                  Done
+                  {translate('auto.components.feature.tips.FeatureTipsModal.c169298e4d', 'Done')}
                 </Button>
               ) : (
                 <FeatureTipActions
@@ -333,7 +343,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
                 skillTerminalOpen ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'
               }`}
             >
-              {skillTerminalOpen ? null : <FeatureTipVisual tip={currentTip} />}
+              {skillTerminalOpen ? null : <CliFeatureTipVisual />}
             </div>
           </div>
         </DialogContent>
@@ -341,28 +351,34 @@ export default function FeatureTipsModal(): JSX.Element | null {
     )
   }
 
-  return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md gap-4 p-7" showCloseButton>
-        <DialogHeader className="items-center gap-4 px-8 text-center sm:text-center">
-          <FeatureTipVisual tip={currentTip} />
-          <DialogTitle className="text-2xl font-semibold tracking-tight">
-            {currentTip.title}
-          </DialogTitle>
-          <DialogDescription className="max-w-sm text-sm leading-relaxed">
-            {currentTip.description}
-          </DialogDescription>
-        </DialogHeader>
+  if (currentTip.action === 'learn-cmd-j-palette') {
+    return (
+      <CmdJPaletteTipDialog
+        open={isOpen}
+        tip={currentTip}
+        primaryBusy={primaryBusy}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSkip={handleSkip}
+        onRebindClick={openShortcutsSettings}
+      />
+    )
+  }
 
-        <DialogFooter className="sm:justify-center">
-          <FeatureTipActions
-            currentTip={currentTip}
-            primaryBusy={primaryBusy}
-            onPrimaryAction={() => void handlePrimaryAction()}
-            onSkip={handleSkip}
-          />
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+  if (currentTip.action !== 'enable-voice') {
+    currentTip.action satisfies never
+    return null
+  }
+
+  return (
+    <VoiceDictationTipDialog
+      open={isOpen}
+      tip={currentTip}
+      primaryBusy={primaryBusy}
+      onOpenChange={handleOpenChange}
+      onPrimaryAction={() => void handlePrimaryAction()}
+      onSkip={handleSkip}
+      onVoiceSettingsClick={openVoiceSettings}
+    />
   )
 }

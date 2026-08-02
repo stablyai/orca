@@ -80,7 +80,8 @@ describe('SshFilesystemProvider readFile streaming', () => {
 
     const result = await provider.readFile('/home/user/file.txt')
     expect(mux.request).toHaveBeenCalledWith('fs.readFileStream', {
-      filePath: '/home/user/file.txt'
+      filePath: '/home/user/file.txt',
+      flowControl: 'ack'
     })
     expect(result).toEqual({ content: text, isBinary: false })
   })

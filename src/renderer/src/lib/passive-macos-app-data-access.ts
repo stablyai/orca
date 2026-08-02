@@ -1,4 +1,8 @@
-import type { OpenFile, RightSidebarTab } from '@/store/slices/editor'
+import type {
+  ActiveRightSidebarTab,
+  OpenFile,
+  RightSidebarExplorerView
+} from '@/store/slices/editor'
 
 const MAC_APP_DATA_SEGMENT_RE = /(^|\/)Library\/(Containers|Group Containers)\//
 
@@ -16,26 +20,39 @@ export function isMacAppDataPath(path: string | null | undefined, userAgent?: st
   return MAC_APP_DATA_SEGMENT_RE.test(path.replace(/\\/g, '/'))
 }
 
-export function shouldPollActiveGitStatus(args: {
+export type ActiveGitStatusPollingArgs = {
   activeWorktreeId: string | null
   worktreePath: string | null
   rightSidebarOpen: boolean
-  rightSidebarTab: RightSidebarTab
+  rightSidebarTab: ActiveRightSidebarTab
+  rightSidebarExplorerView?: RightSidebarExplorerView
   openFiles?: OpenFile[]
   userAgent?: string
-}): boolean {
+}
+
+export function hasInteractiveActiveGitStatusConsumer(args: ActiveGitStatusPollingArgs): boolean {
   if (!args.activeWorktreeId || !args.worktreePath) {
     return false
   }
   if (
     args.rightSidebarOpen &&
     (args.rightSidebarTab === 'source-control' ||
-      args.rightSidebarTab === 'explorer' ||
+      (args.rightSidebarTab === 'explorer' && args.rightSidebarExplorerView !== 'search') ||
       args.rightSidebarTab === 'checks')
   ) {
     return true
   }
   if ((args.openFiles ?? []).some((file) => file.worktreeId === args.activeWorktreeId)) {
+    return true
+  }
+  return false
+}
+
+export function shouldPollActiveGitStatus(args: ActiveGitStatusPollingArgs): boolean {
+  if (!args.activeWorktreeId || !args.worktreePath) {
+    return false
+  }
+  if (hasInteractiveActiveGitStatusConsumer(args)) {
     return true
   }
   // Why: macOS app-container paths can trigger the "data from other apps"

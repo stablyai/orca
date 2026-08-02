@@ -16,6 +16,10 @@ import {
   selectRetainedAgentEntriesForWorktree,
   selectTerminalLayoutsForWorktree
 } from './worktree-agent-row-selectors'
+import {
+  createWorktreeAgentFreshnessSelector,
+  EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
+} from './worktree-agent-freshness-selector'
 
 export { buildWorktreeAgentRows } from './worktree-agent-rows'
 export {
@@ -35,45 +39,51 @@ export {
  * store slice and then shared by every visible card, avoiding O(cards × agents)
  * selector work on high-frequency agent status pings.
  */
-export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
-  const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId])
+export function useWorktreeAgentRows(worktreeId: string, active = true): DashboardAgentRow[] {
+  const selectAgentFreshness = useMemo(
+    () => createWorktreeAgentFreshnessSelector(worktreeId),
+    [worktreeId]
+  )
+  const tabs = useAppStore((s) => (active ? s.tabsByWorktree[worktreeId] : undefined))
   // Why: narrow the subscriptions to only THIS worktree's entries via
   // useShallow. Subscribing to the whole agentStatusByPaneKey map would make
   // every on-screen card re-render on any agent-status update anywhere —
   // O(worktrees²) render amplification. Pre-filtering here means the card
   // only re-renders when something relevant to THIS worktree changes.
   const liveEntries = useAppStore(
-    useShallow((s) => selectLiveAgentStatusEntriesForWorktree(s, worktreeId))
+    useShallow((s) => (active ? selectLiveAgentStatusEntriesForWorktree(s, worktreeId) : []))
   )
   // Why: keep the store selector limited to stable raw records. Converting
   // migration entries creates fresh objects with Date.now(), which breaks
   // useSyncExternalStore's cached-snapshot contract and can blank Electron.
   const migrationUnsupported = useAppStore(
-    useShallow((s) => selectMigrationUnsupportedEntriesForWorktree(s, worktreeId))
+    useShallow((s) => (active ? selectMigrationUnsupportedEntriesForWorktree(s, worktreeId) : []))
   )
   const retained = useAppStore(
-    useShallow((s) => selectRetainedAgentEntriesForWorktree(s, worktreeId))
+    useShallow((s) => (active ? selectRetainedAgentEntriesForWorktree(s, worktreeId) : []))
   )
   const runtimePaneTitlesByTabId = useAppStore(
-    useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktreeId))
+    useShallow((s) => (active ? selectRuntimePaneTitlesForWorktree(s, worktreeId) : {}))
   )
-  const ptyIdsByTabId = useAppStore(useShallow((s) => selectLivePtyIdsForWorktree(s, worktreeId)))
+  const ptyIdsByTabId = useAppStore(
+    useShallow((s) => (active ? selectLivePtyIdsForWorktree(s, worktreeId) : {}))
+  )
   const terminalLayoutsByTabId = useAppStore(
-    useShallow((s) => selectTerminalLayoutsForWorktree(s, worktreeId))
+    useShallow((s) => (active ? selectTerminalLayoutsForWorktree(s, worktreeId) : {}))
   )
   const runtimeAgentOrchestrationByPaneKey = useAppStore(
-    useShallow((s) => selectRuntimeAgentOrchestrationForWorktree(s, worktreeId))
+    useShallow((s) => (active ? selectRuntimeAgentOrchestrationForWorktree(s, worktreeId) : {}))
   )
-  // Why: agentStatusEpoch is included in the dependency array (but not in the
-  // computation itself) so the memo recomputes when freshness boundaries
-  // expire, even if no new PTY data arrives — same rationale as
-  // useDashboardData.
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const agentFreshnessSignature = useAppStore((s) =>
+    active ? selectAgentFreshness(s) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
+  )
 
   return useMemo<DashboardAgentRow[]>(() => {
-    // Why: Date.now() is read inside the memo (not as a dep) so stale-decay
-    // recalculates whenever agentStatusEpoch ticks — same pattern as
-    // useDashboardData.
+    if (!active) {
+      return []
+    }
+    // Why: Date.now() is read inside the memo so stale-decay recalculates when
+    // this worktree's freshness signature changes, even without new PTY data.
     const now = Date.now()
     const entries =
       migrationUnsupported.length > 0
@@ -99,6 +109,7 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    active,
     tabs,
     liveEntries,
     migrationUnsupported,
@@ -107,6 +118,6 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
     ptyIdsByTabId,
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,
-    agentStatusEpoch
+    agentFreshnessSignature
   ])
 }

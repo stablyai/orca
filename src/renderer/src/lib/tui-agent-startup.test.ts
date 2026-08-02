@@ -4,6 +4,13 @@ import {
   buildAgentStartupPlan,
   isShellProcess
 } from './tui-agent-startup'
+import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
+
+const emptyLaunchConfig = (agentCommand: string) => ({
+  agentCommand,
+  agentArgs: '',
+  agentEnv: {}
+})
 
 describe('buildAgentStartupPlan', () => {
   it('passes Claude prompts as a positional interactive argument', () => {
@@ -18,7 +25,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'claude',
       launchCommand: "claude 'Fix the bug'",
       expectedProcess: 'claude',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('claude')
     })
   })
 
@@ -34,7 +42,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'gemini',
       launchCommand: "gemini --prompt-interactive 'Investigate this regression'",
       expectedProcess: 'gemini',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('gemini')
     })
   })
 
@@ -50,7 +59,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'antigravity',
       launchCommand: "agy --prompt-interactive 'Investigate this regression'",
       expectedProcess: 'agy',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('agy')
     })
   })
 
@@ -66,7 +76,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'aider',
       launchCommand: 'aider',
       expectedProcess: 'aider',
-      followupPrompt: 'Refactor the parser'
+      followupPrompt: 'Refactor the parser',
+      launchConfig: emptyLaunchConfig('aider')
     })
   })
 
@@ -82,8 +93,55 @@ describe('buildAgentStartupPlan', () => {
       agent: 'autohand',
       launchCommand: 'autohand',
       expectedProcess: 'autohand',
-      followupPrompt: 'Add tests for the parser'
+      followupPrompt: 'Add tests for the parser',
+      launchConfig: emptyLaunchConfig('autohand')
     })
+  })
+
+  it('launches Ante first and injects the draft prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'ante',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'ante',
+      launchCommand: 'ante',
+      expectedProcess: 'ante',
+      followupPrompt: 'Summarize the failing tests',
+      launchConfig: emptyLaunchConfig('ante')
+    })
+  })
+
+  it('passes the prompt to Trae as a positional argv behind a `--` separator', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'trae',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'trae',
+      launchCommand: "traecli -- 'Summarize the failing tests'",
+      expectedProcess: 'traecli',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('traecli')
+    })
+  })
+
+  // Why: without the separator these dispatch to Trae's `help`/`config` subcommands instead.
+  it('keeps subcommand-shaped Trae prompts as the positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'trae',
+        prompt: 'help me name this config',
+        cmdOverrides: {},
+        platform: 'linux'
+      })?.launchCommand
+    ).toBe("traecli -- 'help me name this config'")
   })
 
   it('uses cursor-agent as the actual launch binary', () => {
@@ -98,7 +156,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'cursor',
       launchCommand: "cursor-agent 'Review this file'",
       expectedProcess: 'cursor-agent',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('cursor-agent')
     })
   })
 
@@ -114,7 +173,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'droid',
       launchCommand: "/opt/factory/bin/droid 'Ship the fix'",
       expectedProcess: 'droid',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('/opt/factory/bin/droid')
     })
   })
 
@@ -130,11 +190,12 @@ describe('buildAgentStartupPlan', () => {
       agent: 'copilot',
       launchCommand: "copilot -i 'Fix the bug'",
       expectedProcess: 'copilot',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('copilot')
     })
   })
 
-  it('launches Grok first and injects the prompt after startup', () => {
+  it('launches Grok with the prompt as a positional argv', () => {
     expect(
       buildAgentStartupPlan({
         agent: 'grok',
@@ -144,9 +205,32 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'grok',
-      launchCommand: 'grok',
+      launchCommand: "grok -- 'Trace the failing test'",
       expectedProcess: 'grok',
-      followupPrompt: 'Trace the failing test'
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('grok')
+    })
+  })
+
+  it('launches Devin first and injects the prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'devin',
+        prompt: 'Trace the failing test',
+        cmdOverrides: {},
+        agentArgs: resolveTuiAgentLaunchArgs('devin', null),
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'devin',
+      launchCommand: "devin '--permission-mode' 'bypass'",
+      expectedProcess: 'devin',
+      followupPrompt: 'Trace the failing test',
+      launchConfig: {
+        agentCommand: "devin '--permission-mode' 'bypass'",
+        agentArgs: '--permission-mode bypass',
+        agentEnv: {}
+      }
     })
   })
 
@@ -162,7 +246,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'command-code',
       launchCommand: "command-code --trust 'Fix the issue'",
       expectedProcess: 'command-code',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('command-code --trust')
     })
   })
 
@@ -189,7 +274,8 @@ describe('buildAgentStartupPlan', () => {
       agent: 'copilot',
       launchCommand: "copilot -i 'Fix the bug'",
       expectedProcess: 'copilot',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('copilot')
     })
   })
 })
@@ -206,7 +292,8 @@ describe('buildAgentDraftLaunchPlan', () => {
     ).toEqual({
       agent: 'claude',
       launchCommand: "claude --prefill 'https://github.com/acme/repo/issues/42'",
-      expectedProcess: 'claude'
+      expectedProcess: 'claude',
+      launchConfig: emptyLaunchConfig('claude')
     })
   })
 
@@ -238,7 +325,8 @@ describe('buildAgentDraftLaunchPlan', () => {
       agent: 'pi',
       launchCommand: 'pi; unset ORCA_PI_PREFILL',
       expectedProcess: 'pi',
-      env: { ORCA_PI_PREFILL: 'https://github.com/acme/repo/issues/42' }
+      env: { ORCA_PI_PREFILL: 'https://github.com/acme/repo/issues/42' },
+      launchConfig: emptyLaunchConfig('pi')
     })
   })
 
@@ -264,7 +352,8 @@ describe('buildAgentDraftLaunchPlan', () => {
     ).toEqual({
       agent: 'claude',
       launchCommand: "/opt/anthropic/bin/claude --prefill 'review this'",
-      expectedProcess: 'claude'
+      expectedProcess: 'claude',
+      launchConfig: emptyLaunchConfig('/opt/anthropic/bin/claude')
     })
   })
 
@@ -279,7 +368,8 @@ describe('buildAgentDraftLaunchPlan', () => {
     ).toEqual({
       agent: 'openclaude',
       launchCommand: "openclaude --prefill 'review this'",
-      expectedProcess: 'openclaude'
+      expectedProcess: 'openclaude',
+      launchConfig: emptyLaunchConfig('openclaude')
     })
   })
 })
@@ -287,6 +377,7 @@ describe('buildAgentDraftLaunchPlan', () => {
 describe('isShellProcess', () => {
   it('treats common shells as non-agent foreground processes', () => {
     expect(isShellProcess('bash')).toBe(true)
+    expect(isShellProcess('C:\\Program Files\\Git\\bin\\bash.exe')).toBe(true)
     expect(isShellProcess('pwsh.exe')).toBe(true)
     expect(isShellProcess('/bin/zsh')).toBe(true)
     expect(isShellProcess('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')).toBe(

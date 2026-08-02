@@ -6,18 +6,49 @@ on:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
       - 'config/scripts/build-computer-macos.mjs'
+      - 'config/scripts/build-windows-cli-launcher.mjs'
+      - 'config/scripts/build-windows-cli-launcher.test.mjs'
+      - 'config/scripts/computer-e2e-workflow.test.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-metrics.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-processes.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mjs'
+      - 'config/scripts/computer-use-modifier-safety.test.mjs'
+      - 'config/scripts/computer-use-skill-guidance.test.mjs'
+      - 'config/scripts/computer-use-smoke.mjs'
+      - 'config/scripts/computer-use-smoke.test.mjs'
+      - 'config/scripts/daemon-boot-smoke.mjs'
+      - 'config/scripts/windows-daemon-workspace-close-repro.mjs'
       - 'config/scripts/verify-computer-native.mjs'
+      # Why: the native-smoke job boots the built terminal daemon under plain
+      # Node, so any change to the daemon bundle graph or the main build must
+      # re-run it (the v1.4.129-rc.1 daemon outage shipped with green CI).
+      - 'electron.vite.config.ts'
+      - 'build-plugins/**'
+      - 'src/main/daemon/**'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
       - 'native/computer-use-windows/**'
+      - 'native/windows-cli-launcher/**'
+      - 'skills/computer-use/SKILL.md'
       - 'src/cli/**'
       - 'src/main/computer/**'
-      - 'src/main/runtime/rpc/methods/computer.ts'
-      - 'src/shared/runtime-types.ts'
+      - 'src/main/runtime/rpc/dispatcher.ts'
+      - 'src/main/runtime/rpc/errors.ts'
+      - 'src/main/runtime/rpc/methods/computer*.ts'
+      - 'src/main/ssh/ssh-remote-cli-launcher.ts'
+      - 'src/main/ssh/ssh-remote-cli-launcher.test.ts'
+      - 'src/shared/computer-use-*.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
       - 'tests/e2e/computer-mac.e2e.ts'
+      - 'tests/e2e/computer-mac-safari.e2e.ts'
       - 'tests/e2e/computer-windows.e2e.ts'
+      - 'tests/e2e/computer-windows-store.e2e.ts'
+      - 'tests/e2e/helpers/computer-cli-driver.ts'
       - 'tests/e2e/helpers/computer-driver.ts'
+      - 'tests/e2e/vitest.config.ts'
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * *'
@@ -25,6 +56,8 @@ on:
 jobs:
   native-smoke:
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -32,6 +65,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
@@ -39,7 +74,7 @@ jobs:
         with:
           run_install: false
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y python3 python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool
+        run: sudo apt-get update && sudo apt-get install -y python3 python3-gi gir1.2-atspi-2.0 at-spi2-core gedit xvfb xclip xdotool
       # Why: pnpm's bundled node-gyp can ship gyp_main.py without execute
       # permission on Linux runners; node-pty's install fallback then fails
       # before this smoke job can exercise the native package.
@@ -49,14 +84,93 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
+      # Why: without --config, bare vitest ignores config/vitest.config.ts (there
+      # is no root config) and falls back to the 5s default timeout with no
+      # Windows worker cap, so the real csc.exe launcher-compile tests time out
+      # on hosted Windows. Use the shared config so this job matches pnpm test.
+      - run: >-
+          pnpm vitest run --config config/vitest.config.ts
+          config/scripts/build-windows-cli-launcher.test.mjs
+          src/main/ssh/ssh-remote-cli-launcher.test.ts
+          config/scripts/computer-e2e-workflow.test.mjs
+          config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
+          config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
+          config/scripts/computer-use-modifier-safety.test.mjs
+          config/scripts/computer-use-skill-guidance.test.mjs
+          config/scripts/computer-use-smoke.test.mjs
+          src/main/computer/computer-provider-lifecycle.test.ts
+          src/main/computer/computer-provider-unavailable-message.test.ts
+          src/main/computer/sidecar-client.test.ts
+          src/main/computer/macos-native-provider-client.test.ts
+          src/main/computer/macos-native-provider-socket.test.ts
+          src/main/computer/macos-computer-use-permissions.test.ts
+          src/main/computer/macos-computer-use-permission-status.test.ts
+          src/main/computer/desktop-script-provider-client.test.ts
+          src/main/computer/desktop-script-provider-cache.test.ts
+          src/main/computer/desktop-script-provider-actions.test.ts
+          src/main/computer/desktop-script-provider-cache-lifecycle.test.ts
+          src/main/computer/desktop-script-provider-errors.test.ts
+          src/main/computer/desktop-script-provider-action-errors.test.ts
+          src/shared/computer-use-error-recovery.test.ts
+          src/shared/computer-use-key-spec.test.ts
+          src/cli/format.test.ts
+          src/cli/handlers/computer.test.ts
+          src/cli/handlers/computer-action-routing.test.ts
+          src/cli/handlers/computer-action-validation.test.ts
+          src/cli/handlers/computer-state-formatting.test.ts
+          src/cli/specs/computer.test.ts
+          src/cli/index.test.ts
+          src/main/runtime/rpc/dispatcher-computer-errors.test.ts
+          src/main/runtime/rpc/errors.test.ts
+          src/main/runtime/rpc/methods/computer.test.ts
+          src/main/runtime/rpc/methods/computer-actions.test.ts
+          src/cli/runtime/envelope-schema.test.ts
+          src/shared/remote-runtime-client.test.ts
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
+      - run: pnpm build:electron-vite
+      # Why: boot the BUILT daemon-entry under plain Node the way production
+      # forks it. v1.4.129-rc.1 shipped a daemon that exited at module load
+      # (leaked electron require) while every other check passed; this fails
+      # the PR when the built daemon cannot start on ubuntu-22.04 / windows.
+      - name: Daemon boot smoke
+        run: node config/scripts/daemon-boot-smoke.mjs
+      # Why: workspace removal overlaps graceful renderer teardown with the
+      # forced main-process sweep; exercise that exact pair against real ConPTY.
+      - name: Windows daemon workspace-close repro
+        if: runner.os == 'Windows'
+        run: node config/scripts/windows-daemon-workspace-close-repro.mjs
+  mac-native-owner-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - name: Owner-loss benchmark process cleanup
+        run: >-
+          pnpm vitest run
+          config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
+          config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
+      - name: Authenticated helper owner-loss smoke
+        run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
+      - name: Swift tests and signed universal helper verification
+        run: pnpm verify:computer-native
 
   mac:
     # macOS Accessibility and Screen Recording require user-granted TCC entries.
     # Keep this on manual/scheduled permission-bearing runners instead of PR CI.
     if: github.event_name != 'pull_request'
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       ORCA_COMPUTER_E2E: '1'
     steps:
@@ -71,7 +185,8 @@ jobs:
       - run: pnpm build:computer-macos
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
-      - run: pnpm test:e2e:computer -- --reporter=verbose tests/e2e/computer-mac.e2e.ts
+      - run: pnpm build:electron-vite
+      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-mac.e2e.ts tests/e2e/computer-mac-safari.e2e.ts
 
   linux:
     if: github.event_name != 'pull_request'
@@ -97,7 +212,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
-      - run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer -- --reporter=verbose tests/e2e/computer-linux.e2e.ts
+      - run: pnpm build:electron-vite
+      - run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts
 
   windows:
     if: github.event_name != 'pull_request'
@@ -115,4 +231,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
-      - run: pnpm test:e2e:computer -- --reporter=verbose tests/e2e/computer-windows.e2e.ts
+      - run: pnpm build:electron-vite
+      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-store.e2e.ts

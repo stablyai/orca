@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { SparsePreset } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 const ERROR_TOAST_DURATION = 60_000
 
@@ -23,6 +24,58 @@ export type SparsePresetsSlice = {
     directories: string[]
   }) => Promise<SparsePreset | null>
   removeSparsePreset: (args: { repoId: string; presetId: string }) => Promise<void>
+}
+
+type SparsePresetsMaps = Pick<
+  AppState,
+  | 'sparsePresetsByRepo'
+  | 'sparsePresetsLoadingByRepo'
+  | 'sparsePresetsLoadStatusByRepo'
+  | 'sparsePresetsErrorByRepo'
+>
+
+// Why: the four per-repo sparse-preset maps are populated lazily per repo but
+// were never pruned when a repo was removed, so orphaned entries accumulated for
+// the renderer's whole session. Call this from the repo-removal reducers to drop
+// entries for repos that no longer exist. Returns only the maps that changed so
+// unrelated selectors don't re-run.
+export function omitSparsePresetsForRepos(
+  s: SparsePresetsMaps,
+  removedRepoIds: Iterable<string>
+): Partial<AppState> {
+  const removed = removedRepoIds instanceof Set ? removedRepoIds : new Set(removedRepoIds)
+  if (removed.size === 0) {
+    return {}
+  }
+  const omit = <T>(obj: Record<string, T>): Record<string, T> => {
+    let changed = false
+    const out = { ...obj }
+    for (const id of removed) {
+      if (id in out) {
+        delete out[id]
+        changed = true
+      }
+    }
+    return changed ? out : obj
+  }
+  const result: Partial<AppState> = {}
+  const byRepo = omit(s.sparsePresetsByRepo)
+  if (byRepo !== s.sparsePresetsByRepo) {
+    result.sparsePresetsByRepo = byRepo
+  }
+  const loading = omit(s.sparsePresetsLoadingByRepo)
+  if (loading !== s.sparsePresetsLoadingByRepo) {
+    result.sparsePresetsLoadingByRepo = loading
+  }
+  const status = omit(s.sparsePresetsLoadStatusByRepo)
+  if (status !== s.sparsePresetsLoadStatusByRepo) {
+    result.sparsePresetsLoadStatusByRepo = status
+  }
+  const error = omit(s.sparsePresetsErrorByRepo)
+  if (error !== s.sparsePresetsErrorByRepo) {
+    result.sparsePresetsErrorByRepo = error
+  }
+  return result
 }
 
 export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePresetsSlice> = (
@@ -73,10 +126,18 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
         // existing presets first so we do not hide them behind a one-item cache.
         await get().fetchSparsePresets(args.repoId)
         if (get().sparsePresetsByRepo[args.repoId] === undefined) {
-          toast.error(args.id ? 'Failed to update preset' : 'Failed to save preset', {
-            description: 'Presets must load before saving.',
-            duration: ERROR_TOAST_DURATION
-          })
+          toast.error(
+            args.id
+              ? translate('auto.store.slices.sparse.presets.811be06b57', 'Failed to update preset')
+              : translate('auto.store.slices.sparse.presets.c96b770172', 'Failed to save preset'),
+            {
+              description: translate(
+                'auto.store.slices.sparse.presets.ef13e994e6',
+                'Presets must load before saving.'
+              ),
+              duration: ERROR_TOAST_DURATION
+            }
+          )
           return null
         }
       }
@@ -96,14 +157,24 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
           }
         }
       })
-      toast.success(args.id ? 'Preset updated' : 'Preset saved', { description: saved.name })
+      toast.success(
+        args.id
+          ? translate('auto.store.slices.sparse.presets.e10f097822', 'Preset updated')
+          : translate('auto.store.slices.sparse.presets.0696d13e56', 'Preset saved'),
+        { description: saved.name }
+      )
       return saved
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      toast.error(args.id ? 'Failed to update preset' : 'Failed to save preset', {
-        description: message,
-        duration: ERROR_TOAST_DURATION
-      })
+      toast.error(
+        args.id
+          ? translate('auto.store.slices.sparse.presets.811be06b57', 'Failed to update preset')
+          : translate('auto.store.slices.sparse.presets.c96b770172', 'Failed to save preset'),
+        {
+          description: message,
+          duration: ERROR_TOAST_DURATION
+        }
+      )
       return null
     }
   },
@@ -120,16 +191,19 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
     }))
     try {
       await window.api.sparsePresets.remove({ repoId, presetId })
-      toast.success('Preset removed')
+      toast.success(translate('auto.store.slices.sparse.presets.ee434d7941', 'Preset removed'))
     } catch (err) {
       set((s) => ({
         sparsePresetsByRepo: { ...s.sparsePresetsByRepo, [repoId]: previous }
       }))
       const message = err instanceof Error ? err.message : String(err)
-      toast.error('Failed to remove preset', {
-        description: message,
-        duration: ERROR_TOAST_DURATION
-      })
+      toast.error(
+        translate('auto.store.slices.sparse.presets.6ed7d6010a', 'Failed to remove preset'),
+        {
+          description: message,
+          duration: ERROR_TOAST_DURATION
+        }
+      )
       // Why: settings UI keeps confirmation/edit state until persistence succeeds.
       throw err
     }

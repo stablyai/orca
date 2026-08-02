@@ -5,10 +5,11 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
 import { ampHookService } from '../amp/hook-service'
 import {
+  clearMigrationUnsupportedPtysByTabPrefix,
   clearMigrationUnsupportedPtysForPaneKey,
   getMigrationUnsupportedPtySnapshot
 } from '../agent-hooks/migration-unsupported-pty-state'
@@ -22,34 +23,29 @@ import { commandCodeHookService } from '../command-code/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
+import { devinHookService } from '../devin/hook-service'
+import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
+import { createAgentPaneAuthorityOwnership } from './agent-pane-authority-ownership'
+import {
+  enrichAgentStatusIpcPayload,
+  isValidAgentStatusDropTabId,
+  type AgentStatusRuntimeEnrichment
+} from './agent-status-ipc-boundary'
 
-type AgentStatusRuntimeEnrichment = Pick<
-  OrcaRuntimeService,
-  'getAgentStatusTerminalHandleForPaneKey' | 'getAgentStatusOrchestrationContextForPaneKey'
->
-
-function enrichAgentStatusIpcPayload(
-  data: AgentStatusIpcPayload,
-  runtime: AgentStatusRuntimeEnrichment | undefined
-): AgentStatusIpcPayload {
-  if (!runtime) {
-    return data
-  }
-  const terminalHandle = runtime.getAgentStatusTerminalHandleForPaneKey(data.paneKey)
-  const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey(data.paneKey)
-  return {
-    ...data,
-    ...(terminalHandle ? { terminalHandle } : {}),
-    ...(orchestration ? { orchestration } : {})
-  }
+type AgentHookHandlerDependencies = {
+  getPtyIdForPaneKey?: (paneKey: string) => string | undefined
 }
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
 // renderer-triggered remove would be silently reverted on the next launch
 // and mislead the user.
-export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment): void {
+export function registerAgentHookHandlers(
+  runtime?: AgentStatusRuntimeEnrichment,
+  dependencies: AgentHookHandlerDependencies = {}
+): void {
   // Why: matches the defensive pattern in src/main/ipc/pty.ts so re-registration
   // never throws "Attempted to register a second handler..." if this function is
   // ever invoked more than once (e.g. the macOS app re-activation path that
@@ -68,14 +64,18 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
   ipcMain.removeHandler('agentHooks:grokStatus')
   ipcMain.removeHandler('agentHooks:copilotStatus')
   ipcMain.removeHandler('agentHooks:hermesStatus')
+  ipcMain.removeHandler('agentHooks:devinStatus')
+  ipcMain.removeHandler('agentHooks:kimiStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
+  ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   // Why: agentStatus:drop is sent fire-and-forget from the renderer via
   // ipcRenderer.send(); we listen with ipcMain.on (not handle) so we don't
   // round-trip a response. Removing first keeps re-registration safe even
   // though the module-level registered guard already prevents re-entry today.
   ipcMain.removeAllListeners('agentStatus:drop')
+  ipcMain.removeAllListeners('agentStatus:dropByTabPrefix')
   ipcMain.on('agentStatus:drop', (_event, paneKey: unknown) => {
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return
@@ -91,6 +91,24 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
       console.warn('[agent-hooks] dropStatusEntry failed:', err)
     }
   })
+  ipcMain.on('agentStatus:dropByTabPrefix', (_event, tabId: unknown) => {
+    if (!isValidAgentStatusDropTabId(tabId)) {
+      return
+    }
+    try {
+      agentHookServer.dropStatusEntriesByTabPrefix(tabId)
+      clearMigrationUnsupportedPtysByTabPrefix(tabId)
+    } catch (err) {
+      console.warn('[agent-hooks] dropStatusEntriesByTabPrefix failed:', err)
+    }
+  })
+  registerAgentPaneAuthorityIpcHandlers({
+    ownsPty: createAgentPaneAuthorityOwnership({
+      getPtyIdForPaneKey: dependencies.getPtyIdForPaneKey,
+      getRuntimeTerminalHandleForPaneKey: (paneKey) =>
+        runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+    })
+  })
   ipcMain.handle('agentStatus:getSnapshot', (): AgentStatusIpcPayload[] => {
     // Why: the renderer pulls this after workspace hydration, so startup cannot
     // lose replayed statuses while its local store is still empty. Match the
@@ -104,6 +122,12 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
       return false
     }
     return agentHookServer.inferInterrupt(request as AgentInterruptInferenceRequest)
+  })
+  ipcMain.handle('agentStatus:inferQuestionAnswered', (_event, request: unknown): boolean => {
+    if (typeof request !== 'object' || request === null) {
+      return false
+    }
+    return agentHookServer.inferQuestionAnswered(request as AgentQuestionAnsweredInferenceRequest)
   })
   ipcMain.handle(
     'agentStatus:getMigrationUnsupportedSnapshot',
@@ -264,6 +288,32 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
     } catch (err) {
       return {
         agent: 'hermes',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:devinStatus', (): AgentHookInstallStatus => {
+    try {
+      return devinHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'devin',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:kimiStatus', (): AgentHookInstallStatus => {
+    try {
+      return kimiHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'kimi',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

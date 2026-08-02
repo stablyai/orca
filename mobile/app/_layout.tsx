@@ -11,6 +11,7 @@ import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationPath } from '../src/notifications/notification-routing'
 import { loadHosts } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
+import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -34,6 +35,12 @@ Notifications.setNotificationHandler({
 export default function RootLayout() {
   const router = useRouter()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    // Why: pairing publication is journaled across process death; startup must
+    // reconcile the server result before another scan can replace that journal.
+    void recoverMobileRelayPairing()
+  }, [])
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
@@ -102,6 +109,14 @@ export default function RootLayout() {
         return
       }
       handledNotificationIdsRef.current.add(notificationId)
+      // Why: RootLayout never unmounts, so cap this tap-dedup set (FIFO) rather
+      // than letting it grow one id per notification tapped for the app's life.
+      if (handledNotificationIdsRef.current.size > 256) {
+        const oldest = handledNotificationIdsRef.current.values().next().value
+        if (oldest !== undefined) {
+          handledNotificationIdsRef.current.delete(oldest)
+        }
+      }
 
       const path = await getNavigationPath(response.notification.request.content.data)
       clearLastNotificationResponse()
@@ -145,8 +160,12 @@ export default function RootLayout() {
             headerTintColor: colors.textPrimary,
             headerTitleStyle: { fontSize: 16, fontWeight: '600' },
             contentStyle: { backgroundColor: colors.bgBase },
-            headerShadowVisible: false,
-            orientation: 'all'
+            headerShadowVisible: false
+            // Why: deliberately no `orientation` screenOption. react-native-screens
+            // has no value that respects the device rotation lock — even 'default'
+            // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
+            // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
+            // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
           }}
         >
           <Stack.Screen
@@ -159,10 +178,18 @@ export default function RootLayout() {
           <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
           <Stack.Screen name="pair" options={{ headerShown: false }} />
           <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="mobile-onboarding"
+            options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
+          />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
+          <Stack.Screen name="connection-log" options={{ headerShown: false }} />
           <Stack.Screen name="about" options={{ headerShown: false }} />
           <Stack.Screen name="h" options={{ headerShown: false }} />
         </Stack>

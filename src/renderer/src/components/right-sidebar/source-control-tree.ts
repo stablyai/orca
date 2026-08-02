@@ -1,7 +1,7 @@
 import { normalizeRelativePath } from '@/lib/path'
 import type { GitStatusEntry, GitStagingArea } from '../../../../shared/types'
 import { splitPathSegments } from './path-tree'
-import { compareGitStatusEntries } from './source-control-status-sort'
+import { compareGitStatusEntries, sourceControlPathCollator } from './source-control-status-sort'
 
 export type SourceControlTreeArea = Extract<GitStagingArea, 'unstaged' | 'staged' | 'untracked'>
 // Why: committed branch rows share the same path tree but do not carry
@@ -51,7 +51,7 @@ type MutableDirectoryNode<Entry extends SourceControlTreeEntry, Area extends str
 }
 
 function compareTreeEntriesByPath(a: SourceControlTreeEntry, b: SourceControlTreeEntry): number {
-  return a.path.localeCompare(b.path, undefined, { numeric: true })
+  return sourceControlPathCollator.compare(a.path, b.path)
 }
 
 function makeDirectoryNode<Entry extends SourceControlTreeEntry, Area extends string>(
@@ -213,6 +213,55 @@ export function compactSourceControlTree<Entry extends SourceControlTreeEntry, A
   }
 
   return nodes.map((node) => compactNode(node, 0))
+}
+
+export function namespaceSourceControlTreeDirectoryKeys<
+  Entry extends SourceControlTreeEntry,
+  Area extends string
+>(
+  nodes: SourceControlTreeNode<Entry, Area>[],
+  namespace: string
+): SourceControlTreeNode<Entry, Area>[] {
+  const namespaceNode = (
+    node: SourceControlTreeNode<Entry, Area>
+  ): SourceControlTreeNode<Entry, Area> => {
+    if (node.type === 'file') {
+      return node
+    }
+
+    // Why: pinned conflict folders share git area semantics with Changes, but
+    // collapse state is UI-section-local and needs a distinct directory key.
+    return {
+      ...node,
+      key: `dir::${namespace}::${node.path}`,
+      children: node.children.map(namespaceNode)
+    }
+  }
+
+  return nodes.map(namespaceNode)
+}
+
+export function applyGitStatusEntryAreasToSourceControlTree(
+  nodes: SourceControlTreeNode<GitStatusEntry, SourceControlTreeArea>[]
+): SourceControlTreeNode<GitStatusEntry, SourceControlTreeArea>[] {
+  const applyEntryArea = (
+    node: SourceControlTreeNode<GitStatusEntry, SourceControlTreeArea>
+  ): SourceControlTreeNode<GitStatusEntry, SourceControlTreeArea> => {
+    if (node.type === 'file') {
+      return {
+        ...node,
+        key: `${node.entry.area}::${node.entry.path}`,
+        area: node.entry.area
+      }
+    }
+
+    return {
+      ...node,
+      children: node.children.map(applyEntryArea)
+    }
+  }
+
+  return nodes.map(applyEntryArea)
 }
 
 export function collectSourceControlTreeFileEntries<

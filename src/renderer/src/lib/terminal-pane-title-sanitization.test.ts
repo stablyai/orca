@@ -38,6 +38,15 @@ describe('sanitizeTerminalLayoutPaneTitles', () => {
     ).not.toHaveProperty('titlesByLeafId')
   })
 
+  it('drops quick command labels from single-pane layouts', () => {
+    expect(
+      sanitizeTerminalLayoutPaneTitles(singlePaneLayout('Run tests'), {
+        ...TAB,
+        quickCommandLabel: 'Run tests'
+      })
+    ).not.toHaveProperty('titlesByLeafId')
+  })
+
   it('keeps an intentional single-pane title that is not a tab label', () => {
     expect(sanitizeTerminalLayoutPaneTitles(singlePaneLayout('build logs'), TAB)).toHaveProperty(
       'titlesByLeafId',

@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: the redactor has intentionally broad fixture coverage across every secret location and key-shape rule; keeping it together makes gaps visible. */
 // Fixture-based test suite for the redactor. Each provider-key shape is
 // exercised in three locations (attribute value, span event message,
 // exit-status `cause`) — that's the contract telemetry-error-tracking.md

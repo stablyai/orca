@@ -11,7 +11,7 @@
 //
 // See docs/design/agent-status-over-ssh.md §8 (commit #8).
 
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper, FileEntryWithStats } from 'ssh2'
 
 import { isPlainObject, type HooksConfig } from './installer-utils'

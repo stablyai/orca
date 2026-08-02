@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import {
+  BROWSER_PALETTE_QUERY_MAX_BYTES,
   searchBrowserPages,
   formatBrowserPaletteUrl,
-  isBlankBrowserUrl
+  isBlankBrowserUrl,
+  isBrowserPaletteQueryTooLarge,
+  type SearchableBrowserPage
 } from './browser-palette-search'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -305,5 +308,77 @@ describe('browser-palette-search', () => {
 
     expect(results).toHaveLength(1)
     expect(results[0].workspaceRange).toEqual({ start: 0, end: 9 })
+  })
+
+  it('rejects oversized pasted queries before scanning browser pages', () => {
+    const oversizedQuery = 'secret-browser-palette'.repeat(BROWSER_PALETTE_QUERY_MAX_BYTES)
+    const entry = {
+      get page(): BrowserPage {
+        throw new Error('oversized browser palette queries must not scan pages')
+      },
+      workspace: makeWorkspace(),
+      worktree: makeWorktree(),
+      repoName: 'repo',
+      worktreeSortIndex: 0,
+      isCurrentPage: false,
+      isCurrentWorktree: false
+    } as SearchableBrowserPage
+
+    expect(isBrowserPaletteQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(searchBrowserPages([entry], oversizedQuery)).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming', () => {
+    expect(searchBrowserPages([], ' '.repeat(BROWSER_PALETTE_QUERY_MAX_BYTES + 1))).toEqual([])
+  })
+
+  it('falls back to the branch label when a cleared display name left it undefined', () => {
+    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
+    // so the store-level display-name corruption reaches here too.
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: 'refs/heads/feature/browser-search'
+    })
+    const entries: SearchableBrowserPage[] = [
+      {
+        page: makePage(),
+        workspace: makeWorkspace(),
+        worktree: cleared,
+        repoName: 'orca',
+        worktreeSortIndex: 0,
+        isCurrentPage: false,
+        isCurrentWorktree: false
+      }
+    ]
+
+    const results = searchBrowserPages(entries, 'browser-search')
+    expect(results[0]).toMatchObject({
+      worktreeName: 'feature/browser-search',
+      worktreeRange: { start: 'feature/'.length, end: 'feature/browser-search'.length }
+    })
+  })
+
+  it('lists a branch-less row on the empty query without throwing', () => {
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: undefined as unknown as string,
+      path: '/repos/design-review'
+    })
+    const entries: SearchableBrowserPage[] = [
+      {
+        page: makePage(),
+        workspace: makeWorkspace(),
+        worktree: cleared,
+        repoName: 'orca',
+        worktreeSortIndex: 0,
+        isCurrentPage: false,
+        isCurrentWorktree: false
+      }
+    ]
+
+    expect(searchBrowserPages(entries, '')[0]).toMatchObject({
+      worktreeName: 'design-review',
+      worktreeRange: null
+    })
   })
 })

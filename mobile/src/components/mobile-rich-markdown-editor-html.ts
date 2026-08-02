@@ -1,4 +1,5 @@
 import { colors } from '../theme/mobile-theme'
+import { MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT } from './mobile-rich-markdown-editor-keyboard-inset-script'
 
 export function escapeInjectedJavaScriptString(value: string): string {
   return JSON.stringify(value).replace(/<\/script/gi, '<\\/script')
@@ -669,13 +670,8 @@ export function buildMobileRichMarkdownEditorHtml(): string {
         }
       });
 
-      window.__orcaRichMarkdown = {
-        setMarkdown: setMarkdown,
-        setEditable: setEditable,
-        runCommand: runCommand,
-        currentMarkdown: currentMarkdown
-      };
-
+      window.__orcaRichMarkdown = { setMarkdown: setMarkdown, setEditable: setEditable, runCommand: runCommand, currentMarkdown: currentMarkdown };
+${MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT}
       post({ type: 'ready' });
     })();
   </script>

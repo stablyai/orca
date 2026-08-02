@@ -1,27 +1,58 @@
 /* eslint-disable max-lines -- Why: terminal pane component co-locates title state, layout serialization, and portal rendering to keep pane lifecycle consistent. */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
-import { X } from 'lucide-react'
 import { useAppStore } from '../../store'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { isUnifiedTabPinned } from '@/store/pinned-tab-close-guard'
+import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
 import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
   isTerminalBackgroundLight,
   normalizeColor,
+  resolveOpaqueTerminalBackground,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
-import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import type {
+  ManagedPane,
+  PaneExternalDropTarget,
+  PaneManager
+} from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
-import { fitPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
-import { getConnectionId } from '@/lib/connection-context'
-import { resolveTerminalDropTargetShell } from './terminal-drop-handler'
-import { EMPTY_LAYOUT, serializeTerminalLayout } from './layout-serialization'
+import type { PtyTransportRecoveryState } from './pty-transport-types'
+import { fitPanes, isWindowsUserAgent } from './pane-helpers'
+import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
+import {
+  getExplicitRuntimeEnvironmentIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
+import {
+  selectRuntimeAwareSshStatus,
+  selectRuntimeAwareSshTargetLabel,
+  selectRuntimeAwareSshTargetRemoved
+} from '@/store/slices/runtime-environment-ssh'
+import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
+import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import {
+  collectLeafIdsInOrder,
+  EMPTY_LAYOUT,
+  serializeTerminalLayout
+} from './layout-serialization'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
   applyExpandedLayoutTo,
   cancelPendingPaneSizeRefreshFrames,
@@ -32,43 +63,104 @@ import { useTerminalKeyboardShortcuts, type SearchState } from './keyboard-handl
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
-import CloseTerminalDialog from './CloseTerminalDialog'
+import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
-import { TerminalErrorToast } from './TerminalErrorToast'
+import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './TerminalErrorToast'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
+import TerminalPaneHeaderOverlay, { type PaneTitleOverlayRect } from './TerminalPaneHeaderOverlay'
+import {
+  arePaneTitleOverlayRectsEqual,
+  clearPaneTitleOverlayRects
+} from './pane-title-overlay-rects'
+import NativeChatView from '../native-chat/NativeChatView'
+import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
+import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
+import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
+import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'
+import {
+  addSessionRestoredBannerPaneId,
+  dismissSessionRestoredBannerPaneIds,
+  pruneSessionRestoredBannerPaneIds,
+  removeSessionRestoredBannerPaneId,
+  syncSessionRestoredBannerTitleSpace,
+  type SessionRestoredBannerDismissEvent,
+  type SessionRestoredBannerReason
+} from './session-restored-banner-pane-state'
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
+import {
+  detachTerminalPaneToTab,
+  isTerminalTabStripDropTarget,
+  resolveTerminalTabStripDropTarget
+} from './terminal-pane-tab-detach'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
+import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
-import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
-import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
-import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
-import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
-import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
-  getRemoteRuntimePtyEnvironmentId,
-  getRemoteRuntimeTerminalHandle
-} from '@/runtime/runtime-terminal-stream'
-import { closeWebRuntimeTerminal } from '@/runtime/web-runtime-session'
-import { isPrimarySelectionEnabled, readPrimarySelectionText } from '@/lib/primary-selection'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+  getMobileFitOverridePtyIds,
+  getFitOverrideForPty,
+  onOverrideChange
+} from '@/lib/pane-manager/mobile-fit-overrides'
+import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
+import {
+  getAllDrivers,
+  getDriverForPty,
+  isPtyLocked,
+  onDriverChange
+} from '@/lib/pane-manager/mobile-driver-state'
+import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
+import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import {
+  nativeChatLaunchAgentForLeaf,
+  resolveNativeChatLeafRoute,
+  type NativeChatLeafRoute
+} from '../native-chat/native-chat-leaf-routing'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
+import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
+import { applyDesktopFitFallbackAfterReplay } from './desktop-fit-fallback'
+import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
+import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
+import { getOverrideAffectedPanes, getPanesNeedingOverrideFit } from './override-affected-panes'
+import {
+  inspectRuntimeTerminalProcess,
+  isRemoteRuntimePtyId
+} from '@/runtime/runtime-terminal-inspection'
+import {
+  clearWebRuntimeTerminalBuffer,
+  closeWebRuntimeTerminal,
+  updateWebRuntimePaneLayout
+} from '@/runtime/web-runtime-session'
+import {
+  armPrimarySelectionNativePasteSuppression,
+  isPrimarySelectionEnabled,
+  readPrimarySelectionText
+} from '@/lib/primary-selection'
+import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
+import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
+import { isTerminalZeroDimensionsDiagnostic } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
 } from '@/lib/terminal-pane-title-sanitization'
-import { planTerminalLiveLayoutInsertions } from './terminal-live-layout-reconciliation'
+import {
+  isHostAuthoritativeLayout,
+  planTerminalLiveLayoutInsertions
+} from './terminal-live-layout-reconciliation'
 import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete,
@@ -80,20 +172,70 @@ import {
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import {
+  firesNativePasteEvent,
+  getClipboardEventText,
+  isClipboardEventPasteRequired
+} from './terminal-clipboard-event-paste'
+import {
+  assertClipboardTextWithinLimitWithYield,
+  type ReadClipboardTextOptions
+} from '../../../../shared/clipboard-text'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
+import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
+import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
+import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
+import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
+import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
+import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
+import {
+  updateTerminalRemoteRuntimeRecoveryUiState,
+  type VisiblePtyRecoveryState
+} from './terminal-remote-runtime-recovery-ui-state'
 
-// Why: registry lives in a leaf module so the store slice can import it
-// without re-entering the `slice → TerminalPane → store → slice` cycle
-// that otherwise leaves createTerminalSlice undefined at store-init time.
+const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
+
+function isInsideNativeChatRoot(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(NATIVE_CHAT_ROOT_SELECTOR) !== null
+}
+
+// Why: registry lives in a leaf module to break the slice → TerminalPane → store → slice import cycle that leaves createTerminalSlice undefined at init.
 import { shutdownBufferCaptures } from './shutdown-buffer-captures'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { pasteTerminalText } from './terminal-bracketed-paste'
+import {
+  executeTerminalPastePlan,
+  planTerminalPasteWithYield,
+  type TerminalPasteSource,
+  type TerminalPasteTextOptions
+} from './terminal-paste-coordinator'
+import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
+import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
+import {
+  isTerminalPanePasteFocusCurrent,
+  isTerminalPanePasteTargetCurrent
+} from './terminal-paste-target-state'
+import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 import {
   applyTerminalPaneAttentionToManager,
   subscribeTerminalPaneAttention
 } from './terminal-pane-attention-subscriptions'
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
-import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
+import {
+  getCachedTerminalGroupIdForWorktree,
+  getCachedUnifiedTerminalTabForWorktree
+} from './terminal-unified-tab-lookup'
+import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useRepoById } from '@/store/selectors'
+import {
+  isXtermHelperTextarea,
+  releaseTerminalFocusForOutsidePointerDown,
+  releaseTerminalFocusForWindowBlur,
+  resyncTerminalFocusForWindowFocus,
+  setRegularTerminalInputFocusAttribute
+} from './regular-terminal-focus-ownership'
+import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
 
 type TerminalPaneProps = {
   tabId: string
@@ -101,14 +243,17 @@ type TerminalPaneProps = {
   cwd?: string
   isActive: boolean
   isVisible?: boolean
-  // Why: when set (Activity portal), this pane visually isolates the given
-  // split pane so only that leaf is shown. Implemented as a transient layout
-  // override (separate snapshot ref) — does NOT touch expandedPaneId state
-  // or persist to the layout snapshot, so returning to the workspace shows
-  // the original split layout unchanged.
+  isWorktreeActive?: boolean
+  // When set (Activity portal), isolates one split pane as a transient override that doesn't touch expandedPaneId or persist the layout.
   isolatedPaneKey?: string | null
+  // Why: ephemeral one-off command terminals don't need the header's prominent split affordance (split shortcuts still work).
+  showSplitButton?: boolean
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
+}
+
+export type TerminalPaneHandle = {
+  closeActivePane: () => void
 }
 
 type TerminalQuickCommandEditorDialogProps = {
@@ -141,20 +286,21 @@ function formatClipboardImagePasteError(error: unknown): string {
   return `Image paste failed: ${detail}`
 }
 
-function isXtermHelperTextarea(target: EventTarget | null): target is HTMLElement {
-  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
-}
-
-export default function TerminalPane({
-  tabId,
-  worktreeId,
-  cwd,
-  isActive,
-  isVisible = true,
-  isolatedPaneKey = null,
-  onPtyExit,
-  onCloseTab
-}: TerminalPaneProps): React.JSX.Element {
+function TerminalPane(
+  {
+    tabId,
+    worktreeId,
+    cwd,
+    isActive,
+    isVisible = true,
+    isWorktreeActive = isVisible,
+    isolatedPaneKey = null,
+    showSplitButton = true,
+    onPtyExit,
+    onCloseTab
+  }: TerminalPaneProps,
+  ref: React.ForwardedRef<TerminalPaneHandle>
+): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const managerRef = useRef<PaneManager | null>(null)
   const paneFontSizesRef = useRef<Map<number, number>>(new Map())
@@ -163,62 +309,97 @@ export default function TerminalPane({
     new Map()
   )
   const pendingPaneSizeRefreshFrameIdsRef = useRef<number[]>([])
-  // Why (separate from expandedStyleSnapshotRef): Activity isolation is a
-  // transient view override that must not collide with the user-facing
-  // expanded-pane state or the layout snapshot. Keeping its own snapshot
-  // map means applyExpandedLayoutTo's internal restore (which targets the
-  // ref it was passed) only clears Activity's overlay, not the user's.
+  // Separate from expandedStyleSnapshotRef so Activity's transient isolation override doesn't collide with the user's expanded-pane state or layout snapshot.
   const activityIsolationSnapshotRef = useRef<Map<HTMLElement, { display: string; flex: string }>>(
     new Map()
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
-  // Why: per-pane live cwd tracked via OSC 7 for split-pane cwd inheritance.
-  // See docs/ssh-split-pane-inherit-cwd.md. The OSC 7 handler is installed
-  // in use-terminal-pane-lifecycle; keyboard and context-menu split actions
-  // read this map at dispatch time to pass cwd into splitPane.
+  // Why: per-pane live cwd via OSC 7 for split-pane cwd inheritance; split actions read it at dispatch. See docs/ssh-split-pane-inherit-cwd.md.
   const paneCwdRef = useRef<Map<number, { cwd: string; confirmed: boolean }>>(new Map())
   const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
+  // Why: per-pane mirror of kitty keyboard flags; the keyboard policy reads it to encode Option chords as kitty CSI-u for opted-in TUIs.
+  const paneKittyKeyboardModesRef = useRef<Map<number, TerminalKittyKeyboardModeTracker>>(new Map())
   const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
-  // Why: tracks panes currently replaying recorded PTY bytes into xterm
-  // (cold-restore, daemon snapshot, scrollback restore, eager-buffer flush).
-  // While non-zero, pty-connection.ts drops xterm onData so auto-replies to
-  // embedded query sequences don't leak to the shell. See replay-guard.ts.
+  // Why: panes replaying recorded PTY bytes; while non-zero, pty-connection drops xterm onData so auto-replies don't leak to the shell. See replay-guard.ts.
   const replayingPanesRef = useRef<Map<number, number>>(new Map())
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
-  const isVisibleRef = useRef(isVisible)
-  isVisibleRef.current = isVisible
+  const isRendererVisible = isVisible && isWorktreeActive
+  const isVisibleRef = useRef(isRendererVisible)
+  isVisibleRef.current = isRendererVisible
+  const sshReconnectTargetId = useAppStore((store) => {
+    const connectionId = getConnectionIdFromState(store, worktreeId)
+    // Why: runtime-owned SSH targets are internal plumbing users can't connect to, so a reconnect prompt would mislead.
+    if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
+      return null
+    }
+    return connectionId
+  })
+  const nativeChatTranscriptIsLocalReadable = useAppStore((store) =>
+    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(store, worktreeId))
+  )
+  // Which machine's SSH store this target belongs to: a remote server's per-environment bucket, or null for this machine's local SSH maps.
+  const sshReconnectEnvironmentId = useAppStore((store) =>
+    sshReconnectTargetId ? getExplicitRuntimeEnvironmentIdForWorktree(store, worktreeId) : null
+  )
+  const sshReconnectStatus = useAppStore((store) =>
+    sshReconnectTargetId
+      ? selectRuntimeAwareSshStatus(store, sshReconnectEnvironmentId, sshReconnectTargetId)
+      : null
+  )
+  const sshReconnectTargetLabel = useAppStore((store) =>
+    sshReconnectTargetId
+      ? selectRuntimeAwareSshTargetLabel(store, sshReconnectEnvironmentId, sshReconnectTargetId)
+      : ''
+  )
+  // Why: a ghost target (removed from its host) can only fail reconnect, so the overlay offers Remove instead of Connect.
+  const sshReconnectTargetRemoved = useAppStore((store) =>
+    sshReconnectTargetId
+      ? selectRuntimeAwareSshTargetRemoved(store, sshReconnectEnvironmentId, sshReconnectTargetId)
+      : false
+  )
+  useEffect(() => {
+    if (!sshReconnectEnvironmentId) {
+      return
+    }
+    // Why: an SSH workspace can mirror before its environment bucket hydrated; overlay state must come from fetched evidence, not an empty default.
+    void hydrateRuntimeEnvironmentSshState(sshReconnectEnvironmentId).catch(() => {})
+  }, [sshReconnectEnvironmentId])
+
+  useVisibleTerminalTabClaim({ isVisible, tabId })
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
-  // Why: tracked in React state (not derived from managerRef.getPanes().length)
-  // so the render containing the portal map (which reads the imperative pane
-  // list via managerRef.current?.getPanes()) re-runs when a pane is split or
-  // closed. managerRef is imperative and doesn't trigger React's dependency
-  // tracking. The lifecycle hook updates this via setPaneCount on
-  // onPaneCreated / onPaneClosed / onLayoutChanged. The value is never
-  // read — the portal map at line ~914 calls `managerRef.current?.getPanes()`
-  // imperatively, so `setPaneCount` is used only as a render-trigger side
-  // effect to force that map to re-run when a pane is split or closed.
+  // Why: React state (not the imperative managerRef) so the render re-runs on split/close; managerRef alone doesn't trigger React deps.
   const [paneCount, setPaneCount] = useState<number>(0)
+  // Why: pane reorders can move panes without changing count or size, so overlay rects need an explicit layout-change render trigger.
+  const [paneLayoutRevision, setPaneLayoutRevision] = useState(0)
   const [searchOpen, setSearchOpen] = useState(false)
   const searchOpenRef = useRef(false)
   searchOpenRef.current = searchOpen
   const searchStateRef = useRef<SearchState>({ query: '', caseSensitive: false, regex: false })
-  const [closeConfirmPaneId, setCloseConfirmPaneId] = useState<number | null>(null)
+  const [pendingCloseConfirmation, setPendingCloseConfirmation] = useState<{
+    paneId: number
+    copyKind: CloseTerminalDialogCopyKind
+  } | null>(null)
   const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
-  // Why: the terminal menu can be the first quick-command entry point, so each
-  // Add action starts with a fresh draft instead of reusing cancelled text.
+  const [chatLeafId, setChatLeafId] = useState<string | null>(null)
+  const onAgentExitedRef = useRef<(leafId: string) => void>(() => {})
+  const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
+    undefined
+  )
+  // Why: each Add action starts with a fresh draft so the terminal menu doesn't reuse cancelled quick-command text.
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
+  const [agentSessionContinuation, setAgentSessionContinuation] =
+    useState<AgentSessionContinuationRequest | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
+  const [ptyRecoveryStatesByPaneId, setPtyRecoveryStatesByPaneId] = useState<
+    Record<number, VisiblePtyRecoveryState>
+  >({})
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   const daemonActions = useDaemonActions()
-  // Why: override state lives in a plain Map for perf (safeFit reads it on
-  // every resize). This counter forces a re-render when overrides change so
-  // the mobile-fit banner appears/disappears. When an override is cleared
-  // (desktop-fit), we also trigger safeFit on affected panes so the terminal
-  // resizes back to desktop dimensions.
+  // Why: override state lives in a Map for perf; this counter forces a re-render on override change so the mobile-fit banner toggles.
   const [, setOverrideTick] = useState(0)
   useEffect(() => {
     const pendingFitFrames = new Set<number>()
@@ -242,65 +423,60 @@ export default function TerminalPane({
 
     const unsubscribe = onOverrideChange((event) => {
       setOverrideTick((n) => n + 1)
-      if (event.mode === 'desktop-fit') {
-        const manager = managerRef.current
-        if (!manager) {
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      // Why: pane IDs are per-tab, so resolve the affected PTY through this tab's live transport bindings, not global pane IDs.
+      const getAffectedPanes = (): ReturnType<typeof manager.getPanes> =>
+        getOverrideAffectedPanes(
+          manager.getPanes(),
+          (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId(),
+          event.ptyId
+        )
+      if (event.mode === 'mobile-fit' || event.mode === 'remote-desktop-fit') {
+        // Why: when mobile drives, xterm must shrink to phone dims or the wide desktop grid garbles the phone-wrapped stream.
+        // Why: override events fan out to every terminal tab; skip the rAF unless this tab has a mis-parked pane.
+        const panesNeedingFit = getPanesNeedingOverrideFit(
+          getAffectedPanes(),
+          event.cols,
+          event.rows
+        )
+        if (panesNeedingFit.length === 0) {
           return
         }
-        // Why: pane IDs are per-tab, so resolve the affected PTY through this
-        // tab's live transport bindings instead of global numeric pane IDs.
-        const getAffectedPanes = (): ReturnType<typeof manager.getPanes> =>
-          manager
-            .getPanes()
-            .filter((pane) => paneTransportsRef.current.get(pane.id)?.getPtyId() === event.ptyId)
-        // Why: fitAddon.fit() measures DOM dimensions, so it must run after
-        // the browser has settled layout. Running synchronously inside the
-        // IPC callback can produce stale measurements. rAF ensures the DOM
-        // is ready. The follow-up timeout acts as a safety net: if
-        // fitAddon.fit() silently threw (its errors are caught), the timeout
-        // falls back to a direct terminal.resize() using the restored
-        // dimensions from the runtime. This guarantees xterm exits mobile
-        // dims even when the DOM-based fit path fails.
+        scheduleFitFrame(() => {
+          for (const pane of getPanesNeedingOverrideFit(
+            getAffectedPanes(),
+            event.cols,
+            event.rows
+          )) {
+            safeFit(pane)
+          }
+        })
+        return
+      }
+      if (event.mode === 'desktop-fit') {
+        // Why: fitAddon.fit() measures the DOM, so run under rAF after layout settles; the timeout is a safety net if fit silently threw.
         const fitAffectedPanes = (): void => {
           for (const pane of getAffectedPanes()) {
             safeFit(pane)
           }
         }
         scheduleFitFrame(fitAffectedPanes)
-        // Why: belt-and-suspenders — if safeFit's fitAddon.fit() threw or
-        // was a no-op due to stale dimensions, fall back to a direct
-        // resize. ONLY fire if xterm is still parked at the prior
-        // mobile-fit dims, meaning safeFit failed to move it. Previously
-        // we also fired when xterm had moved to *any* size other than
-        // the captured baseline, which clobbered safeFit's correct
-        // DOM-measured fit when the desktop pane geometry had changed
-        // since mobile-fit started (e.g. user closed a split or resized
-        // the window while the phone was active). In that scenario the
-        // event.cols/rows is the stale baseline from the moment
-        // mobile-fit started, not the current pane geometry — applying
-        // it would shrink the terminal back to e.g. half-width.
+        // Why: direct-resize fallback if safeFit no-op'd, only while xterm is still at the prior mobile-fit dims; else event.cols/rows is a stale baseline that clobbers the fit.
         scheduleFallbackTimer(() => {
           for (const pane of getAffectedPanes()) {
-            // Why: skip the fallback for hidden/unmounted panes whose
-            // container is 0×0. Force-resizing xterm to the server's
-            // desktop dims while the DOM has no geometry leaves xterm
-            // with cols/rows that won't match when the tab is later
-            // activated (the activation refit will correct it). The
-            // fallback is for the *visible* pane that legitimately
-            // failed to refit via the rAF safeFit.
+            // Why: skip 0×0 hidden panes; forcing desktop dims with no DOM geometry leaves a mismatched grid (fallback is only for the visible pane that failed to refit).
             const rect = pane.container.getBoundingClientRect()
             if (rect.width === 0 || rect.height === 0) {
               continue
             }
-            safeFit(pane)
-            const stuckAtMobile =
-              event.priorCols != null &&
-              event.priorRows != null &&
-              pane.terminal.cols === event.priorCols &&
-              pane.terminal.rows === event.priorRows
-            if (stuckAtMobile && event.cols > 0 && event.rows > 0) {
-              pane.terminal.resize(event.cols, event.rows)
-            }
+            applyDesktopFitFallbackAfterReplay(pane, {
+              ...event,
+              // Why: the timeout/replay queue can outlive this pane binding; never apply old server dims to a replacement PTY.
+              shouldApply: () => getAffectedPanes().includes(pane)
+            })
           }
         })
       }
@@ -319,9 +495,7 @@ export default function TerminalPane({
     }
   }, [])
 
-  // Why: presence-lock banner re-render. Driver state lives in a plain Map
-  // for perf; this counter forces a re-render when the driver flips so the
-  // lock banner appears/disappears. See docs/mobile-presence-lock.md.
+  // Why: driver state lives in a Map for perf; this counter re-renders on driver flips so the lock banner toggles. See docs/mobile-presence-lock.md.
   const [, setDriverTick] = useState(0)
   useEffect(
     () =>
@@ -331,26 +505,72 @@ export default function TerminalPane({
     []
   )
 
-  // Pane title state — keyed by ephemeral paneId, persisted via titlesByLeafId
-  // in the layout snapshot. Ref keeps persistLayoutSnapshot closures fresh.
+  // Pane title state keyed by ephemeral paneId, persisted via titlesByLeafId; ref keeps persistLayoutSnapshot closures fresh.
   const [paneTitles, setPaneTitles] = useState<Record<number, string>>({})
   const paneTitlesRef = useRef<Record<number, string>>({})
   paneTitlesRef.current = paneTitles
   const removedTitleLeafIdsRef = useRef<Set<string>>(new Set())
   const clearedScrollbackLeafIdsRef = useRef<Set<string>>(new Set())
+  const [paneTitleOverlayRects, setPaneTitleOverlayRects] = useState<
+    Record<number, PaneTitleOverlayRect>
+  >({})
   const [renamingPaneId, setRenamingPaneId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
-  // Guard against double-submit: when the user presses Enter, handleRenameSubmit
-  // runs and then the input unmounts causing onBlur to fire handleRenameSubmit
-  // again. Similarly, pressing Escape runs handleRenameCancel but blur would
-  // then call handleRenameSubmit, saving the title the user wanted to discard.
+  // Guard against double-submit: Enter/Escape act first, then the input's onBlur re-fires handleRenameSubmit, re-saving a discarded title.
   const renameSubmittedRef = useRef(false)
   const renameSessionIdRef = useRef(0)
   const renameBlurCommitEnabledRef = useRef(true)
+  // Why: delayed xterm/Radix focus handoffs look like blur but aren't user intent; only outside pointer/Tab nav should commit.
+  const renameUserRequestedBlurCommitRef = useRef(false)
   const renameFocusFrameRef = useRef<number | null>(null)
   const renameEnableBlurFrameRef = useRef<number | null>(null)
   const renameRefocusFrameRef = useRef<number | null>(null)
+  /** Cancels deferred focus/blur frames from inline title editing (xterm and Radix can both move focus after the menu closes). */
+  const cancelPendingRenameFrames = useCallback(() => {
+    const frameRefs = [renameFocusFrameRef, renameEnableBlurFrameRef, renameRefocusFrameRef]
+    for (const frameRef of frameRefs) {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+        frameRef.current = null
+      }
+    }
+  }, [])
+
+  /** Invalidates the active inline title edit session (bumping the session ID) so stale animation-frame callbacks can't commit old titles. */
+  const closeRenameSession = useCallback(() => {
+    renameSessionIdRef.current += 1
+    renameBlurCommitEnabledRef.current = true
+    renameUserRequestedBlurCommitRef.current = false
+    cancelPendingRenameFrames()
+  }, [cancelPendingRenameFrames])
+
+  /** Owns the terminal container ref; closes rename work when the owner detaches so delayed focus callbacks don't target stale DOM. */
+  const setContainerRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      containerRef.current = node
+      if (node !== null) {
+        return
+      }
+      // Why: rename focus/blur frames are owned by the terminal container; invalidate them when that DOM owner detaches.
+      closeRenameSession()
+    },
+    [closeRenameSession]
+  )
+
+  /** Starts inline title editing (menu or keyboard), resetting stale blur-submit state from prior sessions. */
+  const handleStartRename = useCallback(
+    (paneId: number) => {
+      cancelPendingRenameFrames()
+      renameSessionIdRef.current += 1
+      renameBlurCommitEnabledRef.current = false
+      renameUserRequestedBlurCommitRef.current = false
+      renameSubmittedRef.current = false
+      setRenameValue(paneTitlesRef.current[paneId] ?? '')
+      setRenamingPaneId(paneId)
+    },
+    [cancelPendingRenameFrames]
+  )
   const onPtyErrorRef = useRef((_paneId: number, message: string) => {
     if (isTerminalSessionStateSaveFailure(message)) {
       setTerminalError(null)
@@ -359,6 +579,13 @@ export default function TerminalPane({
     }
     setTerminalError((prev) => (prev ? `${prev}\n${message}` : message))
   })
+  const onPtyRecoveryStateRef = useRef(
+    (paneId: number, state: PtyTransportRecoveryState | null) => {
+      setPtyRecoveryStatesByPaneId((previous) =>
+        updateTerminalRemoteRuntimeRecoveryUiState(previous, paneId, state)
+      )
+    }
+  )
 
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
@@ -368,15 +595,193 @@ export default function TerminalPane({
     (store) => store.consumePendingCodexPaneRestart
   )
   const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
+  // Why: in chat view the chat surface sits above the mounted terminal, so its mobile-driver overlay must not render over it (U9/R8).
+  const unifiedTabId = useAppStore(
+    (store) =>
+      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.id
+  )
+  const isChatViewMode = useAppStore(
+    (store) =>
+      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)
+        ?.viewMode === 'chat'
+  )
+  const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
+  const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
+  const unifiedTabLabel = useAppStore(
+    (store) =>
+      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.label
+  )
+  const runtimePaneTitlesByPaneId = useAppStore(
+    useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
+  )
+  // Carry each leaf's agent identity, not just "an agent exists", so the gate can reject unsupported agents; scoped to this tab's panes.
+  const tabAgentTypeByLeaf = useAppStore((store) =>
+    selectTerminalTabAgentTypesByLeaf(store.agentStatusByPaneKey, tabId)
+  )
+  const toggleTabViewMode = useAppStore((store) => store.toggleTabViewMode)
+  const setTabViewMode = useAppStore((store) => store.setTabViewMode)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
   const terminalTab = useAppStore((store) =>
     getCachedTerminalTabForWorktree(store.tabsByWorktree, worktreeId, tabId)
   )
-  const setTabLayout = useAppStore((store) => store.setTabLayout)
   const restoredLayout = useMemo(
     () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
     [savedLayout, terminalTab]
   )
+  const expectedLayoutLeafIds = useMemo(
+    () => collectLeafIdsInOrder(restoredLayout.root),
+    [restoredLayout.root]
+  )
+  const getNativeChatLeafIds = useCallback((): string[] => {
+    const mountedLeafIds = managerRef.current?.getPanes().map((pane) => pane.leafId) ?? []
+    // Why: a partially hydrated manager can expose one pane of a restored split; union both sources so tab-wide evidence stays disabled.
+    return [...new Set([...expectedLayoutLeafIds, ...mountedLeafIds])]
+  }, [expectedLayoutLeafIds])
+  const getTabWideAgentHintLeafId = useCallback((): string | null => {
+    if (tabWideAgentHintLeafId !== undefined) {
+      return tabWideAgentHintLeafId
+    }
+    const leafIds = getNativeChatLeafIds()
+    return leafIds.length === 1 ? leafIds[0] : null
+  }, [getNativeChatLeafIds, tabWideAgentHintLeafId])
+  useEffect(() => {
+    if (tabWideAgentHintLeafId !== undefined) {
+      return
+    }
+    const leafIds = getNativeChatLeafIds()
+    if (leafIds.length === 0) {
+      return
+    }
+    // Why: tab-wide launch/title metadata predates leaf ownership; bind it only when the first topology proves the sole leaf it describes.
+    setTabWideAgentHintLeafId(leafIds.length === 1 ? leafIds[0] : null)
+  }, [getNativeChatLeafIds, paneCount, tabWideAgentHintLeafId])
+  const resolveTitleAgentForLeaf = useCallback(
+    (leafId: string | null) => {
+      const hasSingleKnownLeaf =
+        getNativeChatLeafIds().length === 1 && getTabWideAgentHintLeafId() === leafId
+      return resolveNativeChatLeafTitleAgent({
+        leafId,
+        panes: managerRef.current?.getPanes() ?? [],
+        runtimePaneTitlesByPaneId,
+        tabLabel: hasSingleKnownLeaf ? unifiedTabLabel : null,
+        terminalTitle: hasSingleKnownLeaf ? terminalTab?.title : null
+      })
+    },
+    [
+      getNativeChatLeafIds,
+      getTabWideAgentHintLeafId,
+      runtimePaneTitlesByPaneId,
+      terminalTab?.title,
+      unifiedTabLabel
+    ]
+  )
+  // Per-leaf: a split can mix supported/unsupported agents; the leaf's live agent is authoritative, tab-wide hints only fill in before hooks arrive.
+  const isChatEligibleForLeaf = useCallback(
+    (leafId: string | null): boolean => {
+      const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
+      const launchAgent = nativeChatLaunchAgentForLeaf({
+        launchAgent: terminalTab?.launchAgent,
+        launchAgentLeafId: getTabWideAgentHintLeafId(),
+        leafId,
+        leafIds: getNativeChatLeafIds()
+      })
+      return canToggleNativeChat({
+        experimentalNativeChatEnabled: nativeChatEnabled,
+        contentType: 'terminal',
+        launchAgent: detectedAgent ? null : launchAgent,
+        detectedAgent,
+        resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
+        nativeChatTranscriptIsLocalReadable
+      })
+    },
+    [
+      tabAgentTypeByLeaf,
+      nativeChatEnabled,
+      nativeChatTranscriptIsLocalReadable,
+      terminalTab?.launchAgent,
+      getNativeChatLeafIds,
+      getTabWideAgentHintLeafId,
+      resolveTitleAgentForLeaf
+    ]
+  )
+  const applyNativeChatLeafRoute = useCallback(
+    (route: NativeChatLeafRoute): void => {
+      if (route.chatLeafId !== chatLeafId) {
+        setChatLeafId(route.chatLeafId)
+      }
+      if (route.exitChat && unifiedTabId) {
+        // Why: event/effect replay must not flip terminal mode back to chat.
+        setTabViewMode(unifiedTabId, 'terminal')
+      }
+    },
+    [chatLeafId, setTabViewMode, unifiedTabId]
+  )
+  const handleConfirmedAgentExit = useCallback(
+    (leafId: string): void => {
+      if (leafId !== chatLeafId) {
+        return
+      }
+      const panes = managerRef.current?.getPanes() ?? []
+      const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
+      applyNativeChatLeafRoute(
+        resolveNativeChatLeafRoute({
+          isChatViewMode,
+          chatLeafId,
+          activeLeafId,
+          chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
+          activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
+          chatLeafHasConfirmedAgentExit: true
+        })
+      )
+    },
+    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode]
+  )
+  useEffect(() => {
+    // Why: transport callbacks must observe only committed chat ownership; render work can be replayed/discarded under concurrent React.
+    onAgentExitedRef.current = handleConfirmedAgentExit
+  }, [handleConfirmedAgentExit])
+  const canToggleChatForLeaf = useCallback(
+    (leafId: string | null): boolean => {
+      // Scope the "always allow toggling back" rule to the leaf showing chat; must not make an unsupported sibling look eligible.
+      const isChatViewForLeaf = effectiveChatViewMode && leafId !== null && chatLeafId === leafId
+      return (nativeChatEnabled && isChatViewForLeaf) || isChatEligibleForLeaf(leafId)
+    },
+    [chatLeafId, effectiveChatViewMode, isChatEligibleForLeaf, nativeChatEnabled]
+  )
+  const toggleNativeChatForLeaf = useCallback(
+    (leafId: string) => {
+      if (!unifiedTabId) {
+        return
+      }
+      if (effectiveChatViewMode && chatLeafId === leafId) {
+        setChatLeafId(null)
+        toggleTabViewMode(unifiedTabId)
+        return
+      }
+      setChatLeafId(leafId)
+      if (!effectiveChatViewMode) {
+        toggleTabViewMode(unifiedTabId)
+      }
+    },
+    [unifiedTabId, effectiveChatViewMode, chatLeafId, toggleTabViewMode]
+  )
+  const handleToggleNativeChat = useCallback(() => {
+    const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
+    if (!activeLeafId) {
+      return
+    }
+    toggleNativeChatForLeaf(activeLeafId)
+  }, [toggleNativeChatForLeaf])
+  const readNativeChatTerminalScreen = useCallback((): string | null => {
+    if (!chatLeafId) {
+      return null
+    }
+    const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === chatLeafId)
+    return pane?.serializeAddon.serialize({ scrollback: 0 }) ?? null
+  }, [chatLeafId])
+  const setTabLayout = useAppStore((store) => store.setTabLayout)
+  const expectedLayoutLeafIdsAttr =
+    expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
   const initialLayoutRef = useRef(restoredLayout)
   const updateTabTitle = useAppStore((store) => store.updateTabTitle)
   const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
@@ -393,14 +798,18 @@ export default function TerminalPane({
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
   const updateSettings = useAppStore((store) => store.updateSettings)
+  const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
   const keybindings = useAppStore((store) => store.keybindings)
-  // Why: Windows is the only platform where bare right-click is repurposed as
-  // a paste gesture; on macOS/Linux the terminal still owns right-click for the
-  // context menu. The settings default keeps the Windows shortcut feeling native
-  // without changing the other platforms' interaction model.
-  const rightClickToPaste = isWindowsUserAgent() && (settings?.terminalRightClickToPaste ?? true)
+  const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
+  // Why: Windows ConPTY doesn't forward DECSET 2004 from TUIs, so xterm may not know multi-line paste needs bracketed protection.
+  const forceBracketedMultilineTextPaste = isWindowsUserAgent()
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
-  const shouldMeasureHiddenStartup = startup !== undefined && !isVisible
+  const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
+    () => startup !== undefined && !isVisible
+  )
+  const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<
+    Map<number, SessionRestoredBannerReason>
+  >(() => new Map())
   const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
   const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
@@ -413,6 +822,48 @@ export default function TerminalPane({
       consumeTabStartupCommand(tabId)
     }
   }, [startup, tabId, consumeTabStartupCommand])
+
+  useLayoutEffect(() => {
+    if (isVisible && shouldMeasureHiddenStartup) {
+      // Why: hidden startup measurement is first-launch only; keeping it past first visibility would let inactive tabs refit and SIGWINCH.
+      setShouldMeasureHiddenStartup(false)
+    }
+    if (isVisible) {
+      // Why: a hidden 0×0 pane self-heals once shown; clear only the stale zero-dims diagnostic so real errors survive.
+      setTerminalError((prev) => (prev && isTerminalZeroDimensionsDiagnostic(prev) ? null : prev))
+    }
+  }, [isVisible, shouldMeasureHiddenStartup])
+
+  const clearSessionRestoredBannerForPane = useCallback((paneId: number): void => {
+    setSessionRestoredBannerPaneIds((prev) => {
+      const next = removeSessionRestoredBannerPaneId(prev, paneId)
+      return next === prev ? prev : next
+    })
+  }, [])
+
+  const showRestoredSessionBanner = useCallback(
+    (paneId: number, reason: SessionRestoredBannerReason = 'restored'): void => {
+      setSessionRestoredBannerPaneIds((prev) => {
+        const next = addSessionRestoredBannerPaneId(prev, paneId, reason)
+        return next === prev ? prev : next
+      })
+    },
+    []
+  )
+
+  const dismissSessionRestoredBanner = useCallback(
+    (event: SessionRestoredBannerDismissEvent): void => {
+      setSessionRestoredBannerPaneIds((prev) =>
+        dismissSessionRestoredBannerPaneIds(prev, event, managerRef.current?.getPanes() ?? [])
+      )
+    },
+    []
+  )
+  useSessionRestoredBannerDismiss(
+    sessionRestoredBannerPaneIds.size > 0,
+    containerRef,
+    dismissSessionRestoredBanner
+  )
 
   const openDiskSpaceAnalyzer = useCallback(() => {
     setSessionStateSaveFailureOpen(false)
@@ -476,12 +927,39 @@ export default function TerminalPane({
 
   const settingsRef = useRef(settings)
   settingsRef.current = settings
-  // Why: the persisted setting can be 'auto' (default) or one of the four
-  // explicit modes. useEffectiveMacOptionAsAlt resolves 'auto' into
-  // 'true' | 'false' based on the probe's current layout category (US → 'true',
-  // anything else → 'false'), and re-renders when the OS layout changes.
-  // Downstream keyboard handlers read the ref, so the ref also tracks the
-  // effective value, not the raw setting.
+  const openLinksInAppPreferencePromiseRef = useRef<Promise<boolean> | null>(null)
+
+  const requestOpenLinksInAppPreference = useCallback(
+    (url: string): Promise<boolean> | null => {
+      if (settingsRef.current?.openLinksInAppPreferencePrompted === true) {
+        return null
+      }
+      if (!settingsRef.current) {
+        return null
+      }
+      if (openLinksInAppPreferencePromiseRef.current) {
+        return openLinksInAppPreferencePromiseRef.current
+      }
+      const preferencePromise = (async () => {
+        const openInOrca = await requestLinkRoutingPreference({
+          openLinksInAppDefault: settingsRef.current?.openLinksInApp === true,
+          url
+        })
+        await updateSettings({
+          openLinksInApp: openInOrca,
+          openLinksInAppPreferencePrompted: true
+        })
+        return openInOrca
+      })()
+      openLinksInAppPreferencePromiseRef.current = preferencePromise
+      void preferencePromise.finally(() => {
+        openLinksInAppPreferencePromiseRef.current = null
+      })
+      return preferencePromise
+    },
+    [requestLinkRoutingPreference, updateSettings]
+  )
+  // Why: 'auto' resolves to true/false by keyboard layout (US → alt); the ref tracks that effective value, not the raw setting.
   const effectiveMacOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
   const macOptionAsAltRef = useRef<MacOptionAsAlt>(effectiveMacOptionAsAlt)
   macOptionAsAltRef.current = effectiveMacOptionAsAlt
@@ -492,11 +970,7 @@ export default function TerminalPane({
   const dispatchNotification = useNotificationDispatch(worktreeId)
   const setCacheTimerStartedAt = useAppStore((store) => store.setCacheTimerStartedAt)
 
-  // Memoized with useCallback so downstream hooks (useTerminalKeyboardShortcuts,
-  // useTerminalPaneLifecycle, createExpandCollapseActions) don't tear down and
-  // re-register event listeners on every render. All data it reads comes from
-  // refs (managerRef, containerRef, expandedPaneIdRef, paneTitlesRef) or
-  // stable values (tabId, setTabLayout), so the dependency array is minimal.
+  // Memoized so downstream hooks don't re-register listeners each render; reads only refs/stable values, so deps stay minimal.
   const persistLayoutSnapshot = useCallback((): void => {
     const manager = managerRef.current
     const container = containerRef.current
@@ -518,9 +992,7 @@ export default function TerminalPane({
     const scrollbackPreserveLeafIds = new Set(
       [...currentLeafIds].filter((leafId) => !clearedScrollbackLeafIds.has(leafId))
     )
-    // Preserve existing buffersByLeafId so layout-only persists (resize, split,
-    // reorder) don't clobber previously captured scrollback. Drop entries for
-    // leaves that no longer exist.
+    // Preserve existing buffersByLeafId so layout-only persists don't clobber captured scrollback; drop dead leaves.
     const mergedBuffers = mergeCapturedLeafState({
       prior: existing?.buffersByLeafId,
       fresh: {},
@@ -537,12 +1009,7 @@ export default function TerminalPane({
     if (Object.keys(mergedScrollbackRefs).length > 0) {
       layout.scrollbackRefsByLeafId = mergedScrollbackRefs
     }
-    // Why: between pane creation and the deferred rAF where PTYs actually
-    // attach, all transports have getPtyId() === null. The merge below
-    // preserves the *prior* snapshot's leaf→PTY mappings while still letting
-    // any live transports overwrite them. Without preservation, a rapid
-    // successive remount (tab moved again before the first rAF) would lose
-    // the mappings and force fresh PTY spawns.
+    // Why: before PTYs attach (deferred rAF) transports return null; preserve prior leaf→PTY mappings so a fast remount doesn't force fresh spawns.
     const livePtyEntries = currentPanes
       .map((p) => [p.leafId, paneTransportsRef.current.get(p.id)?.getPtyId() ?? null] as const)
       .filter(
@@ -557,9 +1024,12 @@ export default function TerminalPane({
     if (Object.keys(mergedPtyIds).length > 0) {
       layout.ptyIdsByLeafId = mergedPtyIds
     }
-    // Preserve pane titles — uses the live React state (via ref) rather than
-    // the stale Zustand value because React state reflects in-flight title
-    // edits that haven't been persisted yet.
+    layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
+      root: layout.root,
+      activeLeafId: layout.activeLeafId,
+      ptyIdsByLeafId: mergedPtyIds
+    })
+    // Preserve pane titles from live React state (via ref); Zustand is stale for in-flight edits not yet persisted.
     const titlesByLeafId: Record<string, string> = {}
     const removedTitleLeafIds = removedTitleLeafIdsRef.current
     for (const pane of currentPanes) {
@@ -568,9 +1038,7 @@ export default function TerminalPane({
         titlesByLeafId[pane.leafId] = existingTitle
       }
     }
-    // Why: active agents can trigger layout persists while pane-title React
-    // state is catching up. Preserve existing leaf titles unless this pane
-    // explicitly removed them, then overlay the live local pane-title state.
+    // Why: agents can persist layout while pane-title React state lags, so keep existing titles unless removed before overlaying live state.
     const titles = paneTitlesRef.current
     for (const pane of currentPanes) {
       const title = titles[pane.id]
@@ -583,18 +1051,75 @@ export default function TerminalPane({
       layout.titlesByLeafId = titlesByLeafId
     }
     setTabLayout(tabId, layout)
+    // Why: pane geometry is host-authoritative for remote tabs, so push ratios/expand/titles or they revert on the next snapshot.
+    const hasRemotePane = Object.values(mergedPtyIds).some(
+      (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
+    )
+    if (hasRemotePane) {
+      void updateWebRuntimePaneLayout({
+        worktreeId,
+        tabId,
+        root: layout.root,
+        expandedLeafId: layout.expandedLeafId,
+        ...(layout.titlesByLeafId ? { titlesByLeafId: layout.titlesByLeafId } : {})
+      })
+    }
     for (const leafId of currentLeafIds) {
       clearedScrollbackLeafIds.delete(leafId)
     }
-  }, [tabId, setTabLayout])
+  }, [tabId, setTabLayout, worktreeId])
 
   const clearPaneScrollback = useCallback(
     (pane: ManagedPane): void => {
       clearedScrollbackLeafIdsRef.current.add(pane.leafId)
-      pane.terminal.clear()
+      clearTerminalScrollbackAndFollowOutput(pane.terminal)
+      // Why: also clear the host buffer for remote-server panes, or the next host snapshot replays what we just cleared.
+      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+      const clearedRemoteHostBuffer = clearWebRuntimeTerminalBuffer(ptyId)
+      if (!clearedRemoteHostBuffer && ptyId) {
+        // Why: local/daemon/SSH PTYs keep their own screen state (ConPTY on Windows); clear it too or the next prompt repaints below a blank gap.
+        window.api.pty.clearBuffer(ptyId)
+      }
+      persistLayoutSnapshot()
+    },
+    [paneTransportsRef, persistLayoutSnapshot]
+  )
+
+  /** Removes a custom pane title from state, the persistence ref, and tombstones the leaf so the next snapshot stays cleared. */
+  const removePaneTitle = useCallback(
+    (paneId: number) => {
+      setPaneTitles((prev) => {
+        if (!(paneId in prev)) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[paneId]
+        return next
+      })
+      // Eagerly remove from the ref so persistLayoutSnapshot sees the change.
+      if (paneId in paneTitlesRef.current) {
+        const next = { ...paneTitlesRef.current }
+        delete next[paneId]
+        paneTitlesRef.current = next
+      }
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      if (leafId) {
+        removedTitleLeafIdsRef.current.add(leafId)
+      }
       persistLayoutSnapshot()
     },
     [persistLayoutSnapshot]
+  )
+
+  /** Ignores clear-title shortcuts for panes already on their automatic title (idempotent, no wasted snapshot). */
+  const handleClearPaneTitleShortcut = useCallback(
+    (paneId: number) => {
+      if (!paneTitlesRef.current[paneId]) {
+        return
+      }
+      removePaneTitle(paneId)
+    },
+    [removePaneTitle]
   )
 
   useEffect(() => {
@@ -638,8 +1163,8 @@ export default function TerminalPane({
     persistLayoutSnapshot()
   }, [paneCount, paneTitles, persistLayoutSnapshot, terminalTab])
 
-  const syncPanePtyLayoutBinding = useCallback(
-    (paneId: number, ptyId: string | null): void => {
+  const writePanePtyLayoutBinding = useCallback(
+    (paneId: number, ptyId: string | null, repairActiveLeafOnClear: boolean): void => {
       const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT
       const { ptyIdsByLeafId: _existingPtyIdsByLeafId, ...layoutWithoutPtyBindings } =
         existingLayout
@@ -652,10 +1177,7 @@ export default function TerminalPane({
       if (ptyId) {
         setTabLayout(tabId, {
           ...layoutWithoutPtyBindings,
-          // Why: PTY ownership changes happen after the synchronous layout
-          // snapshot on mount. Persist the live pane→PTY binding here so
-          // remounts attach each pane to its current shell instead of a stale
-          // or missing PTY id from an earlier snapshot.
+          // Why: PTY ownership changes after the mount-time layout snapshot, so persist the live pane→PTY binding here for correct remount attachment.
           ptyIdsByLeafId: {
             ...existingBindings,
             [leafId]: ptyId
@@ -666,8 +1188,55 @@ export default function TerminalPane({
 
       const nextBindings = { ...existingBindings }
       delete nextBindings[leafId]
+      const nextLayout = {
+        ...layoutWithoutPtyBindings,
+        ...(Object.keys(nextBindings).length > 0 ? { ptyIdsByLeafId: nextBindings } : {})
+      }
+      if (
+        repairActiveLeafOnClear &&
+        existingLayout.activeLeafId === leafId &&
+        Object.keys(nextBindings).length > 0
+      ) {
+        // Why: repair focus off an active pane that lost its PTY (it would swallow input); restart bookkeeping opts out to keep the pane getting a fresh PTY.
+        nextLayout.activeLeafId = resolveTerminalLayoutActiveLeafId({
+          root: nextLayout.root,
+          activeLeafId: nextLayout.activeLeafId,
+          ptyIdsByLeafId: nextBindings
+        })
+      }
+      setTabLayout(tabId, nextLayout)
+    },
+    [setTabLayout, tabId]
+  )
+
+  const syncPanePtyLayoutBinding = useCallback(
+    (paneId: number, ptyId: string | null): void => {
+      writePanePtyLayoutBinding(paneId, ptyId, false)
+    },
+    [writePanePtyLayoutBinding]
+  )
+
+  const clearExitedPanePtyLayoutBinding = useCallback(
+    (paneId: number, exitedPtyId: string): void => {
+      const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT
+      const { ptyIdsByLeafId: _existingPtyIdsByLeafId, ...layoutWithoutPtyBindings } =
+        existingLayout
+      const existingBindings = existingLayout.ptyIdsByLeafId ?? {}
+      const leafId = managerRef.current?.getLeafId(paneId)
+      if (!leafId || existingBindings[leafId] !== exitedPtyId) {
+        return
+      }
+
+      const nextBindings = { ...existingBindings }
+      delete nextBindings[leafId]
+      // Why: a focused pane that lost its PTY swallows input while a live sibling exists, so repair focus to a bound leaf on unexpected exit.
       setTabLayout(tabId, {
         ...layoutWithoutPtyBindings,
+        activeLeafId: resolveTerminalLayoutActiveLeafId({
+          root: existingLayout.root,
+          activeLeafId: existingLayout.activeLeafId,
+          ptyIdsByLeafId: nextBindings
+        }),
         ...(Object.keys(nextBindings).length > 0 ? { ptyIdsByLeafId: nextBindings } : {})
       })
     },
@@ -701,12 +1270,10 @@ export default function TerminalPane({
       if (manager.getPanes().length <= 1) {
         onCloseTab()
       } else {
-        // Why: clear the cache timer for this specific pane before closing it,
-        // so the sidebar doesn't show a stale countdown for a pane that no
-        // longer exists. The closeTab path handles bulk cleanup, but closing
-        // a single split pane doesn't go through closeTab.
+        // Why: closing a single split pane skips closeTab's bulk cleanup, so clear this pane's cache timer or the sidebar shows a stale countdown.
         const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
         closeWebRuntimeTerminal(ptyId)
+        clearSessionRestoredBannerForPane(paneId)
         const leafId = manager.getLeafId(paneId)
         if (leafId) {
           useAppStore.getState().setCacheTimerStartedAt(makePaneKey(tabId, leafId), null)
@@ -716,15 +1283,35 @@ export default function TerminalPane({
         manager.closePane(paneId)
       }
     },
-    [onCloseTab, syncPanePtyLayoutBinding, tabId]
+    [clearSessionRestoredBannerForPane, onCloseTab, syncPanePtyLayoutBinding, tabId]
   )
 
-  // Cmd+W handler — shows a confirmation dialog when the pane's shell has
-  // a running child process (e.g. npm run dev), so the user doesn't
-  // accidentally kill it. An idle shell prompt closes immediately. Ctrl+D
-  // (explicit EOF) bypasses this by design.
+  // Cmd+W confirms before killing a shell with a running child (e.g. npm run dev); idle prompts close immediately, and Ctrl+D bypasses by design.
+  const getCloseDialogCopyKind = useCallback(
+    (paneId: number): CloseTerminalDialogCopyKind => {
+      const leafId = managerRef.current?.getLeafId(paneId)
+      if (!leafId) {
+        return 'command'
+      }
+      const agentType =
+        useAppStore.getState().agentStatusByPaneKey[makePaneKey(tabId, leafId)]?.agentType
+      return agentType && agentType !== 'unknown' ? 'agent' : 'command'
+    },
+    [tabId]
+  )
+
   const handleRequestClosePane = useCallback(
     (paneId: number) => {
+      // Why: closing the last pane of a pinned tab prefers the pin dialog over the running-process prompt; non-pinned tabs keep the process prompt.
+      const isLastPane = (managerRef.current?.getPanes().length ?? 0) <= 1
+      if (isLastPane) {
+        const state = useAppStore.getState()
+        const confirmPinned = state.settings?.confirmClosePinnedTab ?? true
+        if (confirmPinned && isUnifiedTabPinned(state, worktreeId, tabId)) {
+          executeClosePane(paneId)
+          return
+        }
+      }
       const transport = paneTransportsRef.current.get(paneId)
       const ptyId = transport?.getPtyId()
       if (!ptyId) {
@@ -734,38 +1321,103 @@ export default function TerminalPane({
       const settings = useAppStore.getState().settings
       void inspectRuntimeTerminalProcess(settings, ptyId)
         .then((process) => {
-          if (process.hasChildProcesses) {
-            setCloseConfirmPaneId(paneId)
-          } else {
+          if (!process.hasChildProcesses || settings?.skipCloseTerminalWithRunningProcessConfirm) {
             executeClosePane(paneId)
+          } else {
+            setPendingCloseConfirmation({ paneId, copyKind: getCloseDialogCopyKind(paneId) })
           }
         })
-        // Why: if the child-process probe rejects (IPC wedged, handler
-        // missing on legacy providers), fall back to closing the pane — Cmd+W
-        // silently doing nothing is worse than closing a pane that might have
-        // had a child process. Matches the semantics of the !ptyId branch above.
+        // Why: if the child-process probe rejects (wedged IPC, legacy provider), close anyway — Cmd+W doing nothing is worse than closing a pane with a child.
         .catch(() => executeClosePane(paneId))
     },
-    [executeClosePane]
+    [executeClosePane, tabId, worktreeId, getCloseDialogCopyKind]
   )
 
-  const handleSearchSelectedText = useCallback(
-    (selectedText: string): void => {
-      const state = useAppStore.getState()
-      state.seedFileSearchQuery(worktreeId, selectedText)
-      state.setRightSidebarTab('search')
-      state.setRightSidebarOpen(true)
+  useImperativeHandle(
+    ref,
+    () => ({
+      closeActivePane: (): void => {
+        const manager = managerRef.current
+        const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+        if (pane) {
+          handleRequestClosePane(pane.id)
+        }
+      }
+    }),
+    [handleRequestClosePane]
+  )
+
+  const handleSearchSelectedText = useCallback((selectedText: string): void => {
+    const state = useAppStore.getState()
+    state.showRightSidebarSearch({ query: selectedText })
+  }, [])
+
+  const handleConfirmClose = useCallback(
+    (dontAskAgain: boolean) => {
+      if (pendingCloseConfirmation === null) {
+        return
+      }
+      const paneId = pendingCloseConfirmation.paneId
+      setPendingCloseConfirmation(null)
+      if (dontAskAgain) {
+        void updateSettings({ skipCloseTerminalWithRunningProcessConfirm: true })
+      }
+      executeClosePane(paneId)
+    },
+    [executeClosePane, pendingCloseConfirmation, updateSettings]
+  )
+
+  const handleCancelClose = useCallback(() => {
+    setPendingCloseConfirmation(null)
+  }, [])
+
+  const resolveExternalPaneDropTarget = useCallback(
+    ({
+      sourcePaneId,
+      clientX,
+      clientY
+    }: {
+      sourcePaneId: number
+      clientX: number
+      clientY: number
+    }): PaneExternalDropTarget | null => {
+      const manager = managerRef.current
+      const panes = manager?.getPanes() ?? []
+      if (panes.length <= 1 || !panes.some((pane) => pane.id === sourcePaneId)) {
+        return null
+      }
+      return resolveTerminalTabStripDropTarget({
+        clientX,
+        clientY,
+        groupsByWorktree: useAppStore.getState().groupsByWorktree,
+        worktreeId
+      })
     },
     [worktreeId]
   )
 
-  const handleConfirmClose = useCallback(() => {
-    if (closeConfirmPaneId === null) {
-      return
-    }
-    executeClosePane(closeConfirmPaneId)
-    setCloseConfirmPaneId(null)
-  }, [closeConfirmPaneId, executeClosePane])
+  const handleExternalPaneDrop = useCallback(
+    (sourcePaneId: number, target: PaneExternalDropTarget): boolean => {
+      if (!isTerminalTabStripDropTarget(target)) {
+        return false
+      }
+      const fallbackPtyId = paneTransportsRef.current.get(sourcePaneId)?.getPtyId() ?? null
+      return (
+        detachTerminalPaneToTab({
+          fallbackPtyId,
+          getStore: useAppStore.getState,
+          manager: managerRef.current,
+          persistLayoutSnapshot,
+          sourcePaneId,
+          sourceTabId: tabId,
+          targetGroupId: target.groupId,
+          targetIndex: target.insertionIndex,
+          worktreeId
+        }) !== null
+      )
+    },
+    [persistLayoutSnapshot, tabId, worktreeId]
+  )
 
   useTerminalPaneLifecycle({
     tabId,
@@ -775,10 +1427,11 @@ export default function TerminalPane({
     setupSplit,
     issueCommandSplit,
     isActive,
-    isVisible,
+    isVisible: isRendererVisible,
     systemPrefersDark,
     settings,
     settingsRef,
+    requestOpenLinksInAppPreference,
     effectiveMacOptionAsAlt,
     effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
@@ -789,15 +1442,19 @@ export default function TerminalPane({
     paneTransportsRef,
     paneCwdRef,
     paneMode2031Ref,
+    paneKittyKeyboardModesRef,
     paneLastThemeModeRef,
     panePtyBindingsRef,
     replayingPanesRef,
     isActiveRef,
     isVisibleRef,
     onPtyExitRef,
+    onAgentExitedRef,
     onPtyErrorRef,
+    onPtyRecoveryStateRef,
     clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
+    isPtyShutdownPending: useAppStore((store) => store.isPtyShutdownPending),
     updateTabTitle,
     setRuntimePaneTitle,
     clearRuntimePaneTitle,
@@ -808,9 +1465,11 @@ export default function TerminalPane({
     clearWorktreeUnread,
     clearTerminalTabUnread,
     clearTerminalPaneUnread,
+    onShowSessionRestoredBanner: showRestoredSessionBanner,
     dispatchNotification,
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
+    clearExitedPanePtyLayoutBinding,
     setTabPaneExpanded,
     setTabCanExpandPane,
     setExpandedPane,
@@ -819,15 +1478,24 @@ export default function TerminalPane({
     setPaneTitles,
     paneTitlesRef,
     setRenamingPaneId,
-    setPaneCount
+    setPaneCount,
+    setPaneLayoutRevision,
+    resolveExternalPaneDropTarget,
+    onExternalPaneDrop: handleExternalPaneDrop
   })
 
   useEffect(() => {
-    if (!(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) {
-      return
-    }
     const manager = managerRef.current
     if (!manager || !restoredLayout.root) {
+      return
+    }
+    // Why: host-owned split layouts (web / remote-server) arrive via snapshot, so the reconciler materializes their panes; local tabs split directly.
+    if (
+      !isHostAuthoritativeLayout({
+        isWebClient: !!(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__,
+        ptyIdsByLeafId: restoredLayout.ptyIdsByLeafId
+      })
+    ) {
       return
     }
     const insertions = planTerminalLiveLayoutInsertions(
@@ -845,11 +1513,8 @@ export default function TerminalPane({
       if (!ptyId || sourcePaneId === null || manager.getNumericIdForLeaf(insertion.newLeafId)) {
         continue
       }
-      // Why: paired web terminals receive host split-pane snapshots after the
-      // pane manager is already mounted. Adopt the host leaf + PTY instead of
-      // spawning a local-only web pane.
-      // Before-placement swaps [source, new] after splitPane, so invert the
-      // host first-child ratio before applying it to the temporary order.
+      // Why: host split-pane snapshots for paired web terminals arrive after mount, so adopt the host leaf + PTY instead of spawning a local-only web pane.
+      // Before-placement swaps [source, new] after splitPane, so invert the host first-child ratio for the temporary order.
       const splitRatio =
         insertion.ratio === undefined
           ? undefined
@@ -877,31 +1542,21 @@ export default function TerminalPane({
       persistLayoutSnapshot()
     }
 
-    if (restoredLayout.activeLeafId) {
-      const activePaneId = manager.getNumericIdForLeaf(restoredLayout.activeLeafId)
-      if (activePaneId !== null) {
-        manager.setActivePane(activePaneId, { focus: isActive })
-      }
+    const activePaneId = restoredLayout.activeLeafId
+      ? manager.getNumericIdForLeaf(restoredLayout.activeLeafId)
+      : null
+    const fallbackActivePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
+    const nextActivePaneId = activePaneId ?? fallbackActivePaneId
+    if (nextActivePaneId !== null) {
+      manager.setActivePane(nextActivePaneId, { focus: isActive })
     }
   }, [isActive, paneCount, persistLayoutSnapshot, restoredLayout])
 
-  // Why (Activity-only pane isolation): when this TerminalPane is being
-  // portaled into the Activity page for a specific agent pane, hide the
-  // other split siblings so the user only sees that agent's pane. Uses
-  // applyExpandedLayoutTo with a separate snapshot ref so the override is
-  // independent of the user-facing expanded-pane state and the persisted
-  // layout snapshot — closing Activity restores the original split layout.
-  // useLayoutEffect: layout style writes must land before paint to avoid
-  // a flash of all panes. paneCount is in deps so the effect re-applies
-  // after splits/closes change the manager's pane list.
+  // Activity-only isolation: when portaled into Activity for one agent pane, hide split siblings via a separate snapshot ref (independent of expand state).
+  // useLayoutEffect so style writes land before paint (no flash); paneCount in deps re-applies after splits/closes.
   useLayoutEffect(() => {
     const snapshots = activityIsolationSnapshotRef.current
-    // Why: refit on rAF so xterm measures the post-layout DOM, not the
-    // pre-toggle one. Mirrors expand-collapse.refreshPaneSizes. Both the
-    // apply and restore paths must refit — restoring without a fit leaves
-    // xterm sized for the isolated single-pane geometry, so the workspace
-    // view (or staging slot) renders at the wrong cols/rows until some
-    // unrelated event triggers another fit.
+    // Why: refit on rAF so xterm measures the post-layout DOM; both apply and restore paths must refit or xterm stays sized for the isolated single-pane geometry.
     const scheduleRefit = (): number =>
       requestAnimationFrame(() => {
         const manager = managerRef.current
@@ -934,8 +1589,7 @@ export default function TerminalPane({
       restoreExpandedLayoutFrom(snapshots)
       const root = containerRef.current?.firstElementChild
       if (root instanceof HTMLElement) {
-        // Why: Activity requested an exact pane. If it cannot be resolved, fail
-        // closed instead of showing the whole split terminal as a fallback.
+        // Why: Activity requested an exact pane; if it can't be resolved, fail closed rather than show the whole split terminal.
         snapshots.set(root, { display: root.style.display, flex: root.style.flex })
         root.style.display = 'none'
       }
@@ -950,9 +1604,7 @@ export default function TerminalPane({
     }
   }, [isolatedPaneKey, paneCount, tabId])
 
-  // Why: belt-and-suspenders unmount cleanup. If the component unmounts
-  // while isolation is active (e.g. tab closed mid-Activity-view), restore
-  // sibling display/flex so the captured DOM doesn't leak inline styles.
+  // Why: on unmount while isolation is active (e.g. tab closed mid-Activity), restore sibling display/flex so the captured DOM doesn't leak inline styles.
   useEffect(() => {
     const snapshots = activityIsolationSnapshotRef.current
     return () => {
@@ -976,10 +1628,7 @@ export default function TerminalPane({
       if (existingPtyId) {
         suppressPtyExit(existingPtyId)
         clearCodexRestartNotice(existingPtyId)
-        // Why: pane-scoped Codex restarts should preserve the split layout and
-        // replace only the stale session in place. Clearing the PTY binding and
-        // consuming the upcoming suppressed exit keeps the pane mounted while a
-        // fresh PTY reconnects under the newly selected Codex account.
+        // Why: keep the pane mounted (clear binding, consume the suppressed exit) so a fresh PTY reconnects in place under the newly selected Codex account.
         clearTabPtyId(tabId, existingPtyId)
       }
 
@@ -995,15 +1644,21 @@ export default function TerminalPane({
         tabId,
         worktreeId,
         cwd,
-        startup: { command: 'codex' },
+        startup: CODEX_ACCOUNT_RESTART_STARTUP,
         paneTransportsRef,
+        paneMode2031Ref,
+        paneKittyKeyboardModesRef,
+        paneLastThemeModeRef,
         replayingPanesRef,
         isActiveRef,
         isVisibleRef,
         onPtyExitRef,
+        onAgentExitedRef,
         onPtyErrorRef,
+        onPtyRecoveryStateRef,
         clearTabPtyId,
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
+        isPtyShutdownPending: useAppStore.getState().isPtyShutdownPending,
         updateTabTitle,
         setRuntimePaneTitle,
         clearRuntimePaneTitle,
@@ -1014,15 +1669,18 @@ export default function TerminalPane({
         clearWorktreeUnread,
         clearTerminalTabUnread,
         clearTerminalPaneUnread,
+        onShowSessionRestoredBanner: showRestoredSessionBanner,
         dispatchNotification,
         setCacheTimerStartedAt,
-        syncPanePtyLayoutBinding
+        syncPanePtyLayoutBinding,
+        clearExitedPanePtyLayoutBinding
       })
       panePtyBindingsRef.current.set(paneId, newPaneBinding)
       manager.setActivePane(paneId, { focus: true })
     },
     [
       clearCodexRestartNotice,
+      clearExitedPanePtyLayoutBinding,
       clearRuntimePaneTitle,
       clearTabPtyId,
       cwd,
@@ -1033,6 +1691,8 @@ export default function TerminalPane({
       clearWorktreeUnread,
       clearTerminalTabUnread,
       clearTerminalPaneUnread,
+      showRestoredSessionBanner,
+      onAgentExitedRef,
       onPtyExitRef,
       setCacheTimerStartedAt,
       setRuntimePaneTitle,
@@ -1045,6 +1705,11 @@ export default function TerminalPane({
     ]
   )
 
+  // Why leaf bindings are a dep: a parked or deferred tab mounts with no
+  // transport, so a queued restart has no ptyId to match on the mount pass. The
+  // reconnected PTY rewrites this map when it binds — `ptyIdsByTabId` does not,
+  // because a restored id is already listed there before the pane ever mounts.
+  const panePtyLayoutBindings = savedLayout.ptyIdsByLeafId
   useEffect(() => {
     const manager = managerRef.current
     if (!manager) {
@@ -1056,22 +1721,28 @@ export default function TerminalPane({
       if (!ptyId || !pendingCodexPaneRestartIds[ptyId]) {
         continue
       }
-      // Why: the status-bar switcher can request a global restart for stale
-      // Codex sessions, but the actual execution must stay pane scoped so a
-      // split tab does not lose unrelated non-Codex panes.
+      // Why: the status-bar switcher requests a global Codex restart, but execution stays pane-scoped so a split tab doesn't lose unrelated non-Codex panes.
       if (consumePendingCodexPaneRestart(ptyId)) {
         handleRestartCodexPane(pane.id)
       }
     }
-  }, [consumePendingCodexPaneRestart, handleRestartCodexPane, pendingCodexPaneRestartIds])
+  }, [
+    consumePendingCodexPaneRestart,
+    handleRestartCodexPane,
+    panePtyLayoutBindings,
+    pendingCodexPaneRestartIds
+  ])
 
-  useTerminalFontZoom({ isActive, managerRef, paneFontSizesRef, settingsRef })
+  useTerminalFontZoom({ isActive, containerRef, managerRef, paneFontSizesRef, settingsRef })
 
   useTerminalKeyboardShortcuts({
+    tabId,
+    worktreeId,
     isActive,
     keyboardScopeRef: containerRef,
     managerRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     paneCwdRef,
     fallbackCwd: cwd ?? '',
     expandedPaneIdRef,
@@ -1084,47 +1755,126 @@ export default function TerminalPane({
     onSearchSelectedText: handleSearchSelectedText,
     onRequestClosePane: handleRequestClosePane,
     onClearPaneScrollback: clearPaneScrollback,
+    onSetTitle: handleStartRename,
+    onClearPaneTitle: handleClearPaneTitleShortcut,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
+    paneKittyKeyboardModesRef,
     keybindings,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'
   })
 
   useTerminalPaneGlobalEffects({
     tabId,
-    // Why: use the pane's own `worktreeId` prop (not global activeWorktreeId)
-    // so the terminal-drop resolver routes to the worktree that actually owns
-    // this PTY. Reading from global state would race during worktree switches
-    // — the drop listener is already gated by `isActive`, and the pane's own
-    // id is the authoritative identity of the terminal being written to.
+    // Why: use the pane's own worktreeId prop, not global activeWorktreeId, so terminal-drop routes to this PTY's worktree without racing worktree switches.
     worktreeId,
     cwd,
     isActive,
     isVisible,
-    // Why: hidden startup probes are opacity-hidden but measurable; ordinary
-    // hidden tabs are display:none and refit on visibility resume instead.
-    isSyncFitEnabled: isVisible || shouldMeasureHiddenStartup,
+    isWorktreeActive,
+    // Why: hidden startup probes are opacity-hidden but measurable; ordinary hidden tabs are display:none and refit on visibility resume.
+    isSyncFitEnabled: isRendererVisible || shouldMeasureHiddenStartup,
     paneCount,
     managerRef,
     containerRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     isActiveRef,
     isVisibleRef,
     toggleExpandPane
   })
 
   useEffect(() => {
+    if (
+      !(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ ||
+      !isVisible ||
+      !isActive
+    ) {
+      return
+    }
+
+    const cleanupCallbacks: (() => void)[] = []
+    const fitAndForward = (): void => {
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      for (const pane of manager.getPanes()) {
+        safeFitAndThen(pane, 'web-client-pty-resize', () => {
+          const transport = paneTransportsRef.current.get(pane.id)
+          if (!transport?.isConnected()) {
+            return
+          }
+          const ptyId = transport.getPtyId()
+          if (!ptyId) {
+            return
+          }
+          // Why: match pty-connection resize guards so web refits don't forward SIGWINCH during mobile-lock or phone-fit overrides.
+          if (getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
+            return
+          }
+          // Why: skip forwarding a stale near-zero fit to the host PTY while the overlay is still settling after a worktree switch.
+          if (pane.terminal.cols < 8 || pane.terminal.rows < 4) {
+            return
+          }
+          transport.resize(pane.terminal.cols, pane.terminal.rows)
+        })
+      }
+    }
+    const scheduleFrame = (): void => {
+      const frameId = requestAnimationFrame(fitAndForward)
+      cleanupCallbacks.push(() => cancelAnimationFrame(frameId))
+    }
+    const scheduleTimer = (delayMs: number): void => {
+      const timerId = window.setTimeout(fitAndForward, delayMs)
+      cleanupCallbacks.push(() => window.clearTimeout(timerId))
+    }
+
+    // Why: web-restored terminals can fit before the remote PTY transport is ready (xterm no-op), so forward the settled cols explicitly.
+    scheduleFrame()
+    scheduleTimer(50)
+    scheduleTimer(150)
+    scheduleTimer(400)
+    scheduleTimer(900)
+
+    return () => {
+      for (const cleanup of cleanupCallbacks) {
+        cleanup()
+      }
+    }
+  }, [isActive, isVisible])
+
+  useEffect(() => {
     const container = containerRef.current
     if (!container) {
       return
     }
+    let ownsRegularTerminalFocus = false
+    let releasedHelperOnWindowBlur: HTMLElement | null = null
+    // Why: the IME refresh's blur emits a focusout that would clear terminalInputFocused mid-handoff; latch it so Terminal-first shortcut routing survives until refocus.
+    let refreshingImeInputContext = false
     const syncFocused = (focused: boolean): void => {
+      ownsRegularTerminalFocus = focused
+      if (focused) {
+        releasedHelperOnWindowBlur = null
+      }
+      setRegularTerminalInputFocusAttribute(focused)
       window.api.ui.setTerminalInputFocused?.(focused)
     }
     const onFocusIn = (event: FocusEvent): void => {
-      if (isXtermHelperTextarea(event.target)) {
-        syncFocused(true)
+      if (!isXtermHelperTextarea(event.target)) {
+        return
+      }
+      syncFocused(true)
+      // Why: helper→helper handoffs skip window blur and can leave a stale macOS NSTextInputContext; the refocus's non-helper relatedTarget prevents recursion.
+      if (isXtermHelperTextarea(event.relatedTarget) && event.relatedTarget !== event.target) {
+        refreshingImeInputContext = true
+        try {
+          refreshTerminalImeInputContext(event.target, {})
+        } finally {
+          refreshingImeInputContext = false
+        }
       }
     }
     const onFocusOut = (event: FocusEvent): void => {
@@ -1134,7 +1884,39 @@ export default function TerminalPane({
       if (isXtermHelperTextarea(event.relatedTarget)) {
         return
       }
+      if (refreshingImeInputContext) {
+        return
+      }
       syncFocused(false)
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      releaseTerminalFocusForOutsidePointerDown({
+        container,
+        activeElement: document.activeElement,
+        pointerTarget: event.target,
+        syncFocused
+      })
+    }
+    const onWindowBlur = (): void => {
+      // Why: webview/browser handoff keeps the helper textarea focused, so clear only the main-process mirror and let guest focus proceed.
+      releasedHelperOnWindowBlur = releaseTerminalFocusForWindowBlur({
+        container,
+        activeElement: document.activeElement,
+        syncFocused
+      })
+    }
+    const onWindowFocus = (): void => {
+      // Why: app reactivation may keep DOM focus on xterm after blur cleared the shortcut mirror, or move focus to body/null.
+      if (
+        resyncTerminalFocusForWindowFocus({
+          container,
+          activeElement: document.activeElement,
+          syncFocused,
+          releasedHelper: releasedHelperOnWindowBlur
+        })
+      ) {
+        releasedHelperOnWindowBlur = null
+      }
     }
 
     if (
@@ -1145,30 +1927,24 @@ export default function TerminalPane({
     }
     container.addEventListener('focusin', onFocusIn)
     container.addEventListener('focusout', onFocusOut)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('blur', onWindowBlur)
+    window.addEventListener('focus', onWindowFocus)
     return () => {
       container.removeEventListener('focusin', onFocusIn)
       container.removeEventListener('focusout', onFocusOut)
-      if (
-        isXtermHelperTextarea(document.activeElement) &&
-        container.contains(document.activeElement)
-      ) {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('blur', onWindowBlur)
+      window.removeEventListener('focus', onWindowFocus)
+      // Why: the helper textarea may be gone before cleanup reads document.activeElement, so clear by this pane's mirrored ownership.
+      if (ownsRegularTerminalFocus) {
         syncFocused(false)
       }
     }
   }, [])
 
-  // Intercept paste at the keydown level (configurable terminal paste chords)
-  // AND as a fallback
-  // on the paste event. We must handle keydown because Chromium does not fire
-  // a paste event when the clipboard contains only image data (no text
-  // representation) and the target is a textarea — which is exactly how
-  // xterm.js receives focus. Without the keydown handler, image-only pastes
-  // are silently discarded and tools like Claude Code never receive the image.
-  //
-  // The paste event handler is kept as a fallback for non-keyboard paste
-  // triggers (Edit > Paste menu, programmatic paste, etc.) and also bypasses
-  // Chromium's native clipboard pipeline that can cause concurrent clipboard
-  // reads by CLI tools (e.g. Codex checking for images) to fail intermittently.
+  // Intercept paste at keydown: Chromium fires no paste event for image-only clipboard on a textarea (xterm's focus target), so image pastes would be lost.
+  // Paste-event handler is a fallback for non-keyboard triggers; it also bypasses Chromium's clipboard pipeline that intermittently fails concurrent CLI reads.
   useEffect(() => {
     if (!isActive) {
       return
@@ -1178,25 +1954,117 @@ export default function TerminalPane({
       return
     }
 
-    const pasteFromClipboard = (pane: ManagedPane): void => {
-      const connectionId = getConnectionId(worktreeId) ?? null
-      void pasteTerminalClipboard({
-        readClipboardText: window.api.ui.readClipboardText,
-        saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
-        connectionId,
-        pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
-        onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
-      }).catch(() => {
-        /* ignore clipboard failures */
-      })
-    }
-
     const isMac = navigator.userAgent.includes('Mac')
     const shortcutPlatform: NodeJS.Platform = isMac
       ? 'darwin'
       : navigator.userAgent.includes('Windows')
         ? 'win32'
         : 'linux'
+
+    const isPanePasteTargetMounted = (
+      pane: ManagedPane,
+      transport: PtyTransport | undefined,
+      ptyId: string | null
+    ): boolean => {
+      return isTerminalPanePasteTargetCurrent({
+        manager: managerRef.current,
+        paneTransports: paneTransportsRef.current,
+        paneId: pane.id,
+        leafId: pane.leafId,
+        transport,
+        ptyId
+      })
+    }
+
+    const executePanePasteText = async (
+      pane: ManagedPane,
+      source: TerminalPasteSource,
+      activeElementAtDispatch: Element | null,
+      text: string,
+      options?: TerminalPasteTextOptions
+    ): Promise<void> => {
+      const connectionId = getConnectionId(worktreeId) ?? null
+      const transport = paneTransportsRef.current.get(pane.id)
+      const ptyId = transport?.getPtyId() ?? null
+      const keyboardOwnedPaste =
+        source === 'keyboard' || source === 'paste-event' || source === 'app-menu'
+      const plan = await planTerminalPasteWithYield({
+        text,
+        source,
+        target: {
+          kind: 'terminal',
+          paneId: pane.id,
+          leafId: pane.leafId,
+          ptyId,
+          runtime: resolveTerminalPasteRuntime({
+            platform: shortcutPlatform,
+            ptyId,
+            connectionId,
+            remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+            transport,
+            isWindowsConpty: forceBracketedMultilineTextPaste
+          })
+        },
+        forceBracketedPaste: options?.forceBracketedPaste,
+        forceBracketedPasteForMultiline: options?.forceBracketedPasteForMultiline,
+        terminalBracketedPasteMode: pane.terminal.modes.bracketedPasteMode
+      })
+      const execution = await executeTerminalPastePlan(plan, {
+        pasteText: (pasteText, pasteOptions) =>
+          pasteTerminalText(pane.terminal, pasteText, pasteOptions),
+        writePty: (data) => writeTerminalPastePtyInput(transport, data),
+        isTargetCurrent: () => {
+          if (!isPanePasteTargetMounted(pane, transport, ptyId)) {
+            return false
+          }
+          return isTerminalPanePasteFocusCurrent({
+            requireSameFocusedElement: keyboardOwnedPaste,
+            activeElementAtDispatch,
+            paneContainer: pane.container
+          })
+        },
+        canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId)
+      })
+      if (execution.status !== 'pasted') {
+        setTerminalError(formatTerminalPasteExecutionError(execution.reason))
+        return
+      }
+      if (text) {
+        recordTerminalUserInputForLeaf(tabId, pane.leafId)
+      }
+      if (options?.recoverImagePasteWebglAtlas) {
+        scheduleImagePasteWebglAtlasRecovery()
+      }
+    }
+
+    const pasteFromClipboard = (
+      pane: ManagedPane,
+      source: Extract<TerminalPasteSource, 'keyboard' | 'paste-event'>,
+      readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string> = window.api.ui
+        .readClipboardText
+    ): void => {
+      const connectionId = getConnectionId(worktreeId) ?? null
+      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+        useAppStore.getState(),
+        worktreeId
+      )
+      const activeElementAtDispatch = document.activeElement
+      void pasteTerminalClipboard({
+        readClipboardText,
+        saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+        connectionId,
+        runtimeEnvironmentId,
+        forceBracketedMultilineTextPaste,
+        pasteText: (text, options) =>
+          executePanePasteText(pane, source, activeElementAtDispatch, text, options),
+        onTextPasteError: () =>
+          setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
+        onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
+      }).catch(() => {
+        setTerminalError('Paste failed.')
+      })
+    }
+
     let suppressNextNativePaste = false
     let pasteSuppressionTimerId: number | null = null
     const shouldSuppressNativePaste = (e: KeyboardEvent): boolean => {
@@ -1209,7 +2077,10 @@ export default function TerminalPane({
     }
     const onKeyPaste = (e: KeyboardEvent): void => {
       const target = e.target
-      if (target instanceof Element && target.closest('[data-terminal-search-root]')) {
+      if (
+        (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
+        isInsideNativeChatRoot(target)
+      ) {
         return
       }
       const matchesPaste = keybindingMatchesAction(
@@ -1221,9 +2092,7 @@ export default function TerminalPane({
       )
       if (!matchesPaste) {
         if (shouldSuppressNativePaste(e)) {
-          // Why: bare Ctrl+V is readline's quote-insert on Windows/Linux. If
-          // Chromium turns it into a native paste event, suppress that follow-up
-          // paste while still letting xterm receive the original keydown.
+          // Why: bare Ctrl+V is readline's quote-insert on Windows/Linux; suppress the native paste Chromium may add while letting xterm keep the keydown.
           suppressNextNativePaste = true
           if (pasteSuppressionTimerId !== null) {
             window.clearTimeout(pasteSuppressionTimerId)
@@ -1233,6 +2102,13 @@ export default function TerminalPane({
             suppressNextNativePaste = false
           }, 0)
         }
+        return
+      }
+      if (isClipboardEventPasteRequired() && firesNativePasteEvent(e, isMac)) {
+        // Why: without navigator.clipboard the chord's native paste event is the
+        // only clipboard access — let its default fire and handle it in onPaste.
+        // A remapped chord (e.g. Ctrl+Y) fires no paste event, so keep consuming it
+        // below instead of letting xterm encode it to the PTY as a raw control char.
         return
       }
       e.preventDefault()
@@ -1245,14 +2121,24 @@ export default function TerminalPane({
       if (!pane) {
         return
       }
-      pasteFromClipboard(pane)
+      suppressNextNativePaste = true
+      if (pasteSuppressionTimerId !== null) {
+        window.clearTimeout(pasteSuppressionTimerId)
+      }
+      pasteSuppressionTimerId = window.setTimeout(() => {
+        pasteSuppressionTimerId = null
+        suppressNextNativePaste = false
+      }, 0)
+      pasteFromClipboard(pane, 'keyboard')
     }
 
-    // Fallback: handle paste events triggered by non-keyboard sources
-    // (Edit > Paste menu, programmatic paste, etc.).
+    // Fallback: paste events from non-keyboard sources (Edit > Paste menu, programmatic paste, etc.).
     const onPaste = (e: ClipboardEvent): void => {
       const target = e.target
-      if (target instanceof Element && target.closest('[data-terminal-search-root]')) {
+      if (
+        (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
+        isInsideNativeChatRoot(target)
+      ) {
         return
       }
       if (suppressNextNativePaste) {
@@ -1275,36 +2161,72 @@ export default function TerminalPane({
       if (!pane) {
         return
       }
-      pasteFromClipboard(pane)
+      if (isClipboardEventPasteRequired()) {
+        const eventText = getClipboardEventText(e)
+        pasteFromClipboard(pane, 'paste-event', (options) =>
+          assertClipboardTextWithinLimitWithYield(eventText, options)
+        )
+        return
+      }
+      pasteFromClipboard(pane, 'paste-event')
+    }
+
+    const onAppMenuPaste = (event: Event): void => {
+      const activeElementAtDispatch = document.activeElement
+      if (
+        !(activeElementAtDispatch instanceof Element) ||
+        !container.contains(activeElementAtDispatch) ||
+        activeElementAtDispatch.closest('[data-terminal-search-root]') ||
+        isInsideNativeChatRoot(activeElementAtDispatch)
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const pane = manager.getActivePane() ?? manager.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      const connectionId = getConnectionId(worktreeId) ?? null
+      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+        useAppStore.getState(),
+        worktreeId
+      )
+      void pasteTerminalClipboard({
+        readClipboardText: window.api.ui.readClipboardText,
+        saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+        connectionId,
+        runtimeEnvironmentId,
+        forceBracketedMultilineTextPaste,
+        pasteText: (text, options) =>
+          executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
+        onTextPasteError: () =>
+          setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
+        onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
+      }).catch(() => {
+        setTerminalError('Paste failed.')
+      })
     }
 
     container.addEventListener('keydown', onKeyPaste, { capture: true })
     container.addEventListener('paste', onPaste, { capture: true })
+    window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
     return () => {
       if (pasteSuppressionTimerId !== null) {
         window.clearTimeout(pasteSuppressionTimerId)
       }
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
+      window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
     }
-  }, [isActive, worktreeId, keybindings])
+  }, [isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste, tabId])
 
-  // Why: a click inside the terminal container is a deliberate interaction
-  // with the pane — dismiss the attention indicator for this tab and worktree
-  // (ghostty "show until interact" semantics). onData already covers
-  // keystrokes; pointerdown covers the mouse path, including right-click
-  // and middle-click paste, which also count as engagement with the pane.
-  //
-  // This listener is intentionally NOT gated on `isActive`. In multi-group
-  // split layouts (TabGroupPanel), several TerminalPane instances are
-  // simultaneously visible but only ONE has `isActive=true` (the focused
-  // group's active pane). When the user clicks into a visible-but-inactive
-  // split pane, TabGroupPanel's wrapper `onPointerDown={commands.focusGroup}`
-  // fires first; focusGroup clears tab-level unread but does NOT call
-  // clearWorktreeUnread — so the worktree-level sidebar dot would linger
-  // until another interaction. Attaching this listener unconditionally lets
-  // the first click dismiss both dots BEFORE focusGroup re-renders the pane
-  // as active and the effect deps change.
+  // Dismiss the pane's attention indicator on click (ghostty "show until interact"); pointerdown covers the mouse path onData doesn't.
+  // NOT gated on isActive: clicking a visible-but-inactive split pane must clear the worktree dot before focusGroup re-renders it active.
   useEffect(() => {
     const container = containerRef.current
     if (!container) {
@@ -1339,42 +2261,114 @@ export default function TerminalPane({
     return subscribeTerminalPaneAttention(tabId, applyTerminalPaneAttention)
   }, [tabId, paneCount, applyTerminalPaneAttention])
 
-  // Sync the data-has-title attribute on pane containers when titles change,
-  // and reflow terminals so safeFit() sees the correct available height.
-  // useLayoutEffect (not useEffect) ensures the attribute and refit happen
-  // synchronously after React commits but before the browser paints, so the
-  // title bar offset is applied before the first visible frame and before
-  // any pending requestAnimationFrame (e.g. queueResizeAll) measures dims.
+  // Sync title reservation before paint so xterm fits below out-of-DOM banner chrome and never hides the first row.
   useLayoutEffect(() => {
     const manager = managerRef.current
     if (!manager) {
       return
     }
-    let needsFit = false
-    for (const pane of manager.getPanes()) {
-      // Show the title bar space when the pane has a title OR is being
-      // inline-edited (so the input appears even for untitled panes).
-      // Unread activity does NOT reserve title-bar space — the bell is
-      // rendered as an absolutely-positioned overlay in the pane's top-right
-      // corner so it can appear and disappear without shifting terminal
-      // content, avoiding the jarring reflow on bell toggles.
-      const shouldShow = !!paneTitles[pane.id] || renamingPaneId === pane.id
-      const hadTitle = pane.container.hasAttribute('data-has-title')
-      if (shouldShow && !hadTitle) {
-        pane.container.setAttribute('data-has-title', '')
-        needsFit = true
-      } else if (!shouldShow && hadTitle) {
-        pane.container.removeAttribute('data-has-title')
-        needsFit = true
-      }
-    }
-    if (needsFit) {
+    // Reserve title space only for text/status chrome; chromeless controls float over xterm so untitled panes keep their first row.
+    const needsFit = syncSessionRestoredBannerTitleSpace({
+      panes: manager.getPanes(),
+      paneTitles,
+      renamingPaneId,
+      sessionRestoredBannerPaneIds
+    })
+    if (needsFit && (isVisible || shouldMeasureHiddenStartup)) {
+      // Why: fitting hidden geometry changes PTY rows and wakes TUIs via SIGWINCH; the visible resume path owns real layout correction.
       fitPanes(manager)
     }
-  }, [paneTitles, renamingPaneId])
+  }, [
+    paneCount,
+    paneLayoutRevision,
+    paneTitles,
+    renamingPaneId,
+    sessionRestoredBannerPaneIds,
+    isVisible,
+    shouldMeasureHiddenStartup
+  ])
 
-  // Register a capture callback for shutdown. The beforeunload handler in
-  // App.tsx calls all registered callbacks to serialize terminal buffers.
+  const syncPaneTitleOverlayRects = useCallback((): void => {
+    const manager = managerRef.current
+    const container = containerRef.current
+    if (!manager || !container) {
+      setPaneTitleOverlayRects(clearPaneTitleOverlayRects)
+      return
+    }
+    const containerRect = container.getBoundingClientRect()
+    const nextRects: Record<number, PaneTitleOverlayRect> = {}
+    for (const pane of manager.getPanes()) {
+      const paneRect = pane.container.getBoundingClientRect()
+      if (paneRect.width <= 0 || paneRect.height <= 0) {
+        continue
+      }
+      nextRects[pane.id] = {
+        left: paneRect.left - containerRect.left,
+        top: paneRect.top - containerRect.top,
+        width: paneRect.width
+      }
+    }
+    setPaneTitleOverlayRects((prev) =>
+      arePaneTitleOverlayRectsEqual(prev, nextRects) ? prev : nextRects
+    )
+  }, [])
+
+  useLayoutEffect(() => {
+    const manager = managerRef.current
+    const container = containerRef.current
+    if (!manager || !container) {
+      setPaneTitleOverlayRects(clearPaneTitleOverlayRects)
+      return
+    }
+
+    let frame: number | null = null
+    const scheduleSync = (): void => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame)
+      }
+      frame = requestAnimationFrame(() => {
+        frame = null
+        syncPaneTitleOverlayRects()
+      })
+    }
+
+    // Why: the title UI is React-owned (outside the xterm DOM), so track pane geometry to keep it attached without xterm/Radix focus fights.
+    syncPaneTitleOverlayRects()
+    const resizeObserver = new ResizeObserver(scheduleSync)
+    resizeObserver.observe(container)
+    for (const pane of manager.getPanes()) {
+      resizeObserver.observe(pane.container)
+    }
+    return () => {
+      resizeObserver.disconnect()
+      if (frame !== null) {
+        cancelAnimationFrame(frame)
+      }
+    }
+  }, [
+    expandedPaneId,
+    isolatedPaneKey,
+    isVisible,
+    paneCount,
+    paneLayoutRevision,
+    paneTitles,
+    renamingPaneId,
+    sessionRestoredBannerPaneIds,
+    syncPaneTitleOverlayRects
+  ])
+
+  useEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    setSessionRestoredBannerPaneIds((prev) => {
+      const next = pruneSessionRestoredBannerPaneIds(prev, manager.getPanes())
+      return next === prev ? prev : next
+    })
+  }, [paneCount])
+
+  // Register a shutdown capture callback; App.tsx's beforeunload handler invokes all to serialize terminal buffers.
   useEffect(() => {
     const captureBuffers = (options?: { includeLocalBuffers?: boolean }): void => {
       const manager = managerRef.current
@@ -1386,12 +2380,7 @@ export default function TerminalPane({
       if (panes.length === 0) {
         return
       }
-      // Why: setTabLayout REPLACES — it doesn't merge. captureBuffers can
-      // run during a transient window (post-remount, just-attached,
-      // mid-replay) where xterm hasn't rendered yet so serialize returns 0
-      // bytes. Without preservation, that empty pass would wipe a known-good
-      // buffer. Merge prior state in for leaves whose live capture came back
-      // empty. Same shape as persistLayoutSnapshot.
+      // Why: setTabLayout REPLACES, not merges; a transient empty capture (xterm not yet rendered) would wipe a known-good buffer, so merge prior state for empty leaves.
       const state = useAppStore.getState()
       const existing = state.terminalLayoutsByTabId[tabId]
       const includeLocalBuffers = options?.includeLocalBuffers ?? true
@@ -1405,8 +2394,7 @@ export default function TerminalPane({
         paneTransports: paneTransportsRef.current,
         paneTitlesByPaneId: paneTitlesRef.current,
         existingLayout: existing,
-        // Why: beforeunload skips local/floating bytes because session payloads
-        // immediately prune them; worktree sleep keeps them as defense-in-depth.
+        // Why: beforeunload skips local/floating bytes (session payloads prune them); worktree sleep keeps them as defense-in-depth.
         captureBuffers: shouldCaptureScrollbackBuffers,
         clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
       })
@@ -1417,79 +2405,38 @@ export default function TerminalPane({
     }
     shutdownBufferCaptures.set(tabId, captureBuffers)
     return () => {
-      // Why: only remove if the entry still points at this closure. A
-      // remount could have replaced it before the prior cleanup ran.
+      // Why: only remove if the entry still points at this closure; a remount may have replaced it first.
       if (shutdownBufferCaptures.get(tabId) === captureBuffers) {
         shutdownBufferCaptures.delete(tabId)
       }
     }
   }, [tabId, worktreeId, setTabLayout])
 
-  const cancelPendingRenameFrames = useCallback(() => {
-    const frameRefs = [renameFocusFrameRef, renameEnableBlurFrameRef, renameRefocusFrameRef]
-    for (const frameRef of frameRefs) {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current)
-        frameRef.current = null
-      }
+  useEffect(() => {
+    if (renamingPaneId === null) {
+      return
     }
-  }, [])
-
-  const closeRenameSession = useCallback(() => {
-    renameSessionIdRef.current += 1
-    renameBlurCommitEnabledRef.current = true
-    cancelPendingRenameFrames()
-  }, [cancelPendingRenameFrames])
-
-  const setContainerRef = useCallback(
-    (node: HTMLDivElement | null): void => {
-      containerRef.current = node
-      if (node !== null) {
+    const markPointerBlurIntent = (event: PointerEvent): void => {
+      const input = renameInputRef.current
+      const target = event.target
+      if (input && target instanceof Node && input.contains(target)) {
         return
       }
-      // Why: inline title rename focus/blur frames are owned by the terminal
-      // container; invalidate them when that DOM owner detaches.
-      closeRenameSession()
-    },
-    [closeRenameSession]
-  )
-
-  const handleStartRename = useCallback(
-    (paneId: number) => {
-      cancelPendingRenameFrames()
-      renameSessionIdRef.current += 1
-      renameBlurCommitEnabledRef.current = false
-      renameSubmittedRef.current = false
-      setRenameValue(paneTitlesRef.current[paneId] ?? '')
-      setRenamingPaneId(paneId)
-    },
-    [cancelPendingRenameFrames]
-  )
-
-  const removePaneTitle = useCallback(
-    (paneId: number) => {
-      setPaneTitles((prev) => {
-        if (!(paneId in prev)) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[paneId]
-        return next
-      })
-      // Eagerly remove from the ref so persistLayoutSnapshot sees the change.
-      if (paneId in paneTitlesRef.current) {
-        const next = { ...paneTitlesRef.current }
-        delete next[paneId]
-        paneTitlesRef.current = next
+      renameUserRequestedBlurCommitRef.current = true
+    }
+    const markKeyboardBlurIntent = (event: KeyboardEvent): void => {
+      if (event.key === 'Tab') {
+        renameUserRequestedBlurCommitRef.current = true
       }
-      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
-      if (leafId) {
-        removedTitleLeafIdsRef.current.add(leafId)
-      }
-      persistLayoutSnapshot()
-    },
-    [persistLayoutSnapshot]
-  )
+    }
+
+    document.addEventListener('pointerdown', markPointerBlurIntent, true)
+    document.addEventListener('keydown', markKeyboardBlurIntent, true)
+    return () => {
+      document.removeEventListener('pointerdown', markPointerBlurIntent, true)
+      document.removeEventListener('keydown', markKeyboardBlurIntent, true)
+    }
+  }, [renamingPaneId])
 
   const handleRenameSubmit = useCallback(() => {
     if (renamingPaneId === null || renameSubmittedRef.current) {
@@ -1506,10 +2453,7 @@ export default function TerminalPane({
       return
     }
     setPaneTitles((prev) => ({ ...prev, [renamingPaneId]: trimmed }))
-    // Eagerly update the ref so persistLayoutSnapshot (which reads
-    // paneTitlesRef.current) sees the new title immediately, without
-    // waiting for React to re-render and assign it during the next
-    // render pass.
+    // Eagerly update the ref so persistLayoutSnapshot sees the new title before React's next render.
     paneTitlesRef.current = { ...paneTitlesRef.current, [renamingPaneId]: trimmed }
     const leafId = managerRef.current?.getPanes().find((pane) => pane.id === renamingPaneId)?.leafId
     if (leafId) {
@@ -1528,7 +2472,10 @@ export default function TerminalPane({
   }, [closeRenameSession])
 
   const handleRenameBlur = useCallback(() => {
-    if (renameBlurCommitEnabledRef.current) {
+    if (renameSubmittedRef.current) {
+      return
+    }
+    if (renameBlurCommitEnabledRef.current && renameUserRequestedBlurCommitRef.current) {
       handleRenameSubmit()
       return
     }
@@ -1538,8 +2485,7 @@ export default function TerminalPane({
 
     const sessionId = renameSessionIdRef.current
     const paneId = renamingPaneId
-    // Why: the context-menu selection can be followed by a delayed Radix/xterm
-    // focus handoff. That synthetic early blur is not a title submission.
+    // Why: a delayed Radix/xterm focus handoff after context-menu selection fires a synthetic blur that isn't a title submission.
     renameRefocusFrameRef.current = requestAnimationFrame(() => {
       renameRefocusFrameRef.current = null
       if (renameSessionIdRef.current !== sessionId || renamingPaneId !== paneId) {
@@ -1548,17 +2494,12 @@ export default function TerminalPane({
       const input = renameInputRef.current
       if (!input) {
         renameBlurCommitEnabledRef.current = true
-        handleRenameSubmit()
         return
       }
       input.focus()
       input.select()
-      if (document.activeElement === input) {
-        renameBlurCommitEnabledRef.current = true
-        return
-      }
+      // Why: even if the OS refuses this focus, don't submit — synthetic focus loss isn't a title-commit signal.
       renameBlurCommitEnabledRef.current = true
-      handleRenameSubmit()
     })
   }, [handleRenameSubmit, renamingPaneId])
 
@@ -1567,8 +2508,7 @@ export default function TerminalPane({
     [removePaneTitle]
   )
 
-  // Auto-focus and select-all in the rename input when the dialog opens.
-  // Also reset the submit guard so the new rename session can accept input.
+  // Auto-focus/select-all the rename input on open and reset the submit guard for the new session.
   useEffect(() => {
     if (renamingPaneId === null) {
       return
@@ -1607,6 +2547,7 @@ export default function TerminalPane({
     managerRef,
     paneTransportsRef,
     paneCwdRef,
+    containerRef,
     worktreeId,
     groupId: quickCommandGroupId,
     fallbackCwd: cwd ?? '',
@@ -1614,10 +2555,83 @@ export default function TerminalPane({
     onRequestClosePane: handleRequestClosePane,
     onClearPaneScrollback: clearPaneScrollback,
     onSetTitle: handleStartRename,
+    onClearPaneTitle: handleClearPaneTitleShortcut,
     onPasteError: setTerminalError,
     onAgentSessionForkReady: setAgentSessionFork,
+    onAgentSessionContinuationReady: setAgentSessionContinuation,
+    forceBracketedMultilineTextPaste,
     rightClickToPaste
   })
+  const getContextMenuLeafId = useCallback((): string | null => {
+    const paneId = contextMenu.menuPaneId
+    const manager = managerRef.current
+    if (!manager) {
+      return null
+    }
+    if (paneId !== null) {
+      return manager.getPanes().find((pane) => pane.id === paneId)?.leafId ?? null
+    }
+    return manager.getActivePane()?.leafId ?? null
+  }, [contextMenu.menuPaneId])
+  const contextMenuLeafId = getContextMenuLeafId()
+  const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
+  const handleContextMenuToggleNativeChat = useCallback(() => {
+    const leafId = getContextMenuLeafId()
+    if (!leafId) {
+      return
+    }
+    toggleNativeChatForLeaf(leafId)
+  }, [getContextMenuLeafId, toggleNativeChatForLeaf])
+
+  const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
+    const ptyIds = new Set(getMobileFitOverridePtyIds())
+    for (const [ptyId, driver] of getAllDrivers()) {
+      if (driver.kind === 'mobile') {
+        ptyIds.add(ptyId)
+      }
+    }
+    return [...ptyIds]
+  }, [])
+
+  const scheduleRestoredTerminalRefit = useCallback((): void => {
+    // Why: desktop-fit events can clear runtime state before xterm repaints, so schedule a settled-frame refit that doesn't depend on focus.
+    requestAnimationFrame(refitAndRefreshAllTerminalPanes)
+    window.setTimeout(refitAndRefreshAllTerminalPanes, 100)
+  }, [])
+
+  const restorePaneTerminalFit = useCallback(
+    async (pane: ManagedPane, ptyId: string): Promise<void> => {
+      // Why: local and remote runtime PTYs use different transports but share one reclaim behavior.
+      // Why: the banner was rendered for this PTY; if the slot now holds a different terminal, bail so a stale portal can't reclaim it.
+      const currentPtyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+      if (currentPtyId !== ptyId) {
+        setOverrideTick((n) => n + 1)
+        return
+      }
+      const restored = await restoreTerminalFitToDesktop(ptyId, settingsRef.current ?? undefined)
+      if (restored) {
+        scheduleRestoredTerminalRefit()
+        // Why: after the overlay unmounts, refocus the reclaimed terminal instead of the removed button/body.
+        pane.terminal.focus()
+      }
+    },
+    [scheduleRestoredTerminalRefit]
+  )
+
+  const restoreAllTerminalFits = useCallback(
+    async (focusPane: ManagedPane): Promise<void> => {
+      // Why: bulk restore follows the same reclaim path as the per-pane button for PTYs held at phone size.
+      const restored = await restoreTerminalFitsToDesktop(
+        getMobileOwnedTerminalPtyIds(),
+        settingsRef.current ?? undefined
+      )
+      if (restored) {
+        scheduleRestoredTerminalRefit()
+        focusPane.terminal.focus()
+      }
+    },
+    [getMobileOwnedTerminalPtyIds, scheduleRestoredTerminalRefit]
+  )
 
   const terminalShouldHandleMiddleClick = useCallback(
     (target: EventTarget | null): target is Node => {
@@ -1667,14 +2681,72 @@ export default function TerminalPane({
       }
       event.preventDefault()
       event.stopPropagation()
+      // Why: preventDefault on mousedown does not stop Chromium's native
+      // middle-click paste follow-up, so arm the shared window to swallow it and
+      // avoid inserting text into the PTY twice.
+      armPrimarySelectionNativePasteSuppression()
       clickedPane.terminal.focus()
-      void readPrimarySelectionText().then((text) => {
-        if (text) {
-          pasteTerminalText(clickedPane.terminal, text)
+      void readPrimarySelectionText().then(async (text) => {
+        if (!text) {
+          return
         }
+        const transport = paneTransportsRef.current.get(clickedPane.id)
+        const ptyId = transport?.getPtyId() ?? null
+        const isMac = navigator.userAgent.includes('Mac')
+        const shortcutPlatform: NodeJS.Platform = isMac
+          ? 'darwin'
+          : navigator.userAgent.includes('Windows')
+            ? 'win32'
+            : 'linux'
+        const connectionId = getConnectionId(worktreeId) ?? null
+        const targetStillMounted = (): boolean => {
+          const manager = managerRef.current
+          return Boolean(
+            manager
+              ?.getPanes()
+              .some(
+                (livePane) =>
+                  livePane.id === clickedPane.id && livePane.leafId === clickedPane.leafId
+              ) &&
+            transport &&
+            paneTransportsRef.current.get(clickedPane.id) === transport &&
+            transport.isConnected() &&
+            transport.getPtyId() === ptyId
+          )
+        }
+        const plan = await planTerminalPasteWithYield({
+          text,
+          source: 'middle-click',
+          target: {
+            kind: 'terminal',
+            paneId: clickedPane.id,
+            leafId: clickedPane.leafId,
+            ptyId,
+            runtime: resolveTerminalPasteRuntime({
+              platform: shortcutPlatform,
+              ptyId,
+              connectionId,
+              remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+              transport
+            })
+          },
+          terminalBracketedPasteMode: clickedPane.terminal.modes.bracketedPasteMode
+        })
+        const execution = await executeTerminalPastePlan(plan, {
+          pasteText: (pasteText, pasteOptions) =>
+            pasteTerminalText(clickedPane.terminal, pasteText, pasteOptions),
+          writePty: (data) => writeTerminalPastePtyInput(transport, data),
+          isTargetCurrent: targetStillMounted,
+          canContinue: targetStillMounted
+        })
+        if (execution.status !== 'pasted') {
+          setTerminalError(formatTerminalPasteExecutionError(execution.reason))
+          return
+        }
+        recordTerminalUserInputForLeaf(tabId, clickedPane.leafId)
       })
     },
-    [getPrimarySelectionMiddleClickPane]
+    [getPrimarySelectionMiddleClickPane, tabId, worktreeId]
   )
 
   const handlePrimarySelectionAuxClick = useCallback(
@@ -1686,33 +2758,72 @@ export default function TerminalPane({
       ) {
         event.preventDefault()
         event.stopPropagation()
+        // Why: auxclick fires at button release, when Chromium's native paste is
+        // imminent; re-arm here so a slow release past the mousedown window still
+        // swallows the follow-up paste.
+        armPrimarySelectionNativePasteSuppression()
       }
     },
     [getPrimarySelectionMiddleClickPane]
   )
 
+  const activatePaneTitleInteraction = useCallback((paneId: number): void => {
+    managerRef.current?.setActivePane(paneId, { focus: false })
+  }, [])
+
+  const splitTerminalPaneFromHeader = useCallback(
+    (pane: ManagedPane, direction: 'vertical' | 'horizontal') => {
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      splitTerminalPaneWithInheritedCwd({
+        manager,
+        getManager: () => managerRef.current,
+        paneTransports: paneTransportsRef.current,
+        paneCwdMap: paneCwdRef.current,
+        fallbackCwd: cwd ?? '',
+        pane,
+        direction,
+        source: 'context_menu'
+      })
+    },
+    [cwd]
+  )
+
+  const beginPaneDragFromHeader = useCallback(
+    (paneId: number, handle: HTMLElement, event: PointerEvent) => {
+      managerRef.current?.beginPaneDragFromPointerDown(paneId, handle, event)
+    },
+    []
+  )
+
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
-  // Why: app light/dark mode can diverge from the selected terminal theme, so
-  // pane-title contrast follows the effective terminal surface instead.
-  const titleUsesLightSurface = isTerminalBackgroundLight(
-    settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background,
-    {
+  const terminalBackground =
+    settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background
+  // Why: app light/dark can diverge from the terminal theme, so pane-title contrast follows the effective terminal surface.
+  const titleUsesLightSurface = isTerminalBackgroundLight(terminalBackground, {
+    appSurface: effectiveAppearance?.mode,
+    backgroundOpacity: settings?.terminalBackgroundOpacity
+  })
+  const paneTitleBackground =
+    resolveOpaqueTerminalBackground(terminalBackground, {
       appSurface: effectiveAppearance?.mode,
       backgroundOpacity: settings?.terminalBackgroundOpacity
-    }
-  )
+    }) ?? (titleUsesLightSurface ? '#ffffff' : '#000000')
 
+  const terminalContentVisible = isVisible || shouldMeasureHiddenStartup
+  const hiddenStartupStyle: CSSProperties = shouldMeasureHiddenStartup
+    ? { opacity: 0, pointerEvents: 'none' }
+    : {}
   const terminalContainerStyle: CSSProperties = {
-    // Why: split groups can keep one terminal visible in an unfocused group so
-    // users still see its output while typing elsewhere. Hiding on `isActive`
-    // blanked the previously focused pane and exposed the white group body.
-    display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
-    // Why: split divider lines intentionally overdraw inside the pane tree.
-    // `hidden` reliably clips that pseudo-element paint at the terminal body.
+    // Why: unfocused split groups keep a terminal visible; gating on isActive blanked the prior pane and exposed the white group body.
+    display: terminalContentVisible ? 'flex' : 'none',
+    // Why: split dividers overdraw into the pane, so overflow:hidden clips that pseudo-element paint at the terminal body.
     overflow: 'hidden',
-    ...(shouldMeasureHiddenStartup ? { opacity: 0, pointerEvents: 'none' } : {}),
+    ...hiddenStartupStyle,
     ['--orca-terminal-divider-color' as string]:
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(
@@ -1722,28 +2833,117 @@ export default function TerminalPane({
   }
 
   const activePane = managerRef.current?.getActivePane()
+  const managedPanes = managerRef.current?.getPanes() ?? []
+  const showSshReconnectOverlay = Boolean(
+    isActive &&
+    isVisible &&
+    sshReconnectTargetId &&
+    sshReconnectStatus &&
+    sshReconnectStatus !== 'connected'
+  )
+  // Why: while the reconnect banner owns recovery, strip only the SSH-owned lines from the
+  // (possibly aggregated) error, so a later successful connect can't flash the raw ssh:connect
+  // failure and any unrelated error still surfaces after reconnect.
+  useEffect(() => {
+    if (!showSshReconnectOverlay || terminalError == null) {
+      return
+    }
+    const kept = stripSshReconnectOwnedErrorLines(terminalError)
+    if (kept !== terminalError) {
+      setTerminalError(kept)
+    }
+  }, [showSshReconnectOverlay, terminalError])
+  const menuPaneHasCustomTitle =
+    contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
+  const chatLeafStillMounted = chatLeafId
+    ? managedPanes.some((pane) => pane.leafId === chatLeafId)
+    : false
+  useEffect(() => {
+    const activeLeafId = activePane?.leafId ?? null
+    const route = resolveNativeChatLeafRoute({
+      isChatViewMode,
+      chatLeafId,
+      activeLeafId,
+      chatLeafStillMounted,
+      activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId)
+    })
+    applyNativeChatLeafRoute(route)
+  }, [
+    isChatViewMode,
+    chatLeafId,
+    activePane?.leafId,
+    chatLeafStillMounted,
+    applyNativeChatLeafRoute,
+    isChatEligibleForLeaf
+  ])
+  const chatPane =
+    isChatViewMode && chatLeafId
+      ? (managedPanes.find((pane) => pane.leafId === chatLeafId) ?? null)
+      : null
+  const chatPanePtyId = chatPane
+    ? (paneTransportsRef.current.get(chatPane.id)?.getPtyId() ?? null)
+    : null
+  const chatPaneResolvedAgent = chatPane ? resolveTitleAgentForLeaf(chatPane.leafId) : null
+  const chatPaneLaunchAgent = nativeChatLaunchAgentForLeaf({
+    launchAgent: terminalTab?.launchAgent,
+    launchAgentLeafId: getTabWideAgentHintLeafId(),
+    leafId: chatPane?.leafId ?? null,
+    leafIds: getNativeChatLeafIds()
+  })
+  const activePaneIsChatLeaf = Boolean(
+    isChatViewMode && activePane?.leafId && activePane.leafId === chatLeafId
+  )
+  // A split can host different agents, so continuation resolves the specific leaf before using tab-wide hints.
+  const resolveAgentForLeaf = (leafId: string | null): string | null => {
+    const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
+    if (detectedAgent) {
+      return detectedAgent
+    }
+    return (
+      nativeChatLaunchAgentForLeaf({
+        launchAgent: terminalTab?.launchAgent,
+        launchAgentLeafId: getTabWideAgentHintLeafId(),
+        leafId,
+        leafIds: getNativeChatLeafIds()
+      }) ?? resolveTitleAgentForLeaf(leafId)
+    )
+  }
+  const activePaneCanContinueInNewSession = canContinueAgentSessionInNewSession(
+    resolveAgentForLeaf(activePane?.leafId ?? null)
+  )
+  const contextMenuCanContinueInNewSession = canContinueAgentSessionInNewSession(
+    resolveAgentForLeaf(contextMenuLeafId)
+  )
+  // Each toggle gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
+  const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
+  const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   return (
     <>
       <div
         ref={setContainerRef}
         className="absolute inset-0 min-h-0 min-w-0"
         data-native-file-drop-target="terminal"
-        data-contextual-tour-target="terminal-pane-split-target"
         data-terminal-tab-id={tabId}
+        data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
         onDragOver={(e) => {
-          if (e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
+          if (
+            e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
+            e.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
+          ) {
             e.preventDefault()
             e.dataTransfer.dropEffect = 'copy'
           }
         }}
         onDrop={(e) => {
-          const filePath = e.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
-          if (!filePath) {
+          if (
+            !e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) &&
+            !e.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
+          ) {
             return
           }
           e.preventDefault()
@@ -1752,44 +2952,43 @@ export default function TerminalPane({
           if (!manager) {
             return
           }
-          const pane = manager.getActivePane() ?? manager.getPanes()[0]
-          if (!pane) {
-            return
-          }
-          const transport = paneTransportsRef.current.get(pane.id)
-          if (!transport) {
-            return
-          }
-          const state = useAppStore.getState()
-          const worktreePath =
-            Object.values(state.worktreesByRepo ?? {})
-              .flat()
-              .find((worktree) => worktree.id === worktreeId)?.path ??
-            cwd ??
-            filePath
-          const targetShell = resolveTerminalDropTargetShell({
-            activeRuntimeEnvironmentId: state.settings?.activeRuntimeEnvironmentId,
-            worktreePath,
-            // Why: internal Explorer drags paste a worktree-absolute path
-            // directly into the target shell. Runtime drops use the runtime
-            // worktree's path shape; legacy SSH drops remain POSIX.
-            connectionId: getConnectionId(worktreeId)
+          void handleInternalTerminalFileDrop({
+            manager,
+            paneTransports: paneTransportsRef.current,
+            worktreeId,
+            tabId,
+            cwd,
+            dataTransfer: e.dataTransfer,
+            dropTarget: e.target
           })
-          transport.sendInput(shellEscapePath(filePath, targetShell))
-          // Move focus to the terminal so the user can keep typing where the
-          // dropped path just landed. Without this, focus stays on the file
-          // tree row that originated the drag and subsequent keystrokes do
-          // not reach the pty — #978.
-          pane.terminal.focus()
         }}
       />
-      {terminalError && isActive && (
+      {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
+          toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
+      {terminalError && isActive && !showSshReconnectOverlay ? (
         <TerminalErrorToast
           error={terminalError}
           onDismiss={() => setTerminalError(null)}
           onRestartDaemon={() => daemonActions.setPending('restart')}
         />
-      )}
+      ) : null}
+      {/* Why: portal into the pane so the banner stacks above the xterm canvas (sibling mount painted under WebGL). */}
+      {showSshReconnectOverlay && sshReconnectTargetId && sshReconnectStatus
+        ? managedPanes.map((pane) =>
+            createPortal(
+              <TerminalSshReconnectOverlay
+                targetId={sshReconnectTargetId}
+                targetLabel={sshReconnectTargetLabel}
+                status={sshReconnectStatus}
+                targetRemoved={sshReconnectTargetRemoved}
+                worktreeId={worktreeId}
+                sshOwnerEnvironmentId={sshReconnectEnvironmentId}
+              />,
+              pane.container,
+              `ssh-reconnect-${pane.id}`
+            )
+          )
+        : null}
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog
@@ -1808,6 +3007,55 @@ export default function TerminalPane({
           />,
           activePane.container
         )}
+      <SessionRestoredBannerPortals
+        panes={managerRef.current?.getPanes() ?? []}
+        paneIds={sessionRestoredBannerPaneIds}
+      />
+      {effectiveChatViewMode && chatPane?.container
+        ? createPortal(
+            <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
+              <NativeChatView
+                terminalTabId={tabId}
+                paneKey={makePaneKey(tabId, chatPane.leafId)}
+                targetPtyId={chatPanePtyId}
+                launchAgent={chatPaneLaunchAgent}
+                resolvedAgent={chatPaneResolvedAgent}
+                onSwitchToTerminal={() => toggleNativeChatForLeaf(chatPane.leafId)}
+                readTerminalScreen={readNativeChatTerminalScreen}
+                contextMenuActions={{
+                  onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
+                  onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
+                  canEqualizePaneSizes: managedPanes.length > 1 && expandedPaneId === null,
+                  onEqualizePaneSizes: () =>
+                    contextMenu.runForPane(chatPane.id, contextMenu.onEqualizePaneSizes),
+                  canExpandPane: managedPanes.length > 1,
+                  isPaneExpanded: expandedPaneId === chatPane.id,
+                  onToggleExpand: () =>
+                    contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
+                  canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
+                    resolveAgentForLeaf(chatPane.leafId)
+                  ),
+                  onContinueAgentSessionInNewSession: () =>
+                    contextMenu.runForPane(
+                      chatPane.id,
+                      contextMenu.onContinueAgentSessionInNewSession
+                    ),
+                  onForkAgentSession: () =>
+                    void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
+                  onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
+                  onCopyTerminalId: () =>
+                    void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
+                  onCopyPaneId: () =>
+                    void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
+                  canClosePane: managedPanes.length > 1,
+                  onClosePane: () => contextMenu.runForPane(chatPane.id, contextMenu.onClosePane)
+                }}
+              />
+            </div>,
+            chatPane.container,
+            `native-chat-${tabId}-${chatPane.leafId}`
+          )
+        : null}
       <TerminalContextMenu
         open={contextMenu.open}
         onOpenChange={contextMenu.setOpen}
@@ -1827,7 +3075,13 @@ export default function TerminalPane({
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
+        canContinueAgentSessionInNewSession={contextMenuCanContinueInNewSession}
+        onContinueAgentSessionInNewSession={contextMenu.onContinueAgentSessionInNewSession}
         onForkAgentSession={() => void contextMenu.onForkAgentSession()}
+        canToggleNativeChat={contextMenuCanToggleChat}
+        isNativeChatView={contextMenuIsChatView}
+        onToggleNativeChat={handleContextMenuToggleNativeChat}
+        onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
         repoQuickCommands={repoQuickCommands}
         globalQuickCommands={globalQuickCommands}
         quickCommandRepoLabel={quickCommandRepoLabel}
@@ -1839,6 +3093,9 @@ export default function TerminalPane({
         }
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
+        onClearPaneTitle={contextMenu.onClearPaneTitle}
+        canClearPaneTitle={menuPaneHasCustomTitle}
+        onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
       />
       {/* Why: repos is a broad store slice; only subscribe while the editor is visible. */}
@@ -1858,97 +3115,92 @@ export default function TerminalPane({
           }
         }}
       />
-      {/* Title bar overlays — portaled into each pane container that has a title
-          or is currently being renamed (so the inline input appears even for
-          untitled panes when "Set Title..." is triggered).
-
-          Note: managerRef is a React ref, so reading .getPanes() here does not
-          by itself trigger re-renders when the pane list changes. This works
-          because every operation that affects the pane list also updates React
-          state — title operations update `paneTitles` or `renamingPaneId`,
-          and structural changes (split, close) update those same signals via
-          onPaneClosed / onPaneCreated callbacks — so React always re-renders
-          this block when .getPanes() would return a different result. */}
-      {(managerRef.current?.getPanes() ?? []).map((pane) => {
-        const title = paneTitles[pane.id]
-        const isEditing = renamingPaneId === pane.id
-        if (!title && !isEditing) {
-          return null
+      {agentSessionContinuation ? (
+        <AgentSessionContinuationDialog
+          open
+          request={agentSessionContinuation}
+          onOpenChange={(open) => {
+            if (!open) {
+              setAgentSessionContinuation(null)
+            }
+          }}
+        />
+      ) : null}
+      <TerminalPaneHeaderOverlay
+        tabId={tabId}
+        worktreeId={worktreeId}
+        cwd={cwd ?? ''}
+        showAlwaysOnHeaders={isActive && terminalContentVisible}
+        showSplitButton={showSplitButton}
+        paneCount={paneCount}
+        activePaneId={activePane?.id}
+        panes={managedPanes}
+        paneTitles={paneTitles}
+        paneTitleOverlayRects={paneTitleOverlayRects}
+        renamingPaneId={renamingPaneId}
+        renameValue={renameValue}
+        renameInputRef={renameInputRef}
+        titleUsesLightSurface={titleUsesLightSurface}
+        paneTitleBackground={paneTitleBackground}
+        terminalContentVisible={terminalContentVisible}
+        hiddenStartupStyle={hiddenStartupStyle}
+        managerRef={managerRef}
+        paneTransportsRef={paneTransportsRef}
+        canToggleNativeChat={activePaneCanToggleChat}
+        isChatViewMode={activePaneIsChatLeaf}
+        onToggleNativeChat={handleToggleNativeChat}
+        canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
+        onContinueAgentSessionInNewSession={(pane) =>
+          contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)
         }
-        return createPortal(
-          <div className="pane-title-bar" {...(isEditing ? { 'data-editing': '' } : {})}>
-            {isEditing ? (
-              <input
-                ref={renameInputRef}
-                className="pane-title-input"
-                aria-label="Pane title"
-                placeholder="Pane title"
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleRenameSubmit()
-                  } else if (e.key === 'Escape') {
-                    handleRenameCancel()
-                  }
+        onSplitPane={splitTerminalPaneFromHeader}
+        onBeginPaneDrag={beginPaneDragFromHeader}
+        onActivatePaneTitleInteraction={activatePaneTitleInteraction}
+        onPaneTitleContextMenu={contextMenu.onPaneTitleContextMenu}
+        onStartRename={handleStartRename}
+        onRemoveTitle={handleRemoveTitle}
+        onClosePane={handleRequestClosePane}
+        onRenameValueChange={setRenameValue}
+        onRenameSubmit={handleRenameSubmit}
+        onRenameCancel={handleRenameCancel}
+        onRenameBlur={handleRenameBlur}
+      />
+      {!showSshReconnectOverlay
+        ? managedPanes.map((pane) => {
+            const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
+            if (!recoveryState) {
+              return null
+            }
+            return createPortal(
+              <TerminalRemoteRuntimeReconnectBanner
+                key={`remote-runtime-reconnect-${pane.id}-${recoveryState.epoch}`}
+                phase={recoveryState.phase}
+                onReconnect={() => {
+                  paneTransportsRef.current.get(pane.id)?.retryRecovery?.()
                 }}
-                onBlur={handleRenameBlur}
-              />
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="pane-title-text"
-                  onClick={() => handleStartRename(pane.id)}
-                  aria-label={`Edit pane title: ${title}`}
-                >
-                  {title}
-                </button>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="pane-title-close"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleRemoveTitle(pane.id)
-                      }}
-                      aria-label={`Remove pane title: ${title}`}
-                    >
-                      <X className="size-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={4}>
-                    Remove title
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            )}
-          </div>,
-          pane.container,
-          `pane-title-${pane.id}`
-        )
-      })}
-      {(managerRef.current?.getPanes() ?? []).map((pane) => {
-        // Why: pane IDs can collide across tabs (e.g. tab 0 pane 1 and tab 1
-        // pane 1). Using the transport's actual ptyId avoids showing banners
-        // on the wrong pane when IDs overlap.
+              />,
+              pane.container,
+              `remote-runtime-reconnect-${pane.id}`
+            )
+          })
+        : null}
+      {managedPanes.map((pane) => {
+        // Why: pane IDs collide across tabs, so key overlays by the transport's actual ptyId to avoid wrong-pane banners.
         const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
         if (!ptyId) {
           return null
         }
-        // Why: two-state lock UI. (1) Driver is mobile → presence-lock,
-        // input paused (docs/mobile-presence-lock.md). (2) No mobile driver
-        // but a phone-fit override is still in place → indefinite hold
-        // (docs/mobile-fit-hold.md). MobileDriverOverlay owns the visual
-        // treatment and collapse-to-chip state; both branches share a
-        // single IPC route through restoreTerminalFit.
+        // Why: two-state lock — mobile driver → presence-lock (docs/mobile-presence-lock.md); phone-fit override → indefinite hold (docs/mobile-fit-hold.md).
         const driver = getDriverForPty(ptyId)
-        const isMobileDriving = driver.kind === 'mobile'
-        const hasFitOverride = getFitOverrideForPty(ptyId) !== null
-        if (!isMobileDriving && !hasFitOverride) {
+        const fitMode = getFitOverrideForPty(ptyId)?.mode ?? null
+        const hasFitOverride = fitMode === 'mobile-fit'
+        if (!shouldShowMobileDriverOverlay(driver.kind, fitMode)) {
+          return null
+        }
+        // Why: only the chat-replaced pane hides presence-lock/phone-fit chrome; sibling splits stay normal terminals.
+        const paneSurface =
+          effectiveChatViewMode && pane.leafId === chatLeafId ? 'chat' : 'terminal'
+        if (shouldChatTakeOverMobileSurface(paneSurface)) {
           return null
         }
         return createPortal(
@@ -1957,48 +3209,21 @@ export default function TerminalPane({
             driver={driver}
             hasFitOverride={hasFitOverride}
             rootClassName="mobile-driver-banner"
-            onAction={async () => {
-              // Why: same restore intent has two transports. Remote-runtime PTYs
-              // must call the environment RPC; local PTYs use the Electron IPC
-              // handler. Both resolve active-mobile and held-no-subscriber states.
-              const transport = paneTransportsRef.current.get(pane.id)
-              const id = transport?.getPtyId()
-              if (!id) {
-                return
-              }
-              const remoteHandle = getRemoteRuntimeTerminalHandle(id)
-              const environmentId =
-                getRemoteRuntimePtyEnvironmentId(id) ??
-                settingsRef.current?.activeRuntimeEnvironmentId ??
-                null
-              const result =
-                remoteHandle && environmentId
-                  ? await callRuntimeRpc<{ restored: boolean }>(
-                      { kind: 'environment', environmentId },
-                      'terminal.restoreFit',
-                      { terminal: remoteHandle },
-                      { timeoutMs: 15_000 }
-                    ).catch(() => ({ restored: false }))
-                  : await window.api.runtime
-                      .restoreTerminalFit(id)
-                      .catch(() => ({ restored: false }))
-              if (result.restored) {
-                // Why: after the overlay unmounts, focus would otherwise stay on
-                // the removed button/body instead of the terminal the user just
-                // reclaimed.
-                pane.terminal.focus()
-              }
-            }}
+            onAction={() => restorePaneTerminalFit(pane, ptyId)}
+            onAllAction={() => restoreAllTerminalFits(pane)}
           />,
           pane.container,
           `mobile-driver-banner-${pane.id}`
         )
       })}
       <CloseTerminalDialog
-        open={closeConfirmPaneId !== null}
-        onCancel={() => setCloseConfirmPaneId(null)}
+        open={pendingCloseConfirmation !== null}
+        copyKind={pendingCloseConfirmation?.copyKind}
+        onCancel={handleCancelClose}
         onConfirm={handleConfirmClose}
       />
     </>
   )
 }
+
+export default forwardRef(TerminalPane)

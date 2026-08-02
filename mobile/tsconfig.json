@@ -1,10 +1,15 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "expo/tsconfig.base.json",
   "compilerOptions": {
+    // Mobile stays on TypeScript 6 so Expo/Metro can still use the JS
+    // compiler API (require('typescript').sys) during release bundling.
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "strict": true,
     "paths": {
       "@/*": ["./src/*"],
+      "tweetnacl": ["./node_modules/tweetnacl"],
+      "ws": ["./node_modules/@types/ws"],
       "zod": ["./node_modules/zod"]
     }
   },

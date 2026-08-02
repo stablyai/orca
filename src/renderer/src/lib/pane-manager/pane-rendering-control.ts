@@ -1,6 +1,12 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
-import { attachWebgl, disposeWebgl, markComplexScriptOutput } from './pane-webgl-renderer'
+import {
+  attachWebgl,
+  clearTerminalWebglAttachBackoff,
+  disposeWebgl,
+  markComplexScriptOutput,
+  resetWebglTextureAtlas
+} from './pane-webgl-renderer'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 
 export function setPaneGpuRenderingState(
@@ -44,8 +50,19 @@ export function suspendPaneRendering(panes: Iterable<ManagedPaneInternal>): void
 }
 
 export function resumePaneRendering(panes: Iterable<ManagedPaneInternal>): void {
+  // Why: resume (worktree foreground, window wake) is the WebGL retry
+  // boundary — Chromium may have restored the GPU process since a context
+  // loss, and bounding retries to resume events cannot loop on live loss.
+  clearTerminalWebglAttachBackoff()
   for (const pane of panes) {
     pane.webglAttachmentDeferred = false
+    pane.webglDisabledAfterContextLoss = false
     reattachWebglIfNeeded(pane)
+  }
+}
+
+export function resetPaneWebglTextureAtlases(panes: Iterable<ManagedPaneInternal>): void {
+  for (const pane of panes) {
+    resetWebglTextureAtlas(pane)
   }
 }

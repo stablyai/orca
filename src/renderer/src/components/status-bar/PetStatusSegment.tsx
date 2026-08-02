@@ -16,6 +16,7 @@ import {
 import { useAppStore } from '../../store'
 import { BUNDLED_PET, BUNDLED_PETS, findBundledPet, isBundledPetId } from '../pet/pet-models'
 import { PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 // Why: cluster pet-related controls (show/hide, character picker, custom
 // upload + removal, jump-to-settings) behind a single status-bar segment. Only
@@ -45,7 +46,12 @@ function PetStatusSegmentInner(): React.JSX.Element {
     console.log('[pet-overlay] upload: click')
     if (!window.api?.pet?.import) {
       console.warn('[pet-overlay] upload: window.api.pet.import missing — restart Orca')
-      toast.error('Custom pet upload needs a full app restart (not just reload).')
+      toast.error(
+        translate(
+          'auto.components.status.bar.PetStatusSegment.e6234bcc17',
+          'Custom pet upload needs a full app restart (not just reload).'
+        )
+      )
       return
     }
     try {
@@ -61,13 +67,25 @@ function PetStatusSegmentInner(): React.JSX.Element {
       setPetId(model.id)
     } catch (error) {
       console.error('[pet-overlay] upload: error', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to import file')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.status.bar.PetStatusSegment.f395c9a685',
+              'Failed to import file'
+            )
+      )
     }
   }
 
   const handleImportPetBundle = async (): Promise<void> => {
     if (!window.api?.pet?.importPetBundle) {
-      toast.error('Pet bundle import needs a full app restart (not just reload).')
+      toast.error(
+        translate(
+          'auto.components.status.bar.PetStatusSegment.2021d4f6db',
+          'Pet bundle import needs a full app restart (not just reload).'
+        )
+      )
       return
     }
     try {
@@ -82,7 +100,14 @@ function PetStatusSegmentInner(): React.JSX.Element {
       setPetId(model.id)
     } catch (error) {
       console.error('[pet-overlay] pet bundle: error', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to import pet bundle')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.status.bar.PetStatusSegment.cef0ab4636',
+              'Failed to import pet bundle'
+            )
+      )
     }
   }
 
@@ -92,7 +117,10 @@ function PetStatusSegmentInner(): React.JSX.Element {
         <button
           type="button"
           className="group inline-flex items-center cursor-pointer pl-1 pr-[6.5rem] py-0.5"
-          aria-label="Pet menu"
+          aria-label={translate(
+            'auto.components.status.bar.PetStatusSegment.aec479308a',
+            'Pet menu'
+          )}
         >
           <span
             className={`rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground group-hover:bg-accent/70 group-hover:text-foreground ${petVisible ? '' : 'opacity-50'}`}
@@ -102,14 +130,18 @@ function PetStatusSegmentInner(): React.JSX.Element {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="end" sideOffset={8} className="min-w-[220px]">
-        <DropdownMenuLabel>Pet</DropdownMenuLabel>
+        <DropdownMenuLabel>
+          {translate('auto.components.status.bar.PetStatusSegment.34c25dfe9c', 'Pet')}
+        </DropdownMenuLabel>
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault()
             setPetVisible(!petVisible)
           }}
         >
-          {petVisible ? 'Hide pet' : 'Show pet'}
+          {petVisible
+            ? translate('auto.components.status.bar.PetStatusSegment.1fbc51cc77', 'Hide pet')
+            : translate('auto.components.status.bar.PetStatusSegment.6d0a8cd179', 'Show pet')}
         </DropdownMenuItem>
         {/* Why: in-menu range so users can resize the overlay without leaving
             the dropdown — pet sprites can import larger than the default 180px
@@ -122,8 +154,13 @@ function PetStatusSegmentInner(): React.JSX.Element {
           onKeyDown={(e) => e.stopPropagation()}
         >
           <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>Size</span>
-            <span className="tabular-nums">{petSize}px</span>
+            <span>
+              {translate('auto.components.status.bar.PetStatusSegment.2f7bbaa457', 'Size')}
+            </span>
+            <span className="tabular-nums">
+              {petSize}
+              {translate('auto.components.status.bar.PetStatusSegment.c6aa805b1b', 'px')}
+            </span>
           </div>
           <input
             type="range"
@@ -133,11 +170,16 @@ function PetStatusSegmentInner(): React.JSX.Element {
             value={petSize}
             onChange={(e) => setPetSize(Number(e.target.value))}
             className="w-full"
-            aria-label="Pet size"
+            aria-label={translate(
+              'auto.components.status.bar.PetStatusSegment.b75484a01a',
+              'Pet size'
+            )}
           />
         </div>
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger>Choose pet</DropdownMenuSubTrigger>
+          <DropdownMenuSubTrigger>
+            {translate('auto.components.status.bar.PetStatusSegment.0608ad02a2', 'Choose pet')}
+          </DropdownMenuSubTrigger>
           {/* Why: portal so the submenu escapes the parent Content's overflow
               clipping — without this, the submenu opens inside the scroll
               container and gets clipped. Matches the convention used in
@@ -184,7 +226,11 @@ function PetStatusSegmentInner(): React.JSX.Element {
                     <button
                       type="button"
                       className="ml-2 flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
-                      aria-label={`Remove ${model.label}`}
+                      aria-label={translate(
+                        'auto.components.status.bar.PetStatusSegment.3668339495',
+                        'Remove {{value0}}',
+                        { value0: model.label }
+                      )}
                       onClick={(event) => {
                         event.stopPropagation()
                         event.preventDefault()
@@ -207,7 +253,10 @@ function PetStatusSegmentInner(): React.JSX.Element {
                 }}
               >
                 <Upload className="size-3.5" aria-hidden />
-                Upload your own…
+                {translate(
+                  'auto.components.status.bar.PetStatusSegment.59b5955621',
+                  'Upload your own…'
+                )}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => {
@@ -215,7 +264,10 @@ function PetStatusSegmentInner(): React.JSX.Element {
                 }}
               >
                 <PackageOpen className="size-3.5" aria-hidden />
-                Import .codex-pet bundle…
+                {translate(
+                  'auto.components.status.bar.PetStatusSegment.ed176ad68f',
+                  'Import .codex-pet bundle…'
+                )}
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuPortal>
@@ -231,7 +283,7 @@ function PetStatusSegmentInner(): React.JSX.Element {
             openSettingsPage()
           }}
         >
-          Pet settings…
+          {translate('auto.components.status.bar.PetStatusSegment.cd8c6c654c', 'Pet settings…')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

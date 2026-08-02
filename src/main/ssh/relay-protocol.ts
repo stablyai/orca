@@ -2,15 +2,33 @@
 // 13-byte framing header matching VS Code's PersistentProtocol wire format.
 // See design-ssh-support.md § JSON-RPC Protocol Specification.
 
+import {
+  FrameDecoder,
+  FrameDecoderContinuationError,
+  HEADER_LENGTH,
+  MAX_MESSAGE_SIZE,
+  FRAME_DECODER_MAX_FRAMES_PER_TURN,
+  FRAME_DECODER_MAX_BYTES_PER_TURN,
+  FRAME_DECODER_MAX_TURN_MS,
+  FRAME_DECODER_MAX_RETAINED_BYTES
+} from '../../shared/relay-frame-decoder'
+
+export {
+  FrameDecoder,
+  FrameDecoderContinuationError,
+  HEADER_LENGTH,
+  MAX_MESSAGE_SIZE,
+  FRAME_DECODER_MAX_FRAMES_PER_TURN,
+  FRAME_DECODER_MAX_BYTES_PER_TURN,
+  FRAME_DECODER_MAX_TURN_MS,
+  FRAME_DECODER_MAX_RETAINED_BYTES
+}
+export type { DecodedFrame, FrameDecoderOptions } from '../../shared/relay-frame-decoder'
+
 export const RELAY_VERSION = '0.1.0'
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`
 export const RELAY_SENTINEL_TIMEOUT_MS = 10_000
 export const RELAY_REMOTE_DIR = '.orca-remote'
-
-// ── Framing constants (VS Code ProtocolConstants) ───────────────────
-
-export const HEADER_LENGTH = 13
-export const MAX_MESSAGE_SIZE = 16 * 1024 * 1024 // 16 MB
 
 /** Message type byte. */
 export const MessageType = {
@@ -21,9 +39,6 @@ export const MessageType = {
 /** Keepalive/timeout (VS Code ProtocolConstants). */
 export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
-
-/** Reconnection grace period (default, overridable by relay --grace-time). */
-export const DEFAULT_GRACE_TIME_MS = 3 * 60 * 60 * 1000 // 3 hours
 
 // ── Relay error codes ───────────────────────────────────────────────
 
@@ -52,6 +67,45 @@ export const STREAM_CHUNK_SIZE = 256 * 1024
  * 20-watcher cap idiom. Prevents file-descriptor exhaustion from a buggy
  * client. */
 export const MAX_CONCURRENT_STREAMS = 16
+
+// ── Git response streaming (see docs/relay-git-response-stream-design.md) ──
+
+/** Serialized-JSON size above which the relay chunks a streamable git response
+ * (diff family + exec) onto the bulk lane instead of one JSON-RPC frame. Mirror
+ * of the relay-side constant; the client only opts in — the relay owns the
+ * decision — so this is documentation of the shared contract. */
+export const GIT_RESPONSE_STREAM_THRESHOLD = 256 * 1024
+
+/** Per-chunk size (serialized-result UTF-8 bytes) for git response streaming.
+ * The client reassembles by concatenation and does not depend on this value,
+ * so it stays cross-version safe. */
+export const GIT_RESPONSE_CHUNK_SIZE = 128 * 1024
+
+/** Sentinel the relay returns as the RPC result when the real payload streams
+ * as git.responseChunk frames. Absent from old relays, so a new client falls
+ * back to the plain result they return. */
+export type GitResponseStreamMarker = {
+  __orcaGitResponseStream: { streamId: number; totalBytes: number; chunkCount: number }
+}
+
+export function isGitResponseStreamMarker(value: unknown): value is GitResponseStreamMarker {
+  if (typeof value !== 'object' || value === null || !('__orcaGitResponseStream' in value)) {
+    return false
+  }
+  const marker = (value as { __orcaGitResponseStream?: unknown }).__orcaGitResponseStream
+  if (typeof marker !== 'object' || marker === null) {
+    return false
+  }
+  const fields = marker as Record<string, unknown>
+  return (
+    Number.isInteger(fields.streamId) &&
+    (fields.streamId as number) > 0 &&
+    Number.isInteger(fields.totalBytes) &&
+    (fields.totalBytes as number) >= 0 &&
+    Number.isInteger(fields.chunkCount) &&
+    (fields.chunkCount as number) >= 0
+  )
+}
 
 // ── JSON-RPC types ──────────────────────────────────────────────────
 
@@ -114,85 +168,24 @@ export function encodeKeepAliveFrame(id: number, ack: number): Buffer {
   return encodeFrame(MessageType.KeepAlive, id, ack, Buffer.alloc(0))
 }
 
-export type DecodedFrame = {
-  type: number
-  id: number
-  ack: number
-  payload: Buffer
-}
-
-/**
- * Incremental frame parser. Feed it chunks of data; it emits complete frames.
- */
-export class FrameDecoder {
-  private buffer = Buffer.alloc(0)
-  private onFrame: (frame: DecodedFrame) => void
-  private onError: ((err: Error) => void) | null
-
-  constructor(onFrame: (frame: DecodedFrame) => void, onError?: (err: Error) => void) {
-    this.onFrame = onFrame
-    this.onError = onError ?? null
-  }
-
-  feed(chunk: Buffer | Uint8Array): void {
-    this.buffer = Buffer.concat([this.buffer, chunk])
-
-    while (this.buffer.length >= HEADER_LENGTH) {
-      const length = this.buffer.readUInt32BE(9)
-      const totalLength = HEADER_LENGTH + length
-
-      // Why: throwing here would leave the buffer in a partially consumed
-      // state — subsequent feed() calls would try to parse leftover payload
-      // bytes as a new header, corrupting every future frame. Instead we
-      // skip the entire oversized frame so the decoder stays synchronized.
-      if (length > MAX_MESSAGE_SIZE) {
-        if (this.buffer.length < totalLength) {
-          break
-        }
-        this.buffer = this.buffer.subarray(totalLength)
-        const err = new Error(`Frame payload too large: ${length} bytes — discarded`)
-        if (this.onError) {
-          this.onError(err)
-        }
-        continue
-      }
-
-      if (this.buffer.length < totalLength) {
-        break
-      }
-
-      const frame: DecodedFrame = {
-        type: this.buffer[0],
-        id: this.buffer.readUInt32BE(1),
-        ack: this.buffer.readUInt32BE(5),
-        payload: this.buffer.subarray(HEADER_LENGTH, totalLength)
-      }
-
-      this.buffer = this.buffer.subarray(totalLength)
-      this.onFrame(frame)
-    }
-  }
-
-  reset(): void {
-    this.buffer = Buffer.alloc(0)
-  }
-}
-
-/**
- * Parse a JSON-RPC message from a frame payload.
- */
 export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
   const text = payload.toString('utf-8')
   const msg = JSON.parse(text) as JsonRpcMessage
   if (msg.jsonrpc !== '2.0') {
-    throw new Error(`Invalid JSON-RPC version: ${(msg as Record<string, unknown>).jsonrpc}`)
+    throw new Error(`Invalid JSON-RPC version: ${String((msg as Record<string, unknown>).jsonrpc)}`)
   }
   return msg
 }
 
 // ── Supported platforms ─────────────────────────────────────────────
 
-export type RelayPlatform = 'linux-x64' | 'linux-arm64' | 'darwin-x64' | 'darwin-arm64'
+export type RelayPlatform =
+  | 'linux-x64'
+  | 'linux-arm64'
+  | 'darwin-x64'
+  | 'darwin-arm64'
+  | 'win32-x64'
+  | 'win32-arm64'
 
 export function parseUnameToRelayPlatform(os: string, arch: string): RelayPlatform | null {
   const normalizedOs = os.toLowerCase().trim()
@@ -203,10 +196,17 @@ export function parseUnameToRelayPlatform(os: string, arch: string): RelayPlatfo
     relayOs = 'linux'
   } else if (normalizedOs === 'darwin') {
     relayOs = 'darwin'
+  } else if (
+    normalizedOs === 'windows' ||
+    normalizedOs === 'win32' ||
+    normalizedOs.startsWith('mingw') ||
+    normalizedOs.startsWith('msys')
+  ) {
+    relayOs = 'win32'
   }
 
   let relayArch: string | null = null
-  if (normalizedArch === 'x86_64' || normalizedArch === 'amd64') {
+  if (normalizedArch === 'x86_64' || normalizedArch === 'amd64' || normalizedArch === 'x64') {
     relayArch = 'x64'
   } else if (normalizedArch === 'aarch64' || normalizedArch === 'arm64') {
     relayArch = 'arm64'

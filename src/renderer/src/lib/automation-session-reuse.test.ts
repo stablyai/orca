@@ -21,6 +21,8 @@ function run(overrides: Partial<AutomationRun>): AutomationRun {
     sessionKind: 'terminal',
     chatSessionId: null,
     terminalSessionId: 'tab-1',
+    terminalPaneKey: paneKey,
+    terminalPtyId: 'pty-1',
     outputSnapshot: null,
     precheckResult: null,
     usage: null,
@@ -75,13 +77,21 @@ describe('automation session reuse', () => {
     expect(session).toEqual({ tabId: 'tab-1', ptyId: 'pty-1', paneKey })
   })
 
-  it('uses the PTY that belongs to the matched split-pane leaf', () => {
+  it('uses the PTY recorded for the exact split-pane run', () => {
     const session = findReusableAutomationSession({
       automationId: 'auto-1',
       agentId: 'claude',
       worktreeId: 'wt-1',
       currentRunId: 'run-current',
-      runs: [run({ id: 'run-new', terminalSessionId: 'tab-1', createdAt: 2 })],
+      runs: [
+        run({
+          id: 'run-new',
+          terminalSessionId: 'tab-1',
+          terminalPaneKey: splitPaneKey,
+          terminalPtyId: 'pty-right',
+          createdAt: 2
+        })
+      ],
       state: {
         agentStatusByPaneKey: {
           [splitPaneKey]: status({ paneKey: splitPaneKey })
@@ -102,6 +112,85 @@ describe('automation session reuse', () => {
     })
 
     expect(session).toEqual({ tabId: 'tab-1', ptyId: 'pty-right', paneKey: splitPaneKey })
+  })
+
+  it('does not reuse legacy runs without exact pane and PTY identity', () => {
+    const session = findReusableAutomationSession({
+      automationId: 'auto-1',
+      agentId: 'claude',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      runs: [
+        run({
+          id: 'run-new',
+          terminalSessionId: 'tab-1',
+          terminalPaneKey: null,
+          terminalPtyId: null,
+          createdAt: 2
+        })
+      ],
+      state: {
+        agentStatusByPaneKey: { [paneKey]: status() },
+        ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+        terminalLayoutsByTabId: {
+          'tab-1': { ptyIdsByLeafId: { [leafId]: 'pty-1' } }
+        },
+        unifiedTabsByWorktree: {
+          'wt-1': [{ contentType: 'terminal', entityId: 'tab-1' }]
+        }
+      } as never
+    })
+
+    expect(session).toBeNull()
+  })
+
+  it('does not reuse an unrelated split pane for a run with exact pane identity', () => {
+    const session = findReusableAutomationSession({
+      automationId: 'auto-1',
+      agentId: 'claude',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      runs: [run({ id: 'run-new', terminalSessionId: 'tab-1', createdAt: 2 })],
+      state: {
+        agentStatusByPaneKey: {
+          [splitPaneKey]: status({ paneKey: splitPaneKey })
+        },
+        ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-right'] },
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            ptyIdsByLeafId: {
+              [leafId]: 'pty-1',
+              [splitLeafId]: 'pty-right'
+            }
+          }
+        },
+        unifiedTabsByWorktree: {
+          'wt-1': [{ contentType: 'terminal', entityId: 'tab-1' }]
+        }
+      } as never
+    })
+
+    expect(session).toBeNull()
+  })
+
+  it('rejects an exact run pane when its PTY is no longer live', () => {
+    const session = findReusableAutomationSession({
+      automationId: 'auto-1',
+      agentId: 'claude',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      runs: [run({ id: 'run-new', terminalSessionId: 'tab-1', createdAt: 2 })],
+      state: {
+        agentStatusByPaneKey: { [paneKey]: status() },
+        ptyIdsByTabId: { 'tab-1': ['pty-other'] },
+        terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [leafId]: 'pty-1' } } },
+        unifiedTabsByWorktree: {
+          'wt-1': [{ contentType: 'terminal', entityId: 'tab-1' }]
+        }
+      } as never
+    })
+
+    expect(session).toBeNull()
   })
 
   it('rejects sessions that are not idle in a live agent pane', () => {

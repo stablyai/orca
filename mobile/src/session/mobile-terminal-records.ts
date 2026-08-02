@@ -1,4 +1,5 @@
-import type { MobileTerminalTheme } from '../terminal/TerminalWebView'
+import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 
 export type TerminalRecord = {
   handle: string
@@ -15,6 +16,10 @@ export type MobileTerminalSessionTab = {
   leafId?: string
   status?: 'pending-handle' | 'ready'
   terminal: string | null
+  agentStatus?: AgentStatusEntry | null
+  /** Host-provided launch context still parked as an unsent TUI-input draft. */
+  launchDraft?: string
+  launchDraftCreatedAt?: number
   terminalTheme?: MobileTerminalTheme
   isActive: boolean
 }
@@ -22,12 +27,115 @@ export type MobileTerminalSessionTab = {
 type MobileSessionTabLike =
   | MobileTerminalSessionTab
   | {
-      type: string
+      type: 'markdown'
+      id: string
       title?: string
-      terminal?: unknown
-      terminalTheme?: MobileTerminalTheme
+      filePath?: string
+      relativePath?: string
+      isDirty?: boolean
+      documentVersion?: string
       isActive?: boolean
     }
+  | {
+      type: 'file'
+      id: string
+      title?: string
+      filePath?: string
+      relativePath?: string
+      language?: string
+      isDirty?: boolean
+      isActive?: boolean
+    }
+  | {
+      type: 'browser'
+      id: string
+      title?: string
+      browserWorkspaceId?: string
+      browserPageId?: string | null
+      url?: string
+      loading?: boolean
+      canGoBack?: boolean
+      canGoForward?: boolean
+      isActive?: boolean
+    }
+
+export function mobileSessionTabsEqual(
+  a: readonly MobileSessionTabLike[],
+  b: readonly MobileSessionTabLike[]
+): boolean {
+  return a.length === b.length && a.every((tab, index) => mobileSessionTabEqual(tab, b[index]))
+}
+
+function mobileSessionTabEqual(
+  a: MobileSessionTabLike,
+  b: MobileSessionTabLike | undefined
+): boolean {
+  if (
+    !b ||
+    a.type !== b.type ||
+    a.id !== b.id ||
+    a.title !== b.title ||
+    a.isActive !== b.isActive
+  ) {
+    return false
+  }
+  switch (a.type) {
+    case 'terminal':
+      return (
+        b.type === 'terminal' &&
+        a.parentTabId === b.parentTabId &&
+        a.leafId === b.leafId &&
+        a.status === b.status &&
+        a.terminal === b.terminal &&
+        // A frame whose only delta is the launch draft appearing or retracting
+        // still has to reach the chat composer.
+        a.launchDraft === b.launchDraft &&
+        a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
+        JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
+        JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
+      )
+    case 'markdown':
+      return (
+        b.type === 'markdown' &&
+        a.filePath === b.filePath &&
+        a.relativePath === b.relativePath &&
+        a.isDirty === b.isDirty &&
+        a.documentVersion === b.documentVersion
+      )
+    case 'file':
+      return (
+        b.type === 'file' &&
+        a.filePath === b.filePath &&
+        a.relativePath === b.relativePath &&
+        a.language === b.language &&
+        a.isDirty === b.isDirty
+      )
+    case 'browser':
+      return (
+        b.type === 'browser' &&
+        a.browserWorkspaceId === b.browserWorkspaceId &&
+        a.browserPageId === b.browserPageId &&
+        a.url === b.url &&
+        a.loading === b.loading &&
+        a.canGoBack === b.canGoBack &&
+        a.canGoForward === b.canGoForward
+      )
+  }
+}
+
+// Reconcile a partial session snapshot against the last known record for the
+// same terminal. The snapshot owns live fields (title, activity); the known
+// theme only survives when the snapshot omits it, since lightweight snapshots
+// can drop it.
+function mergeTerminalSnapshotWithKnownRecord(
+  snapshot: TerminalRecord,
+  known: TerminalRecord
+): TerminalRecord {
+  return {
+    ...snapshot,
+    terminalTheme: snapshot.terminalTheme ?? known.terminalTheme
+  }
+}
 
 export function mergeTerminalRecordsByCurrentOrder(
   terminalTabs: TerminalRecord[],
@@ -39,7 +147,12 @@ export function mergeTerminalRecordsByCurrentOrder(
   const terminalTabsByHandle = new Map(terminalTabs.map((tab) => [tab.handle, tab]))
   const currentHandles = new Set(currentTerminals.map((terminal) => terminal.handle))
   return [
-    ...currentTerminals.map((terminal) => terminalTabsByHandle.get(terminal.handle) ?? terminal),
+    ...currentTerminals.map((terminal) => {
+      const snapshotTerminal = terminalTabsByHandle.get(terminal.handle)
+      return snapshotTerminal
+        ? mergeTerminalSnapshotWithKnownRecord(snapshotTerminal, terminal)
+        : terminal
+    }),
     ...terminalTabs.filter((terminal) => !currentHandles.has(terminal.handle))
   ]
 }

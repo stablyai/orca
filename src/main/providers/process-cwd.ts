@@ -1,5 +1,5 @@
-import { execFile as execFileCb } from 'child_process'
-import { readlink } from 'fs/promises'
+import { execFile as execFileCb } from 'node:child_process'
+import { readlink } from 'node:fs/promises'
 
 /**
  * Resolve the current working directory of a local process by pid.

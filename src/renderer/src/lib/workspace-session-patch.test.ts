@@ -205,6 +205,10 @@ describe('buildWorkspaceSessionPatch', () => {
 
     expect(Object.keys(patch).sort()).toEqual(
       [
+        // Why: the reconnect list derives from remote session ids, so any
+        // patch that rewrites remoteSessionIdsByTabId must carry it too —
+        // otherwise a crash between patches strands a stale target on disk.
+        'activeConnectionIdsAtShutdown',
         'activeWorktreeIdsOnShutdown',
         'remoteSessionIdsByTabId',
         'tabsByWorktree',
@@ -223,6 +227,83 @@ describe('buildWorkspaceSessionPatch', () => {
 
     expect(Object.hasOwn(patch, 'activeConnectionIdsAtShutdown')).toBe(true)
     expect(patch.activeConnectionIdsAtShutdown).toBeUndefined()
+  })
+
+  it('derives reconnect targets from surviving relay session ids in terminal-field patches', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        tabsByWorktree: {
+          'wt-ssh': [{ id: 'tab-ssh', title: 'remote', ptyId: null, worktreeId: 'wt-ssh' } as never]
+        },
+        ptyIdsByTabId: { 'tab-ssh': [] },
+        lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'ssh:conn-1@@pty-42' },
+        sshConnectionStates: new Map([['conn-1', { status: 'reconnecting' } as never]]),
+        repos: [createRepo('repo-ssh', 'conn-1')],
+        worktreesByRepo: { 'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' } as never] }
+      }),
+      ['lastKnownRelayPtyIdByTabId']
+    )
+
+    expect(patch.remoteSessionIdsByTabId).toEqual({ 'tab-ssh': 'ssh:conn-1@@pty-42' })
+    expect(patch.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
+  })
+
+  it('patches tab chrome as a sanitized bundle when split groups change', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'term-unified-1',
+              entityId: 'tab-1',
+              groupId: 'group-left',
+              worktreeId: 'wt-1',
+              contentType: 'terminal',
+              label: 'shell',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          'wt-1': [
+            {
+              id: 'group-left',
+              worktreeId: 'wt-1',
+              activeTabId: 'term-unified-1',
+              tabOrder: ['term-unified-1']
+            },
+            {
+              id: 'group-right',
+              worktreeId: 'wt-1',
+              activeTabId: null,
+              tabOrder: []
+            }
+          ]
+        },
+        layoutByWorktree: {
+          'wt-1': {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-left' },
+            second: { type: 'leaf', groupId: 'group-right' }
+          }
+        },
+        activeGroupIdByWorktree: { 'wt-1': 'group-right' }
+      }),
+      ['groupsByWorktree']
+    )
+
+    expect(Object.keys(patch).sort()).toEqual(
+      ['activeGroupIdByWorktree', 'tabGroupLayouts', 'tabGroups', 'unifiedTabs'].sort()
+    )
+    expect(patch.tabGroups?.['wt-1']).toEqual([
+      expect.objectContaining({ id: 'group-left', tabOrder: ['term-unified-1'] })
+    ])
+    expect(patch.tabGroupLayouts?.['wt-1']).toEqual({ type: 'leaf', groupId: 'group-left' })
+    expect(patch.activeGroupIdByWorktree?.['wt-1']).toBe('group-left')
   })
 
   it('persists default terminal tab idempotency marker changes', () => {
@@ -244,5 +325,15 @@ describe('buildWorkspaceSessionPatch', () => {
 
     expect(Object.hasOwn(patch, 'defaultTerminalTabsAppliedByWorktreeId')).toBe(true)
     expect(patch.defaultTerminalTabsAppliedByWorktreeId).toBeUndefined()
+  })
+
+  it('keeps sleeping agent session clearing keys in patches', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({ sleepingAgentSessionsByPaneKey: {} }),
+      ['sleepingAgentSessionsByPaneKey']
+    )
+
+    expect(Object.hasOwn(patch, 'sleepingAgentSessionsByPaneKey')).toBe(true)
+    expect(patch.sleepingAgentSessionsByPaneKey).toBeUndefined()
   })
 })

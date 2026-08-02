@@ -1,181 +1,36 @@
-import { Terminal } from '@xterm/xterm'
-import type { ITerminalOptions } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-// Upstream packaging bug: @xterm/addon-ligatures declares `"main":
-// "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
-// resolve the bare import. Fixed locally via config/patches/@xterm__addon-ligatures*.
-// Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 and
-// https://github.com/xtermjs/xterm.js/pull/5828 — drop the patch once that lands.
-import { LigaturesAddon } from '@xterm/addon-ligatures'
-import { SearchAddon } from '@xterm/addon-search'
-import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { WebLinksAddon } from '@xterm/addon-web-links'
-import { SerializeAddon } from '@xterm/addon-serialize'
-
-import type { PaneManagerOptions, ManagedPaneInternal } from './pane-manager-types'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
-import type { DragReorderState } from './pane-drag-reorder'
-import type { DragReorderCallbacks } from './pane-drag-reorder'
-import { attachPaneDrag } from './pane-drag-reorder'
+import type { ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
 import {
   attachPaneFitResizeObserver,
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
-import { buildDefaultTerminalOptions } from './pane-terminal-options'
-import {
-  ENABLE_WEBGL_RENDERER,
-  attachWebgl,
-  cancelPendingWebglRefresh,
-  disposeWebgl
-} from './pane-webgl-renderer'
-import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
+import { cancelDeferredScrollRestore } from './pane-scroll'
+import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
+import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
+import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
+import { installTerminalLinkifierHoverResetOnMouseLeave } from './terminal-linkifier-hover-reset-on-mouseleave'
+import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
+import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
+import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
+import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
+import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
+import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
 // ---------------------------------------------------------------------------
 
-function getTerminalUrlOpenHint(): string {
-  return navigator.userAgent.includes('Mac')
-    ? '⌘+click to open or ⇧⌘+click for system browser'
-    : 'Ctrl+click to open or Shift+Ctrl+click for system browser'
-}
-
-export function createPaneDOM(
-  id: number,
-  leafId: TerminalLeafId,
-  options: PaneManagerOptions,
-  dragState: DragReorderState,
-  dragCallbacks: DragReorderCallbacks,
-  onPointerDown: (id: number, options?: { focusTerminal?: boolean }) => void,
-  onMouseEnter: (id: number, event: MouseEvent) => void
-): ManagedPaneInternal {
-  // Create .pane container
-  const container = document.createElement('div')
-  container.className = 'pane'
-  container.dataset.paneId = String(id)
-  container.dataset.leafId = leafId
-
-  // Create .xterm-container — baseline layout (position, width, height, margin)
-  // is CSS-driven (see main.css .xterm-container) so that the data-has-title
-  // attribute override can shift the terminal down without racing safeFit().
-  const xtermContainer = document.createElement('div')
-  xtermContainer.className = 'xterm-container'
-  container.appendChild(xtermContainer)
-
-  // Build terminal options
-  const userOpts = options.terminalOptions?.(id) ?? {}
-  const terminalOpts: ITerminalOptions = {
-    ...buildDefaultTerminalOptions(),
-    ...userOpts
-  }
-
-  const terminal = new Terminal(terminalOpts)
-  const fitAddon = new FitAddon()
-  const searchAddon = new SearchAddon()
-  const unicode11Addon = new Unicode11Addon()
-  const openLinkHint = getTerminalUrlOpenHint()
-
-  // URL tooltip element — Ghostty-style bottom-left hint on hover
-  const linkTooltip = document.createElement('div')
-  linkTooltip.className = 'pane-link-tooltip'
-  linkTooltip.classList.add('xterm-hover')
-  linkTooltip.style.cssText =
-    'display:none;position:absolute;bottom:4px;left:8px;z-index:40;' +
-    'padding:5px 8px;border-radius:4px;font-size:11px;font-family:inherit;' +
-    'color:#a1a1aa;background:rgba(24,24,27,0.85);border:1px solid rgba(63,63,70,0.6);' +
-    'pointer-events:none;max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
-
-  // Ghostty-style drag handle — appears at top of pane on hover when 2+ panes
-  const dragHandle = document.createElement('div')
-  dragHandle.className = 'pane-drag-handle'
-  container.appendChild(dragHandle)
-  const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
-
-  const webLinksAddon = new WebLinksAddon(
-    options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
-    {
-      hover: (_event, uri) => {
-        if (uri) {
-          linkTooltip.textContent = `${uri} (${openLinkHint})`
-          linkTooltip.style.display = ''
-        }
-      },
-      leave: () => {
-        linkTooltip.style.display = 'none'
-      }
-    }
-  )
-
-  const serializeAddon = new SerializeAddon()
-
-  const panePointerDownHandler = (event: PointerEvent): void => {
-    onPointerDown(id, {
-      focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
-    })
-  }
-
-  const paneMouseEnterHandler = (event: MouseEvent): void => {
-    onMouseEnter(id, event)
-  }
-
-  const pane: ManagedPaneInternal = {
-    id,
-    leafId,
-    stablePaneId: leafId,
-    terminal,
-    container,
-    xtermContainer,
-    linkTooltip,
-    terminalGpuAcceleration: options.terminalGpuAcceleration ?? 'auto',
-    gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
-    webglAttachmentDeferred: false,
-    webglDisabledAfterContextLoss: false,
-    hasComplexScriptOutput: false,
-    fitAddon,
-    fitResizeObserver: null,
-    pendingInitialFitRafId: null,
-    pendingWebglRefreshRafId: null,
-    pendingObservedFitRafId: null,
-    searchAddon,
-    serializeAddon,
-    unicode11Addon,
-    webLinksAddon,
-    webglAddon: null,
-    ligaturesAddon: null,
-    panePointerDownHandler,
-    paneMouseEnterHandler,
-    paneDragCleanup,
-    compositionHandler: null,
-    pendingSplitScrollState: null,
-    pendingSplitScrollRafIds: [],
-    pendingSplitScrollTimerId: null,
-    pendingSplitScrollBufferDisposable: null,
-    debugLabel: options.debugLabel ?? null
-  }
-
-  // Focus handler: clicking a pane makes it active and explicitly focuses
-  // the terminal. We must call focus: true here because after DOM reparenting
-  // (e.g. splitPane moves the original pane into a flex container), xterm.js's
-  // native click-to-focus on its internal textarea may not fire reliably.
-  container.addEventListener('pointerdown', panePointerDownHandler)
-
-  // Focus-follows-mouse handler: when the setting is enabled, hovering a
-  // pane makes it active. All gating (feature flag, drag-in-progress,
-  // window focus, etc.) lives in the PaneManager callback — this layer
-  // just forwards the event.
-  container.addEventListener('mouseenter', paneMouseEnterHandler)
-
-  return pane
-}
+export { createPaneDOM } from './pane-dom-creation'
 
 /** Open terminal into its container and load addons. Must be called after the container is in the DOM. */
 export function openTerminal(pane: ManagedPaneInternal): void {
   const {
     terminal,
+    container,
     xtermContainer,
     linkTooltip,
+    terminalTuiScrollSensitivity,
     fitAddon,
     searchAddon,
     serializeAddon,
@@ -185,8 +40,9 @@ export function openTerminal(pane: ManagedPaneInternal): void {
 
   // Open terminal into DOM
   terminal.open(xtermContainer)
-  const linkTooltipContainer = terminal.element ?? xtermContainer
-  linkTooltipContainer.appendChild(linkTooltip)
+  // Why: terminal.element sits under the padded xterm container. Pane-level
+  // placement keeps the hover URL on the true bottom-left window corner.
+  container.appendChild(linkTooltip)
 
   // Load addons (order matters: WebGL must be after open())
   terminal.loadAddon(fitAddon)
@@ -194,8 +50,22 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   terminal.loadAddon(serializeAddon)
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
+  attachTerminalMouseWheelMultiplier(terminal, {
+    getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity
+  })
+  pane.terminalScrollIntentDisposable = attachTerminalScrollIntentTracking(
+    terminal,
+    xtermContainer,
+    pane.leafId
+  )
+  // Why: a link streamed into a visible pane under a stationary pointer would
+  // otherwise stay un-underlined/un-clickable until the mouse crosses to a new
+  // line; invalidate the linkifier hover cache when output lands so the next
+  // pointer move re-linkifies it.
+  pane.linkifierHoverResetDisposable = installTerminalLinkifierHoverResetOnWrite(terminal)
+  pane.linkifierMouseLeaveResetDisposable = installTerminalLinkifierHoverResetOnMouseLeave(terminal)
 
-  // Activate Unicode 11 widths *before* any caller-driven write. CJK / emoji /
+  // Activate Orca's Unicode 11 width shim *before* any caller-driven write. CJK / emoji /
   // ZWJ codepoints get baked into the buffer at the active unicode version on
   // write — if a restore (snapshot, scrollback, cold-restore) writes bytes
   // through xterm while the default v6 width tables are still active, wide
@@ -204,41 +74,20 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // (replayTerminalLayout → splitPane/createInitialPane → openTerminal,
   // restoreScrollbackBuffers, handleReattachResult) run after openTerminal,
   // so the activation must stay at this position.
-  terminal.unicode.activeVersion = '11'
+  activateOrcaTerminalUnicodeProvider(terminal)
 
-  // Why: the OS reads the focused textarea's screen rect at compositionstart to
-  // decide where to display the IME candidate window. xterm.js only repositions
-  // the textarea on compositionupdate (via updateCompositionElements), not on
-  // compositionstart, so the window can appear at a stale cursor position. We
-  // force-sync the textarea position in a capture-phase listener so the OS sees
-  // the correct location before it opens the candidate window.
-  //
-  // Cell dimensions are derived from the public .xterm-screen element's bounds
-  // (xterm sizes that element to cols*cellWidth × rows*cellHeight) rather than
-  // poking `_core._renderService.dimensions` — keeps us on the public API
-  // surface so upgrades don't silently regress the fix.
-  if (terminal.element && terminal.textarea) {
-    const screenElement = terminal.element.querySelector<HTMLElement>('.xterm-screen')
-    const textarea = terminal.textarea
-    const handler = (): void => {
-      if (!screenElement) {
-        return
-      }
-      const rect = screenElement.getBoundingClientRect()
-      const cellWidth = rect.width / terminal.cols
-      const cellHeight = rect.height / terminal.rows
-      if (!(cellWidth > 0) || !(cellHeight > 0)) {
-        return
-      }
-      const buf = terminal.buffer.active
-      const x = Math.min(buf.cursorX, terminal.cols - 1)
-      textarea.style.top = `${buf.cursorY * cellHeight}px`
-      textarea.style.left = `${x * cellWidth}px`
-    }
-    terminal.element.addEventListener('compositionstart', handler, true)
-    // Store so disposePane() can remove it and avoid a memory leak.
-    pane.compositionHandler = handler
-  }
+  // Why: any xterm character joiner makes every repaint scan the whole grid.
+  // Defer registration until the first RTL write; replay and live paths both
+  // ensure it before parsing, so restored Arabic still shapes immediately.
+  pane.arabicShapingJoinerCleanup = configureLazyArabicShapingJoiner(
+    terminal,
+    () => pane.webglAddon != null
+  )
+
+  // Store so disposePane() can remove it and avoid a memory leak.
+  pane.compositionHandler = installTerminalImeCandidateAnchor(terminal)
+
+  pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
 
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
@@ -272,9 +121,12 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
     return
   }
   try {
-    const ligaturesAddon = new LigaturesAddon()
+    const ligaturesAddon = new TerminalLigaturesAddon()
     pane.terminal.loadAddon(ligaturesAddon)
     pane.ligaturesAddon = ligaturesAddon
+    // Why: ligatures can be enabled after rows already rendered, especially
+    // from Settings. Force existing glyph runs to be recomputed immediately.
+    pane.terminal.refresh(0, pane.terminal.rows - 1)
     // Why: the WebGL renderer builds its glyph texture atlas at activation
     // time, so `font-feature-settings` applied after WebGL loaded won't
     // reach the GPU-rendered cells until the atlas is rebuilt. The upstream
@@ -327,8 +179,24 @@ export function disposePane(
   }
   pane.paneDragCleanup?.()
   pane.paneDragCleanup = null
+  pane.focusClassSyncCleanup?.()
+  pane.focusClassSyncCleanup = null
+  pane.terminalScrollIntentDisposable?.dispose()
+  pane.terminalScrollIntentDisposable = null
+  pane.linkifierHoverResetDisposable?.dispose()
+  pane.linkifierHoverResetDisposable = null
+  pane.linkifierMouseLeaveResetDisposable?.dispose()
+  pane.linkifierMouseLeaveResetDisposable = null
+  // Deregister the RTL shaping joiner: terminal.dispose() below does not.
+  try {
+    pane.arabicShapingJoinerCleanup?.()
+  } catch {
+    /* ignore */
+  }
+  pane.arabicShapingJoinerCleanup = null
   if (pane.compositionHandler) {
-    pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
+    pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler)
+    pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)
     pane.compositionHandler = null
   }
   try {
@@ -337,15 +205,18 @@ export function disposePane(
     /* ignore */
   }
   try {
-    pane.ligaturesAddon?.dispose()
+    // Why: fit retries own xterm markers and frame callbacks independently of
+    // split restoration; both must be released before terminal disposal.
+    cancelDeferredScrollRestore(pane.terminal)
   } catch {
     /* ignore */
   }
   try {
-    pane.webglAddon?.dispose()
+    pane.ligaturesAddon?.dispose()
   } catch {
     /* ignore */
   }
+  disposeWebgl(pane)
   try {
     pane.searchAddon.dispose()
   } catch {

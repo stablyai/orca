@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
+import * as path from 'node:path'
+import { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
+
+function removeWorktreeWithCapabilityCache(
+  git: GitExec,
+  params: Parameters<typeof removeWorktreeOp>[1]
+) {
+  return removeWorktreeOp(git, params, new GitCapabilityCache())
+}
 
 function lineWorktreeList(...entries: { path: string; branch?: string }[]): string {
   return entries
@@ -27,6 +36,10 @@ function nulWorktreeList(...entries: { path: string; branch?: string }[]): strin
     .join('\0')
 }
 
+function resolvedRepoPath(): string {
+  return path.posix.resolve('/repo-feature', '/repo/.git', '..')
+}
+
 describe('relay worktree path parsing', () => {
   it('deletes the matching branch for SSH worktrees whose paths contain newlines', async () => {
     const worktreePath = '/repo-feature\nremote'
@@ -51,9 +64,9 @@ describe('relay worktree path parsing', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await removeWorktreeOp(git, { worktreePath })
+    await removeWorktreeWithCapabilityCache(git, { worktreePath })
 
-    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/newline'], '/repo')
+    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/newline'], resolvedRepoPath())
   })
 
   it('falls back to line-block worktree listing when remote Git rejects -z', async () => {
@@ -85,17 +98,14 @@ describe('relay worktree path parsing', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await removeWorktreeOp(git, { worktreePath: '/repo-feature' })
+    await removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
 
     expect(calls).toEqual([
       '/repo-feature$ rev-parse --git-common-dir',
-      '/repo$ worktree list --porcelain -z',
-      '/repo$ worktree list --porcelain',
-      '/repo$ worktree remove /repo-feature',
-      '/repo$ worktree prune',
-      '/repo$ worktree list --porcelain -z',
-      '/repo$ worktree list --porcelain',
-      '/repo$ branch -d -- feature/test'
+      `${resolvedRepoPath()}$ worktree list --porcelain -z`,
+      `${resolvedRepoPath()}$ worktree list --porcelain`,
+      `${resolvedRepoPath()}$ worktree remove /repo-feature`,
+      `${resolvedRepoPath()}$ branch -d -- feature/test`
     ])
   })
 })

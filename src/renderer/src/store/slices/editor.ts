@@ -1,11 +1,18 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { pushRecentlyClosedTabKind } from './recently-closed-tabs'
 import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
-import { openHttpLink } from '@/lib/http-link-routing'
+import {
+  buildCheckRunDetailsTabId,
+  getCheckRunDetailsTabLabel,
+  type OpenCheckRunDetailsState
+} from '@/components/editor/check-run-details-tab'
+import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
 import type {
@@ -16,6 +23,7 @@ import type {
   GitConflictOperation,
   GitConflictResolutionStatus,
   GitConflictStatusSource,
+  GlobalSettings,
   GitPushTarget,
   GitStatusEntry,
   GitStatusResult,
@@ -23,14 +31,26 @@ import type {
   Tab,
   TabGroup,
   GitUpstreamStatus,
-  RightSidebarTab,
+  ActiveRightSidebarTab,
+  RightSidebarExplorerView,
   SearchResult,
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
-import { stripCredentialsFromMessage } from '../../../../shared/git-remote-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
+import {
+  clampCombinedDiffFileTreeWidth,
+  COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH
+} from '../../../../shared/combined-diff-file-tree-width'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
+import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
+import {
+  isNonFastForwardRemoteError,
+  markSyncPushStageError,
+  resolveRemoteOperationErrorMessage
+} from '@/lib/source-control-remote-error'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import {
   fastForwardRuntimeGit,
@@ -46,17 +66,57 @@ import {
   statRuntimePath
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  addAdditionalValidWorkspaceKeys,
+  type WorkspaceSessionHydrationOptions
+} from '@/lib/workspace-session-hydration-keys'
+import { buildValidWorktreeIdsForSessionHydration } from './degraded-repo-worktree-validity'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { translate } from '@/i18n/i18n'
+import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
+import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
+import {
+  assertEditorFileOperationCurrent,
+  captureEditorFileOperationProvenance,
+  getEditorFileOperationContext
+} from '@/lib/editor-file-operation-owner'
 
-export type { RightSidebarTab } from '../../../../shared/types'
+export type {
+  ActiveRightSidebarTab,
+  RightSidebarExplorerView,
+  RightSidebarTab
+} from '../../../../shared/types'
+
+const DEFAULT_FILE_SEARCH_STATE = {
+  query: '',
+  caseSensitive: false,
+  wholeWord: false,
+  useRegex: false,
+  includePattern: '',
+  excludePattern: '',
+  results: null,
+  resultOwner: null,
+  loading: false,
+  collapsedFiles: new Set<string>()
+} satisfies Omit<
+  EditorSlice['fileSearchStateByWorktree'][string],
+  'seedRequestId' | 'focusRequestId'
+>
+
+function defaultFileSearchState(): EditorSlice['fileSearchStateByWorktree'][string] {
+  return { ...DEFAULT_FILE_SEARCH_STATE, collapsedFiles: new Set<string>() }
+}
 
 export type DiffSource =
   | 'unstaged'
   | 'staged'
   | 'branch'
   | 'commit'
+  | 'combined-all'
   | 'combined-uncommitted'
   | 'combined-branch'
   | 'combined-commit'
@@ -82,6 +142,32 @@ type BranchCompareLike = Pick<
   'baseRef' | 'baseOid' | 'compareRef' | 'headOid' | 'mergeBase'
 >
 
+function getKnownGitHead(head: string | null | undefined): string | undefined {
+  const trimmed = head?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+function createLoadingBranchCompareSummary(baseRef: string): GitBranchCompareSummary {
+  return {
+    baseRef,
+    baseOid: null,
+    compareRef: 'HEAD',
+    headOid: null,
+    mergeBase: null,
+    changedFiles: 0,
+    status: 'loading'
+  }
+}
+
+function branchCompareMatchesStatusHead(
+  summary: GitBranchCompareSummary,
+  statusHead: string
+): boolean {
+  const summaryHead = getKnownGitHead(summary.headOid)
+  // Why: git status reports '(initial)' for unborn branches; branch compare represents that same state as a null headOid.
+  return summaryHead === statusHead || (statusHead === '(initial)' && summary.headOid === null)
+}
+
 type CommitCompareLike = Pick<
   GitCommitCompareSummary,
   'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
@@ -91,7 +177,7 @@ type CommitCompareLike = Pick<
 }
 
 type CombinedDiffAlternate = {
-  source: 'combined-uncommitted' | 'combined-branch'
+  source: 'combined-all' | 'combined-branch'
   branchCompare?: BranchCompareSnapshot
 }
 
@@ -121,22 +207,9 @@ export type CombinedDiffSkippedConflict = {
   conflictKind: GitConflictKind
 }
 
-// Why: OpenFile is a single type (not a discriminated union on `mode`) because
-// the tab plumbing (reorder, close, activate) treats all tabs uniformly. However,
-// consumers that access `filePath` must be aware that conflict-review tabs use
-// the worktree root as filePath, not a real file. Any code that assumes filePath
-// points to an actual file should check `mode` first.
-//
-// `skippedConflicts` is stored directly on the tab state so the exclusion notice
-// in combined-diff views is stable for the tab's lifetime. It must NOT be
-// reconstructed from live status on every render — the live set can change
-// between polls, which would make the notice flicker or become inaccurate.
-//
-// `branchEntriesSnapshot` exists for the same reason on combined branch diffs:
-// the active worktree is the only one guaranteed to keep a live branch-compare
-// entry list warm. When the user switches worktrees and comes back, the tab must
-// still know which files it was showing even if the live compare data for that
-// inactive worktree has not been refreshed yet.
+// OpenFile is one type (not a `mode` union); consumers reading `filePath` must check `mode` first — conflict-review tabs use the worktree root, not a real file.
+// `skippedConflicts` lives on the tab so the combined-diff exclusion notice stays stable; live status changing between polls would make it flicker.
+// `branchEntriesSnapshot` keeps a combined-branch tab's file list known after switching away from an inactive worktree whose compare data is stale.
 export type OpenFile = {
   id: string // use filePath as unique key
   filePath: string // absolute path
@@ -144,17 +217,15 @@ export type OpenFile = {
   worktreeId: string
   language: string
   isDirty: boolean
-  // Why: remote untitled cleanup must target the environment that created the
-  // file, even if the user switches to Local or another runtime before closing.
+  // Why: remote untitled cleanup must target the creating environment even if the user later switches runtime.
   runtimeEnvironmentId?: string | null
-  /** Why: markdown preview tabs are separate editor tabs that mirror a source
-   *  markdown file's live draft. Storing the source file ID lets the preview
-   *  follow unsaved edits from the normal editor without becoming editable
-   *  itself or conflating the preview tab's identity with the source tab. */
+  /** SSH target that owns an absolute path outside the worktree. */
+  externalSshTargetId?: string
+  /** Host provenance captured when the tab opened; mutations reject replacement owners. */
+  operationProvenance?: EditorFileOperationProvenance
+  /** Why: preview tabs mirror a source file's live draft; storing its ID lets the preview follow unsaved edits without becoming editable. */
   markdownPreviewSourceFileId?: string
-  /** Optional hash fragment to reveal when a preview tab is opened from a
-   *  markdown link such as `./guide.md#setup`. Kept on tab state so repeated
-   *  "open preview" actions can retarget an already-open preview tab. */
+  /** Hash fragment to reveal when a preview tab opens from a link (`./guide.md#setup`); kept on tab state so repeat opens can retarget it. */
   markdownPreviewAnchor?: string
   diffSource?: DiffSource
   branchCompare?: BranchCompareSnapshot
@@ -164,40 +235,53 @@ export type OpenFile = {
   combinedAreaFilter?: string // filter combined diff to a specific area (e.g. 'staged', 'unstaged', 'untracked')
   branchEntriesSnapshot?: GitBranchChangeEntry[]
   commitEntriesSnapshot?: GitBranchChangeEntry[]
-  /** Why: snapshot uncommitted entries at tab-open time so a subsequent commit
-   *  does not yank entries out from under the combined diff, which would rebuild
-   *  all sections and lose loaded content + scroll position. */
+  /** Why: snapshot uncommitted entries at tab-open so a later commit can't yank them out from under the combined diff (rebuild + lost scroll). */
   uncommittedEntriesSnapshot?: GitStatusEntry[]
   conflict?: OpenConflictMetadata
   skippedConflicts?: CombinedDiffSkippedConflict[]
   conflictReview?: ConflictReviewState
   isPreview?: boolean // preview tabs are replaced when another file is single-clicked
   isUntitled?: boolean // true for files created via "New Markdown" that haven't been renamed yet
-  // Why: templated New Markdown files contain real user-visible content at
-  // creation time, unlike blank placeholder files that can be discarded.
+  // Why: templated New Markdown files have real content at creation, unlike blank placeholders that can be discarded.
   deleteUntouchedOnClose?: boolean
-  // Why: when an external process (e.g. `git mv`, `rm`) removes the file on
-  // disk while it's open, we keep the tab around so the user can still see
-  // (and potentially save) their in-memory content. The tab surfaces this as
-  // a strikethrough label plus a "deleted"/"renamed" suffix. Cleared if the
-  // file reappears on disk at its original path.
-  externalMutation?: 'deleted' | 'renamed'
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview'
+  // Why: external delete/rename of an open file keeps the tab (strikethrough label); 'changed' = rewritten on disk under unsaved edits → changed-on-disk banner (#7265).
+  externalMutation?: 'deleted' | 'renamed' | 'changed'
+  /** Signature of the disk content this tab's edits are based on; persisted so a restore detects a changed-on-disk conflict before autosave clobbers an agent write. */
+  lastKnownDiskSignature?: string
+  /** Why: gates autosave for restored dirty tabs until the conflict scan compares disk vs baseline, else a slow SSH read loses the race. Not persisted. */
+  pendingDiskBaselineVerification?: boolean
+  /** Why: gates autosave during a live self-move echo's disk verification; separate flag from the restored scan's so the two can't clear each other's gate. Not persisted. */
+  pendingLiveDiskVerification?: boolean
+  /** Why: routes an Orca-owned move's destination-watcher echo into content verification. On the tab so it survives the atomic rekey; operationId supersedes a stale verification on re-move. Not persisted. */
+  pendingSelfMoveEcho?: { operationId: string; targetPath: string }
+  /** Why: diff bodies are cached in EditorPanel; bump this on re-select so the panel refetches instead of reusing a stale snapshot. */
+  diffContentReloadNonce?: number
+  /** Why: bumping refetches clean tabs — the user's manual recovery when a remote watcher misses an external write. */
+  fileContentReloadNonce?: number
+  /** Why: CI check-details tabs are virtual editor tabs backed by fetched PR check-run metadata, not a file on disk. */
+  checkRunDetails?: OpenCheckRunDetailsState
+  /** Why: web-client tab mirrored from the host snapshot; only mirrored tabs may be culled when they vanish, locally-opened tabs must survive. */
+  mirroredFromRuntimeSession?: boolean
+  /** Why: orthogonal to `mode` — an edit-mode tab that must never accept edits/autosave/rename (AI Vault View Log). Persisted only when true. */
+  readOnly?: boolean
+  /** Why: explicit live tail, only meaningful for a read-only local log. */
+  liveTail?: boolean
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
 }
 
 export type ActivityBarPosition = 'top' | 'side'
 
 export type MarkdownViewMode = 'source' | 'rich' | 'preview'
 
-// Why: orthogonal to MarkdownViewMode. 'changes' flips the editor tab to a
-// diff-against-HEAD rendering (working tree incl. unsaved draft vs HEAD) in
-// place of the normal editor, without creating a separate tab. The per-tab
-// Tab.contentType stays 'editor' for the whole lifetime; this slice drives
-// what EditorPanel *renders* for that tab. See reviews/changes-view-mode-plan.md.
+// Why: orthogonal to MarkdownViewMode; 'changes' renders diff-vs-HEAD in place of the editor without a separate tab. See reviews/changes-view-mode-plan.md.
 export type EditorViewMode = 'edit' | 'changes'
 
 /** Enough state to restore a tab via `openFile` after `closeFile` (id is always filePath). */
-export type ClosedEditorTabSnapshot = Omit<OpenFile, 'id' | 'isDirty'>
+// Why: omit mirroredFromRuntimeSession so a user-reopened tab isn't treated as host-owned and culled by the next web session sync.
+export type ClosedEditorTabSnapshot = Omit<
+  OpenFile,
+  'id' | 'isDirty' | 'mirroredFromRuntimeSession'
+>
 
 const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 
@@ -205,6 +289,24 @@ type EditorOpenTargetOptions = {
   targetGroupId?: string
   preview?: boolean
   runtimeEnvironmentId?: string | null
+  forceContentReload?: boolean
+}
+
+type GitRuntimeOperationOptions = {
+  runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  applyUpstreamStatus?: boolean
+}
+
+function resolveDiffRuntimeEnvironmentId(
+  state: AppState,
+  worktreeId: string,
+  explicitRuntimeEnvironmentId: string | null | undefined
+): string | null | undefined {
+  if (explicitRuntimeEnvironmentId !== undefined) {
+    return explicitRuntimeEnvironmentId
+  }
+  // Why: route diffs by explicit worktree owner; null forces LOCAL, undefined would inherit the focused runtime → wrong host (#6957, #8484).
+  return getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? null
 }
 
 export type PendingEditorReveal = {
@@ -214,6 +316,18 @@ export type PendingEditorReveal = {
   column: number
   matchLength: number
 }
+
+export type PendingEditorFocusRequest = {
+  fileId: string
+  worktreeId: string
+  viewStateId: string
+  expiresAt: number
+  token: number
+}
+
+// Why: allow slow SSH mounts without leaving an unrelated future remount armed indefinitely.
+const EDITOR_FOCUS_REQUEST_TTL_MS = 30_000
+let nextEditorFocusRequestToken = 0
 
 const pendingEditorLineRevealFrameIds = new Set<number>()
 
@@ -252,8 +366,7 @@ function scheduleEditorLineReveal(
   column?: number,
   fileId?: string
 ): void {
-  // Why: openFile can replace a preview and remount Monaco asynchronously; the
-  // reveal must land after that remount or the old editor can clear it.
+  // Why: openFile may remount Monaco async; the reveal must land after remount or the old editor clears it.
   cancelPendingEditorLineRevealFrames()
   get().setPendingEditorReveal(null)
   requestTrackedEditorLineRevealFrame(() => {
@@ -270,10 +383,7 @@ function scheduleEditorLineReveal(
 }
 
 export type EditorSlice = {
-  // Why: #300 originally kept EditorPanel mounted while hidden so unsaved
-  // drafts and autosave timers could survive tab switches. Drafts live in the
-  // store instead so the visible editor UI can unmount without losing edits or
-  // widening the app-shutdown surface.
+  // Why: drafts live in the store (not a hidden mounted EditorPanel, #300) so the editor UI can unmount without losing edits.
   editorDrafts: Record<string, string>
   setEditorDraft: (fileId: string, content: string) => void
   clearEditorDraft: (fileId: string) => void
@@ -283,28 +393,45 @@ export type EditorSlice = {
   markdownViewMode: Record<string, MarkdownViewMode>
   setMarkdownViewMode: (fileId: string, mode: MarkdownViewMode) => void
 
-  // Editor view mode per file (fileId -> mode). Orthogonal to markdownViewMode:
-  // a markdown file can be in Raw+Changes, Rendered+Changes, etc. Absent entry
-  // means 'edit'.
+  // Editor view mode per file (fileId -> mode). Orthogonal to markdownViewMode; absent entry means 'edit'.
   editorViewMode: Record<string, EditorViewMode>
   setEditorViewMode: (fileId: string, mode: EditorViewMode) => void
 
-  // Per-file opt-in to render front matter in the markdown preview (#4468).
-  // Default is hidden; absent entry means hidden. Storing only the explicit
-  // true values keeps the record minimal and the default implicit.
+  // Per-file opt-in to render markdown-preview front matter (#4468); absent = default.
   markdownFrontmatterVisible: Record<string, boolean>
   setMarkdownFrontmatterVisible: (fileId: string, visible: boolean) => void
+
+  // Per-file opt-in to keep the markdown TOC open; absent = hidden (default).
+  markdownTableOfContentsVisible: Record<string, boolean>
+  setMarkdownTableOfContentsVisible: (fileId: string, visible: boolean) => void
+
+  // Markdown table of contents panel sizing
+  markdownTocPanelWidth: number
+  setMarkdownTocPanelWidth: (width: number) => void
+
+  // Combined diff file tree sizing
+  combinedDiffFileTreeWidth: number
+  setCombinedDiffFileTreeWidth: (width: number) => void
 
   // Right sidebar
   rightSidebarOpen: boolean
   rightSidebarWidth: number
-  rightSidebarTab: RightSidebarTab
-  rightSidebarTabByWorktree: Record<string, RightSidebarTab>
+  rightSidebarTab: ActiveRightSidebarTab
+  rightSidebarExplorerView: RightSidebarExplorerView
+  rightSidebarRouteRequestId: number
+  rightSidebarTabByWorktree: Record<string, ActiveRightSidebarTab>
+  rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
   activityBarPosition: ActivityBarPosition
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
   setRightSidebarWidth: (width: number) => void
-  setRightSidebarTab: (tab: RightSidebarTab) => void
+  setRightSidebarTab: (tab: ActiveRightSidebarTab) => void
+  setRightSidebarExplorerView: (view: RightSidebarExplorerView) => void
+  showRightSidebarFiles: () => void
+  showRightSidebarSearch: (payload?: {
+    query?: string | null
+    includePattern?: string | null
+  }) => void
   setActivityBarPosition: (position: ActivityBarPosition) => void
 
   // File explorer state
@@ -335,13 +462,12 @@ export type EditorSlice = {
       targetGroupId?: string
       recordReplacedPreview?: boolean
       suppressActiveRuntimeFallback?: boolean
+      forceContentReload?: boolean
+      focusEditor?: boolean
     }
   ) => void
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
-  // Why: dispatcher for markdown link activation. Lives on the slice because it
-  // sequences openFile, setMarkdownViewMode, and setPendingEditorReveal around
-  // an async Monaco remount — all reading/writing state in this slice. See
-  // docs/markdown-internal-link-opening-design.md.
+  // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,
     ctx: {
@@ -349,12 +475,18 @@ export type EditorSlice = {
       worktreeId: string
       worktreeRoot: string | null
       runtimeEnvironmentId?: string | null
+      sourceOwner?: HttpLinkSourceOwner
     }
   ) => Promise<void>
   openMarkdownPreview: (
     file: Pick<
       OpenFile,
-      'filePath' | 'relativePath' | 'worktreeId' | 'language' | 'runtimeEnvironmentId'
+      | 'filePath'
+      | 'relativePath'
+      | 'worktreeId'
+      | 'language'
+      | 'runtimeEnvironmentId'
+      | 'externalSshTargetId'
     >,
     options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
@@ -368,7 +500,18 @@ export type EditorSlice = {
   setActiveFile: (fileId: string) => void
   reorderFiles: (fileIds: string[]) => void
   markFileDirty: (fileId: string, dirty: boolean) => void
-  setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | null) => void
+  setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
+  setLastKnownDiskSignature: (fileId: string, signature: string) => void
+  clearPendingDiskBaselineVerification: (fileId: string) => void
+  setPendingDiskBaselineVerification: (fileId: string, value: boolean) => void
+  setPendingLiveDiskVerification: (fileId: string, value: boolean) => void
+  clearSelfMoveEcho: (fileId: string) => void
+  /** Atomically retargets open editor sessions across an Orca-owned move — one commit-only update migrating every path-derived id + all id-keyed state, no close/reopen. Returns collision/stale without mutating. */
+  rekeyOpenFilesForPathChange: (args: {
+    rekeys: readonly OpenFilePathRekey[]
+    /** When set, dirty autosave-capable destinations get move-echo provenance + a synchronous autosave gate so the watcher can content-verify the echo. */
+    moveOperationId?: string
+  }) => RekeyOpenFilesResult
   clearUntitled: (fileId: string) => void
   openDiff: (
     worktreeId: string,
@@ -398,7 +541,8 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     alternate?: CombinedDiffAlternate,
-    areaFilter?: string
+    areaFilter?: string,
+    entriesSnapshot?: GitStatusEntry[]
   ) => void
   openConflictFile: (
     worktreeId: string,
@@ -420,6 +564,19 @@ export type EditorSlice = {
     entries: ConflictReviewEntry[],
     source: ConflictReviewState['source']
   ) => void
+  openCheckRunDetails: (
+    worktreeId: string,
+    contextKey: string,
+    check: OpenCheckRunDetailsState['check'],
+    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+  ) => void
+  patchOpenCheckRunDetails: (
+    worktreeId: string,
+    contextKey: string,
+    check: OpenCheckRunDetailsState['check'],
+    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+  ) => void
+  reloadOpenCheckRunDetailsTab: (fileId: string) => Promise<void>
   openBranchAllDiffs: (
     worktreeId: string,
     worktreePath: string,
@@ -441,29 +598,22 @@ export type EditorSlice = {
 
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
+  gitStatusHeadByWorktree: Record<string, string>
+  // Why: set when status hit the entry limit; SCM shows "too many changes" and pauses polling. `{ limit }` when huge, else absent.
+  gitStatusHugeByWorktree: Record<string, { limit: number }>
   gitIgnoredPathsByWorktree: Record<string, string[]>
   gitConflictOperationByWorktree: Record<string, GitConflictOperation>
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
   trackConflictPath: (worktreeId: string, path: string, conflictKind: GitConflictKind) => void
   setGitStatus: (worktreeId: string, status: GitStatusResult) => void
-  // Why: lightweight updater for conflict operation only, used to clear stale
-  // "Rebasing"/"Merging" badges on non-active worktrees without a full git status poll.
+  // Why: clears stale Rebasing/Merging badges on non-active worktrees without a full git status poll.
   setConflictOperation: (worktreeId: string, operation: GitConflictOperation) => void
   remoteStatusesByWorktree: Record<string, GitUpstreamStatus>
   setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
-  // Why: refcount-backed busy flag. A bare boolean races across worktrees —
-  // push on A finishing while pull on B is still in flight would flip the
-  // flag off and prematurely re-enable B's button. beginRemoteOperation /
-  // endRemoteOperation must be paired (begin at the start of the async
-  // operation, end in finally) so the derived boolean only flips to false
-  // once every in-flight remote op has finished.
+  // Why: refcount-backed busy flag; a bare boolean races across worktrees (A finishing re-enables B mid-flight). begin/end must be paired.
   isRemoteOperationActive: boolean
   remoteOperationDepth: number
-  // Why: surfaces *which* remote op the user actually triggered so the
-  // primary button can mirror it (label + spinner) rather than leaving a
-  // stale label from before the dropdown click. Cleared when depth hits 0.
-  // Last-write-wins on concurrent ops, which is fine — the UI disables
-  // every entry while busy, so concurrent ops can't be initiated through it.
+  // Why: which remote op the user triggered, so the primary button mirrors its label+spinner; cleared at depth 0.
   inFlightRemoteOpKind: RemoteOpKind | null
   beginRemoteOperation: (kind?: RemoteOpKind) => void
   endRemoteOperation: () => void
@@ -471,56 +621,69 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
-  ) => Promise<void>
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
+  ) => Promise<GitUpstreamStatus | null>
   pushBranch: (
     worktreeId: string,
     worktreePath: string,
     publish?: boolean,
     connectionId?: string,
     pushTarget?: GitPushTarget,
-    options?: { forceWithLease?: boolean }
+    options?: GitRuntimeOperationOptions & { forceWithLease?: boolean }
   ) => Promise<void>
   pullBranch: (
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   fastForwardBranch: (
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   syncBranch: (
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   rebaseFromBase: (
     worktreeId: string,
     worktreePath: string,
     baseRef: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   fetchBranch: (
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    options?: GitRuntimeOperationOptions
   ) => Promise<void>
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
   gitBranchCompareRequestKeyByWorktree: Record<string, string>
-  beginGitBranchCompareRequest: (worktreeId: string, requestKey: string, baseRef: string) => void
+  gitBranchCompareRequestStatusHeadByWorktree: Record<string, string | null>
+  beginGitBranchCompareRequest: (
+    worktreeId: string,
+    requestKey: string,
+    baseRef: string,
+    options?: { preserveExistingSummary?: boolean }
+  ) => void
   setGitBranchCompareResult: (
     worktreeId: string,
     requestKey: string,
     result: { summary: GitBranchCompareSummary; entries: GitBranchChangeEntry[] }
   ) => void
+  clearGitBranchCompare: (worktreeId: string) => void
 
   // File search state
   fileSearchStateByWorktree: Record<
@@ -533,9 +696,11 @@ export type EditorSlice = {
       includePattern: string
       excludePattern: string
       results: SearchResult | null
+      resultOwner: FileSearchResultOwner | null
       loading: boolean
       collapsedFiles: Set<string>
       seedRequestId?: number
+      focusRequestId?: number
     }
   >
   updateFileSearchState: (
@@ -551,9 +716,14 @@ export type EditorSlice = {
   // Editor navigation (for search result → go-to-line)
   pendingEditorReveal: PendingEditorReveal | null
   setPendingEditorReveal: (reveal: PendingEditorReveal | null) => void
+  pendingEditorFocusRequest: PendingEditorFocusRequest | null
+  consumeEditorFocusRequest: (token: number) => void
 
   // Session hydration — restore editor files from persisted workspace session
-  hydrateEditorSession: (session: WorkspaceSessionState) => void
+  hydrateEditorSession: (
+    session: WorkspaceSessionState,
+    options?: WorkspaceSessionHydrationOptions
+  ) => void
 }
 
 function openWorkspaceEditorItem(
@@ -561,7 +731,7 @@ function openWorkspaceEditorItem(
   fileId: string,
   worktreeId: string,
   label: string,
-  contentType: 'editor' | 'diff' | 'conflict-review',
+  contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
   isPreview?: boolean,
   targetGroupId?: string
 ): string {
@@ -574,8 +744,7 @@ function openWorkspaceEditorItem(
       contentType
     )
     if (existing) {
-      // Why: sidebar preview reopens should focus the tab without making it
-      // permanent; explicit tab activation still promotes previews by default.
+      // Why: sidebar preview reopens focus the tab without promoting it; explicit activation still promotes previews by default.
       state.activateTab?.(existing.id, { preservePreview: isPreview })
       return existing.id
     }
@@ -590,7 +759,12 @@ function openWorkspaceEditorItem(
 }
 
 function isEditorTabContentType(contentType: Tab['contentType']): boolean {
-  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+  return (
+    contentType === 'editor' ||
+    contentType === 'diff' ||
+    contentType === 'conflict-review' ||
+    contentType === 'check-details'
+  )
 }
 
 function getReplaceablePreviewFileId(
@@ -607,9 +781,7 @@ function getReplaceablePreviewFileId(
     if (!previewTab) {
       return null
     }
-    // Why: split groups may hold separate tabs for the same editor entity. A
-    // group-scoped preview replacement must not mutate the shared OpenFile out
-    // from under another group's tab.
+    // Why: split groups can share one OpenFile; a group-scoped preview replacement must not mutate it out from under another group's tab.
     const isSharedEntity = tabsForWorktree.some(
       (tab) =>
         tab.id !== previewTab.id &&
@@ -634,33 +806,84 @@ function getReplaceablePreviewFileId(
 function removeEditorStateForReplacedPreview(
   state: Pick<
     EditorSlice,
-    'editorDrafts' | 'editorCursorLine' | 'markdownViewMode' | 'editorViewMode'
+    | 'editorDrafts'
+    | 'editorCursorLine'
+    | 'markdownViewMode'
+    | 'editorViewMode'
+    | 'markdownFrontmatterVisible'
+    | 'markdownTableOfContentsVisible'
+    | 'openFiles'
   >,
-  replacedFileId: string,
+  replacedFile: Pick<OpenFile, 'id' | 'markdownPreviewSourceFileId'>,
   nextFileId: string
-): Pick<EditorSlice, 'editorDrafts' | 'editorCursorLine' | 'markdownViewMode' | 'editorViewMode'> {
-  if (replacedFileId === nextFileId) {
+): Pick<
+  EditorSlice,
+  | 'editorDrafts'
+  | 'editorCursorLine'
+  | 'markdownViewMode'
+  | 'editorViewMode'
+  | 'markdownFrontmatterVisible'
+  | 'markdownTableOfContentsVisible'
+> {
+  const visibilityKeys = [
+    replacedFile.id,
+    ...(replacedFile.markdownPreviewSourceFileId ? [replacedFile.markdownPreviewSourceFileId] : [])
+  ].filter(
+    (key) =>
+      key !== nextFileId &&
+      !state.openFiles.some(
+        (file) =>
+          file.id !== replacedFile.id &&
+          (file.id === key || file.markdownPreviewSourceFileId === key)
+      )
+  )
+  if (replacedFile.id === nextFileId) {
     return {
       editorDrafts: state.editorDrafts,
       editorCursorLine: state.editorCursorLine,
       markdownViewMode: state.markdownViewMode,
-      editorViewMode: state.editorViewMode
+      editorViewMode: state.editorViewMode,
+      markdownFrontmatterVisible: state.markdownFrontmatterVisible,
+      markdownTableOfContentsVisible: state.markdownTableOfContentsVisible
     }
   }
   return {
     editorDrafts: Object.fromEntries(
-      Object.entries(state.editorDrafts).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.editorDrafts).filter(([fileId]) => fileId !== replacedFile.id)
     ),
     editorCursorLine: Object.fromEntries(
-      Object.entries(state.editorCursorLine).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.editorCursorLine).filter(([fileId]) => fileId !== replacedFile.id)
     ),
     markdownViewMode: Object.fromEntries(
-      Object.entries(state.markdownViewMode).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.markdownViewMode).filter(([fileId]) => fileId !== replacedFile.id)
     ),
     editorViewMode: Object.fromEntries(
-      Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFile.id)
+    ),
+    markdownFrontmatterVisible: removeMarkdownVisibilityKeys(
+      state.markdownFrontmatterVisible,
+      visibilityKeys
+    ),
+    markdownTableOfContentsVisible: removeMarkdownVisibilityKeys(
+      state.markdownTableOfContentsVisible,
+      visibilityKeys
     )
   }
+}
+
+function removeMarkdownVisibilityKeys(
+  visibility: Record<string, boolean>,
+  keysToRemove: readonly string[]
+): Record<string, boolean> {
+  let next: Record<string, boolean> | null = null
+  for (const key of keysToRemove) {
+    if (!(key in visibility)) {
+      continue
+    }
+    next ??= { ...visibility }
+    delete next[key]
+  }
+  return next ?? visibility
 }
 
 function getGroupActiveTab(group: TabGroup, tabsById: Map<string, Tab>): Tab | null {
@@ -711,13 +934,14 @@ function resolveEditorOpenTargetGroupId(
     groups.find((group) => group.id === state.activeGroupIdByWorktree?.[worktreeId]) ??
     fallbackGroup
   const activeTab = getGroupActiveTab(activeGroup, tabsById)
-  if (!activeTab || isEditorTabContentType(activeTab.contentType)) {
+  // Why: only a focused agent *terminal* should defer to an existing editor pane
+  // (#6891). Editor, browser, and simulator panes open the file in the focused
+  // group so it lands where the user is looking instead of a stale editor pane.
+  if (!activeTab || activeTab.contentType !== 'terminal') {
     return activeGroup.id
   }
 
-  // Why: file explorer opens should reuse an existing editor pane when the
-  // focused pane is an agent terminal, instead of turning that terminal pane
-  // into an editor tab.
+  // Why: reuse an existing editor pane rather than turning a focused agent-terminal pane into an editor tab.
   const visibleEditorGroup = groups.find((group) => {
     if (group.id === activeGroup.id) {
       return false
@@ -746,9 +970,7 @@ function buildEditorActiveResult(
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
 } {
   return {
-    // Why: floating markdown tabs use the editor surface without becoming the
-    // main worktree's active editor. Updating only the per-worktree maps keeps
-    // the workspace behind the floating panel from switching surfaces.
+    // Why: floating markdown tabs must not become the worktree's active editor, so update only the per-worktree maps.
     ...(worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       ? {}
       : { activeFileId: fileId, activeTabType: 'editor' as const }),
@@ -772,7 +994,7 @@ function isSameEditorOwner(
   )
 }
 
-function buildOwnedEditorFileId(
+export function buildOwnedEditorFileId(
   filePath: string,
   worktreeId: string,
   runtimeEnvironmentId: string | null | undefined
@@ -781,7 +1003,7 @@ function buildOwnedEditorFileId(
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }
 
-function buildDiffEditorFileId(
+export function buildDiffEditorFileId(
   worktreeId: string,
   diffSource: DiffSource,
   relativePath: string,
@@ -792,6 +1014,26 @@ function buildDiffEditorFileId(
   return runtimeKey
     ? `editor-diff:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(diffSource)}:${encodeURIComponent(relativePath)}`
     : legacyId
+}
+
+function withDiffContentReloadRequest(file: OpenFile): OpenFile {
+  return {
+    ...file,
+    diffContentReloadNonce: (file.diffContentReloadNonce ?? 0) + 1
+  }
+}
+
+function shouldRequestExistingFileContentReload(
+  existing: OpenFile,
+  nextMode: OpenFile['mode'],
+  options: EditorOpenTargetOptions | undefined
+): boolean {
+  return (
+    options?.forceContentReload === true &&
+    !existing.isDirty &&
+    (existing.mode === 'edit' || existing.mode === 'markdown-preview') &&
+    (nextMode === 'edit' || nextMode === 'markdown-preview')
+  )
 }
 
 function isEditorFileIdOccupiedByOtherOwner(
@@ -816,7 +1058,12 @@ function matchesEditorMode(
   return !modes || modes.includes(file.mode)
 }
 
-function resolveEditorFileIdForOwner(
+function getReusableOpenFileModes(mode: OpenFile['mode']): readonly OpenFile['mode'][] {
+  // Why: one path can be open as both a diff and an editable tab; matching by path alone would collapse them onto one OpenFile.
+  return [mode]
+}
+
+export function resolveEditorFileIdForOwner(
   state: Pick<EditorSlice, 'openFiles'>,
   filePath: string,
   worktreeId: string,
@@ -832,8 +1079,7 @@ function resolveEditorFileIdForOwner(
   if (existing) {
     return existing.id
   }
-  // Why: preview-only markdown tabs also reserve their source id. Treat those
-  // source ids like open editor ids so same-path owners do not collapse.
+  // Why: preview-only markdown tabs reserve their source id too; treat it like an open editor id so same-path owners don't collapse.
   return state.openFiles.some((file) =>
     isEditorFileIdOccupiedByOtherOwner(file, filePath, worktreeId, runtimeEnvironmentId)
   )
@@ -970,7 +1216,8 @@ function migrateHydratedEditorTabsAndGroups(
     }
     const tabIdMigrations = new Map<string, string>()
     const nextTabs = tabs.map((tab) => {
-      if (tab.contentType !== 'editor') {
+      // Why: widened for the shared live-move rekey — a move retargets every editor-family tab (diff/conflict-review/check-details), not only plain 'editor'.
+      if (!isEditorTabContentType(tab.contentType)) {
         return tab
       }
       const nextId = idMigrations.get(tab.id) ?? tab.id
@@ -1035,200 +1282,47 @@ function migrateHydratedEditorTabsAndGroups(
   }
 }
 
-const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
-const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
-
-// Why: arbitrarily long git stderr lines (for instance, a multi-kilobyte
-// server-side pre-receive hook message) should not blow up the toast. Cap the
-// detail length so the toast stays readable; the underlying error is still
-// rethrown for console/logs if a caller needs the full payload.
-function truncateDetail(detail: string): string {
-  if (detail.length <= REMOTE_OPERATION_DETAIL_MAX_LENGTH) {
-    return detail
-  }
-  return `${detail.slice(0, REMOTE_OPERATION_DETAIL_MAX_LENGTH).trimEnd()}...`
+/** One tab's migration in an Orca-owned move; precomputed by the move coordinator. */
+export type OpenFilePathRekey = {
+  oldFileId: string
+  newFileId: string
+  oldFilePath: string
+  newFilePath: string
+  newRelativePath: string
+  newLanguage?: string
+  newMarkdownPreviewSourceFileId?: string
+  /** Explicit rename of an untitled file consumes its untitled status. */
+  consumeUntitled?: boolean
 }
 
-function extractPublishFailureDetail(message: string): string | null {
-  const normalized = message.replace(/\r\n/g, '\n')
-  const lines = normalized
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-  const fatalLine = lines.find((line) => line.startsWith('fatal:'))
-  if (fatalLine) {
-    return truncateDetail(stripCredentialsFromMessage(fatalLine.slice('fatal:'.length).trim()))
-  }
-  const remoteLine = lines.find((line) => line.startsWith('remote:'))
-  if (remoteLine) {
-    return truncateDetail(stripCredentialsFromMessage(remoteLine.slice('remote:'.length).trim()))
-  }
-  return null
-}
+export type RekeyOpenFilesResult = { ok: true } | { ok: false; reason: 'collision' | 'stale' }
 
-function isNonFastForwardRemoteError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
-  )
-}
-
-export function resolveRemoteOperationErrorMessage(
-  error: unknown,
-  options?: {
-    publish?: boolean
-    isPush?: boolean
-    isSync?: boolean
-    isFetch?: boolean
-    isFastForward?: boolean
-    isRebase?: boolean
-  }
-): string {
-  if (!(error instanceof Error)) {
-    return REMOTE_OPERATION_FAILED_MESSAGE
-  }
-
-  if (/unmerged files|needs merge|you have not concluded your merge/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — resolve existing conflicts first.'
+function rekeyFileIdRecord<T>(
+  record: Record<string, T>,
+  migrations: ReadonlyMap<string, string>
+): Record<string, T> {
+  let changed = false
+  const next: Record<string, T> = {}
+  for (const [key, value] of Object.entries(record)) {
+    const mapped = migrations.get(key)
+    if (mapped !== undefined && mapped !== key) {
+      next[mapped] = value
+      changed = true
+    } else {
+      next[key] = value
     }
-    return options?.isSync
-      ? 'Sync blocked — resolve existing merge conflicts first.'
-      : 'Pull blocked — resolve existing merge conflicts first.'
   }
-
-  if (/automatic merge failed|CONFLICT \(|fix conflicts/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase stopped with conflicts. Resolve them in Source Control, then continue the rebase.'
-    }
-    return options?.isSync
-      ? 'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
-      : 'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
-  }
-
-  // Why: under sync, the inner push runs *after* a successful pull, so a
-  // non-fast-forward at that point means the remote raced ahead between
-  // fetch and push — not "user forgot to pull". Saying "Pull first" would
-  // be wrong (sync just did). Branch isSync above the shared NFF path so
-  // sync gets a sync-shaped message instead of inheriting the push wording.
-  if (
-    options?.isSync &&
-    /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
-  ) {
-    return 'Sync failed — remote moved while syncing. Try again.'
-  }
-
-  // Why: non-fast-forward/rejected detection is shared across publish and push so
-  // both paths surface the same actionable toast regardless of operation type.
-  if (/non-fast-forward|fetch first|updates were rejected/i.test(error.message)) {
-    return 'Push rejected — remote has changes. Pull first, then try again.'
-  }
-
-  // Why: `git pull` / merge refuses to run when the working tree has changes
-  // that would be overwritten; surface a single readable line instead of the
-  // multi-line git stderr (which lists every affected path).
-  if (
-    /local changes.*would be overwritten|Please commit your changes or stash them/i.test(
-      error.message
-    )
-  ) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — commit or stash your local changes first.'
-    }
-    if (options?.isFastForward) {
-      return 'Fast-forward blocked — commit or stash your local changes first.'
-    }
-    return 'Pull blocked — commit or stash your local changes first.'
-  }
-
-  if (/Pull would overwrite local changes/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — commit or stash your local changes first.'
-    }
-    if (options?.isFastForward) {
-      return 'Fast-forward blocked — commit or stash your local changes first.'
-    }
-    return 'Pull blocked — commit or stash your local changes first.'
-  }
-
-  if (/Pull would overwrite untracked files/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — move, remove, or add untracked files first.'
-    }
-    if (options?.isFastForward) {
-      return 'Fast-forward blocked — move, remove, or add untracked files first.'
-    }
-    return 'Pull blocked — move, remove, or add untracked files first.'
-  }
-
-  if (options?.publish) {
-    // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
-    // keeps the toast human-readable while preserving the actionable fatal reason.
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Publish Branch failed. ${detail}. Check your remote access and try again.`
-    }
-
-    return 'Publish Branch failed. Check your remote access and try again.'
-  }
-
-  if (options?.isSync) {
-    // Why: the user invoked Sync — surface "Sync failed" rather than leaking
-    // the inner-step name ("Push failed"). Detail extraction matches push so
-    // auth / protected-branch reasons stay actionable.
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Sync failed. ${detail}. Check your remote access and try again.`
-    }
-    return 'Sync failed. Check your connection and try again.'
-  }
-
-  if (options?.isPush) {
-    // Why: surfacing fatal/remote lines from git is more actionable than a generic
-    // connection message for auth errors, protected branches, etc.
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Push failed. ${detail}. Check your remote access and try again.`
-    }
-    return 'Push failed. Check your connection and try again.'
-  }
-
-  if (options?.isFetch) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Fetch failed. ${detail}`
-  }
-
-  if (options?.isFastForward) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Fast-forward failed. ${detail}`
-  }
-
-  if (options?.isRebase) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Rebase failed. ${detail}`
-  }
-
-  return error.message
+  return changed ? next : record
 }
 
 function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): void {
   const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
-  const repo = state.repos.find((candidate) => candidate.id === repoId)
   const owningRuntimeEnvironmentId = file.runtimeEnvironmentId?.trim()
-  // Why: untitled placeholders may live on a remote runtime or SSH target.
-  // Route through the runtime-aware client instead of assuming client-local FS.
-  const context = {
-    settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
-    worktreeId: file.worktreeId,
-    worktreePath: worktree?.path ?? null,
-    connectionId: repo?.connectionId ?? undefined
+  let context: ReturnType<typeof getEditorFileOperationContext>
+  try {
+    context = getEditorFileOperationContext(state, file, worktree?.path ?? null)
+  } catch {
+    return
   }
   void deleteRuntimeRelativePath(context, file.relativePath)
     .then((deletedRemotely) => {
@@ -1246,19 +1340,17 @@ function shouldDeleteUntouchedUntitledFile(file: OpenFile | undefined, hasDraft:
   )
 }
 
-function getWorktreeConnectionId(state: AppState, worktreeId: string): string | undefined {
-  const worktree = findWorktreeById(state.worktreesByRepo ?? {}, worktreeId)
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = (state.repos ?? []).find((candidate) => candidate.id === repoId)
-  return repo?.connectionId ?? undefined
-}
-
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
   editorDrafts: {},
   setEditorDraft: (fileId, content) =>
-    set((s) => ({
-      editorDrafts: { ...s.editorDrafts, [fileId]: content }
-    })),
+    set((s) => {
+      // Why: read-only tabs must never accrue a draft — it seeds dirty/autosave/hot-exit restore that could overwrite an agent transcript.
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (file?.readOnly === true) {
+        return s
+      }
+      return { editorDrafts: { ...s.editorDrafts, [fileId]: content } }
+    }),
   clearEditorDraft: (fileId) =>
     set((s) => {
       if (!(fileId in s.editorDrafts)) {
@@ -1295,9 +1387,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   editorViewMode: {},
   setEditorViewMode: (fileId, mode) =>
     set((s) => {
-      // Why: default is 'edit'. Writing 'edit' explicitly when no entry exists
-      // would grow the record unnecessarily; delete instead so the shape stays
-      // minimal and hydration round-trips cleanly.
+      // Why: default is 'edit' — delete rather than store it so the record stays minimal and hydration round-trips cleanly.
       if (mode === 'edit') {
         if (!(fileId in s.editorViewMode)) {
           return s
@@ -1309,16 +1399,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return { editorViewMode: { ...s.editorViewMode, [fileId]: mode } }
     }),
 
-  // Markdown preview front-matter visibility (#4468). Default is hidden; the
-  // preview only renders the front-matter card when the user opts in per file.
+  // Markdown preview front-matter visibility (#4468).
   markdownFrontmatterVisible: {},
   setMarkdownFrontmatterVisible: (fileId, visible) =>
     set((s) => {
-      // Why: default is hidden. Writing `false` explicitly when no entry exists
-      // would grow the record unnecessarily; delete instead so the shape stays
-      // minimal and hydration round-trips cleanly — same trade-off as
-      // setEditorViewMode above.
-      if (!visible) {
+      // Why: don't persist the default value; delete instead so the map carries only overrides and hydration round-trips cleanly.
+      if (visible) {
         if (!(fileId in s.markdownFrontmatterVisible)) {
           return s
         }
@@ -1326,19 +1412,142 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         delete next[fileId]
         return { markdownFrontmatterVisible: next }
       }
-      return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: true } }
+      return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: false } }
     }),
+
+  // Markdown table of contents visibility
+  markdownTableOfContentsVisible: {},
+  setMarkdownTableOfContentsVisible: (fileId, visible) =>
+    set((s) => {
+      if (!visible) {
+        if (!(fileId in s.markdownTableOfContentsVisible)) {
+          return s
+        }
+        const next = { ...s.markdownTableOfContentsVisible }
+        delete next[fileId]
+        return { markdownTableOfContentsVisible: next }
+      }
+      return {
+        markdownTableOfContentsVisible: {
+          ...s.markdownTableOfContentsVisible,
+          [fileId]: true
+        }
+      }
+    }),
+
+  // Markdown table of contents panel sizing
+  markdownTocPanelWidth: 240,
+  setMarkdownTocPanelWidth: (width) =>
+    set((s) => ({
+      markdownTocPanelWidth: clampMarkdownTocPanelWidth(width, undefined, s.markdownTocPanelWidth)
+    })),
+
+  // Combined diff file tree sizing
+  combinedDiffFileTreeWidth: COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH,
+  setCombinedDiffFileTreeWidth: (width) =>
+    set((s) => ({
+      combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+        width,
+        undefined,
+        s.combinedDiffFileTreeWidth
+      )
+    })),
 
   // Right sidebar
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
   rightSidebarTab: 'explorer',
+  rightSidebarExplorerView: 'files',
+  rightSidebarRouteRequestId: 0,
   rightSidebarTabByWorktree: {},
+  rightSidebarExplorerViewByWorktree: {},
   activityBarPosition: 'top',
   toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
   setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
-  setRightSidebarTab: (tab) => set({ rightSidebarTab: tab }),
+  setRightSidebarTab: (tab) =>
+    set((s) => ({
+      rightSidebarTab: tab,
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
+      ...(tab === 'explorer' ? { rightSidebarExplorerView: 'files' as const } : {})
+    })),
+  setRightSidebarExplorerView: (view) =>
+    set((s) => ({
+      rightSidebarExplorerView: view,
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
+      ...(s.activeWorktreeId
+        ? {
+            rightSidebarExplorerViewByWorktree: {
+              ...s.rightSidebarExplorerViewByWorktree,
+              [s.activeWorktreeId]: view
+            }
+          }
+        : {})
+    })),
+  showRightSidebarFiles: () =>
+    set((s) => ({
+      rightSidebarOpen: true,
+      rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'files',
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
+      ...(s.activeWorktreeId
+        ? {
+            rightSidebarExplorerViewByWorktree: {
+              ...s.rightSidebarExplorerViewByWorktree,
+              [s.activeWorktreeId]: 'files'
+            }
+          }
+        : {})
+    })),
+  showRightSidebarSearch: (payload) =>
+    set((s) => {
+      const next = {
+        rightSidebarOpen: true,
+        rightSidebarTab: 'explorer' as const,
+        rightSidebarExplorerView: 'search' as const,
+        rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
+        ...(s.activeWorktreeId
+          ? {
+              rightSidebarExplorerViewByWorktree: {
+                ...s.rightSidebarExplorerViewByWorktree,
+                [s.activeWorktreeId]: 'search' as const
+              }
+            }
+          : {})
+      }
+      if (!s.activeWorktreeId) {
+        return next
+      }
+
+      const query = payload?.query?.trim() ? payload.query : null
+      const includePattern = payload?.includePattern?.trim() ? payload.includePattern : null
+      const current = s.fileSearchStateByWorktree[s.activeWorktreeId] || defaultFileSearchState()
+      const shouldSeed = Boolean(query || (includePattern && current.query.trim()))
+      const shouldFocus = !shouldSeed
+      const nextSearchState = {
+        ...current,
+        ...(query ? { query } : {}),
+        ...(includePattern ? { includePattern } : {}),
+        ...(shouldSeed
+          ? {
+              results: null,
+              resultOwner: null,
+              loading: false,
+              collapsedFiles: new Set<string>(),
+              seedRequestId: (current.seedRequestId ?? 0) + 1
+            }
+          : {}),
+        ...(shouldFocus ? { focusRequestId: (current.focusRequestId ?? 0) + 1 } : {})
+      }
+
+      return {
+        ...next,
+        fileSearchStateByWorktree: {
+          ...s.fileSearchStateByWorktree,
+          [s.activeWorktreeId]: nextSearchState
+        }
+      }
+    }),
   setActivityBarPosition: (position) => set({ activityBarPosition: position }),
 
   // File explorer
@@ -1383,11 +1592,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }),
   pendingExplorerReveal: null,
   revealInExplorer: (worktreeId, filePath) =>
-    set({
+    set((s) => ({
       rightSidebarOpen: true,
       rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'files',
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
+      rightSidebarExplorerViewByWorktree: {
+        ...s.rightSidebarExplorerViewByWorktree,
+        [worktreeId]: 'files'
+      },
       pendingExplorerReveal: { worktreeId, filePath, requestId: Date.now() }
-    }),
+    })),
   clearPendingExplorerReveal: () => set({ pendingExplorerReveal: null }),
 
   // Open files
@@ -1412,37 +1627,74 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     let editorItemWorktreeId = file.worktreeId
     let editorItemFileId = file.filePath
     let editorItemLabel = file.relativePath
-    let editorItemContentType: 'editor' | 'diff' | 'conflict-review' =
-      file.mode === 'conflict-review' ? 'conflict-review' : file.mode === 'diff' ? 'diff' : 'editor'
+    let editorItemContentType: 'editor' | 'diff' | 'conflict-review' | 'check-details' =
+      file.mode === 'conflict-review'
+        ? 'conflict-review'
+        : file.mode === 'check-details'
+          ? 'check-details'
+          : file.mode === 'diff'
+            ? 'diff'
+            : 'editor'
     let editorItemTargetGroupId = options?.targetGroupId
     set((s) => {
       const worktreeId = file.worktreeId
-      const runtimeEnvironmentId =
-        file.runtimeEnvironmentId === null
+      let operationProvenance = file.operationProvenance
+      if (!operationProvenance && file.mode === 'edit' && file.readOnly !== true) {
+        try {
+          operationProvenance = captureEditorFileOperationProvenance(
+            s,
+            worktreeId,
+            options?.suppressActiveRuntimeFallback ? null : file.runtimeEnvironmentId,
+            options?.suppressActiveRuntimeFallback === true ||
+              file.runtimeEnvironmentId !== undefined
+          )
+        } catch (error) {
+          toast.error(extractIpcErrorMessage(error, 'Failed to resolve file owner.'))
+          // Why: mirrored tabs can arrive before their graph row; allow convergence while mutation paths still fail closed without provenance.
+        }
+      }
+      const runtimeEnvironmentId = operationProvenance
+        ? operationProvenance.generation.route.runtimeEnvironmentId
+        : file.runtimeEnvironmentId === null
           ? null
           : (file.runtimeEnvironmentId ??
             (options?.suppressActiveRuntimeFallback
               ? null
               : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined)))
+      const reusableOpenFileModes = getReusableOpenFileModes(file.mode)
       const existing = s.openFiles.find(
         (f) =>
-          f.filePath === file.filePath && isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
+          f.filePath === file.filePath &&
+          matchesEditorMode(f, reusableOpenFileModes) &&
+          isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
       )
-      const id = resolveEditorFileIdForOwner(s, file.filePath, worktreeId, runtimeEnvironmentId)
+      const id = resolveEditorFileIdForOwner(
+        s,
+        file.filePath,
+        worktreeId,
+        runtimeEnvironmentId,
+        reusableOpenFileModes
+      )
       editorItemFileId = id
       const isPreview = options?.preview ?? false
       const recordReplacedPreview = options?.recordReplacedPreview ?? false
-      // Why: resolve the target group up-front so preview replacement can be
-      // scoped to that group. Opening as preview in group B must not evict a
-      // preview tab belonging to group A (split tab groups).
+      // Why: resolve the target group up-front so preview replacement is scoped to it (group B open must not evict group A's preview).
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
       const activeResult = buildEditorActiveResult(s, worktreeId, id)
-
       if (existing) {
         // If opening as non-preview, also pin the existing tab
         const updatedPreview = isPreview ? existing.isPreview : false
+        const nextExternalSshTargetId = file.externalSshTargetId ?? existing.externalSshTargetId
+        const refreshExternalSshProvenance = file.externalSshTargetId !== undefined
+        const fileContentReloadNonce = shouldRequestExistingFileContentReload(
+          existing,
+          file.mode,
+          options
+        )
+          ? (existing.fileContentReloadNonce ?? 0) + 1
+          : existing.fileContentReloadNonce
         const needsExistingUpdate =
           existing.mode !== file.mode ||
           existing.diffSource !== file.diffSource ||
@@ -1456,10 +1708,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.language !== file.language ||
           existing.relativePath !== file.relativePath ||
           existing.worktreeId !== file.worktreeId ||
-          existing.runtimeEnvironmentId !== runtimeEnvironmentId
+          existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
+          existing.externalSshTargetId !== nextExternalSshTargetId ||
+          refreshExternalSshProvenance ||
+          existing.fileContentReloadNonce !== fileContentReloadNonce
         if (!needsExistingUpdate) {
           return activeResult
         }
+        // Why: `readOnly` is intentionally NOT in this override map — it's sticky, so `...f` preserves the tab's own read-only state.
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === id
@@ -1469,6 +1725,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   worktreeId: file.worktreeId,
                   language: file.language,
                   runtimeEnvironmentId,
+                  externalSshTargetId: nextExternalSshTargetId,
+                  operationProvenance: refreshExternalSshProvenance
+                    ? operationProvenance
+                    : f.operationProvenance,
                   mode: file.mode,
                   diffSource: file.diffSource,
                   branchCompare: file.branchCompare,
@@ -1480,7 +1740,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   conflict: file.conflict,
                   skippedConflicts: file.skippedConflicts,
                   conflictReview: file.conflictReview,
-                  isPreview: updatedPreview
+                  isPreview: updatedPreview,
+                  fileContentReloadNonce
                 }
               : f
           ),
@@ -1488,75 +1749,33 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
 
-      // If opening as preview, replace the existing preview tab.
-      // Why: preview replacement is scoped to `worktreeId + targetGroupId` so
-      // link clicks in group B do not silently evict previews from group A.
-      // Falls back to worktree-wide when group plumbing is unavailable (e.g.
-      // in tests that don't populate unifiedTabsByWorktree), matching the
-      // prior behavior.
+      // Why: scope preview replacement to worktreeId + targetGroupId so link clicks in group B don't evict group A's previews.
       let newFiles = s.openFiles
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
         const existingPreviewIdx = s.openFiles.findIndex((f) => f.id === replaceablePreviewId)
         if (existingPreviewIdx !== -1) {
           const replacedPreview = s.openFiles[existingPreviewIdx]
-          const nextEditorDrafts =
-            replacedPreview.id === id
-              ? s.editorDrafts
-              : Object.fromEntries(
-                  Object.entries(s.editorDrafts).filter(([fileId]) => fileId !== replacedPreview.id)
-                )
-          const nextMarkdownViewMode =
-            replacedPreview.id === id
-              ? s.markdownViewMode
-              : Object.fromEntries(
-                  Object.entries(s.markdownViewMode).filter(
-                    ([fileId]) => fileId !== replacedPreview.id
-                  )
-                )
-          const nextEditorViewMode =
-            replacedPreview.id === id
-              ? s.editorViewMode
-              : Object.fromEntries(
-                  Object.entries(s.editorViewMode).filter(
-                    ([fileId]) => fileId !== replacedPreview.id
-                  )
-                )
-          const frontmatterVisibilityKeys = new Set([replacedPreview.id])
-          if (replacedPreview.markdownPreviewSourceFileId) {
-            frontmatterVisibilityKeys.add(replacedPreview.markdownPreviewSourceFileId)
-          }
-          const frontmatterKeysToRemove = [...frontmatterVisibilityKeys].filter(
-            (key) =>
-              key in s.markdownFrontmatterVisible &&
-              !s.openFiles.some(
-                (file, index) =>
-                  index !== existingPreviewIdx &&
-                  (file.id === key || file.markdownPreviewSourceFileId === key)
-              )
-          )
-          const nextMarkdownFrontmatterVisible =
-            replacedPreview.id === id || frontmatterKeysToRemove.length === 0
-              ? s.markdownFrontmatterVisible
-              : Object.fromEntries(
-                  Object.entries(s.markdownFrontmatterVisible).filter(
-                    ([fileId]) => !frontmatterKeysToRemove.includes(fileId)
-                  )
-                )
-          // Why: editorCursorLine entries accumulate per file; clean up the
-          // evicted preview's entry so it does not leak across tab replacements.
-          const nextEditorCursorLine =
-            replacedPreview.id === id
-              ? s.editorCursorLine
-              : Object.fromEntries(
-                  Object.entries(s.editorCursorLine).filter(
-                    ([fileId]) => fileId !== replacedPreview.id
-                  )
-                )
+          // Why: reuse the shared eviction helper so per-file cursor/draft/visibility cleanup stays in one place.
+          const {
+            editorDrafts: nextEditorDrafts,
+            editorCursorLine: nextEditorCursorLine,
+            markdownViewMode: nextMarkdownViewMode,
+            editorViewMode: nextEditorViewMode,
+            markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
+            markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible
+          } = removeEditorStateForReplacedPreview(s, replacedPreview, id)
           // Replace in-place to preserve tab position
           newFiles = s.openFiles.map((f, i) =>
             i === existingPreviewIdx
-              ? { ...file, id, isDirty: false, isPreview: true, runtimeEnvironmentId }
+              ? {
+                  ...file,
+                  id,
+                  isDirty: false,
+                  isPreview: true,
+                  runtimeEnvironmentId,
+                  operationProvenance
+                }
               : f
           )
           // Swap the old preview ID for the new one in the stored tab bar order
@@ -1569,14 +1788,16 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                 }
               }
             : {}
-          // Why: link-activation replaces previews by default, so users walking
-          // A → B → C can't reach A via Cmd/Ctrl+Shift+T unless we push the
-          // evicted preview onto the recently-closed stack. Gated with
-          // recordReplacedPreview so file-explorer single-click (which
-          // semantically *wants* silent eviction) is unaffected.
+          // Why: push the evicted preview onto the recently-closed stack so Cmd/Ctrl+Shift+T can reopen it; gated to keep file-explorer clicks silent.
           let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
+          let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
           if (recordReplacedPreview && replacedPreview.id !== id) {
-            const { id: _rid, isDirty: _rdirty, ...snap } = replacedPreview
+            const {
+              id: _rid,
+              isDirty: _rdirty,
+              mirroredFromRuntimeSession: _rmirrored,
+              ...snap
+            } = replacedPreview
             const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
             nextRecentlyClosed = {
               ...s.recentlyClosedEditorTabsByWorktree,
@@ -1585,6 +1806,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                 MAX_RECENT_CLOSED_EDITOR_TABS
               )
             }
+            nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
+              s.recentlyClosedTabKindsByWorktree,
+              worktreeId,
+              'editor'
+            )
           }
           return {
             openFiles: newFiles,
@@ -1593,17 +1819,16 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             markdownViewMode: nextMarkdownViewMode,
             editorViewMode: nextEditorViewMode,
             markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
+            markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible,
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
+            recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds,
             ...previewTabBarUpdate,
             ...activeResult
           }
         }
       }
 
-      // Why: append the new file to the persisted tab bar order so it appears
-      // at the end of the tab bar. Without this, reconcileOrder in TabBar
-      // falls back to type-grouped ordering (terminals first) when the stored
-      // order doesn't contain the new file.
+      // Why: append to the persisted tab bar order, else TabBar's reconcileOrder falls back to type-grouped ordering (terminals first).
       const tabBarUpdate: Record<string, unknown> = {}
       if (s.tabBarOrderByWorktree) {
         const currentOrder = s.tabBarOrderByWorktree[worktreeId] ?? []
@@ -1633,14 +1858,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             id,
             isDirty: false,
             isPreview: isPreview || undefined,
-            runtimeEnvironmentId
+            runtimeEnvironmentId,
+            operationProvenance
           }
         ],
         ...tabBarUpdate,
         ...activeResult
       }
     })
-    void openWorkspaceEditorItem(
+    const editorItemViewStateId = openWorkspaceEditorItem(
       get(),
       editorItemFileId,
       editorItemWorktreeId,
@@ -1649,6 +1875,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       options?.preview ?? false,
       editorItemTargetGroupId
     )
+    if (options?.focusEditor) {
+      set({
+        pendingEditorFocusRequest: {
+          fileId: editorItemFileId,
+          worktreeId: editorItemWorktreeId,
+          viewStateId: editorItemViewStateId,
+          expiresAt: Date.now() + EDITOR_FOCUS_REQUEST_TTL_MS,
+          token: ++nextEditorFocusRequestToken
+        }
+      })
+    }
   },
 
   openNewMarkdownInActiveWorkspace: async (groupId) => {
@@ -1662,18 +1899,33 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     try {
-      const connectionId =
-        state.repos.find((entry) => entry.id === worktree.repoId)?.connectionId ?? undefined
+      const operationProvenance = captureEditorFileOperationProvenance(
+        state,
+        worktreeId,
+        undefined,
+        false
+      )
+      const operationContext = getEditorFileOperationContext(
+        state,
+        { worktreeId, operationProvenance },
+        worktree.path
+      )
       const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
         worktree.path,
         worktreeId,
-        connectionId,
-        get().settings
+        operationContext.connectionId,
+        operationContext.settings,
+        operationProvenance,
+        operationContext.expectedSshConnectionGeneration,
+        operationContext.expectedSshTargetId,
+        operationContext.expectedExecutionHostId,
+        () => assertEditorFileOperationCurrent(get(), worktreeId, operationProvenance)
       )
       if (!fileInfo) {
         return
       }
       get().openFile(fileInfo, { preview: false, targetGroupId: groupId })
+      get().recordFeatureInteraction('markdown-file-created')
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
     }
@@ -1697,6 +1949,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ['edit']
       )
     const id = `markdown-preview::${sourceFileId}`
+    const externalSshTargetId =
+      file.externalSshTargetId ??
+      initialState.openFiles.find((openFile) => openFile.id === sourceFileId)?.externalSshTargetId
     const anchor = options?.anchor || undefined
     set((s) => {
       const existing = s.openFiles.find((openFile) => openFile.id === id)
@@ -1709,6 +1964,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.relativePath !== file.relativePath ||
           existing.filePath !== file.filePath ||
           existing.language !== file.language ||
+          existing.externalSshTargetId !== externalSshTargetId ||
           existing.markdownPreviewSourceFileId !== sourceFileId ||
           existing.markdownPreviewAnchor !== anchor ||
           existing.mode !== 'markdown-preview'
@@ -1723,6 +1979,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                       worktreeId: file.worktreeId,
                       language: file.language,
                       runtimeEnvironmentId,
+                      externalSshTargetId,
                       markdownPreviewSourceFileId: sourceFileId,
                       markdownPreviewAnchor: anchor,
                       mode: 'markdown-preview' as const
@@ -1742,6 +1999,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         language: file.language,
         isDirty: false,
         runtimeEnvironmentId,
+        externalSshTargetId,
         markdownPreviewSourceFileId: sourceFileId,
         markdownPreviewAnchor: anchor,
         mode: 'markdown-preview'
@@ -1799,23 +2057,16 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
   },
 
-  // Why: closing a tab does NOT clear Resolved locally state. If the file is
-  // still present in Changes or Staged Changes, the continuity badge should
-  // remain visible until the file leaves the sidebar, the session resets, or
-  // the file becomes live-unresolved again. trackedConflictPaths is tied to
-  // sidebar presence, not tab lifecycle.
+  // Why: closing a tab does NOT clear Resolved-locally state — trackedConflictPaths is tied to sidebar presence, not tab lifecycle.
   closeFile: (fileId) => {
-    // Why: capture untitled + dirty state before the set() call mutates the
-    // store, so we can decide after the tab is removed whether the on-disk
-    // file should be cleaned up (untitled files closed without edits are
-    // throwaway and should not litter the worktree).
+    // Why: capture untitled+dirty state before set() mutates the store, so cleanup of throwaway untitled files can decide after removal.
     const preClose = get().openFiles.find((f) => f.id === fileId)
-    // Why: also check editorDrafts as a safety net — isDirty is set via a
-    // debounced callback from the editor, so there's a narrow window where
-    // content exists but isDirty hasn't flushed yet. A draft means the user
-    // typed something, so the file should be kept.
+    // Why: also check editorDrafts — isDirty is set by a debounced callback, so a draft can exist before isDirty flushes; a draft means the user typed something.
     const hasDraft = !!get().editorDrafts[fileId]
     const shouldDeleteFromDisk = shouldDeleteUntouchedUntitledFile(preClose, hasDraft)
+
+    // Why: mirrored tabs are host-owned, so the host must close its copy or its next snapshot re-mirrors the file and the tab reopens.
+    notifyHostOfMirroredEditorClose(get(), preClose?.worktreeId, fileId)
 
     set((s) => {
       const closedFile = s.openFiles.find((f) => f.id === fileId)
@@ -1827,28 +2078,23 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       delete newMarkdownViewMode[fileId]
       const newEditorViewMode = { ...s.editorViewMode }
       delete newEditorViewMode[fileId]
-      const frontmatterVisibilityKeys = new Set([fileId])
+      const markdownVisibilityKeys = new Set([fileId])
       if (closedFile?.markdownPreviewSourceFileId) {
-        frontmatterVisibilityKeys.add(closedFile.markdownPreviewSourceFileId)
+        markdownVisibilityKeys.add(closedFile.markdownPreviewSourceFileId)
       }
-      const keysToRemove = [...frontmatterVisibilityKeys].filter(
+      const visibilityKeysToRemove = [...markdownVisibilityKeys].filter(
         (key) =>
-          key in s.markdownFrontmatterVisible &&
           !newFiles.some((file) => file.id === key || file.markdownPreviewSourceFileId === key)
       )
       const newMarkdownFrontmatterVisible =
-        keysToRemove.length > 0
-          ? (() => {
-              const next = { ...s.markdownFrontmatterVisible }
-              for (const key of keysToRemove) {
-                delete next[key]
-              }
-              return next
-            })()
+        visibilityKeysToRemove.length > 0
+          ? removeMarkdownVisibilityKeys(s.markdownFrontmatterVisible, visibilityKeysToRemove)
           : s.markdownFrontmatterVisible
-      // Why: editorCursorLine entries are keyed by fileId and accumulate on
-      // every cursor move. Without cleanup they grow without bound across a
-      // long session as files are opened and closed.
+      const newMarkdownTableOfContentsVisible =
+        visibilityKeysToRemove.length > 0
+          ? removeMarkdownVisibilityKeys(s.markdownTableOfContentsVisible, visibilityKeysToRemove)
+          : s.markdownTableOfContentsVisible
+      // Why: editorCursorLine is keyed by fileId and grows unbounded across a long session without cleanup on close.
       const newEditorCursorLine = { ...s.editorCursorLine }
       delete newEditorCursorLine[fileId]
       let newActiveId = s.activeFileId
@@ -1879,9 +2125,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
 
-      // Why: editor tabs share a mixed tab strip with browser tabs. Closing the
-      // last editor in a worktree should reveal an available browser tab before
-      // falling all the way back to a terminal surface.
+      // Why: editors share a mixed tab strip with browser tabs; closing the last editor should reveal a browser tab before falling back to a terminal.
       const activeWorktreeId = s.activeWorktreeId
       const remainingForWorktree = activeWorktreeId
         ? newFiles.filter((f) => f.worktreeId === activeWorktreeId)
@@ -1915,8 +2159,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         browserTabsForWorktree.length === 0 &&
         terminalTabsForWorktree.length === 0
 
-      // Why: keep tabBarOrderByWorktree in sync so stale editor IDs don't
-      // linger and cause position shifts the next time the order is reconciled.
+      // Why: prune the closed id from tabBarOrderByWorktree so stale ids don't shift positions on the next reconcile.
       const worktreeId = closedFile?.worktreeId ?? activeWorktreeId
       const nextTabBarOrderByWorktree =
         worktreeId && s.tabBarOrderByWorktree
@@ -1929,18 +2172,21 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           : s.tabBarOrderByWorktree
 
       let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
+      let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
       const wtRecent = closedFile?.worktreeId
-      // Why: untitled files that were never edited will be deleted from disk
-      // after close. Adding them to the reopen stack would let Cmd+Shift+T
-      // try to reopen a path that no longer exists. Preview tabs are also
-      // excluded — they are ephemeral views, not user-opened files.
+      // Why: exclude untitled unedited files (deleted from disk after close, so Cmd+Shift+T can't reopen a gone path) and ephemeral preview tabs from the reopen stack.
       if (
         closedFile &&
         wtRecent &&
         !shouldDeleteFromDisk &&
         closedFile.mode !== 'markdown-preview'
       ) {
-        const { id: _id, isDirty: _dirty, ...snap } = closedFile
+        const {
+          id: _id,
+          isDirty: _dirty,
+          mirroredFromRuntimeSession: _mirrored,
+          ...snap
+        } = closedFile
         const stack = s.recentlyClosedEditorTabsByWorktree[wtRecent] ?? []
         nextRecentlyClosed = {
           ...s.recentlyClosedEditorTabsByWorktree,
@@ -1949,6 +2195,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             MAX_RECENT_CLOSED_EDITOR_TABS
           )
         }
+        nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
+          s.recentlyClosedTabKindsByWorktree,
+          wtRecent,
+          'editor'
+        )
       }
 
       return {
@@ -1956,10 +2207,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         editorDrafts: newEditorDrafts,
         editorCursorLine: newEditorCursorLine,
         activeFileId: newActiveId,
-        // Why: if closing the last editor also leaves the worktree without any
-        // browser or terminal surface, keep parity with the terminal/browser
-        // close handlers and return to the Orca landing state instead of
-        // leaving an active worktree selected with nothing renderable.
+        // Why: if the last editor closes with no browser/terminal surface left, return to the landing state like the terminal/browser close handlers do.
         activeWorktreeId: shouldDeactivateWorktree ? null : s.activeWorktreeId,
         activeBrowserTabId: shouldDeactivateWorktree
           ? null
@@ -1972,34 +2220,30 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         markdownViewMode: newMarkdownViewMode,
         editorViewMode: newEditorViewMode,
         markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
+        markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
         pendingEditorReveal: null,
-        recentlyClosedEditorTabsByWorktree: nextRecentlyClosed
+        pendingEditorFocusRequest:
+          s.pendingEditorFocusRequest?.fileId === fileId ? null : s.pendingEditorFocusRequest,
+        recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
+        recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds
       }
     })
 
-    // Why: untitled files that were never edited are empty placeholders — they
-    // exist on disk only because createUntitledMarkdownFile() eagerly writes
-    // them so the editor has a real path to bind to. If the user closes the
-    // tab without typing anything, the file is just clutter. Fire-and-forget
-    // delete; failure (e.g. already removed externally) is harmless.
+    // Why: untitled unedited files exist on disk only because createUntitledMarkdownFile() eagerly writes a bindable path; delete the clutter (fire-and-forget).
     if (shouldDeleteFromDisk && preClose && typeof window !== 'undefined') {
       deleteUntouchedUntitledFile(get(), preClose)
     }
 
-    // Why: the unified tab model drives visual tab-bar order and next-active
-    // selection (MRU-based, falling back to the visual neighbor). Without
-    // this, closing an editor/diff tab picks the next active file from the
-    // openFiles array instead of running the unified close path, producing
-    // inconsistent behavior vs terminal/browser tab closes which already go
-    // through closeUnifiedTab.
+    // Why: route editor/diff closes through the unified close path (MRU + visual-neighbor fallback) so they match terminal/browser tab-close behavior.
     for (const tabs of Object.values(get().unifiedTabsByWorktree ?? {})) {
       const unifiedTab = tabs.find(
         (entry) =>
           entry.entityId === fileId &&
           (entry.contentType === 'editor' ||
             entry.contentType === 'diff' ||
-            entry.contentType === 'conflict-review')
+            entry.contentType === 'conflict-review' ||
+            entry.contentType === 'check-details')
       )
       if (unifiedTab) {
         get().closeUnifiedTab(unifiedTab.id)
@@ -2028,13 +2272,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const state = get()
     const activeWorktreeId = state.activeWorktreeId
 
-    // Why: same rationale as closeFile — untitled files that were never edited
-    // are empty placeholders that should not survive a "close all" operation.
+    // Why: like closeFile — untitled unedited files are empty placeholders that shouldn't survive close-all.
     const untitledToDelete = state.openFiles.filter(
       (f) =>
         shouldDeleteUntouchedUntitledFile(f, !!state.editorDrafts[f.id]) &&
         (!activeWorktreeId || f.worktreeId === activeWorktreeId)
     )
+    const closingFiles = state.openFiles.filter(
+      (file) => !activeWorktreeId || file.worktreeId === activeWorktreeId
+    )
+    // Why: close-all bypasses closeFile, so notify mirrored host-owned editors here or the next host snapshot reopens them.
+    for (const file of closingFiles) {
+      notifyHostOfMirroredEditorClose(state, file.worktreeId, file.id)
+    }
 
     const closingItemIds = Object.values(state.unifiedTabsByWorktree ?? {})
       .flat()
@@ -2042,7 +2292,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         (item) =>
           (item.contentType === 'editor' ||
             item.contentType === 'diff' ||
-            item.contentType === 'conflict-review') &&
+            item.contentType === 'conflict-review' ||
+            item.contentType === 'check-details') &&
           (!activeWorktreeId || item.worktreeId === activeWorktreeId)
       )
       .map((item) => item.id)
@@ -2058,7 +2309,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           markdownViewMode: {},
           editorViewMode: {},
           markdownFrontmatterVisible: {},
-          pendingEditorReveal: null
+          markdownTableOfContentsVisible: {},
+          pendingEditorReveal: null,
+          pendingEditorFocusRequest: null
         }
       }
       // Only close files for the current worktree
@@ -2078,6 +2331,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           remainingFileIds.has(fileId)
         )
       )
+      const newMarkdownTableOfContentsVisible = Object.fromEntries(
+        Object.entries(s.markdownTableOfContentsVisible).filter(([fileId]) =>
+          remainingFileIds.has(fileId)
+        )
+      )
       const newEditorCursorLine = Object.fromEntries(
         Object.entries(s.editorCursorLine).filter(([fileId]) => remainingFileIds.has(fileId))
       )
@@ -2091,37 +2349,37 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const shouldDeactivateWorktree =
         browserTabsForWorktree.length === 0 && terminalTabsForWorktree.length === 0
 
-      // Why: remove all closed editor file IDs from tab bar order so stale
-      // entries don't cause position shifts on subsequent tab operations.
+      // Why: mirrored tabs use host tab ids in tab order while local entries use file ids; remove both shapes.
       const closedFileIds = new Set(
         s.openFiles.filter((f) => f.worktreeId === activeWorktreeId).map((f) => f.id)
       )
+      const closedTabOrderIds = new Set([...closedFileIds, ...closingItemIds])
       const nextTabBarOrderByWorktree = s.tabBarOrderByWorktree
         ? {
             ...s.tabBarOrderByWorktree,
             [activeWorktreeId]: (s.tabBarOrderByWorktree[activeWorktreeId] ?? []).filter(
-              (entryId) => !closedFileIds.has(entryId)
+              (entryId) => !closedTabOrderIds.has(entryId)
             )
           }
         : s.tabBarOrderByWorktree
 
       const closingFiles = s.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
       let nextRecentClosed = s.recentlyClosedEditorTabsByWorktree[activeWorktreeId] ?? []
-      for (const f of [...closingFiles].reverse()) {
-        // Why: untitled non-dirty files are deleted from disk after close —
-        // skip them so the reopen stack doesn't reference vanished paths.
-        // Preview tabs are ephemeral views that shouldn't pollute the stack.
+      let capturedCloseCount = 0
+      for (const f of [...closingFiles].toReversed()) {
+        // Why: skip untitled non-dirty files (deleted from disk after close) and ephemeral preview tabs so the reopen stack has no vanished/junk paths.
         if (
           shouldDeleteUntouchedUntitledFile(f, !!s.editorDrafts[f.id]) ||
           f.mode === 'markdown-preview'
         ) {
           continue
         }
-        const { id: _id, isDirty: _dirty, ...snap } = f
+        const { id: _id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snap } = f
         nextRecentClosed = [snap as ClosedEditorTabSnapshot, ...nextRecentClosed].slice(
           0,
           MAX_RECENT_CLOSED_EDITOR_TABS
         )
+        capturedCloseCount += 1
       }
 
       return {
@@ -2129,9 +2387,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         editorDrafts: newEditorDrafts,
         editorCursorLine: newEditorCursorLine,
         activeFileId: null,
-        // Why: closing every editor in the active worktree can leave no
-        // renderable surface at all. Clear the active worktree in that case so
-        // the renderer shows the landing page instead of a blank workspace.
+        // Why: closing every editor can leave no renderable surface; clear the active worktree so the renderer shows the landing page, not a blank workspace.
         activeWorktreeId: shouldDeactivateWorktree ? null : s.activeWorktreeId,
         activeBrowserTabId: shouldDeactivateWorktree
           ? null
@@ -2144,18 +2400,26 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         markdownViewMode: newMarkdownViewMode,
         editorViewMode: newEditorViewMode,
         markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
+        markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
-        // Why: search-result navigation queues a one-shot reveal for the next
-        // editor mount. If the worktree closes all editor tabs before that
-        // reveal is consumed, keeping it around would make a later reopen jump
-        // to an old match unexpectedly.
+        // Why: clear the one-shot search reveal; keeping it after closing all editors would make a later reopen jump to an old match.
         pendingEditorReveal: null,
+        pendingEditorFocusRequest:
+          s.pendingEditorFocusRequest?.worktreeId === activeWorktreeId
+            ? null
+            : s.pendingEditorFocusRequest,
         recentlyClosedEditorTabsByWorktree: {
           ...s.recentlyClosedEditorTabsByWorktree,
           [activeWorktreeId]: nextRecentClosed
-        }
+        },
+        recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
+          s.recentlyClosedTabKindsByWorktree,
+          activeWorktreeId,
+          'editor',
+          capturedCloseCount
+        )
       }
     })
     if (typeof window !== 'undefined') {
@@ -2219,13 +2483,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   markFileDirty: (fileId, dirty) =>
     set((s) => {
-      // Why: typing fires this on every keystroke. Rebuilding openFiles
-      // unconditionally thrashes every subscriber (EditorPanel → EditorContent
-      // → MonacoEditor re-renders) and produced visible typing lag. Bail out
-      // when the dirty bit is already the target value and the preview-promote
-      // side effect is a no-op.
+      // Why: this fires on every keystroke; rebuilding openFiles unconditionally thrashes subscribers and caused typing lag, so bail when nothing changes.
       const file = s.openFiles.find((f) => f.id === fileId)
       if (!file) {
+        return s
+      }
+      // Why: read-only tabs can never become dirty; hard no-op any stray change/save callback that reached here.
+      if (file.readOnly === true) {
         return s
       }
       const needsPreviewClear = dirty && file.isPreview
@@ -2271,6 +2535,202 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }),
 
+  setLastKnownDiskSignature: (fileId, signature) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (!file || file.lastKnownDiskSignature === signature) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, lastKnownDiskSignature: signature } : f
+        )
+      }
+    }),
+
+  clearPendingDiskBaselineVerification: (fileId) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (!file?.pendingDiskBaselineVerification) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, pendingDiskBaselineVerification: undefined } : f
+        )
+      }
+    }),
+
+  setPendingDiskBaselineVerification: (fileId, value) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      const next = value || undefined
+      if (!file || file.pendingDiskBaselineVerification === next) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, pendingDiskBaselineVerification: next } : f
+        )
+      }
+    }),
+
+  setPendingLiveDiskVerification: (fileId, value) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      const next = value || undefined
+      if (!file || file.pendingLiveDiskVerification === next) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, pendingLiveDiskVerification: next } : f
+        )
+      }
+    }),
+
+  clearSelfMoveEcho: (fileId) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (!file?.pendingSelfMoveEcho) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId ? { ...f, pendingSelfMoveEcho: undefined } : f
+        )
+      }
+    }),
+
+  rekeyOpenFilesForPathChange: ({ rekeys, moveOperationId }) => {
+    if (rekeys.length === 0) {
+      return { ok: true }
+    }
+    let result: RekeyOpenFilesResult = { ok: true }
+    set((s) => {
+      const migrations = new Map<string, string>()
+      const rekeyByOldId = new Map<string, OpenFilePathRekey>()
+      for (const rekey of rekeys) {
+        migrations.set(rekey.oldFileId, rekey.newFileId)
+        rekeyByOldId.set(rekey.oldFileId, rekey)
+      }
+      const openById = new Map(s.openFiles.map((f) => [f.id, f]))
+
+      // Preflight (atomic with apply): every source still open, target ids unique,
+      // and no target id belongs to an UNAFFECTED live session (never merge two).
+      const seenNewIds = new Set<string>()
+      for (const rekey of rekeys) {
+        if (!openById.has(rekey.oldFileId)) {
+          result = { ok: false, reason: 'stale' }
+          return s
+        }
+        if (seenNewIds.has(rekey.newFileId)) {
+          result = { ok: false, reason: 'collision' }
+          return s
+        }
+        seenNewIds.add(rekey.newFileId)
+        const occupier = openById.get(rekey.newFileId)
+        if (occupier && !migrations.has(occupier.id)) {
+          result = { ok: false, reason: 'collision' }
+          return s
+        }
+      }
+
+      const nextOpenFiles = s.openFiles.map((f) => {
+        const rekey = rekeyByOldId.get(f.id)
+        if (!rekey) {
+          return f
+        }
+        // Spread the whole OpenFile so fields this action doesn't know about survive; change only the path-derived ones.
+        // Gate atomically here so autosave is suspended before any echo can be verified (only a dirty autosave-capable tab can be clobbered).
+        const gatesEcho =
+          moveOperationId !== undefined &&
+          f.isDirty &&
+          // A 'changed' tab is already autosave-suspended via externalMutation; gating it would strand the gate (verification skips a 'changed' tab), so leave the banner as terminal.
+          f.externalMutation !== 'changed' &&
+          (f.mode === 'edit' || (f.mode === 'diff' && f.diffSource === 'unstaged'))
+        return {
+          ...f,
+          id: rekey.newFileId,
+          filePath: rekey.newFilePath,
+          relativePath: rekey.newRelativePath,
+          // A moved tab's id no longer matches the host snapshot, so leaving it host-owned would cull it (losing the draft); the coordinator close-notifies the host's old-path tab. (Re-homing the host tab in place is a follow-up.)
+          mirroredFromRuntimeSession: undefined,
+          ...(rekey.newLanguage !== undefined ? { language: rekey.newLanguage } : {}),
+          ...(rekey.newMarkdownPreviewSourceFileId !== undefined
+            ? { markdownPreviewSourceFileId: rekey.newMarkdownPreviewSourceFileId }
+            : {}),
+          ...(rekey.consumeUntitled
+            ? { isUntitled: undefined, deleteUntouchedOnClose: undefined }
+            : {}),
+          ...(gatesEcho
+            ? {
+                pendingLiveDiskVerification: true,
+                pendingSelfMoveEcho: {
+                  operationId: moveOperationId,
+                  targetPath: rekey.newFilePath
+                }
+              }
+            : {})
+        }
+      })
+
+      const activeFileIdByWorktree: Record<string, string | null> = {}
+      for (const [wtId, activeId] of Object.entries(s.activeFileIdByWorktree)) {
+        activeFileIdByWorktree[wtId] = activeId ? (migrations.get(activeId) ?? activeId) : activeId
+      }
+
+      // Partition by each moved file's OWN worktree: the same path can be open in more than one worktree (e.g. a floating workspace), and tab-bar / group state is per-worktree.
+      const migrationsByWorktree: Record<string, Map<string, string>> = {}
+      for (const rekey of rekeys) {
+        const wtId = openById.get(rekey.oldFileId)!.worktreeId
+        ;(migrationsByWorktree[wtId] ??= new Map()).set(rekey.oldFileId, rekey.newFileId)
+      }
+
+      const tabBarOrderByWorktree = { ...s.tabBarOrderByWorktree }
+      for (const [wtId, wtMigrations] of Object.entries(migrationsByWorktree)) {
+        const prevBarOrder = tabBarOrderByWorktree[wtId]
+        if (prevBarOrder) {
+          tabBarOrderByWorktree[wtId] = prevBarOrder.map((id) => wtMigrations.get(id) ?? id)
+        }
+      }
+
+      const reveal = s.pendingEditorReveal
+      const rekeyForReveal = reveal
+        ? rekeys.find((r) => r.oldFilePath === reveal.filePath)
+        : undefined
+
+      return {
+        openFiles: nextOpenFiles,
+        editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
+        editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
+        markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),
+        editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
+        markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
+        markdownTableOfContentsVisible: rekeyFileIdRecord(
+          s.markdownTableOfContentsVisible,
+          migrations
+        ),
+        activeFileId: s.activeFileId ? (migrations.get(s.activeFileId) ?? s.activeFileId) : null,
+        activeFileIdByWorktree,
+        tabBarOrderByWorktree,
+        ...migrateHydratedEditorTabsAndGroups(s, migrationsByWorktree),
+        ...(reveal && rekeyForReveal
+          ? {
+              pendingEditorReveal: {
+                ...reveal,
+                filePath: rekeyForReveal.newFilePath,
+                // matchesPendingEditorReveal prefers fileId, so migrate it too or
+                // the reveal would never match the rekeyed tab.
+                ...(reveal.fileId ? { fileId: migrations.get(reveal.fileId) ?? reveal.fileId } : {})
+              }
+            }
+          : {})
+      }
+    })
+    return result
+  },
+
   clearUntitled: (fileId) =>
     set((s) => ({
       openFiles: s.openFiles.map((f) => (f.id === fileId ? { ...f, isUntitled: undefined } : f))
@@ -2278,10 +2738,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
     const isPreview = options?.preview ?? false
-    const runtimeEnvironmentId = options?.runtimeEnvironmentId
     let editorItemTargetGroupId = options?.targetGroupId
     let editorItemFileId = ''
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
       const id = buildDiffEditorFileId(worktreeId, diffSource, relativePath, runtimeEnvironmentId)
       editorItemFileId = id
@@ -2291,28 +2755,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
-        const needsUpdate =
-          existing.mode !== 'diff' ||
-          existing.diffSource !== diffSource ||
-          existing.isPreview !== updatedPreview ||
-          existing.runtimeEnvironmentId !== runtimeEnvironmentId
+        const reopenedDiff = withDiffContentReloadRequest({
+          ...existing,
+          mode: 'diff' as const,
+          diffSource,
+          conflict: undefined,
+          skippedConflicts: undefined,
+          conflictReview: undefined,
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
+        })
         return {
-          openFiles: needsUpdate
-            ? s.openFiles.map((f) =>
-                f.id === id
-                  ? {
-                      ...f,
-                      mode: 'diff' as const,
-                      diffSource,
-                      conflict: undefined,
-                      skippedConflicts: undefined,
-                      conflictReview: undefined,
-                      isPreview: updatedPreview,
-                      runtimeEnvironmentId
-                    }
-                  : f
-              )
-            : s.openFiles,
+          openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2332,7 +2786,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         skippedConflicts: undefined,
         conflictReview: undefined,
         isPreview: isPreview || undefined,
-        runtimeEnvironmentId: options?.runtimeEnvironmentId
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2344,7 +2798,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2380,25 +2834,28 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
+        const reopenedDiff = withDiffContentReloadRequest({
+          ...existing,
+          mode: 'diff' as const,
+          diffSource: 'branch' as const,
+          branchCompare,
+          branchOldPath: entry.oldPath,
+          conflict: undefined,
+          skippedConflicts: undefined,
+          conflictReview: undefined,
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
+        })
         return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === id
-              ? {
-                  ...f,
-                  mode: 'diff' as const,
-                  diffSource: 'branch' as const,
-                  branchCompare,
-                  branchOldPath: entry.oldPath,
-                  conflict: undefined,
-                  skippedConflicts: undefined,
-                  conflictReview: undefined,
-                  isPreview: updatedPreview
-                }
-              : f
-          ),
+          openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2419,7 +2876,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        isPreview: isPreview || undefined
+        isPreview: isPreview || undefined,
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2431,7 +2889,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2467,25 +2925,28 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
+        const reopenedDiff = withDiffContentReloadRequest({
+          ...existing,
+          mode: 'diff' as const,
+          diffSource: 'commit' as const,
+          commitCompare,
+          branchOldPath: entry.oldPath,
+          conflict: undefined,
+          skippedConflicts: undefined,
+          conflictReview: undefined,
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
+        })
         return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === id
-              ? {
-                  ...f,
-                  mode: 'diff' as const,
-                  diffSource: 'commit' as const,
-                  commitCompare,
-                  branchOldPath: entry.oldPath,
-                  conflict: undefined,
-                  skippedConflicts: undefined,
-                  conflictReview: undefined,
-                  isPreview: updatedPreview
-                }
-              : f
-          ),
+          openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2506,7 +2967,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        isPreview: isPreview || undefined
+        isPreview: isPreview || undefined,
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2518,7 +2980,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2545,7 +3007,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     )
   },
 
-  openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter) => {
+  openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot) => {
     const id = areaFilter
       ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
       : `${worktreeId}::all-diffs::uncommitted`
@@ -2555,18 +3017,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ] ?? 'All Changes')
       : 'All Changes'
     set((s) => {
-      const relevantEntries = (s.gitStatusByWorktree[worktreeId] ?? []).filter((entry) => {
-        if (areaFilter) {
-          return entry.area === areaFilter
-        }
-        return entry.area !== 'untracked'
-      })
+      const branchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
+      const branchCompare =
+        !areaFilter &&
+        branchSummary?.status === 'ready' &&
+        branchSummary.baseOid &&
+        branchSummary.headOid &&
+        branchSummary.mergeBase
+          ? toBranchCompareSnapshot(branchSummary)
+          : undefined
+      const branchEntriesSnapshot = branchCompare
+        ? (s.gitBranchChangesByWorktree[worktreeId] ?? [])
+        : undefined
+      const relevantEntries =
+        entriesSnapshot ??
+        (s.gitStatusByWorktree[worktreeId] ?? []).filter((entry) => {
+          return areaFilter === undefined || entry.area === areaFilter
+        })
       const skippedConflicts = relevantEntries
         .filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind)
         .map((entry) => ({ path: entry.path, conflictKind: entry.conflictKind! }))
-      // Why: snapshot the entry list at open time so a subsequent commit does
-      // not yank entries from under the combined diff view, which would rebuild
-      // all sections and lose loaded content + scroll position.
+      // Why: snapshot entries at open time so a later commit can't yank them and force a rebuild that loses loaded content + scroll position.
       const uncommittedEntriesSnapshot = relevantEntries
       const id = areaFilter
         ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
@@ -2576,6 +3047,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             areaFilter
           ] ?? 'All Changes')
         : 'All Changes'
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -2583,12 +3055,16 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             f.id === id
               ? {
                   ...f,
+                  diffSource: branchCompare ? 'combined-all' : 'combined-uncommitted',
+                  branchCompare,
+                  branchEntriesSnapshot,
                   uncommittedEntriesSnapshot,
                   combinedAlternate: alternate,
                   combinedAreaFilter: areaFilter,
                   skippedConflicts,
                   conflictReview: undefined,
-                  conflict: undefined
+                  conflict: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -2606,13 +3082,16 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         language: 'plaintext',
         isDirty: false,
         mode: 'diff',
-        diffSource: 'combined-uncommitted',
+        diffSource: branchCompare ? 'combined-all' : 'combined-uncommitted',
+        branchCompare,
+        branchEntriesSnapshot,
         uncommittedEntriesSnapshot,
         combinedAlternate: alternate,
         combinedAreaFilter: areaFilter,
         skippedConflicts,
         conflictReview: undefined,
-        conflict: undefined
+        conflict: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -2700,7 +3179,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2817,9 +3296,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     })
 
-    // Why: the conflict file needs a normal editor backing tab for save/close
-    // flows, but selecting it from Conflict Review must keep the review tab
-    // visible. Create the backing tab beside the review tab, then restore focus.
+    // Why: the conflict file needs a normal editor backing tab for save/close, but selecting from Conflict Review must keep the review tab visible; restore focus after.
     void openWorkspaceEditorItem(
       get(),
       absolutePath,
@@ -2834,11 +3311,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
   },
 
-  // Why: Review conflicts is launched from Source Control into the editor area,
-  // not from Checks. Merge-conflict review is source-control work, not CI/PR
-  // status. The tab renders from a stored snapshot (entries + timestamp), not
-  // from live status on every paint, so the list is stable even if the live
-  // unresolved set changes between polls.
+  // Why: renders from a stored snapshot (entries + timestamp), not live status, so the list stays stable across polls while reviewing.
   openConflictReview: (worktreeId, worktreePath, entries, source) => {
     const id = `${worktreeId}::conflict-review`
     set((s) => {
@@ -2894,10 +3367,155 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     void openWorkspaceEditorItem(get(), id, worktreeId, 'Conflict Review', 'conflict-review')
   },
 
+  // Why: the checks sidebar only fits inline summaries; full logs and annotations belong in the center editor pane.
+  openCheckRunDetails: (worktreeId, contextKey, check, state) => {
+    const id = buildCheckRunDetailsTabId(worktreeId, check)
+    const label = getCheckRunDetailsTabLabel(check)
+    const checkRunDetails: OpenCheckRunDetailsState = {
+      contextKey,
+      check,
+      details: state.details,
+      loading: state.loading,
+      error: state.error
+    }
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (existing) {
+        return {
+          openFiles: s.openFiles.map((f) =>
+            f.id === id
+              ? {
+                  ...f,
+                  mode: 'check-details' as const,
+                  relativePath: label,
+                  language: 'plaintext',
+                  checkRunDetails
+                }
+              : f
+          ),
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
+      }
+
+      const newFile: OpenFile = {
+        id,
+        filePath: id,
+        relativePath: label,
+        worktreeId,
+        language: 'plaintext',
+        isDirty: false,
+        mode: 'check-details',
+        checkRunDetails
+      }
+
+      return {
+        openFiles: [...s.openFiles, newFile],
+        activeFileId: id,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+      }
+    })
+    void openWorkspaceEditorItem(get(), id, worktreeId, label, 'check-details')
+  },
+
+  // Why: sidebar detail fetches can finish after the full-details tab is open; update the snapshot without stealing focus.
+  patchOpenCheckRunDetails: (worktreeId, contextKey, check, state) => {
+    const id = buildCheckRunDetailsTabId(worktreeId, check)
+    const nextCheckRunDetails: OpenCheckRunDetailsState = {
+      contextKey,
+      check,
+      details: state.details,
+      loading: state.loading,
+      error: state.error
+    }
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (!existing?.checkRunDetails) {
+        return s
+      }
+      const current = existing.checkRunDetails
+      if (
+        current.contextKey === nextCheckRunDetails.contextKey &&
+        current.check.status === nextCheckRunDetails.check.status &&
+        current.check.conclusion === nextCheckRunDetails.check.conclusion &&
+        current.loading === nextCheckRunDetails.loading &&
+        current.error === nextCheckRunDetails.error &&
+        current.details === nextCheckRunDetails.details
+      ) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === id ? { ...f, checkRunDetails: nextCheckRunDetails } : f
+        )
+      }
+    })
+  },
+
+  reloadOpenCheckRunDetailsTab: async (fileId) => {
+    const state = get()
+    const file = state.openFiles.find((candidate) => candidate.id === fileId)
+    const checkRunDetails = file?.checkRunDetails
+    if (!file || file.mode !== 'check-details' || !checkRunDetails) {
+      return
+    }
+    const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
+    const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
+    const repo = state.repos.find((candidate) => candidate.id === repoId)
+    if (!repo?.path) {
+      return
+    }
+    const { contextKey, check } = checkRunDetails
+    const patch = (next: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>): void => {
+      get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, next)
+    }
+    patch({ details: checkRunDetails.details, loading: true, error: null })
+    try {
+      const details = await get().fetchPRCheckDetails(
+        repo.path,
+        {
+          checkRunId: check.checkRunId,
+          workflowRunId: check.workflowRunId,
+          checkName: check.name,
+          url: check.url,
+          prRepo: null
+        },
+        { repoId: repo.id }
+      )
+      patch({
+        details,
+        loading: false,
+        error: details
+          ? null
+          : translate(
+              'auto.store.slices.editor.checkRunDetailsUnavailable',
+              'No details are available for this check.'
+            )
+      })
+    } catch (error) {
+      patch({
+        details: null,
+        loading: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.store.slices.editor.checkRunDetailsLoadFailed',
+                'Failed to load check details.'
+              )
+      })
+    }
+  },
+
   openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) => {
     const branchCompare = toBranchCompareSnapshot(compare)
     const id = `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const branchEntriesSnapshot = s.gitBranchChangesByWorktree[worktreeId] ?? []
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
@@ -2911,7 +3529,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   combinedAlternate: alternate,
                   conflict: undefined,
                   skippedConflicts: undefined,
-                  conflictReview: undefined
+                  conflictReview: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -2935,7 +3554,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         combinedAlternate: alternate,
         conflict: undefined,
         skippedConflicts: undefined,
-        conflictReview: undefined
+        conflictReview: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -2961,6 +3581,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       ? `Commit ${commitCompare.compareRef}: ${subject}`
       : `Commit ${commitCompare.compareRef}`
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -2973,7 +3594,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   commitEntriesSnapshot: entries,
                   conflict: undefined,
                   skippedConflicts: undefined,
-                  conflictReview: undefined
+                  conflictReview: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -2997,7 +3619,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         commitEntriesSnapshot: entries,
         conflict: undefined,
         skippedConflicts: undefined,
-        conflictReview: undefined
+        conflictReview: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -3019,6 +3642,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // Git status
   gitStatusByWorktree: {},
+  gitStatusHeadByWorktree: {},
+  gitStatusHugeByWorktree: {},
   gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
   trackedConflictPathsByWorktree: {},
@@ -3035,21 +3660,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
     }),
-  // Why: session-local conflict tracking (trackedConflictPaths, Resolved locally
-  // state) lives entirely in the renderer and never crosses the IPC boundary.
-  // The main process returns only what `git status` reports. The renderer is
-  // responsible for setting conflictStatusSource ('git' for live u-records,
-  // 'session' for Resolved locally) and for all Resolved locally lifecycle.
+  // Why: session-local conflict tracking (Resolved-locally) lives only in the renderer; main returns raw git status, so the renderer owns conflictStatusSource.
   setGitStatus: (worktreeId, status) =>
     set((s) => {
       const hadStatusEntry = Object.prototype.hasOwnProperty.call(s.gitStatusByWorktree, worktreeId)
       const prevEntries = s.gitStatusByWorktree[worktreeId] ?? []
       const prevOperation = s.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
       const currentTracked = { ...s.trackedConflictPathsByWorktree[worktreeId] }
-      // Why: conflictStatusSource is NOT set by the main process. The renderer
-      // stamps 'git' here for live u-records, and 'session' below when applying
-      // Resolved locally state. This keeps the main process free of session
-      // awareness while letting the renderer distinguish the two sources.
+      // Why: main process doesn't set conflictStatusSource; stamp 'git' here for live u-records ('session' is stamped below for Resolved-locally).
       const normalizedEntries = status.entries.map((entry) =>
         entry.conflictStatus === 'unresolved'
           ? { ...entry, conflictStatusSource: 'git' as const }
@@ -3059,16 +3677,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         (entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind
       )
       const unresolvedByPath = new Map(unresolvedEntries.map((entry) => [entry.path, entry]))
+      const statusIsComplete = status.didHitLimit !== true
+      // Why: a capped snapshot cannot prove that an omitted conflict operation ended.
+      const nextOperation =
+        !statusIsComplete && status.conflictOperation === 'unknown'
+          ? prevOperation
+          : status.conflictOperation
 
-      // Why: when the operation is aborted (git merge --abort, etc.), all u-records
-      // disappear and the HEAD file is cleaned up simultaneously. We detect this as
-      // the operation transitioning to 'unknown' with zero unresolved entries. In
-      // this case we clear the entire trackedConflictPaths set rather than
-      // transitioning each path to Resolved locally — abort is NOT resolution, and
-      // showing "Resolved locally" on every previously-conflicted file after an
-      // abort would be misleading.
+      // Why: operation → 'unknown' with zero unresolved means an abort (git merge --abort), not resolution; clear tracked paths instead of marking each "Resolved locally".
       if (
-        status.conflictOperation === 'unknown' &&
+        statusIsComplete &&
+        nextOperation === 'unknown' &&
         prevOperation !== 'unknown' &&
         unresolvedByPath.size === 0
       ) {
@@ -3093,21 +3712,28 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       })
 
-      const visiblePaths = new Set(nextEntries.map((entry) => entry.path))
-      for (const path of Object.keys(currentTracked)) {
-        if (!visiblePaths.has(path) && !unresolvedByPath.has(path)) {
-          delete currentTracked[path]
+      if (statusIsComplete) {
+        const visiblePaths = new Set(nextEntries.map((entry) => entry.path))
+        for (const path of Object.keys(currentTracked)) {
+          if (!visiblePaths.has(path) && !unresolvedByPath.has(path)) {
+            delete currentTracked[path]
+          }
         }
       }
 
-      const nextOpenFiles = reconcileOpenFilesForStatus(s.openFiles, worktreeId, nextEntries)
+      const nextOpenFiles = reconcileOpenFilesForStatus(
+        s.openFiles,
+        worktreeId,
+        nextEntries,
+        statusIsComplete
+      )
       const statusUnchanged = hadStatusEntry && areGitStatusEntriesEqual(prevEntries, nextEntries)
       const trackedUnchanged = areTrackedConflictMapsEqual(
         s.trackedConflictPathsByWorktree[worktreeId] ?? {},
         currentTracked
       )
       const openFilesUnchanged = nextOpenFiles === s.openFiles
-      const operationUnchanged = prevOperation === status.conflictOperation
+      const operationUnchanged = prevOperation === nextOperation
 
       const prevIgnored = s.gitIgnoredPathsByWorktree[worktreeId]
       const nextIgnored = status.ignoredPaths ?? []
@@ -3116,18 +3742,67 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         prevIgnored.length === nextIgnored.length &&
         prevIgnored.every((p, i) => p === nextIgnored[i])
 
+      const prevHuge = s.gitStatusHugeByWorktree[worktreeId]
+      const nextHuge = status.didHitLimit ? { limit: nextEntries.length } : undefined
+      const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
+      const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
+      const nextStatusHead = getKnownGitHead(status.head)
+      const statusHeadUnchanged = prevStatusHead === nextStatusHead
+
+      const prevBranchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
+      // Why: a compare request can finish after git status observed a new HEAD; reject the stale snapshot before it renders a false clean state.
+      const shouldInvalidateBranchCompare =
+        !statusHeadUnchanged &&
+        nextStatusHead !== undefined &&
+        prevBranchSummary?.status === 'ready' &&
+        !branchCompareMatchesStatusHead(prevBranchSummary, nextStatusHead)
+
       if (
         statusUnchanged &&
         trackedUnchanged &&
         openFilesUnchanged &&
         operationUnchanged &&
-        ignoredUnchanged
+        ignoredUnchanged &&
+        hugeUnchanged &&
+        statusHeadUnchanged &&
+        !shouldInvalidateBranchCompare
       ) {
         return s
       }
 
+      const nextHugeMap = hugeUnchanged
+        ? s.gitStatusHugeByWorktree
+        : nextHuge
+          ? { ...s.gitStatusHugeByWorktree, [worktreeId]: nextHuge }
+          : (() => {
+              const copy = { ...s.gitStatusHugeByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
+
+      const nextStatusHeadMap = statusHeadUnchanged
+        ? s.gitStatusHeadByWorktree
+        : nextStatusHead
+          ? { ...s.gitStatusHeadByWorktree, [worktreeId]: nextStatusHead }
+          : (() => {
+              const copy = { ...s.gitStatusHeadByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
+      const nextBranchCompareSummaries = shouldInvalidateBranchCompare
+        ? {
+            ...s.gitBranchCompareSummaryByWorktree,
+            [worktreeId]: createLoadingBranchCompareSummary(prevBranchSummary.baseRef)
+          }
+        : s.gitBranchCompareSummaryByWorktree
+      const nextBranchChanges = shouldInvalidateBranchCompare
+        ? { ...s.gitBranchChangesByWorktree, [worktreeId]: [] }
+        : s.gitBranchChangesByWorktree
+
       return {
         openFiles: nextOpenFiles,
+        gitStatusHugeByWorktree: nextHugeMap,
+        gitStatusHeadByWorktree: nextStatusHeadMap,
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
@@ -3136,10 +3811,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           : { ...s.gitIgnoredPathsByWorktree, [worktreeId]: nextIgnored },
         gitConflictOperationByWorktree: operationUnchanged
           ? s.gitConflictOperationByWorktree
-          : { ...s.gitConflictOperationByWorktree, [worktreeId]: status.conflictOperation },
+          : { ...s.gitConflictOperationByWorktree, [worktreeId]: nextOperation },
         trackedConflictPathsByWorktree: trackedUnchanged
           ? s.trackedConflictPathsByWorktree
-          : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked }
+          : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked },
+        gitBranchCompareSummaryByWorktree: nextBranchCompareSummaries,
+        gitBranchChangesByWorktree: nextBranchChanges
       }
     }),
   setConflictOperation: (worktreeId, operation) =>
@@ -3148,9 +3825,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       if (prev === operation) {
         return s
       }
-      // Why: when the operation clears (transitions to 'unknown') on a non-active
-      // worktree, we also need to clear tracked conflict paths — same as the
-      // full setGitStatus handler does for the active worktree.
+      // Why: when the operation clears on a non-active worktree, also clear tracked conflict paths — same as setGitStatus does for the active one.
       const nextTracked =
         operation === 'unknown' && prev !== 'unknown'
           ? {}
@@ -3191,10 +3866,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     set((s) => ({
       remoteOperationDepth: s.remoteOperationDepth + 1,
       isRemoteOperationActive: true,
-      // Why: last-write-wins. The UI disables every action entry while busy,
-      // so a second remote op can't be started from inside Orca. If a
-      // background caller (future) triggers one, surfacing the most recent
-      // kind matches "what the user is currently watching".
+      // Why: last-write-wins on the kind; the UI blocks a second user-initiated op, so the most recent kind matches what the user is watching.
       inFlightRemoteOpKind: kind ?? s.inFlightRemoteOpKind
     })),
   endRemoteOperation: () =>
@@ -3203,32 +3875,40 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return {
         remoteOperationDepth: next,
         isRemoteOperationActive: next > 0,
-        // Why: only clear the in-flight kind when no remote op remains. Until
-        // depth reaches 0 some other op is still running and its label/
-        // spinner should keep displaying.
+        // Why: keep the in-flight kind (its label/spinner) until depth reaches 0 and no remote op remains.
         inFlightRemoteOpKind: next > 0 ? s.inFlightRemoteOpKind : null
       }
     }),
-  fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId, pushTarget) => {
+  fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
       const status = await getRuntimeGitUpstreamStatus(
         {
-          settings: get().settings,
+          settings: runtimeSettings,
           worktreeId,
           worktreePath,
           connectionId
         },
         pushTarget
       )
-      get().setUpstreamStatus(worktreeId, status)
+      if (options?.applyUpstreamStatus !== false) {
+        get().setUpstreamStatus(worktreeId, status)
+      }
+      return status
     } catch (error) {
-      // Why: on error we leave the prior status in place rather than writing a
-      // synthetic {hasUpstream:false} — that would flash 'Publish Branch' on a
-      // tracked branch after any transient IPC hiccup and a user click would
-      // re-publish, clobbering the upstream relationship. If the branch is
-      // genuinely newly unpublished, the polling effect will eventually correct
-      // the status on success.
+      // Why: keep prior status on error — a synthetic {hasUpstream:false} would flash 'Publish Branch' on a tracked branch and a click could re-publish, clobbering the upstream.
+      if (pushTarget) {
+        // Why: don't let an old automatic-poll cache entry suppress the next retry after a transient refresh failure.
+        invalidateAutomaticPushTargetUpstreamStatusCache({
+          settings: runtimeSettings,
+          worktreeId,
+          worktreePath,
+          connectionId,
+          pushTarget
+        })
+      }
       console.error('fetchUpstreamStatus failed', error)
+      return null
     }
   },
   pushBranch: async (
@@ -3239,49 +3919,55 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     pushTarget,
     options = {}
   ) => {
-    // Why: don't *await* a post-op git status / upstream refresh here.
-    // Chaining awaited refreshes inside the mutation extends the gap before
-    // compound flows (runCompoundCommitAction → runRemoteAction) reach the
-    // next step. But we still need a near-immediate upstream refresh so
-    // the primary button label rotates from "Push" to "Commit" as soon as
-    // ahead=0 — the polling layer is on a 3s interval, which is long
-    // enough to read as a stuck label. Solution: fire the upstream refresh
-    // as fire-and-forget so it doesn't block the mutation but updates the
-    // store as soon as the IPC resolves.
-    get().beginRemoteOperation(publish ? 'publish' : 'push')
+    // Why: fire-and-forget the upstream refresh (don't await) so compound flows aren't delayed, but the "Push"→"Commit" label still rotates faster than the 3s poll.
+    get().beginRemoteOperation(
+      publish ? 'publish' : options.forceWithLease === true ? 'force_push' : 'push'
+    )
     let shouldRefreshAfterRejectedPush = false
+    const runtimeSettings = options.runtimeTargetSettings ?? get().settings
     try {
       await pushRuntimeGit(
-        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
         { publish, pushTarget, forceWithLease: options.forceWithLease }
       )
     } catch (error) {
       shouldRefreshAfterRejectedPush = isNonFastForwardRemoteError(error)
-      toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
+      toast.error(
+        resolveRemoteOperationErrorMessage(error, {
+          publish,
+          isPush: !publish && options.forceWithLease !== true,
+          isForcePush: !publish && options.forceWithLease === true
+        })
+      )
       throw error
     } finally {
       get().endRemoteOperation()
       if (shouldRefreshAfterRejectedPush) {
-        const context = { settings: get().settings, worktreeId, worktreePath, connectionId }
-        // Why: the rejected push proved the publish branch moved. Fetch first
-        // so legacy base-tracking worktrees can discover origin/<branch>, then
-        // refresh ahead/behind so Pull/Sync become actionable immediately.
+        const context = { settings: runtimeSettings, worktreeId, worktreePath, connectionId }
+        // Why: the rejected push proved the branch moved; fetch first so legacy base-tracking worktrees discover origin/<branch>, then refresh ahead/behind.
         void fetchRuntimeGit(context, pushTarget)
           .catch(() => undefined)
-          .then(() => get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget))
+          .then(() =>
+            get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+              runtimeTargetSettings: runtimeSettings
+            })
+          )
       }
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
     const refreshGitHubForWorktree = get().refreshGitHubForWorktree
     if (typeof refreshGitHubForWorktree === 'function') {
       refreshGitHubForWorktree(worktreeId)
     }
   },
-  pullBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
+  pullBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
     get().beginRemoteOperation('pull')
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
       await pullRuntimeGit(
-        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
         pushTarget
       )
     } catch (error) {
@@ -3290,17 +3976,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } finally {
       get().endRemoteOperation()
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
     const refreshGitHubForWorktree = get().refreshGitHubForWorktree
     if (typeof refreshGitHubForWorktree === 'function') {
       refreshGitHubForWorktree(worktreeId)
     }
   },
-  fastForwardBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
+  fastForwardBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
     get().beginRemoteOperation('fast_forward')
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
       await fastForwardRuntimeGit(
-        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
         pushTarget
       )
     } catch (error) {
@@ -3309,25 +3998,23 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } finally {
       get().endRemoteOperation()
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
     const refreshGitHubForWorktree = get().refreshGitHubForWorktree
     if (typeof refreshGitHubForWorktree === 'function') {
       refreshGitHubForWorktree(worktreeId)
     }
   },
-  syncBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
-    // Why: same shape as pushBranch / pullBranch — fire-and-forget the
-    // post-op upstream refresh after the busy flag clears so the primary
-    // button label rotates immediately when the IPC resolves.
+  syncBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
+    // Why: like pushBranch — fire-and-forget the post-op upstream refresh so the primary button label rotates immediately.
     get().beginRemoteOperation('sync')
-    // Why: the inner push stage toasts with { isSync: true } so its failure
-    // surfaces a "Sync failed..." message instead of "Push failed..." — the
-    // user invoked Sync; the underlying push is implementation detail. The
-    // outer catch must then skip toasting to avoid a double-toast.
+    // Why: the inner push stage toasts as Sync and marks the error so the outer catch skips toasting, avoiding a double-toast.
     let pushStageToastShown = false
     let pushed = false
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
-      const context = { settings: get().settings, worktreeId, worktreePath, connectionId }
+      const context = { settings: runtimeSettings, worktreeId, worktreePath, connectionId }
       await fetchRuntimeGit(context, pushTarget)
       const upstreamStatusBeforePull = await getRuntimeGitUpstreamStatus(context, pushTarget)
       if (shouldForcePushWithLeaseForUpstream(upstreamStatusBeforePull)) {
@@ -3335,44 +4022,48 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           await pushRuntimeGit(context, { pushTarget, forceWithLease: true })
           pushed = true
         } catch (error) {
-          toast.error(resolveRemoteOperationErrorMessage(error, { isSync: true }))
+          toast.error(
+            resolveRemoteOperationErrorMessage(error, {
+              isSync: true,
+              isSyncPushStage: true
+            })
+          )
           pushStageToastShown = true
-          throw error
+          throw markSyncPushStageError(error)
         }
       } else {
         await pullRuntimeGit(context, pushTarget)
-        // Why: push only if the pull left local commits that aren't on the
-        // remote. After a merge pull the ahead count can be >0 (local commits +
-        // the new merge commit) or 0 (pure fast-forward), and we avoid a
-        // no-op push round-trip in the fast-forward case.
+        // Why: push only if the pull left local commits ahead of the remote; skip the no-op push after a pure fast-forward.
         const upstreamStatus = await getRuntimeGitUpstreamStatus(context, pushTarget)
         if (upstreamStatus.ahead > 0) {
           try {
             await pushRuntimeGit(context, { pushTarget })
             pushed = true
           } catch (error) {
-            // Why: format under the user-facing operation (sync) rather than
-            // the inner step (push) — the user clicked Sync and shouldn't see
-            // a "Push failed" toast for a step they didn't directly invoke.
-            toast.error(resolveRemoteOperationErrorMessage(error, { isSync: true }))
+            // Why: frame as Sync, not the inner push — the user clicked Sync and didn't directly invoke this push.
+            toast.error(
+              resolveRemoteOperationErrorMessage(error, {
+                isSync: true,
+                isSyncPushStage: true
+              })
+            )
             pushStageToastShown = true
-            throw error
+            throw markSyncPushStageError(error)
           }
         }
       }
     } catch (error) {
       if (!pushStageToastShown) {
-        // Why: same isSync framing for fetch/pull/upstream-status failures so
-        // every sync failure path consistently reads as "Sync failed..." (or
-        // a more specific actionable message like "Pull blocked..." when the
-        // shared classifiers match first).
+        // Why: frame fetch/pull/upstream failures as "Sync failed..." since the user invoked Sync, not the inner step.
         toast.error(resolveRemoteOperationErrorMessage(error, { isSync: true }))
       }
       throw error
     } finally {
       get().endRemoteOperation()
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
     if (pushed) {
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
       if (typeof refreshGitHubForWorktree === 'function') {
@@ -3380,11 +4071,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }
   },
-  rebaseFromBase: async (worktreeId, worktreePath, baseRef, connectionId, pushTarget) => {
+  rebaseFromBase: async (worktreeId, worktreePath, baseRef, connectionId, pushTarget, options) => {
     get().beginRemoteOperation('rebase')
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
       await rebaseRuntimeGitFromBase(
-        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
         baseRef
       )
     } catch (error) {
@@ -3393,21 +4085,21 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } finally {
       get().endRemoteOperation()
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
     const refreshGitHubForWorktree = get().refreshGitHubForWorktree
     if (typeof refreshGitHubForWorktree === 'function') {
       refreshGitHubForWorktree(worktreeId)
     }
   },
-  fetchBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
-    // Why: same shape as pushBranch / pullBranch — fire-and-forget the
-    // upstream refresh after the busy flag clears. Fetch updates the
-    // remote refs only, so the visible signal we want is the new
-    // ahead/behind counts on the upstream-status payload.
+  fetchBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
+    // Why: like pushBranch — fire-and-forget the upstream refresh after the busy flag clears so new ahead/behind counts surface.
     get().beginRemoteOperation('fetch')
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
       await fetchRuntimeGit(
-        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
         pushTarget
       )
     } catch (error) {
@@ -3416,33 +4108,47 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } finally {
       get().endRemoteOperation()
     }
-    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
+      runtimeTargetSettings: runtimeSettings
+    })
   },
   gitBranchChangesByWorktree: {},
   gitBranchCompareSummaryByWorktree: {},
   gitBranchCompareRequestKeyByWorktree: {},
-  beginGitBranchCompareRequest: (worktreeId, requestKey, baseRef) =>
+  gitBranchCompareRequestStatusHeadByWorktree: {},
+  beginGitBranchCompareRequest: (worktreeId, requestKey, baseRef, options) =>
     set((s) => ({
       gitBranchCompareRequestKeyByWorktree: {
         ...s.gitBranchCompareRequestKeyByWorktree,
         [worktreeId]: requestKey
       },
-      gitBranchCompareSummaryByWorktree: {
-        ...s.gitBranchCompareSummaryByWorktree,
-        [worktreeId]: {
-          baseRef,
-          baseOid: null,
-          compareRef: 'HEAD',
-          headOid: null,
-          mergeBase: null,
-          changedFiles: 0,
-          status: 'loading'
-        }
-      }
+      gitBranchCompareRequestStatusHeadByWorktree: {
+        ...s.gitBranchCompareRequestStatusHeadByWorktree,
+        [worktreeId]: getKnownGitHead(s.gitStatusHeadByWorktree[worktreeId]) ?? null
+      },
+      ...(options?.preserveExistingSummary
+        ? {}
+        : {
+            gitBranchCompareSummaryByWorktree: {
+              ...s.gitBranchCompareSummaryByWorktree,
+              [worktreeId]: createLoadingBranchCompareSummary(baseRef)
+            }
+          })
     })),
   setGitBranchCompareResult: (worktreeId, requestKey, result) =>
     set((s) => {
       if (s.gitBranchCompareRequestKeyByWorktree[worktreeId] !== requestKey) {
+        return s
+      }
+      const statusHead = getKnownGitHead(s.gitStatusHeadByWorktree[worktreeId])
+      const requestStatusHead = s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId]
+      // Why: never let a compare result computed before a status change overwrite a newer status snapshot.
+      if (
+        result.summary.status !== 'loading' &&
+        statusHead !== undefined &&
+        requestStatusHead !== statusHead &&
+        !branchCompareMatchesStatusHead(result.summary, statusHead)
+      ) {
         return s
       }
       const prevEntries = s.gitBranchChangesByWorktree[worktreeId]
@@ -3474,22 +4180,38 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           : { ...s.gitBranchCompareSummaryByWorktree, [worktreeId]: result.summary }
       }
     }),
+  // Why: when the compare base resolves to "no base", drop any stale summary so the committed-changes section and "vs" row disappear instead of lingering.
+  clearGitBranchCompare: (worktreeId) =>
+    set((s) => {
+      if (
+        s.gitBranchCompareSummaryByWorktree[worktreeId] === undefined &&
+        s.gitBranchChangesByWorktree[worktreeId] === undefined &&
+        s.gitBranchCompareRequestKeyByWorktree[worktreeId] === undefined &&
+        s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId] === undefined
+      ) {
+        return s
+      }
+      const nextSummary = { ...s.gitBranchCompareSummaryByWorktree }
+      const nextChanges = { ...s.gitBranchChangesByWorktree }
+      const nextRequestKey = { ...s.gitBranchCompareRequestKeyByWorktree }
+      const nextRequestHead = { ...s.gitBranchCompareRequestStatusHeadByWorktree }
+      delete nextSummary[worktreeId]
+      delete nextChanges[worktreeId]
+      delete nextRequestKey[worktreeId]
+      delete nextRequestHead[worktreeId]
+      return {
+        gitBranchCompareSummaryByWorktree: nextSummary,
+        gitBranchChangesByWorktree: nextChanges,
+        gitBranchCompareRequestKeyByWorktree: nextRequestKey,
+        gitBranchCompareRequestStatusHeadByWorktree: nextRequestHead
+      }
+    }),
 
   // File search
   fileSearchStateByWorktree: {},
   updateFileSearchState: (worktreeId, updates) =>
     set((s) => {
-      const current = s.fileSearchStateByWorktree[worktreeId] || {
-        query: '',
-        caseSensitive: false,
-        wholeWord: false,
-        useRegex: false,
-        includePattern: '',
-        excludePattern: '',
-        results: null,
-        loading: false,
-        collapsedFiles: new Set()
-      }
+      const current = s.fileSearchStateByWorktree[worktreeId] || defaultFileSearchState()
       return {
         fileSearchStateByWorktree: {
           ...s.fileSearchStateByWorktree,
@@ -3499,17 +4221,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }),
   seedFileSearchQuery: (worktreeId, query) =>
     set((s) => {
-      const current = s.fileSearchStateByWorktree[worktreeId] || {
-        query: '',
-        caseSensitive: false,
-        wholeWord: false,
-        useRegex: false,
-        includePattern: '',
-        excludePattern: '',
-        results: null,
-        loading: false,
-        collapsedFiles: new Set()
-      }
+      const current = s.fileSearchStateByWorktree[worktreeId] || defaultFileSearchState()
       return {
         fileSearchStateByWorktree: {
           ...s.fileSearchStateByWorktree,
@@ -3517,6 +4229,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             ...current,
             query,
             results: null,
+            resultOwner: null,
             loading: false,
             collapsedFiles: new Set(),
             seedRequestId: (current.seedRequestId ?? 0) + 1
@@ -3526,17 +4239,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }),
   seedFileSearchIncludePattern: (worktreeId, includePattern) =>
     set((s) => {
-      const current = s.fileSearchStateByWorktree[worktreeId] || {
-        query: '',
-        caseSensitive: false,
-        wholeWord: false,
-        useRegex: false,
-        includePattern: '',
-        excludePattern: '',
-        results: null,
-        loading: false,
-        collapsedFiles: new Set()
-      }
+      const current = s.fileSearchStateByWorktree[worktreeId] || defaultFileSearchState()
       return {
         fileSearchStateByWorktree: {
           ...s.fileSearchStateByWorktree,
@@ -3544,6 +4247,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             ...current,
             includePattern,
             results: null,
+            resultOwner: null,
             loading: false,
             collapsedFiles: new Set(),
             seedRequestId: (current.seedRequestId ?? 0) + 1
@@ -3598,6 +4302,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             ...current,
             query: '',
             results: null,
+            resultOwner: null,
             loading: false,
             collapsedFiles: new Set()
           }
@@ -3608,19 +4313,56 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Editor navigation
   pendingEditorReveal: null,
   setPendingEditorReveal: (reveal) => set({ pendingEditorReveal: reveal }),
+  pendingEditorFocusRequest: null,
+  consumeEditorFocusRequest: (token) =>
+    set((s) =>
+      s.pendingEditorFocusRequest?.token === token ? { pendingEditorFocusRequest: null } : s
+    ),
 
   activateMarkdownLink: async (rawHref, ctx) => {
     const initialState = get()
+    let inferredRuntimeEnvironmentId: string | null | undefined
+    if (!ctx.sourceOwner && ctx.runtimeEnvironmentId === undefined) {
+      const inferredRuntimeOwners = new Set(
+        initialState.openFiles
+          .filter(
+            (file) => file.filePath === ctx.sourceFilePath && file.worktreeId === ctx.worktreeId
+          )
+          .map((file) => file.runtimeEnvironmentId?.trim() || null)
+      )
+      if (inferredRuntimeOwners.size > 1) {
+        return
+      }
+      inferredRuntimeEnvironmentId =
+        inferredRuntimeOwners.size === 1 ? [...inferredRuntimeOwners][0] : undefined
+    }
     const sourceRuntimeEnvironmentId =
-      ctx.runtimeEnvironmentId !== undefined
-        ? ctx.runtimeEnvironmentId
-        : initialState.openFiles.find((file) => file.filePath === ctx.sourceFilePath)
-            ?.runtimeEnvironmentId
-    const sourceSettings = settingsForRuntimeOwner(
-      initialState.settings,
-      sourceRuntimeEnvironmentId
-    )
-    const sourceConnectionId = getWorktreeConnectionId(initialState, ctx.worktreeId)
+      ctx.sourceOwner?.kind === 'runtime'
+        ? ctx.sourceOwner.runtimeEnvironmentId
+        : ctx.sourceOwner
+          ? null
+          : ctx.runtimeEnvironmentId !== undefined
+            ? ctx.runtimeEnvironmentId
+            : inferredRuntimeEnvironmentId
+    const runtimeOwnerId = sourceRuntimeEnvironmentId?.trim() || null
+    const sourceSettings = settingsForRuntimeOwner(initialState.settings, runtimeOwnerId)
+    const resolvedConnectionId =
+      ctx.sourceOwner || runtimeOwnerId
+        ? undefined
+        : getConnectionIdForFileFromState(initialState, ctx.worktreeId, ctx.sourceFilePath)
+    const sourceOwner: HttpLinkSourceOwner =
+      ctx.sourceOwner ??
+      (runtimeOwnerId
+        ? { kind: 'runtime', runtimeEnvironmentId: runtimeOwnerId }
+        : resolvedConnectionId === undefined
+          ? { kind: 'unknown' }
+          : resolvedConnectionId === null
+            ? { kind: 'local' }
+            : { kind: 'ssh', connectionId: resolvedConnectionId })
+    if (sourceOwner.kind === 'unknown') {
+      return
+    }
+    const sourceConnectionId = sourceOwner.kind === 'ssh' ? sourceOwner.connectionId : undefined
     const fileContext = {
       settings: sourceSettings,
       worktreeId: ctx.worktreeId,
@@ -3635,32 +4377,37 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     if (target.kind === 'external') {
-      openHttpLink(target.url, { worktreeId: ctx.worktreeId })
+      openHttpLink(target.url, { worktreeId: ctx.worktreeId, sourceOwner })
       return
     }
     if (target.kind === 'file') {
       const { line, column } = target
       if (target.relativePath === undefined) {
         if (isLocalPathOpenBlocked(sourceSettings, { connectionId: sourceConnectionId })) {
-          // Why: a file:// link outside the worktree is a client-local escape
-          // hatch. Remote runtime/SSH editors must not treat server paths as client paths.
+          // Why: a file:// link outside the worktree is client-local; remote runtime/SSH editors must not treat server paths as client paths.
           showLocalPathOpenBlockedToast()
           return
         }
-        // Why: terminal file links already authorize clicked external paths
-        // before opening them in Orca. Markdown file:// links need the same
-        // user-gesture authorization so /tmp screenshots can use ImageViewer.
+        // Why: markdown file:// links need the same user-gesture authorization terminal links get, so external paths (e.g. /tmp screenshots) can open in Orca.
         await window.api.fs.authorizeExternalPath({ targetPath: target.absolutePath })
       } else {
         let stats: { isDirectory: boolean }
         try {
           stats = await statRuntimePath(fileContext, target.absolutePath)
         } catch {
-          toast.error(`File not found: ${target.relativePath}`)
+          toast.error(
+            translate('auto.store.slices.editor.f2e00db373', 'File not found: {{value0}}', {
+              value0: target.relativePath
+            })
+          )
           return
         }
         if (stats.isDirectory) {
-          toast.error(`Cannot open directory: ${target.relativePath}`)
+          toast.error(
+            translate('auto.store.slices.editor.51f15c37d3', 'Cannot open directory: {{value0}}', {
+              value0: target.relativePath
+            })
+          )
           return
         }
       }
@@ -3693,11 +4440,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     try {
       stats = await statRuntimePath(fileContext, absolutePath)
     } catch {
-      toast.error(`File not found: ${relativePath}`)
+      toast.error(
+        translate('auto.store.slices.editor.f2e00db373', 'File not found: {{value0}}', {
+          value0: relativePath
+        })
+      )
       return
     }
     if (stats.isDirectory) {
-      toast.error(`Cannot open directory: ${relativePath}`)
+      toast.error(
+        translate('auto.store.slices.editor.51f15c37d3', 'Cannot open directory: {{value0}}', {
+          value0: relativePath
+        })
+      )
       return
     }
 
@@ -3719,33 +4474,29 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
     if (line !== undefined) {
       const fileId = getOpenedEditFileIdAfterOpen(get(), absolutePath, ctx.worktreeId)
-      // Why: pendingEditorReveal is consumed by MonacoEditor on mount. If the
-      // file stays in rich mode, the reveal is silently dropped; use the final
-      // owner-qualified id after openFile has resolved the tab identity.
+      // Why: MonacoEditor drops the reveal if the file stays in rich mode; switch to source using the resolved owner-qualified id.
       get().setMarkdownViewMode(fileId, 'source')
       scheduleEditorLineReveal(get, absolutePath, line, column, fileId)
     }
   },
 
-  // Why: only edit-mode files are restored — diffs and conflict views depend on
-  // transient git state that may have changed between sessions. Restoring them
-  // would show stale data or fail to load entirely.
-  hydrateEditorSession: (session) => {
+  // Why: only edit-mode files are restored — diffs/conflict views depend on transient git state that may be stale between sessions.
+  hydrateEditorSession: (session, options) => {
     set((s) => {
       const openFilesByWorktree = session.openFilesByWorktree ?? {}
       const persistedActiveFileIdByWorktree = session.activeFileIdByWorktree ?? {}
       const persistedActiveTabTypeByWorktree = session.activeTabTypeByWorktree ?? {}
       const persistedMarkdownFrontmatterVisible = session.markdownFrontmatterVisible ?? {}
 
-      // Why: worktrees may have been deleted between sessions. Filter out
-      // files for worktrees that no longer exist, mirroring the validation
-      // that hydrateWorkspaceSession performs for terminal tabs.
-      const validWorktreeIds = new Set(
-        Object.values(s.worktreesByRepo)
-          .flat()
-          .map((w) => w.id)
+      const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(
+        s,
+        Object.keys(openFilesByWorktree)
       )
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+      for (const workspace of s.folderWorkspaces) {
+        validWorktreeIds.add(folderWorkspaceKey(workspace.id))
+      }
+      addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
 
       const openFiles: OpenFile[] = []
       const editorDrafts: Record<string, string> = {}
@@ -3762,9 +4513,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             pf,
             worktreeId
           )
-          // Why: floating/runtime-owned files need IDs that survive peers
-          // disappearing between restarts; collision-based IDs drift when the
-          // same path is no longer open in another owner.
+          // Why: floating/runtime-owned files need IDs that survive peers disappearing between restarts; collision-based IDs drift when the path is no longer open elsewhere.
           const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
           const id =
             shouldHydrateWithOwnedEditorFileId(worktreeId, pf.runtimeEnvironmentId) ||
@@ -3772,9 +4521,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               ? ownedId
               : pf.filePath
           usedOpenFileIds.add(id)
-          // Why: legacy sessions used the collision-derived id for each
-          // persisted entry. Mapping every filePath would collapse same-path
-          // local/runtime tabs onto whichever owner hydrates last.
+          // Why: map from the collision-derived legacy id; keying by filePath would collapse same-path local/runtime tabs onto the last owner to hydrate.
           addEditorFileIdMigration(editorFileIdMigrationsByWorktree, worktreeId, legacyId, id)
           legacyHydratedOpenFiles.push({
             id: legacyId,
@@ -3782,7 +4529,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             worktreeId,
             runtimeEnvironmentId: pf.runtimeEnvironmentId
           })
-          if (pf.dirtyDraftContent !== undefined) {
+          // Why: read-only tabs (AI Vault View Log) must restore clean — ignore any persisted dirty draft/baseline so they can't come back writable.
+          const isReadOnly = pf.readOnly === true
+          if (!isReadOnly && pf.dirtyDraftContent !== undefined) {
             editorDrafts[id] = pf.dirtyDraftContent
           }
           openFiles.push({
@@ -3790,21 +4539,28 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             filePath: pf.filePath,
             relativePath: pf.relativePath,
             worktreeId,
-            // Why: sessions can contain language ids from older Orca builds.
-            // Re-detect on hydrate so newly-supported extensions like .ipynb
-            // stop reopening as raw JSON/plain text after the upgrade.
+            // Why: re-detect language on hydrate — older sessions stored ids from before extensions like .ipynb were supported.
             language: detectLanguage(pf.relativePath || pf.filePath),
-            isDirty: pf.dirtyDraftContent !== undefined,
+            isDirty: !isReadOnly && pf.dirtyDraftContent !== undefined,
             isPreview: pf.isPreview,
             runtimeEnvironmentId: pf.runtimeEnvironmentId,
+            externalSshTargetId: pf.externalSshTargetId,
+            ...(isReadOnly ? { readOnly: true } : {}),
+            ...(isReadOnly && pf.liveTail === true ? { liveTail: true } : {}),
+            lastKnownDiskSignature: isReadOnly ? undefined : pf.lastKnownDiskSignature,
+            // Why: suspend autosave until the conflict scan verifies disk vs baseline, else a slow remote read clobbers an offline write.
+            pendingDiskBaselineVerification:
+              !isReadOnly &&
+              pf.dirtyDraftContent !== undefined &&
+              pf.lastKnownDiskSignature !== undefined
+                ? true
+                : undefined,
             mode: 'edit'
           })
         }
       }
 
-      // Why: use the store's activeWorktreeId (set by hydrateWorkspaceSession)
-      // rather than the raw session value. hydrateWorkspaceSession may have
-      // nulled out an invalid worktree ID, and we must respect that decision.
+      // Why: use the store's activeWorktreeId — hydrateWorkspaceSession may have nulled an invalid ID, and we must respect that.
       const activeWorktreeId = s.activeWorktreeId
       const fallbackActiveFileId = activeWorktreeId
         ? (openFiles.find((f) => f.worktreeId === activeWorktreeId)?.id ?? null)
@@ -3816,16 +4572,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             persistedActiveFileIdByWorktree[activeWorktreeId]
           )
         : null
-      // Why: verify the persisted active file still exists in the restored set.
-      // The file may have been removed due to worktree validation or the
-      // persisted data may reference a stale path.
+      // Why: the persisted active file may be gone (worktree validation or stale path), so verify it exists in the restored set.
       const activeFileExists = persistedActiveFileId
         ? openFiles.some((f) => f.id === persistedActiveFileId && f.worktreeId === activeWorktreeId)
         : false
-      // Why: if the previously active editor surface pointed at a transient
-      // diff/conflict tab, restart still restores any normal edit tabs for the
-      // worktree. Promote the first restored edit file so the UI comes back on
-      // a concrete file tab instead of an unselected editor surface.
+      // Why: the previous active surface may have been a transient diff/conflict tab (not restored), so promote the first restored edit file.
       const nextActiveFileId = activeFileExists ? persistedActiveFileId : fallbackActiveFileId
       const activeTabType: WorkspaceVisibleTabType =
         activeWorktreeId && persistedActiveTabTypeByWorktree[activeWorktreeId]
@@ -3858,39 +4609,34 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           if (tabType !== 'editor') {
             return true
           }
-          // Why: a persisted "editor" surface only makes sense if that
-          // worktree still restored a concrete active editor file. Otherwise we
-          // preserve a stale last-active marker that conflicts with browser or
-          // terminal restore logic for the same worktree.
+          // Why: an "editor" marker is valid only if the worktree restored a concrete active file; otherwise it's a stale marker.
           return Boolean(filteredActiveFileIdByWorktree[wId])
         })
       )
 
-      // Why: restart only restores edit-mode files. If the previous active
-      // surface for the current worktree was a transient diff/conflict view,
-      // we must clear the stale "editor" marker here so startup falls back to
-      // browser or terminal instead of showing an empty editor surface.
+      // Why: transient diff/conflict surfaces aren't restored, so clear a stale "editor" marker and fall back to terminal.
       const nextActiveTabType =
         nextActiveFileId || activeTabType !== 'editor' ? activeTabType : 'terminal'
       const openFileIds = new Set(openFiles.map((file) => file.id))
-      const visibleFrontmatterEntries = new Map<string, boolean>()
+      // Why: visible is the default, so restore only per-file hide overrides (`false`); legacy `true` entries collapse to the default.
+      const hiddenFrontmatterEntries = new Map<string, boolean>()
       for (const [persistedFileId, visible] of Object.entries(
         persistedMarkdownFrontmatterVisible
       )) {
-        if (!visible) {
+        if (visible) {
           continue
         }
         if (openFileIds.has(persistedFileId)) {
-          visibleFrontmatterEntries.set(persistedFileId, true)
+          hiddenFrontmatterEntries.set(persistedFileId, false)
         }
         for (const migrations of Object.values(editorFileIdMigrationsByWorktree)) {
           const migratedFileId = migrations.get(persistedFileId)
           if (migratedFileId && openFileIds.has(migratedFileId)) {
-            visibleFrontmatterEntries.set(migratedFileId, true)
+            hiddenFrontmatterEntries.set(migratedFileId, false)
           }
         }
       }
-      const markdownFrontmatterVisible = Object.fromEntries(visibleFrontmatterEntries)
+      const markdownFrontmatterVisible = Object.fromEntries(hiddenFrontmatterEntries)
 
       return {
         openFiles,
@@ -3965,15 +4711,15 @@ function toOpenConflictMetadata(entry: GitStatusEntry): OpenConflictMetadata | u
         conflictKind: entry.conflictKind,
         conflictStatus: entry.conflictStatus,
         conflictStatusSource: entry.conflictStatusSource,
-        message: 'This file is in a conflict state, but no working-tree file is available to edit.',
+        message: translate(
+          'auto.store.slices.editor.dcb521ed29',
+          'This file is in a conflict state, but no working-tree file is available to edit.'
+        ),
         guidance: 'Resolve the conflict in Git or restore one side before reopening it.'
       }
 }
 
-// Why: equality checks comparing only path/status/area are insufficient. A row
-// can change from unresolved to resolved_locally (or vice versa) without its
-// base GitFileStatus changing. Without checking conflictKind, conflictStatus,
-// and conflictStatusSource here, the affected row would remain visually stale.
+// Why: conflict state can change (unresolved↔resolved_locally) without the base status changing, so also compare conflict fields.
 function areGitStatusEntriesEqual(prev: GitStatusEntry[], next: GitStatusEntry[]): boolean {
   return (
     prev.length === next.length &&
@@ -4011,6 +4757,7 @@ function areUpstreamStatusesEqual(
     prev.upstreamName === next.upstreamName &&
     prev.ahead === next.ahead &&
     prev.behind === next.behind &&
+    prev.hasConfiguredPushTarget === next.hasConfiguredPushTarget &&
     prev.behindCommitsArePatchEquivalent === next.behindCommitsArePatchEquivalent
   )
 }
@@ -4018,7 +4765,8 @@ function areUpstreamStatusesEqual(
 function reconcileOpenFilesForStatus(
   openFiles: OpenFile[],
   worktreeId: string,
-  nextEntries: GitStatusEntry[]
+  nextEntries: GitStatusEntry[],
+  statusIsComplete: boolean
 ): OpenFile[] {
   const entriesByPath = new Map(nextEntries.map((entry) => [entry.path, entry]))
   let changed = false
@@ -4028,12 +4776,17 @@ function reconcileOpenFilesForStatus(
       return [file]
     }
 
-    if (file.mode === 'conflict-review') {
+    if (file.mode === 'conflict-review' || file.mode === 'check-details') {
       return [file]
     }
 
     const entry = entriesByPath.get(file.relativePath)
     if (!file.conflict) {
+      return [file]
+    }
+
+    // Why: a capped snapshot cannot prove that an omitted conflict was resolved.
+    if (!entry && !statusIsComplete) {
       return [file]
     }
 

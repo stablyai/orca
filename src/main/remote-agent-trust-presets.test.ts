@@ -55,6 +55,28 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
     )
   })
 
+  it('writes Codex trust when the remote home is a Windows absolute path', async () => {
+    const fsProvider = makeFsProvider({
+      realpath: vi.fn(async () => 'C:/Users/alice/platform')
+    })
+    mocks.getActiveMultiplexer.mockReturnValue({
+      request: vi.fn(async () => ({ resolvedPath: 'C:\\Users\\alice\\' }))
+    })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await markRemoteAgentWorkspaceTrusted({
+      preset: 'codex',
+      connectionId: 'ssh-windows',
+      workspacePath: 'C:\\Users\\alice\\platform'
+    })
+
+    expect(fsProvider.createDir).toHaveBeenCalledWith('C:/Users/alice/.codex')
+    expect(fsProvider.writeFile).toHaveBeenCalledWith(
+      'C:/Users/alice/.codex/config.toml',
+      expect.stringContaining('[projects."C:/Users/alice/platform"]')
+    )
+  })
+
   it('writes Cursor trust marker on the remote host', async () => {
     const fsProvider = makeFsProvider()
     mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
@@ -69,6 +91,30 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
     expect(fsProvider.writeFile).toHaveBeenCalledWith(
       '/home/u/.cursor/projects/real-repo-worktree/.workspace-trusted',
       expect.stringContaining('"workspacePath": "/real/repo/worktree"')
+    )
+  })
+
+  it('sanitizes Windows path characters in remote Cursor trust marker paths', async () => {
+    const fsProvider = makeFsProvider({
+      realpath: vi.fn(async () => 'C:/Users/alice/platform')
+    })
+    mocks.getActiveMultiplexer.mockReturnValue({
+      request: vi.fn(async () => ({ resolvedPath: 'C:/Users/alice/' }))
+    })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await markRemoteAgentWorkspaceTrusted({
+      preset: 'cursor',
+      connectionId: 'ssh-windows',
+      workspacePath: 'C:\\Users\\alice\\platform'
+    })
+
+    expect(fsProvider.createDir).toHaveBeenCalledWith(
+      'C:/Users/alice/.cursor/projects/C-Users-alice-platform'
+    )
+    expect(fsProvider.writeFile).toHaveBeenCalledWith(
+      'C:/Users/alice/.cursor/projects/C-Users-alice-platform/.workspace-trusted',
+      expect.stringContaining('"workspacePath": "C:/Users/alice/platform"')
     )
   })
 

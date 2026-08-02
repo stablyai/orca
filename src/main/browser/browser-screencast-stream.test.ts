@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: one fixture-backed file covers screencast frame, viewport, dialog, and cleanup behavior together. */
 import { Buffer } from 'node:buffer'
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'

@@ -4,6 +4,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
+  JiraAuthType,
   JiraConnectionStatus,
   JiraIssue,
   JiraIssueFilter,
@@ -11,16 +12,26 @@ import type {
   JiraViewer
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
+import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import {
   jiraConnect,
   jiraDisconnect,
   jiraGetIssue,
+  jiraLookupIssueSummary,
   jiraListIssues,
+  jiraReadStatus,
   jiraSearchIssues,
   jiraSelectSite,
   jiraStatus,
   jiraTestConnection
 } from '@/runtime/runtime-jira-client'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { translate } from '@/i18n/i18n'
+import {
+  getTaskSourceCacheScope,
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../../shared/task-source-context'
 
 const CACHE_TTL = 60_000
 const MAX_CACHE_ENTRIES = 500
@@ -47,81 +58,407 @@ function evictStaleEntries<T>(
 
 function looksLikeAuthError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error)
-  return /authenticat|unauthorized|forbidden|401|403/i.test(msg)
+  // Why: Jira 403 commonly means endpoint/project access is denied while the
+  // saved token is still valid; do not flip Settings back to disconnected.
+  return /authenticat|unauthorized|401/i.test(msg)
 }
 
-const inflightIssueRequests = new Map<string, Promise<JiraIssue | null>>()
-const inflightSearchRequests = new Map<string, Promise<JiraIssue[]>>()
-const inflightListRequests = new Map<string, Promise<JiraIssue[]>>()
+type InflightJiraReadRequest<T> = {
+  promise: Promise<T>
+  contextKey: string
+  mutationGeneration: number
+}
+
+type SharedJiraSummaryRequest = InflightJiraReadRequest<JiraIssue | null> & {
+  controller: AbortController
+  subscribers: number
+}
+
+function createJiraAbortError(what: string): Error {
+  const error = new Error(`Jira ${what} aborted`)
+  error.name = 'AbortError'
+  return error
+}
+
+/**
+ * Join one summary read, even when the caller brought its own signal.
+ *
+ * The shared request is cancelled only once every subscriber has abandoned it, so a superseded
+ * keystroke still releases the Jira pool without stealing a lookup another caller is waiting on.
+ */
+function subscribeToJiraSummaryRequest(
+  entry: SharedJiraSummaryRequest,
+  signal: AbortSignal | undefined
+): Promise<JiraIssue | null> {
+  if (!signal) {
+    entry.subscribers += 1
+    return entry.promise
+  }
+  if (signal.aborted) {
+    return Promise.reject(createJiraAbortError('issue summary lookup'))
+  }
+  entry.subscribers += 1
+  return new Promise<JiraIssue | null>((resolve, reject) => {
+    const abandon = (): void => {
+      entry.subscribers -= 1
+      if (entry.subscribers <= 0) {
+        entry.controller.abort()
+      }
+      reject(createJiraAbortError('issue summary lookup'))
+    }
+    signal.addEventListener('abort', abandon, { once: true })
+    const settle = (): void => signal.removeEventListener('abort', abandon)
+    entry.promise.then(
+      (issue) => {
+        settle()
+        resolve(issue)
+      },
+      (error: unknown) => {
+        settle()
+        reject(error)
+      }
+    )
+  })
+}
+
+type JiraReadOptions = {
+  sourceContext?: TaskSourceContext | null
+  siteId?: JiraSiteSelection | null
+}
+type JiraSearchOptions = JiraReadOptions & { signal?: AbortSignal }
+type JiraPatchOptions = { sourceContext?: TaskSourceContext | null }
+type JiraIssueSummaryLookupOptions = { force?: boolean; signal?: AbortSignal }
+
+type JiraReadScope = {
+  settings: AppState['settings'] | TaskSourceContext | null
+  contextKey: string
+  cachePrefix: string | null
+  explicitSource: boolean
+}
+
+const inflightIssueRequests = new Map<string, InflightJiraReadRequest<JiraIssue | null>>()
+const inflightIssueSummaryRequests = new Map<string, SharedJiraSummaryRequest>()
+const inflightSearchRequests = new Map<string, InflightJiraReadRequest<JiraIssue[]>>()
+const inflightListRequests = new Map<string, InflightJiraReadRequest<JiraIssue[]>>()
+let jiraStatusReadGeneration = 0
+let jiraMutationGeneration = 0
 
 function getSelectedSiteId(status: JiraConnectionStatus): JiraSiteSelection | null {
   return status.selectedSiteId ?? status.activeSiteId ?? null
 }
 
+function shouldRefreshStatusAfterRead(
+  siteId: JiraSiteSelection | null | undefined,
+  status: JiraConnectionStatus,
+  options?: { abortable?: boolean }
+): boolean {
+  // Why: a visible credential error may have been cleared by a successful credential read.
+  if (status.credentialError !== undefined) {
+    return true
+  }
+  // Why: 'all' list/detail reads can hide per-site decrypt failures. Abortable typeahead
+  // (composer search) must not re-check status on every keystroke.
+  return siteId === 'all' && options?.abortable !== true
+}
+
 function clearJiraInflight(): void {
+  for (const entry of inflightIssueSummaryRequests.values()) {
+    entry.controller.abort()
+  }
   inflightIssueRequests.clear()
+  inflightIssueSummaryRequests.clear()
   inflightSearchRequests.clear()
   inflightListRequests.clear()
+}
+
+function beginJiraMutation(): number {
+  jiraMutationGeneration += 1
+  return jiraMutationGeneration
+}
+
+function isCurrentJiraMutation(generation: number): boolean {
+  return generation === jiraMutationGeneration
+}
+
+function isCurrentJiraRuntimeContext(contextKey: string, settings: AppState['settings']): boolean {
+  return getProviderRuntimeContextKey(settings) === contextKey
+}
+
+function canWriteJiraReadResult(
+  contextKey: string,
+  mutationGeneration: number,
+  settings: AppState['settings'],
+  explicitSource = false
+): boolean {
+  return (
+    mutationGeneration === jiraMutationGeneration &&
+    (explicitSource || isCurrentJiraRuntimeContext(contextKey, settings))
+  )
+}
+
+function getJiraReadScope(
+  settings: AppState['settings'],
+  sourceContext?: TaskSourceContext | null
+): JiraReadScope {
+  if (!sourceContext) {
+    return {
+      settings,
+      contextKey: getProviderRuntimeContextKey(settings),
+      cachePrefix: null,
+      explicitSource: false
+    }
+  }
+  const runtimeSettings = getTaskSourceRuntimeSettings(sourceContext)
+  return {
+    settings: sourceContext,
+    contextKey: `${getProviderRuntimeContextKey(runtimeSettings)}::${getTaskSourceCacheScope(sourceContext)}`,
+    cachePrefix: getTaskSourceCacheScope(sourceContext),
+    explicitSource: true
+  }
+}
+
+function scopedJiraCacheKey(scope: JiraReadScope, key: string): string {
+  return scope.cachePrefix ? `${scope.cachePrefix}::${key}` : key
+}
+
+function getJiraConnectionRevisionContextKey(
+  settings: AppState['settings'] | TaskSourceContext | null
+): string {
+  return getProviderRuntimeContextKey(
+    settings && 'kind' in settings ? getTaskSourceRuntimeSettings(settings) : settings
+  )
+}
+
+function nextJiraConnectionRevisions(
+  revisions: Record<string, number>,
+  contextKey: string
+): Record<string, number> {
+  return { ...revisions, [contextKey]: (revisions[contextKey] ?? 0) + 1 }
+}
+
+const EMPTY_JIRA_READ_CACHES = {
+  jiraIssueCache: {},
+  jiraIssueSummaryCache: {},
+  jiraSearchCache: {}
+} satisfies Partial<JiraSlice>
+
+/**
+ * An auth failure on a read invalidates the connection: bump the revision so lazy readers re-probe.
+ * An explicit source context owns its own status, so only the ambient status is reset.
+ */
+function markJiraConnectionLost(
+  set: (partial: (state: AppState) => Partial<JiraSlice>) => void,
+  scope: JiraReadScope
+): void {
+  const revisionContextKey = getJiraConnectionRevisionContextKey(scope.settings)
+  set((state) => ({
+    ...(scope.explicitSource ? {} : { jiraStatus: { connected: false, viewer: null } }),
+    jiraConnectionRevisions: nextJiraConnectionRevisions(
+      state.jiraConnectionRevisions,
+      revisionContextKey
+    )
+  }))
+}
+
+/** Status write that also bumps the revision watchers use to re-read a lazily-loaded status. */
+function jiraStatusUpdate(
+  state: AppState,
+  contextKey: string,
+  status: JiraConnectionStatus,
+  extra?: Partial<JiraSlice>
+): Partial<JiraSlice> {
+  return {
+    jiraStatus: status,
+    jiraStatusChecked: true,
+    jiraStatusContextKey: contextKey,
+    jiraConnectionRevisions: nextJiraConnectionRevisions(state.jiraConnectionRevisions, contextKey),
+    ...extra
+  }
 }
 
 export type JiraSlice = {
   jiraStatus: JiraConnectionStatus
   jiraStatusChecked: boolean
+  jiraStatusContextKey: string | null
+  jiraConnectionRevisions: Record<string, number>
   jiraIssueCache: Record<string, CacheEntry<JiraIssue>>
+  jiraIssueSummaryCache: Record<string, CacheEntry<JiraIssue | null>>
   jiraSearchCache: Record<string, CacheEntry<JiraIssue[]>>
 
   checkJiraConnection: () => Promise<void>
+  readJiraStatus: (sourceContext: TaskSourceContext) => Promise<JiraConnectionStatus>
+  lookupJiraIssueSummary: (
+    sourceContext: TaskSourceContext,
+    key: string,
+    siteId: string,
+    options?: JiraIssueSummaryLookupOptions
+  ) => Promise<JiraIssue | null>
   connectJira: (args: {
     siteUrl: string
     email: string
     apiToken: string
+    authType?: JiraAuthType
   }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
   testJiraConnection: (
     siteId?: string | null
   ) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
   selectJiraSite: (siteId: JiraSiteSelection) => Promise<void>
   disconnectJira: (siteId?: string | null) => Promise<void>
-  fetchJiraIssue: (key: string, siteId?: string | null) => Promise<JiraIssue | null>
-  searchJiraIssues: (jql: string, limit?: number) => Promise<JiraIssue[]>
-  listJiraIssues: (filter?: JiraIssueFilter, limit?: number) => Promise<JiraIssue[]>
-  patchJiraIssue: (issueKey: string, patch: Partial<JiraIssue>) => void
+  fetchJiraIssue: (
+    key: string,
+    siteId?: string | null,
+    options?: JiraReadOptions
+  ) => Promise<JiraIssue | null>
+  searchJiraIssues: (
+    jql: string,
+    limit?: number,
+    options?: JiraSearchOptions
+  ) => Promise<JiraIssue[]>
+  listJiraIssues: (
+    filter?: JiraIssueFilter,
+    limit?: number,
+    options?: JiraReadOptions
+  ) => Promise<JiraIssue[]>
+  patchJiraIssue: (issueKey: string, patch: Partial<JiraIssue>, options?: JiraPatchOptions) => void
 }
 
 export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, get) => ({
   jiraStatus: { connected: false, viewer: null },
   jiraStatusChecked: false,
+  jiraStatusContextKey: null,
+  jiraConnectionRevisions: {},
   jiraIssueCache: {},
+  jiraIssueSummaryCache: {},
   jiraSearchCache: {},
 
   checkJiraConnection: async () => {
+    const contextKey = getProviderRuntimeContextKey(get().settings)
+    const statusReadGeneration = (jiraStatusReadGeneration += 1)
+    const mutationGeneration = jiraMutationGeneration
+    if (get().jiraStatusContextKey !== contextKey) {
+      set({ jiraStatusChecked: false })
+    }
     try {
       const status = await jiraStatus(get().settings)
+      if (
+        mutationGeneration !== jiraMutationGeneration ||
+        statusReadGeneration !== jiraStatusReadGeneration ||
+        getProviderRuntimeContextKey(get().settings) !== contextKey
+      ) {
+        return
+      }
       const prev = get().jiraStatus
       if (
         prev.connected !== status.connected ||
+        prev.credentialError !== status.credentialError ||
         prev.viewer?.email !== status.viewer?.email ||
         getSelectedSiteId(prev) !== getSelectedSiteId(status) ||
         (prev.sites?.length ?? 0) !== (status.sites?.length ?? 0)
       ) {
-        set({ jiraStatus: status, jiraStatusChecked: true })
+        set((state) => jiraStatusUpdate(state, contextKey, status))
       } else if (!get().jiraStatusChecked) {
-        set({ jiraStatusChecked: true })
+        set({ jiraStatusChecked: true, jiraStatusContextKey: contextKey })
+      } else if (get().jiraStatusContextKey !== contextKey) {
+        set({ jiraStatusContextKey: contextKey })
       }
     } catch {
+      if (
+        mutationGeneration !== jiraMutationGeneration ||
+        statusReadGeneration !== jiraStatusReadGeneration ||
+        getProviderRuntimeContextKey(get().settings) !== contextKey
+      ) {
+        return
+      }
       if (get().jiraStatus.connected) {
-        set({ jiraStatus: { connected: false, viewer: null }, jiraStatusChecked: true })
+        set((state) => jiraStatusUpdate(state, contextKey, { connected: false, viewer: null }))
       } else if (!get().jiraStatusChecked) {
-        set({ jiraStatusChecked: true })
+        set({ jiraStatusChecked: true, jiraStatusContextKey: contextKey })
+      } else if (get().jiraStatusContextKey !== contextKey) {
+        set({ jiraStatusContextKey: contextKey })
       }
     }
   },
 
+  readJiraStatus: async (sourceContext) => jiraReadStatus(sourceContext),
+
+  lookupJiraIssueSummary: async (sourceContext, key, siteId, options) => {
+    const scope = getJiraReadScope(get().settings, sourceContext)
+    const cacheKey = scopedJiraCacheKey(scope, `${siteId}::${key.toUpperCase()}`)
+    const cached = get().jiraIssueSummaryCache[cacheKey]
+    if (!options?.force && isFresh(cached)) {
+      return cached.data
+    }
+    if (options?.force && cached) {
+      set((state) => {
+        const jiraIssueSummaryCache = { ...state.jiraIssueSummaryCache }
+        delete jiraIssueSummaryCache[cacheKey]
+        return { jiraIssueSummaryCache }
+      })
+    }
+    const inflight = inflightIssueSummaryRequests.get(cacheKey)
+    if (!options?.force && inflight?.contextKey === scope.contextKey) {
+      return subscribeToJiraSummaryRequest(inflight, options?.signal)
+    }
+    if (options?.signal?.aborted) {
+      throw createJiraAbortError('issue summary lookup')
+    }
+    let entry: SharedJiraSummaryRequest
+    const controller = new AbortController()
+    const promise = jiraLookupIssueSummary(scope.settings, key, siteId, controller.signal)
+      .then((issue) => {
+        if (
+          issue &&
+          issue.key.toUpperCase() === key.toUpperCase() &&
+          issue.siteId === siteId &&
+          inflightIssueSummaryRequests.get(cacheKey) === entry
+        ) {
+          set((state) => ({
+            jiraIssueSummaryCache: evictStaleEntries({
+              ...state.jiraIssueSummaryCache,
+              [cacheKey]: { data: issue, fetchedAt: Date.now() }
+            })
+          }))
+        }
+        return issue
+      })
+      .finally(() => {
+        if (inflightIssueSummaryRequests.get(cacheKey) === entry) {
+          inflightIssueSummaryRequests.delete(cacheKey)
+        }
+      })
+    entry = {
+      promise,
+      controller,
+      subscribers: 0,
+      contextKey: scope.contextKey,
+      mutationGeneration: jiraMutationGeneration
+    }
+    inflightIssueSummaryRequests.set(cacheKey, entry)
+    return subscribeToJiraSummaryRequest(entry, options?.signal)
+  },
+
   connectJira: async (args) => {
+    const requestGeneration = beginJiraMutation()
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     try {
       const result = await jiraConnect(get().settings, args)
-      if (result.ok) {
-        set({ jiraStatus: { connected: true, viewer: result.viewer }, jiraStatusChecked: true })
+      if (
+        result.ok &&
+        isCurrentJiraMutation(requestGeneration) &&
+        isCurrentJiraRuntimeContext(contextKey, get().settings)
+      ) {
+        set((state) =>
+          jiraStatusUpdate(state, contextKey, { connected: true, viewer: result.viewer })
+        )
         void get().checkJiraConnection()
+      } else if (result.ok) {
+        return {
+          ok: false as const,
+          error: translate(
+            'auto.store.slices.jira.856083302c',
+            'Jira connection was superseded by a newer request.'
+          )
+        }
       }
       return result
     } catch (error) {
@@ -131,10 +468,23 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
   },
 
   testJiraConnection: async (siteId) => {
+    const requestGeneration = beginJiraMutation()
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     try {
       const result = await jiraTestConnection(get().settings, siteId)
+      if (
+        !isCurrentJiraMutation(requestGeneration) ||
+        !isCurrentJiraRuntimeContext(contextKey, get().settings)
+      ) {
+        return result
+      }
       const status = await jiraStatus(get().settings)
-      set({ jiraStatus: status, jiraStatusChecked: true })
+      if (
+        isCurrentJiraMutation(requestGeneration) &&
+        isCurrentJiraRuntimeContext(contextKey, get().settings)
+      ) {
+        set((state) => jiraStatusUpdate(state, contextKey, status))
+      }
       return result
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Test failed'
@@ -143,138 +493,348 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
   },
 
   selectJiraSite: async (siteId) => {
+    const requestGeneration = beginJiraMutation()
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     const status = await jiraSelectSite(get().settings, siteId)
+    if (
+      !isCurrentJiraMutation(requestGeneration) ||
+      getProviderRuntimeContextKey(get().settings) !== contextKey
+    ) {
+      return
+    }
     clearJiraInflight()
-    set({
-      jiraStatus: status,
-      jiraIssueCache: {},
-      jiraSearchCache: {},
-      jiraStatusChecked: true
-    })
+    set((state) => jiraStatusUpdate(state, contextKey, status, EMPTY_JIRA_READ_CACHES))
   },
 
   disconnectJira: async (siteId) => {
+    const requestGeneration = beginJiraMutation()
+    const contextKey = getProviderRuntimeContextKey(get().settings)
     await jiraDisconnect(get().settings, siteId)
+    if (
+      !isCurrentJiraMutation(requestGeneration) ||
+      !isCurrentJiraRuntimeContext(contextKey, get().settings)
+    ) {
+      return
+    }
     clearJiraInflight()
     const status = await jiraStatus(get().settings)
-    set({
-      jiraStatus: status.connected ? status : { connected: false, viewer: null },
-      jiraIssueCache: {},
-      jiraSearchCache: {},
-      jiraStatusChecked: true
-    })
+    if (
+      !isCurrentJiraMutation(requestGeneration) ||
+      !isCurrentJiraRuntimeContext(contextKey, get().settings)
+    ) {
+      return
+    }
+    set((state) =>
+      jiraStatusUpdate(
+        state,
+        contextKey,
+        status.connected ? status : { connected: false, viewer: null },
+        EMPTY_JIRA_READ_CACHES
+      )
+    )
   },
 
-  fetchJiraIssue: async (key, siteId) => {
-    const issueCacheKey = `${siteId ?? 'selected'}::${key}`
+  fetchJiraIssue: async (key, siteId, options) => {
+    const scope = getJiraReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
+    const issueCacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'selected'}::${key}`)
     const cached = get().jiraIssueCache[issueCacheKey] ?? get().jiraIssueCache[key]
     if (isFresh(cached)) {
       return cached.data
     }
     const inflight = inflightIssueRequests.get(issueCacheKey)
-    if (inflight) {
-      return inflight
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === jiraMutationGeneration
+    ) {
+      return inflight.promise
     }
-    const promise = jiraGetIssue(get().settings, key, siteId)
+    let entry: InflightJiraReadRequest<JiraIssue | null>
+    const requestMutationGeneration = jiraMutationGeneration
+    const promise = jiraGetIssue(scope.settings, key, siteId)
       .then((issue) => {
-        set((s) => ({
-          jiraIssueCache: evictStaleEntries({
-            ...s.jiraIssueCache,
-            [issueCacheKey]: { data: issue, fetchedAt: Date.now() }
-          })
-        }))
+        if (
+          inflightIssueRequests.get(issueCacheKey) === entry &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          set((s) => ({
+            jiraIssueCache: evictStaleEntries({
+              ...s.jiraIssueCache,
+              [issueCacheKey]: { data: issue, fetchedAt: Date.now() }
+            })
+          }))
+        }
         return issue
       })
       .catch((error) => {
         console.warn('[jira] fetchJiraIssue failed:', error)
-        if (looksLikeAuthError(error)) {
-          set({ jiraStatus: { connected: false, viewer: null } })
+        if (
+          isIntegrationCredentialDecryptionError(error) &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
+            void get().checkJiraConnection()
+          }
+        } else if (
+          looksLikeAuthError(error) &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          markJiraConnectionLost(set, scope)
         }
         return null
       })
       .finally(() => {
-        inflightIssueRequests.delete(issueCacheKey)
+        if (inflightIssueRequests.get(issueCacheKey) === entry) {
+          inflightIssueRequests.delete(issueCacheKey)
+        }
+        if (
+          shouldRefreshStatusAfterRead(siteId, get().jiraStatus) &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          void get().checkJiraConnection()
+        }
       })
-    inflightIssueRequests.set(issueCacheKey, promise)
+    entry = { promise, contextKey, mutationGeneration: requestMutationGeneration }
+    inflightIssueRequests.set(issueCacheKey, entry)
     return promise
   },
 
-  searchJiraIssues: async (jql, limit = 30) => {
-    const siteId = getSelectedSiteId(get().jiraStatus)
-    const cacheKey = `${siteId ?? 'default'}::${jql}::${limit}`
+  searchJiraIssues: async (jql, limit = 30, options) => {
+    const scope = getJiraReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
+    const siteId =
+      options && 'siteId' in options ? options.siteId : getSelectedSiteId(get().jiraStatus)
+    const cacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'default'}::${jql}::${limit}`)
     const cached = get().jiraSearchCache[cacheKey]
     if (isFresh(cached)) {
       return cached.data ?? []
     }
     const inflight = inflightSearchRequests.get(cacheKey)
-    if (inflight) {
-      return inflight
+    // Why: an abortable search must not be shared — one caller's cleanup would cancel the other's.
+    if (
+      !options?.signal &&
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === jiraMutationGeneration
+    ) {
+      return inflight.promise
     }
-    const promise = jiraSearchIssues(get().settings, jql, limit, siteId)
+    let entry: InflightJiraReadRequest<JiraIssue[]>
+    const abortable = options?.signal !== undefined
+    const requestMutationGeneration = jiraMutationGeneration
+    const promise = jiraSearchIssues(scope.settings, jql, limit, siteId, options?.signal)
       .then((issues) => {
-        set((s) => ({
-          jiraSearchCache: evictStaleEntries({
-            ...s.jiraSearchCache,
-            [cacheKey]: { data: issues, fetchedAt: Date.now() }
-          })
-        }))
+        if (options?.signal?.aborted) {
+          // Late success after cancel must not warm the cache for a superseded query.
+          throw createJiraAbortError('search')
+        }
+        if (
+          (abortable || inflightSearchRequests.get(cacheKey) === entry) &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          set((s) => ({
+            jiraSearchCache: evictStaleEntries({
+              ...s.jiraSearchCache,
+              [cacheKey]: { data: issues, fetchedAt: Date.now() }
+            })
+          }))
+        }
         return issues
       })
       .catch((error) => {
-        console.warn('[jira] searchJiraIssues failed:', error)
-        if (looksLikeAuthError(error)) {
-          set({ jiraStatus: { connected: false, viewer: null } })
+        if (options?.signal?.aborted) {
+          // Superseded by a newer query: not a connection problem, so leave status untouched.
+          throw error
         }
-        return []
+        console.warn('[jira] searchJiraIssues failed:', error)
+        if (
+          isIntegrationCredentialDecryptionError(error) &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus, { abortable })) {
+            void get().checkJiraConnection()
+          }
+        } else if (
+          looksLikeAuthError(error) &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          markJiraConnectionLost(set, scope)
+        }
+        // Credential/auth failures are surfaced through connection state, so they
+        // keep the empty-list contract. Other failures (forbidden, bad JQL,
+        // network, 5xx) reject so the Tasks panel can show a real error instead
+        // of a misleading "No issues found".
+        if (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) {
+          return []
+        }
+        throw error
       })
       .finally(() => {
-        inflightSearchRequests.delete(cacheKey)
+        if (inflightSearchRequests.get(cacheKey) === entry) {
+          inflightSearchRequests.delete(cacheKey)
+        }
+        if (
+          !options?.signal?.aborted &&
+          shouldRefreshStatusAfterRead(siteId, get().jiraStatus, { abortable }) &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          void get().checkJiraConnection()
+        }
       })
-    inflightSearchRequests.set(cacheKey, promise)
+    entry = { promise, contextKey, mutationGeneration: requestMutationGeneration }
+    if (!abortable) {
+      inflightSearchRequests.set(cacheKey, entry)
+    }
     return promise
   },
 
-  listJiraIssues: async (filter = 'assigned', limit = 30) => {
+  listJiraIssues: async (filter = 'assigned', limit = 30, options) => {
+    const scope = getJiraReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
     const siteId = getSelectedSiteId(get().jiraStatus)
-    const cacheKey = `${siteId ?? 'default'}::list::${filter}::${limit}`
+    const cacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'default'}::list::${filter}::${limit}`)
     const cached = get().jiraSearchCache[cacheKey]
     if (isFresh(cached)) {
       return cached.data ?? []
     }
     const inflight = inflightListRequests.get(cacheKey)
-    if (inflight) {
-      return inflight
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === jiraMutationGeneration
+    ) {
+      return inflight.promise
     }
-    const promise = jiraListIssues(get().settings, filter, limit, siteId)
+    let entry: InflightJiraReadRequest<JiraIssue[]>
+    const requestMutationGeneration = jiraMutationGeneration
+    const promise = jiraListIssues(scope.settings, filter, limit, siteId)
       .then((issues) => {
-        set((s) => ({
-          jiraSearchCache: evictStaleEntries({
-            ...s.jiraSearchCache,
-            [cacheKey]: { data: issues, fetchedAt: Date.now() }
-          })
-        }))
+        if (
+          inflightListRequests.get(cacheKey) === entry &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          set((s) => ({
+            jiraSearchCache: evictStaleEntries({
+              ...s.jiraSearchCache,
+              [cacheKey]: { data: issues, fetchedAt: Date.now() }
+            })
+          }))
+        }
         return issues
       })
       .catch((error) => {
         console.warn('[jira] listJiraIssues failed:', error)
-        if (looksLikeAuthError(error)) {
-          set({ jiraStatus: { connected: false, viewer: null } })
+        if (
+          isIntegrationCredentialDecryptionError(error) &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          if (!shouldRefreshStatusAfterRead(siteId, get().jiraStatus)) {
+            void get().checkJiraConnection()
+          }
+        } else if (
+          looksLikeAuthError(error) &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          markJiraConnectionLost(set, scope)
         }
-        return []
+        // Credential/auth failures are surfaced through connection state, so they
+        // keep the empty-list contract. Other failures (forbidden, bad JQL,
+        // network, 5xx) reject so the Tasks panel can show a real error instead
+        // of a misleading "No issues found".
+        if (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) {
+          return []
+        }
+        throw error
       })
       .finally(() => {
-        inflightListRequests.delete(cacheKey)
+        if (inflightListRequests.get(cacheKey) === entry) {
+          inflightListRequests.delete(cacheKey)
+        }
+        if (
+          shouldRefreshStatusAfterRead(siteId, get().jiraStatus) &&
+          canWriteJiraReadResult(
+            contextKey,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          void get().checkJiraConnection()
+        }
       })
-    inflightListRequests.set(cacheKey, promise)
+    entry = { promise, contextKey, mutationGeneration: requestMutationGeneration }
+    inflightListRequests.set(cacheKey, entry)
     return promise
   },
 
-  patchJiraIssue: (issueKey, patch) => {
+  patchJiraIssue: (issueKey, patch, options) => {
+    const sourceScope =
+      options?.sourceContext?.provider === 'jira'
+        ? getTaskSourceCacheScope(options.sourceContext)
+        : null
+    const canPatchCacheKey = (key: string): boolean =>
+      sourceScope === null || key.startsWith(`${sourceScope}::`)
     set((s) => {
       let changed = false
       const nextIssueCache = { ...s.jiraIssueCache }
       for (const [key, entry] of Object.entries(nextIssueCache)) {
-        if (entry?.data?.key !== issueKey) {
+        if (!canPatchCacheKey(key) || entry?.data?.key !== issueKey) {
           continue
         }
         nextIssueCache[key] = { ...entry, data: { ...entry.data, ...patch }, fetchedAt: 0 }
@@ -283,7 +843,7 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       const nextSearchCache = { ...s.jiraSearchCache }
       for (const key of Object.keys(nextSearchCache)) {
         const entry = nextSearchCache[key]
-        if (!entry?.data) {
+        if (!canPatchCacheKey(key) || !entry?.data) {
           continue
         }
         const index = entry.data.findIndex((issue) => issue.key === issueKey)

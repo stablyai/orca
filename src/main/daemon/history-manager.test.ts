@@ -1,10 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, rmSync, readFileSync, existsSync, chmodSync } from 'fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { HistoryManager } from './history-manager'
+import { flushPendingSessionTreeRemovals } from './terminal-history-session-tombstone'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import { getHistorySessionDirName } from './history-paths'
+import {
+  getTerminalHistoryQuarantineOwnerDir,
+  hasTerminalHistoryRecoveryProtection
+} from './terminal-history-recovery-quarantine'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'history-mgr-test-'))
@@ -46,6 +60,8 @@ describe('HistoryManager', () => {
 
   afterEach(async () => {
     await mgr.dispose()
+    // Detached tombstone reclaims outlive the test that queued them; settle before the fixture goes.
+    await flushPendingSessionTreeRemovals()
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -70,6 +86,146 @@ describe('HistoryManager', () => {
 
       const sessionDir = join(dir, getHistorySessionDirName('sess-1'))
       expect(existsSync(sessionDir)).toBe(true)
+    })
+
+    it('quarantines the complete unreadable generation before opening a replacement', async () => {
+      const sessionId = 'unreadable-recovery'
+      await mgr.openSession(sessionId, { cwd: '/old', cols: 80, rows: 24 })
+      await mgr.checkpoint(sessionId, makeSnapshot({ snapshotAnsi: 'only recovery copy' }))
+      writeFileSync(sessionPath(dir, sessionId, 'future-artifact'), 'keep me')
+      const recoveryFreeze = await mgr.freezeForRecovery(sessionId)
+
+      await mgr.openSession(sessionId, {
+        cwd: '/new',
+        cols: 120,
+        rows: 40,
+        recoveryFreeze,
+        quarantineUnreadableRecovery: true
+      })
+
+      const ownerDir = getTerminalHistoryQuarantineOwnerDir(dir, sessionId)
+      const bundles = readdirSync(ownerDir)
+      expect(bundles).toHaveLength(1)
+      const quarantined = join(ownerDir, bundles[0])
+      expect(readdirSync(quarantined).sort()).toEqual([
+        '.unreadable-recovery',
+        'checkpoint.json',
+        'future-artifact',
+        'meta.json',
+        'output.log'
+      ])
+      expect(readFileSync(join(quarantined, 'checkpoint.json'), 'utf8')).toContain(
+        'only recovery copy'
+      )
+      expect(existsSync(sessionPath(dir, sessionId, 'checkpoint.json'))).toBe(false)
+      expect(
+        JSON.parse(readFileSync(sessionPath(dir, sessionId, 'meta.json'), 'utf8'))
+      ).toMatchObject({
+        cwd: '/new',
+        cols: 120,
+        rows: 40
+      })
+    })
+
+    it('fails closed when the frozen recovery generation changes', async () => {
+      const sessionId = 'changed-recovery'
+      await mgr.openSession(sessionId, { cwd: '/old', cols: 80, rows: 24 })
+      await mgr.checkpoint(sessionId, makeSnapshot())
+      const recoveryFreeze = await mgr.freezeForRecovery(sessionId)
+      writeFileSync(sessionPath(dir, sessionId, 'raced-artifact'), 'new generation')
+
+      await mgr.openSession(sessionId, {
+        cwd: '/new',
+        cols: 80,
+        rows: 24,
+        recoveryFreeze,
+        quarantineUnreadableRecovery: true
+      })
+
+      expect(mgr.isSessionDisabled(sessionId)).toBe(true)
+      expect(existsSync(sessionPath(dir, sessionId, 'checkpoint.json'))).toBe(true)
+      expect(existsSync(sessionPath(dir, sessionId, 'raced-artifact'))).toBe(true)
+      expect(existsSync(getTerminalHistoryQuarantineOwnerDir(dir, sessionId))).toBe(false)
+    })
+
+    it('leaves persistent protection when the quarantine rename cannot start', async () => {
+      const sessionId = 'blocked-quarantine'
+      await mgr.openSession(sessionId, { cwd: '/old', cols: 80, rows: 24 })
+      await mgr.checkpoint(sessionId, makeSnapshot())
+      const recoveryFreeze = await mgr.freezeForRecovery(sessionId)
+      writeFileSync(join(dir, '.recovery-quarantine'), 'block owner directory creation')
+
+      await mgr.openSession(sessionId, {
+        cwd: '/new',
+        cols: 80,
+        rows: 24,
+        recoveryFreeze,
+        quarantineUnreadableRecovery: true
+      })
+
+      expect(mgr.isSessionDisabled(sessionId)).toBe(true)
+      expect(hasTerminalHistoryRecoveryProtection(dir, sessionId)).toBe(true)
+      expect(existsSync(sessionPath(dir, sessionId, 'checkpoint.json'))).toBe(true)
+    })
+
+    it('rejects an unverified writer for a protected recovery generation', async () => {
+      const sessionId = 'protected-register'
+      await mgr.openSession(sessionId, { cwd: '/old', cols: 80, rows: 24 })
+      const recoveryFreeze = await mgr.freezeForRecovery(sessionId)
+      writeFileSync(join(dir, '.recovery-quarantine'), 'block owner directory creation')
+      await mgr.openSession(sessionId, {
+        cwd: '/new',
+        cols: 80,
+        rows: 24,
+        recoveryFreeze,
+        quarantineUnreadableRecovery: true
+      })
+      const relaunched = new HistoryManager(dir)
+
+      relaunched.registerWriter(sessionId)
+
+      expect(relaunched.isSessionDisabled(sessionId)).toBe(true)
+      expect(relaunched.hasWriter(sessionId)).toBe(false)
+    })
+
+    it('rejects a freeze-verified writer for a protected recovery generation', async () => {
+      const sessionId = 'recovered-protection'
+      await mgr.openSession(sessionId, { cwd: '/old', cols: 80, rows: 24 })
+      const recoveryFreeze = await mgr.freezeForRecovery(sessionId)
+      writeFileSync(join(dir, '.recovery-quarantine'), 'block owner directory creation')
+      await mgr.openSession(sessionId, {
+        cwd: '/new',
+        cols: 80,
+        rows: 24,
+        recoveryFreeze,
+        quarantineUnreadableRecovery: true
+      })
+      const relaunched = new HistoryManager(dir)
+      const verifiedFreeze = await relaunched.freezeForRecovery(sessionId)
+      relaunched.registerWriter(sessionId, verifiedFreeze)
+
+      await relaunched.checkpoint(sessionId, makeSnapshot({ snapshotAnsi: 'verified recovery' }))
+
+      expect(hasTerminalHistoryRecoveryProtection(dir, sessionId)).toBe(true)
+      expect(relaunched.hasWriter(sessionId)).toBe(false)
+      expect(relaunched.isSessionDisabled(sessionId)).toBe(true)
+    })
+
+    it('rejects a consumed recovery freeze token', async () => {
+      const sessionId = 'consumed-freeze'
+      await mgr.openSession(sessionId, { cwd: '/old', cols: 80, rows: 24 })
+      const recoveryFreeze = await mgr.freezeForRecovery(sessionId)
+      await mgr.openSession(sessionId, {
+        cwd: '/new',
+        cols: 80,
+        rows: 24,
+        recoveryFreeze
+      })
+      mgr.suspendSession(sessionId)
+
+      mgr.registerWriter(sessionId, recoveryFreeze)
+
+      expect(mgr.isSessionDisabled(sessionId)).toBe(true)
     })
   })
 
@@ -125,23 +281,36 @@ describe('HistoryManager', () => {
       expect(data.rehydrateSequences).toBe('\x1b[?2004h\x1b[?1h')
     })
 
+    it('preserves OSC link ranges in checkpoint', async () => {
+      await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
+      const oscLinks = [{ row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }]
+
+      await mgr.checkpoint('sess-1', makeSnapshot({ oscLinks }))
+
+      const data = JSON.parse(readFileSync(sessionPath(dir, 'sess-1', 'checkpoint.json'), 'utf-8'))
+      expect(data.oscLinks).toEqual(oscLinks)
+    })
+
     it('ignores checkpoint for unknown sessions', async () => {
       await mgr.checkpoint('nonexistent', makeSnapshot())
     })
 
-    it('ignores checkpoint for disabled sessions', async () => {
-      await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
+    it.skipIf(process.platform === 'win32')(
+      'ignores checkpoint for disabled sessions',
+      async () => {
+        await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
 
-      const cpPath = sessionPath(dir, 'sess-1', 'checkpoint.json')
-      chmodSync(join(dir, getHistorySessionDirName('sess-1')), 0o555)
+        const cpPath = sessionPath(dir, 'sess-1', 'checkpoint.json')
+        chmodSync(join(dir, getHistorySessionDirName('sess-1')), 0o555)
 
-      await mgr.checkpoint('sess-1', makeSnapshot())
+        await mgr.checkpoint('sess-1', makeSnapshot())
 
-      chmodSync(join(dir, getHistorySessionDirName('sess-1')), 0o755)
+        chmodSync(join(dir, getHistorySessionDirName('sess-1')), 0o755)
 
-      await mgr.checkpoint('sess-1', makeSnapshot({ snapshotAnsi: 'after-error' }))
-      expect(existsSync(cpPath)).toBe(false)
-    })
+        await mgr.checkpoint('sess-1', makeSnapshot({ snapshotAnsi: 'after-error' }))
+        expect(existsSync(cpPath)).toBe(false)
+      }
+    )
 
     it('does not write scrollback.bin', async () => {
       await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
@@ -203,6 +372,26 @@ describe('HistoryManager', () => {
       await mgr.removeSession('sess-1')
       expect(existsSync(join(dir, getHistorySessionDirName('sess-1')))).toBe(false)
     })
+
+    it('deletes quarantined recovery owned by the session', async () => {
+      const sessionId = 'remove-quarantine'
+      await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
+      const recoveryFreeze = await mgr.freezeForRecovery(sessionId)
+      await mgr.openSession(sessionId, {
+        cwd: '/new',
+        cols: 80,
+        rows: 24,
+        recoveryFreeze,
+        quarantineUnreadableRecovery: true
+      })
+      const ownerDir = getTerminalHistoryQuarantineOwnerDir(dir, sessionId)
+      expect(existsSync(ownerDir)).toBe(true)
+
+      await mgr.removeSession(sessionId)
+
+      expect(existsSync(ownerDir)).toBe(false)
+      expect(existsSync(join(dir, getHistorySessionDirName(sessionId)))).toBe(false)
+    })
   })
 
   describe('hasHistory', () => {
@@ -235,58 +424,111 @@ describe('HistoryManager', () => {
   })
 
   describe('error handling', () => {
-    it('disables writes after fs error and does not throw', async () => {
-      await mgr.openSession('disk-full', { cwd: '/tmp', cols: 80, rows: 24 })
+    it.skipIf(process.platform === 'win32')(
+      'disables writes after fs error and does not throw',
+      async () => {
+        await mgr.openSession('disk-full', { cwd: '/tmp', cols: 80, rows: 24 })
 
-      const sessionDir = join(dir, getHistorySessionDirName('disk-full'))
-      chmodSync(sessionDir, 0o555)
+        const sessionDir = join(dir, getHistorySessionDirName('disk-full'))
+        chmodSync(sessionDir, 0o555)
 
-      await mgr.checkpoint('disk-full', makeSnapshot())
+        await mgr.checkpoint('disk-full', makeSnapshot())
 
-      chmodSync(sessionDir, 0o755)
+        chmodSync(sessionDir, 0o755)
 
-      await mgr.checkpoint('disk-full', makeSnapshot({ snapshotAnsi: 'after-error' }))
-      expect(existsSync(sessionPath(dir, 'disk-full', 'checkpoint.json'))).toBe(false)
+        await mgr.checkpoint('disk-full', makeSnapshot({ snapshotAnsi: 'after-error' }))
+        expect(existsSync(sessionPath(dir, 'disk-full', 'checkpoint.json'))).toBe(false)
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'disables writes after fs error on openSession',
+      async () => {
+        chmodSync(dir, 0o555)
+
+        await mgr.openSession('disk-full-open', { cwd: '/tmp', cols: 80, rows: 24 })
+
+        chmodSync(dir, 0o755)
+
+        await mgr.checkpoint('disk-full-open', makeSnapshot())
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'does not throw on closeSession disk error',
+      async () => {
+        await mgr.openSession('close-err', { cwd: '/tmp', cols: 80, rows: 24 })
+
+        const metaPath = sessionPath(dir, 'close-err', 'meta.json')
+        chmodSync(metaPath, 0o444)
+
+        await mgr.closeSession('close-err', 0)
+
+        chmodSync(metaPath, 0o644)
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'reports write errors via onWriteError callback',
+      async () => {
+        const errors: { sessionId: string; error: Error }[] = []
+        mgr = new HistoryManager(dir, {
+          onWriteError: (sessionId, error) => errors.push({ sessionId, error })
+        })
+
+        await mgr.openSession('err-cb', { cwd: '/tmp', cols: 80, rows: 24 })
+
+        const sessionDir = join(dir, getHistorySessionDirName('err-cb'))
+        chmodSync(sessionDir, 0o555)
+
+        await mgr.checkpoint('err-cb', makeSnapshot())
+
+        chmodSync(sessionDir, 0o755)
+
+        expect(errors).toHaveLength(1)
+        expect(errors[0].sessionId).toBe('err-cb')
+      }
+    )
+  })
+
+  describe('large session cleanup responsiveness', () => {
+    it('tombstones a large session tree instead of walking it on the teardown path', async () => {
+      const sessionId = 'bulky'
+      await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
+      const sessionDir = join(dir, getHistorySessionDirName(sessionId))
+      // Enough entries that a recursive walk would dominate removeSession's duration.
+      for (let i = 0; i < 3_000; i++) {
+        writeFileSync(join(sessionDir, `chunk-${i}.log`), `payload-${i}`)
+      }
+
+      // Why structural and not a turn count: worktree teardown awaits removeSession once per terminal,
+      // so the contract is that the awaited half only renames. The tree surviving under .pending-delete
+      // right after the await can only happen if the reclaim was detached.
+      await mgr.removeSession(sessionId)
+
+      expect(existsSync(sessionDir)).toBe(false)
+      const tombstones = readdirSync(join(dir, '.pending-delete'))
+      expect(tombstones).toHaveLength(1)
+      expect(readdirSync(join(dir, '.pending-delete', tombstones[0])).length).toBeGreaterThan(0)
+
+      await flushPendingSessionTreeRemovals()
+      expect(readdirSync(join(dir, '.pending-delete'))).toHaveLength(0)
     })
 
-    it('disables writes after fs error on openSession', async () => {
-      chmodSync(dir, 0o555)
+    it('reclaims tombstones left by a quit mid-removal on the next construction', async () => {
+      const sessionId = 'leftover'
+      await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
+      await mgr.removeSession(sessionId)
+      await flushPendingSessionTreeRemovals()
 
-      await mgr.openSession('disk-full-open', { cwd: '/tmp', cols: 80, rows: 24 })
+      const orphan = join(dir, '.pending-delete', 'orphaned-tombstone')
+      mkdirSync(orphan, { recursive: true })
+      writeFileSync(join(orphan, 'output.log'), 'stranded')
 
-      chmodSync(dir, 0o755)
+      new HistoryManager(dir)
+      await flushPendingSessionTreeRemovals()
 
-      await mgr.checkpoint('disk-full-open', makeSnapshot())
-    })
-
-    it('does not throw on closeSession disk error', async () => {
-      await mgr.openSession('close-err', { cwd: '/tmp', cols: 80, rows: 24 })
-
-      const metaPath = sessionPath(dir, 'close-err', 'meta.json')
-      chmodSync(metaPath, 0o444)
-
-      await mgr.closeSession('close-err', 0)
-
-      chmodSync(metaPath, 0o644)
-    })
-
-    it('reports write errors via onWriteError callback', async () => {
-      const errors: { sessionId: string; error: Error }[] = []
-      mgr = new HistoryManager(dir, {
-        onWriteError: (sessionId, error) => errors.push({ sessionId, error })
-      })
-
-      await mgr.openSession('err-cb', { cwd: '/tmp', cols: 80, rows: 24 })
-
-      const sessionDir = join(dir, getHistorySessionDirName('err-cb'))
-      chmodSync(sessionDir, 0o555)
-
-      await mgr.checkpoint('err-cb', makeSnapshot())
-
-      chmodSync(sessionDir, 0o755)
-
-      expect(errors).toHaveLength(1)
-      expect(errors[0].sessionId).toBe('err-cb')
+      expect(existsSync(orphan)).toBe(false)
     })
   })
 })

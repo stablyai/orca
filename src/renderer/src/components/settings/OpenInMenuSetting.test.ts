@@ -4,14 +4,14 @@ import {
   shouldCommitOpenInApplicationsDraft
 } from './OpenInMenuSetting'
 import {
+  getOpenInAppPresets,
   isOpenInAppPresetAdded,
-  OPEN_IN_APP_PRESETS,
   OpenInApplicationIcon
 } from '@/lib/open-in-app-catalog'
 import type { OpenInAppPreset } from '@/lib/open-in-app-catalog'
 
 function requirePreset(id: string): OpenInAppPreset {
-  const preset = OPEN_IN_APP_PRESETS.find((entry) => entry.id === id)
+  const preset = getOpenInAppPresets().find((entry) => entry.id === id)
   if (!preset) {
     throw new Error(`Preset not found: ${id}`)
   }

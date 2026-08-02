@@ -1,5 +1,6 @@
 import type { PRCheckDetail, PRComment, PRInfo } from './types'
 import type { HostedReviewInfo, HostedReviewQueueSummary } from './hosted-review'
+import { derivePRCheckStatus } from './pr-check-status'
 
 export type HostedReviewFromGitHubPRInfoArgs = {
   pr: PRInfo
@@ -32,30 +33,10 @@ function deriveChecksStatus(
   prChecksStatus: PRInfo['checksStatus'],
   checks?: PRCheckDetail[]
 ): PRInfo['checksStatus'] {
-  if (!checks || checks.length === 0) {
+  if (!checks) {
     return prChecksStatus
   }
-  const hasFailure = checks.some(
-    (check) =>
-      check.conclusion === 'failure' ||
-      check.conclusion === 'timed_out' ||
-      check.conclusion === 'cancelled'
-  )
-  if (hasFailure) {
-    return 'failure'
-  }
-  const hasPending = checks.some(
-    (check) =>
-      check.status !== 'completed' || check.conclusion === null || check.conclusion === 'pending'
-  )
-  if (hasPending) {
-    return 'pending'
-  }
-  const hasSuccess = checks.some((check) => check.conclusion === 'success')
-  if (hasSuccess) {
-    return 'success'
-  }
-  return 'neutral'
+  return derivePRCheckStatus(checks)
 }
 
 export function hostedReviewSummaryFromGitHubPRInfo(
@@ -113,9 +94,13 @@ export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
     mergeable: pr.mergeable,
     ...(pr.reviewDecision !== undefined ? { reviewDecision: pr.reviewDecision } : {}),
     ...(pr.autoMergeEnabled !== undefined ? { autoMergeEnabled: pr.autoMergeEnabled } : {}),
+    ...(pr.autoMergeAllowed !== undefined ? { autoMergeAllowed: pr.autoMergeAllowed } : {}),
     ...(pr.mergeQueueRequired !== undefined ? { mergeQueueRequired: pr.mergeQueueRequired } : {}),
     ...(pr.mergeStateStatus !== undefined ? { mergeStateStatus: pr.mergeStateStatus } : {}),
     ...(pr.headSha ? { headSha: pr.headSha } : {}),
+    ...(pr.confirmedContainedHeadOid
+      ? { confirmedContainedHeadOid: pr.confirmedContainedHeadOid }
+      : {}),
     ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
   }
 }

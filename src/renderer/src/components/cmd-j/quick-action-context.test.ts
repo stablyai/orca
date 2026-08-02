@@ -6,7 +6,7 @@ import {
   resolveCmdJActiveGroupId,
   type CmdJQuickActionContext
 } from './quick-action-context'
-import { CMD_J_QUICK_ACTIONS } from './quick-actions'
+import { getCmdJQuickActions } from './quick-actions'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/types'
 
@@ -112,13 +112,19 @@ describe('Cmd+J quick action context', () => {
     } satisfies CmdJQuickActionContext
 
     expect(
-      CMD_J_QUICK_ACTIONS.find((action) => action.id === 'new-terminal-tab')?.isAvailable(context)
+      getCmdJQuickActions()
+        .find((action) => action.id === 'new-terminal-tab')
+        ?.isAvailable(context)
     ).toEqual({ available: false, reason: 'no-active-workspace' })
     expect(
-      CMD_J_QUICK_ACTIONS.find((action) => action.id === 'create-workspace')?.isAvailable(context)
+      getCmdJQuickActions()
+        .find((action) => action.id === 'create-workspace')
+        ?.isAvailable(context)
     ).toEqual({ available: true })
     expect(
-      CMD_J_QUICK_ACTIONS.find((action) => action.id === 'add-quick-command')?.isAvailable(context)
+      getCmdJQuickActions()
+        .find((action) => action.id === 'add-quick-command')
+        ?.isAvailable(context)
     ).toEqual({ available: true })
   })
 
@@ -126,7 +132,7 @@ describe('Cmd+J quick action context', () => {
     const workspaceActions = ['new-browser-tab', 'new-markdown-file', 'new-terminal-tab']
     const currentWorkspaceActions = ['delete-workspace']
     const workspaceAgnosticActions = ['create-workspace', 'add-quick-command']
-    const actionById = new Map(CMD_J_QUICK_ACTIONS.map((action) => [action.id, action]))
+    const actionById = new Map(getCmdJQuickActions().map((action) => [action.id, action]))
     const baseContext = {
       ...ctx({}),
       activeWorktree: null,
@@ -250,7 +256,7 @@ describe('Cmd+J quick action context', () => {
 
   it('runtime re-check returns unavailable without invoking the action helper', async () => {
     const calls: string[] = []
-    const action = CMD_J_QUICK_ACTIONS.find((entry) => entry.id === 'new-terminal-tab')
+    const action = getCmdJQuickActions().find((entry) => entry.id === 'new-terminal-tab')
     const context = {
       ...ctx({ activeGroupId: null }),
       activeWorktree: null,
@@ -274,7 +280,7 @@ describe('Cmd+J quick action context', () => {
 
   it('runtime re-check invokes the current workspace delete action when available', async () => {
     const calls: string[] = []
-    const action = CMD_J_QUICK_ACTIONS.find((entry) => entry.id === 'delete-workspace')
+    const action = getCmdJQuickActions().find((entry) => entry.id === 'delete-workspace')
     const context = {
       ...ctx({ activeGroupId: null }),
       activeWorktree: null,

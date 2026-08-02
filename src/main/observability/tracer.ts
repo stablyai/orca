@@ -4,8 +4,8 @@
 // recording — rather than the Effect Tracer.Tracer interface, and emit the
 // same NDJSON record shape our local sink expects (`type: 'effect-span'`,
 // `traceId`, `spanId`, `parentSpanId?`, `attributes`, `events`, `exit`).
-// Wire-compatibility is what lets us pipe traces into the same Grafana LGTM
-// dashboards used by local OpenTelemetry collectors.
+// The compact shape keeps local diagnostic files readable and cheap to
+// collect for user-reviewed support uploads.
 //
 // Concurrency model: in-process span tree maintained via Node's
 // `AsyncLocalStorage`, so a child span created inside an `await` chain
@@ -89,10 +89,8 @@ const noopSpan: ActiveSpan = {
 let activeSink: TracerSink | null = null
 const contextStorage = new AsyncLocalStorage<SpanContext>()
 
-// 16-byte traceId / 8-byte spanId — OpenTelemetry hex shapes. Using
-// `randomBytes(8)` over `randomUUID()` because the OTLP exporter expects the
-// shorter spanId without dashes; standardizing on the OTLP shape avoids a
-// per-exporter conversion later.
+// 16-byte traceId / 8-byte spanId — compact hex IDs keep local NDJSON
+// records close to standard trace shapes without introducing UUID dashes.
 function genTraceId(): string {
   return randomBytes(16).toString('hex')
 }
@@ -114,6 +112,17 @@ export function setActiveSink(sink: TracerSink | null): void {
   activeSink = sink
 }
 
+/** Force records already handed to the tracer onto disk. Reserve this for
+ * crash boundaries where the process may not survive the normal batch window. */
+export function flushActiveSink(): void {
+  try {
+    activeSink?.flush()
+  } catch {
+    // Why: a disk/rotation failure in optional local diagnostics must never
+    // turn a recoverable renderer crash into a main-process crash.
+  }
+}
+
 /** Get the current parent context, or `undefined` if we are at the top of
  *  the trace tree. Renderer-IPC entry points capture this, embed it in
  *  span-event attributes (so cross-process spans can be visually linked
@@ -127,14 +136,19 @@ export function getActiveSpanContext(): SpanContext | undefined {
  * resolves to `fn`'s return value; `fn`'s thrown errors propagate after
  * the span has been recorded as a Failure.
  *
- * This is the function 90% of call sites should reach for. It mirrors
- * OpenTelemetry's `tracer.startActiveSpan` shape so engineers who have used
- * OTel anywhere recognize the call site immediately.
+ * This is the function 90% of call sites should reach for: it keeps span
+ * lifetime scoped to the async work it measures.
  */
+type SpanRecordDecision = (record: RedactableSpan) => boolean
+
 export async function withSpan<T>(
   name: string,
   fn: (span: ActiveSpan) => Promise<T> | T,
-  options?: { kind?: string; attributes?: Record<string, unknown> }
+  options?: {
+    kind?: string
+    attributes?: Record<string, unknown>
+    shouldRecord?: SpanRecordDecision
+  }
 ): Promise<T> {
   const span = startSpan(name, options)
   try {
@@ -160,7 +174,11 @@ export async function withSpan<T>(
  */
 export function startSpan(
   name: string,
-  options?: { kind?: string; attributes?: Record<string, unknown> }
+  options?: {
+    kind?: string
+    attributes?: Record<string, unknown>
+    shouldRecord?: SpanRecordDecision
+  }
 ): ActiveSpan {
   if (!activeSink) {
     return noopSpan
@@ -206,11 +224,20 @@ export function startSpan(
       exit
     }
 
+    if (options?.shouldRecord && !options.shouldRecord(record)) {
+      return
+    }
+
     const redacted = redactSpan(record, 'client')
     // Wrap in a `type: 'effect-span'` envelope so the NDJSON file is
     // compatible with Effect-style span output. Effect-oriented consumers
     // (the LGTM stack, jq cookbooks) can read the file unchanged.
-    activeSink?.push({ type: 'effect-span', ...redacted })
+    try {
+      activeSink?.push({ type: 'effect-span', ...redacted })
+    } catch {
+      // Why: tracing is optional; a local file rotation failure must not turn
+      // the instrumented operation into an application failure.
+    }
   }
 
   return {

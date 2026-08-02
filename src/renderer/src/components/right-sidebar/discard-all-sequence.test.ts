@@ -3,6 +3,8 @@ import {
   getDiscardAllPaths,
   getStageAllPaths,
   getUnstageAllPaths,
+  isStageableStatusEntry,
+  isSubmoduleWorktreeOnlyChange,
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
@@ -109,9 +111,62 @@ describe('getStageAllPaths', () => {
     expect(getStageAllPaths(entries, 'unstaged')).toEqual(['clean.ts', 'resolved.ts'])
   })
 
+  it('skips submodule rows that only contain nested worktree dirtiness', () => {
+    const entries: GitStatusEntry[] = [
+      entry({
+        path: 'nested-repo',
+        area: 'unstaged',
+        submodule: { commitChanged: false, trackedChanges: false, untrackedChanges: true }
+      }),
+      entry({
+        path: 'changed-gitlink',
+        area: 'unstaged',
+        submodule: { commitChanged: true, trackedChanges: false, untrackedChanges: true }
+      })
+    ]
+    expect(getStageAllPaths(entries, 'unstaged')).toEqual(['changed-gitlink'])
+  })
+
   it('returns an empty array when nothing matches', () => {
     expect(getStageAllPaths([], 'unstaged')).toEqual([])
     expect(getStageAllPaths([entry({ path: 'a.ts', area: 'staged' })], 'unstaged')).toEqual([])
+  })
+})
+
+describe('status entry stageability', () => {
+  it('marks nested-only submodule changes as not stageable from the parent repo', () => {
+    const nestedOnly = entry({
+      path: 'nested-repo',
+      area: 'unstaged',
+      submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: false }
+    })
+
+    expect(isSubmoduleWorktreeOnlyChange(nestedOnly)).toBe(true)
+    expect(isStageableStatusEntry(nestedOnly)).toBe(false)
+  })
+
+  it('keeps changed submodule gitlinks stageable from the parent repo', () => {
+    const changedGitlink = entry({
+      path: 'nested-repo',
+      area: 'unstaged',
+      submodule: { commitChanged: true, trackedChanges: true, untrackedChanges: true }
+    })
+
+    expect(isSubmoduleWorktreeOnlyChange(changedGitlink)).toBe(false)
+    expect(isStageableStatusEntry(changedGitlink)).toBe(true)
+  })
+
+  it('marks lazily-expanded submodule-internal entries as not stageable', () => {
+    const innerEntry = entry({
+      path: 'flutter_mine/lib/main.dart',
+      area: 'unstaged',
+      submoduleRoot: 'flutter_mine'
+    })
+
+    // Why: changes inside a submodule are read-only from the parent — staging
+    // them via `git add` from the parent worktree is a no-op/footgun.
+    expect(isStageableStatusEntry(innerEntry)).toBe(false)
+    expect(getStageAllPaths([innerEntry], 'unstaged')).toEqual([])
   })
 })
 

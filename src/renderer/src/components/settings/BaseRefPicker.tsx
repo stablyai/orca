@@ -1,16 +1,20 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: base-ref defaults and search results come from runtime repo IPC and must clear stale repo results before new requests resolve. */
-import { useEffect, useState } from 'react'
-import { ScrollArea } from '../ui/scroll-area'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
 } from '@/runtime/runtime-repo-client'
+import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
+import { translate } from '@/i18n/i18n'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 type BaseRefPickerProps = {
   repoId: string
+  hostId?: ExecutionHostId
   currentBaseRef?: string
   onSelect: (ref: string) => void
   onUsePrimary?: () => void
@@ -18,13 +22,20 @@ type BaseRefPickerProps = {
 
 export function BaseRefPicker({
   repoId,
+  hostId,
   currentBaseRef,
   onSelect,
   onUsePrimary
 }: BaseRefPickerProps): React.JSX.Element {
-  const activeRuntimeEnvironmentId = useAppStore(
-    (state) => state.settings?.activeRuntimeEnvironmentId ?? null
+  const focusedRuntimeEnvironmentId = useAppStore((state) =>
+    getRuntimeEnvironmentIdForRepo(state, repoId)
   )
+  const selectedHost = parseExecutionHostId(hostId)
+  const activeRuntimeEnvironmentId = hostId
+    ? selectedHost?.kind === 'runtime'
+      ? selectedHost.environmentId
+      : null
+    : focusedRuntimeEnvironmentId
   // Why: null until the IPC resolves (or when the repo has no default base ref
   // available). We avoid seeding with 'origin/main' because that would display
   // a fabricated default in repos that don't actually have origin/main.
@@ -37,13 +48,36 @@ export function BaseRefPicker({
   const [baseRefQuery, setBaseRefQuery] = useState('')
   const [baseRefResults, setBaseRefResults] = useState<string[]>([])
   const [isSearchingBaseRefs, setIsSearchingBaseRefs] = useState(false)
+  const baseRefResultsListRef = useRef<HTMLDivElement>(null)
+
+  // Why: Radix Dialog scroll-lock cancels wheel events on in-dialog scroll
+  // regions, so we scroll the results list manually (same pattern as CommandList).
+  useEffect(() => {
+    const el = baseRefResultsListRef.current
+    if (!el) {
+      return
+    }
+    const onWheel = (event: WheelEvent): void => {
+      if (el.scrollHeight <= el.clientHeight) {
+        return
+      }
+      event.preventDefault()
+      el.scrollTop += event.deltaY
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [baseRefResults.length])
 
   useEffect(() => {
     let stale = false
 
     const loadDefaultBaseRef = async (): Promise<void> => {
       try {
-        const result = await getRuntimeRepoBaseRefDefault({ activeRuntimeEnvironmentId }, repoId)
+        const result = await getRuntimeRepoBaseRefDefault(
+          { activeRuntimeEnvironmentId },
+          repoId,
+          hostId
+        )
         if (!stale) {
           setDefaultBaseRef(result.defaultBaseRef)
           setRemoteCount(result.remoteCount)
@@ -69,9 +103,14 @@ export function BaseRefPicker({
     return () => {
       stale = true
     }
-  }, [activeRuntimeEnvironmentId, repoId])
+  }, [activeRuntimeEnvironmentId, hostId, repoId])
 
   useEffect(() => {
+    if (!isRuntimeRepoRefSearchQueryWithinLimit(baseRefQuery)) {
+      setBaseRefResults([])
+      setIsSearchingBaseRefs(false)
+      return
+    }
     const trimmedQuery = baseRefQuery.trim()
     if (trimmedQuery.length < 2) {
       setBaseRefResults([])
@@ -83,7 +122,13 @@ export function BaseRefPicker({
     setIsSearchingBaseRefs(true)
 
     const timer = window.setTimeout(() => {
-      void searchRuntimeRepoBaseRefs({ activeRuntimeEnvironmentId }, repoId, trimmedQuery, 20)
+      void searchRuntimeRepoBaseRefs(
+        { activeRuntimeEnvironmentId },
+        repoId,
+        trimmedQuery,
+        20,
+        hostId
+      )
         .then((results) => {
           if (!stale) {
             setBaseRefResults(results)
@@ -106,7 +151,7 @@ export function BaseRefPicker({
       stale = true
       window.clearTimeout(timer)
     }
-  }, [activeRuntimeEnvironmentId, baseRefQuery, repoId])
+  }, [activeRuntimeEnvironmentId, baseRefQuery, hostId, repoId])
 
   const effectiveBaseRef = currentBaseRef ?? defaultBaseRef
 
@@ -115,14 +160,25 @@ export function BaseRefPicker({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-sm font-medium text-foreground">
-            {effectiveBaseRef ?? 'No default base ref'}
+            {effectiveBaseRef ??
+              translate('auto.components.settings.BaseRefPicker.ee110e1830', 'No default base ref')}
           </div>
           <p className="text-xs text-muted-foreground">
             {currentBaseRef
-              ? 'Pinned for this repo'
+              ? translate(
+                  'auto.components.settings.BaseRefPicker.2f3cda96f5',
+                  'Pinned for this repo'
+                )
               : defaultBaseRef
-                ? `Following primary branch (${defaultBaseRef})`
-                : 'Pick a base branch below'}
+                ? translate(
+                    'auto.components.settings.BaseRefPicker.086ce7f369',
+                    'Following primary branch ({{value0}})',
+                    { value0: defaultBaseRef }
+                  )
+                : translate(
+                    'auto.components.settings.BaseRefPicker.9a14ec7400',
+                    'Pick a base branch below'
+                  )}
           </p>
           {/* Why: passive hint that fork workflows have other remotes worth
               searching (e.g. `upstream`). Host-agnostic and remote-name-agnostic
@@ -136,14 +192,30 @@ export function BaseRefPicker({
             // whenever remoteCount>1, not a dynamic status update. aria-live would
             // cause screen readers to re-announce it on every mount/repo switch.
             <p className="text-xs text-muted-foreground">
-              Multiple remotes detected. Type a remote name (e.g. <code>upstream</code>) or a full
-              ref (e.g. <code>upstream/main</code>) to scope results.
+              {translate(
+                'auto.components.settings.BaseRefPicker.a5c16712c1',
+                'Multiple remotes detected. Type a remote name (e.g.'
+              )}{' '}
+              <code>
+                {translate('auto.components.settings.BaseRefPicker.915ad97875', 'upstream')}
+              </code>
+              {translate(
+                'auto.components.settings.BaseRefPicker.80f7c82303',
+                ') or a full ref (e.g.'
+              )}{' '}
+              <code>
+                {translate('auto.components.settings.BaseRefPicker.b468f46726', 'upstream/main')}
+              </code>
+              {translate(
+                'auto.components.settings.BaseRefPicker.ade9a5bb03',
+                ') to scope results.'
+              )}
             </p>
           ) : null}
         </div>
         {onUsePrimary && (
           <Button variant="outline" size="sm" onClick={onUsePrimary} disabled={!currentBaseRef}>
-            Use Primary
+            {translate('auto.components.settings.BaseRefPicker.773a5687a3', 'Use Primary')}
           </Button>
         )}
       </div>
@@ -151,17 +223,25 @@ export function BaseRefPicker({
       <Input
         value={baseRefQuery}
         onChange={(e) => setBaseRefQuery(e.target.value)}
-        placeholder="Search branches by name..."
+        placeholder={translate(
+          'auto.components.settings.BaseRefPicker.7db7fb87e5',
+          'Search branches by name...'
+        )}
         className="max-w-md"
       />
 
       {isSearchingBaseRefs ? (
-        <p className="text-xs text-muted-foreground">Searching branches...</p>
+        <p className="text-xs text-muted-foreground">
+          {translate('auto.components.settings.BaseRefPicker.a4a9372eb2', 'Searching branches...')}
+        </p>
       ) : null}
 
       {!isSearchingBaseRefs && baseRefQuery.trim().length >= 2 ? (
         baseRefResults.length > 0 ? (
-          <ScrollArea className="max-h-48 rounded-md border border-border/50">
+          <div
+            ref={baseRefResultsListRef}
+            className="max-h-[min(12rem,40vh)] overflow-y-auto overflow-x-hidden rounded-md border border-border/50 scrollbar-sleek"
+          >
             <div className="p-1">
               {baseRefResults.map((ref) => (
                 <button
@@ -184,14 +264,21 @@ export function BaseRefPicker({
                 >
                   <span className="truncate">{ref}</span>
                   {effectiveBaseRef === ref ? (
-                    <span className="text-[10px] uppercase tracking-[0.18em]">Current</span>
+                    <span className="text-[10px] uppercase tracking-[0.18em]">
+                      {translate('auto.components.settings.BaseRefPicker.d166ff883d', 'Current')}
+                    </span>
                   ) : null}
                 </button>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         ) : (
-          <p className="text-xs text-muted-foreground">No matching branches found.</p>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.BaseRefPicker.1b8e54151f',
+              'No matching branches found.'
+            )}
+          </p>
         )
       ) : null}
     </div>

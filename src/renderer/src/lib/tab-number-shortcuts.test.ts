@@ -32,7 +32,10 @@ function state(overrides: {
   | 'activeView'
   | 'activeWorktreeId'
   | 'groupsByWorktree'
+  | 'repos'
+  | 'settings'
   | 'unifiedTabsByWorktree'
+  | 'worktreesByRepo'
 > {
   const worktreeId = overrides.activeWorktreeId ?? 'wt-1'
   return {
@@ -41,6 +44,13 @@ function state(overrides: {
     activeGroupIdByWorktree:
       worktreeId === null ? {} : { [worktreeId]: overrides.activeGroupId ?? 'group-a' },
     groupsByWorktree: worktreeId === null ? {} : { [worktreeId]: overrides.groups ?? [] },
+    repos:
+      worktreeId === null
+        ? []
+        : ([{ id: 'repo-1', connectionId: null, executionHostId: 'local' }] as never),
+    settings: { activeRuntimeEnvironmentId: null } as never,
+    worktreesByRepo:
+      worktreeId === null ? {} : { 'repo-1': [{ id: worktreeId, repoId: 'repo-1' }] as never },
     unifiedTabsByWorktree: worktreeId === null ? {} : { [worktreeId]: overrides.tabs ?? [] }
   }
 }

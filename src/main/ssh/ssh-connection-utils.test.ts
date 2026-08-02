@@ -1,7 +1,6 @@
-/* eslint-disable max-lines -- Why: SSH connection utility tests share mocked filesystem and environment setup across auth, proxy, and retry helpers. */
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import { join } from 'path'
+import { join } from 'node:path'
 import { BaseAgent, utils, type ParsedKey } from 'ssh2'
 
 const { spawnMock } = vi.hoisted(() => ({
@@ -31,6 +30,8 @@ vi.mock('fs', () => ({
 
 import {
   isTransientError,
+  isSystemSshFallbackError,
+  isGssapiSystemSshFallbackCandidate,
   isAuthError,
   isAgentFallbackError,
   sleep,
@@ -144,6 +145,71 @@ describe('isTransientError', () => {
   })
 })
 
+// ── isSystemSshFallbackError ─────────────────────────────────────────
+
+describe('isSystemSshFallbackError', () => {
+  it('returns true for local reachability errors that system ssh may bypass', () => {
+    const hostErr = new Error('host unreachable') as NodeJS.ErrnoException
+    hostErr.code = 'EHOSTUNREACH'
+    const netErr = new Error('net unreachable') as NodeJS.ErrnoException
+    netErr.code = 'ENETUNREACH'
+
+    expect(isSystemSshFallbackError(hostErr)).toBe(true)
+    expect(isSystemSshFallbackError(netErr)).toBe(true)
+  })
+
+  it('returns false for transient errors that should keep the normal retry path', () => {
+    const refused = new Error('refused') as NodeJS.ErrnoException
+    refused.code = 'ECONNREFUSED'
+
+    expect(isSystemSshFallbackError(refused)).toBe(false)
+    expect(isSystemSshFallbackError(new Error('connect ETIMEDOUT 1.2.3.4:22'))).toBe(false)
+  })
+})
+
+// ── isGssapiSystemSshFallbackCandidate ───────────────────────────────
+
+describe('isGssapiSystemSshFallbackCandidate', () => {
+  const authErr = new Error('All configured authentication methods failed')
+
+  it('returns true for auth failures when resolved config enables GSSAPI', () => {
+    expect(isGssapiSystemSshFallbackCandidate(authErr, {}, { gssapiAuthentication: true })).toBe(
+      true
+    )
+  })
+
+  it('returns true for passphrase failures so Kerberos SSO runs before prompting', () => {
+    const passphraseErr = new Error('Encrypted private OpenSSH key detected, but no passphrase')
+    expect(
+      isGssapiSystemSshFallbackCandidate(passphraseErr, {}, { gssapiAuthentication: true })
+    ).toBe(true)
+  })
+
+  it('returns false when the target already tried system ssh proactively', () => {
+    expect(
+      isGssapiSystemSshFallbackCandidate(
+        authErr,
+        { gssapiAuthentication: true },
+        { gssapiAuthentication: true }
+      )
+    ).toBe(false)
+  })
+
+  it('returns false without GSSAPI in the resolved config', () => {
+    expect(isGssapiSystemSshFallbackCandidate(authErr, {}, { gssapiAuthentication: false })).toBe(
+      false
+    )
+    expect(isGssapiSystemSshFallbackCandidate(authErr, {}, null)).toBe(false)
+  })
+
+  it('returns false for network errors so retry semantics stay unchanged', () => {
+    const netErr = new Error('connect ETIMEDOUT 1.2.3.4:22')
+    expect(isGssapiSystemSshFallbackCandidate(netErr, {}, { gssapiAuthentication: true })).toBe(
+      false
+    )
+  })
+})
+
 // ── isAuthError ──────────────────────────────────────────────────────
 
 describe('isAuthError', () => {
@@ -167,8 +233,20 @@ describe('isAuthError', () => {
     )
   })
 
+  it.each([
+    'Permission denied (publickey).',
+    'Permission denied (publickey,password).',
+    'Permission denied, please try again.'
+  ])('detects OpenSSH credential rejection: %s', (message) => {
+    expect(isAuthError(new Error(message))).toBe(true)
+  })
+
   it('returns false for transient errors', () => {
     expect(isAuthError(new Error('connect ETIMEDOUT'))).toBe(false)
+  })
+
+  it('does not classify a local filesystem permission failure as authentication', () => {
+    expect(isAuthError(new Error('Permission denied (os error 13)'))).toBe(false)
   })
 })
 
@@ -247,7 +325,7 @@ describe('findDefaultKeyFile', () => {
     expect(result!.contents).toEqual(Buffer.from('key-contents'))
   })
 
-  it('probes keys in VS Code order: ed25519, rsa, ecdsa, dsa, xmss', () => {
+  it('probes regular and FIDO2 keys in stable default order', () => {
     const checkedPaths: string[] = []
     mockExistsSync.mockImplementation((path: unknown) => {
       checkedPaths.push(String(path))
@@ -263,6 +341,34 @@ describe('findDefaultKeyFile', () => {
       testHomePath('.ssh', 'id_dsa'),
       testHomePath('.ssh', 'id_xmss')
     ])
+  })
+
+  it('keeps a regular default ahead of a malformed FIDO2 default', () => {
+    mockExistsSync.mockImplementation((path: unknown) => {
+      return (
+        path === testHomePath('.ssh', 'id_rsa') || path === testHomePath('.ssh', 'id_ed25519_sk')
+      )
+    })
+    mockReadFileSync.mockImplementation((path: unknown) => {
+      if (String(path) === testHomePath('.ssh', 'id_ed25519_sk')) {
+        throw new Error('malformed FIDO2 key')
+      }
+      return Buffer.from('rsa-key')
+    })
+
+    expect(findDefaultKeyFile()).toEqual({
+      path: '~/.ssh/id_rsa',
+      contents: Buffer.from('rsa-key')
+    })
+  })
+
+  it('leaves FIDO2 defaults out of the ssh2 private-key fallback', () => {
+    mockExistsSync.mockImplementation((path: unknown) => {
+      return path === testHomePath('.ssh', 'id_ed25519_sk')
+    })
+
+    expect(findDefaultKeyFile()).toBeUndefined()
+    expect(mockReadFileSync).not.toHaveBeenCalled()
   })
 
   it('skips unreadable key files and tries next', () => {
@@ -303,6 +409,8 @@ function makeResolved(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig
     forwardAgent: false,
     identitiesOnly: false,
     proxyUseFdpass: false,
+    controlMaster: 'no',
+    controlPersist: 'no',
     ...overrides
   }
 }
@@ -368,6 +476,44 @@ describe('buildConnectConfig', () => {
     )
 
     expect(config.port).toBe(2022)
+  })
+
+  it('uses fresh OpenSSH endpoint authority for imported config targets', () => {
+    const config = buildConnectConfig(
+      makeTarget({
+        source: 'ssh-config',
+        configHost: 'workbox',
+        host: 'stale.example.com',
+        port: 2022,
+        username: 'stale-user'
+      }),
+      makeResolved({
+        hostname: 'current.example.com',
+        port: 2202,
+        user: 'current-user'
+      })
+    )
+
+    expect(config.host).toBe('current.example.com')
+    expect(config.port).toBe(2202)
+    expect(config.username).toBe('current-user')
+  })
+
+  it('keeps imported endpoint fields as the fallback when ssh -G is unavailable', () => {
+    const config = buildConnectConfig(
+      makeTarget({
+        source: 'ssh-config',
+        configHost: 'workbox',
+        host: 'fallback.example.com',
+        port: 2022,
+        username: 'fallback-user'
+      }),
+      null
+    )
+
+    expect(config.host).toBe('fallback.example.com')
+    expect(config.port).toBe(2022)
+    expect(config.username).toBe('fallback-user')
   })
 
   it('sets readyTimeout to CONNECT_TIMEOUT_MS', () => {
@@ -513,6 +659,22 @@ describe('buildConnectConfig', () => {
     }
   })
 
+  it('uses fresh OpenSSH IdentityFile authority for imported config targets', () => {
+    mockReadFileSync.mockImplementation((path: unknown) => Buffer.from(String(path)))
+    const config = buildConnectConfig(
+      makeTarget({
+        source: 'ssh-config',
+        configHost: 'workbox',
+        identityFile: '/home/user/.ssh/stale'
+      }),
+      makeResolved({ identityFile: ['/home/user/.ssh/current'] }),
+      { includeAgent: false, includePrivateKey: true }
+    )
+
+    expect(config.privateKey).toEqual(Buffer.from('/home/user/.ssh/current'))
+    expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/current')
+  })
+
   it('expands Windows-style target.identityFile before reading private key', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
     const config = buildConnectConfig(makeTarget({ identityFile: '~\\.ssh\\custom' }), null, {
@@ -593,6 +755,23 @@ describe('resolveEffectiveProxy', () => {
     expect(resolveEffectiveProxy(target, resolved)).toEqual({
       kind: 'proxy-command',
       command: 'cloudflared access ssh --hostname %h'
+    })
+  })
+
+  it('uses fresh OpenSSH proxy authority for imported config targets', () => {
+    const target = {
+      ...makeTarget(),
+      source: 'ssh-config' as const,
+      configHost: 'workbox',
+      proxyCommand: 'ssh -W %h:%p stale-bastion'
+    }
+
+    expect(resolveEffectiveProxy(target, makeResolved())).toBeUndefined()
+    expect(
+      resolveEffectiveProxy(target, makeResolved({ proxyCommand: 'ssh -W %h:%p current-bastion' }))
+    ).toEqual({
+      kind: 'proxy-command',
+      command: 'ssh -W %h:%p current-bastion'
     })
   })
 

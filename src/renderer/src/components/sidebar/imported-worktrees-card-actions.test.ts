@@ -87,10 +87,17 @@ describe('imported worktrees card actions', () => {
   })
 
   it('dismisses the card when keep-hidden update succeeds', async () => {
-    await keepImportedWorktreesHiddenCard({ projectId, updateRepo, setCardState })
+    await keepImportedWorktreesHiddenCard({
+      projectId,
+      updateRepo,
+      setCardState,
+      hiddenWorktreePaths: ['/scratch/external'],
+      existingBaselinePaths: ['/scratch/old']
+    })
 
     expect(updateRepo).toHaveBeenCalledWith(projectId, {
-      externalWorktreeVisibilityPromptDismissedAt: expect.any(Number)
+      externalWorktreeVisibilityPromptDismissedAt: expect.any(Number),
+      externalWorktreeInboxBaselinePaths: ['/scratch/old', '/scratch/external']
     })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, null)
   })

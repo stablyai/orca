@@ -11,9 +11,12 @@ import type { MobileDiffLine } from './mobile-diff-lines'
 describe('mobile file syntax highlighting', () => {
   it('detects common source languages from file paths', () => {
     expect(detectMobileFileLanguage('src/App.tsx')).toBe('typescript')
+    expect(detectMobileFileLanguage('config/vitest.config.mts')).toBe('typescript')
+    expect(detectMobileFileLanguage('C:\\repo\\scripts\\postinstall.CTS')).toBe('typescript')
     expect(detectMobileFileLanguage('scripts/deploy.sh')).toBe('shell')
     expect(detectMobileFileLanguage('Dockerfile')).toBe('dockerfile')
     expect(resolveMobileSyntaxLanguage('src/App.tsx')).toBe('typescript')
+    expect(resolveMobileSyntaxLanguage('worktrees/feature/build.cts')).toBe('typescript')
     expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('plaintext')
   })
 
@@ -44,6 +47,22 @@ describe('mobile file syntax highlighting', () => {
     expect(highlighted[1]?.kind).toBe('add')
     expect(highlighted[1]?.newLineNumber).toBe(4)
     expect(highlighted[1]?.segments).toContainEqual({ text: '"New"', kind: 'string' })
+  })
+
+  it('continues highlighting after blank diff lines', () => {
+    const lines: MobileDiffLine[] = [
+      { kind: 'context', text: "import { readFileSync } from 'node:fs'", newLineNumber: 1 },
+      { kind: 'context', text: '', newLineNumber: 2 },
+      { kind: 'context', text: 'const projectDir = dirname(import.meta.url)', newLineNumber: 3 }
+    ]
+
+    const highlighted = highlightMobileDiffLines(lines, 'typescript')
+
+    expect(highlighted[1]).toMatchObject({
+      highlighted: false,
+      segments: [{ text: '', kind: 'plain' }]
+    })
+    expect(highlighted[2]?.segments).toContainEqual({ text: 'const', kind: 'keyword' })
   })
 
   it('falls back to plain text when segment caps would create too many React Native nodes', () => {

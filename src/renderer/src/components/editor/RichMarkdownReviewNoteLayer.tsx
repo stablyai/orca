@@ -8,6 +8,7 @@ import {
   type MarkdownReviewNote
 } from '@/lib/markdown-review-notes'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
+import { translate } from '@/i18n/i18n'
 
 function isRichMarkdownReviewNoteNavigationClick(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -48,7 +49,13 @@ export function RichMarkdownReviewNoteLayer({
   onDelivered
 }: RichMarkdownReviewNoteLayerProps): React.JSX.Element {
   return (
-    <div className="rich-markdown-review-note-layer" aria-label="Review notes">
+    <div
+      className="rich-markdown-review-note-layer"
+      aria-label={translate(
+        'auto.components.editor.RichMarkdownReviewNoteLayer.3ababd949d',
+        'Review notes'
+      )}
+    >
       {positions.map(({ comment, top }) => (
         <div
           key={comment.id}
@@ -80,9 +87,27 @@ export function RichMarkdownReviewNoteLayer({
                 <button
                   type="button"
                   className="rich-markdown-review-note-action"
-                  title={copiedCommentId === comment.id ? 'Copied note' : 'Copy note for agent'}
+                  title={
+                    copiedCommentId === comment.id
+                      ? translate(
+                          'auto.components.editor.RichMarkdownReviewNoteLayer.117432e2c6',
+                          'Copied note'
+                        )
+                      : translate(
+                          'auto.components.editor.RichMarkdownReviewNoteLayer.9cde7ad994',
+                          'Copy note for agent'
+                        )
+                  }
                   aria-label={
-                    copiedCommentId === comment.id ? 'Copied note' : 'Copy note for agent'
+                    copiedCommentId === comment.id
+                      ? translate(
+                          'auto.components.editor.RichMarkdownReviewNoteLayer.117432e2c6',
+                          'Copied note'
+                        )
+                      : translate(
+                          'auto.components.editor.RichMarkdownReviewNoteLayer.9cde7ad994',
+                          'Copy note for agent'
+                        )
                   }
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
@@ -104,7 +129,10 @@ export function RichMarkdownReviewNoteLayer({
                   scopes={[
                     {
                       id: 'note',
-                      label: 'This note',
+                      label: translate(
+                        'auto.components.editor.RichMarkdownReviewNoteLayer.f3ef92952b',
+                        'This note'
+                      ),
                       notes: comment.sentAt ? [] : [comment as MarkdownReviewNote],
                       prompt: formatMarkdownReviewNotes(
                         [comment as MarkdownReviewNote],

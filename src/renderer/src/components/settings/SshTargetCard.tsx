@@ -9,14 +9,16 @@ import {
   ServerOff,
   Trash2
 } from 'lucide-react'
-import type {
-  SshTarget,
-  SshConnectionState,
-  SshConnectionStatus
+import {
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshConnectionState,
+  type SshConnectionStatus,
+  type SshTarget
 } from '../../../../shared/ssh-types'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
+import { translate } from '@/i18n/i18n'
 
 // ── Shared status helpers ────────────────────────────────────────────
 
@@ -28,7 +30,9 @@ export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
   connected: 'Connected',
   reconnecting: 'Reconnecting\u2026',
   'reconnection-failed': 'Reconnection failed',
-  error: 'Error'
+  get error() {
+    return translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
+  }
 }
 
 export function statusColor(status: SshConnectionStatus): string {
@@ -46,6 +50,31 @@ export function statusColor(status: SshConnectionStatus): string {
     case 'disconnected':
       return 'bg-muted-foreground/40'
   }
+}
+
+function formatGraceDuration(seconds: number): string {
+  if (seconds % 86_400 === 0) {
+    return `${seconds / 86_400}d`
+  }
+  if (seconds % 3_600 === 0) {
+    return `${seconds / 3_600}h`
+  }
+  if (seconds % 60 === 0) {
+    return `${seconds / 60}m`
+  }
+  return `${seconds}s`
+}
+
+function formatTerminalPersistence(target: SshTarget): string {
+  const graceSeconds = target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+  if (graceSeconds === 0) {
+    return translate('auto.components.settings.SshTargetCard.8ce71262f4', 'terminals until reset')
+  }
+  return translate(
+    'auto.components.settings.SshTargetCard.a883f5a00f',
+    'terminal timeout: {{value0}}',
+    { value0: formatGraceDuration(graceSeconds) }
+  )
 }
 
 // ── SshTargetCard ────────────────────────────────────────────────────
@@ -89,6 +118,7 @@ export function SshTargetCard({
   const endpoint = target.username
     ? `${target.username}@${target.host}:${target.port}`
     : `${target.host}:${target.port}`
+  const terminalPersistence = formatTerminalPersistence(target)
 
   const handleCardRef = useCallback((node: HTMLDivElement | null): void => {
     // Why: SSH target actions can resolve after the card is removed; the root
@@ -143,7 +173,17 @@ export function SshTargetCard({
           onClick={handleTerminateSessions}
           className="size-7 text-muted-foreground hover:text-red-400"
           disabled={hasActionInFlight}
-          aria-label={terminateInFlight ? 'Ending remote terminals' : 'End remote terminals'}
+          aria-label={
+            terminateInFlight
+              ? translate(
+                  'auto.components.settings.SshTargetCard.c77f1abfe3',
+                  'Ending remote terminals'
+                )
+              : translate(
+                  'auto.components.settings.SshTargetCard.da16e108e6',
+                  'End remote terminals'
+                )
+          }
         >
           {terminateInFlight ? (
             <Loader2 className="size-3 animate-spin" />
@@ -153,7 +193,7 @@ export function SshTargetCard({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        End remote terminals
+        {translate('auto.components.settings.SshTargetCard.da16e108e6', 'End remote terminals')}
       </TooltipContent>
     </Tooltip>
   )
@@ -167,7 +207,14 @@ export function SshTargetCard({
           onClick={handleResetRelay}
           className="size-7 text-muted-foreground hover:text-red-400"
           disabled={hasActionInFlight}
-          aria-label={resetInFlight ? 'Resetting remote relay' : 'Reset remote relay'}
+          aria-label={
+            resetInFlight
+              ? translate(
+                  'auto.components.settings.SshTargetCard.97dea4e8cf',
+                  'Resetting remote relay'
+                )
+              : translate('auto.components.settings.SshTargetCard.762a48c662', 'Reset remote relay')
+          }
         >
           {resetInFlight ? (
             <Loader2 className="size-3 animate-spin" />
@@ -177,7 +224,7 @@ export function SshTargetCard({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        Reset remote relay
+        {translate('auto.components.settings.SshTargetCard.762a48c662', 'Reset remote relay')}
       </TooltipContent>
     </Tooltip>
   )
@@ -194,13 +241,16 @@ export function SshTargetCard({
             onClick={() => onEdit(target)}
             className="size-7"
             disabled={hasActionInFlight}
-            aria-label="Edit target"
+            aria-label={translate(
+              'auto.components.settings.SshTargetCard.3d8af2949f',
+              'Edit target'
+            )}
           >
             <Pencil className="size-3" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
-          Edit target
+          {translate('auto.components.settings.SshTargetCard.3d8af2949f', 'Edit target')}
         </TooltipContent>
       </Tooltip>
       <Tooltip>
@@ -211,7 +261,11 @@ export function SshTargetCard({
             onClick={() => onRemove(target.id)}
             className="size-7 text-muted-foreground hover:text-red-400"
             disabled={hasActionInFlight}
-            aria-label={removeInFlight ? 'Removing target' : 'Remove target'}
+            aria-label={
+              removeInFlight
+                ? translate('auto.components.settings.SshTargetCard.3d21a22d0e', 'Removing target')
+                : translate('auto.components.settings.SshTargetCard.7f7b3d7ab4', 'Remove target')
+            }
           >
             {removeInFlight ? (
               <Loader2 className="size-3 animate-spin" />
@@ -221,7 +275,7 @@ export function SshTargetCard({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
-          Remove target
+          {translate('auto.components.settings.SshTargetCard.7f7b3d7ab4', 'Remove target')}
         </TooltipContent>
       </Tooltip>
     </div>
@@ -243,6 +297,7 @@ export function SshTargetCard({
         <p className="truncate text-xs text-muted-foreground">
           {endpoint}
           {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
+          {` \u2022 ${terminalPersistence}`}
         </p>
         {state?.error ? (
           <p className="mt-0.5 truncate text-xs text-red-400">{state.error}</p>
@@ -261,7 +316,7 @@ export function SshTargetCard({
               disabled={hasActionInFlight}
             >
               <ServerOff className="size-3" />
-              Disconnect
+              {translate('auto.components.settings.SshTargetCard.4c86f30877', 'Disconnect')}
             </Button>
           </>
         ) : isSshTargetConnecting(status) ? (
@@ -269,7 +324,7 @@ export function SshTargetCard({
             {renderSecondaryIconActions(false)}
             <Button variant="ghost" size="xs" disabled className="gap-1.5">
               <Loader2 className="size-3 animate-spin" />
-              Connecting
+              {translate('auto.components.settings.SshTargetCard.1810b51482', 'Connecting')}
             </Button>
           </>
         ) : (
@@ -287,7 +342,7 @@ export function SshTargetCard({
               ) : (
                 <MonitorSmartphone className="size-3" />
               )}
-              Test
+              {translate('auto.components.settings.SshTargetCard.0e53e9f8e8', 'Test')}
             </Button>
             <Button
               variant="ghost"
@@ -301,7 +356,7 @@ export function SshTargetCard({
               ) : (
                 <Server className="size-3" />
               )}
-              Connect
+              {translate('auto.components.settings.SshTargetCard.ec6543cee9', 'Connect')}
             </Button>
           </>
         )}

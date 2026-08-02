@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: browser IPC handlers must be registered together so the
    trust boundary (isTrustedBrowserRenderer) and handler teardown stay consistent. */
-import { BrowserWindow, dialog, ipcMain, webContents } from 'electron'
-import { browserManager } from '../browser/browser-manager'
+import { BrowserWindow, ipcMain, webContents } from 'electron'
+import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
@@ -24,6 +24,7 @@ import type {
 } from '../../shared/browser-grab-types'
 import type {
   BrowserCookieImportResult,
+  BrowserCertificateProceedResult,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
   BrowserViewportOverride
@@ -44,6 +45,9 @@ let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 const pendingTabRegistrations = new Map<string, Set<() => void>>()
 const pendingWorktreeTabRegistrations = new Map<string, Set<() => void>>()
 const pendingAnyTabRegistrations = new Set<() => void>()
+const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
+const grabModeOperationByPageId = new Map<string, Promise<void>>()
+const GRAB_REGISTRATION_WAIT_MS = 1_000
 
 function waitForRegistrationSet(
   registrationResolvers: Set<() => void>,
@@ -99,6 +103,10 @@ export function waitForTabRegistration(browserPageId: string, timeoutMs = 8_000)
   if (isLiveBrowserWebContentsId(browserManager.getGuestWebContentsId(browserPageId))) {
     return Promise.resolve()
   }
+  return waitForNextTabRegistration(browserPageId, timeoutMs)
+}
+
+function waitForNextTabRegistration(browserPageId: string, timeoutMs: number): Promise<void> {
   let registrationResolvers = pendingTabRegistrations.get(browserPageId)
   if (!registrationResolvers) {
     registrationResolvers = new Set()
@@ -106,6 +114,24 @@ export function waitForTabRegistration(browserPageId: string, timeoutMs = 8_000)
   }
   return waitForRegistrationSet(registrationResolvers, timeoutMs, () => {
     pendingTabRegistrations.delete(browserPageId)
+  })
+}
+
+function queueGrabModeOperation(
+  browserPageId: string,
+  operation: () => Promise<BrowserSetGrabModeResult>
+): Promise<BrowserSetGrabModeResult> {
+  const previous = grabModeOperationByPageId.get(browserPageId) ?? Promise.resolve()
+  const result = previous.then(operation)
+  const completion = result.then(
+    () => {},
+    () => {}
+  )
+  grabModeOperationByPageId.set(browserPageId, completion)
+  return result.finally(() => {
+    if (grabModeOperationByPageId.get(browserPageId) === completion) {
+      grabModeOperationByPageId.delete(browserPageId)
+    }
   })
 }
 
@@ -167,6 +193,9 @@ function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean {
 }
 
 export function registerBrowserHandlers(): void {
+  grabModeIntentByPageId.clear()
+  // Why: a stale in-flight chain from a prior registration would block new operations forever.
+  grabModeOperationByPageId.clear()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:unregisterGuest')
   ipcMain.removeHandler('browser:openDevTools')
@@ -180,6 +209,7 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
   ipcMain.removeHandler('browser:activeTabChanged')
+  ipcMain.removeHandler('browser:proceedCertificate')
 
   ipcMain.handle(
     'browser:registerGuest',
@@ -201,10 +231,13 @@ export function registerBrowserHandlers(): void {
       // with a new webContentsId. The bridge must destroy the old session's
       // proxy (its webContents is gone) and let the next command recreate it.
       const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
-      browserManager.registerGuest({
+      const registered = browserManager.registerGuest({
         ...args,
         rendererWebContentsId: event.sender.id
       })
+      if (!registered) {
+        return false
+      }
       if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
         agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
       }
@@ -232,8 +265,28 @@ export function registerBrowserHandlers(): void {
       agentBrowserBridgeRef.onTabClosed(wcId)
     }
     browserManager.unregisterGuest(args.browserPageId)
+    grabModeIntentByPageId.delete(args.browserPageId)
+    // Why: don't let a reused browserPageId queue behind the destroyed guest's pending chain.
+    grabModeOperationByPageId.delete(args.browserPageId)
     return true
   })
+
+  ipcMain.handle(
+    'browser:proceedCertificate',
+    (
+      event,
+      args: { browserPageId?: unknown; challengeId?: unknown }
+    ): BrowserCertificateProceedResult => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.browserPageId !== 'string' ||
+        typeof args.challengeId !== 'string'
+      ) {
+        return { ok: false, reason: 'missing' }
+      }
+      return browserCertificateTrustController.proceed(args.browserPageId, args.challengeId)
+    }
+  )
 
   // Why: keeps the bridge's active tab in sync with the renderer's UI state.
   // Without this, a user switching tabs in the UI would leave the agent operating
@@ -330,34 +383,6 @@ export function registerBrowserHandlers(): void {
     }
   )
 
-  ipcMain.handle('browser:acceptDownload', async (event, args: { downloadId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return { ok: false, reason: 'not-authorized' as const }
-    }
-    const prompt = browserManager.getDownloadPrompt(args.downloadId, event.sender.id)
-    if (!prompt) {
-      return { ok: false, reason: 'not-ready' as const }
-    }
-
-    const parent = BrowserWindow.fromWebContents(event.sender)
-    const result = parent
-      ? await dialog.showSaveDialog(parent, { defaultPath: prompt.filename })
-      : await dialog.showSaveDialog({ defaultPath: prompt.filename })
-    if (result.canceled || !result.filePath) {
-      browserManager.cancelDownload({
-        downloadId: args.downloadId,
-        senderWebContentsId: event.sender.id
-      })
-      return { ok: false, reason: 'canceled' as const }
-    }
-
-    return browserManager.acceptDownload({
-      downloadId: args.downloadId,
-      senderWebContentsId: event.sender.id,
-      savePath: result.filePath
-    })
-  })
-
   ipcMain.handle('browser:cancelDownload', (event, args: { downloadId: string }) => {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
@@ -376,12 +401,44 @@ export function registerBrowserHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'not-authorized' }
       }
-      const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      const intent = {
+        generation: (grabModeIntentByPageId.get(args.browserPageId)?.generation ?? 0) + 1,
+        enabled: args.enabled
+      }
+      grabModeIntentByPageId.set(args.browserPageId, intent)
+      const isCurrentIntent = (): boolean =>
+        grabModeIntentByPageId.get(args.browserPageId) === intent
+      let guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      if (!guest && args.enabled) {
+        // Why: fast file:// pages can expose the toolbar before did-attach registration reaches main.
+        await waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS).catch(
+          () => {}
+        )
+        if (!isCurrentIntent()) {
+          return { ok: true }
+        }
+        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      }
       if (!guest) {
+        if (!args.enabled) {
+          return { ok: true }
+        }
         return { ok: false, reason: 'not-ready' }
       }
-      const success = await browserManager.setGrabMode(args.browserPageId, args.enabled, guest)
-      return success ? { ok: true } : { ok: false, reason: 'not-ready' }
+      return queueGrabModeOperation(args.browserPageId, async () => {
+        if (!isCurrentIntent()) {
+          return { ok: true }
+        }
+        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+        if (!guest) {
+          return args.enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
+        }
+        const success = await browserManager.setGrabMode(args.browserPageId, args.enabled, guest)
+        if (!isCurrentIntent()) {
+          return { ok: true }
+        }
+        return success ? { ok: true } : { ok: false, reason: 'injection-failed' }
+      })
     }
   )
 

@@ -30,7 +30,25 @@ describe('automation RPC methods', () => {
         prompt: 'Review changes',
         precheck: { command: 'test -f ready', timeoutSeconds: 30 },
         agentId: 'codex',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: 'github:stablyai/orca',
+          hostId: 'runtime:gpu',
+          projectHostSetupId: 'setup-gpu',
+          repoId: 'repo-gpu',
+          path: '/srv/orca'
+        },
+        sourceContext: {
+          kind: 'task-source',
+          provider: 'github',
+          projectId: 'github:stablyai/orca',
+          hostId: 'local',
+          projectHostSetupId: 'setup-local',
+          repoId: 'repo-local',
+          providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+        },
         repo: 'repo-1',
+        setupDecision: 'skip',
         reuseSession: true,
         rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
         dtstart: 1
@@ -41,6 +59,7 @@ describe('automation RPC methods', () => {
         id: 'auto-1',
         updates: {
           enabled: false,
+          setupDecision: 'run',
           reuseSession: false,
           rrule: '0 9 * * 1-5',
           dtstart: 2
@@ -59,13 +78,21 @@ describe('automation RPC methods', () => {
         prompt: 'Review changes',
         precheck: { command: 'test -f ready', timeoutSeconds: 30 },
         agentId: 'codex',
+        runContext: expect.objectContaining({ hostId: 'runtime:gpu' }),
+        sourceContext: expect.objectContaining({ hostId: 'local' }),
         repo: 'repo-1',
+        setupDecision: 'skip',
         reuseSession: true
       })
     )
     expect(runtime.updateAutomation).toHaveBeenCalledWith(
       'auto-1',
-      expect.objectContaining({ enabled: false, reuseSession: false, rrule: '0 9 * * 1-5' })
+      expect.objectContaining({
+        enabled: false,
+        setupDecision: 'run',
+        reuseSession: false,
+        rrule: '0 9 * * 1-5'
+      })
     )
     expect(runtime.deleteAutomation).toHaveBeenCalledWith('auto-1')
     expect(runtime.runAutomationNow).toHaveBeenCalledWith('auto-1')

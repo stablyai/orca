@@ -1,4 +1,4 @@
-export type TabCycleType = 'terminal' | 'editor' | 'browser'
+export type TabCycleType = 'terminal' | 'editor' | 'browser' | 'simulator'
 
 export type TypeCyclableTab = {
   type: TabCycleType
@@ -28,6 +28,9 @@ export function getActiveEntityIdForTabType(
   if (activeTabType === 'browser') {
     return activeBrowserTabId
   }
+  if (activeTabType === 'simulator') {
+    return activeTabId
+  }
   return activeTabId
 }
 
@@ -41,8 +44,8 @@ type GetNextTabAcrossAllTypesParams = {
   direction: number
 }
 
-// Why: companion to getNextTabWithinActiveType for the Cmd/Ctrl+Alt+Shift+]/[
-// "cycle across every tab" chord. Keeps the same dual-id matching semantics
+// Why: companion to getNextTabWithinActiveType for the "cycle across every tab"
+// chord (Cmd/Ctrl+Shift+]/[ on fresh installs). Keeps the same dual-id matching semantics
 // (prefer the active group's unified tabId to disambiguate split layouts, fall
 // back to the backing entity id) so behavior matches what the TabBar renders.
 export function getNextTabAcrossAllTypes({

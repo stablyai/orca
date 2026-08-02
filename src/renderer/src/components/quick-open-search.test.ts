@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  QUICK_OPEN_QUERY_MAX_BYTES,
   QUICK_OPEN_RESULT_LIMIT,
+  isQuickOpenQueryTooLarge,
   prepareQuickOpenFiles,
-  rankQuickOpenFiles
+  rankQuickOpenFiles,
+  type QuickOpenIndexedFile
 } from './quick-open-search'
 
 describe('quick-open-search', () => {
@@ -120,6 +123,32 @@ describe('quick-open-search', () => {
 
     expect(rankQuickOpenFiles('a', files, 0)).toEqual([])
     expect(rankQuickOpenFiles('a', files, -1)).toEqual([])
+  })
+
+  it('rejects oversized pasted queries before reading indexed file candidates', () => {
+    const oversizedQuery = 'secret-quick-open'.repeat(QUICK_OPEN_QUERY_MAX_BYTES)
+    const file = {
+      path: 'src/secret.ts',
+      inputIndex: 0,
+      get lowerPath(): string {
+        throw new Error('oversized queries must not scan indexed paths')
+      },
+      get lowerFilename(): string {
+        throw new Error('oversized queries must not scan indexed filenames')
+      }
+    } as QuickOpenIndexedFile
+
+    expect(isQuickOpenQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(rankQuickOpenFiles(oversizedQuery, [file])).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming quick-open queries', () => {
+    expect(
+      rankQuickOpenFiles(
+        ' '.repeat(QUICK_OPEN_QUERY_MAX_BYTES + 1),
+        prepareQuickOpenFiles(['src/a.ts'])
+      )
+    ).toEqual([])
   })
 
   it('matches Windows-style path queries against slash-normalized file paths', () => {

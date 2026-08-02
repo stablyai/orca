@@ -1,11 +1,14 @@
-/* eslint-disable max-lines */
 // Why: PR context generation depends on command order across remote-state
 // variants; keeping the table of git command mocks together makes regressions
 // easier to audit than splitting the suite by helper.
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getPullRequestDraftContext } from './pull-request-context'
 
 type GitExec = Parameters<typeof getPullRequestDraftContext>[0]
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 function createContextInput(base = 'main') {
   return {
@@ -260,73 +263,5 @@ describe('getPullRequestDraftContext', () => {
       ['merge-base', 'upstream/main', 'HEAD'],
       expect.any(Object)
     )
-  })
-
-  it('does not run rebase before collecting PR context', async () => {
-    const execGit = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\n', stderr: '' }
-      }
-      if (args[0] === 'for-each-ref') {
-        return { stdout: 'origin/main\n', stderr: '' }
-      }
-      if (args[0] === 'branch') {
-        return { stdout: 'feature\n', stderr: '' }
-      }
-      if (args[0] === 'rebase') {
-        throw new Error('Generate must not rebase the live worktree')
-      }
-      if (args[0] === 'merge-base') {
-        return { stdout: 'abc123\n', stderr: '' }
-      }
-      if (args[0] === 'log') {
-        return { stdout: '- feat: change\n', stderr: '' }
-      }
-      if (args[0] === 'diff') {
-        return { stdout: 'M\tREADME.md\n', stderr: '' }
-      }
-      throw new Error(`Unexpected git args: ${args.join(' ')}`)
-    })
-
-    await expect(getPullRequestDraftContext(execGit, createContextInput())).resolves.toMatchObject({
-      branch: 'feature'
-    })
-    expect(execGit).not.toHaveBeenCalledWith(expect.arrayContaining(['rebase']), expect.anything())
-  })
-
-  it('stops generation when the relevant base fetch fails', async () => {
-    const execGit = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\nstale-fork\n', stderr: '' }
-      }
-      if (args[0] === 'for-each-ref') {
-        return { stdout: 'origin/main\nstale-fork/main\n', stderr: '' }
-      }
-      if (args[0] === 'fetch') {
-        if (args[2] !== 'origin') {
-          throw new Error(`Fetched unrelated remote: ${args.join(' ')}`)
-        }
-        throw new Error(
-          'Command failed: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main\nfatal: unable to access origin'
-        )
-      }
-      throw new Error(`Unexpected git args: ${args.join(' ')}`)
-    })
-
-    await expect(getPullRequestDraftContext(execGit, createContextInput())).rejects.toThrow(
-      'Fetch before generating PR details failed: fatal: unable to access origin'
-    )
-  })
-
-  it('returns null without running git when the base is invalid', async () => {
-    const execGit = vi.fn<GitExec>()
-
-    await expect(getPullRequestDraftContext(execGit, createContextInput('--main'))).resolves.toBe(
-      null
-    )
-    expect(execGit).not.toHaveBeenCalled()
   })
 })

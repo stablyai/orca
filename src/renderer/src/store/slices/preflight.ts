@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
-import type { PreflightStatus } from '../../../../preload/api-types'
+import type { PreflightRuntimeContext, PreflightStatus } from '../../../../preload/api-types'
 import type { AppState } from '../types'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   getLocalPreflightContext,
   localPreflightContextKey,
@@ -15,6 +16,7 @@ export type PreflightSlice = {
   preflightStatusError: string | null
 
   refreshPreflightStatus: (options?: { force?: boolean }) => Promise<void>
+  invalidatePreflightStatus: () => void
 }
 
 let nonForcedPreflightRequest: { key: string; promise: Promise<void> } | null = null
@@ -28,13 +30,18 @@ function getErrorMessage(error: unknown): string {
 function buildPreflightArgs(
   force: boolean,
   context: LocalPreflightContext
-): { force?: boolean; wslDistro?: string | null; wslDefault?: boolean } | undefined {
-  if (!force && !context) {
+): (PreflightRuntimeContext & { force?: boolean }) | undefined {
+  const wslDistro = context?.wslDistro
+  const wslDefault = context?.wslDefault === true
+  const projectRuntime = context?.projectRuntime
+  if (!force && !wslDistro && !wslDefault && !projectRuntime) {
     return undefined
   }
   return {
     ...(force ? { force: true } : {}),
-    ...context
+    ...(projectRuntime ? { projectRuntime } : {}),
+    ...(wslDistro ? { wslDistro } : {}),
+    ...(wslDefault ? { wslDefault: true } : {})
   }
 }
 
@@ -44,6 +51,19 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
   preflightStatusContextKey: null,
   preflightStatusLoading: false,
   preflightStatusError: null,
+
+  invalidatePreflightStatus: () => {
+    latestPreflightRequestId += 1
+    nonForcedPreflightRequest = null
+    forcedPreflightRequest = null
+    set({
+      preflightStatus: null,
+      preflightStatusChecked: false,
+      preflightStatusContextKey: null,
+      preflightStatusLoading: false,
+      preflightStatusError: null
+    })
+  },
 
   refreshPreflightStatus: async (options) => {
     const force = options?.force === true
@@ -61,6 +81,8 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
 
     const requestId = ++latestPreflightRequestId
     const contextChanged = get().preflightStatusContextKey !== contextKey
+    const runtimeTarget = getActiveRuntimeTarget(get().settings)
+    const preflightArgs = buildPreflightArgs(force, context)
     set({
       preflightStatus: contextChanged ? null : get().preflightStatus,
       preflightStatusChecked: contextChanged ? false : get().preflightStatusChecked,
@@ -68,8 +90,11 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
       preflightStatusError: null
     })
 
-    const request = window.api.preflight
-      .check(buildPreflightArgs(force, context))
+    const request = (
+      runtimeTarget.kind === 'environment'
+        ? callRuntimeRpc<PreflightStatus>(runtimeTarget, 'preflight.check', force ? { force } : {})
+        : window.api.preflight.check(preflightArgs)
+    )
       .then((status) => {
         if (requestId !== latestPreflightRequestId) {
           return

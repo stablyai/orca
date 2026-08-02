@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalListWithKnownRecords,
+  mergeTerminalRecordsByCurrentOrder,
+  mobileSessionTabsEqual,
   type MobileTerminalSessionTab,
   type TerminalRecord
 } from './mobile-terminal-records'
@@ -23,6 +25,17 @@ const darkTheme = {
 }
 
 describe('mobile terminal records', () => {
+  it('keeps the known theme when a session-tab snapshot omits it', () => {
+    const known: TerminalRecord[] = [
+      { handle: 'pty-1', title: 'Old title', terminalTheme: darkTheme, isActive: false }
+    ]
+    const snapshot: TerminalRecord[] = [{ handle: 'pty-1', title: 'Current title', isActive: true }]
+
+    expect(mergeTerminalRecordsByCurrentOrder(snapshot, known)).toEqual([
+      { handle: 'pty-1', title: 'Current title', terminalTheme: darkTheme, isActive: true }
+    ])
+  })
+
   it('keeps session-tab terminal themes when terminal.list omits them', () => {
     const terminalList: TerminalRecord[] = [
       { handle: 'pty-1', title: 'Terminal', isActive: true },
@@ -72,5 +85,69 @@ describe('mobile terminal records', () => {
         }
       ])
     ).toEqual([])
+  })
+
+  it('treats a launch draft appearing or retracting as a session-tab change', () => {
+    // The route keeps `prev` when these compare equal, so a frame whose only
+    // delta is the draft would never reach the chat composer.
+    const base: MobileTerminalSessionTab = {
+      type: 'terminal',
+      id: 'term-1::leaf-1',
+      parentTabId: 'term-1',
+      leafId: 'leaf-1',
+      title: 'Claude',
+      status: 'ready',
+      terminal: 'pty-1',
+      isActive: true
+    }
+    const seeded: MobileTerminalSessionTab = {
+      ...base,
+      launchDraft: 'https://github.com/o/r/issues/12',
+      launchDraftCreatedAt: 1
+    }
+
+    expect(mobileSessionTabsEqual([base], [seeded])).toBe(false)
+    expect(mobileSessionTabsEqual([seeded], [base])).toBe(false)
+    expect(mobileSessionTabsEqual([seeded], [{ ...seeded }])).toBe(true)
+    expect(mobileSessionTabsEqual([seeded], [{ ...seeded, launchDraftCreatedAt: 2 }])).toBe(false)
+  })
+
+  it('treats terminal agent-status changes as session-tab changes', () => {
+    const base: MobileTerminalSessionTab = {
+      type: 'terminal',
+      id: 'term-1::leaf-1',
+      parentTabId: 'term-1',
+      leafId: 'leaf-1',
+      title: 'Claude',
+      status: 'ready',
+      terminal: 'pty-1',
+      isActive: true,
+      agentStatus: {
+        state: 'working',
+        prompt: '',
+        updatedAt: 1,
+        stateStartedAt: 1,
+        paneKey: 'term-1:leaf-1',
+        terminalHandle: 'pty-1',
+        stateHistory: []
+      }
+    }
+
+    expect(
+      mobileSessionTabsEqual(
+        [base],
+        [
+          {
+            ...base,
+            agentStatus: {
+              ...base.agentStatus!,
+              state: 'blocked',
+              updatedAt: 2,
+              stateStartedAt: 2
+            }
+          }
+        ]
+      )
+    ).toBe(false)
   })
 })

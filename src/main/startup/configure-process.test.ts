@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { homedir, tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => {
@@ -110,6 +110,74 @@ describe('patchPackagedProcessPath', () => {
 })
 
 describe('configureDevUserDataPath', () => {
+  it('forces Electron home into the disposable E2E profile', async () => {
+    const { app } = await import('electron')
+    const { configureDevUserDataPath } = await import('./configure-process')
+    const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+    const originalE2EHomeDir = process.env.ORCA_E2E_HOME_DIR
+    const originalHome = process.env.HOME
+    const originalUserProfile = process.env.USERPROFILE
+    const tempRoot = mkdtempSync(join(tmpdir(), 'orca-configure-e2e-home-'))
+    const e2eRoot = join(tempRoot, 'user-data')
+    const e2eHome = join(tempRoot, 'home')
+    process.env.ORCA_E2E_USER_DATA_DIR = e2eRoot
+    process.env.ORCA_E2E_HOME_DIR = e2eHome
+    process.env.HOME = e2eHome
+    process.env.USERPROFILE = e2eHome
+
+    try {
+      configureDevUserDataPath(true)
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true })
+      if (originalE2EUserDataDir === undefined) {
+        delete process.env.ORCA_E2E_USER_DATA_DIR
+      } else {
+        process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
+      }
+      if (originalE2EHomeDir === undefined) {
+        delete process.env.ORCA_E2E_HOME_DIR
+      } else {
+        process.env.ORCA_E2E_HOME_DIR = originalE2EHomeDir
+      }
+      if (originalHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = originalHome
+      }
+      if (originalUserProfile === undefined) {
+        delete process.env.USERPROFILE
+      } else {
+        process.env.USERPROFILE = originalUserProfile
+      }
+    }
+
+    expect(app.setPath).toHaveBeenCalledWith('home', e2eHome)
+    expect(app.setPath).toHaveBeenCalledWith('userData', e2eRoot)
+  })
+
+  it('rejects an E2E launch whose Node home escaped the disposable profile', async () => {
+    const { configureDevUserDataPath } = await import('./configure-process')
+    const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+    const originalE2EHomeDir = process.env.ORCA_E2E_HOME_DIR
+    const originalHome = process.env.HOME
+    const originalUserProfile = process.env.USERPROFILE
+    const e2eRoot = mkdtempSync(join(tmpdir(), 'orca-configure-e2e-escape-'))
+    process.env.ORCA_E2E_USER_DATA_DIR = e2eRoot
+    process.env.ORCA_E2E_HOME_DIR = join(e2eRoot, 'home')
+    process.env.HOME = join(e2eRoot, 'escaped-home')
+    process.env.USERPROFILE = join(e2eRoot, 'escaped-home')
+
+    try {
+      expect(() => configureDevUserDataPath(true)).toThrow(/disposable home boundary/)
+    } finally {
+      rmSync(e2eRoot, { recursive: true, force: true })
+      restoreEnv('ORCA_E2E_USER_DATA_DIR', originalE2EUserDataDir)
+      restoreEnv('ORCA_E2E_HOME_DIR', originalE2EHomeDir)
+      restoreEnv('HOME', originalHome)
+      restoreEnv('USERPROFILE', originalUserProfile)
+    }
+  })
+
   it('uses an explicit dev userData override when provided', async () => {
     const { app } = await import('electron')
     const { configureDevUserDataPath } = await import('./configure-process')
@@ -151,6 +219,14 @@ describe('configureDevUserDataPath', () => {
     expect(app.setPath).not.toHaveBeenCalled()
   })
 })
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key]
+  } else {
+    process.env[key] = value
+  }
+}
 
 describe('configureOrcaUserDataPathEnv', () => {
   it('overwrites stale inherited ORCA_USER_DATA_PATH with Electron userData', async () => {
@@ -297,6 +373,187 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
+  it('opts hidden pages out of intensive wake-up throttling', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      'IntensiveWakeUpThrottling'
+    )
+  })
+
+  it('raises the WebGL context budget above the 16-context Blink default', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('max-active-webgl-contexts', '128')
+  })
+
+  it('disables Skia Graphite only on macOS without disabling hardware acceleration', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.disableHardwareAcceleration).mockClear()
+
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      setPlatform(platform)
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+      enableMainProcessGpuFeatures()
+
+      if (platform === 'darwin') {
+        expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-skia-graphite')
+      } else {
+        expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-skia-graphite')
+      }
+    }
+
+    expect(app.disableHardwareAcceleration).not.toHaveBeenCalled()
+  })
+
+  it('disables the GPU sandbox on Linux Wayland without disabling acceleration', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+
+    try {
+      setPlatform('linux')
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      process.env.WAYLAND_DISPLAY = 'wayland-1'
+      vi.mocked(app.disableHardwareAcceleration).mockClear()
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+      enableMainProcessGpuFeatures()
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+    }
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.disableHardwareAcceleration).not.toHaveBeenCalled()
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EarlyEstablishGpuChannel')
+    )
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EstablishGpuChannelAsync')
+    )
+  })
+
+  it('uses Electron Ozone hints to recognize forced Linux Wayland launches', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    setPlatform('linux')
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+      switchName === 'ozone-platform' ? 'wayland' : ''
+    )
+
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EarlyEstablishGpuChannel')
+    )
+  })
+
+  it('honors explicit Linux X11 Ozone overrides even when Wayland env vars are present', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+    const originalSessionType = process.env.XDG_SESSION_TYPE
+
+    try {
+      setPlatform('linux')
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      process.env.WAYLAND_DISPLAY = 'wayland-1'
+      process.env.XDG_SESSION_TYPE = 'wayland'
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+      vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+        switchName === 'ozone-platform' ? 'x11' : ''
+      )
+
+      enableMainProcessGpuFeatures()
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+      if (originalSessionType === undefined) {
+        delete process.env.XDG_SESSION_TYPE
+      } else {
+        process.env.XDG_SESSION_TYPE = originalSessionType
+      }
+    }
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'enable-features',
+      'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
+    )
+  })
+
+  it('does not disable the GPU sandbox outside Linux Wayland', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+    const originalSessionType = process.env.XDG_SESSION_TYPE
+    const originalOzoneHint = process.env.ELECTRON_OZONE_PLATFORM_HINT
+
+    try {
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      delete process.env.WAYLAND_DISPLAY
+      delete process.env.XDG_SESSION_TYPE
+      delete process.env.ELECTRON_OZONE_PLATFORM_HINT
+
+      for (const platform of ['linux', 'darwin', 'win32'] as const) {
+        setPlatform(platform)
+        vi.mocked(app.commandLine.appendSwitch).mockClear()
+        vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+          switchName === 'enable-features' ? '' : ''
+        )
+
+        enableMainProcessGpuFeatures()
+
+        expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+      }
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+      if (originalSessionType === undefined) {
+        delete process.env.XDG_SESSION_TYPE
+      } else {
+        process.env.XDG_SESSION_TYPE = originalSessionType
+      }
+      if (originalOzoneHint === undefined) {
+        delete process.env.ELECTRON_OZONE_PLATFORM_HINT
+      } else {
+        process.env.ELECTRON_OZONE_PLATFORM_HINT = originalOzoneHint
+      }
+    }
+  })
+
   it('disables the GPU process for Linux E2E runs', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
@@ -314,6 +571,10 @@ describe('enableMainProcessGpuFeatures', () => {
       'enable-features',
       expect.any(String)
     )
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'max-active-webgl-contexts',
+      expect.any(String)
+    )
   })
 
   it('preserves existing enable-features switches', async () => {
@@ -329,5 +590,32 @@ describe('enableMainProcessGpuFeatures', () => {
       'enable-features',
       'EarlyEstablishGpuChannel,EstablishGpuChannelAsync,ExistingFeature'
     )
+  })
+
+  it('preserves existing enable-features switches on Linux Wayland without eager GPU channel flags', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+
+    try {
+      setPlatform('linux')
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      process.env.WAYLAND_DISPLAY = 'wayland-1'
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+      vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+        switchName === 'enable-features' ? 'ExistingFeature' : ''
+      )
+
+      enableMainProcessGpuFeatures()
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+    }
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-features', 'ExistingFeature')
   })
 })

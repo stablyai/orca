@@ -1,0 +1,14 @@
+/config/scripts/create-draft-release.mjs text eol=lf
+/config/scripts/orca-dev.mjs text eol=lf
+/config/scripts/latest-stable-release.mjs text eol=lf
+/config/scripts/publish-complete-draft-releases.mjs text eol=lf
+/config/scripts/release-rc-history.mjs text eol=lf
+/config/scripts/run-internal-dev-setup.mjs text eol=lf
+/config/scripts/verify-cli-bin.mjs text eol=lf
+/config/scripts/verify-release-required-assets.mjs text eol=lf
+/skill-guides/*.md text eol=lf
+/skill-stubs/*.md text eol=lf
+/skills/*/SKILL.md text eol=lf
+/src/cli/bundled-skill-guides.ts text eol=lf
+# Bundled plugin trees are byte-hashed; CRLF checkout would break the pinned hash.
+/resources/plugins/** text eol=lf

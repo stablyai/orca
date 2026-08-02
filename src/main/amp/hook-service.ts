@@ -2,10 +2,10 @@
    managed Amp plugin source and ownership marker. Splitting would make the
    emitted plugin bytes drift from the installer checks that protect user
    plugin files from being overwritten. */
-import { randomUUID } from 'crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -232,6 +232,7 @@ function getAmpPluginSource(): string {
     '      },',
     '      body: JSON.stringify({',
     '        paneKey,',
+    '        launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || "",',
     '        tabId: process.env.ORCA_TAB_ID || "",',
     '        worktreeId: process.env.ORCA_WORKTREE_ID || "",',
     '        env: coords.env,',

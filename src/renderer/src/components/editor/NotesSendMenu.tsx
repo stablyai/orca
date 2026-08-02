@@ -14,6 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
+import { translate } from '@/i18n/i18n'
 
 const ENABLED_SEND_TOOLTIP = 'Send notes to an agent'
 
@@ -39,6 +40,10 @@ export type NotesSendMenuProps<TNote> = {
   disabledTooltip?: string
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
+  // A new nonce value asks this menu to open (e.g. from a keyboard shortcut).
+  // Only a single mounted instance should be driven this way.
+  openRequestNonce?: number | null
+  onOpenRequestHandled?: () => void
   onDelivered: (notes: readonly TNote[]) => void
 }
 
@@ -63,6 +68,8 @@ export function NotesSendMenu<TNote>({
   disabledTooltip = 'All notes sent',
   iconClassName = 'size-3.5',
   align = 'end',
+  openRequestNonce = null,
+  onOpenRequestHandled,
   onDelivered
 }: NotesSendMenuProps<TNote>): React.JSX.Element {
   const openAgentSendPopoverTargetMode = useAppStore((s) => s.openAgentSendPopoverTargetMode)
@@ -137,6 +144,18 @@ export function NotesSendMenu<TNote>({
     [closeAgentSendPopoverTargetMode, targetModeId]
   )
 
+  useEffect(() => {
+    if (openRequestNonce == null) {
+      return
+    }
+    // Why: only open when notes remain; either way clear the request so a stale
+    // nonce cannot reopen the menu on a later remount.
+    if (hasDeliverableNotes && defaultScope) {
+      handleOpenChange(true)
+    }
+    onOpenRequestHandled?.()
+  }, [openRequestNonce, hasDeliverableNotes, defaultScope, handleOpenChange, onOpenRequestHandled])
+
   return (
     <DropdownMenu modal={false} open={effectiveSendMenuOpen} onOpenChange={handleOpenChange}>
       <Tooltip>
@@ -150,7 +169,15 @@ export function NotesSendMenu<TNote>({
               )}
               disabled={!hasDeliverableNotes}
               title={hasDeliverableNotes ? ENABLED_SEND_TOOLTIP : disabledTooltip}
-              aria-label={triggerLabel ? `Send ${triggerLabel} to an agent` : ENABLED_SEND_TOOLTIP}
+              aria-label={
+                triggerLabel
+                  ? translate(
+                      'auto.components.editor.NotesSendMenu.433928cd9f',
+                      'Send {{value0}} to an agent',
+                      { value0: triggerLabel }
+                    )
+                  : ENABLED_SEND_TOOLTIP
+              }
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
@@ -183,7 +210,9 @@ export function NotesSendMenu<TNote>({
       >
         {scopes.length > 1 ? (
           <>
-            <DropdownMenuLabel>Send notes</DropdownMenuLabel>
+            <DropdownMenuLabel>
+              {translate('auto.components.editor.NotesSendMenu.44dc5e60a6', 'Send notes')}
+            </DropdownMenuLabel>
             {scopes.map((scope) => (
               <DropdownMenuSub key={scope.id}>
                 <DropdownMenuSubTrigger

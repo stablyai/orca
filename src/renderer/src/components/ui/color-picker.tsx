@@ -7,6 +7,7 @@ import { Button } from './button'
 import { Input } from './input'
 import { Label } from './label'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
+import { translate } from '@/i18n/i18n'
 
 type ColorPickerProps = {
   value: string
@@ -92,12 +93,18 @@ export function ColorPicker({
           <HexColorPicker
             color={swatchColor}
             onChange={updateColor}
-            aria-label={`${label} picker`}
+            aria-label={translate(
+              'auto.components.ui.color.picker.1cec618bcc',
+              '{{value0}} picker',
+              { value0: label }
+            )}
             className="[&_.react-colorful__hue]:rounded-b-md [&_.react-colorful__interactive:focus_.react-colorful__pointer]:ring-[3px] [&_.react-colorful__interactive:focus_.react-colorful__pointer]:ring-ring/50 [&_.react-colorful__pointer]:border-popover"
             style={{ width: '100%', height: 180 }}
           />
           <div className="flex items-center justify-between gap-3">
-            <Label htmlFor={inputId}>Hex</Label>
+            <Label htmlFor={inputId}>
+              {translate('auto.components.ui.color.picker.faa855a582', 'Hex')}
+            </Label>
             <span className="font-mono text-xs uppercase text-muted-foreground">{swatchColor}</span>
           </div>
           <Input
@@ -123,7 +130,11 @@ export function ColorPicker({
             aria-invalid={hasInvalidDraft}
             className="font-mono text-xs uppercase"
           />
-          {hasInvalidDraft ? <p className="text-xs text-destructive">Invalid hex color.</p> : null}
+          {hasInvalidDraft ? (
+            <p className="text-xs text-destructive">
+              {translate('auto.components.ui.color.picker.ebcf6ba29e', 'Invalid hex color.')}
+            </p>
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>

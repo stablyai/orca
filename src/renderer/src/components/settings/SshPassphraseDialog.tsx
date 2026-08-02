@@ -11,6 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 
 export function SshPassphraseDialog(): React.JSX.Element | null {
   const request = useAppStore((s) => s.sshCredentialQueue[0] ?? null)
@@ -68,7 +69,14 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
       await window.api.ssh.submitCredential({ requestId: request.requestId, value })
       removeRequest(request.requestId)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to submit SSH credential')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.SshPassphraseDialog.b8e88fd0de',
+              'Failed to submit SSH credential'
+            )
+      )
       setSubmitting(false)
     }
   }, [request, value, removeRequest])
@@ -80,7 +88,14 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
         await window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
         removeRequest(request.requestId)
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to cancel SSH credential request')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'auto.components.settings.SshPassphraseDialog.c55f105262',
+                'Failed to cancel SSH credential request'
+              )
+        )
         setSubmitting(false)
       }
     }
@@ -95,19 +110,39 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && void handleCancel()}>
-      <DialogContent showCloseButton={false} className="max-w-[360px]">
+      {/* Why: a credential prompt is a preemptive modal that must sit above any
+          open popover/menu (popover z-60, menus z-70) — the default dialog z-50
+          would let a still-open picker cover the focused input. */}
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="!z-[140]"
+        className="!z-[150] max-w-[360px]"
+      >
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {isPassword ? 'SSH Password' : 'SSH Key Passphrase'}
+            {isPassword
+              ? translate('auto.components.settings.SshPassphraseDialog.106bd57f4a', 'SSH Password')
+              : translate(
+                  'auto.components.settings.SshPassphraseDialog.1f3dde805d',
+                  'SSH Key Passphrase'
+                )}
           </DialogTitle>
           <DialogDescription className="text-xs">
             {isPassword ? (
               <>
-                Enter the password for <span className="font-medium">{label}</span>
+                {translate(
+                  'auto.components.settings.SshPassphraseDialog.dbf9b6f2d0',
+                  'Enter the password for'
+                )}{' '}
+                <span className="font-medium">{label}</span>
               </>
             ) : (
               <>
-                Enter the passphrase for <span className="font-medium">{label}</span>
+                {translate(
+                  'auto.components.settings.SshPassphraseDialog.ce4fdf7914',
+                  'Enter the passphrase for'
+                )}{' '}
+                <span className="font-medium">{label}</span>
               </>
             )}
           </DialogDescription>
@@ -117,7 +152,17 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
             htmlFor="ssh-credential-input"
             className="text-[11px] font-medium text-muted-foreground mb-1 block"
           >
-            {isPassword ? `Password for ${request.detail}` : `Passphrase for ${request.detail}`}
+            {isPassword
+              ? translate(
+                  'auto.components.settings.SshPassphraseDialog.cab3d5f5a5',
+                  'Password for {{value0}}',
+                  { value0: request.detail }
+                )
+              : translate(
+                  'auto.components.settings.SshPassphraseDialog.8a349e3fac',
+                  'Passphrase for {{value0}}',
+                  { value0: request.detail }
+                )}
           </label>
           <Input
             id="ssh-credential-input"
@@ -131,7 +176,17 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
                 void handleSubmit()
               }
             }}
-            placeholder={isPassword ? 'Enter password' : 'Enter passphrase'}
+            placeholder={
+              isPassword
+                ? translate(
+                    'auto.components.settings.SshPassphraseDialog.abaa0dc653',
+                    'Enter password'
+                  )
+                : translate(
+                    'auto.components.settings.SshPassphraseDialog.c3ce71aad6',
+                    'Enter passphrase'
+                  )
+            }
             className="h-8 text-sm"
             disabled={submitting}
           />
@@ -143,10 +198,12 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
             onClick={() => void handleCancel()}
             disabled={submitting}
           >
-            Cancel
+            {translate('auto.components.settings.SshPassphraseDialog.d5a234456f', 'Cancel')}
           </Button>
           <Button size="sm" onClick={() => void handleSubmit()} disabled={!value || submitting}>
-            {isPassword ? 'Connect' : 'Unlock'}
+            {isPassword
+              ? translate('auto.components.settings.SshPassphraseDialog.bec2c1318f', 'Connect')
+              : translate('auto.components.settings.SshPassphraseDialog.405066423c', 'Unlock')}
           </Button>
         </DialogFooter>
       </DialogContent>

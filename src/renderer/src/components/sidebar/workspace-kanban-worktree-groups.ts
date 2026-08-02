@@ -1,15 +1,16 @@
 import type { WorkspaceStatus, WorkspaceStatusDefinition, Worktree } from '../../../../shared/types'
 import type { SortBy } from './smart-sort'
 import { getWorkspaceStatus } from './workspace-status'
+import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 
 function sortBoardWorktrees(a: Worktree, b: Worktree): number {
-  return b.lastActivityAt - a.lastActivityAt || a.displayName.localeCompare(b.displayName)
+  return b.lastActivityAt - a.lastActivityAt || compareWorktreeDisplayName(a, b)
 }
 
 function sortManualBoardWorktrees(a: Worktree, b: Worktree): number {
   return (
     (b.manualOrder ?? b.sortOrder) - (a.manualOrder ?? a.sortOrder) ||
-    a.displayName.localeCompare(b.displayName)
+    compareWorktreeDisplayName(a, b)
   )
 }
 

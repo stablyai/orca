@@ -1,95 +1,25 @@
-const GH_ITEM_PATH_RE = /^\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/.*)?$/i
+// Why: the parsing core moved to shared so main's terminal side-effect
+// tracker can emit pr-link facts (terminal-side-effect-authority.md, slice 3).
+// Re-exported here so renderer consumers keep their '@/lib' import path.
+// normalizeGitHubLinkQuery stays renderer-side: its too-large guard is link-
+// picker input policy, not parsing.
+import {
+  type GitHubIssueOrPRLink,
+  parseGitHubIssueOrPRLink,
+  parseGitHubIssueOrPRNumber
+} from '../../../shared/github-links'
 
-export type RepoSlug = {
-  owner: string
-  repo: string
-}
+import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
+
+export * from '../../../shared/github-links'
+
+const HTTP_URL_PREFIX_RE = /^https?:\/\//i
 
 export type GitHubLinkQuery = {
   query: string
   directNumber: number | null
-}
-
-export function buildGitHubRepoUrl(slug: RepoSlug | null | undefined): string | null {
-  if (!slug?.owner || !slug.repo) {
-    return null
-  }
-  return `https://github.com/${encodeURIComponent(slug.owner)}/${encodeURIComponent(slug.repo)}`
-}
-
-function matchGitHubItemPath(url: URL): RegExpExecArray | null {
-  return GH_ITEM_PATH_RE.exec(url.pathname.replace(/\/+$/, ''))
-}
-
-/**
- * Parses a GitHub issue/PR reference from plain input.
- * Supports issue/PR numbers (e.g. "42"), "#42", and full GitHub URLs.
- */
-export function parseGitHubIssueOrPRNumber(input: string): number | null {
-  const trimmed = input.trim()
-  if (!trimmed) {
-    return null
-  }
-
-  const numeric = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed
-  if (/^\d+$/.test(numeric)) {
-    return Number.parseInt(numeric, 10)
-  }
-
-  let url: URL
-  try {
-    url = new URL(trimmed)
-  } catch {
-    return null
-  }
-
-  if (!/^(?:www\.)?github\.com$/i.test(url.hostname)) {
-    return null
-  }
-
-  const match = matchGitHubItemPath(url)
-  if (!match) {
-    return null
-  }
-
-  return Number.parseInt(match[4], 10)
-}
-
-/**
- * Parses an owner/repo slug plus issue/PR number from a GitHub URL. Returns
- * null for anything that isn't a recognizable github.com issue or pull URL.
- */
-export function parseGitHubIssueOrPRLink(input: string): {
-  slug: RepoSlug
-  number: number
-  type: 'issue' | 'pr'
-} | null {
-  const trimmed = input.trim()
-  if (!trimmed) {
-    return null
-  }
-
-  let url: URL
-  try {
-    url = new URL(trimmed)
-  } catch {
-    return null
-  }
-
-  if (!/^(?:www\.)?github\.com$/i.test(url.hostname)) {
-    return null
-  }
-
-  const match = matchGitHubItemPath(url)
-  if (!match) {
-    return null
-  }
-
-  return {
-    slug: { owner: match[1], repo: match[2] },
-    type: match[3].toLowerCase() === 'pull' ? 'pr' : 'issue',
-    number: Number.parseInt(match[4], 10)
-  }
+  directLink?: GitHubIssueOrPRLink
+  tooLarge?: boolean
 }
 
 /**
@@ -97,13 +27,16 @@ export function parseGitHubIssueOrPRLink(input: string): {
  * URLs resolve to a usable query + direct-number lookup.
  */
 export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
+  if (isWorkItemLinkQueryTooLarge(raw)) {
+    return { query: '', directNumber: null, tooLarge: true }
+  }
   const trimmed = raw.trim()
   if (!trimmed) {
     return { query: '', directNumber: null }
   }
 
   const direct = parseGitHubIssueOrPRNumber(trimmed)
-  if (direct !== null && !trimmed.startsWith('http')) {
+  if (direct !== null && !HTTP_URL_PREFIX_RE.test(trimmed)) {
     return { query: trimmed, directNumber: direct }
   }
 
@@ -112,11 +45,12 @@ export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
     return { query: trimmed, directNumber: null }
   }
 
-  // Why: any github.com issue/pull URL is accepted by number regardless of
+  // Why: any GitHub-shaped issue/pull URL is accepted by number regardless of
   // slug, since fork checkouts can legitimately target upstream issues whose
   // slug differs from the origin remote.
   return {
     query: trimmed,
-    directNumber: link.number
+    directNumber: link.number,
+    directLink: link
   }
 }

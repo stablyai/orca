@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { writeFileSync } from 'fs'
+import { writeFileSync } from 'node:fs'
 
 async function setCustomGenerator(page: Page, scriptPath: string): Promise<void> {
   await page.evaluate(async (scriptPath) => {
@@ -25,6 +25,30 @@ async function setCustomGenerator(page: Page, scriptPath: string): Promise<void>
       }
     })
   }, scriptPath)
+}
+
+/**
+ * Writes a generator that echoes back whichever issue number reached the prompt, so the
+ * assertion covers the whole chain (renderer → IPC → worktree meta → template render →
+ * agent stdin) rather than any single hop. `emitPayload` lines run with a captured `issue`
+ * const in scope and must write the payload the caller's generation path expects.
+ */
+export function writeLinkedIssueEchoGenerator(scriptPath: string, emitPayload: string[]): void {
+  writeFileSync(
+    scriptPath,
+    [
+      'const chunks = []',
+      "process.stdin.on('data', (chunk) => chunks.push(chunk))",
+      "process.stdin.on('end', () => {",
+      "  const prompt = Buffer.concat(chunks).toString('utf8')",
+      // Why: capture the whole line, not `\d*` — a `\d*` capture matches zero digits before
+      // an unexpanded `{linkedIssue}` and reports it as `empty`, hiding a literal token.
+      '  const match = prompt.match(/ORCA_E2E_ISSUE=([^\\r\\n]*)/)',
+      "  const issue = match ? match[1] || 'empty' : 'missing'",
+      ...emitPayload,
+      '})'
+    ].join('\n')
+  )
 }
 
 export async function installDelayedPrGenerator(

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -16,6 +16,15 @@ vi.mock('os', async () => {
 })
 
 import { AntigravityHookService } from './hook-service'
+import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
+import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+
+const ANTIGRAVITY_SCRIPT_FILE_NAME =
+  process.platform === 'win32' ? 'antigravity-hook.cmd' : 'antigravity-hook.sh'
+const ANTIGRAVITY_PRE_INVOCATION_COMMAND =
+  process.platform === 'win32' ? 'antigravity-pre-invocation.cmd' : 'antigravity-hook.sh'
+const ANTIGRAVITY_POST_TOOL_USE_COMMAND =
+  process.platform === 'win32' ? 'antigravity-post-tool-use.cmd' : 'antigravity-hook.sh'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -62,21 +71,39 @@ describe('AntigravityHookService', () => {
     )
     expect(config['orca-status'].PreToolUse).toBeUndefined()
     expect(config['orca-status'].PostToolUse[0].matcher).toBe('*')
-    expect(config['orca-status'].PreInvocation[0].command).toContain('antigravity-hook')
     expect(config['orca-status'].PreInvocation[0].command).toContain(
-      "ORCA_ANTIGRAVITY_EVENT='PreInvocation'"
+      ANTIGRAVITY_PRE_INVOCATION_COMMAND
     )
-    expect(config['orca-status'].Stop[0].command).toContain("ORCA_ANTIGRAVITY_EVENT='Stop'")
+    if (process.platform === 'win32') {
+      expect(config['orca-status'].PreInvocation[0].command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
+    } else {
+      expect(config['orca-status'].PreInvocation[0].command).toContain(
+        "ORCA_ANTIGRAVITY_EVENT='PreInvocation'"
+      )
+      expect(config['orca-status'].Stop[0].command).toContain("ORCA_ANTIGRAVITY_EVENT='Stop'")
+    }
 
     const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook.sh'),
+      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_SCRIPT_FILE_NAME),
       'utf8'
     )
     expect(script).toContain('/hook/antigravity')
-    expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
-    expect(script).toContain('payload=$(cat)')
-    expect(script).toContain("payload='{}'")
-    expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
+    if (process.platform === 'win32') {
+      expect(script).toContain('%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+      expect(script).toContain('hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT')
+      expect(script).toContain('[string]::IsNullOrWhiteSpace($inputData)) { @{} }')
+      expect(script).not.toContain('[string]::IsNullOrWhiteSpace($inputData)) { exit 0 }')
+    } else {
+      expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
+      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
+      expect(script).toContain("payload='{}'")
+      expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
+      // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
+      // on the curl command line (EDR oversized-command-line false positive).
+      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      expect(script).toContain('--data-urlencode "payload@-"')
+      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+    }
     expect(script).toContain('{"decision":""}')
   })
 
@@ -140,10 +167,9 @@ describe('AntigravityHookService', () => {
         const definition = config['orca-status'][eventName][0]
         const command =
           eventName === 'PostToolUse' ? definition.hooks?.[0]?.command : definition.command
-        expect(command).toContain(wrapperFileName)
+        expect(createManagedCommandMatcher(wrapperFileName)(command)).toBe(true)
         expect(command).not.toContain('cmd /d /s /c')
         expect(command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
-        expect(command).not.toContain('"')
 
         const wrapper = readFileSync(join(homeDir, '.orca', 'agent-hooks', wrapperFileName), 'utf8')
         expect(wrapper).toContain(`set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`)
@@ -155,6 +181,7 @@ describe('AntigravityHookService', () => {
         'utf8'
       )
       expect(script).toContain('/hook/antigravity')
+      expect(script).toContain('%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
       expect(script).toContain('hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT')
       expect(script).toContain('[string]::IsNullOrWhiteSpace($inputData)) { @{} }')
       expect(script).not.toContain('[string]::IsNullOrWhiteSpace($inputData)) { exit 0 }')
@@ -189,7 +216,9 @@ describe('AntigravityHookService', () => {
     expect(config['user-hook'].PreInvocation[0].command).toBe('/usr/local/bin/user-hook')
     const commands = config['orca-status'].PreInvocation.map((entry) => entry.command)
     expect(commands).toContain('/usr/local/bin/orca-extra')
-    expect(commands.some((command) => command.includes('antigravity-hook.sh'))).toBe(true)
+    expect(commands.some((command) => command.includes(ANTIGRAVITY_PRE_INVOCATION_COMMAND))).toBe(
+      true
+    )
   })
 
   it('removes stale managed Antigravity hook entries from retired events', () => {
@@ -230,6 +259,8 @@ describe('AntigravityHookService', () => {
       (definition.hooks ?? []).map((hook) => hook.command)
     )
     expect(commands).toHaveLength(1)
-    expect(commands[0]).toContain(join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook.sh'))
+    expect(commands[0]).toContain(
+      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_POST_TOOL_USE_COMMAND)
+    )
   })
 })

@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../shared/skills'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   _installedAgentSkillDiscoveryInternalsForTests,
-  hasInstalledAgentSkill
+  hasInstalledAgentSkill,
+  hasInstalledAgentSkillNamed,
+  notifyInstalledAgentSkillsRefreshed
 } from './useInstalledAgentSkills'
 
 afterEach(() => {
@@ -112,6 +115,47 @@ describe('hasInstalledAgentSkill', () => {
       })
     ).toBe(true)
   })
+
+  it('matches installed skills by any accepted name', () => {
+    expect(
+      hasInstalledAgentSkillNamed(
+        [skill({ name: 'linear-tickets' })],
+        ['orca-linear', 'linear-tickets']
+      )
+    ).toBe(true)
+  })
+
+  it('matches accepted names by POSIX directory basename', () => {
+    expect(
+      hasInstalledAgentSkillNamed(
+        [
+          skill({
+            name: 'Linear Tickets',
+            directoryPath: '/Users/test/.agents/skills/linear-tickets'
+          })
+        ],
+        ['orca-linear', 'linear-tickets']
+      )
+    ).toBe(true)
+  })
+
+  it('matches accepted names by Windows directory basename', () => {
+    expect(
+      hasInstalledAgentSkillNamed(
+        [
+          skill({
+            name: 'Linear Tickets',
+            directoryPath: 'C:\\Users\\test\\.agents\\skills\\orca-linear'
+          })
+        ],
+        ['orca-linear', 'linear-tickets']
+      )
+    ).toBe(true)
+  })
+
+  it('keeps aliases opt-in for unrelated single-name checks', () => {
+    expect(hasInstalledAgentSkill([skill({ name: 'linear-tickets' })], 'orca-linear')).toBe(false)
+  })
 })
 
 describe('isOrchestrationSkillName', () => {
@@ -129,6 +173,29 @@ describe('isOrchestrationSkillName', () => {
 })
 
 describe('discoverInstalledAgentSkills', () => {
+  const projectWslRuntime: ProjectExecutionRuntimeResolution = {
+    status: 'resolved',
+    runtime: {
+      kind: 'wsl',
+      hostPlatform: 'wsl',
+      projectId: 'repo-1',
+      distro: 'Ubuntu',
+      reason: 'project-override',
+      cacheKey: 'repo-1:wsl:Ubuntu'
+    }
+  }
+
+  const projectHostRuntime: ProjectExecutionRuntimeResolution = {
+    status: 'resolved',
+    runtime: {
+      kind: 'windows-host',
+      hostPlatform: 'win32',
+      projectId: 'repo-1',
+      reason: 'project-override',
+      cacheKey: 'repo-1:windows-host'
+    }
+  }
+
   it('starts a fresh scan when a forced refresh arrives during a background scan', async () => {
     const firstScan = deferred<SkillDiscoveryResult>()
     const secondScan = deferred<SkillDiscoveryResult>()
@@ -155,6 +222,31 @@ describe('discoverInstalledAgentSkills', () => {
     const freshResult = discoveryResult([skill({ name: 'orca-cli' })])
     secondScan.resolve(freshResult)
     await expect(forcedRefresh).resolves.toBe(freshResult)
+  })
+
+  it('lets completed-scan broadcasts reuse the cached result', async () => {
+    const discover = vi
+      .fn<() => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([skill({ name: 'orca-linear' })]))
+    vi.stubGlobal('window', {
+      api: { skills: { discover } },
+      dispatchEvent: vi.fn(),
+      CustomEvent: class {}
+    })
+
+    await _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(true)
+    notifyInstalledAgentSkillsRefreshed()
+    const fromSubscribers = [1, 2, 3].map(() =>
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false)
+    )
+
+    expect(discover).toHaveBeenCalledTimes(1)
+    for (const pending of fromSubscribers) {
+      await expect(pending).resolves.toMatchObject({
+        skills: [expect.objectContaining({ name: 'orca-linear' })]
+      })
+    }
+    expect(discover).toHaveBeenCalledTimes(1)
   })
 
   it('caches host and WSL discovery results separately', async () => {
@@ -188,5 +280,58 @@ describe('discoverInstalledAgentSkills', () => {
     expect(discover).toHaveBeenCalledTimes(2)
     expect(discover).toHaveBeenNthCalledWith(1, undefined)
     expect(discover).toHaveBeenNthCalledWith(2, { runtime: 'wsl', wslDistro: null })
+  })
+
+  it('forwards project runtime targets to skill discovery', async () => {
+    const wslResult = discoveryResult([skill({ name: 'wsl-skill' })])
+    const discover = vi.fn().mockResolvedValueOnce(wslResult)
+    vi.stubGlobal('window', {
+      api: { skills: { discover } }
+    })
+
+    await expect(
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false, {
+        projectRuntime: projectWslRuntime
+      })
+    ).resolves.toBe(wslResult)
+
+    expect(discover).toHaveBeenCalledWith({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      projectRuntime: projectWslRuntime
+    })
+  })
+
+  it('caches project host runtime separately from generic host discovery', async () => {
+    const genericHostResult = discoveryResult([skill({ name: 'generic-host-skill' })])
+    const projectHostResult = discoveryResult([skill({ name: 'project-host-skill' })])
+    const discover = vi
+      .fn()
+      .mockResolvedValueOnce(genericHostResult)
+      .mockResolvedValueOnce(projectHostResult)
+    vi.stubGlobal('window', {
+      api: { skills: { discover } }
+    })
+
+    await expect(
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false)
+    ).resolves.toBe(genericHostResult)
+    await expect(
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false, {
+        projectRuntime: projectHostRuntime
+      })
+    ).resolves.toBe(projectHostResult)
+    await expect(
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false, {
+        projectRuntime: projectHostRuntime
+      })
+    ).resolves.toBe(projectHostResult)
+
+    expect(discover).toHaveBeenCalledTimes(2)
+    expect(discover).toHaveBeenNthCalledWith(1, undefined)
+    expect(discover).toHaveBeenNthCalledWith(2, {
+      runtime: 'host',
+      projectRuntime: projectHostRuntime
+    })
   })
 })

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { type AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from './agent-status'
+import { RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX } from './agent-status'
 import { createTestStore } from './store-test-helpers'
 
 // Why: dropAgentStatus and dismissRetainedAgentsByWorktree mirror the renderer-
@@ -24,12 +25,16 @@ afterEach(() => {
   }
 })
 
-function stubWindowApi(): { drop: ReturnType<typeof vi.fn> } {
+function stubWindowApi(): {
+  drop: ReturnType<typeof vi.fn>
+  dropByTabPrefix: ReturnType<typeof vi.fn>
+} {
   const drop = vi.fn()
+  const dropByTabPrefix = vi.fn()
   ;(globalThis as { window?: unknown }).window = {
-    api: { agentStatus: { drop } }
+    api: { agentStatus: { drop, dropByTabPrefix } }
   }
-  return { drop }
+  return { drop, dropByTabPrefix }
 }
 
 describe('dropAgentStatus → IPC fan-out', () => {
@@ -70,6 +75,68 @@ describe('dropAgentStatus → IPC fan-out', () => {
     store.getState().dropAgentStatus('tab-1:0')
     store.getState().dropAgentStatus('tab-1:0')
     expect(drop).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('dropAgentStatusByTabPrefix -> IPC fan-out', () => {
+  it('fires window.api.agentStatus.dropByTabPrefix after dropping local tab rows', () => {
+    const { dropByTabPrefix } = stubWindowApi()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
+    store
+      .getState()
+      .setAgentStatus('tab-2:0', { state: 'working', prompt: 'p', agentType: 'claude' })
+
+    store.getState().dropAgentStatusByTabPrefix('tab-1')
+
+    expect(dropByTabPrefix).toHaveBeenCalledTimes(1)
+    expect(dropByTabPrefix).toHaveBeenCalledWith('tab-1')
+    expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey['tab-2:0']).toBeDefined()
+  })
+
+  it('fires dropByTabPrefix when no local rows match so stale main cache can be evicted', () => {
+    const { dropByTabPrefix } = stubWindowApi()
+    const store = createTestStore()
+
+    store.getState().dropAgentStatusByTabPrefix('tab-missing')
+
+    expect(dropByTabPrefix).toHaveBeenCalledTimes(1)
+    expect(dropByTabPrefix).toHaveBeenCalledWith('tab-missing')
+    expect(store.getState().recentlyClosedAgentStatusTabIds['tab-missing']).toBe(true)
+  })
+
+  it('keeps closed tab markers for the renderer session', () => {
+    stubWindowApi()
+    const store = createTestStore()
+
+    store.getState().dropAgentStatusByTabPrefix('tab-old')
+    store.getState().dropAgentStatusByTabPrefix('tab-new')
+
+    expect(store.getState().recentlyClosedAgentStatusTabIds).toEqual({
+      'tab-old': true,
+      'tab-new': true
+    })
+  })
+
+  it('FIFO-caps recentlyClosedAgentStatusTabIds so it cannot grow unbounded', () => {
+    stubWindowApi()
+    const store = createTestStore()
+    const cap = RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX
+
+    for (let i = 0; i < cap + 5; i++) {
+      store.getState().dropAgentStatusByTabPrefix(`tab-${i}`)
+    }
+
+    const closed = store.getState().recentlyClosedAgentStatusTabIds
+    expect(Object.keys(closed)).toHaveLength(cap)
+    // Oldest evicted, most-recent retained (a status event for a tab closed
+    // >cap tabs ago cannot still arrive, so suppression is unaffected).
+    expect(closed['tab-0']).toBeUndefined()
+    expect(closed['tab-4']).toBeUndefined()
+    expect(closed[`tab-${cap + 4}`]).toBe(true)
   })
 })
 

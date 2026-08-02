@@ -1,7 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { hasCompletedTabAgent, resolveCompletedTabAgent, resolveTabAgent } from './tab-agent'
+import {
+  resolveFocusedCompletedTabAgent,
+  resolveFocusedRetainedTabAgent,
+  resolveFocusedTabAgent,
+  resolveSiblingCompletedTabAgent,
+  resolveSiblingRetainedTabAgent,
+  resolveSiblingTabAgent
+} from './tab-agent'
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../shared/types'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+
+// Composed exactly the way useTabAgent layers the resolvers: focused pane
+// first, then any sibling agent pane in the tab.
+function resolveTabAgent(
+  map: Record<string, AgentStatusEntry>,
+  layout: TerminalLayoutSnapshot | undefined,
+  tabId: string
+): TuiAgent | null {
+  return resolveFocusedTabAgent(map, layout, tabId) ?? resolveSiblingTabAgent(map, layout, tabId)
+}
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -22,6 +40,27 @@ function layout(activeLeafId: string | null): TerminalLayoutSnapshot {
   return { root: null, activeLeafId, expandedLeafId: null }
 }
 
+function retainedEntry(paneKey: string, agentType: AgentType): RetainedAgentEntry {
+  const tabId = paneKey.slice(0, paneKey.indexOf(':'))
+  const tab: TerminalTab = {
+    id: tabId,
+    ptyId: null,
+    worktreeId: 'wt-1',
+    title: 'Terminal 1',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+  return {
+    entry: { ...entry(paneKey, agentType), state: 'done' },
+    worktreeId: tab.worktreeId,
+    tab,
+    agentType,
+    startedAt: 0
+  }
+}
+
 describe('resolveTabAgent', () => {
   it('returns null for a plain terminal (no agent entries)', () => {
     expect(resolveTabAgent({}, layout(LEAF_A), 'tab-1')).toBeNull()
@@ -40,6 +79,15 @@ describe('resolveTabAgent', () => {
     expect(resolveTabAgent(map, layout(LEAF_B), 'tab-1')).toBe('codex')
   })
 
+  it('exposes focused and sibling hook identity separately', () => {
+    const map = {
+      [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'claude'),
+      [`tab-1:${LEAF_B}`]: entry(`tab-1:${LEAF_B}`, 'codex')
+    }
+    expect(resolveFocusedTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('claude')
+    expect(resolveSiblingTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('codex')
+  })
+
   it('falls back to any agent pane when the focused pane is a plain terminal', () => {
     // Focused leaf A has no entry (it's a shell); the split sibling runs Codex.
     const map = { [`tab-1:${LEAF_B}`]: entry(`tab-1:${LEAF_B}`, 'codex') }
@@ -49,6 +97,13 @@ describe('resolveTabAgent', () => {
   it('resolves via the prefix scan when the layout is missing', () => {
     const map = { [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'droid') }
     expect(resolveTabAgent(map, undefined, 'tab-1')).toBe('droid')
+  })
+
+  it('treats same-tab hook identity as focused when the layout is missing', () => {
+    const map = { [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'codex') }
+
+    expect(resolveFocusedTabAgent(map, undefined, 'tab-1')).toBe('codex')
+    expect(resolveSiblingTabAgent(map, undefined, 'tab-1')).toBeNull()
   })
 
   it("keeps the terminal glyph for an agent that didn't identify itself", () => {
@@ -73,8 +128,52 @@ describe('resolveTabAgent', () => {
         state: 'done' as const
       }
     }
-    expect(hasCompletedTabAgent(map, 'tab-1')).toBe(true)
-    expect(resolveCompletedTabAgent(map, 'tab-1')).toBe('openclaude')
+    expect(resolveFocusedCompletedTabAgent(map, undefined, 'tab-1')).toBe('openclaude')
+    expect(resolveSiblingCompletedTabAgent(map, undefined, 'tab-1')).toBeNull()
+  })
+
+  it('exposes focused and sibling completed hook identity separately', () => {
+    const map = {
+      [`tab-1:${LEAF_A}`]: {
+        ...entry(`tab-1:${LEAF_A}`, 'claude'),
+        state: 'done' as const
+      },
+      [`tab-1:${LEAF_B}`]: {
+        ...entry(`tab-1:${LEAF_B}`, 'codex'),
+        state: 'done' as const
+      }
+    }
+
+    expect(resolveFocusedCompletedTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('claude')
+    expect(resolveSiblingCompletedTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('codex')
+  })
+
+  it('resolves retained completion identity for the focused pane and siblings separately', () => {
+    const retained = {
+      [`tab-1:${LEAF_A}`]: retainedEntry(`tab-1:${LEAF_A}`, 'codex'),
+      [`tab-1:${LEAF_B}`]: retainedEntry(`tab-1:${LEAF_B}`, 'claude')
+    }
+
+    expect(resolveFocusedRetainedTabAgent(retained, layout(LEAF_A), 'tab-1')).toBe('codex')
+    expect(resolveSiblingRetainedTabAgent(retained, layout(LEAF_A), 'tab-1')).toBe('claude')
+  })
+
+  it('treats a same-tab retained completion as focused while layout is unavailable', () => {
+    const retained = {
+      [`tab-1:${LEAF_A}`]: retainedEntry(`tab-1:${LEAF_A}`, 'codex')
+    }
+
+    expect(resolveFocusedRetainedTabAgent(retained, undefined, 'tab-1')).toBe('codex')
+    expect(resolveSiblingRetainedTabAgent(retained, undefined, 'tab-1')).toBeNull()
+  })
+
+  it('does not leak retained identity from another tab', () => {
+    const retained = {
+      [`tab-2:${LEAF_A}`]: retainedEntry(`tab-2:${LEAF_A}`, 'codex')
+    }
+
+    expect(resolveFocusedRetainedTabAgent(retained, layout(LEAF_A), 'tab-1')).toBeNull()
+    expect(resolveSiblingRetainedTabAgent(retained, layout(LEAF_A), 'tab-1')).toBeNull()
   })
 
   it('keeps the terminal glyph for an agent Orca has no icon for', () => {

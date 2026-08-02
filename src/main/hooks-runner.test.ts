@@ -34,7 +34,7 @@ describe('createSetupRunnerScript', () => {
     }) as unknown as Repo
 
   it('writes a fail-fast Windows runner that returns after batch commands', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     const originalPlatform = process.platform
 
     execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd')
@@ -108,7 +108,7 @@ describe('createSetupRunnerScript', () => {
   })
 
   it('translates WSL runner paths and env vars to Linux form on Windows', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     const originalPlatform = process.platform
 
     execFileSyncMock.mockReturnValue('/home/jin/.git/worktrees/feature/orca/setup-runner.sh')
@@ -157,7 +157,7 @@ describe('createSetupRunnerScript', () => {
   })
 
   it('translates WSL env vars to Linux paths when the worktree lives on a WSL UNC path', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     const originalPlatform = process.platform
 
     execFileSyncMock.mockReturnValue('/home/jin/repo/.git/worktrees/feature/orca/setup-runner.sh')
@@ -214,7 +214,7 @@ describe('createIssueCommandRunnerScript', () => {
     }) as unknown as Repo
 
   it('writes a POSIX runner under the worktree git dir for long issue commands', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     const originalPlatform = process.platform
 
     execFileSyncMock.mockReturnValue(

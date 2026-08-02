@@ -3,6 +3,11 @@ export type CsvParseResult = {
   maxColumns: number
 }
 
+export const CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS = 64 * 1024
+
+const LINE_FEED_CODE_UNIT = 10
+const CARRIAGE_RETURN_CODE_UNIT = 13
+
 // Why: RFC 4180-compatible CSV parsing with quote handling and CRLF support.
 // A hand-rolled parser avoids pulling a new dependency (papaparse) for what is
 // a small, well-specified grammar. Inline state machine keeps the hot path
@@ -114,17 +119,52 @@ export function detectCsvDelimiter(filePath: string, content: string): string {
   // Why: skip leading blank/whitespace-only lines before sniffing. A file that
   // starts with one or more empty lines would otherwise be classified as comma
   // (0 tabs vs 0 commas, tie goes to comma), misdetecting blank-leading TSVs.
-  const lines = text.split(/\r?\n/)
-  let firstLine = ''
-  for (const line of lines) {
-    if (line.trim().length > 0) {
-      firstLine = line
-      break
-    }
-  }
+  const firstLine = findFirstNonEmptyCsvSniffLine(text)
   const tabs = countDelimiterOutsideQuotes(firstLine, '\t')
   const commas = countDelimiterOutsideQuotes(firstLine, ',')
   return tabs > commas ? '\t' : ','
+}
+
+function findFirstNonEmptyCsvSniffLine(text: string): string {
+  // Why: delimiter sniffing only needs one representative line; splitting a
+  // pasted or dropped CSV can allocate one array entry per row before render.
+  const scanLength = Math.min(text.length, CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS)
+  let lineStart = 0
+  let lineHasContent = false
+
+  for (let index = 0; index < scanLength; index += 1) {
+    const codeUnit = text.charCodeAt(index)
+    if (codeUnit === LINE_FEED_CODE_UNIT || codeUnit === CARRIAGE_RETURN_CODE_UNIT) {
+      if (lineHasContent) {
+        return text.slice(lineStart, index)
+      }
+      if (
+        codeUnit === CARRIAGE_RETURN_CODE_UNIT &&
+        index + 1 < scanLength &&
+        text.charCodeAt(index + 1) === LINE_FEED_CODE_UNIT
+      ) {
+        index += 1
+      }
+      lineStart = index + 1
+      lineHasContent = false
+      continue
+    }
+    if (!lineHasContent && !isCsvSniffWhitespace(codeUnit)) {
+      lineHasContent = true
+    }
+  }
+
+  return lineHasContent ? text.slice(lineStart, scanLength) : ''
+}
+
+function isCsvSniffWhitespace(codeUnit: number): boolean {
+  return (
+    codeUnit === 0x09 ||
+    codeUnit === 0x0b ||
+    codeUnit === 0x0c ||
+    codeUnit === 0x20 ||
+    codeUnit === 0xa0
+  )
 }
 
 function countDelimiterOutsideQuotes(line: string, delimiter: string): number {

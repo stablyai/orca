@@ -6,6 +6,7 @@ import { Dialog as SheetPrimitive } from 'radix-ui'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -103,7 +104,9 @@ function SheetContent({
             className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">
+              {translate('auto.components.ui.sheet.1189e9fe0a', 'Close')}
+            </span>
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Content>

@@ -2,6 +2,7 @@ import {
   formatKeybinding,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
+  isDoubleTapBinding,
   type KeybindingActionId,
   type KeybindingOverrides
 } from '../../../shared/keybindings'
@@ -9,6 +10,11 @@ import { useAppStore } from '../store'
 import { getShortcutPlatform } from '../lib/shortcut-platform'
 
 export { getShortcutPlatform }
+
+export type ShortcutKeyComboDetails = {
+  keys: string[]
+  doubleTap: boolean
+}
 
 export function formatShortcutLabel(
   actionId: KeybindingActionId,
@@ -21,36 +27,58 @@ export function formatShortcutLabel(
   )
 }
 
+export function formatPrimaryShortcutLabel(
+  actionId: KeybindingActionId,
+  overrides?: KeybindingOverrides
+): string {
+  const platform = getShortcutPlatform()
+  const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
+  return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
+}
+
 export function useShortcutLabel(actionId: KeybindingActionId): string {
   const keybindings = useAppStore((state) => state.keybindings)
   return formatShortcutLabel(actionId, keybindings)
 }
 
-export function formatShortcutKeys(
+// Why: returns null for unbound actions instead of the display sentinel
+// 'Unassigned', so callers decide whether to render a hint without coupling
+// UI logic to formatter copy (which may change or become localized).
+export function formatOptionalShortcutLabel(
   actionId: KeybindingActionId,
   overrides?: KeybindingOverrides
-): string[] {
+): string | null {
   const platform = getShortcutPlatform()
-  const binding = getEffectiveKeybindingsForAction(actionId, platform, overrides)[0]
-  return binding ? formatKeybinding(binding, platform) : []
+  const bindings = getEffectiveKeybindingsForAction(actionId, platform, overrides)
+  if (bindings.length === 0) {
+    return null
+  }
+  return formatKeybindingList(bindings, platform)
 }
 
-export function useShortcutKeys(actionId: KeybindingActionId): string[] {
+export function useOptionalShortcutLabel(actionId: KeybindingActionId): string | null {
   const keybindings = useAppStore((state) => state.keybindings)
-  return formatShortcutKeys(actionId, keybindings)
+  return formatOptionalShortcutLabel(actionId, keybindings)
 }
 
-export function formatShortcutKeyCombos(
+export function formatShortcutKeyComboDetails(
   actionId: KeybindingActionId,
   overrides?: KeybindingOverrides
-): string[][] {
+): ShortcutKeyComboDetails[] {
   const platform = getShortcutPlatform()
-  return getEffectiveKeybindingsForAction(actionId, platform, overrides).map((binding) =>
-    formatKeybinding(binding, platform)
-  )
+  return getEffectiveKeybindingsForAction(actionId, platform, overrides).map((binding) => ({
+    keys: formatKeybinding(binding, platform),
+    doubleTap: isDoubleTapBinding(binding)
+  }))
 }
 
-export function useShortcutKeyCombos(actionId: KeybindingActionId): string[][] {
+export function useShortcutKeyComboDetails(
+  actionId: KeybindingActionId
+): ShortcutKeyComboDetails[] {
   const keybindings = useAppStore((state) => state.keybindings)
-  return formatShortcutKeyCombos(actionId, keybindings)
+  return formatShortcutKeyComboDetails(actionId, keybindings)
+}
+
+export function useShortcutKeyDetails(actionId: KeybindingActionId): ShortcutKeyComboDetails {
+  return useShortcutKeyComboDetails(actionId)[0] ?? { keys: [], doubleTap: false }
 }

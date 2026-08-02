@@ -1,7 +1,3 @@
-/* eslint-disable max-lines -- Why: covers every pty:management IPC channel
-against shared mocks (electron, fs, daemon-init, DaemonPtyRouter). Splitting
-across files would duplicate the vi.hoisted setup and the shared helpers,
-with no meaningful ownership seam. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaemonSessionInfo } from '../daemon/types'
 
@@ -41,6 +37,23 @@ vi.mock('../daemon/daemon-pty-router', () => {
     }
   }
   return { DaemonPtyRouter }
+})
+
+// Why: the handler also branches on `provider instanceof DegradedDaemonPtyProvider`
+// (for getAllAdapters) and reports `degraded` from it. The real constructor
+// subscribes to adapter events, so keep only the accessors pty-management uses.
+vi.mock('../daemon/degraded-daemon-pty-provider', () => {
+  class DegradedDaemonPtyProvider {
+    readonly isDegraded = true
+    private allAdapters: unknown[]
+    constructor(opts: { current: unknown; legacy: unknown[] }) {
+      this.allAdapters = [opts.current, ...opts.legacy]
+    }
+    getAllAdapters() {
+      return this.allAdapters
+    }
+  }
+  return { DegradedDaemonPtyProvider }
 })
 
 type HandlerMap = Record<string, (event: unknown, args?: unknown) => unknown>
@@ -107,6 +120,15 @@ async function makeRouter(current: MockAdapter, legacy: MockAdapter[] = []) {
   return new DaemonPtyRouter({ current: current as never, legacy: legacy as never })
 }
 
+async function makeDegradedProvider(current: MockAdapter, legacy: MockAdapter[] = []) {
+  const { DegradedDaemonPtyProvider } = await import('../daemon/degraded-daemon-pty-provider')
+  return new DegradedDaemonPtyProvider({
+    current: current as never,
+    legacy: legacy as never,
+    fallback: undefined as never
+  })
+}
+
 describe('pty:management IPC handlers', () => {
   beforeEach(() => {
     getDaemonProviderMock.mockReset()
@@ -128,13 +150,31 @@ describe('pty:management IPC handlers', () => {
       const handlers = buildHandlerMap()
       const result = (await handlers['pty:management:listSessions']({})) as {
         sessions: DaemonSessionInfo[]
+        degraded: boolean
       }
 
       expect(result.sessions).toHaveLength(3)
+      expect(result.degraded).toBe(false)
       const byId = new Map(result.sessions.map((s) => [s.sessionId, s]))
       expect(byId.get('new-1')?.protocolVersion).toBe(5)
       expect(byId.get('new-2')?.protocolVersion).toBe(5)
       expect(byId.get('old-1')?.protocolVersion).toBe(3)
+    })
+
+    it('reports degraded mode and still lists sessions when the daemon cannot spawn fresh PTYs', async () => {
+      const current = makeAdapter(5, [makeSession('preserved-1')])
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeDegradedProvider(current))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = (await handlers['pty:management:listSessions']({})) as {
+        sessions: DaemonSessionInfo[]
+        degraded: boolean
+      }
+
+      expect(result.degraded).toBe(true)
+      expect(result.sessions.map((s) => s.sessionId)).toEqual(['preserved-1'])
     })
 
     it('returns empty list when no daemon provider is installed', async () => {
@@ -186,10 +226,11 @@ describe('pty:management IPC handlers', () => {
     async function runKillAllWithPolls(
       handler: (event: unknown, args?: unknown) => unknown,
       pollCount: number = 65
-    ): Promise<{ killedCount: number; remainingCount: number }> {
+    ): Promise<{ killedCount: number; remainingCount: number; killedSessionIds: string[] }> {
       const resultPromise = handler({}) as Promise<{
         killedCount: number
         remainingCount: number
+        killedSessionIds: string[]
       }>
       // Why: advance the loop's sleeps one at a time. Between each sleep the
       // handler awaits collectSessions (a microtask), so we need to flush
@@ -235,7 +276,11 @@ describe('pty:management IPC handlers', () => {
       const handlers = buildHandlerMap()
       const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
 
-      expect(result).toEqual({ killedCount: 3, remainingCount: 0 })
+      expect(result).toEqual({
+        killedCount: 3,
+        remainingCount: 0,
+        killedSessionIds: ['new-1', 'new-2', 'old-1']
+      })
       // Each initial session receives exactly one shutdown — no retries.
       expect(current.shutdown).toHaveBeenCalledTimes(2)
       expect(current.shutdown).toHaveBeenCalledWith('new-1', { immediate: true })
@@ -262,7 +307,7 @@ describe('pty:management IPC handlers', () => {
       const handlers = buildHandlerMap()
       const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
 
-      expect(result).toEqual({ killedCount: 0, remainingCount: 1 })
+      expect(result).toEqual({ killedCount: 0, remainingCount: 1, killedSessionIds: [] })
       // One shutdown fired — no per-session retry. Initial-snapshot
       // accounting means the stuck session is counted once.
       expect(current.shutdown).toHaveBeenCalledTimes(1)
@@ -296,7 +341,11 @@ describe('pty:management IPC handlers', () => {
       const handlers = buildHandlerMap()
       const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
 
-      expect(result).toEqual({ killedCount: 2, remainingCount: 0 })
+      expect(result).toEqual({
+        killedCount: 2,
+        remainingCount: 0,
+        killedSessionIds: ['a', 'b']
+      })
     })
 
     it('swallows per-session shutdown rejections without stopping the batch', async () => {
@@ -330,7 +379,11 @@ describe('pty:management IPC handlers', () => {
       expect(current.shutdown).toHaveBeenCalledWith('a', { immediate: true })
       expect(current.shutdown).toHaveBeenCalledWith('b', { immediate: true })
       // 'a' rejected and is still alive → counts as remaining; 'b' reaped.
-      expect(result).toEqual({ killedCount: 1, remainingCount: 1 })
+      expect(result).toEqual({
+        killedCount: 1,
+        remainingCount: 1,
+        killedSessionIds: ['b']
+      })
     })
   })
 

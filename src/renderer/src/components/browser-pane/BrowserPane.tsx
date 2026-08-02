@@ -11,11 +11,16 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { getWorkspaceFileBrowserOpenTarget } from '@/lib/file-preview'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import {
+  getWorkspaceFileDragRejectionMessage,
+  readWorkspaceFileDragPaths,
+  WORKSPACE_FILE_PATH_MIME
+} from '@/lib/workspace-file-drag'
 import {
   ArrowLeft,
   ArrowRight,
@@ -23,7 +28,9 @@ import {
   Copy,
   CornerDownLeft,
   Crosshair,
+  Download,
   ExternalLink,
+  FolderOpen,
   Globe,
   Image,
   Loader2,
@@ -34,12 +41,12 @@ import {
   RefreshCw,
   Send,
   SquareCode,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,8 +59,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
+import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { getOrcaProfileBrowserDefaultPartition } from '../../../../shared/orca-profiles'
 import type {
+  BrowserCertificateProceedResult,
   BrowserLoadError,
   BrowserPage as BrowserPageState,
   BrowserWorkspace as BrowserWorkspaceState
@@ -61,7 +72,9 @@ import type {
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
-  redactKagiSessionToken
+  redactKagiSessionToken,
+  resolveRemoteFailureExternalUrl,
+  toHttpsRecoveryUrl
 } from '../../../../shared/browser-url'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -70,12 +83,20 @@ import {
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
 import { rememberLiveBrowserUrl } from './browser-runtime'
+import { ensureBrowserPageWebview } from './browser-page-webview'
 import {
   destroyPersistentWebview,
-  registerPersistentWebview,
-  registeredWebContentsIds,
-  webviewRegistry
+  moveFocusToRendererBeforeWebviewDetach,
+  registeredWebContentsIds
 } from './webview-registry'
+import {
+  applyBrowserPageViewportLayout,
+  ensureBrowserPageViewport,
+  getBrowserOverlaySlotViewport,
+  parkBrowserPageViewport,
+  subscribeBrowserOverlaySlotViewport,
+  syncBrowserPageChromeInset
+} from './browser-page-viewport'
 import { useBrowserAutomationVisiblePageIds } from './browser-automation-visibility'
 import type {
   BrowserDownloadRequestedEvent,
@@ -99,6 +120,7 @@ import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
 import BrowserAddressBar from './BrowserAddressBar'
+import { BrowserImportHintButton } from './BrowserImportHintButton'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import BrowserFind from './BrowserFind'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
@@ -117,6 +139,12 @@ import {
   addBrowserPageZoomEventListener,
   applyBrowserPageZoom,
   browserPageZoomLevelToPercent,
+  DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  getBrowserPageZoomIndicatorState,
+  getExplicitBrowserPageZoomLevel,
+  normalizeBrowserPageZoomLevel,
+  rememberExplicitBrowserPageZoomLevel,
+  setBrowserPageZoomLevel,
   type BrowserPageZoomDirection
 } from './browser-page-zoom'
 import {
@@ -126,6 +154,7 @@ import {
 } from '@/runtime/runtime-file-client'
 import {
   callRuntimeRpc,
+  runtimeEnvironmentSupportsCapability,
   RuntimeRpcCallError,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
@@ -143,21 +172,22 @@ import {
   type BrowserScreencastFrameMetadata
 } from '../../../../shared/browser-screencast-protocol'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../../shared/runtime-rpc-feature-interaction-source'
-import {
-  formatByteCount,
-  formatDownloadFinishedNotice,
-  formatLoadFailureDescription,
-  formatLoadFailureRecoveryHint,
-  formatPermissionNotice,
-  formatPopupNotice
-} from './browser-notices'
+import { formatByteCount, formatPermissionNotice, formatPopupNotice } from './browser-notices'
 import {
   getDriverForBrowserPage,
   onBrowserDriverChange,
+  useBrowserMobileDrivenPageIds,
   type BrowserDriverState
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
+import { translate } from '@/i18n/i18n'
+import { isBrowserPagePanePaintable } from './browser-page-paintability'
+import { useMarkupMode, type MarkupCaptureContext } from './markup/useMarkupMode'
+import { MarkupOverlay } from './markup/MarkupOverlay'
+import { MarkupDrawButton } from './markup/MarkupDrawButton'
+import { deliverMarkupToClipboard } from './markup/markup-clipboard-delivery'
+import { BrowserLoadFailureOverlay } from './browser-load-failure-overlay'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -166,9 +196,22 @@ type BrowserTabPageState = Partial<
   >
 >
 
-type BrowserDownloadState = BrowserDownloadRequestedEvent & {
+type BrowserDownloadState = Omit<BrowserDownloadRequestedEvent, 'status' | 'savePath'> & {
   receivedBytes: number
-  status: 'requested' | 'downloading'
+  status: 'downloading' | 'completed' | 'failed' | 'canceled'
+  savePath: string | null
+  error: string | null
+  progressState: BrowserDownloadProgressEvent['state']
+  completedAt: number | null
+}
+
+function formatBrowserDownloadProgress(download: BrowserDownloadState): string | null {
+  const received = formatByteCount(download.receivedBytes)
+  const total = formatByteCount(download.totalBytes)
+  if (received && total) {
+    return `${received} / ${total}`
+  }
+  return received ?? total
 }
 
 type GrabIntent = 'copy' | 'annotate'
@@ -180,12 +223,23 @@ type BrowserOverlayAnchor = {
 }
 
 const BROWSER_ANNOTATION_INTENT_OPTIONS = [
-  { value: 'change', label: 'Change', icon: PencilLine },
-  { value: 'question', label: 'Question', icon: MessageCircleQuestionMark }
+  {
+    value: 'change',
+    get label() {
+      return translate('auto.components.browser.pane.BrowserPane.143204e423', 'Change')
+    },
+    icon: PencilLine
+  },
+  {
+    value: 'question',
+    get label() {
+      return translate('auto.components.browser.pane.BrowserPane.b5ba6085de', 'Question')
+    },
+    icon: MessageCircleQuestionMark
+  }
 ] as const
 
-// Why: priority remains in the persisted annotation shape for backwards
-// compatibility, but the annotation UI no longer exposes urgency choices.
+// Why: priority stays in the persisted annotation shape for backwards compat, though the UI no longer exposes urgency choices.
 const DEFAULT_BROWSER_ANNOTATION_PRIORITY: BrowserAnnotationPriority = 'important'
 const BROWSER_PAGE_ZOOM_FEEDBACK_MS = 1400
 
@@ -233,11 +287,22 @@ type RemoteBrowserContextMenu = {
   y: number
   linkUrl: string | null
   pageUrl: string
+  selectionText: string
 }
 
 type RemoteBrowserViewportSize = {
   width: number
   height: number
+}
+
+function getBrowserPageRuntimeEnvironmentId(
+  page: BrowserPageState,
+  inferredRuntimeEnvironmentId: string | null | undefined
+): string | null {
+  if (page.browserRuntimeEnvironmentId !== undefined) {
+    return page.browserRuntimeEnvironmentId?.trim() || null
+  }
+  return inferredRuntimeEnvironmentId?.trim() || null
 }
 
 type RemoteBrowserImagePoint = {
@@ -266,8 +331,7 @@ function createBrowserAnnotationId(): string {
 function createBrowserAnnotationPayload(payload: BrowserGrabPayload): BrowserAnnotationPayload {
   return {
     ...payload,
-    // Why: annotations are persisted renderer state; screenshot data is a
-    // transient copy action payload and can be megabytes per selection.
+    // Why: annotations are persisted; screenshot data is a transient copy payload that can be megabytes per selection.
     screenshot: null
   }
 }
@@ -356,7 +420,10 @@ function PendingBrowserAnnotationCard({
         collisionPadding={12}
         portalContainer={portalContainer}
         className="z-40 w-[22rem] max-w-[calc(var(--radix-popover-content-available-width)-1rem)] p-3 shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
-        aria-label="Add browser annotation"
+        aria-label={translate(
+          'auto.components.browser.pane.BrowserPane.b472c5fe03',
+          'Add browser annotation'
+        )}
         onEscapeKeyDown={(event) => {
           event.preventDefault()
           onCancel()
@@ -373,13 +440,16 @@ function PendingBrowserAnnotationCard({
           </div>
         </div>
         <Label htmlFor="browser-annotation-comment" className="sr-only">
-          Annotation comment
+          {translate('auto.components.browser.pane.BrowserPane.d2a7092e6e', 'Annotation comment')}
         </Label>
         <textarea
           id="browser-annotation-comment"
           value={comment}
           onChange={(event) => setComment(event.target.value)}
-          placeholder="Describe what the agent should change here..."
+          placeholder={translate(
+            'auto.components.browser.pane.BrowserPane.532bac48c5',
+            'Describe what the agent should change here...'
+          )}
           maxLength={GRAB_BUDGET.annotationCommentMaxLength}
           className="h-24 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
           autoFocus
@@ -400,7 +470,9 @@ function PendingBrowserAnnotationCard({
           }}
         />
         <div className="mt-2 min-w-0">
-          <Label className="mb-1 block text-xs text-muted-foreground">Intent</Label>
+          <Label className="mb-1 block text-xs text-muted-foreground">
+            {translate('auto.components.browser.pane.BrowserPane.8f87e6c2e5', 'Intent')}
+          </Label>
           <ToggleGroup
             type="single"
             size="sm"
@@ -412,7 +484,10 @@ function PendingBrowserAnnotationCard({
               }
             }}
             className="h-8 w-full [&_[data-slot=toggle-group-item]]:h-8 [&_[data-slot=toggle-group-item]]:flex-1 [&_[data-slot=toggle-group-item]]:px-2"
-            aria-label="Annotation intent"
+            aria-label={translate(
+              'auto.components.browser.pane.BrowserPane.0cb3bd6221',
+              'Annotation intent'
+            )}
           >
             {BROWSER_ANNOTATION_INTENT_OPTIONS.map((option) => {
               const Icon = option.icon
@@ -432,7 +507,7 @@ function PendingBrowserAnnotationCard({
         </div>
         <div className="mt-3 flex justify-end gap-2">
           <Button size="sm" variant="ghost" className="h-8" onClick={onCancel}>
-            Cancel
+            {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
           </Button>
           <Button
             size="sm"
@@ -441,7 +516,7 @@ function PendingBrowserAnnotationCard({
             onClick={() => onAdd(trimmed, intent)}
           >
             <MessageSquarePlus className="size-3.5" />
-            Add
+            {translate('auto.components.browser.pane.BrowserPane.90d021f2ad', 'Add')}
             <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
               <span>{submitModifierLabel}</span>
               <CornerDownLeft className="size-3" />
@@ -546,16 +621,21 @@ function buildRemoteContextMenuExpression(x: number, y: number): string {
   return `(() => {
     const target = document.elementFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
     const anchor = target && typeof target.closest === 'function' ? target.closest('a[href]') : null;
+    // Why: read the guest selection here so the remote/paired browser can offer
+    // the same Copy affordance as the local webview (there is no ContextMenuParams
+    // over the runtime RPC).
+    const selection = typeof window.getSelection === 'function' ? window.getSelection() : null;
     return JSON.stringify({
       linkUrl: anchor && anchor.href ? anchor.href : null,
-      pageUrl: location.href || 'about:blank'
+      pageUrl: location.href || 'about:blank',
+      selectionText: selection ? String(selection) : ''
     });
   })()`
 }
 
 function readRemoteContextMenuResult(
   result: unknown
-): Pick<RemoteBrowserContextMenu, 'linkUrl' | 'pageUrl'> | null {
+): Pick<RemoteBrowserContextMenu, 'linkUrl' | 'pageUrl' | 'selectionText'> | null {
   if (!result || typeof result !== 'object') {
     return null
   }
@@ -564,10 +644,16 @@ function readRemoteContextMenuResult(
     return null
   }
   try {
-    const parsed = JSON.parse(raw) as { linkUrl?: unknown; pageUrl?: unknown }
+    const parsed = JSON.parse(raw) as {
+      linkUrl?: unknown
+      pageUrl?: unknown
+      selectionText?: unknown
+    }
     return {
       linkUrl: typeof parsed.linkUrl === 'string' && parsed.linkUrl ? parsed.linkUrl : null,
-      pageUrl: typeof parsed.pageUrl === 'string' && parsed.pageUrl ? parsed.pageUrl : 'about:blank'
+      pageUrl:
+        typeof parsed.pageUrl === 'string' && parsed.pageUrl ? parsed.pageUrl : 'about:blank',
+      selectionText: typeof parsed.selectionText === 'string' ? parsed.selectionText : ''
     }
   } catch {
     return null
@@ -614,28 +700,6 @@ function getRemoteBrowserDeviceScaleFactor(): number {
   return Math.min(2, Math.max(1, Number(scale.toFixed(2))))
 }
 
-function getLoadErrorMetadata(loadError: BrowserLoadError | null): {
-  displayUrl: string
-  host: string | null
-  isLocalhostLike: boolean
-} {
-  const rawUrl = loadError?.validatedUrl ?? 'about:blank'
-  const displayUrl = toDisplayUrl(rawUrl)
-  try {
-    const parsed = new URL(rawUrl)
-    const host = parsed.host || null
-    const hostname = parsed.hostname
-    const isLocalhostLike =
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname === '0.0.0.0' ||
-      hostname === '::1'
-    return { displayUrl, host, isLocalhostLike }
-  } catch {
-    return { displayUrl, host: null, isLocalhostLike: false }
-  }
-}
-
 function getOpenableExternalUrl(
   webview: Electron.WebviewTag | null,
   fallbackUrl: string
@@ -645,10 +709,7 @@ function getOpenableExternalUrl(
     try {
       currentUrl = webview.getURL() || fallbackUrl
     } catch {
-      // Why: restored browser tabs render before the guest emits dom-ready.
-      // Electron throws if toolbar code queries navigation state too early, and
-      // that renderer exception blanks the whole IDE on launch. Fall back to the
-      // persisted tab URL until the guest is fully attached.
+      // Why: querying nav state before dom-ready throws and blanks the whole IDE on launch; fall back to the persisted URL.
       currentUrl = fallbackUrl
     }
   }
@@ -661,9 +722,7 @@ function getCurrentBrowserUrl(webview: Electron.WebviewTag | null, fallbackUrl: 
     try {
       currentUrl = webview.getURL() || fallbackUrl
     } catch {
-      // Why: toolbar actions still need a stable URL during early guest attach
-      // and restore. Fall back to the persisted tab URL instead of throwing
-      // and dropping browser actions on freshly restored tabs.
+      // Why: toolbar actions need a stable URL during early guest attach/restore; fall back to the persisted URL instead of throwing.
       currentUrl = fallbackUrl
     }
   }
@@ -686,12 +745,7 @@ function retryBrowserTabLoad(
     return
   }
 
-  // Why: once Chromium lands on chrome-error://chromewebdata/, reload() can
-  // simply refresh the internal error page instead of retrying the original
-  // destination. Force navigation back to the attempted URL so Retry and the
-  // toolbar reload button actually re-attempt the failed page. Keep the last
-  // failure visible until a real success arrives so retry does not briefly
-  // drop the user back to a blank black guest surface.
+  // Why: after chrome-error://, reload() only refreshes the error page — force navigation back to the attempted URL; keep the failure visible until success.
   onUpdatePageState(browserTab.id, {
     loading: true,
     title: retryUrl
@@ -699,15 +753,33 @@ function retryBrowserTabLoad(
   webview.src = retryUrl
 }
 
+export type BrowserFindShortcutScope = 'focused' | 'inactive' | 'owned-target'
+
+function browserOverlayOwnsShortcutTarget(
+  target: EventTarget | null,
+  browserTabId: string
+): boolean {
+  if (!(target instanceof Element)) {
+    return false
+  }
+  return (
+    target.closest('[data-browser-overlay-tab-id]')?.getAttribute('data-browser-overlay-tab-id') ===
+    browserTabId
+  )
+}
+
 export default function BrowserPane({
   browserTab,
-  isActive
+  isActive,
+  findShortcutScope
 }: {
   browserTab: BrowserWorkspaceState
   isActive: boolean
+  findShortcutScope?: BrowserFindShortcutScope
 }): React.JSX.Element {
-  const activeRuntimeEnvironmentId = useAppStore(
-    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
+  const resolvedFindShortcutScope = findShortcutScope ?? (isActive ? 'focused' : 'inactive')
+  const activeRuntimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(s, browserTab.worktreeId)
   )
   const browserPages = useAppStore((s) =>
     getBrowserPagesForWorkspace(s.browserPagesByWorkspace, browserTab.id)
@@ -716,17 +788,18 @@ export default function BrowserPane({
     browserPages.find((page) => page.id === browserTab.activePageId) ?? browserPages[0] ?? null
   const updateBrowserPageState = useAppStore((s) => s.updateBrowserPageState)
   const setBrowserPageUrl = useAppStore((s) => s.setBrowserPageUrl)
-  const runtimeEnvironmentActive = Boolean(activeRuntimeEnvironmentId?.trim())
+  const activeBrowserRuntimeEnvironmentId = activeBrowserPage
+    ? getBrowserPageRuntimeEnvironmentId(activeBrowserPage, activeRuntimeEnvironmentId)
+    : null
+  const runtimeEnvironmentActive = Boolean(activeBrowserRuntimeEnvironmentId)
   const activeBrowserPageId = activeBrowserPage?.id ?? null
-  const activeBrowserPageIsBlank =
-    !runtimeEnvironmentActive &&
-    (activeBrowserPage?.url === 'about:blank' || activeBrowserPage?.url === ORCA_BROWSER_BLANK_URL)
   const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
   const automationVisiblePageIds = useBrowserAutomationVisiblePageIds(browserPageIds)
-  // Why: inactive Electron webviews must stay mounted in their original DOM
-  // parent. Parking them by unmounting/reparenting loses form text and SPA
-  // state on normal tab switches.
-  const renderedBrowserPages = browserPages
+  const mobileDrivenPageIds = useBrowserMobileDrivenPageIds(browserPageIds)
+  // Why: inactive webviews must stay mounted in their original DOM parent; unmounting/reparenting loses form text and SPA state.
+  const renderedBrowserPages = browserPages.filter(
+    (page) => !getBrowserPageRuntimeEnvironmentId(page, activeRuntimeEnvironmentId)
+  )
   const [activeBrowserDriver, setActiveBrowserDriver] = useState<BrowserDriverState>({
     kind: 'idle'
   })
@@ -736,9 +809,11 @@ export default function BrowserPane({
       return
     }
     for (const page of browserPages) {
-      destroyPersistentWebview(page.id)
+      if (getBrowserPageRuntimeEnvironmentId(page, activeRuntimeEnvironmentId)) {
+        destroyPersistentWebview(page.id)
+      }
     }
-  }, [browserPages, runtimeEnvironmentActive])
+  }, [activeRuntimeEnvironmentId, browserPages, runtimeEnvironmentActive])
 
   useEffect(() => {
     if (runtimeEnvironmentActive || !activeBrowserPageId) {
@@ -755,10 +830,7 @@ export default function BrowserPane({
 
   useContextualTour(
     'browser',
-    isActive &&
-      activeBrowserPage !== null &&
-      !runtimeEnvironmentActive &&
-      !activeBrowserPageIsBlank,
+    isActive && activeBrowserPage !== null && !runtimeEnvironmentActive,
     'browser_visible'
   )
 
@@ -769,11 +841,12 @@ export default function BrowserPane({
     await window.api.runtime.reclaimBrowserForDesktop(activeBrowserPageId)
   }, [activeBrowserPageId])
 
-  if (runtimeEnvironmentActive) {
+  if (activeBrowserRuntimeEnvironmentId) {
     return activeBrowserPage ? (
       <RemoteBrowserPagePane
-        key={`${activeRuntimeEnvironmentId?.trim() ?? ''}:${activeBrowserPage.id}`}
+        key={`${activeBrowserRuntimeEnvironmentId ?? ''}:${activeBrowserPage.id}`}
         browserTab={activeBrowserPage}
+        runtimeEnvironmentId={activeBrowserRuntimeEnvironmentId}
         worktreeId={browserTab.worktreeId}
         isActive={isActive}
         onUpdatePageState={updateBrowserPageState}
@@ -795,8 +868,13 @@ export default function BrowserPane({
               workspaceId={browserTab.id}
               worktreeId={browserTab.worktreeId}
               sessionProfileId={browserTab.sessionProfileId ?? null}
+              sessionPartition={browserTab.sessionPartition ?? null}
               isActive={isActive && page.id === activeBrowserPage?.id}
+              findShortcutScope={
+                page.id === activeBrowserPage?.id ? resolvedFindShortcutScope : 'inactive'
+              }
               isAutomationVisible={automationVisiblePageIds.has(page.id)}
+              isMobileDriven={mobileDrivenPageIds.has(page.id)}
               inputLocked={activeBrowserDriver.kind === 'mobile'}
               onUpdatePageState={updateBrowserPageState}
               onSetUrl={setBrowserPageUrl}
@@ -814,18 +892,20 @@ export default function BrowserPane({
 
 function RemoteBrowserPagePane({
   browserTab,
+  runtimeEnvironmentId,
   worktreeId,
   isActive,
   onUpdatePageState,
   onSetUrl
 }: {
   browserTab: BrowserPageState
+  runtimeEnvironmentId: string
   worktreeId: string
   isActive: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: (tabId: string, url: string) => void
 }): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
+  const activeRuntimeEnvironmentId = runtimeEnvironmentId
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const remoteViewportRef = useRef<HTMLDivElement | null>(null)
@@ -858,7 +938,6 @@ function RemoteBrowserPagePane({
   const currentBrowserTabIdRef = useRef(browserTab.id)
   const currentBrowserTabUrlRef = useRef(browserTab.url)
   const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
-  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() ?? null
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(activeRuntimeEnvironmentId)
   const startRemoteStreamRef = useRef<
     (pageId: string) => Promise<RemoteBrowserStreamSubscription | null>
@@ -868,9 +947,45 @@ function RemoteBrowserPagePane({
     (token: RemoteBrowserOperationToken) => Promise<BrowserTabInfo | null>
   >(async () => null)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
+  const certificateFailure = useAppStore(
+    (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
+  )
+  const remotePageHandle = useAppStore(
+    (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
+  )
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
+  const keybindings = useAppStore((state) => state.keybindings)
+
+  // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
+  const [remoteCertificateTrustSupported, setRemoteCertificateTrustSupported] = useState(false)
+  const remoteCertificateEnvironmentId = remotePageHandle?.environmentId ?? null
+  const certificateChallengeId = certificateFailure?.challengeId ?? null
+  useEffect(() => {
+    if (!remoteCertificateEnvironmentId || !certificateChallengeId) {
+      setRemoteCertificateTrustSupported(false)
+      return
+    }
+    let cancelled = false
+    void runtimeEnvironmentSupportsCapability(
+      remoteCertificateEnvironmentId,
+      BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
+    )
+      .then((supported) => {
+        if (!cancelled) {
+          setRemoteCertificateTrustSupported(supported)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRemoteCertificateTrustSupported(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [remoteCertificateEnvironmentId, certificateChallengeId])
 
   currentBrowserTabIdRef.current = browserTab.id
   currentBrowserTabUrlRef.current = browserTab.url
@@ -936,8 +1051,7 @@ function RemoteBrowserPagePane({
       clearStreamFrame()
       setRemoteError(null)
       setBusy(false)
-      // Why: a runtime-side tab close is the remote equivalent of closing the
-      // visible browser tab; don't leave a dead pane behind with a not-found RPC.
+      // Why: a runtime-side tab close mirrors closing the visible tab; don't leave a dead pane behind.
       const workspacePageCount = state.browserPagesByWorkspace[browserTab.workspaceId]?.length ?? 0
       if (workspacePageCount <= 1) {
         closeBrowserTab(browserTab.workspaceId)
@@ -1019,8 +1133,7 @@ function RemoteBrowserPagePane({
         { timeoutMs: 15_000, suppressFeatureInteraction: true }
       )
       try {
-        // Why: the streamed bitmap can include the host compositor surface,
-        // while CDP input wants the guest page's CSS viewport coordinates.
+        // Why: the streamed bitmap can include the host compositor surface, but CDP input wants the guest page's CSS viewport coords.
         const viewport = await callRuntimeRpc(
           target,
           'browser.eval',
@@ -1100,6 +1213,8 @@ function RemoteBrowserPagePane({
   )
 
   useEffect(() => {
+    // Why: StrictMode's mount→cleanup→mount leaves mountedRef false; re-arm or operation tokens read stale and the pane wedges.
+    mountedRef.current = true
     return () => {
       mountedRef.current = false
       remoteOperationGenerationRef.current += 1
@@ -1129,9 +1244,7 @@ function RemoteBrowserPagePane({
   }, [clearPendingRemoteWheel])
 
   useEffect(() => {
-    remoteOperationGenerationRef.current += 1
-    streamGenerationRef.current += 1
-    activeStreamTokenRef.current = null
+    // Why: only reset frame/wheel on identity change; bumping the stream/operation generations here races the streaming effect and wedges the pane.
     remoteStreamViewportSizeRef.current = null
     clearPendingRemoteWheel()
     clearStreamFrame()
@@ -1226,7 +1339,7 @@ function RemoteBrowserPagePane({
         return
       }
       const state = useAppStore.getState()
-      const currentEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() ?? null
+      const currentEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
       const pageStillExists = browserPageExists(browserTab.id)
       if (currentEnvironmentId === activeRuntimeEnvironmentId && pageStillExists) {
         return
@@ -1236,8 +1349,7 @@ function RemoteBrowserPagePane({
       if (!removedHandle) {
         return
       }
-      // Why: remote browser tabs outlive React components on the daemon. Close
-      // only when the local page is gone or its owning runtime environment is.
+      // Why: remote tabs outlive React components on the daemon; close only when the local page or its runtime environment is gone.
       void callRuntimeRpc(
         { kind: 'environment', environmentId: removedHandle.environmentId },
         'browser.tabClose',
@@ -1245,7 +1357,7 @@ function RemoteBrowserPagePane({
         { timeoutMs: 15_000, suppressFeatureInteraction: true }
       ).catch(() => {})
     }
-  }, [activeRuntimeEnvironmentId, browserTab.id, runtimeWorktree])
+  }, [activeRuntimeEnvironmentId, browserTab.id, runtimeWorktree, worktreeId])
 
   const applyRemoteTabInfo = useCallback(
     (tab: Pick<BrowserTabInfo, 'url' | 'title'>): void => {
@@ -1527,9 +1639,7 @@ function RemoteBrowserPagePane({
       streamSubscriptionRef.current = null
       activeStreamTokenRef.current = null
       remoteStreamViewportSizeRef.current = null
-      // Why: browser navigation can close and recreate the screencast stream.
-      // Keep the last frame visible during restart so remote browser panes do
-      // not flash back to the generic loading placeholder on every navigation.
+      // Why: navigation recreates the screencast stream; keep the last frame during restart so panes don't flash the loading placeholder.
       if (!restart) {
         clearStreamFrame()
       }
@@ -1671,9 +1781,7 @@ function RemoteBrowserPagePane({
         return
       }
 
-      // Why: the runtime stream validates frames against the viewport it was
-      // started with. After a pane resize, restart media so new-size frames are
-      // accepted instead of leaving the renderer on the last old-size bitmap.
+      // Why: the runtime stream validates frames against its start viewport, so restart media after resize or new-size frames get rejected.
       streamGenerationRef.current += 1
       activeStreamTokenRef.current = null
       streamSubscriptionRef.current = null
@@ -1812,6 +1920,32 @@ function RemoteBrowserPagePane({
     })
   }, [isActive])
 
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const handleBrowserFocusRequest = (event: Event): void => {
+      const detail = (event as CustomEvent<BrowserFocusRequestDetail>).detail
+      if (!detail || detail.pageId !== browserTab.id) {
+        return
+      }
+      const focusTarget = consumeBrowserFocusRequest(browserTab.id)
+      if (!focusTarget) {
+        return
+      }
+      if (focusTarget === 'address-bar') {
+        addressBarInputRef.current?.focus()
+        addressBarInputRef.current?.select()
+        return
+      }
+      const target = imageRef.current ?? remoteViewportRef.current
+      target?.focus()
+    }
+    window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+    return () =>
+      window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+  }, [browserTab.id, isActive])
+
   const runRemoteNavigation = useCallback(
     async (
       method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
@@ -1859,7 +1993,12 @@ function RemoteBrowserPagePane({
         setRemoteError(message)
         onUpdatePageState(browserTab.id, {
           loading: false,
-          loadError: { code: 0, description: message, validatedUrl: url ?? browserTab.url }
+          // Why: validatedUrl is persisted, so redact the Kagi session token like the main-process failure path does.
+          loadError: {
+            code: 0,
+            description: message,
+            validatedUrl: redactKagiSessionToken(url ?? browserTab.url)
+          }
         })
       } finally {
         if (isCurrentRemoteOperationToken(pageToken)) {
@@ -1887,6 +2026,30 @@ function RemoteBrowserPagePane({
     },
     [runRemoteNavigation]
   )
+
+  // Browser history shortcuts for SSH/runtime browsers.
+  // Why: remote panes have no local webview ref, so route history through runtime RPC instead of WebContents.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const shortcutPlatform = getShortcutPlatform()
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      const method = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
+        ? 'browser.back'
+        : keybindingMatchesAction('browser.forward', e, shortcutPlatform, keybindings)
+          ? 'browser.forward'
+          : null
+      if (method === null) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      void runRemoteNavigation(method)
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [isActive, keybindings, runRemoteNavigation])
 
   const submitAddressBar = (): void => {
     const searchEngine = useAppStore.getState().browserDefaultSearchEngine
@@ -2024,7 +2187,9 @@ function RemoteBrowserPagePane({
       x: event.clientX,
       y: event.clientY,
       linkUrl: null,
-      pageUrl: browserTab.url || 'about:blank'
+      pageUrl: browserTab.url || 'about:blank',
+      // Why: filled in below once the async eval reads the guest selection.
+      selectionText: ''
     })
     enqueueRemoteInput(async () => {
       const operationToken = createRemoteOperationToken(pageId)
@@ -2049,7 +2214,8 @@ function RemoteBrowserPagePane({
               ? {
                   ...current,
                   linkUrl: parsed.linkUrl,
-                  pageUrl: redactKagiSessionToken(parsed.pageUrl)
+                  pageUrl: redactKagiSessionToken(parsed.pageUrl),
+                  selectionText: parsed.selectionText
                 }
               : current
           )
@@ -2237,13 +2403,40 @@ function RemoteBrowserPagePane({
     if (!image || !frameUrl) {
       return
     }
-    // Why: React delegates wheel listeners passively in Chromium, so native
-    // non-passive binding is required to prevent page scroll and console noise.
+    // Why: React binds wheel listeners passively in Chromium, so bind natively non-passive to preventDefault scroll.
     image.addEventListener('wheel', handleRemoteScreenshotWheel, { passive: false })
     return () => image.removeEventListener('wheel', handleRemoteScreenshotWheel)
   }, [frameUrl, handleRemoteScreenshotWheel])
 
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
+  const remoteFailureUrl = browserTab.loadError?.validatedUrl ?? browserTab.url
+  const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
+  const showRemoteFailureOverlay =
+    Boolean(browserTab.loadError) &&
+    remoteFailureUrl !== 'about:blank' &&
+    remoteFailureUrl !== ORCA_BROWSER_BLANK_URL
+
+  // Why: markup snapshots the displayed screencast <img> (no injection), so it works on remote panes even though element-grab doesn't.
+  const markup = useMarkupMode({
+    getCaptureContext: useCallback((): MarkupCaptureContext | null => {
+      const element = imageRef.current
+      const container = remoteViewportRef.current
+      if (!element || !container) {
+        return null
+      }
+      const rect = container.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) {
+        return null
+      }
+      return {
+        source: { kind: 'image', element },
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+        outputScale: window.devicePixelRatio || 1
+      }
+    }, []),
+    onDeliver: deliverMarkupToClipboard
+  })
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
@@ -2270,7 +2463,10 @@ function RemoteBrowserPagePane({
                         setContextMenu(null)
                       }}
                     >
-                      Open Link In Orca Browser
+                      {translate(
+                        'auto.components.browser.pane.BrowserPane.b5b87d6cbb',
+                        'Open Link In Orca Browser'
+                      )}
                     </button>
                     <button
                       role="menuitem"
@@ -2283,7 +2479,10 @@ function RemoteBrowserPagePane({
                         setContextMenu(null)
                       }}
                     >
-                      Open Link In Default Browser
+                      {translate(
+                        'auto.components.browser.pane.BrowserPane.8ce4f6b12e',
+                        'Open Link In Default Browser'
+                      )}
                     </button>
                     <button
                       role="menuitem"
@@ -2293,7 +2492,25 @@ function RemoteBrowserPagePane({
                         setContextMenu(null)
                       }}
                     >
-                      Copy Link Address
+                      {translate(
+                        'auto.components.browser.pane.BrowserPane.efb0e8f7f3',
+                        'Copy Link Address'
+                      )}
+                    </button>
+                    <div className="my-1 h-px bg-border/70" />
+                  </>
+                ) : null}
+                {contextMenu.selectionText.trim() ? (
+                  <>
+                    <button
+                      role="menuitem"
+                      className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                      onClick={() => {
+                        void window.api.ui.writeClipboardText(contextMenu.selectionText)
+                        setContextMenu(null)
+                      }}
+                    >
+                      {translate('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy')}
                     </button>
                     <div className="my-1 h-px bg-border/70" />
                   </>
@@ -2306,7 +2523,7 @@ function RemoteBrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Back
+                  {translate('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back')}
                 </button>
                 <button
                   role="menuitem"
@@ -2316,7 +2533,7 @@ function RemoteBrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Forward
+                  {translate('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward')}
                 </button>
                 <button
                   role="menuitem"
@@ -2326,7 +2543,7 @@ function RemoteBrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Reload
+                  {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
                 </button>
                 <div className="my-1 h-px bg-border/70" />
                 <button
@@ -2340,7 +2557,10 @@ function RemoteBrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Open Page In Default Browser
+                  {translate(
+                    'auto.components.browser.pane.BrowserPane.f7ab83f7ed',
+                    'Open Page In Default Browser'
+                  )}
                 </button>
                 <button
                   role="menuitem"
@@ -2350,7 +2570,10 @@ function RemoteBrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Copy Page URL
+                  {translate(
+                    'auto.components.browser.pane.BrowserPane.1b179ab561',
+                    'Copy Page URL'
+                  )}
                 </button>
               </div>
             </>,
@@ -2403,7 +2626,10 @@ function RemoteBrowserPagePane({
               variant="ghost"
               className="h-7 w-7 opacity-50"
               aria-disabled="true"
-              aria-label="Browser annotations unavailable in remote runtime"
+              aria-label={translate(
+                'auto.components.browser.pane.BrowserPane.deb5293610',
+                'Browser annotations unavailable in remote runtime'
+              )}
               onClick={(event) => {
                 event.preventDefault()
               }}
@@ -2412,14 +2638,33 @@ function RemoteBrowserPagePane({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            Browser annotations are only available in local browser tabs.
+            {translate(
+              'auto.components.browser.pane.BrowserPane.8b7e6d1f5a',
+              'Browser annotations are only available in local browser tabs.'
+            )}
           </TooltipContent>
         </Tooltip>
+        <MarkupDrawButton
+          onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
+          disabled={!frameUrl}
+          active={markup.isActive}
+          surfaceActive={isActive}
+          className="h-7 w-7"
+        />
       </div>
       <div
         ref={remoteViewportRef}
+        tabIndex={-1}
         className="relative min-h-0 flex-1 overflow-hidden bg-background"
       >
+        {markup.isActive && markup.baseImage ? (
+          <MarkupOverlay
+            baseImage={markup.baseImage}
+            busy={markup.state === 'composing'}
+            onComplete={(input) => void markup.complete(input)}
+            onCancel={markup.cancel}
+          />
+        ) : null}
         {frameUrl ? (
           <img
             ref={imageRef}
@@ -2443,14 +2688,63 @@ function RemoteBrowserPagePane({
                 <Globe className="size-5 text-muted-foreground" />
               )}
               <div className="text-sm font-medium text-foreground">
-                {busy ? 'Opening remote browser' : 'Remote browser'}
+                {busy
+                  ? translate(
+                      'auto.components.browser.pane.BrowserPane.b313a7275b',
+                      'Opening remote browser'
+                    )
+                  : translate(
+                      'auto.components.browser.pane.BrowserPane.572046436a',
+                      'Remote browser'
+                    )}
               </div>
               <div className="text-xs leading-5 text-muted-foreground">
-                This pane is rendered from the active runtime server.
+                {translate(
+                  'auto.components.browser.pane.BrowserPane.bbe8f15e83',
+                  'This pane is rendered from the active runtime server.'
+                )}
               </div>
             </div>
           </div>
         )}
+        {showRemoteFailureOverlay && browserTab.loadError ? (
+          <BrowserLoadFailureOverlay
+            loadError={browserTab.loadError}
+            externalUrl={remoteFailureExternalUrl}
+            currentUrl={toDisplayUrl(remoteFailureUrl)}
+            httpsRecoveryUrl={toHttpsRecoveryUrl(remoteFailureUrl)}
+            onRetry={() => void runRemoteNavigation('browser.reload')}
+            onTryHttps={(url) => void runRemoteNavigation('browser.goto', url)}
+            onCopy={(url) => void window.api.ui.writeClipboardText(url)}
+            onOpenExternal={(url) => void window.api.shell.openUrl(url)}
+            certificateFailure={remoteCertificateTrustSupported ? certificateFailure : null}
+            expectedBrowserPageId={
+              remotePageHandle?.environmentId === activeRuntimeEnvironmentId
+                ? remotePageHandle.remotePageId
+                : null
+            }
+            onProceedCertificate={async (challengeId) => {
+              const target = runtimeTarget()
+              if (
+                !target ||
+                remotePageHandle?.environmentId !== target.environmentId ||
+                remotePageHandle.remotePageId !== certificateFailure?.browserPageId
+              ) {
+                return { ok: false, reason: 'missing' }
+              }
+              return callRuntimeRpc<BrowserCertificateProceedResult>(
+                target,
+                'browser.certificate.proceed',
+                {
+                  worktree: runtimeWorktree,
+                  page: remotePageHandle.remotePageId,
+                  challengeId
+                },
+                { timeoutMs: 15_000, suppressFeatureInteraction: true }
+              )
+            }}
+          />
+        ) : null}
         {remoteError ? (
           <div className="absolute bottom-4 left-1/2 max-w-md -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
             {remoteError}
@@ -2480,8 +2774,11 @@ function BrowserPagePane({
   workspaceId,
   worktreeId,
   sessionProfileId,
+  sessionPartition,
   isActive,
+  findShortcutScope,
   isAutomationVisible,
+  isMobileDriven,
   inputLocked,
   onUpdatePageState,
   onSetUrl
@@ -2490,52 +2787,89 @@ function BrowserPagePane({
   workspaceId: string
   worktreeId: string
   sessionProfileId: string | null
+  sessionPartition: string | null
   isActive: boolean
+  findShortcutScope: BrowserFindShortcutScope
   isAutomationVisible: boolean
+  isMobileDriven: boolean
   inputLocked: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: (tabId: string, url: string) => void
 }): React.JSX.Element {
-  const isPaintable = isActive || isAutomationVisible
+  const isPaintable = isBrowserPagePanePaintable({
+    isActive,
+    isAutomationVisible,
+    isMobileDriven
+  })
+  const pageViewport = ensureBrowserPageViewport(browserTab.id, workspaceId)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  containerRef.current = pageViewport?.container ?? null
+  const chromeHeaderRef = useRef<HTMLDivElement | null>(null)
   const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const browserZoomFeedbackTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const setContainerRef = useCallback((node: HTMLDivElement | null): void => {
-    containerRef.current = node
-    if (node !== null) {
+  useEffect(() => {
+    return () => {
+      clearTimeout(grabToastTimerRef.current)
+      clearTimeout(annotationCopyTimerRef.current)
+      clearTimeout(browserZoomFeedbackTimerRef.current)
+    }
+  }, [])
+  const [slotViewportReady, setSlotViewportReady] = useState(
+    () => getBrowserOverlaySlotViewport(workspaceId) !== null
+  )
+  useLayoutEffect(() => {
+    if (getBrowserOverlaySlotViewport(workspaceId)) {
+      setSlotViewportReady(true)
       return
     }
-    // Why: feedback timers are scoped to this pane owner and must not fire
-    // after the DOM owner is detached.
-    clearTimeout(grabToastTimerRef.current)
-    clearTimeout(annotationCopyTimerRef.current)
-    clearTimeout(browserZoomFeedbackTimerRef.current)
-  }, [])
+    return subscribeBrowserOverlaySlotViewport(workspaceId, () => {
+      setSlotViewportReady(true)
+    })
+  }, [workspaceId])
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
+  const dismissAddressBarSuggestionsRef = useRef<(() => void) | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const browserTabIdRef = useRef(browserTab.id)
   browserTabIdRef.current = browserTab.id
   const inputLockedRef = useRef(inputLocked)
   inputLockedRef.current = inputLocked
+  const navigateBrowserHistoryRef = useRef<(direction: 'back' | 'forward') => void>(() => {})
+  navigateBrowserHistoryRef.current = (direction: 'back' | 'forward'): void => {
+    // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
+    if (direction === 'back') {
+      webviewRef.current?.goBack()
+    } else {
+      webviewRef.current?.goForward()
+    }
+  }
+  const handleInternalFileDragOverRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
+  const handleInternalFileDropRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const keybindings = useAppStore((state) => state.keybindings)
+  const browserDefaultZoomLevel = useAppStore(
+    (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
+  )
+  const setBrowserDefaultZoomLevel = useAppStore((state) => state.setBrowserDefaultZoomLevel)
+  const normalizedBrowserDefaultZoomLevel = normalizeBrowserPageZoomLevel(browserDefaultZoomLevel)
+  const browserDefaultZoomPercent = browserPageZoomLevelToPercent(normalizedBrowserDefaultZoomLevel)
+  // Why: the level THIS pane should hold. Seeded from the configured default ("applied to newly
+  // opened browser tabs") and moved only by zooming this pane, so a reload can't broadcast another
+  // tab's zoom through the shared setting. Why the module-level lookup: the guest webview outlives
+  // this component (worktree switch, Settings visit), so re-seeding on remount would let a later
+  // Settings change retroactively hijack a tab the user already zoomed.
+  const paneZoomLevelRef = useRef(
+    getExplicitBrowserPageZoomLevel(browserTab.id) ?? normalizedBrowserDefaultZoomLevel
+  )
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
   const browserTabUrlRef = useRef(browserTab.url)
   const activeLoadFailureRef = useRef<BrowserLoadError | null>(browserTab.loadError)
-  // Why: CDP viewport emulation does not survive all renderer process swaps
-  // (cross-origin navigations, crashes). We reapply on every dom-ready from
-  // this ref so the persisted preset survives reloads without re-running the
-  // webview lifecycle effect whenever the preset changes.
+  // Why: CDP viewport emulation doesn't survive renderer process swaps, so reapply the preset from this ref on every dom-ready.
   const viewportPresetIdRef = useRef(browserTab.viewportPresetId ?? null)
   viewportPresetIdRef.current = browserTab.viewportPresetId ?? null
   const trackNextLoadingEventRef = useRef(false)
-  // Why: tracks the most recent URL the webview has navigated to or been
-  // observed at, from any source (navigation events, address bar, initial
-  // load). The URL sync effect checks this ref to avoid force-navigating
-  // the webview to an intermediate redirect URL — which would restart the
-  // redirect chain and cause an infinite loop.
+  // Most-recent observed webview URL; URL sync checks it to avoid force-navigating to an intermediate redirect (which would loop the redirect chain).
   const lastKnownWebviewUrlRef = useRef<string | null>(null)
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const onSetUrlRef = useRef(onSetUrl)
@@ -2544,19 +2878,41 @@ function BrowserPagePane({
   const [addressBarValue, setAddressBarValue] = useState(browserTab.url)
   const addressBarValueRef = useRef(browserTab.url)
   const [resourceNotice, setResourceNotice] = useState<string | null>(null)
-  const [downloadState, setDownloadState] = useState<BrowserDownloadState | null>(null)
-  const downloadStateRef = useRef<BrowserDownloadState | null>(null)
-  const [browserZoomPercent, setBrowserZoomPercent] = useState(100)
+  const [downloadStates, setDownloadStates] = useState<BrowserDownloadState[]>([])
+  const downloadStatesRef = useRef<BrowserDownloadState[]>([])
+  const [browserZoomPercent, setBrowserZoomPercent] = useState(browserDefaultZoomPercent)
   const [browserZoomFeedbackVisible, setBrowserZoomFeedbackVisible] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
     linkUrl: string | null
     pageUrl: string
+    selectionText: string
   } | null>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
   const grab = useGrabMode(browserTab.id)
+
+  const markup = useMarkupMode({
+    getCaptureContext: useCallback((): MarkupCaptureContext | null => {
+      const webview = webviewRef.current
+      const container = containerRef.current
+      if (!webview || !container) {
+        return null
+      }
+      const rect = container.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) {
+        return null
+      }
+      return {
+        source: { kind: 'webview', webview },
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+        outputScale: window.devicePixelRatio || 1
+      }
+    }, []),
+    onDeliver: deliverMarkupToClipboard
+  })
   const [grabIntent, setGrabIntent] = useState<GrabIntent>('copy')
   const grabIntentRef = useRef(grabIntent)
   grabIntentRef.current = grabIntent
@@ -2571,13 +2927,12 @@ function BrowserPagePane({
   })
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
-  const annotationViewportBridgeTokenRef = useRef(
-    typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID().replaceAll('-', '')
-      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
-  )
+  const annotationViewportBridgeTokenRef = useRef(createBrowserUuid().replaceAll('-', ''))
   const browserAnnotations = useAppStore(
     (s) => s.browserAnnotationsByPageId[browserTab.id] ?? EMPTY_BROWSER_ANNOTATIONS
+  )
+  const certificateFailure = useAppStore(
+    (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
   const browserAnnotationsRef = useRef(browserAnnotations)
@@ -2604,10 +2959,20 @@ function BrowserPagePane({
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
+  const activeOrcaProfileId = useAppStore((s) => s.activeOrcaProfileId)
+  const fallbackBrowserPartition = activeOrcaProfileId
+    ? getOrcaProfileBrowserDefaultPartition(activeOrcaProfileId)
+    : null
+  const defaultSessionProfile = browserSessionProfiles.find((p) => p.id === 'default') ?? null
   const sessionProfile = sessionProfileId
     ? (browserSessionProfiles.find((p) => p.id === sessionProfileId) ?? null)
-    : null
-  const webviewPartition = sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
+    : defaultSessionProfile
+  const webviewPartition =
+    sessionPartition ??
+    sessionProfile?.partition ??
+    defaultSessionProfile?.partition ??
+    fallbackBrowserPartition ??
+    ORCA_BROWSER_PARTITION
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const clearBrowserSessionImportState = useAppStore((s) => s.clearBrowserSessionImportState)
   const showBrowserZoomFeedback = useCallback((level: number): void => {
@@ -2647,10 +3012,7 @@ function BrowserPagePane({
 
   const keepAddressBarFocusRef = useRef(false)
 
-  // Inline toast that appears near the grabbed element instead of the global
-  // bottom-right toaster, so feedback feels spatially connected to the action.
-  // Why: positioned below (or above, if near viewport bottom) so it doesn't
-  // occlude the element the user just selected.
+  // Inline toast near the grabbed element (below, or above near the viewport bottom) so it doesn't occlude the selection.
   const [grabToast, setGrabToast] = useState<{
     message: string
     type: 'success' | 'error'
@@ -2677,10 +3039,7 @@ function BrowserPagePane({
   const dismissGrabToast = useCallback(() => {
     clearTimeout(grabToastTimerRef.current)
     setGrabToast(null)
-    // Why: only rearm if the grab state is still 'confirming', meaning the
-    // auto-copy toast is dismissing naturally. If the user already triggered
-    // a shortcut (C/S) that called rearm, the state will be 'armed' and we
-    // skip to avoid a double-rearm race.
+    // Why: only rearm while 'confirming'; if a C/S shortcut already rearmed (state 'armed'), skip to avoid a double-rearm race.
     if (
       grabRef.current.state === 'confirming' &&
       !(grabIntentRef.current === 'annotate' && pendingAnnotationPayloadRef.current)
@@ -2719,9 +3078,7 @@ function BrowserPagePane({
     [dismissGrabToast]
   )
 
-  // Why: the same in-guest picker powers two flows. Cmd/Ctrl+C preserves the
-  // original one-click copy behavior, while the toolbar annotation action turns
-  // the selected element into a pending feedback note.
+  // Why: the same in-guest picker powers two flows — Cmd/Ctrl+C copies, the toolbar action creates a pending annotation.
   useEffect(() => {
     if (grab.state !== 'confirming' || !grab.payload) {
       return
@@ -2785,10 +3142,7 @@ function BrowserPagePane({
   }, [browserTab.id, browserTab.url])
 
   useEffect(() => {
-    // Why: if the user is actively typing in the address bar (focused), do not
-    // clobber their in-progress query when an async URL update lands (e.g., the
-    // configured default URL resolving after a new tab opens). Syncing will
-    // resume on the next legitimate URL change after the input loses focus.
+    // Why: don't clobber an in-progress address-bar query when an async URL update lands; syncing resumes once the input blurs.
     if (document.activeElement === addressBarInputRef.current) {
       return
     }
@@ -2808,12 +3162,12 @@ function BrowserPagePane({
   }, [addressBarValue])
 
   useEffect(() => {
-    downloadStateRef.current = downloadState
-  }, [downloadState])
+    downloadStatesRef.current = downloadStates
+  }, [downloadStates])
 
   useEffect(() => {
     setResourceNotice(null)
-    setDownloadState(null)
+    setDownloadStates([])
   }, [browserTab.id])
 
   useEffect(() => {
@@ -2839,13 +3193,7 @@ function BrowserPagePane({
       if (event.browserPageId !== browserTab.id) {
         return
       }
-      // Why: convert the OS screen cursor position to the renderer's CSS
-      // viewport coordinates. This is the only approach immune to coordinate
-      // space mismatches between the guest process and the renderer (caused
-      // by UI zoom, DPI scaling, or Electron version differences).
-      // window.screenX/Y gives the window origin in the same screen
-      // coordinate system that screen.getCursorScreenPoint() uses. Dividing
-      // by the zoom factor converts screen points to CSS pixels.
+      // Why: convert OS screen cursor coords to renderer CSS pixels — immune to guest/renderer coordinate-space mismatches from zoom/DPI.
       const zoomFactor = Math.pow(1.2, window.api.ui.getZoomLevel())
       const x = Math.round((event.screenX - window.screenX) / zoomFactor)
       const y = Math.round((event.screenY - window.screenY) / zoomFactor)
@@ -2863,7 +3211,8 @@ function BrowserPagePane({
         x,
         y,
         linkUrl: event.linkUrl,
-        pageUrl: event.pageUrl
+        pageUrl: event.pageUrl,
+        selectionText: event.selectionText ?? ''
       })
     })
   }, [browserTab.id])
@@ -2891,12 +3240,7 @@ function BrowserPagePane({
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [contextMenu])
 
-  // Why: position: fixed can be offset by ancestor CSS properties (backdrop-filter,
-  // transform, will-change) that create new containing blocks. Even with a Portal to
-  // document.body, global CSS or Electron chrome can shift the element. Measuring the
-  // actual rendered position and correcting before paint is immune to all of these.
-  // Additionally, flip the menu when it would overflow the viewport edge so right-clicking
-  // near the screen border keeps the entire menu visible.
+  // Why: ancestor CSS (transform/backdrop-filter) can shift position:fixed even via a body Portal, so measure/correct before paint; also flip on viewport overflow.
   useLayoutEffect(() => {
     const el = contextMenuRef.current
     if (!el || !contextMenu) {
@@ -2906,8 +3250,7 @@ function BrowserPagePane({
     el.style.top = `${contextMenu.y}px`
     const rect = el.getBoundingClientRect()
 
-    // Why: CSS containing blocks can shift "fixed" elements. Capture the offset
-    // between where we asked CSS to place the element and where it actually rendered.
+    // Why: CSS containing blocks can shift "fixed" elements; capture the offset between requested and actual position.
     const offsetX = contextMenu.x - rect.left
     const offsetY = contextMenu.y - rect.top
 
@@ -2934,13 +3277,30 @@ function BrowserPagePane({
       if (event.browserPageId !== browserTab.id) {
         return
       }
-      // Why: downloads are approved per browser tab, not globally. Keep the
-      // request local to the owning BrowserPane so the user can see which page
-      // triggered the save prompt before Orca asks main to choose a path.
-      setDownloadState({
-        ...event,
-        receivedBytes: 0,
-        status: 'requested'
+      setDownloadStates((current) => {
+        const nextEntry: BrowserDownloadState = {
+          browserPageId: event.browserPageId,
+          downloadId: event.downloadId,
+          origin: event.origin,
+          filename: event.filename,
+          totalBytes: event.totalBytes,
+          mimeType: event.mimeType,
+          receivedBytes: 0,
+          status: 'downloading',
+          savePath: event.savePath,
+          error: null,
+          progressState: null,
+          completedAt: null
+        }
+        const existingIndex = current.findIndex(
+          (download) => download.downloadId === event.downloadId
+        )
+        if (existingIndex === -1) {
+          return [nextEntry, ...current]
+        }
+        const next = [...current]
+        next[existingIndex] = { ...next[existingIndex], ...nextEntry }
+        return next
       })
       setResourceNotice(null)
     })
@@ -2948,35 +3308,45 @@ function BrowserPagePane({
 
   useEffect(() => {
     return window.api.browser.onDownloadProgress((event: BrowserDownloadProgressEvent) => {
-      setDownloadState((current) => {
-        if (!current || current.downloadId !== event.downloadId) {
-          return current
-        }
-        return {
-          ...current,
-          receivedBytes: event.receivedBytes,
-          totalBytes: event.totalBytes,
-          status: 'downloading'
-        }
-      })
+      setDownloadStates((current) =>
+        current.map((download) =>
+          download.downloadId === event.downloadId
+            ? {
+                ...download,
+                receivedBytes: event.receivedBytes,
+                totalBytes: event.totalBytes,
+                progressState: event.state
+              }
+            : download
+        )
+      )
     })
   }, [])
 
   useEffect(() => {
     return window.api.browser.onDownloadFinished((event: BrowserDownloadFinishedEvent) => {
-      const current = downloadStateRef.current
-      if (!current || current.downloadId !== event.downloadId) {
+      if (event.browserPageId && event.browserPageId !== browserTab.id) {
         return
       }
-      setDownloadState((current) => {
-        if (!current || current.downloadId !== event.downloadId) {
-          return current
-        }
-        return null
-      })
-      setResourceNotice(formatDownloadFinishedNotice(event))
+      const current = downloadStatesRef.current
+      if (!current.some((download) => download.downloadId === event.downloadId)) {
+        return
+      }
+      setDownloadStates((current) =>
+        current.map((download) =>
+          download.downloadId === event.downloadId
+            ? {
+                ...download,
+                status: event.status,
+                savePath: event.savePath,
+                error: event.error,
+                completedAt: Date.now()
+              }
+            : download
+        )
+      )
     })
-  }, [])
+  }, [browserTab.id])
 
   const focusAddressBarNow = useCallback(() => {
     const input = addressBarInputRef.current
@@ -3007,12 +3377,7 @@ function BrowserPagePane({
       return
     }
     keepAddressBarFocusRef.current = true
-    // Why: terminal activation restores xterm focus on a later animation frame
-    // when the surface changes. A single address-bar focus attempt can lose
-    // that race, leaving the new browser tab on <body>. Retry briefly across a
-    // few frames so a freshly opened blank tab still lands in the location bar,
-    // but keep the request one-shot so revisiting the tab later does not steal
-    // focus back from the user.
+    // Why: terminal activation re-grabs focus a frame later; retry a few frames to win the race, but stay one-shot so revisiting the tab doesn't steal focus.
     let cancelled = false
     let frameId = 0
     let attempts = 0
@@ -3066,9 +3431,7 @@ function BrowserPagePane({
         frameId = window.requestAnimationFrame(runFocus)
       }
     }
-    // Why: jump-palette browser focus can be queued before the target page
-    // pane mounts. Persisting the request outside React lets the active page
-    // claim it once mounted instead of depending on a transient event race.
+    // Why: focus can be queued before the pane mounts; persisting outside React lets it be claimed on mount instead of racing an event.
     frameId = window.requestAnimationFrame(runFocus)
     return () => {
       cancelled = true
@@ -3090,8 +3453,7 @@ function BrowserPagePane({
         return
       }
       if (focusTarget === 'address-bar') {
-        // Why: palette-triggered address-bar focus has to survive the same
-        // follow-up browser load events as the existing blank-tab path.
+        // Why: palette-triggered address-bar focus must survive the same follow-up load events as the blank-tab path.
         keepAddressBarFocusRef.current = true
         focusAddressBarNow()
         return
@@ -3099,26 +3461,27 @@ function BrowserPagePane({
       keepAddressBarFocusRef.current = false
       focusWebviewNow()
     }
-    // Why: queued focus lets a page claim a request after mount, but palette
-    // re-selecting an already-active page never remounts. Listening for the
-    // matching event lets the active pane consume the durable request
-    // immediately without regressing the mount/activation path above.
+    // Why: an already-active page never remounts, so listen for the event to consume the durable focus request immediately.
     window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
     return () =>
       window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
   }, [browserTab.id, focusAddressBarNow, focusWebviewNow, isActive])
 
   // Cmd/Ctrl+F — find in page (renderer path: focus on browser chrome)
-  // Why: unlike grab-mode shortcuts (bare C/S) which skip editable targets,
-  // Cmd+F is a modified chord that should always open find — even from the
-  // address bar. This matches Chrome/Safari behavior.
+  // Why: unlike bare C/S grab shortcuts, Cmd+F should always open find even from the address bar (matches Chrome/Safari).
   useEffect(() => {
-    if (!isActive) {
+    if (findShortcutScope === 'inactive') {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (!keybindingMatchesAction('browser.find', e, shortcutPlatform, keybindings)) {
+        return
+      }
+      if (
+        findShortcutScope === 'owned-target' &&
+        !browserOverlayOwnsShortcutTarget(e.target, workspaceId)
+      ) {
         return
       }
       e.preventDefault()
@@ -3127,18 +3490,54 @@ function BrowserPagePane({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings])
+  }, [findShortcutScope, keybindings, workspaceId])
 
   // Cmd/Ctrl+F — find in page (IPC path: focus inside webview guest)
-  // Why: a focused webview guest is a separate Chromium process so the renderer
-  // keydown handler above never fires. Main intercepts the chord and sends it
-  // back here so find works whether focus is on the toolbar or the page.
+  // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
   useEffect(() => {
     if (!isActive) {
       return
     }
-    return window.api.ui.onFindInBrowserPage(() => {
-      setFindOpen(true)
+    return window.api.ui.onFindInBrowserPage(
+      { browserPageId: browserTab.id, browserWorkspaceId: workspaceId },
+      () => {
+        setFindOpen(true)
+      }
+    )
+  }, [browserTab.id, isActive, workspaceId])
+
+  // Browser history shortcuts (renderer path: focus on browser chrome)
+  // Why: macOS can't deliver Logitech side-buttons to Electron; Logi Options+ remaps them to history chords, handled here when chrome is focused.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const shortcutPlatform = getShortcutPlatform()
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      const direction = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
+        ? 'back'
+        : keybindingMatchesAction('browser.forward', e, shortcutPlatform, keybindings)
+          ? 'forward'
+          : null
+      if (direction === null) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      navigateBrowserHistoryRef.current(direction)
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [isActive, keybindings])
+
+  // Browser history shortcuts (IPC path: focus inside webview guest)
+  // Why: a focused webview is a separate WebContents, so main forwards the chords back here.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    return window.api.ui.onBrowserHistoryNavigate((direction) => {
+      navigateBrowserHistoryRef.current(direction)
     })
   }, [isActive])
 
@@ -3150,10 +3549,7 @@ function BrowserPagePane({
   }, [isActive])
 
   // Cmd/Ctrl+R — reload (renderer path: focus on browser chrome, not in guest)
-  // Why: when focus is inside the renderer chrome (address bar, toolbar buttons)
-  // rather than the webview guest, the guest shortcut forwarding in main never
-  // fires. Handle the chord directly here so reload works regardless of where
-  // focus sits within the browser pane.
+  // Why: guest shortcut forwarding never fires when focus is on browser chrome, so handle the chord directly here.
   useEffect(() => {
     if (!isActive) {
       return
@@ -3186,9 +3582,7 @@ function BrowserPagePane({
   }, [isActive, keybindings])
 
   // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
-  // Why: a focused webview guest is a separate Chromium process so the renderer
-  // keydown handler above never fires. Main intercepts the chord and sends it
-  // back here so reload works whether focus is on the toolbar or the page.
+  // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
   useEffect(() => {
     if (!isActive) {
       return
@@ -3206,8 +3600,12 @@ function BrowserPagePane({
       if (!isActiveRef.current) {
         return
       }
+      // Why: reset targets 100% like Chromium; the configured default is a new-tab seed, not a reset target.
       const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
       if (nextLevel !== null) {
+        paneZoomLevelRef.current = nextLevel
+        rememberExplicitBrowserPageZoomLevel(browserTabIdRef.current, nextLevel)
+        setBrowserDefaultZoomLevel(nextLevel)
         showBrowserZoomFeedback(nextLevel)
       }
     }
@@ -3222,7 +3620,7 @@ function BrowserPagePane({
       removeGuestListener()
       removeLocalListener()
     }
-  }, [isActive, showBrowserZoomFeedback])
+  }, [isActive, setBrowserDefaultZoomLevel, showBrowserZoomFeedback])
 
   useEffect(() => {
     if (!isActive) {
@@ -3247,18 +3645,12 @@ function BrowserPagePane({
             webview.getTitle(),
             webview.getURL() || browserTabUrlRef.current
           ),
-          // Why: webview attach can transiently report isLoading() even
-          // when no user-visible navigation happened. If we sync that into the
-          // tab model on every activation, switching tabs flashes the blue
-          // loading dot and makes hidden tabs look like they are reloading.
-          // Only explicit navigation/load events should drive Orca's loading UI.
+          // Why: attach can transiently report isLoading() with no real navigation; syncing it would flash the loading dot on tab switches.
           canGoBack: webview.canGoBack(),
           canGoForward: webview.canGoForward()
         })
       } catch {
-        // Why: Electron only exposes these getters after the guest fully
-        // attaches. Ignoring the transient failure avoids crashing Orca while
-        // the webview guest becomes ready.
+        // Why: these getters only exist after the guest fully attaches; ignore the transient failure during attach.
       }
     },
     [browserTab.id]
@@ -3266,8 +3658,7 @@ function BrowserPagePane({
 
   const syncBrowserAnnotationViewportBridge = useCallback((): void => {
     const pendingAnnotationPayload = pendingAnnotationPayloadRef.current
-    // Why: existing annotation badges are rendered in the guest process for
-    // compositor-smooth scroll; only the pending dialog needs viewport messages.
+    // Why: existing badges render in-guest for smooth scroll; only the pending dialog needs viewport messages.
     const markers = browserAnnotationsRef.current.map((annotation, index) => ({
       id: annotation.id,
       index,
@@ -3285,77 +3676,103 @@ function BrowserPagePane({
         token: annotationViewportBridgeTokenRef.current
       })
       .catch(() => {
-        // The viewport bridge is visual-only; stale markers are less bad than
-        // breaking the browser pane on a navigated or destroyed guest.
+        // The viewport bridge is visual-only; stale markers beat breaking the pane on a destroyed guest.
       })
   }, [browserTab.id])
 
-  // Why: this effect manages the full lifecycle of the webview DOM element —
-  // creation, event wiring, and teardown. browserTab.url is
-  // intentionally excluded — it changes on every navigation, and including it
-  // would destroy and recreate the webview on every page load. URL-dependent
-  // logic inside the effect reads from browserTabUrlRef instead.
+  // Why: browserTab.url excluded from deps (changes every navigation → would destroy/recreate the webview); URL logic reads browserTabUrlRef.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- see comment above
   useEffect(() => {
-    const container = containerRef.current
+    let container = ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
     if (!container) {
       return
     }
 
-    let webview = webviewRegistry.get(browserTab.id)
-    let needsInitialNavigation = false
-    if (webview && webview.parentElement !== container) {
-      // Why: moving an Electron webview between DOM parents can recreate the
-      // guest document. Treat unexpected parent drift as stale state instead.
-      destroyPersistentWebview(browserTab.id)
-      webview = undefined
+    const ensuredWebview = ensureBrowserPageWebview({
+      browserTabId: browserTab.id,
+      container,
+      inputLocked: inputLockedRef.current,
+      webviewPartition,
+      resolveContainer: () =>
+        ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
+    })
+    if (!ensuredWebview) {
+      return
     }
-    if (webview) {
-      webview.style.pointerEvents = inputLockedRef.current ? 'none' : 'auto'
+    container = ensuredWebview.container
+    const webview = ensuredWebview.webview
+    const needsInitialNavigation = ensuredWebview.created
+
+    if (!ensuredWebview.created) {
+      // pointerEvents already applied inside ensureBrowserPageWebview for the reused-webview path.
       syncNavigationState(webview)
-      // Why: seed the ref with the store URL so the URL sync effect does not
-      // force-navigate an already-mounted webview that is on the right page.
-      // getURL() can throw briefly during attach, so use the store URL from the
-      // last navigation event.
+      // Why: seed from the store URL (getURL() can throw during attach) so URL sync won't force-navigate an already-correct webview.
       lastKnownWebviewUrlRef.current =
         normalizeBrowserNavigationUrl(browserTabUrlRef.current) ?? null
-    } else {
-      webview = document.createElement('webview') as Electron.WebviewTag
-      webview.setAttribute('partition', webviewPartition)
-      webview.setAttribute('allowpopups', '')
-      webview.style.display = 'flex'
-      webview.style.flex = '1'
-      webview.style.width = '100%'
-      webview.style.height = '100%'
-      webview.style.border = 'none'
-      webview.style.pointerEvents = inputLockedRef.current ? 'none' : 'auto'
-      // Why: default to white so sites that don't set an html/body background
-      // (e.g. httpbin.org/html) don't show through to Orca's dark chrome. Real
-      // browsers paint the viewport white by default; sites that specify their
-      // own background (including dark ones) still override this.
-      webview.style.background = '#ffffff'
-      registerPersistentWebview(browserTab.id, webview)
-      container.appendChild(webview)
-      needsInitialNavigation = true
     }
 
     webviewRef.current = webview
 
-    const handleDomReady = (): void => {
+    // Why: un-park the shell before webview.src is assigned or the guest navigates while hidden and stays blank (the visibility layout effect doesn't re-run on first appear).
+    applyBrowserPageViewportLayout(browserTab.id, { paintable: isPaintable, active: isActive })
+
+    const onContainerDragOver = (event: globalThis.DragEvent): void => {
+      handleInternalFileDragOverRef.current(event as unknown as DragEvent<HTMLDivElement>)
+    }
+    const onContainerDrop = (event: globalThis.DragEvent): void => {
+      handleInternalFileDropRef.current(event as unknown as DragEvent<HTMLDivElement>)
+    }
+    container.addEventListener('dragover', onContainerDragOver)
+    container.addEventListener('drop', onContainerDrop)
+
+    const dismissAddressBarSuggestions = (): void => {
+      dismissAddressBarSuggestionsRef.current?.()
+    }
+
+    let registrationInFlight: { webContentsId: number; promise: Promise<boolean> } | null = null
+    const registerGuest = (): Promise<boolean> => {
       const webContentsId = webview.getWebContentsId()
-      let queuedAnnotationViewportBridgeSync = false
-      if (registeredWebContentsIds.get(browserTab.id) !== webContentsId) {
-        registeredWebContentsIds.set(browserTab.id, webContentsId)
-        queuedAnnotationViewportBridgeSync = true
-        void window.api.browser
-          .registerGuest({
-            browserPageId: browserTab.id,
-            workspaceId,
-            worktreeId,
-            sessionProfileId,
-            webContentsId
-          })
-          .finally(() => syncBrowserAnnotationViewportBridge())
+      if (registeredWebContentsIds.get(browserTab.id) === webContentsId) {
+        return Promise.resolve(true)
+      }
+      if (registrationInFlight?.webContentsId === webContentsId) {
+        return registrationInFlight.promise
+      }
+      const promise = window.api.browser
+        .registerGuest({
+          browserPageId: browserTab.id,
+          workspaceId,
+          worktreeId,
+          sessionProfileId,
+          webContentsId
+        })
+        .then((registered) => {
+          if (registered) {
+            registeredWebContentsIds.set(browserTab.id, webContentsId)
+          }
+          return registered
+        })
+        // Why: normalize IPC rejection to false so the dom-ready fallback can retry attach-policy races.
+        .catch(() => false)
+        .finally(() => {
+          if (registrationInFlight?.promise === promise) {
+            registrationInFlight = null
+          }
+        })
+      registrationInFlight = { webContentsId, promise }
+      return promise
+    }
+
+    const handleDidAttach = (): void => {
+      // Why: register at attach since cert failures can precede dom-ready; the dom-ready path stays an idempotent fallback.
+      void registerGuest().finally(() => syncBrowserAnnotationViewportBridge())
+    }
+
+    const handleDomReady = (): void => {
+      const queuedAnnotationViewportBridgeSync =
+        registeredWebContentsIds.get(browserTab.id) !== webview.getWebContentsId()
+      if (queuedAnnotationViewportBridgeSync) {
+        void registerGuest().finally(() => syncBrowserAnnotationViewportBridge())
       }
       syncNavigationState(webview)
       if (keepAddressBarFocusRef.current) {
@@ -3364,17 +3781,17 @@ function BrowserPagePane({
       if (!queuedAnnotationViewportBridgeSync) {
         syncBrowserAnnotationViewportBridge()
       }
-      // Why: CDP Emulation.setDeviceMetricsOverride and related overrides are
-      // scoped to the guest's debugger session and do not survive all
-      // cross-origin navigations (renderer swaps). Reapplying on dom-ready is
-      // idempotent, so users who picked a viewport preset keep it after
-      // reloads, SPA navigations, and persisted-session restoration.
+      // Why: Chromium restores per-origin zoom on reload/navigation, so reassert THIS pane's level after
+      // every guest load. Uses the pane-local level, not the shared setting, so reloading one tab never
+      // adopts a zoom the user applied to a different tab.
+      const appliedLevel = setBrowserPageZoomLevel(webview, paneZoomLevelRef.current)
+      if (appliedLevel !== null) {
+        setBrowserZoomPercent(browserPageZoomLevelToPercent(appliedLevel))
+      }
+      // Why: CDP viewport overrides are scoped to the debugger session and don't survive cross-origin nav, so reapply (idempotently) on dom-ready.
       const presetId = viewportPresetIdRef.current
       const preset = getBrowserViewportPreset(presetId)
-      // Why: always reapply on dom-ready (including null) because
-      // Emulation.setDeviceMetricsOverride can persist across same-origin navigations
-      // within the same renderer. Sending null ensures CDP matches the store state
-      // instead of showing a stale emulated viewport after the user picks "Default".
+      // Why: reapply even null so CDP matches store state; setDeviceMetricsOverride persists across same-origin nav and would leave a stale viewport.
       void window.api.browser.setViewportOverride({
         browserPageId: browserTab.id,
         override: preset ? browserViewportPresetToOverride(preset) : null
@@ -3382,8 +3799,7 @@ function BrowserPagePane({
     }
 
     const handleDidStartLoading = (): void => {
-      // Why: reloads replace the document without changing URL, invalidating
-      // captured element rects and DOM context just like navigation does.
+      // Why: a reload replaces the document without changing the URL, invalidating captured element rects like a navigation does.
       clearBrowserPageAnnotationsRef.current(browserTab.id)
       setPendingAnnotationPayload(null)
       setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
@@ -3405,7 +3821,10 @@ function BrowserPagePane({
         trackNextLoadingEventRef.current = false
         const synthesizedFailure = {
           code: -1,
-          description: 'This site could not be reached.',
+          description: translate(
+            'auto.components.browser.pane.BrowserPane.e48569ac6d',
+            'This site could not be reached.'
+          ),
           validatedUrl: redactKagiSessionToken(
             browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
           )
@@ -3425,10 +3844,7 @@ function BrowserPagePane({
           normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
         if (normalizedAttemptedUrl === normalizedCurrentUrl) {
           trackNextLoadingEventRef.current = false
-          // Why: some webview failures still emit did-stop-loading on the
-          // original destination URL. If we clear loadError here, the failed
-          // navigation falls back to a blank Chromium surface even though Orca
-          // already knows this exact load failed.
+          // Why: some failures still emit did-stop-loading on the original URL; keep loadError so the known-failed load isn't cleared to a blank surface.
           onUpdatePageStateRef.current(browserTab.id, {
             loading: false,
             title: getBrowserDisplayTitle(webview.getTitle(), browserModelUrl),
@@ -3445,8 +3861,7 @@ function BrowserPagePane({
       lastKnownWebviewUrlRef.current =
         normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
       rememberLiveBrowserUrl(browserTab.id, browserModelUrl)
-      // Why: don't overwrite in-progress typing. See comment on the
-      // browserTab.url sync effect above.
+      // Why: don't overwrite in-progress typing (see the browserTab.url sync effect above).
       if (document.activeElement !== addressBarInputRef.current) {
         setAddressBarValue(toDisplayUrl(browserModelUrl))
       }
@@ -3524,9 +3939,7 @@ function BrowserPagePane({
         return
       }
       if (event.errorCode === -3) {
-        // Why: Chromium reports redirect/cancel races as ERR_ABORTED (-3) even
-        // when the replacement navigation succeeds. Ignore that noise so Orca
-        // does not show a false load failure for a working page.
+        // Why: Chromium reports redirect/cancel races as ERR_ABORTED (-3) even when the replacement navigation succeeds; ignore to avoid a false failure.
         return
       }
       trackNextLoadingEventRef.current = false
@@ -3564,13 +3977,12 @@ function BrowserPagePane({
       }
     }
 
+    webview.addEventListener('did-attach', handleDidAttach)
     webview.addEventListener('dom-ready', handleDomReady)
+    webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
-    // Why: separate handler registered only on 'did-navigate' (full page loads),
-    // NOT on 'did-navigate-in-page'. The shared handleDidNavigate is registered
-    // on both events, so adding find-close logic there would also close on SPA
-    // hash changes and pushState calls, which fire constantly on single-page apps.
+    // Why: close find only on full 'did-navigate', not the shared handler, which also fires on SPA in-page hash/pushState changes.
     const handleFindCloseOnNavigate = (): void => {
       setFindOpen(false)
     }
@@ -3584,10 +3996,7 @@ function BrowserPagePane({
     webview.addEventListener('console-message', handleAnnotationViewportMessage)
 
     if (needsInitialNavigation) {
-      // Why: connection-refused localhost tabs can fail before Electron wires up
-      // event delivery if src is assigned too early. Attach listeners first so
-      // Orca never misses the initial did-fail-load signal for a new tab.
-      // Only non-blank initial tabs should light up Orca's loading indicator.
+      // Why: set src only after listeners attach so a fast localhost failure isn't missed; only non-blank tabs show the loading indicator.
       const initialUrl =
         normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
       trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
@@ -3596,7 +4005,9 @@ function BrowserPagePane({
     }
 
     return () => {
+      webview.removeEventListener('did-attach', handleDidAttach)
       webview.removeEventListener('dom-ready', handleDomReady)
+      webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
       webview.removeEventListener('did-stop-loading', handleDidStopLoading)
       webview.removeEventListener('did-navigate', handleDidNavigate)
@@ -3606,27 +4017,25 @@ function BrowserPagePane({
       webview.removeEventListener('page-favicon-updated', handleFaviconUpdate)
       webview.removeEventListener('did-fail-load', handleFailLoad)
       webview.removeEventListener('console-message', handleAnnotationViewportMessage)
+      container.removeEventListener('dragover', onContainerDragOver)
+      container.removeEventListener('drop', onContainerDrop)
 
       if (webviewRef.current === webview) {
         webviewRef.current = null
       }
 
-      if (webviewRegistry.get(browserTab.id) === webview) {
-        destroyPersistentWebview(browserTab.id)
-      }
+      // Why: park the viewport on chrome unmount (worktree switch) to keep the guest alive; destroy only on explicit close.
+      moveFocusToRendererBeforeWebviewDetach(webview)
+      parkBrowserPageViewport(browserTab.id)
     }
-    // Why: this effect mounts and wires up webview event listeners once per tab
-    // identity. browserTab.url is intentionally excluded: re-running on URL
-    // changes would detach/reattach the webview, cancelling in-progress
-    // navigations. Callbacks use refs so they always see current values.
-    // webviewPartition IS included: switching profiles changes the partition,
-    // which requires destroying and recreating the webview since Electron does
-    // not allow changing a webview's partition after creation.
+    // Why: wire listeners once per tab identity. browserTab.url is excluded (re-running would detach/reattach and cancel navigations; callbacks use refs).
+    // webviewPartition IS included: Electron can't change a webview's partition after creation, so a profile switch must recreate it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     browserTab.id,
-    webviewPartition,
     workspaceId,
+    slotViewportReady,
+    webviewPartition,
     worktreeId,
     createBrowserTab,
     focusAddressBarNow,
@@ -3634,6 +4043,28 @@ function BrowserPagePane({
     syncNavigationState,
     syncBrowserAnnotationViewportBridge
   ])
+
+  useLayoutEffect(() => {
+    applyBrowserPageViewportLayout(browserTab.id, { paintable: isPaintable, active: isActive })
+    const syncChromeInset = (): void => {
+      const header = chromeHeaderRef.current
+      if (!header) {
+        return
+      }
+      syncBrowserPageChromeInset(browserTab.id, header.offsetHeight)
+    }
+    syncChromeInset()
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncChromeInset)
+    const header = chromeHeaderRef.current
+    if (header) {
+      resizeObserver?.observe(header)
+    }
+    return () => {
+      resizeObserver?.disconnect()
+    }
+    // Why: re-run once slotViewportReady flips so visibility and chrome-inset land on a real viewport (first render no-ops).
+  }, [browserTab.id, isActive, isPaintable, slotViewportReady])
 
   useEffect(() => {
     syncBrowserAnnotationViewportBridge()
@@ -3654,12 +4085,7 @@ function BrowserPagePane({
     if (!normalizedUrl) {
       return
     }
-    // Why: navigation events (did-navigate, did-stop-loading) update both the
-    // store URL and this ref to the same value. If they match, the store URL
-    // change came from a navigation event — not a user action — so there is
-    // nothing to navigate to. Skipping here prevents the sync effect from
-    // force-navigating the webview back to an intermediate redirect URL, which
-    // would restart the redirect chain and cause an infinite loop.
+    // Why: navigation events set both the store URL and this ref; a match means the change came from navigation, so skip to avoid a redirect infinite loop.
     if (lastKnownWebviewUrlRef.current === normalizedUrl) {
       return
     }
@@ -3667,9 +4093,7 @@ function BrowserPagePane({
     try {
       liveUrl = webview.getURL() || null
     } catch {
-      // Why: newly attached guests can briefly reject getURL() before the
-      // underlying guest is fully ready. Skip entirely so we do not
-      // misinterpret a transient error as a URL mismatch and force-navigate.
+      // Why: a newly attached guest can reject getURL(); skip so a transient error isn't misread as a mismatch and force-navigated.
       return
     }
     const normalizedLiveUrl = liveUrl ? (normalizeBrowserNavigationUrl(liveUrl) ?? liveUrl) : null
@@ -3679,9 +4103,7 @@ function BrowserPagePane({
       webview.src !== normalizedUrl &&
       declaredSrc !== normalizedUrl
     ) {
-      // Why: browserTab.url changes are Orca-driven navigations (address bar,
-      // terminal link open, retry target update). Gate the next did-start-loading
-      // event so only real navigations, not tab activation churn, show loading UI.
+      // Why: browserTab.url changes are Orca-driven navigations; gate did-start-loading so only real navigations show loading UI.
       trackNextLoadingEventRef.current = normalizedUrl !== ORCA_BROWSER_BLANK_URL
       lastKnownWebviewUrlRef.current = normalizedUrl
       webview.src = normalizedUrl
@@ -3715,22 +4137,19 @@ function BrowserPagePane({
           loading: false,
           loadError: {
             code: -1,
-            description: 'This site could not be reached.',
+            description: translate(
+              'auto.components.browser.pane.BrowserPane.e48569ac6d',
+              'This site could not be reached.'
+            ),
             validatedUrl: redactKagiSessionToken(attemptedUrl)
           }
         })
       } catch {
-        // Why: the guest can still be mid-attach while the loading spinner is
-        // visible. Polling is only a fallback for missed failure events, so
-        // transient getURL() errors should be ignored until the next tick.
+        // Why: ignore transient getURL() errors from a mid-attach guest; this poll is only a fallback.
       }
     }
 
-    // Why: some Electron builds paint Chromium's internal chrome-error page
-    // without delivering a timely did-fail-load event to the renderer webview.
-    // Polling only while the active tab is "loading" gives Orca a last-resort
-    // path to swap the black guest surface without waking every retained
-    // inactive browser pane on a 250ms loop.
+    // Why: some Electron builds paint chrome-error pages without a did-fail-load event; poll only while the active tab loads as a fallback.
     detectChromiumErrorPage()
     const intervalId = window.setInterval(detectChromiumErrorPage, 250)
     return () => window.clearInterval(intervalId)
@@ -3756,35 +4175,30 @@ function BrowserPagePane({
     [grab, grabIntent, recordFeatureInteraction]
   )
 
-  // CmdOrCtrl+C toggles grab mode
-  // Why: Cmd+C is deliberately repurposed inside the browser pane so that the
-  // most natural "copy" gesture enters grab mode, letting the user visually
-  // pick and copy an element.  Normal text copy inside the webview guest is
-  // handled by the guest page itself (Chromium's built-in Cmd+C) and never
-  // reaches the host renderer keydown listener.
+  // Why: Cmd+C is repurposed as the grab-mode gesture; native text copy in the guest is handled by Chromium and never reaches here.
   useEffect(() => {
-    // Why: without the isActive gate, every mounted BrowserPagePane registers
-    // a global keydown listener, so Cmd+C would toggle grab mode on all panes
-    // simultaneously — not just the active one.
+    // Why: gate on isActive so only the active pane's global keydown listener toggles grab mode.
     if (!isActive) {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
-      // Why: let native Cmd+C work in text inputs (address bar, search fields,
-      // contentEditable regions). Only intercept when focus is on a non-input
-      // element so grab-mode toggle doesn't swallow copy in form controls.
+      // Why: don't intercept in editable targets so native Cmd+C still copies in inputs/contentEditable.
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      if (keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)) {
+      // Why: don't start the in-guest picker behind an open markup overlay (matches the disabled toolbar buttons).
+      if (
+        !markup.isActive &&
+        keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)
+      ) {
         e.preventDefault()
         startGrabIntent('copy')
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isActive, keybindings, startGrabIntent])
+  }, [isActive, keybindings, markup.isActive, startGrabIntent])
 
   useEffect(() => {
     if (!isActive) {
@@ -3795,9 +4209,7 @@ function BrowserPagePane({
       if (!keybindingMatchesAction('browser.focusAddressBar', e, shortcutPlatform, keybindings)) {
         return
       }
-      // Why: Cmd/Ctrl+L is a browser-local focus command. Capture it before
-      // the surrounding workspace or any embedded editor surface can treat the
-      // same chord as something else.
+      // Why: capture Cmd/Ctrl+L before the workspace or an embedded editor can claim the same chord.
       e.preventDefault()
       e.stopPropagation()
       focusAddressBarNow()
@@ -3806,10 +4218,7 @@ function BrowserPagePane({
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [focusAddressBarNow, isActive, keybindings])
 
-  // Why: a focused webview guest receives Cmd/Ctrl+C inside Chromium, not the
-  // host renderer window. Main forwards the chord back only when the page
-  // would not use it for native copy, so grab mode still toggles from web
-  // content without stealing real copy from inputs or selections.
+  // Why: a focused guest gets Cmd/Ctrl+C inside Chromium; main forwards it back only when the page wouldn't use it for native copy.
   useEffect(() => {
     return window.api.browser.onGrabModeToggle((tabId) => {
       if (tabId === browserTab.id) {
@@ -3818,12 +4227,7 @@ function BrowserPagePane({
     })
   }, [browserTab.id, startGrabIntent])
 
-  // Why: single-key shortcuts (C / S) let the user copy the hovered element
-  // without clicking. During 'armed'/'awaiting' state, the shortcut calls the
-  // extractHoverPayload IPC to read the currently hovered element directly.
-  // During 'confirming' state, it uses the already-captured payload instead.
-  // The shortcuts only fire when grab mode is active, so they don't interfere
-  // with normal typing elsewhere.
+  // C / S copy the hovered element without clicking: extract via IPC while armed/awaiting, else use the captured payload.
   const grabPayloadRef = useRef(grab.payload)
   grabPayloadRef.current = grab.payload
   const handleGrabActionShortcut = useCallback(
@@ -3850,8 +4254,7 @@ function BrowserPagePane({
       }
 
       if (grab.state === 'confirming') {
-        // Why: left-click auto-copies, so only S (screenshot) is useful.
-        // But right-click (contextMenu) skips auto-copy, so C must still work.
+        // Why: right-click (contextMenu) skips the left-click auto-copy, so C must still work here.
         if (grab.contextMenu && key === 'c') {
           const currentPayload = grabPayloadRef.current
           if (currentPayload) {
@@ -3934,9 +4337,7 @@ function BrowserPagePane({
     })
   }, [browserTab.id, grab.state, handleGrabActionShortcut])
 
-  // Why: Radix DropdownMenu fires onOpenChange(false) before onSelect, so
-  // the rearm in onOpenChange would clear the payload before the handler runs.
-  // This ref lets onOpenChange skip the rearm when a menu action was taken.
+  // Why: Radix fires onOpenChange(false) before onSelect, so this flag lets onOpenChange skip the rearm that would clear the payload first.
   const grabMenuActionTakenRef = useRef(false)
 
   // Handlers for the right-click context dropdown menu
@@ -4028,7 +4429,10 @@ function BrowserPagePane({
           worktreeId,
           source: 'browser-annotations',
           prompt: browserAnnotationsPrompt,
-          label: 'Browser annotations',
+          label: translate(
+            'auto.components.browser.pane.BrowserPane.27d863542c',
+            'Browser annotations'
+          ),
           launchSource: 'notes_send'
         })
       } else {
@@ -4053,7 +4457,10 @@ function BrowserPagePane({
           worktreeId,
           source: 'browser-annotations',
           prompt: browserAnnotationsPrompt,
-          label: 'Browser annotations',
+          label: translate(
+            'auto.components.browser.pane.BrowserPane.27d863542c',
+            'Browser annotations'
+          ),
           launchSource: 'notes_send'
         })
       } else {
@@ -4091,6 +4498,10 @@ function BrowserPagePane({
     },
     [annotationBannerSendModeId, annotationTraySendModeId, closeAgentSendPopoverTargetMode]
   )
+
+  const handleBrowserAnnotationsSentToAgent = useCallback((): void => {
+    recordFeatureInteraction('browser-annotations-sent-to-agent')
+  }, [recordFeatureInteraction])
 
   const handleClearBrowserAnnotations = useCallback((): void => {
     if (browserAnnotationsRef.current.length === 0) {
@@ -4204,9 +4615,11 @@ function BrowserPagePane({
       onUpdatePageStateRef.current(browserTab.id, {
         loadError: {
           code: 0,
-          description: 'Enter a valid http(s) or localhost URL.',
-          // Why: the user may have pasted a Kagi URL with a token; redact
-          // before persisting it into BrowserPage.loadError.
+          description: translate(
+            'auto.components.browser.pane.BrowserPane.87eb75f7d2',
+            'Enter a valid http(s) or localhost URL.'
+          ),
+          // Why: redact a possible Kagi session token before persisting into loadError.
           validatedUrl: redactKagiSessionToken(addressBarValue.trim()) || 'about:blank'
         }
       })
@@ -4215,38 +4628,32 @@ function BrowserPagePane({
     navigateToUrl(nextUrl)
   }
 
-  // Why: the store initially holds 'about:blank', but once the webview loads
-  // with the safe data: URL, handleDidStopLoading writes the resolved URL back.
-  // Match both so the "New Browser Tab" overlay stays visible for blank tabs.
+  // Why: a blank tab reads as 'about:blank' or the resolved data: URL, so match both to keep the "New Browser Tab" overlay visible.
   const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
   const externalUrl = getOpenableExternalUrl(webviewRef.current, browserTab.url)
   const currentBrowserUrl = getCurrentBrowserUrl(webviewRef.current, browserTab.url)
-  const loadErrorMeta = getLoadErrorMetadata(browserTab.loadError)
-  const loadErrorHint = formatLoadFailureRecoveryHint(loadErrorMeta)
+  const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
+  const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
-  const downloadProgressLabel = (() => {
-    if (!downloadState) {
-      return null
-    }
-    const received = formatByteCount(downloadState.receivedBytes)
-    const total = formatByteCount(downloadState.totalBytes)
-    if (received && total) {
-      return `${received} / ${total}`
-    }
-    if (total) {
-      return total
-    }
-    return received
+  const visibleDownloads = (() => {
+    const active = downloadStates.filter((download) => download.status === 'downloading')
+    const recent = downloadStates
+      .filter((download) => download.status !== 'downloading')
+      .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0))
+      .slice(0, 3)
+    return [...active, ...recent]
   })()
-  const showBrowserZoomIndicator = browserZoomFeedbackVisible || browserZoomPercent !== 100
+  const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
+    feedbackVisible: browserZoomFeedbackVisible,
+    isDefaultZoom: browserZoomPercent === browserDefaultZoomPercent
+  })
 
   useEffect(() => {
     const webview = webviewRef.current
     if (!webview) {
       return
     }
-    // Why: desktop reclaim uses a React overlay, but Electron webviews can
-    // keep receiving native input unless their own hit testing is disabled.
+    // Why: Electron webviews keep receiving native input under a React overlay unless their own hit testing is disabled.
     webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
   }, [inputLocked])
 
@@ -4255,10 +4662,7 @@ function BrowserPagePane({
     if (!webview) {
       return
     }
-    // Why: Electron webviews render in their own compositor layer, so a React
-    // overlay can sit "under" a failed guest and still look like a black page.
-    // Fully removing the guest from layout is more reliable than visibility
-    // toggles here; some Electron builds keep painting a hidden guest layer.
+    // Why: some Electron builds keep painting a hidden guest layer, so drop it from layout (display:none) instead of just hiding it.
     webview.style.display = showFailureOverlay ? 'none' : 'flex'
   }, [showFailureOverlay])
 
@@ -4270,15 +4674,26 @@ function BrowserPagePane({
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'copy'
   }, [])
+  handleInternalFileDragOverRef.current = handleInternalFileDragOver
 
   const handleInternalFileDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
-      const filePath = event.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
-      if (!filePath) {
+      if (!event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
         return
       }
       event.preventDefault()
       event.stopPropagation()
+
+      // Why: a browser opens one URL, so reject multi-path drags rather than silently opening the lead file.
+      const dragPaths = readWorkspaceFileDragPaths(event.dataTransfer, { maxPaths: 1 })
+      if (dragPaths.status === 'rejected') {
+        setResourceNotice(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
+        return
+      }
+      const filePath = dragPaths.paths[0]
+      if (!filePath) {
+        return
+      }
 
       const target = getWorkspaceFileBrowserOpenTarget({ filePath, worktreeId })
       if (target.status === 'unsupported') {
@@ -4303,25 +4718,69 @@ function BrowserPagePane({
     },
     [navigateToUrl, worktreeId]
   )
+  handleInternalFileDropRef.current = handleInternalFileDrop
+
+  const dismissBrowserDownload = useCallback((downloadId: string) => {
+    setDownloadStates((current) => current.filter((download) => download.downloadId !== downloadId))
+  }, [])
+
+  const handleOpenDownloadedFile = useCallback(async (download: BrowserDownloadState) => {
+    if (!download.savePath) {
+      setResourceNotice(
+        translate(
+          'auto.components.browser.pane.BrowserPane.9f6f2e8c19',
+          'The downloaded file path is unavailable.'
+        )
+      )
+      return
+    }
+    const opened = await window.api.shell.openFilePath(download.savePath)
+    if (!opened) {
+      setResourceNotice(
+        translate(
+          'auto.components.browser.pane.BrowserPane.0c79b7634d',
+          'Could not open the downloaded file. It may have been moved or deleted.'
+        )
+      )
+    }
+  }, [])
+
+  const handleShowDownloadedFile = useCallback(async (download: BrowserDownloadState) => {
+    if (!download.savePath) {
+      setResourceNotice(
+        translate(
+          'auto.components.browser.pane.BrowserPane.9f6f2e8c19',
+          'The downloaded file path is unavailable.'
+        )
+      )
+      return
+    }
+    const result = await window.api.shell.openInFileManager(download.savePath)
+    if (!result.ok) {
+      setResourceNotice(
+        translate(
+          'auto.components.browser.pane.BrowserPane.397d9dc923',
+          'Could not show the downloaded file. It may have been moved or deleted.'
+        )
+      )
+    }
+  }, [])
 
   return (
     <div
       className={cn(
         'absolute inset-0 flex min-h-0 flex-1 flex-col',
         isActive
-          ? 'z-10'
+          ? 'pointer-events-none z-10'
           : isPaintable
             ? 'pointer-events-none z-0 opacity-0'
             : 'pointer-events-none hidden'
       )}
-      // Why: automation-visible webviews must remain mounted and paintable, but
-      // their hidden toolbar and guest content cannot stay keyboard-focusable.
+      // Why: hidden panes stay paintable (automation/mobile) but must not stay keyboard-focusable.
       inert={!isActive}
       aria-hidden={!isActive}
     >
-      {/* IPC-driven context menu — rendered in a Portal so position: fixed is
-          relative to the viewport, not affected by ancestor backdrop-filter or
-          transform properties that create new containing blocks. */}
+      {/* IPC-driven context menu in a Portal so position:fixed escapes ancestor transform/backdrop-filter containing blocks. */}
       {contextMenu
         ? createPortal(
             <>
@@ -4345,7 +4804,10 @@ function BrowserPagePane({
                         setContextMenu(null)
                       }}
                     >
-                      Open Link In Orca Browser
+                      {translate(
+                        'auto.components.browser.pane.BrowserPane.b5b87d6cbb',
+                        'Open Link In Orca Browser'
+                      )}
                     </button>
                     <button
                       role="menuitem"
@@ -4358,7 +4820,10 @@ function BrowserPagePane({
                         setContextMenu(null)
                       }}
                     >
-                      Open Link In Default Browser
+                      {translate(
+                        'auto.components.browser.pane.BrowserPane.8ce4f6b12e',
+                        'Open Link In Default Browser'
+                      )}
                     </button>
                     <button
                       role="menuitem"
@@ -4368,7 +4833,25 @@ function BrowserPagePane({
                         setContextMenu(null)
                       }}
                     >
-                      Copy Link Address
+                      {translate(
+                        'auto.components.browser.pane.BrowserPane.efb0e8f7f3',
+                        'Copy Link Address'
+                      )}
+                    </button>
+                    <div className="my-1 h-px bg-border/70" />
+                  </>
+                ) : null}
+                {contextMenu.selectionText.trim() ? (
+                  <>
+                    <button
+                      role="menuitem"
+                      className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                      onClick={() => {
+                        void window.api.ui.writeClipboardText(contextMenu.selectionText)
+                        setContextMenu(null)
+                      }}
+                    >
+                      {translate('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy')}
                     </button>
                     <div className="my-1 h-px bg-border/70" />
                   </>
@@ -4382,7 +4865,7 @@ function BrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Back
+                  {translate('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back')}
                 </button>
                 <button
                   role="menuitem"
@@ -4393,7 +4876,7 @@ function BrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Forward
+                  {translate('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward')}
                 </button>
                 <button
                   role="menuitem"
@@ -4403,7 +4886,7 @@ function BrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Reload
+                  {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
                 </button>
                 <div className="my-1 h-px bg-border/70" />
                 <button
@@ -4417,7 +4900,10 @@ function BrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Open Page In Default Browser
+                  {translate(
+                    'auto.components.browser.pane.BrowserPane.f7ab83f7ed',
+                    'Open Page In Default Browser'
+                  )}
                 </button>
                 <button
                   role="menuitem"
@@ -4427,7 +4913,10 @@ function BrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Copy Page URL
+                  {translate(
+                    'auto.components.browser.pane.BrowserPane.1b179ab561',
+                    'Copy Page URL'
+                  )}
                 </button>
                 <div className="my-1 h-px bg-border/70" />
                 <button
@@ -4438,7 +4927,7 @@ function BrowserPagePane({
                     setContextMenu(null)
                   }}
                 >
-                  Inspect Page
+                  {translate('auto.components.browser.pane.BrowserPane.a8f37f70c3', 'Inspect Page')}
                 </button>
               </div>
             </>,
@@ -4446,689 +4935,858 @@ function BrowserPagePane({
           )
         : null}
 
-      <div
-        className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
-        data-contextual-tour-target="browser-toolbar"
-      >
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => webviewRef.current?.goBack()}
-          disabled={!browserTab.canGoBack}
-        >
-          <ArrowLeft className="size-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => webviewRef.current?.goForward()}
-          disabled={!browserTab.canGoForward}
-        >
-          <ArrowRight className="size-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => {
-            const webview = webviewRef.current
-            if (!webview) {
-              return
-            }
-            if (browserTab.loading) {
-              webview.stop()
-            } else if (browserTab.loadError) {
-              retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
-            } else {
-              webview.reload()
-            }
-          }}
-        >
-          {browserTab.loading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="size-4" />
-          )}
-        </Button>
-
-        <BrowserAddressBar
-          value={addressBarValue}
-          onChange={setAddressBarValue}
-          onSubmit={submitAddressBar}
-          onNavigate={navigateToUrl}
-          inputRef={addressBarInputRef}
-        />
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex">
-              <Button
-                size="icon"
-                variant={grab.state !== 'idle' && grabIntent === 'copy' ? 'default' : 'ghost'}
-                className={cn(
-                  'h-8 w-8',
-                  grab.state !== 'idle' &&
-                    grabIntent === 'copy' &&
-                    'bg-foreground/80 text-background hover:bg-foreground/90'
-                )}
-                onClick={() => startGrabIntent('copy')}
-                disabled={isBlankTab}
-                aria-label="Grab page element"
-                data-contextual-tour-target="browser-grab-control"
-              >
-                <Crosshair className="size-4" />
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={4}>
-            {`Grab page element (${grabElementShortcut})`}
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* Why: wrap the disabled button in a span so pointer events still
-                reach the tooltip trigger — Radix (and the DOM) drop hover
-                events on disabled <button>, which is why the previous native
-                `title` attribute fired inconsistently. */}
-            <span className="inline-flex">
-              <Button
-                size="icon"
-                variant={grab.state !== 'idle' && grabIntent === 'annotate' ? 'default' : 'ghost'}
-                className={cn(
-                  'relative h-8 w-8',
-                  grab.state !== 'idle' &&
-                    grabIntent === 'annotate' &&
-                    'bg-foreground/80 text-background hover:bg-foreground/90'
-                )}
-                onClick={() => startGrabIntent('annotate')}
-                disabled={isBlankTab}
-                aria-label="Annotate page element"
-                data-contextual-tour-target="browser-annotation-control"
-              >
-                <MessageSquarePlus className="size-4" />
-                {browserAnnotations.length > 0 ? (
-                  <span className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground">
-                    {browserAnnotations.length}
-                  </span>
-                ) : null}
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={4}>
-            Annotate page element
-          </TooltipContent>
-        </Tooltip>
-
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => void window.api.browser.openDevTools({ browserPageId: browserTab.id })}
-          title="Open browser devtools"
-        >
-          <SquareCode className="size-4" />
-        </Button>
-
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => {
-            if (!externalUrl) {
-              return
-            }
-            void window.api.shell.openUrl(externalUrl)
-          }}
-          title="Open in default browser"
-          disabled={!externalUrl}
-        >
-          <ExternalLink className="size-4" />
-        </Button>
-
-        <BrowserToolbarMenu
-          currentProfileId={sessionProfileId}
-          workspaceId={workspaceId}
-          browserPageId={browserTab.id}
-          viewportPresetId={browserTab.viewportPresetId ?? null}
-          onDestroyWebview={() => destroyPersistentWebview(browserTab.id)}
-        />
-      </div>
-      {downloadState ? (
-        <div className="flex items-center gap-3 border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-foreground/90">
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-medium text-foreground">{downloadState.filename}</div>
-            <div className="truncate text-muted-foreground">
-              {downloadState.status === 'requested'
-                ? `Download from ${downloadState.origin}`
-                : `Downloading from ${downloadState.origin}${downloadProgressLabel ? ` • ${downloadProgressLabel}` : ''}`}
-            </div>
-          </div>
-          {downloadState.status === 'requested' ? (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7"
-                onClick={() => {
-                  void window.api.browser.acceptDownload({
-                    downloadId: downloadState.downloadId
-                  })
-                }}
-              >
-                Save
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7"
-                onClick={() => {
-                  void window.api.browser.cancelDownload({
-                    downloadId: downloadState.downloadId
-                  })
-                }}
-              >
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <span className="shrink-0 text-muted-foreground">
-              {downloadProgressLabel ?? 'Downloading'}
-            </span>
-          )}
-        </div>
-      ) : null}
-      {resourceNotice ? (
-        <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-background px-3 py-1.5 text-xs text-muted-foreground">
-          <span>{resourceNotice}</span>
-          <button
-            type="button"
-            onClick={() => setResourceNotice(null)}
-            className="shrink-0 text-muted-foreground/60 hover:text-foreground"
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
-        </div>
-      ) : null}
-      {grab.state !== 'idle' ? (
+      <div ref={chromeHeaderRef} className="pointer-events-auto shrink-0">
         <div
-          className={cn(
-            'flex items-center gap-2 border-b border-border/60 px-3 py-1.5 text-xs text-foreground/90',
-            grab.state === 'error' ? 'bg-destructive/10' : 'bg-accent'
-          )}
+          className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
+          data-contextual-tour-target="browser-toolbar"
         >
-          <Crosshair
-            className={cn(
-              'size-3 shrink-0',
-              grab.state === 'error' ? 'text-destructive' : 'text-muted-foreground'
-            )}
-          />
-          <span className="min-w-0 flex-1 truncate">
-            {grab.state === 'error'
-              ? `Grab failed: ${grab.error ?? 'Unknown error'}`
-              : grabIntent === 'annotate'
-                ? pendingAnnotationPayload
-                  ? 'Add feedback for the selected element.'
-                  : browserAnnotations.length > 0
-                    ? `${browserAnnotations.length} annotation${browserAnnotations.length === 1 ? '' : 's'} ready. Select another element or copy all feedback.`
-                    : 'Click an element to add feedback for the agent.'
-                : grab.state === 'confirming'
-                  ? 'Copied — press S to screenshot, or select another element'
-                  : 'Click or hover an element, then press C to copy or S to screenshot.'}
-          </span>
-          {grabIntent === 'annotate' && browserAnnotations.length > 0 ? (
-            <>
-              <DropdownMenu
-                modal={false}
-                open={annotationBannerSendOpen}
-                onOpenChange={handleAnnotationBannerSendOpenChange}
-              >
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="xs" variant="outline" className="h-6 gap-1.5">
-                        <Send className="size-3" />
-                        Send
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    Send feedback to a new agent
-                  </TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent
-                  align="end"
-                  className="min-w-[180px]"
-                  onInteractOutside={preventAgentSendTargetOutsideDismiss}
-                  onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
-                >
-                  <QuickLaunchAgentMenuItems
-                    worktreeId={worktreeId}
-                    groupId={activeGroupId ?? worktreeId}
-                    onFocusTerminal={focusTerminalTabSurface}
-                    prompt={browserAnnotationsPrompt}
-                    promptDelivery="submit-after-ready"
-                    launchSource="notes_send"
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                size="xs"
-                variant="outline"
-                className="h-6 gap-1.5"
-                onClick={handleCopyBrowserAnnotations}
-              >
-                {browserAnnotationsCopied ? (
-                  <CircleCheck className="size-3" />
-                ) : (
-                  <Copy className="size-3" />
-                )}
-                {browserAnnotationsCopied ? 'Copied' : 'Copy All'}
-              </Button>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                    onClick={handleClearBrowserAnnotations}
-                    aria-label="Clear browser annotations"
-                  >
-                    <Trash2 className="size-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  Clear annotations
-                </TooltipContent>
-              </Tooltip>
-            </>
-          ) : null}
-          <button
-            className="ml-auto shrink-0 rounded px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground"
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={() => webviewRef.current?.goBack()}
+            disabled={!browserTab.canGoBack}
+          >
+            <ArrowLeft className="size-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={() => webviewRef.current?.goForward()}
+            disabled={!browserTab.canGoForward}
+          >
+            <ArrowRight className="size-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
             onClick={() => {
-              setPendingAnnotationPayload(null)
-              grab.cancel()
+              const webview = webviewRef.current
+              if (!webview) {
+                return
+              }
+              if (browserTab.loading) {
+                webview.stop()
+              } else if (browserTab.loadError) {
+                retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+              } else {
+                webview.reload()
+              }
             }}
           >
-            Cancel
-          </button>
-        </div>
-      ) : null}
-      <div
-        ref={setContainerRef}
-        className="relative flex min-h-0 flex-1 overflow-hidden bg-background"
-        onDragOver={handleInternalFileDragOver}
-        onDrop={handleInternalFileDrop}
-      >
-        <div
-          role="status"
-          aria-live="polite"
-          aria-hidden={!showBrowserZoomIndicator}
-          className={cn(
-            'pointer-events-none absolute top-3 right-3 z-30 rounded-md border border-border bg-popover/95 px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-xs transition-opacity duration-300 ease-out',
-            browserZoomFeedbackVisible
-              ? 'opacity-100'
-              : browserZoomPercent === 100
-                ? 'opacity-0'
-                : 'opacity-80'
-          )}
-        >
-          {browserZoomPercent}%
-        </div>
-        <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
-        {showFailureOverlay ? (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">
-            <div className="flex max-w-sm flex-col items-center px-8 py-8 text-center opacity-70">
-              <div className="mb-4 rounded-full border border-border/70 bg-muted/30 p-3">
-                <Globe className="size-5 text-muted-foreground" />
-              </div>
-              <h2 className="text-base font-semibold text-foreground/85">
-                {loadErrorMeta.host ? `Can't reach ${loadErrorMeta.host}` : "Can't load this page"}
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {formatLoadFailureDescription(browserTab.loadError, loadErrorMeta)}
-              </p>
-              {loadErrorHint ? (
-                <p className="mt-2 text-xs text-muted-foreground/80">{loadErrorHint}</p>
-              ) : null}
-              <div className="mt-5 flex items-center gap-2">
+            {browserTab.loading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
+          </Button>
+
+          <BrowserAddressBar
+            value={addressBarValue}
+            onChange={setAddressBarValue}
+            onSubmit={submitAddressBar}
+            onNavigate={navigateToUrl}
+            inputRef={addressBarInputRef}
+            dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
+          />
+
+          <BrowserImportHintButton profileId={sessionProfileId} />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
                 <Button
-                  size="sm"
+                  size="icon"
+                  variant={grab.state !== 'idle' && grabIntent === 'copy' ? 'default' : 'ghost'}
+                  className={cn(
+                    'h-8 w-8',
+                    grab.state !== 'idle' &&
+                      grabIntent === 'copy' &&
+                      'bg-foreground/80 text-background hover:bg-foreground/90'
+                  )}
+                  onClick={() => startGrabIntent('copy')}
+                  disabled={isBlankTab || markup.isActive}
+                  aria-label={translate(
+                    'auto.components.browser.pane.BrowserPane.fdfc7fe0ef',
+                    'Grab page element'
+                  )}
+                  data-contextual-tour-target="browser-grab-control"
+                >
+                  <Crosshair className="size-4" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {translate(
+                'auto.components.browser.pane.BrowserPane.acbe79fd01',
+                'Grab page element ({{value0}})',
+                { value0: grabElementShortcut }
+              )}
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Why: disabled <button> drops hover events, so wrap in a span so the tooltip trigger still fires. */}
+              <span className="inline-flex">
+                <Button
+                  size="icon"
+                  variant={grab.state !== 'idle' && grabIntent === 'annotate' ? 'default' : 'ghost'}
+                  className={cn(
+                    'relative h-8 w-8',
+                    grab.state !== 'idle' &&
+                      grabIntent === 'annotate' &&
+                      'bg-foreground/80 text-background hover:bg-foreground/90'
+                  )}
+                  onClick={() => startGrabIntent('annotate')}
+                  disabled={isBlankTab || markup.isActive}
+                  aria-label={translate(
+                    'auto.components.browser.pane.BrowserPane.fc9be38f6f',
+                    'Annotate page element'
+                  )}
+                  data-contextual-tour-target="browser-annotation-control"
+                >
+                  <MessageSquarePlus className="size-4" />
+                  {browserAnnotations.length > 0 ? (
+                    <span className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground">
+                      {browserAnnotations.length}
+                    </span>
+                  ) : null}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {translate(
+                'auto.components.browser.pane.BrowserPane.fc9be38f6f',
+                'Annotate page element'
+              )}
+            </TooltipContent>
+          </Tooltip>
+
+          <MarkupDrawButton
+            onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
+            disabled={isBlankTab || grab.state !== 'idle'}
+            active={markup.isActive}
+            surfaceActive={isActive}
+          />
+
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={() => void window.api.browser.openDevTools({ browserPageId: browserTab.id })}
+            title={translate(
+              'auto.components.browser.pane.BrowserPane.ec75d0c412',
+              'Open browser devtools'
+            )}
+          >
+            <SquareCode className="size-4" />
+          </Button>
+
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={() => {
+              if (!externalUrl) {
+                return
+              }
+              void window.api.shell.openUrl(externalUrl)
+            }}
+            title={translate(
+              'auto.components.browser.pane.BrowserPane.0f41bf80c7',
+              'Open in default browser'
+            )}
+            disabled={!externalUrl}
+          >
+            <ExternalLink className="size-4" />
+          </Button>
+
+          <BrowserToolbarMenu
+            currentProfileId={sessionProfileId}
+            workspaceId={workspaceId}
+            browserPageId={browserTab.id}
+            viewportPresetId={browserTab.viewportPresetId ?? null}
+            onDestroyWebview={() => destroyPersistentWebview(browserTab.id)}
+            isActive={isActive}
+          />
+        </div>
+        {visibleDownloads.length > 0 ? (
+          <div className="border-b border-border/60 bg-background px-3 py-1.5">
+            <div className="scrollbar-sleek flex max-h-36 flex-col gap-1 overflow-y-auto">
+              {visibleDownloads.map((download) => {
+                const progressLabel = formatBrowserDownloadProgress(download)
+                const statusLabel =
+                  download.status === 'downloading'
+                    ? download.progressState === 'interrupted'
+                      ? translate(
+                          'auto.components.browser.pane.BrowserPane.39c04fed61',
+                          'Downloading paused'
+                        )
+                      : (progressLabel ??
+                        translate(
+                          'auto.components.browser.pane.BrowserPane.759f32af29',
+                          'Downloading'
+                        ))
+                    : download.status === 'completed'
+                      ? translate(
+                          'auto.components.browser.pane.BrowserPane.5c3d530a68',
+                          'Downloaded'
+                        )
+                      : download.status === 'canceled'
+                        ? translate(
+                            'auto.components.browser.pane.BrowserPane.4bb7424d6b',
+                            'Canceled'
+                          )
+                        : (download.error ??
+                          translate(
+                            'auto.components.browser.pane.BrowserPane.6e776f9ef9',
+                            'Download failed'
+                          ))
+                return (
+                  <div
+                    key={download.downloadId}
+                    className="flex min-h-8 items-center gap-2 text-xs text-foreground"
+                  >
+                    {download.status === 'completed' ? (
+                      <CircleCheck className="size-3.5 shrink-0 text-muted-foreground" />
+                    ) : download.status === 'failed' ? (
+                      <OctagonX className="size-3.5 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <Download className="size-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{download.filename}</div>
+                      <div className="truncate text-muted-foreground">
+                        {download.status === 'downloading'
+                          ? translate(
+                              'auto.components.browser.pane.BrowserPane.4300f38145',
+                              'Downloading from {{value0}}{{value1}}',
+                              {
+                                value0: download.origin,
+                                value1: statusLabel ? ` • ${statusLabel}` : ''
+                              }
+                            )
+                          : statusLabel}
+                      </div>
+                    </div>
+                    {download.status === 'downloading' ? (
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        className="h-6 shrink-0"
+                        onClick={() => {
+                          void window.api.browser.cancelDownload({
+                            downloadId: download.downloadId
+                          })
+                        }}
+                      >
+                        {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
+                      </Button>
+                    ) : download.status === 'completed' ? (
+                      <>
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          className="h-6 shrink-0 gap-1"
+                          onClick={() => {
+                            void handleOpenDownloadedFile(download)
+                          }}
+                        >
+                          <ExternalLink className="size-3" />
+                          {translate('auto.components.browser.pane.BrowserPane.756bfc25c9', 'Open')}
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="h-6 shrink-0 gap-1"
+                          onClick={() => {
+                            void handleShowDownloadedFile(download)
+                          }}
+                        >
+                          <FolderOpen className="size-3" />
+                          {translate('auto.components.browser.pane.BrowserPane.09a9489aa5', 'Show')}
+                        </Button>
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => dismissBrowserDownload(download.downloadId)}
+                          aria-label={translate(
+                            'auto.components.browser.pane.BrowserPane.2fdca7df09',
+                            'Dismiss'
+                          )}
+                        >
+                          <X className="size-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        className="h-6 w-6 shrink-0"
+                        onClick={() => dismissBrowserDownload(download.downloadId)}
+                        aria-label={translate(
+                          'auto.components.browser.pane.BrowserPane.2fdca7df09',
+                          'Dismiss'
+                        )}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+        {resourceNotice ? (
+          <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-background px-3 py-1.5 text-xs text-muted-foreground">
+            <span>{resourceNotice}</span>
+            <button
+              type="button"
+              onClick={() => setResourceNotice(null)}
+              className="shrink-0 text-muted-foreground/60 hover:text-foreground"
+              aria-label={translate(
+                'auto.components.browser.pane.BrowserPane.2fdca7df09',
+                'Dismiss'
+              )}
+            >
+              ✕
+            </button>
+          </div>
+        ) : null}
+        {grab.state !== 'idle' ? (
+          <div
+            className={cn(
+              'flex items-center gap-2 border-b border-border/60 px-3 py-1.5 text-xs text-foreground/90',
+              grab.state === 'error' ? 'bg-destructive/10' : 'bg-accent'
+            )}
+          >
+            <Crosshair
+              className={cn(
+                'size-3 shrink-0',
+                grab.state === 'error' ? 'text-destructive' : 'text-muted-foreground'
+              )}
+            />
+            <span className="min-w-0 flex-1 truncate">
+              {grab.state === 'error'
+                ? translate(
+                    'auto.components.browser.pane.BrowserPane.4328a0a062',
+                    'Grab failed: {{value0}}',
+                    { value0: grab.error ?? 'Unknown error' }
+                  )
+                : grabIntent === 'annotate'
+                  ? pendingAnnotationPayload
+                    ? translate(
+                        'auto.components.browser.pane.BrowserPane.b733a91bd9',
+                        'Add feedback for the selected element.'
+                      )
+                    : browserAnnotations.length === 1
+                      ? translate(
+                          'auto.components.browser.pane.BrowserPane.074f0ed10b',
+                          '{{value0}} annotation ready. Select another element or copy all feedback.',
+                          { value0: browserAnnotations.length }
+                        )
+                      : browserAnnotations.length > 0
+                        ? translate(
+                            'auto.components.browser.pane.BrowserPane.a2164a6e5a',
+                            '{{value0}} annotations ready. Select another element or copy all feedback.',
+                            { value0: browserAnnotations.length }
+                          )
+                        : translate(
+                            'auto.components.browser.pane.BrowserPane.777b5bc4ec',
+                            'Click an element to add feedback for the agent.'
+                          )
+                  : grab.state === 'confirming'
+                    ? translate(
+                        'auto.components.browser.pane.BrowserPane.e852e20cea',
+                        'Copied — press S to screenshot, or select another element'
+                      )
+                    : translate(
+                        'auto.components.browser.pane.BrowserPane.168350ae6a',
+                        'Click or hover an element, then press C to copy or S to screenshot.'
+                      )}
+            </span>
+            {grabIntent === 'annotate' && browserAnnotations.length > 0 ? (
+              <>
+                <DropdownMenu
+                  modal={false}
+                  open={annotationBannerSendOpen}
+                  onOpenChange={handleAnnotationBannerSendOpenChange}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="xs" variant="outline" className="h-6 gap-1.5">
+                          <Send className="size-3" />
+                          {translate('auto.components.browser.pane.BrowserPane.ac39b9366b', 'Send')}
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      {translate(
+                        'auto.components.browser.pane.BrowserPane.95af781091',
+                        'Send feedback to an agent'
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent
+                    align="end"
+                    className="min-w-[180px]"
+                    onInteractOutside={preventAgentSendTargetOutsideDismiss}
+                    onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+                  >
+                    <BrowserAnnotationSendMenuContent
+                      worktreeId={worktreeId}
+                      groupId={activeGroupId ?? worktreeId}
+                      prompt={browserAnnotationsPrompt}
+                      onPromptDelivered={handleBrowserAnnotationsSentToAgent}
+                    />
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  size="xs"
                   variant="outline"
-                  className="h-9 gap-2 px-3"
-                  title="Retry"
-                  onClick={() => {
+                  className="h-6 gap-1.5"
+                  onClick={handleCopyBrowserAnnotations}
+                >
+                  {browserAnnotationsCopied ? (
+                    <CircleCheck className="size-3" />
+                  ) : (
+                    <Copy className="size-3" />
+                  )}
+                  {browserAnnotationsCopied
+                    ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
+                    : translate('auto.components.browser.pane.BrowserPane.499b31b84e', 'Copy All')}
+                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                      onClick={handleClearBrowserAnnotations}
+                      aria-label={translate(
+                        'auto.components.browser.pane.BrowserPane.734e4343ec',
+                        'Clear browser annotations'
+                      )}
+                    >
+                      <Trash2 className="size-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {translate(
+                      'auto.components.browser.pane.BrowserPane.11c5084aa2',
+                      'Clear annotations'
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            ) : null}
+            <button
+              className="ml-auto shrink-0 rounded px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => {
+                setPendingAnnotationPayload(null)
+                grab.cancel()
+              }}
+            >
+              {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {pageViewport?.container
+        ? createPortal(
+            <>
+              {markup.isActive && markup.baseImage ? (
+                <MarkupOverlay
+                  baseImage={markup.baseImage}
+                  busy={markup.state === 'composing'}
+                  onComplete={(input) => void markup.complete(input)}
+                  onCancel={markup.cancel}
+                />
+              ) : null}
+              <div
+                role="status"
+                aria-live="polite"
+                aria-hidden={browserZoomIndicatorState.ariaHidden}
+                className={cn(
+                  'pointer-events-none absolute top-3 right-3 z-30 rounded-md border border-border bg-popover/95 px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-xs transition-opacity duration-300 ease-out',
+                  browserZoomIndicatorState.opacityClassName
+                )}
+              >
+                {browserZoomPercent}%
+              </div>
+              <BrowserFind
+                isOpen={findOpen}
+                onClose={() => setFindOpen(false)}
+                webviewRef={webviewRef}
+              />
+              {showFailureOverlay && browserTab.loadError ? (
+                <BrowserLoadFailureOverlay
+                  loadError={browserTab.loadError}
+                  externalUrl={failureExternalUrl}
+                  currentUrl={toDisplayUrl(failedNavigationUrl)}
+                  httpsRecoveryUrl={toHttpsRecoveryUrl(failedNavigationUrl)}
+                  onRetry={() => {
                     const webview = webviewRef.current
                     if (!webview) {
                       return
                     }
-                    onUpdatePageStateRef.current(browserTab.id, {
-                      loading: true
-                    })
+                    onUpdatePageStateRef.current(browserTab.id, { loading: true })
                     retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
                   }}
-                >
-                  <RefreshCw className="size-4" />
-                  <span>Refresh</span>
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-9 gap-2 px-3"
-                  title="Copy failed page URL"
-                  onClick={() => {
-                    // Why: failed guests often leave users stranded on a blank
-                    // error surface. Put the current URL on the clipboard from
-                    // the recovery UI itself so they can retry elsewhere
-                    // without having to discover the toolbar overflow first.
-                    void window.api.ui.writeClipboardText(currentBrowserUrl)
-                    setResourceNotice('Copied the current page URL.')
+                  onTryHttps={navigateToUrl}
+                  onCopy={(url) => {
+                    void window.api.ui.writeClipboardText(url)
+                    setResourceNotice(
+                      translate(
+                        'browser.loadFailure.addressCopied',
+                        'Copied the current page address.'
+                      )
+                    )
                   }}
-                >
-                  <Copy className="size-4" />
-                  <span>Copy Address</span>
-                </Button>
-                {externalUrl ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-9 gap-2 px-3"
-                    title="Open failed page in default browser"
-                    onClick={() => {
-                      // Why: page failures inside Orca can still be recoverable
-                      // in the system browser, especially for OAuth, captive
-                      // portals, or enterprise auth flows that rely on a full
-                      // browser profile. Keep this action in the failed-state
-                      // overlay so recovery does not depend on toolbar affordance
-                      // discovery while the guest itself is unusable.
-                      void window.api.shell.openUrl(externalUrl)
-                    }}
-                  >
-                    <ExternalLink className="size-4" />
-                    <span>Open Externally</span>
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : null}
-        {isBlankTab ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">
-            <div className="flex flex-col items-center px-8 py-8 text-center opacity-70">
-              <div className="mb-4 rounded-full border border-border/70 bg-muted/30 p-3">
-                <Globe className="size-5 text-muted-foreground" />
-              </div>
-              <div className="text-center">
-                <p className="text-base font-semibold text-foreground/85">New Tab</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Type a URL above to start browsing.
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : null}
-        {pendingAnnotationPayload ? (
-          <PendingBrowserAnnotationCard
-            payload={pendingAnnotationPayload}
-            anchor={getBrowserOverlayAnchor(
-              pendingAnnotationPayload,
-              containerRef.current,
-              webviewRef.current,
-              browserOverlayViewport
-            )}
-            portalContainer={containerRef.current}
-            onAdd={handleAddBrowserAnnotation}
-            onCancel={handleCancelPendingBrowserAnnotation}
-          />
-        ) : null}
-        {browserAnnotations.length > 0 && browserAnnotationTrayOpen ? (
-          <div className="absolute right-3 bottom-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
-            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-              <MessageSquarePlus className="size-4 text-muted-foreground" />
-              <div className="min-w-0 flex-1 text-sm font-medium">
-                {browserAnnotations.length} annotation{browserAnnotations.length === 1 ? '' : 's'}
-              </div>
-              <DropdownMenu
-                modal={false}
-                open={annotationTraySendOpen}
-                onOpenChange={handleAnnotationTraySendOpenChange}
-              >
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="xs" variant="outline" className="gap-1.5">
-                        <Send className="size-3" />
-                        Send
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    Send feedback to a new agent
-                  </TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent
-                  align="end"
-                  className="min-w-[180px]"
-                  onInteractOutside={preventAgentSendTargetOutsideDismiss}
-                  onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
-                >
-                  <QuickLaunchAgentMenuItems
-                    worktreeId={worktreeId}
-                    groupId={activeGroupId ?? worktreeId}
-                    onFocusTerminal={focusTerminalTabSurface}
-                    prompt={browserAnnotationsPrompt}
-                    promptDelivery="submit-after-ready"
-                    launchSource="notes_send"
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                size="xs"
-                variant="outline"
-                className="gap-1.5"
-                onClick={handleCopyBrowserAnnotations}
-              >
-                {browserAnnotationsCopied ? (
-                  <CircleCheck className="size-3" />
-                ) : (
-                  <Copy className="size-3" />
-                )}
-                {browserAnnotationsCopied ? 'Copied' : 'Copy'}
-              </Button>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={handleClearBrowserAnnotations}
-                    aria-label="Clear browser annotations"
-                  >
-                    <Trash2 className="size-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  Clear annotations
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-1.5">
-              {browserAnnotations.map((annotation, index) => (
-                <div
-                  key={annotation.id}
-                  className="group flex gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent focus-within:bg-accent"
-                >
-                  <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                    {index + 1}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium text-foreground">
-                      {annotation.payload.target.accessibility.accessibleName ||
-                        annotation.payload.target.textSnippet ||
-                        annotation.payload.target.tagName}
+                  onOpenExternal={(url) => void window.api.shell.openUrl(url)}
+                  certificateFailure={certificateFailure}
+                  expectedBrowserPageId={browserTab.id}
+                  onProceedCertificate={(challengeId) =>
+                    window.api.browser.proceedCertificate({
+                      browserPageId: browserTab.id,
+                      challengeId
+                    })
+                  }
+                />
+              ) : null}
+              {isBlankTab ? (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">
+                  <div className="flex flex-col items-center px-8 py-8 text-center opacity-70">
+                    <div className="mb-4 rounded-full border border-border/70 bg-muted/30 p-3">
+                      <Globe className="size-5 text-muted-foreground" />
                     </div>
-                    <div className="mt-0.5 line-clamp-2 text-muted-foreground">
-                      {annotation.comment}
-                    </div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">
-                      <span>{annotation.intent}</span>
+                    <div className="text-center">
+                      <p className="text-base font-semibold text-foreground/85">
+                        {translate(
+                          'auto.components.browser.pane.BrowserPane.366bf5d62c',
+                          'New Tab'
+                        )}
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {translate(
+                          'auto.components.browser.pane.BrowserPane.f796c774a4',
+                          'Type a URL above to start browsing.'
+                        )}
+                      </p>
                     </div>
                   </div>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
-                    onClick={() => handleDeleteBrowserAnnotation(annotation.id)}
-                    aria-label={`Delete annotation ${index + 1}`}
-                  >
-                    <Trash2 className="size-3" />
-                  </Button>
                 </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        {/* Right-click context dropdown: positioned at the element's center,
-            shown when grab.contextMenu is true (user right-clicked). */}
-        <DropdownMenu
-          open={grab.state === 'confirming' && grab.contextMenu && grabIntent === 'copy'}
-          onOpenChange={(open) => {
-            if (!open && grab.state === 'confirming') {
-              // Why: skip rearm if a menu action (Copy/Screenshot) already
-              // handled the rearm — see grabMenuActionTakenRef.
-              if (grabMenuActionTakenRef.current) {
-                grabMenuActionTakenRef.current = false
-                return
-              }
-              grab.rearm()
-            }
-          }}
-        >
-          <DropdownMenuTrigger asChild>
-            <button
-              aria-hidden
-              tabIndex={-1}
-              className="pointer-events-none absolute size-px opacity-0"
-              style={(() => {
-                if (!grab.payload) {
-                  return { left: 0, top: 0 }
-                }
-                const rect = grab.payload.target.rectViewport
-                const webview = webviewRef.current
-                const webviewRect = webview?.getBoundingClientRect()
-                const cRect = containerRef.current?.getBoundingClientRect()
-                const offsetX = (webviewRect?.left ?? 0) - (cRect?.left ?? 0)
-                const offsetY = (webviewRect?.top ?? 0) - (cRect?.top ?? 0)
-                return {
-                  left: offsetX + rect.x + rect.width / 2,
-                  top: offsetY + rect.y + rect.height / 2
-                }
-              })()}
-            />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" sideOffset={4}>
-            <DropdownMenuItem onSelect={handleGrabCopy}>
-              <Copy className="size-3.5" />
-              Copy Contents
-              <DropdownMenuShortcut>C</DropdownMenuShortcut>
-            </DropdownMenuItem>
-            {grab.payload?.screenshot?.dataUrl?.startsWith('data:image/png;base64,') ? (
-              <DropdownMenuItem onSelect={handleGrabCopyScreenshot}>
-                <Image className="size-3.5" />
-                Copy Screenshot
-                <DropdownMenuShortcut>S</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            ) : null}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={() => {
-                grabMenuActionTakenRef.current = true
-                grab.cancel()
-              }}
-            >
-              Cancel
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* Inline toast bubble (left-click auto-copy feedback). Positioned
-            below (or above if near viewport bottom) so it doesn't occlude
-            the element. The "···" button opens the same action dropdown as
-            right-click for users who prefer clicking. */}
-        {grabToast ? (
-          <div
-            className="absolute z-30 flex items-center animate-in fade-in zoom-in-95 duration-150"
-            style={{
-              left: grabToast.x,
-              top: grabToast.y,
-              transform: grabToast.below
-                ? 'translate(-50%, 8px)'
-                : 'translate(-50%, -100%) translateY(-8px)',
-              flexDirection: grabToast.below ? 'column' : 'column-reverse'
-            }}
-          >
-            {/* Caret pointing toward the element */}
-            <div
-              className="h-2 w-4 shrink-0"
-              style={{
-                clipPath: grabToast.below
-                  ? 'polygon(50% 0%, 0% 100%, 100% 100%)'
-                  : 'polygon(0% 0%, 100% 0%, 50% 100%)',
-                background: 'white'
-              }}
-            />
-            <div
-              className={`flex items-center gap-1.5 rounded-full py-1.5 pl-3 pr-1.5 shadow-lg ${
-                grabToast.type === 'success' ? 'bg-white text-gray-900' : 'bg-white text-red-600'
-              }`}
-            >
-              {grabToast.type === 'success' ? (
-                <CircleCheck className="size-4 fill-blue-600 text-white" />
-              ) : (
-                <OctagonX className="size-4 text-red-500" />
-              )}
-              <span className="text-sm font-semibold">{grabToast.message}</span>
-              {grabToast.payload?.screenshot?.dataUrl?.startsWith('data:image/png;base64,') ? (
-                <DropdownMenu
-                  onOpenChange={(open) => {
-                    if (open) {
-                      clearTimeout(grabToastTimerRef.current)
-                    } else {
-                      grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 1200)
-                    }
-                  }}
-                >
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex size-6 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/10 hover:text-gray-700">
-                      <span className="text-sm font-bold leading-none">···</span>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" sideOffset={4}>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        const dataUrl = grabToast.payload?.screenshot?.dataUrl
-                        if (dataUrl?.startsWith('data:image/png;base64,')) {
-                          void window.api.ui.writeClipboardImage(dataUrl)
-                          setGrabToast((prev) =>
-                            prev ? { ...prev, message: 'Screenshotted' } : null
+              ) : null}
+              {pendingAnnotationPayload ? (
+                <PendingBrowserAnnotationCard
+                  payload={pendingAnnotationPayload}
+                  anchor={getBrowserOverlayAnchor(
+                    pendingAnnotationPayload,
+                    containerRef.current,
+                    webviewRef.current,
+                    browserOverlayViewport
+                  )}
+                  portalContainer={containerRef.current}
+                  onAdd={handleAddBrowserAnnotation}
+                  onCancel={handleCancelPendingBrowserAnnotation}
+                />
+              ) : null}
+              {browserAnnotations.length > 0 && browserAnnotationTrayOpen ? (
+                <div className="absolute right-3 bottom-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+                  <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                    <MessageSquarePlus className="size-4 text-muted-foreground" />
+                    <div className="min-w-0 flex-1 text-sm font-medium">
+                      {browserAnnotations.length === 1
+                        ? translate(
+                            'auto.components.browser.pane.BrowserPane.ea6af700da',
+                            '{{value0}} annotation',
+                            { value0: browserAnnotations.length }
                           )
-                        }
-                      }}
+                        : translate(
+                            'auto.components.browser.pane.BrowserPane.c13693fe27',
+                            '{{value0}} annotations',
+                            { value0: browserAnnotations.length }
+                          )}
+                    </div>
+                    <DropdownMenu
+                      modal={false}
+                      open={annotationTraySendOpen}
+                      onOpenChange={handleAnnotationTraySendOpenChange}
                     >
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="xs" variant="outline" className="gap-1.5">
+                              <Send className="size-3" />
+                              {translate(
+                                'auto.components.browser.pane.BrowserPane.ac39b9366b',
+                                'Send'
+                              )}
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" sideOffset={6}>
+                          {translate(
+                            'auto.components.browser.pane.BrowserPane.95af781091',
+                            'Send feedback to an agent'
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent
+                        align="end"
+                        className="min-w-[180px]"
+                        onInteractOutside={preventAgentSendTargetOutsideDismiss}
+                        onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+                      >
+                        <BrowserAnnotationSendMenuContent
+                          worktreeId={worktreeId}
+                          groupId={activeGroupId ?? worktreeId}
+                          prompt={browserAnnotationsPrompt}
+                          onPromptDelivered={handleBrowserAnnotationsSentToAgent}
+                        />
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      className="gap-1.5"
+                      onClick={handleCopyBrowserAnnotations}
+                    >
+                      {browserAnnotationsCopied ? (
+                        <CircleCheck className="size-3" />
+                      ) : (
+                        <Copy className="size-3" />
+                      )}
+                      {browserAnnotationsCopied
+                        ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
+                        : translate('auto.components.browser.pane.BrowserPane.d51ef37351', 'Copy')}
+                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={handleClearBrowserAnnotations}
+                          aria-label={translate(
+                            'auto.components.browser.pane.BrowserPane.734e4343ec',
+                            'Clear browser annotations'
+                          )}
+                        >
+                          <Trash2 className="size-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        {translate(
+                          'auto.components.browser.pane.BrowserPane.11c5084aa2',
+                          'Clear annotations'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-1.5">
+                    {browserAnnotations.map((annotation, index) => (
+                      <div
+                        key={annotation.id}
+                        className="group flex gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent focus-within:bg-accent"
+                      >
+                        <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                          {index + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium text-foreground">
+                            {annotation.payload.target.accessibility.accessibleName ||
+                              annotation.payload.target.textSnippet ||
+                              annotation.payload.target.tagName}
+                          </div>
+                          <div className="mt-0.5 line-clamp-2 text-muted-foreground">
+                            {annotation.comment}
+                          </div>
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            <span>{annotation.intent}</span>
+                          </div>
+                        </div>
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          className="can-hover:opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
+                          onClick={() => handleDeleteBrowserAnnotation(annotation.id)}
+                          aria-label={translate(
+                            'auto.components.browser.pane.BrowserPane.f2d0c22d67',
+                            'Delete annotation {{value0}}',
+                            { value0: index + 1 }
+                          )}
+                        >
+                          <Trash2 className="size-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {/* Right-click context dropdown, positioned at the grabbed element's center. */}
+              <DropdownMenu
+                open={grab.state === 'confirming' && grab.contextMenu && grabIntent === 'copy'}
+                onOpenChange={(open) => {
+                  if (!open && grab.state === 'confirming') {
+                    // Why: skip rearm if a menu action already handled it — see grabMenuActionTakenRef.
+                    if (grabMenuActionTakenRef.current) {
+                      grabMenuActionTakenRef.current = false
+                      return
+                    }
+                    grab.rearm()
+                  }
+                }}
+              >
+                <DropdownMenuTrigger asChild>
+                  <button
+                    aria-hidden
+                    tabIndex={-1}
+                    className="pointer-events-none absolute size-px opacity-0"
+                    style={(() => {
+                      if (!grab.payload) {
+                        return { left: 0, top: 0 }
+                      }
+                      const rect = grab.payload.target.rectViewport
+                      const webview = webviewRef.current
+                      const webviewRect = webview?.getBoundingClientRect()
+                      const cRect = containerRef.current?.getBoundingClientRect()
+                      const offsetX = (webviewRect?.left ?? 0) - (cRect?.left ?? 0)
+                      const offsetY = (webviewRect?.top ?? 0) - (cRect?.top ?? 0)
+                      return {
+                        left: offsetX + rect.x + rect.width / 2,
+                        top: offsetY + rect.y + rect.height / 2
+                      }
+                    })()}
+                  />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" sideOffset={4}>
+                  <DropdownMenuItem onSelect={handleGrabCopy}>
+                    <Copy className="size-3.5" />
+                    {translate(
+                      'auto.components.browser.pane.BrowserPane.c2ef0359b9',
+                      'Copy Contents'
+                    )}
+                    <DropdownMenuShortcut>C</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                  {grab.payload?.screenshot?.dataUrl?.startsWith('data:image/png;base64,') ? (
+                    <DropdownMenuItem onSelect={handleGrabCopyScreenshot}>
                       <Image className="size-3.5" />
-                      Copy Screenshot
+                      {translate(
+                        'auto.components.browser.pane.BrowserPane.1ded0d3168',
+                        'Copy Screenshot'
+                      )}
                       <DropdownMenuShortcut>S</DropdownMenuShortcut>
                     </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  ) : null}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      grabMenuActionTakenRef.current = true
+                      grab.cancel()
+                    }}
+                  >
+                    {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Inline toast bubble; flips above the element when near the viewport bottom so it doesn't occlude it. */}
+              {grabToast ? (
+                <div
+                  className="absolute z-30 flex items-center animate-in fade-in zoom-in-95 duration-150"
+                  style={{
+                    left: grabToast.x,
+                    top: grabToast.y,
+                    transform: grabToast.below
+                      ? 'translate(-50%, 8px)'
+                      : 'translate(-50%, -100%) translateY(-8px)',
+                    flexDirection: grabToast.below ? 'column' : 'column-reverse'
+                  }}
+                >
+                  {/* Caret pointing toward the element */}
+                  <div
+                    className="h-2 w-4 shrink-0"
+                    style={{
+                      clipPath: grabToast.below
+                        ? 'polygon(50% 0%, 0% 100%, 100% 100%)'
+                        : 'polygon(0% 0%, 100% 0%, 50% 100%)',
+                      background: 'white'
+                    }}
+                  />
+                  <div
+                    className={`flex items-center gap-1.5 rounded-full py-1.5 pl-3 pr-1.5 shadow-lg ${
+                      grabToast.type === 'success'
+                        ? 'bg-white text-gray-900'
+                        : 'bg-white text-red-600'
+                    }`}
+                  >
+                    {grabToast.type === 'success' ? (
+                      <CircleCheck className="size-4 fill-blue-600 text-white" />
+                    ) : (
+                      <OctagonX className="size-4 text-red-500" />
+                    )}
+                    <span className="text-sm font-semibold">{grabToast.message}</span>
+                    {grabToast.payload?.screenshot?.dataUrl?.startsWith(
+                      'data:image/png;base64,'
+                    ) ? (
+                      <DropdownMenu
+                        onOpenChange={(open) => {
+                          if (open) {
+                            clearTimeout(grabToastTimerRef.current)
+                          } else {
+                            grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 1200)
+                          }
+                        }}
+                      >
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex size-6 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/10 hover:text-gray-700">
+                            <span className="text-sm font-bold leading-none">···</span>
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" sideOffset={4}>
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              const dataUrl = grabToast.payload?.screenshot?.dataUrl
+                              if (dataUrl?.startsWith('data:image/png;base64,')) {
+                                void window.api.ui.writeClipboardImage(dataUrl)
+                                setGrabToast((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        message: translate(
+                                          'auto.components.browser.pane.BrowserPane.f30d2d35a7',
+                                          'Screenshotted'
+                                        )
+                                      }
+                                    : null
+                                )
+                              }
+                            }}
+                          >
+                            <Image className="size-3.5" />
+                            {translate(
+                              'auto.components.browser.pane.BrowserPane.1ded0d3168',
+                              'Copy Screenshot'
+                            )}
+                            <DropdownMenuShortcut>S</DropdownMenuShortcut>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
+                  </div>
+                </div>
               ) : null}
-            </div>
-          </div>
-        ) : null}
-      </div>
+            </>,
+            pageViewport.container
+          )
+        : null}
     </div>
   )
 }

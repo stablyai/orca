@@ -1,6 +1,11 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
-import path from 'path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import path from 'node:path'
+import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import {
+  buildWslLoginShellCommand,
+  escapeWslShCommandForWindows
+} from '../../shared/wsl-login-shell-command'
 
 const execFileAsync = promisify(execFile)
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
@@ -20,18 +25,24 @@ export async function detectWslCommandsOnPath(
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
+  const lookupScript = buildPosixCommandPathLookupScript({
+    kind: 'shell-variable',
+    name: 'cmd'
+  })
+  // Newlines keep the loop valid in zsh and every POSIX shell used here.
   const script = [
     `for cmd in ${commandList}; do`,
-    'if resolved=$(command -v "$cmd" 2>/dev/null); then',
+    lookupScript,
+    'if [ -n "$resolved" ]; then',
     `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
     'fi',
     'done'
-  ].join(' ')
+  ].join('\n')
 
   try {
     // Why: WSL cold-start plus many parallel wsl.exe probes can timeout and
-    // cache an empty result. One interactive probe matches user terminals and
-    // gives the distro a single startup path.
+    // cache an empty result. One probe through the distro user's login shell
+    // matches zsh/bash PATH customizations from their normal terminals.
     const { stdout } = await execWslAgentDetectionCommand(wslTarget, script)
     return parseWslDetectedCommands(stdout)
   } catch {
@@ -50,7 +61,13 @@ async function execWslAgentDetectionCommand(
   const distroArgs = target.distro ? ['-d', target.distro] : []
   const commandPromise = execFileAsync(
     'wsl.exe',
-    [...distroArgs, '--exec', 'bash', '-ic', command],
+    [
+      ...distroArgs,
+      '--',
+      'sh',
+      '-c',
+      escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
+    ],
     {
       encoding: 'utf-8',
       timeout: WSL_AGENT_DETECTION_TIMEOUT_MS
@@ -97,7 +114,9 @@ function parseWslDetectedCommands(stdout: string): Set<string> {
     }
     const command = payload.slice(0, separatorIndex)
     const resolvedPath = payload.slice(separatorIndex + 1)
-    if (path.posix.isAbsolute(resolvedPath) || path.win32.isAbsolute(resolvedPath)) {
+    // Why: a real guest executable always resolves to a POSIX-absolute path, so
+    // a Windows-style C:\ path here is spoofed/non-guest output, not an install.
+    if (path.posix.isAbsolute(resolvedPath)) {
       found.add(command)
     }
   }

@@ -1,44 +1,50 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
-  KEYBINDING_DEFINITIONS,
-  findKeybindingConflicts,
+  findKeybindingConflictsForDefinitions,
   formatKeybindingList,
-  getEffectiveKeybindingsForAction,
+  getEffectiveKeybindingsForDefinition,
   getKeybindingDefinition,
-  isKeybindingAllowedInTerminal,
-  isKeybindingPotentialTerminalConflict,
   keybindingFromInputForAction,
-  keybindingIsActiveInContext,
   normalizeKeybindingListForAction,
   type KeybindingActionId,
   type KeybindingDefinition,
-  type KeybindingInput,
-  type KeybindingOverrides,
-  type TerminalShortcutPolicy
+  type KeybindingInput
 } from '../../../../shared/keybindings'
+import { EMPTY_DISABLED_TUI_AGENTS } from './shortcut-groups'
 import { useAppStore } from '../../store'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
-import type { ShortcutTerminalStatus } from './ShortcutBindingRow'
+import { getShortcutTerminalStatus } from './shortcut-terminal-status'
 import {
-  getShortcutSearchEntry,
+  hasCommonBindingOverride,
+  hasOwnBindingOverride,
+  removeBindingOverride,
+  sameBindings
+} from './keybinding-override-edits'
+import {
+  buildShortcutGlobalSearchMatcher,
   matchesShortcutFilter,
   matchesShortcutLocalSearch,
+  normalizeShortcutLocalSearchQuery,
   ShortcutFilterRail,
   type ShortcutFilter,
   type ShortcutRowsByGroup
 } from './ShortcutFilterRail'
 import { ShortcutRowsList } from './ShortcutRowsList'
 import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
-import { TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY } from './shortcuts-search'
-import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
+import { matchesSettingsSearch } from './settings-search'
 import { clearRecordingActionForShortcutMutation } from './shortcut-recording-state'
+import {
+  adjustRecordingIndexAfterRemove,
+  appendBinding,
+  removeBindingAt,
+  replaceBindingAt
+} from './shortcut-binding-list-mutations'
 import { useMountedRef } from '@/hooks/useMountedRef'
-
-type ShortcutGroup = {
-  title: string
-  items: KeybindingDefinition[]
-}
+import { translate } from '@/i18n/i18n'
+import { useEditablePluginCommands } from '@/store/plugin-panels'
+import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
 
 const isMac = navigator.userAgent.includes('Mac')
 const platform: NodeJS.Platform = isMac
@@ -46,79 +52,6 @@ const platform: NodeJS.Platform = isMac
   : navigator.userAgent.includes('Windows')
     ? 'win32'
     : 'linux'
-
-function groupDefinitions(): ShortcutGroup[] {
-  const groups = new Map<string, KeybindingDefinition[]>()
-  for (const definition of KEYBINDING_DEFINITIONS) {
-    groups.set(definition.group, [...(groups.get(definition.group) ?? []), definition])
-  }
-  return Array.from(groups.entries()).map(([title, items]) => ({ title, items }))
-}
-
-function sameBindings(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((binding, index) => binding === b[index])
-}
-
-function hasOwnBindingOverride(
-  overrides: KeybindingOverrides,
-  actionId: KeybindingActionId
-): boolean {
-  return Object.prototype.hasOwnProperty.call(overrides, actionId)
-}
-
-function removeBindingOverride(
-  overrides: KeybindingOverrides,
-  actionId: KeybindingActionId
-): KeybindingOverrides {
-  const next = { ...overrides }
-  delete next[actionId]
-  return next
-}
-
-function hasCommonBindingOverride(
-  snapshot: ReturnType<typeof useAppStore.getState>['keybindingSnapshot'],
-  actionId: KeybindingActionId
-): boolean {
-  return hasOwnBindingOverride(snapshot?.commonOverrides ?? {}, actionId)
-}
-
-function getShortcutTerminalStatus(
-  definition: KeybindingDefinition,
-  terminalShortcutPolicy: TerminalShortcutPolicy,
-  hasEffectiveBinding: boolean
-): ShortcutTerminalStatus | undefined {
-  if (!hasEffectiveBinding) {
-    return undefined
-  }
-  if (definition.scope === 'terminal') {
-    return {
-      label: 'Terminal',
-      description: 'Runs from terminal panes.'
-    }
-  }
-  if (isKeybindingAllowedInTerminal(definition)) {
-    return {
-      label: 'Terminal active',
-      description: 'Still runs while a terminal has keyboard focus.'
-    }
-  }
-  if (!isKeybindingPotentialTerminalConflict(definition)) {
-    return undefined
-  }
-  const activeInTerminal = keybindingIsActiveInContext(definition, {
-    context: 'terminal',
-    terminalShortcutPolicy
-  })
-  return activeInTerminal
-    ? {
-        label: 'Orca first',
-        description: 'Also runs while a terminal or TUI has keyboard focus.'
-      }
-    : {
-        label: 'Terminal first',
-        description: 'Disabled while a terminal or TUI has keyboard focus.'
-      }
-}
 
 export function ShortcutsPane(): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
@@ -128,37 +61,61 @@ export function ShortcutsPane(): React.JSX.Element {
   const updateSettings = useAppStore((state) => state.updateSettings)
   const keybindings = useAppStore((state) => state.keybindings)
   const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
+  const disabledTuiAgents = useAppStore(
+    (state) => state.settings?.disabledTuiAgents ?? EMPTY_DISABLED_TUI_AGENTS
+  )
   const setKeybindingOverride = useAppStore((state) => state.setKeybindingOverride)
   const resetKeybindingOverride = useAppStore((state) => state.resetKeybindingOverride)
   const disableKeybindingAction = useAppStore((state) => state.disableKeybindingAction)
+  const pluginCommands = useEditablePluginCommands()
   const mountedRef = useMountedRef()
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
+  // Which binding index of the recording action is being captured. Equals the
+  // effective length when capturing a brand-new (appended) binding.
+  const [recordingBindingIndex, setRecordingBindingIndex] = useState<number | null>(null)
+  // Bindings an action had right before it was disabled, so "Enable" can restore
+  // them in one click instead of forcing a reset-to-default.
+  const [disableMemory, setDisableMemory] = useState<Partial<Record<KeybindingActionId, string[]>>>(
+    {}
+  )
   const [shortcutQuery, setShortcutQuery] = useState('')
   const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
 
-  const groups = useMemo(groupDefinitions, [])
-  const conflictByAction = useMemo(() => {
-    const result = new Map<KeybindingActionId, string[]>()
-    for (const conflict of findKeybindingConflicts(platform, keybindings)) {
-      const labels = conflict.actionIds
-        .map((id) => getKeybindingDefinition(id)?.title ?? id)
-        .join(', ')
-      for (const actionId of conflict.actionIds) {
-        result.set(actionId, [
-          ...(result.get(actionId) ?? []),
-          `${formatKeybindingList([conflict.binding], platform)} conflicts with ${labels}.`
-        ])
-      }
-    }
-    return result
-  }, [keybindings])
+  // Why: tell the main process to suspend global shortcut dispatch while any row
+  // is recording, so the captured chord lands in the editor instead of firing.
+  // One source of truth here avoids races between per-row recorder effects.
+  useEffect(() => {
+    window.api.ui.setShortcutRecorderFocused(recordingActionId !== null)
+    return () => window.api.ui.setShortcutRecorderFocused(false)
+  }, [recordingActionId])
+
+  const { groups, definitions, definitionsByAction, ignoredConflictActionIds, conflictByAction } =
+    useMemo(
+      () =>
+        buildShortcutDefinitionCatalog({
+          disabledTuiAgents,
+          pluginCommands,
+          keybindings,
+          platform
+        }),
+      [disabledTuiAgents, keybindings, pluginCommands]
+    )
+  const definitionForAction = (actionId: KeybindingActionId): KeybindingDefinition | null =>
+    definitionsByAction.get(actionId) ?? getKeybindingDefinition(actionId)
+  const effectiveBindingsForAction = (
+    actionId: KeybindingActionId,
+    overrides = keybindings
+  ): string[] => {
+    const definition = definitionForAction(actionId)
+    return definition ? getEffectiveKeybindingsForDefinition(definition, platform, overrides) : []
+  }
   const shortcutGroups = useMemo<ShortcutRowsByGroup[]>(
     () =>
       groups.map((group) => ({
         title: group.title,
         rows: group.items.map((item) => {
-          const effective = getEffectiveKeybindingsForAction(item.id, platform, keybindings)
+          const effective = getEffectiveKeybindingsForDefinition(item, platform, keybindings)
           const modified = hasOwnBindingOverride(keybindings, item.id)
           const warnings = conflictByAction.get(item.id) ?? []
           return {
@@ -177,13 +134,14 @@ export function ShortcutsPane(): React.JSX.Element {
       })),
     [conflictByAction, groups, keybindings, terminalShortcutPolicy]
   )
-  const shortcutSearchQuery = normalizeSettingsSearchQuery(shortcutQuery)
+  const shortcutSearchQuery = normalizeShortcutLocalSearchQuery(shortcutQuery)
   const shortcutRows = shortcutGroups.flatMap((group) => group.rows)
-  const baseVisibleRows = shortcutRows.filter(
-    (row) =>
-      matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
-      matchesShortcutLocalSearch(row, shortcutSearchQuery, platform)
-  )
+  const matchesShortcutGlobalSearch = buildShortcutGlobalSearchMatcher(shortcutRows, searchQuery)
+  const matchesShortcutSearch = (row: ShortcutRowsByGroup['rows'][number]): boolean =>
+    shortcutSearchQuery !== null &&
+    matchesShortcutGlobalSearch(row) &&
+    matchesShortcutLocalSearch(row, shortcutSearchQuery, platform)
+  const baseVisibleRows = shortcutRows.filter((row) => matchesShortcutSearch(row))
   const filterCounts: Record<ShortcutFilter, number> = {
     all: baseVisibleRows.length,
     modified: baseVisibleRows.filter((row) => row.modified).length,
@@ -194,10 +152,7 @@ export function ShortcutsPane(): React.JSX.Element {
     .map((group) => ({
       title: group.title,
       rows: group.rows.filter(
-        (row) =>
-          matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
-          matchesShortcutLocalSearch(row, shortcutSearchQuery, platform) &&
-          matchesShortcutFilter(row, shortcutFilter)
+        (row) => matchesShortcutSearch(row) && matchesShortcutFilter(row, shortcutFilter)
       )
     }))
     .filter((group) => group.rows.length > 0)
@@ -219,19 +174,30 @@ export function ShortcutsPane(): React.JSX.Element {
       return false
     }
 
-    const defaults = getEffectiveKeybindingsForAction(actionId, platform, {})
+    const definition = definitionForAction(actionId)
+    if (!definition) {
+      setErrors((prev) => ({
+        ...prev,
+        [actionId]: translate(
+          'auto.components.settings.ShortcutsPane.shortcutUnavailable',
+          'Shortcut is no longer available.'
+        )
+      }))
+      return false
+    }
+    const defaults = getEffectiveKeybindingsForDefinition(definition, platform, {})
     const next =
       sameBindings(normalizedResult, defaults) ||
       (normalizedResult.length === 0 && defaults.length === 0)
         ? removeBindingOverride(keybindings, actionId)
         : { ...keybindings, [actionId]: normalizedResult }
-    const blockingConflict = findKeybindingConflicts(platform, next).find((conflict) =>
-      conflict.actionIds.includes(actionId)
-    )
+    const blockingConflict = findKeybindingConflictsForDefinitions(definitions, platform, next, {
+      ignoredActionIds: ignoredConflictActionIds
+    }).find((conflict) => conflict.actionIds.includes(actionId))
     if (blockingConflict) {
       const labels = blockingConflict.actionIds
         .filter((id) => id !== actionId)
-        .map((id) => getKeybindingDefinition(id)?.title ?? id)
+        .map((id) => definitionsByAction.get(id)?.title ?? id)
         .join(', ')
       setErrors((prev) => ({
         ...prev,
@@ -270,18 +236,30 @@ export function ShortcutsPane(): React.JSX.Element {
       return
     }
 
-    // Why: the visual editor records one chord at a time; users can still
-    // manage multi-binding arrays directly in keybindings.json.
-    if ((await saveBindings(actionId, [captured.value])) && mountedRef.current) {
+    // Edit just the targeted binding (or append a new one) instead of replacing
+    // the whole list, so an action's other bindings survive the capture.
+    const current = effectiveBindingsForAction(actionId)
+    const next =
+      recordingBindingIndex === null || recordingBindingIndex >= current.length
+        ? appendBinding(current, captured.value)
+        : replaceBindingAt(current, recordingBindingIndex, captured.value)
+    if ((await saveBindings(actionId, next)) && mountedRef.current) {
       setRecordingActionId(null)
+      setRecordingBindingIndex(null)
     }
+  }
+
+  const removeBinding = async (actionId: KeybindingActionId, index: number): Promise<void> => {
+    setErrors((prev) => ({ ...prev, [actionId]: undefined }))
+    const current = effectiveBindingsForAction(actionId)
+    await saveBindings(actionId, removeBindingAt(current, index))
   }
 
   const resetBinding = async (actionId: KeybindingActionId): Promise<void> => {
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
     try {
       await (hasCommonBindingOverride(keybindingSnapshot, actionId)
-        ? setKeybindingOverride(actionId, getEffectiveKeybindingsForAction(actionId, platform, {}))
+        ? setKeybindingOverride(actionId, effectiveBindingsForAction(actionId, {}))
         : resetKeybindingOverride(actionId))
     } catch (error) {
       if (mountedRef.current) {
@@ -314,10 +292,13 @@ export function ShortcutsPane(): React.JSX.Element {
   const clearRecordingForAction = (actionId: KeybindingActionId): void => {
     // Why: disable/reset are final shortcut edits; the next keypress must not
     // be captured into the shortcut the user just removed or restored.
+    if (recordingActionId === actionId) {
+      setRecordingBindingIndex(null)
+    }
     setRecordingActionId((current) => clearRecordingActionForShortcutMutation(current, actionId))
   }
 
-  const showPolicy = matchesSettingsSearch(searchQuery, TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY)
+  const showPolicy = matchesSettingsSearch(searchQuery, getTerminalShortcutPolicySearchEntry())
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
@@ -325,20 +306,30 @@ export function ShortcutsPane(): React.JSX.Element {
         {showPolicy ? (
           <ShortcutTerminalPolicyControl
             terminalShortcutPolicy={terminalShortcutPolicy}
-            keywords={TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY.keywords}
+            keywords={getTerminalShortcutPolicySearchEntry().keywords}
             updateSettings={updateSettings}
           />
         ) : null}
 
         <SettingsSubsectionHeader
-          title="Keyboard Shortcuts"
+          title={translate(
+            'auto.components.settings.ShortcutsPane.47f8f7aef9',
+            'Keyboard Shortcuts'
+          )}
           description={
             <>
-              Customize shortcuts visually or edit{' '}
+              {translate(
+                'auto.components.settings.ShortcutsPane.38e86e206a',
+                'Customize shortcuts visually or edit'
+              )}{' '}
               <span className="font-mono text-[11px]">
-                {keybindingSnapshot?.path ?? '~/.orca/keybindings.json'}
+                {keybindingSnapshot?.path ??
+                  translate(
+                    'auto.components.settings.ShortcutsPane.d8c988dab4',
+                    '~/.orca/keybindings.json'
+                  )}
               </span>{' '}
-              directly.
+              {translate('auto.components.settings.ShortcutsPane.4b7ae34062', 'directly.')}
             </>
           }
           action={<KeybindingsFileActions />}
@@ -361,7 +352,10 @@ export function ShortcutsPane(): React.JSX.Element {
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
+        {/* Below xl the rail stacks above the list in one column; pin the rail
+            row to its content (auto) and let the list row take the rest, so the
+            rail can't spill over the list the way two equal auto rows would. */}
+        <div className="grid min-h-0 flex-1 gap-6 max-xl:grid-rows-[auto_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">
           <ShortcutFilterRail
             query={shortcutQuery}
             onQueryChange={setShortcutQuery}
@@ -373,25 +367,61 @@ export function ShortcutsPane(): React.JSX.Element {
           />
 
           <ShortcutRowsList
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1 scrollbar-sleek"
+            // overflow-x-hidden is explicit: overflow-y-auto alone makes the
+            // browser compute overflow-x to auto, which produced the phantom
+            // horizontal scroll when long edit-time content popped in.
+            className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 scrollbar-sleek"
             groups={visibleShortcutGroups}
             platform={platform}
             errors={errors}
+            disableMemory={disableMemory}
             recordingActionId={recordingActionId}
-            onStartRecording={(actionId) => {
+            recordingBindingIndex={recordingBindingIndex}
+            onStartRecordingAt={(actionId, index) => {
               setRecordingActionId(actionId)
+              setRecordingBindingIndex(index)
               clearError(actionId)
             }}
-            onCancelRecording={() => setRecordingActionId(null)}
+            onAppendBinding={(actionId) => {
+              const current = effectiveBindingsForAction(actionId)
+              setRecordingActionId(actionId)
+              setRecordingBindingIndex(current.length)
+              clearError(actionId)
+            }}
+            onCancelRecording={() => {
+              setRecordingActionId(null)
+              setRecordingBindingIndex(null)
+            }}
             onCapture={(actionId, input) => void captureBinding(actionId, input)}
             onClearError={clearError}
-            onDisable={(actionId) => {
+            onRemoveBindingAt={(actionId, index) => {
+              // Keep a pending capture aimed at the right row after the removal
+              // shifts indices (or clear it if the recorded row itself is gone).
+              if (recordingActionId === actionId) {
+                const nextIndex = adjustRecordingIndexAfterRemove(recordingBindingIndex, index)
+                setRecordingBindingIndex(nextIndex)
+                if (nextIndex === null) {
+                  setRecordingActionId(null)
+                }
+              }
+              void removeBinding(actionId, index)
+            }}
+            onResetAction={(actionId) => {
+              clearRecordingForAction(actionId)
+              void resetBinding(actionId)
+            }}
+            onDisableAction={(actionId) => {
+              // Remember the current bindings first so "Enable" can restore them.
+              const current = effectiveBindingsForAction(actionId)
+              setDisableMemory((memory) => ({ ...memory, [actionId]: current }))
               clearRecordingForAction(actionId)
               void disableBinding(actionId)
             }}
-            onReset={(actionId) => {
-              clearRecordingForAction(actionId)
-              void resetBinding(actionId)
+            onEnableAction={(actionId) => {
+              const remembered = disableMemory[actionId]
+              if (remembered && remembered.length > 0) {
+                void saveBindings(actionId, remembered)
+              }
             }}
           />
         </div>

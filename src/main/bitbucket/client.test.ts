@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
@@ -8,8 +9,29 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-import { getBitbucketAuthStatus, getBitbucketPullRequestForBranch } from './client'
+import {
+  getBitbucketAuthStatus,
+  getBitbucketPullRequestForBranch,
+  getBitbucketPullRequestForBranchOrThrow
+} from './client'
 import { _resetBitbucketRepoRefCache } from './repository-ref'
+import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
+
+/** Serve the remote URL plus the #9171 default-branch resolver probes. */
+function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
+  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    if (args[0] === 'remote') {
+      return { stdout: 'git@bitbucket.org:team/repo.git\n', stderr: '' }
+    }
+    if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
+      return { stdout: `${defaultRef}\n`, stderr: '' }
+    }
+    if (args[0] === 'rev-parse' && args[1] === '--verify' && args.includes(defaultRef)) {
+      return { stdout: 'default-oid\n', stderr: '' }
+    }
+    throw new Error(`unexpected git call: ${args.join(' ')}`)
+  })
+}
 
 const OLD_ENV = process.env
 
@@ -45,7 +67,61 @@ describe('Bitbucket client', () => {
       stderr: ''
     })
     _resetBitbucketRepoRefCache()
+    __resetRepoDefaultBranchCacheForTests()
     vi.unstubAllGlobals()
+  })
+
+  it('hides a stale DECLINED PR whose source branch is the repo default branch (#9171)', async () => {
+    primeGitExecWithDefaultBranch()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/statuses/build')) {
+        return Response.json({ values: [] })
+      }
+      return Response.json({
+        values: [{ ...bitbucketPr(7), state: 'DECLINED', source: { branch: { name: 'main' } } }]
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getBitbucketPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toBeNull()
+  })
+
+  it('keeps an OPEN PR whose source branch is the repo default branch', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/statuses/build')) {
+        return Response.json({ values: [{ state: 'SUCCESSFUL' }] })
+      }
+      return Response.json({
+        values: [
+          { ...bitbucketPr(8), source: { branch: { name: 'main' }, commit: { hash: 'abc123' } } }
+        ]
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getBitbucketPullRequestForBranch('/repo', 'refs/heads/main')
+    ).resolves.toMatchObject({ number: 8, state: 'open' })
+  })
+
+  it('discards a MERGED default-branch shadow and refetches the linked PR via the fallback (#9171)', async () => {
+    primeGitExecWithDefaultBranch()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/statuses/build')) {
+        return Response.json({ values: [] })
+      }
+      if (url.endsWith('/pullrequests/42')) {
+        return Response.json(bitbucketPr(42))
+      }
+      return Response.json({
+        values: [{ ...bitbucketPr(7), state: 'MERGED', source: { branch: { name: 'main' } } }]
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getBitbucketPullRequestForBranch('/repo', 'refs/heads/main', 42)
+    ).resolves.toMatchObject({ number: 42 })
   })
 
   it('fetches a branch pull request and commit build status', async () => {
@@ -92,6 +168,19 @@ describe('Bitbucket client', () => {
     )
   })
 
+  it('getBitbucketPullRequestForBranchOrThrow surfaces a failure instead of null (finding 4)', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ error: 'forbidden' }, { status: 403 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    // The swallowing variant collapses a real failure into a false "no PR".
+    await expect(getBitbucketPullRequestForBranch('/repo', 'feature/bitbucket')).resolves.toBeNull()
+    // The throwing variant makes the failure visible so eligibility records
+    // `unavailable` rather than a false "No pull request found".
+    await expect(
+      getBitbucketPullRequestForBranchOrThrow('/repo', 'feature/bitbucket')
+    ).rejects.toThrow(/Bitbucket request failed/)
+  })
+
   it('falls back to a linked PR number when branch lookup misses', async () => {
     const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
       if (url.includes('/statuses/build')) {
@@ -121,5 +210,20 @@ describe('Bitbucket client', () => {
       authenticated: true,
       account: 'bitbucket-user'
     })
+  })
+
+  it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
+    let cancelledBodies = 0
+    const fetchMock = vi.fn(async () =>
+      cancelTrackingResponse(502, () => {
+        cancelledBodies += 1
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/bitbucket')
+
+    expect(fetchMock).toHaveBeenCalled()
+    expect(cancelledBodies).toBe(fetchMock.mock.calls.length)
   })
 })

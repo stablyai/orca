@@ -1,4 +1,9 @@
-import { RuntimeClientError } from './runtime-client'
+import { RuntimeClientError } from './runtime/types'
+import { unknownCommandData, unknownFlagData } from './command-suggestion'
+import { specPaths, type CommandSpec } from './command-spec'
+
+export { specPaths }
+export type { CommandSpec }
 
 export type ParsedArgs = {
   commandPath: string[]
@@ -6,19 +11,79 @@ export type ParsedArgs = {
   positionalFlagConflicts?: string[]
 }
 
-export type CommandSpec = {
-  path: string[]
-  summary: string
-  usage: string
-  allowedFlags: string[]
-  positionalArgs?: string[]
-  examples?: string[]
-  notes?: string[]
+export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
+const GLOBAL_VALUE_FLAGS = new Set(['pairing-code', 'environment'])
+export const BOOLEAN_FLAGS = new Set([
+  'all',
+  'attachments',
+  'children',
+  'comments',
+  'connect',
+  'current',
+  'dry-run',
+  'enter',
+  'focus',
+  'force',
+  'full',
+  'help',
+  'inject',
+  'include-archived',
+  'interrupt',
+  'json',
+  'local',
+  'messages',
+  'me',
+  'mobile',
+  'mobile-pairing',
+  'no-pairing',
+  'parent-current',
+  'provision',
+  'ready',
+  'recipe-json',
+  'relations',
+  'reinstall',
+  'restore-window',
+  'return-preamble',
+  'run-hooks',
+  'show-profile',
+  'staged',
+  'tab',
+  'tasks',
+  'text-stdin',
+  'unread',
+  'value-stdin',
+  'wait'
+])
+
+export const REPEATED_FLAG_SEPARATOR = '\u0000'
+const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
+
+function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
+  const existing = flags.get(name)
+  if (typeof existing === 'string' && REPEATABLE_STRING_FLAGS.has(name)) {
+    flags.set(name, `${existing}${REPEATED_FLAG_SEPARATOR}${value}`)
+    return
+  }
+  flags.set(name, value)
 }
 
-export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
+function commandPathStartsAt(argv: string[], tokenIndex: number, path: string[]): boolean {
+  let cursor = tokenIndex
+  for (const part of path) {
+    while (argv[cursor]?.startsWith('--')) {
+      const assignment = argv[cursor].slice(2)
+      const flag = assignment.split('=', 1)[0]
+      cursor += assignment.includes('=') || BOOLEAN_FLAGS.has(flag) ? 1 : 2
+    }
+    if (argv[cursor] !== part) {
+      return false
+    }
+    cursor += 1
+  }
+  return true
+}
 
-export function parseArgs(argv: string[]): ParsedArgs {
+export function parseArgs(argv: string[], commandPaths?: readonly string[][]): ParsedArgs {
   const commandPath: string[] = []
   const flags = new Map<string, string | boolean>()
 
@@ -35,18 +100,29 @@ export function parseArgs(argv: string[]): ParsedArgs {
     // treats a `--`-leading next token as a new flag, so it can't express one.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
-      flags.set(assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      setFlagValue(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
       continue
     }
 
     const flag = assignment
+    if (BOOLEAN_FLAGS.has(flag)) {
+      flags.set(flag, true)
+      continue
+    }
+    // Why: a pre-command flag must not consume a registry-resolvable command path.
+    const startsCommandAt = (tokenIndex: number): boolean =>
+      commandPaths?.some((path) => commandPathStartsAt(argv, tokenIndex, path)) ?? false
+    if (commandPath.length === 0 && startsCommandAt(i + 1) && !startsCommandAt(i + 2)) {
+      flags.set(flag, true)
+      continue
+    }
     const hasNext = i + 1 < argv.length
     const next = argv[i + 1]
     if (!hasNext || next.startsWith('--')) {
       flags.set(flag, true)
       continue
     }
-    flags.set(flag, next)
+    setFlagValue(flags, flag, next)
     i += 1
   }
 
@@ -76,15 +152,21 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   }
   if (
     [
+      'account',
       'automations',
+      'project',
       'repo',
       'worktree',
       'terminal',
       'file',
       'orchestration',
       'computer',
+      'emulator',
       'note',
-      'diagnostics'
+      'diagnostics',
+      'linear',
+      'skills',
+      'agent-context'
     ].includes(commandPath[0])
   ) {
     return false
@@ -99,11 +181,27 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   ].includes(joined)
 }
 
+// Why: validation and agent discovery must expose the same effective flag set.
+export function effectiveAllowedFlags(spec: CommandSpec): string[] {
+  if (spec.argumentMode === 'passthrough') {
+    return []
+  }
+  return [
+    ...new Set([
+      ...GLOBAL_FLAGS,
+      ...spec.allowedFlags,
+      ...(supportsBrowserPageFlag(spec.path) ? ['page'] : [])
+    ])
+  ]
+}
+
 export function isCommandGroup(commandPath: string[]): boolean {
   return (
     (commandPath.length === 1 &&
       [
+        'account',
         'automations',
+        'project',
         'repo',
         'worktree',
         'terminal',
@@ -119,9 +217,13 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'storage',
         'orchestration',
         'computer',
+        'emulator',
         'agent',
         'environment',
-        'diagnostics'
+        'diagnostics',
+        'linear',
+        'skills',
+        'vm'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
     (commandPath.length === 2 &&
@@ -133,26 +235,35 @@ export function isCommandGroup(commandPath: string[]): boolean {
 export function normalizeCommandPositionals(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
   for (const spec of specs) {
     const positionalArgs = spec.positionalArgs ?? []
-    if (positionalArgs.length === 0) {
+    // Why: aliased paths still need canonicalization when there are no positionals.
+    if (positionalArgs.length === 0 && !spec.aliases) {
       continue
     }
-    if (parsed.commandPath.length !== spec.path.length + positionalArgs.length) {
-      continue
-    }
-    if (!matches(parsed.commandPath.slice(0, spec.path.length), spec.path)) {
-      continue
-    }
-    const flags = new Map(parsed.flags)
-    const values = parsed.commandPath.slice(spec.path.length)
-    // Why: validation runs inside main's error-reporting path, so normalization
-    // records ambiguity instead of throwing before CLI errors can be formatted.
-    const positionalFlagConflicts = positionalArgs.filter((name) => flags.has(name))
-    positionalArgs.forEach((name, index) => {
-      if (!flags.has(name)) {
-        flags.set(name, values[index])
+    // Why: canonicalize aliases before validation and dispatch so both use one key.
+    for (const base of specPaths(spec)) {
+      // Why: `< 0` (not `<= 0`) so an exact base match with zero positionals
+      // still canonicalizes an aliased path; upper bound guards over-consumption.
+      const positionalCount = parsed.commandPath.length - base.length
+      if (positionalCount < 0 || positionalCount > positionalArgs.length) {
+        continue
       }
-    })
-    return { commandPath: spec.path, flags, positionalFlagConflicts }
+      if (!matches(parsed.commandPath.slice(0, base.length), base)) {
+        continue
+      }
+      const flags = new Map(parsed.flags)
+      const values = parsed.commandPath.slice(base.length)
+      // Why: validation runs inside main's error-reporting path, so normalization
+      // records ambiguity instead of throwing before CLI errors can be formatted.
+      const providedPositionals = values.map((_, index) => positionalArgs[index])
+      const positionalFlagConflicts = providedPositionals.filter((name) => flags.has(name))
+      values.forEach((value, index) => {
+        const name = positionalArgs[index]
+        if (!flags.has(name)) {
+          flags.set(name, value)
+        }
+      })
+      return { commandPath: spec.path, flags, positionalFlagConflicts }
+    }
   }
   return parsed
 }
@@ -161,7 +272,7 @@ export function findCommandSpec(
   specs: CommandSpec[],
   commandPath: string[]
 ): CommandSpec | undefined {
-  return specs.find((spec) => matches(spec.path, commandPath))
+  return specs.find((spec) => specPaths(spec).some((candidate) => matches(candidate, commandPath)))
 }
 
 export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs): void {
@@ -169,7 +280,8 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
   if (!spec) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Unknown command: ${parsed.commandPath.join(' ')}`
+      `Unknown command: ${parsed.commandPath.join(' ')}`,
+      unknownCommandData(specs, parsed.commandPath)
     )
   }
 
@@ -182,16 +294,17 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
     )
   }
 
-  for (const flag of parsed.flags.keys()) {
+  const pageAllowed = supportsBrowserPageFlag(spec.path)
+  for (const [flag, value] of parsed.flags) {
     const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
-    if (
-      !isGlobalFlag &&
-      !spec.allowedFlags.includes(flag) &&
-      !(flag === 'page' && supportsBrowserPageFlag(spec.path))
-    ) {
+    if (GLOBAL_VALUE_FLAGS.has(flag) && (typeof value !== 'string' || value.length === 0)) {
+      throw new RuntimeClientError('invalid_argument', `Flag --${flag} requires a value.`)
+    }
+    if (!isGlobalFlag && !spec.allowedFlags.includes(flag) && !(flag === 'page' && pageAllowed)) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `Unknown flag --${flag} for command: ${spec.path.join(' ')}`
+        `Unknown flag --${flag} for command: ${spec.path.join(' ')}`,
+        unknownFlagData(flag, effectiveAllowedFlags(spec))
       )
     }
   }

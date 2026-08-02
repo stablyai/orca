@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getDiffSectionBodyHeight,
+  getLargeDiffFallbackBodyHeight,
   getDiffSectionEstimatedHeight,
   isIntrinsicHeightImageDiff
 } from './diff-section-layout'
@@ -16,6 +17,10 @@ describe('diff section layout', () => {
         useIntrinsicImageHeight: false
       })
     ).toBe(139)
+  })
+
+  it('uses a bounded fallback height for oversized diffs before measurement', () => {
+    expect(getLargeDiffFallbackBodyHeight()).toBe(160)
   })
 
   it('falls back to line-count height before Monaco has mounted', () => {
@@ -58,6 +63,39 @@ describe('diff section layout', () => {
         useIntrinsicImageHeight: false
       })
     ).toBe(1539)
+  })
+
+  it('estimates line-count height without allocating split arrays', () => {
+    const originalSplit = String.prototype.split
+    const patchedSplit = function patchedSplit(
+      this: string,
+      separator?: unknown,
+      limit?: number
+    ): string[] {
+      if (String(this).startsWith('line 0')) {
+        throw new Error('layout should not split full diff content')
+      }
+      const args = limit === undefined ? [separator] : [separator, limit]
+      return Reflect.apply(originalSplit, this, args) as string[]
+    } as typeof String.prototype.split
+    String.prototype.split = patchedSplit
+
+    try {
+      const largeUnchangedFile = Array.from({ length: 10_000 }, (_, index) => `line ${index}`).join(
+        '\n'
+      )
+
+      expect(
+        getDiffSectionBodyHeight({
+          measuredContentHeight: undefined,
+          originalContent: largeUnchangedFile,
+          modifiedContent: `${largeUnchangedFile}\nchanged`,
+          useIntrinsicImageHeight: false
+        })
+      ).toBe(1539)
+    } finally {
+      String.prototype.split = originalSplit
+    }
   })
 
   it('keeps empty text sections visible', () => {
@@ -145,6 +183,34 @@ describe('diff section layout', () => {
         useIntrinsicImageHeight: false
       })
     ).toBe(294)
+  })
+
+  it('uses bounded fallback height for oversized virtualized sections', () => {
+    expect(
+      getDiffSectionEstimatedHeight({
+        collapsed: false,
+        measuredContentHeight: undefined,
+        originalContent: '',
+        modifiedContent: 'one',
+        changedLineCount: 200_000,
+        useIntrinsicImageHeight: false,
+        isLargeDiffLimited: true
+      })
+    ).toBe(188)
+  })
+
+  it('ignores stale Monaco measurements for oversized virtualized sections', () => {
+    expect(
+      getDiffSectionEstimatedHeight({
+        collapsed: false,
+        measuredContentHeight: 3_800_000,
+        originalContent: '',
+        modifiedContent: 'one',
+        changedLineCount: 200_000,
+        useIntrinsicImageHeight: false,
+        isLargeDiffLimited: true
+      })
+    ).toBe(188)
   })
 
   it('estimates collapsed virtualized sections as header-only rows', () => {

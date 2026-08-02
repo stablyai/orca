@@ -15,6 +15,9 @@ import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
+import { translate } from '@/i18n/i18n'
+import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
+import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 
 const NON_GIT_REPO_ERROR = 'Not a valid git repository'
 
@@ -73,21 +76,23 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         if ('error' in result) {
           throw new Error(result.error)
         }
-        repo = result.repo
-        const state = useAppStore.getState()
-        const existingIdx = state.repos.findIndex((r) => r.id === repo?.id)
-        if (existingIdx !== -1) {
-          state.clearOrcaHookTrustForRepo(repo.id)
-          const updated = [...state.repos]
-          updated[existingIdx] = repo
-          useAppStore.setState({ repos: updated })
-        } else {
-          useAppStore.setState({ repos: [...state.repos, repo] })
+        const upserted = upsertAddedRepoWithProjectHostSetup(result.repo, {
+          sshConnectionId: connectionId
+        })
+        repo = upserted.repo
+        if (upserted.alreadyPresent) {
+          useAppStore.getState().clearOrcaHookTrustForRepo(repo.id)
         }
         if (!mountedRef.current || gen !== addGenRef.current) {
           return
         }
-        toast.success('Remote project added', { description: repo.displayName })
+        toast.success(
+          translate(
+            'auto.components.sidebar.AddProjectFromFolderDialog.e643b30398',
+            'Project added on SSH host'
+          ),
+          { description: repo.displayName }
+        )
       } else {
         repo = await addRepoPath(folderPath)
       }
@@ -104,13 +109,16 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
       }
       // Why: after the repo is already added, a non-authoritative refresh
       // should still close onto the project row instead of trapping the user.
-      await fetchWorktrees(repo.id, { requireAuthoritative: true })
+      const ownerOptions = worktreeRefreshOptions(null, connectionId)
+      await fetchWorktrees(repo.id, ownerOptions)
       if (!mountedRef.current || gen !== addGenRef.current) {
         return
       }
       await finishProjectAddWithDefaultCheckout({
         repoId: repo.id,
         source: connectionId ? 'ssh_remote_path' : 'local_folder_picker',
+        selectedPath: folderPath,
+        executionHostId: ownerOptions.executionHostId,
         closeModal,
         setHideDefaultBranchWorkspace
       })
@@ -156,8 +164,18 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add Project</DialogTitle>
-          <DialogDescription>Add this folder as a separate Orca project.</DialogDescription>
+          <DialogTitle>
+            {translate(
+              'auto.components.sidebar.AddProjectFromFolderDialog.7d1f51678c',
+              'Add Project'
+            )}
+          </DialogTitle>
+          <DialogDescription>
+            {translate(
+              'auto.components.sidebar.AddProjectFromFolderDialog.046751dbfb',
+              'Add this folder as a separate Orca project.'
+            )}
+          </DialogDescription>
         </DialogHeader>
 
         {folderPath && (
@@ -170,7 +188,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>
-            Cancel
+            {translate('auto.components.sidebar.AddProjectFromFolderDialog.7726a16374', 'Cancel')}
           </Button>
           <Button onClick={handleConfirm} disabled={!folderPath || isAdding}>
             {isAdding ? (
@@ -178,7 +196,10 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
             ) : (
               <FolderPlus className="size-4" />
             )}
-            Add Project
+            {translate(
+              'auto.components.sidebar.AddProjectFromFolderDialog.7d1f51678c',
+              'Add Project'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -11,6 +11,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import type { LinearTeam } from '../../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { translate } from '@/i18n/i18n'
 
 type TeamMultiComboboxProps = {
   teams: LinearTeam[]
@@ -20,12 +22,46 @@ type TeamMultiComboboxProps = {
   triggerClassName?: string
 }
 
+export const TEAM_MULTI_COMBOBOX_QUERY_MAX_BYTES = 2 * 1024
+
+export function isTeamMultiComboboxQueryTooLarge(
+  query: string,
+  maxBytes = TEAM_MULTI_COMBOBOX_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
+export function filterTeamMultiComboboxTeams(
+  teams: readonly LinearTeam[],
+  query: string
+): readonly LinearTeam[] {
+  if (isTeamMultiComboboxQueryTooLarge(query)) {
+    return []
+  }
+  const trimmedQuery = query.trim()
+  if (!trimmedQuery) {
+    return teams
+  }
+  const lower = trimmedQuery.toLowerCase()
+  return teams.filter(
+    (team) => team.name.toLowerCase().includes(lower) || team.key.toLowerCase().includes(lower)
+  )
+}
+
 function renderTriggerLabel(teams: LinearTeam[], selected: ReadonlySet<string>): React.JSX.Element {
   if (teams.length === 0) {
-    return <span className="inline-flex min-w-0 items-center gap-1.5">All teams</span>
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        {translate('auto.components.ui.team.multi.combobox.301f2a796e', 'All teams')}
+      </span>
+    )
   }
   if (selected.size === teams.length) {
-    return <span className="inline-flex min-w-0 items-center gap-1.5">All teams</span>
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        {translate('auto.components.ui.team.multi.combobox.301f2a796e', 'All teams')}
+      </span>
+    )
   }
   const selectedTeams = teams.filter((t) => selected.has(t.id))
   const [first, second, ...rest] = selectedTeams
@@ -49,15 +85,7 @@ export default function TeamMultiCombobox({
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
 
-  const filteredTeams = useMemo(() => {
-    if (!query) {
-      return teams
-    }
-    const lower = query.toLowerCase()
-    return teams.filter(
-      (t) => t.name.toLowerCase().includes(lower) || t.key.toLowerCase().includes(lower)
-    )
-  }, [teams, query])
+  const filteredTeams = useMemo(() => filterTeamMultiComboboxTeams(teams, query), [teams, query])
 
   const allSelected = selected.size === teams.length && teams.length > 0
 
@@ -119,7 +147,10 @@ export default function TeamMultiCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder="Search teams..."
+            placeholder={translate(
+              'auto.components.ui.team.multi.combobox.18ec58881e',
+              'Search teams...'
+            )}
             value={query}
             onValueChange={setQuery}
             className="text-xs"
@@ -141,11 +172,18 @@ export default function TeamMultiCombobox({
                   allSelected ? 'opacity-70' : 'opacity-0'
                 )}
               />
-              <span>All teams</span>
+              <span>
+                {translate('auto.components.ui.team.multi.combobox.301f2a796e', 'All teams')}
+              </span>
             </button>
           </div>
           <CommandList>
-            <CommandEmpty>No teams match your search.</CommandEmpty>
+            <CommandEmpty>
+              {translate(
+                'auto.components.ui.team.multi.combobox.de83523bf9',
+                'No teams match your search.'
+              )}
+            </CommandEmpty>
             {filteredTeams.map((team) => {
               const isSelected = selected.has(team.id)
               const isLastSelected = isSelected && selected.size <= 1

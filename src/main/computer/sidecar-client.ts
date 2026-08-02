@@ -1,5 +1,5 @@
-import { fork, type ChildProcess } from 'child_process'
-import { join } from 'path'
+import { fork, type ChildProcess } from 'node:child_process'
+import { join } from 'node:path'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -7,6 +7,8 @@ import type {
   ComputerProviderCapabilities,
   ComputerSnapshotResult
 } from '../../shared/runtime-types'
+import { normalizeComputerActionResult } from './computer-action-verification-normalization'
+import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
 
 type ComputerSidecarMethod =
@@ -47,16 +49,6 @@ let sidecar: ComputerSidecarProcess | null = null
 // stale children keep a no-op listener that does not retain the sidecar owner.
 function ignoreStaleChildError(): void {}
 
-export function shouldUseComputerSidecar(): boolean {
-  return (
-    (process.platform === 'darwin' ||
-      process.platform === 'linux' ||
-      process.platform === 'win32') &&
-    typeof process.versions.electron === 'string' &&
-    process.env.ORCA_COMPUTER_SIDECAR !== '1'
-  )
-}
-
 export async function callComputerSidecarListApps(): Promise<ComputerListAppsResult> {
   return (await getComputerSidecar().call('listApps', {})) as ComputerListAppsResult
 }
@@ -84,7 +76,13 @@ export async function callComputerSidecarAction(
   >,
   params: unknown
 ): Promise<ComputerActionResult> {
-  return (await getComputerSidecar().call(method, params)) as ComputerActionResult
+  const validation = validateComputerSidecarPasteText(method, params)
+  if (validation) {
+    await validation
+  }
+  return normalizeComputerActionResult(
+    (await getComputerSidecar().call(method, params)) as ComputerActionResult
+  )
 }
 
 export function resetComputerSidecarForTest(): void {
@@ -122,11 +120,46 @@ class ComputerSidecarProcess {
   private childListenerCleanup: (() => void) | null = null
   private nextId = 1
   private pending = new Map<number, PendingRequest>()
+  private queueTail: Promise<void> | null = null
+  private queueGeneration = 0
 
   constructor(private readonly entryPath: string) {}
 
   call(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
+    const generation = this.queueGeneration
+    const run = () => {
+      if (generation !== this.queueGeneration) {
+        throw new RuntimeClientError(
+          'accessibility_error',
+          'computer sidecar queue was invalidated; retry the computer-use request'
+        )
+      }
+      return this.send(method, params)
+    }
+    const result = this.queueTail ? this.queueTail.then(run, run) : run()
+    const tail = result.then(
+      () => undefined,
+      () => undefined
+    )
+    this.queueTail = tail
+    void tail.finally(() => {
+      if (this.queueTail === tail) {
+        this.queueTail = null
+      }
+    })
+    return result
+  }
+
+  private send(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
     const child = this.ensureStarted()
+    if (!child.send) {
+      const error = new RuntimeClientError(
+        'accessibility_error',
+        'computer sidecar IPC is unavailable'
+      )
+      this.failActiveChild(child, error)
+      return Promise.reject(error)
+    }
     const id = this.nextId++
     const request: ComputerSidecarRequest = { id, method, params }
 
@@ -138,13 +171,18 @@ class ComputerSidecarProcess {
       }, REQUEST_TIMEOUT_MS)
 
       this.pending.set(id, { resolve, reject, timer })
-      child.send?.(request, (error) => {
+      child.send(request, (error) => {
         if (!error) {
+          return
+        }
+        const wrapped = new RuntimeClientError('accessibility_error', error.message)
+        if (this.child === child) {
+          this.failActiveChild(child, wrapped)
           return
         }
         clearTimeout(timer)
         this.pending.delete(id)
-        reject(new RuntimeClientError('accessibility_error', error.message))
+        reject(wrapped)
       })
     })
   }
@@ -152,6 +190,7 @@ class ComputerSidecarProcess {
   shutdown(): void {
     const child = this.child
     this.child = null
+    this.queueGeneration++
     this.cleanupActiveChildListeners()
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer)
@@ -230,6 +269,7 @@ class ComputerSidecarProcess {
     }
     this.cleanupActiveChildListeners()
     this.child = null
+    this.queueGeneration++
     const detail = signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`
     const error = new RuntimeClientError(
       'accessibility_error',
@@ -250,12 +290,17 @@ class ComputerSidecarProcess {
     this.cleanupActiveChildListeners()
     // Why: an active process error makes the IPC sidecar unreliable; restart
     // on the next call instead of reusing a broken helper.
+    this.failActiveChild(child, new RuntimeClientError('accessibility_error', error.message))
+  }
+
+  private failActiveChild(child: ChildProcess, error: RuntimeClientError): void {
+    this.cleanupActiveChildListeners()
     this.child = null
+    this.queueGeneration++
     child.kill('SIGTERM')
-    const wrapped = new RuntimeClientError('accessibility_error', error.message)
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer)
-      pending.reject(wrapped)
+      pending.reject(error)
       this.pending.delete(id)
     }
   }

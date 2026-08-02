@@ -24,6 +24,24 @@ function markdownCommandItem(
   }
 }
 
+function editableContextPasteItem(
+  label: string,
+  webContents: EditableContextMenuWebContents,
+  options?: { plainTextOnly?: boolean }
+): Electron.MenuItemConstructorOptions {
+  return {
+    label,
+    click: () => {
+      // Why: context-menu paste must share renderer ownership with keyboard and
+      // app-menu paste so large text controls can chunk and terminals cannot
+      // receive duplicate native paste.
+      webContents.send('ui:editableContextPaste', {
+        plainTextOnly: options?.plainTextOnly === true
+      })
+    }
+  }
+}
+
 function buildMarkdownMenuTemplate(
   webContents: EditableContextMenuWebContents,
   point: { x: number; y: number }
@@ -49,6 +67,8 @@ function buildMarkdownMenuTemplate(
         markdownCommandItem('Heading 1', 'heading-1', webContents, point),
         markdownCommandItem('Heading 2', 'heading-2', webContents, point),
         markdownCommandItem('Heading 3', 'heading-3', webContents, point),
+        markdownCommandItem('Heading 4', 'heading-4', webContents, point),
+        markdownCommandItem('Heading 5', 'heading-5', webContents, point),
         { type: 'separator' },
         markdownCommandItem('Bullet list', 'bullet-list', webContents, point),
         markdownCommandItem('Numbered list', 'ordered-list', webContents, point),
@@ -67,18 +87,20 @@ function buildMarkdownMenuTemplate(
     { type: 'separator' },
     { role: 'cut' },
     { role: 'copy' },
-    { role: 'paste' },
-    { role: 'pasteAndMatchStyle', label: 'Paste as plain text' },
+    editableContextPasteItem('Paste', webContents),
+    editableContextPasteItem('Paste as plain text', webContents, { plainTextOnly: true }),
     { role: 'selectAll' }
   ]
 }
 
-function buildNativeEditMenuTemplate(): Electron.MenuItemConstructorOptions[] {
+function buildNativeEditMenuTemplate(
+  webContents: EditableContextMenuWebContents
+): Electron.MenuItemConstructorOptions[] {
   return [
     { role: 'cut' },
     { role: 'copy' },
-    { role: 'paste' },
-    { role: 'pasteAndMatchStyle', label: 'Paste as plain text' },
+    editableContextPasteItem('Paste', webContents),
+    editableContextPasteItem('Paste as plain text', webContents, { plainTextOnly: true }),
     { role: 'selectAll' }
   ]
 }
@@ -93,10 +115,6 @@ export function buildEditableContextMenuTemplate(
 
   const suggestions = params.dictionarySuggestions.slice(0, 5)
   const isRichMarkdownSurface = params.formControlType === 'none'
-  if (!isRichMarkdownSurface && suggestions.length === 0 && !params.misspelledWord) {
-    return []
-  }
-
   const template: Electron.MenuItemConstructorOptions[] = suggestions.map((suggestion) => ({
     label: suggestion,
     click: () => webContents.replaceMisspelling(suggestion)
@@ -120,7 +138,7 @@ export function buildEditableContextMenuTemplate(
   template.push(
     ...(isRichMarkdownSurface
       ? buildMarkdownMenuTemplate(webContents, { x: params.x, y: params.y })
-      : buildNativeEditMenuTemplate())
+      : buildNativeEditMenuTemplate(webContents))
   )
 
   return template

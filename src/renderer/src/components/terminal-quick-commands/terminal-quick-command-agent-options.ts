@@ -1,5 +1,5 @@
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog'
 import { supportsTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import type { TuiAgent } from '../../../../shared/types'
 
@@ -22,7 +22,7 @@ const QUICK_COMMAND_AGENT_ORDER_RANK = new Map<TuiAgent, number>(
 )
 
 export function getTerminalQuickCommandAgentOptions(
-  catalog: readonly AgentCatalogEntry[] = AGENT_CATALOG
+  catalog: readonly AgentCatalogEntry[] = getAgentCatalog()
 ): AgentCatalogEntry[] {
   const catalogOrder = new Map<TuiAgent, number>(catalog.map((entry, index) => [entry.id, index]))
 

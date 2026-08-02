@@ -1,131 +1,98 @@
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
-// Why: keep these shapes in lockstep with src/shared/types.ts and
-// src/shared/rate-limit-types.ts. We don't import from desktop here because
-// the mobile bundle must not pull in Electron-coupled type files.
-export type RateLimitWindow = {
-  usedPercent: number
-  windowMinutes: number
-  resetsAt: number | null
-  resetDescription: string | null
-}
+// Pure types and selectors live in account-usage-state.ts (no RN imports) so
+// they are unit-testable; re-exported here so existing import sites are stable.
+export type {
+  RateLimitWindow,
+  ProviderRateLimits,
+  InactiveAccountUsage,
+  ClaudeAccountSummary,
+  CodexAccountSummary,
+  AccountsSnapshot,
+  ProviderKey,
+  UsageBarState
+} from './account-usage-state'
+export {
+  decodeAccountsSnapshot,
+  getActiveProviderRateLimits,
+  getInactiveProviderUsage,
+  getUsageBarState,
+  getWindowResetLabel,
+  hasActiveProviderUsage,
+  hasRenderableUsage
+} from './account-usage-state'
 
-export type ProviderRateLimits = {
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go'
-  session: RateLimitWindow | null
-  weekly: RateLimitWindow | null
-  monthly?: RateLimitWindow | null
-  updatedAt: number
-  error: string | null
-  status: 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
-}
-
-export type InactiveAccountUsage = {
-  accountId: string
-  claude: ProviderRateLimits | null
-  updatedAt: number
-  isFetching: boolean
-}
-
-export type ClaudeAccountSummary = {
-  id: string
-  email: string
-  organizationName?: string | null
-}
-
-export type CodexAccountSummary = {
-  id: string
-  email: string
-  workspaceLabel?: string | null
-}
-
-export type AccountsSnapshot = {
-  claude: { accounts: ClaudeAccountSummary[]; activeAccountId: string | null }
-  codex: { accounts: CodexAccountSummary[]; activeAccountId: string | null }
-  rateLimits: {
-    claude: ProviderRateLimits | null
-    codex: ProviderRateLimits | null
-    inactiveClaudeAccounts: InactiveAccountUsage[]
-    inactiveCodexAccounts: InactiveAccountUsage[]
-  }
-}
-
-export type ProviderKey = 'claude' | 'codex'
-
-export function getActiveProviderRateLimits(
-  snapshot: AccountsSnapshot,
-  provider: ProviderKey
-): ProviderRateLimits | null {
-  return provider === 'claude' ? snapshot.rateLimits.claude : snapshot.rateLimits.codex
-}
-
-export function getInactiveProviderUsage(
-  snapshot: AccountsSnapshot,
-  provider: ProviderKey,
-  accountId: string
-): InactiveAccountUsage | null {
-  const list =
-    provider === 'claude'
-      ? snapshot.rateLimits.inactiveClaudeAccounts
-      : snapshot.rateLimits.inactiveCodexAccounts
-  return list.find((u) => u.accountId === accountId) ?? null
-}
-
-// Why: matches desktop StatusBar convention — bars show percent remaining
-// (so a fresh account renders full, a depleted one renders empty), not
-// percent used. Color thresholds invert accordingly.
+// Why: matches desktop StatusBar — bars show percent used (consumption), same
+// as Claude/Codex harness meters. Fresh account is empty/green; depleted is
+// full/red.
 export function UsageBar({
   label,
   usedPercent,
   unavailable,
-  loading
+  loading,
+  resetText
 }: {
   label: string
   usedPercent: number | null
   unavailable: boolean
   loading?: boolean
+  resetText?: string | null
 }) {
-  const remaining = usedPercent == null ? null : Math.max(0, Math.min(100, 100 - usedPercent))
+  // Why: round then clamp so bar width, color, and label share one value (desktop parity).
+  const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
+  // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
   const barColor =
-    remaining == null
+    used == null
       ? colors.textMuted
-      : remaining <= 10
+      : used >= 80
         ? colors.statusRed
-        : remaining <= 30
+        : used >= 60
           ? colors.statusAmber
           : colors.statusGreen
   return (
-    <View style={styles.usageBar}>
-      <Text style={styles.usageLabel}>{label}</Text>
-      <View style={styles.usageTrack}>
-        <View
-          style={[
-            styles.usageFill,
-            {
-              width: `${remaining ?? 0}%`,
-              backgroundColor: unavailable ? colors.textMuted : barColor
-            }
-          ]}
-        />
+    <View style={styles.usageBarColumn}>
+      <View style={styles.usageBar}>
+        <Text style={styles.usageLabel}>{label}</Text>
+        <View style={styles.usageTrack}>
+          <View
+            style={[
+              styles.usageFill,
+              {
+                width: `${used ?? 0}%`,
+                backgroundColor: unavailable ? colors.textMuted : barColor
+              }
+            ]}
+          />
+        </View>
+        {loading ? (
+          <ActivityIndicator
+            size="small"
+            color={colors.textSecondary}
+            style={styles.usageSpinner}
+          />
+        ) : (
+          <Text style={styles.usageValue}>{unavailable || used == null ? '—' : `${used}%`}</Text>
+        )}
       </View>
-      {loading ? (
-        <ActivityIndicator size="small" color={colors.textSecondary} style={styles.usageSpinner} />
-      ) : (
-        <Text style={styles.usageValue}>
-          {unavailable || remaining == null ? '—' : `${Math.round(remaining)}%`}
+      {resetText ? (
+        <Text style={styles.usageResetText} numberOfLines={1}>
+          {resetText}
         </Text>
-      )}
+      ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  usageBarColumn: {
+    flex: 1,
+    gap: 2
+  },
   usageBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    flex: 1
+    gap: spacing.xs
   },
   usageLabel: {
     fontSize: typography.metaSize,
@@ -151,5 +118,12 @@ const styles = StyleSheet.create({
   },
   usageSpinner: {
     width: 36
+  },
+  // Why: indented past the window label so the countdown aligns with the
+  // start of the track above it.
+  usageResetText: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    marginLeft: 22 + spacing.xs
   }
 })

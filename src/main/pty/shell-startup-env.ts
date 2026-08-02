@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'fs'
-import { basename, join } from 'path'
+import { existsSync, readFileSync } from 'node:fs'
+import { posix } from 'node:path'
 
 // Why: only files the user's actual shell would source. Mixing zsh and bash
 // files breaks the "last assignment wins matches the live shell" guarantee —
@@ -11,6 +11,10 @@ const ZSH_AFTER_ENV_FILES = ['.zprofile', '.zshrc', '.zlogin']
 // .bash_profile / .bash_login / .profile but intentionally does NOT force
 // .bashrc. Scanning .bashrc would mirror values the live Orca bash never sees.
 const BASH_LOGIN_FILES = ['.bash_profile', '.bash_login', '.profile']
+
+export function isShellStartupEnvProbeSupported(): boolean {
+  return process.platform !== 'win32'
+}
 
 function parseExportedValue(content: string, name: string, home: string): string | undefined {
   const assignment = new RegExp(`^export\\s+${name}=(.+)$`)
@@ -54,12 +58,12 @@ function shellStartupFilePaths(home: string, shell: string | undefined): readonl
     return zshStartupFilePaths(home)
   }
 
-  const name = basename(shell).toLowerCase()
+  const name = posix.basename(shell).toLowerCase()
   if (name === 'zsh') {
     return zshStartupFilePaths(home)
   }
   if (name === 'bash') {
-    return BASH_LOGIN_FILES.map((file) => join(home, file))
+    return BASH_LOGIN_FILES.map((file) => posix.join(home, file))
   }
   // Why: unsupported explicit shells (fish, nushell, custom wrappers) do not
   // use Orca's zsh/bash shell-ready startup files, so scanning those files
@@ -68,13 +72,13 @@ function shellStartupFilePaths(home: string, shell: string | undefined): readonl
 }
 
 function zshStartupFilePaths(home: string): readonly string[] {
-  const zshEnvPath = join(home, ZSH_ENV_FILE)
+  const zshEnvPath = posix.join(home, ZSH_ENV_FILE)
   const zshEnv = readStartupFile(zshEnvPath)
   // Why: zsh sources ~/.zshenv first, then uses any ZDOTDIR exported there
   // for .zprofile/.zshrc/.zlogin. Mirror that enough for static env discovery
   // so users who keep zsh config in ~/.config/zsh do not lose overlay sources.
   const zshDir = zshEnv ? (parseExportedValue(zshEnv, 'ZDOTDIR', home) ?? home) : home
-  return [zshEnvPath, ...ZSH_AFTER_ENV_FILES.map((file) => join(zshDir, file))]
+  return [zshEnvPath, ...ZSH_AFTER_ENV_FILES.map((file) => posix.join(zshDir, file))]
 }
 
 function unquoteShellValue(value: string): { text: string; quoted: '"' | "'" | null } {
@@ -151,7 +155,7 @@ export function readShellStartupEnvVar(
   home = process.env.HOME,
   shell = process.env.SHELL
 ): string | undefined {
-  if (!home || process.platform === 'win32') {
+  if (!home || !isShellStartupEnvProbeSupported()) {
     return undefined
   }
   // Why: the regex above is fixed; rejecting unsafe names is cheap defense

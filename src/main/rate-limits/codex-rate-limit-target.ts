@@ -1,14 +1,14 @@
 import type { GlobalSettings } from '../../shared/types'
+import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import {
   getWslSelectionKey,
   normalizeCodexRuntimeSelection,
   type CodexAccountSelectionTarget
 } from '../codex-accounts/runtime-selection'
-
-function normalizeOptionalDistro(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
-}
+import {
+  getProjectRuntimeRateLimitTarget,
+  normalizeOptionalDistro
+} from './project-runtime-rate-limit-target'
 
 function getSingleSelectedWslDistro(settings: GlobalSettings): string | null {
   const selection = normalizeCodexRuntimeSelection(settings)
@@ -30,27 +30,27 @@ export function getInitialCodexRateLimitTarget(
     return { runtime: 'host' }
   }
   if (settings.localAccountRuntime === 'wsl') {
+    if (platform !== 'win32') {
+      return { runtime: 'host' }
+    }
     return {
       runtime: 'wsl',
       wslDistro:
         normalizeOptionalDistro(settings.localAccountWslDistro) ??
-        normalizeOptionalDistro(settings.terminalWindowsWslDistro) ??
         getSingleSelectedWslDistro(settings)
     }
   }
+  if (settings.localAccountRuntime === 'auto') {
+    const target = resolveLocalAccountRuntimeTarget(settings, platform)
+    return target.runtime === 'wsl'
+      ? { runtime: 'wsl', wslDistro: target.wslDistro }
+      : { runtime: 'host' }
+  }
 
-  if (
-    settings.localAgentRuntime === 'wsl' ||
-    (settings.localAgentRuntime == null &&
-      platform === 'win32' &&
-      settings.terminalWindowsShell === 'wsl.exe')
-  ) {
-    return {
-      runtime: 'wsl',
-      wslDistro:
-        normalizeOptionalDistro(settings.localAgentWslDistro) ??
-        normalizeOptionalDistro(settings.terminalWindowsWslDistro)
-    }
+  // Why: pre-setting profiles used account selection as their startup fallback.
+  const projectRuntimeTarget = getProjectRuntimeRateLimitTarget(settings, platform)
+  if (projectRuntimeTarget) {
+    return projectRuntimeTarget
   }
 
   const selection = normalizeCodexRuntimeSelection(settings)

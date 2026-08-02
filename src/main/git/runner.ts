@@ -1,13 +1,10 @@
-/* eslint-disable max-lines -- Why: command routing, WSL translation, and
-git/gh/glab wrappers must stay co-located so platform behavior remains
-consistent across every repo-scoped subprocess call. */
+/* eslint-disable max-lines -- command routing, WSL translation, and git/gh/glab wrappers stay co-located for consistent platform behavior. */
 /**
  * Centralized git/gh/command runner with transparent WSL support.
  *
- * Why: When a repo lives on a WSL filesystem (UNC path like \\wsl.localhost\Ubuntu\...),
- * native Windows binaries (git.exe, gh.exe, rg.exe) are either absent or extremely slow.
- * This module detects WSL paths and routes command execution through `wsl.exe -d <distro>`
- * with translated Linux paths, so every call site gets WSL support for free.
+ * Why: when a repo lives on a WSL filesystem, native Windows binaries (git.exe,
+ * gh.exe, rg.exe) are absent or slow, so this routes execution through
+ * `wsl.exe -d <distro>` with translated Linux paths.
  */
 import {
   execFile,
@@ -16,12 +13,44 @@ import {
   type ChildProcess,
   type ExecFileOptions,
   type SpawnOptions
-} from 'child_process'
+} from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../observability/instrumentation'
+import { recordSubprocessSpawn } from '../diagnostics/main-thread-churn-probe'
+import {
+  classifyGhRateLimitBucket,
+  createGhRateLimitBlockedError,
+  getGhRateLimitBlockedUntilMs,
+  ghRateLimitScopeKey,
+  isGhPrimaryRateLimitStderr,
+  isGhRateLimitProbe,
+  notifyGhPrimaryRateLimit,
+  type GhRateLimitBucket
+} from './gh-rate-limit-breaker'
 import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
+import { addWslEnvKeys } from '../wsl-env'
+import {
+  appendGitConfigEnv,
+  gitCredentialPromptGuardEnv
+} from '../../shared/git-credential-prompt-env'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
+import {
+  buildWslLoginShellCommand,
+  escapeWslShCommandForWindows,
+  quotePosixShell
+} from '../../shared/wsl-login-shell-command'
+import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
+import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
+// Re-exported for existing importers; lightweight consumers should import from './exec-error' to avoid this heavy module.
+import { extractExecError, parseRetryAfterMs } from './exec-error'
+export { extractExecError, parseRetryAfterMs }
 
 // ─── Core resolution ────────────────────────────────────────────────
+
+// Env-assignment prefix for WSL-routed git, where spawn env can't cross the wsl.exe boundary; values are shell-safe unquoted.
+const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
+  .map(([key, value]) => `${key}=${value}`)
+  .join(' ')
 
 type ResolvedCommand = {
   binary: string
@@ -32,33 +61,31 @@ type ResolvedCommand = {
 }
 
 /**
- * Translate any Windows-style paths in command arguments to Linux paths
- * when the command will execute inside WSL.
+ * Translate Windows-style path arguments to Linux paths for commands run in WSL.
  *
- * Why: callers like worktree-create pass Windows paths (e.g. the workspace
- * directory) as git arguments. WSL git doesn't understand Windows paths,
- * so we must translate them. WSL UNC paths (\\wsl.localhost\...) are
- * converted to their native Linux form; regular Windows drive paths
- * (C:\Users\...) are converted to /mnt/c/Users/...
+ * Why: callers pass Windows paths as git arguments, which WSL git can't read.
+ * UNC paths (\\wsl.localhost\…) become native Linux; drive paths (C:\…) → /mnt/c/…
  */
 function translateArgsForWsl(args: string[]): string[] {
-  return args.map((arg) => {
-    // WSL UNC path → native linux path
-    const wslInfo = parseWslPath(arg)
-    if (wslInfo) {
-      return wslInfo.linuxPath
-    }
+  return args.map(translateArgForWsl)
+}
 
-    // Windows drive path (e.g. C:\Users\...) → /mnt/c/Users/...
-    const driveMatch = arg.match(/^([A-Za-z]):[/\\](.*)$/)
-    if (driveMatch) {
-      const driveLetter = driveMatch[1].toLowerCase()
-      const rest = driveMatch[2].replace(/\\/g, '/')
-      return `/mnt/${driveLetter}/${rest}`
-    }
+function translateArgForWsl(arg: string): string {
+  // WSL UNC path → native linux path
+  const wslInfo = parseWslPath(arg)
+  if (wslInfo) {
+    return wslInfo.linuxPath
+  }
 
-    return arg
-  })
+  // Windows drive path (e.g. C:\Users\...) → /mnt/c/Users/...
+  const driveMatch = arg.match(/^([A-Za-z]):[/\\](.*)$/)
+  if (driveMatch) {
+    const driveLetter = driveMatch[1].toLowerCase()
+    const rest = driveMatch[2].replace(/\\/g, '/')
+    return `/mnt/${driveLetter}/${rest}`
+  }
+
+  return arg
 }
 
 function hasExplicitRepoArg(args: string[]): boolean {
@@ -86,6 +113,17 @@ function argsUseGhApiPlaceholders(args: string[]): boolean {
   )
 }
 
+function hasExplicitRepoViewTarget(args: string[]): boolean {
+  const target = args[2]
+  return (
+    args[0] === 'repo' &&
+    args[1] === 'view' &&
+    typeof target === 'string' &&
+    !target.startsWith('-') &&
+    target.includes('/')
+  )
+}
+
 function canRunGitHubCliWithoutRepoCwd(args: string[]): boolean {
   if (hasExplicitRepoArg(args)) {
     return true
@@ -93,7 +131,7 @@ function canRunGitHubCliWithoutRepoCwd(args: string[]): boolean {
   if (args[0] === 'api') {
     return !argsUseGhApiPlaceholders(args)
   }
-  return args[0] === 'auth'
+  return args[0] === 'auth' || hasExplicitRepoViewTarget(args)
 }
 
 function isMissingCommandInWsl(stderr: string, command: string): boolean {
@@ -120,15 +158,21 @@ function resolveHostGitHubCli(command: 'gh', args: string[]): ResolvedCommand {
   return {
     binary: command,
     args,
-    // Why: host gh cannot use a WSL UNC cwd reliably. We only fall back
-    // for commands with explicit repo/API context, so no repo cwd is required.
+    // Why: host gh can't use a WSL UNC cwd; we only fall back for commands with explicit repo/API context, so none is needed.
     cwd: undefined,
     wsl: null
   }
 }
 
+let defaultWslDistroOverride: string | null = null
+
+// Why: allow host commands fallback to route through the user's pinned WSL distro when host execution fails.
+export function setDefaultWslDistroOverride(distro: string | null): void {
+  defaultWslDistroOverride = distro
+}
+
 function resolveDefaultWslCli(command: 'gh' | 'glab', args: string[]): ResolvedCommand | null {
-  const distro = getDefaultWslDistro()
+  const distro = defaultWslDistroOverride ?? getDefaultWslDistro()
   return distro ? resolveCommand(command, args, undefined, distro) : null
 }
 
@@ -148,34 +192,24 @@ function isHostCommandMissing(err: unknown, command: 'gh' | 'glab'): boolean {
 }
 
 /**
- * Given a command, its arguments, and a working directory, resolve whether
- * the invocation should be routed through wsl.exe.
+ * Resolve whether a command invocation should be routed through wsl.exe.
  *
- * Why `bash -c "cd ... && ..."` instead of `--cd`: wsl.exe's --cd flag
- * does not work reliably when invoked via Node's execFile/spawn (it fails
- * with ERROR_PATH_NOT_FOUND in some configurations). Using bash -c with
- * an explicit cd is universally supported.
+ * Why `bash -c "cd … && …"` instead of `--cd`: wsl.exe's --cd fails with
+ * ERROR_PATH_NOT_FOUND under Node's execFile/spawn in some configs.
  */
 function resolveCommand(
   command: string,
   args: string[],
   cwd: string | undefined,
-  wslDistroOverride?: string
+  wslDistroOverride?: string,
+  options: { useWslLoginShell?: boolean } = {}
 ): ResolvedCommand {
   if (process.platform !== 'win32') {
     return { binary: command, args, cwd, wsl: null }
   }
 
-  // Why: global gh callers (rate_limit, listAccessibleProjects) have no
-  // meaningful cwd to derive a WSL distro from. On WSL-only Windows setups,
-  // gh.exe isn't on the host PATH and the spawn fails with ENOENT. Allow
-  // callers to pass a distro hint so we can route through wsl.exe regardless.
-  // TODO(wsl-default-distro): the codebase currently has no persistent
-  // "default WSL distro" setting — distros are derived from individual repo
-  // paths. Until such a setting exists, global gh callers without an explicit
-  // override silently fall back to host gh.exe, which on WSL-only Windows
-  // installs will ENOENT. The wslDistroOverride parameter is the hook for
-  // wiring a future setting in without re-plumbing the runner.
+  // Why: global gh callers (rate_limit, listAccessibleProjects) have no cwd to derive a distro from; a distro hint still routes through wsl.exe.
+  // TODO(wsl-default-distro): no default-distro setting yet, so override-less global gh callers fall back to host gh.exe (ENOENT on WSL-only installs).
   const cwdWsl = cwd ? parseWslPath(cwd) : null
   const wsl: WslPathInfo | null =
     cwdWsl ?? (wslDistroOverride ? { distro: wslDistroOverride, linuxPath: '' } : null)
@@ -184,25 +218,37 @@ function resolveCommand(
   }
 
   const translatedArgs = translateArgsForWsl(args)
-  // Why: shell-escape each argument to prevent word splitting / glob expansion
-  // inside the bash -c string. Single quotes are safe for all chars except
-  // single quotes themselves, which we escape as '\'' (end quote, escaped
-  // literal, reopen quote).
-  const escapedArgs = translatedArgs.map((a) => `'${a.replace(/'/g, "'\\''")}'`)
-  // Why: when cwd is supplied as a WSL UNC path, prepend `cd <linuxPath> &&`
-  // so the command runs in the expected directory. When the caller only
-  // supplied a distro override (no cwd), skip the cd entirely — the gh CLI
-  // doesn't need a particular cwd for global calls like `api rate_limit`.
-  const shellCmd = cwdWsl
-    ? `cd '${cwdWsl.linuxPath.replace(/'/g, "'\\''")}' && ${command} ${escapedArgs.join(' ')}`
-    : `${command} ${escapedArgs.join(' ')}`
+  // Why: env on wsl.exe stays Windows-side (WSLENV forwards only named vars), so the locale must ride the command string (issue #7808).
+  const localePrefix = command === 'git' ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ` : ''
+  const escapedCommand = quotePosixShell(command)
+  // Why: shell-escape each arg to prevent word splitting / glob expansion inside the bash -c string.
+  const escapedArgs = translatedArgs.map(quotePosixShell)
+  // Why: prepend `cd <linuxPath> &&` for a UNC cwd; skip it when only a distro override was given (global gh needs no cwd).
+  const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
+  const shellCmd = linuxCwd
+    ? `cd ${quotePosixShell(linuxCwd)} && ${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
+    : `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
+
+  if (options.useWslLoginShell) {
+    return {
+      binary: 'wsl.exe',
+      args: [
+        '-d',
+        wsl.distro,
+        '--',
+        'sh',
+        '-lc',
+        escapeWslShCommandForWindows(buildWslLoginShellCommand(shellCmd))
+      ],
+      cwd: undefined,
+      wsl
+    }
+  }
 
   return {
     binary: 'wsl.exe',
     args: ['-d', wsl.distro, '--', 'bash', '-c', shellCmd],
-    // Why: cwd is set to undefined because wsl.exe handles directory switching
-    // via the cd inside bash -c. Setting a UNC cwd on the Node process would
-    // be redundant and can cause issues with some Node internals.
+    // Why: the `cd` inside bash -c handles the directory; a UNC cwd on the Node process is redundant and can break Node internals.
     cwd: undefined,
     wsl
   }
@@ -210,12 +256,19 @@ function resolveCommand(
 
 // ─── Git-specific runners ───────────────────────────────────────────
 
+// Why: cap execFile output to prevent an uncatchable V8 string overflow; match relay MAX_GIT_BUFFER.
+export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
+
 type GitExecOptions = {
   cwd: string
   encoding?: BufferEncoding | 'buffer'
   maxBuffer?: number
   timeout?: number
+  stdin?: string
   env?: NodeJS.ProcessEnv
+  signal?: AbortSignal
+  wslDistro?: string
+  useConfiguredSshCommandForNetwork?: boolean
 }
 
 type CommandExecOptions = {
@@ -225,6 +278,7 @@ type CommandExecOptions = {
   timeout?: number
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
+  wslDistro?: string
 }
 
 function isMissingCommandError(error: unknown): boolean {
@@ -253,28 +307,61 @@ function createAbortError(): Error {
   return error
 }
 
-function killSpawnedCommandTree(child: ChildProcess): void {
+const WINDOWS_TREE_KILL_WAIT_MS = 2_000
+
+function killSpawnedCommandTree(child: ChildProcess): Promise<void> {
   const pid = child.pid
   if (!pid || process.platform !== 'win32') {
     child.kill()
-    return
+    return Promise.resolve()
   }
-  try {
-    // Why: Windows package-manager CLIs are often .cmd shims. Killing only
-    // cmd.exe leaves the underlying node/npm/pnpm child running.
-    const killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
-      stdio: 'ignore',
-      windowsHide: true
-    })
-    killer.on('error', () => child.kill())
+  return new Promise((resolve) => {
+    let killer: ChildProcess
+    try {
+      // Why: Windows shims/wsl.exe own descendants; wait for /t tree cleanup so a timed-out command can't outlive its probe.
+      killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      if (!killer || typeof killer.unref !== 'function') {
+        child.kill()
+        resolve()
+        return
+      }
+    } catch {
+      child.kill()
+      resolve()
+      return
+    }
+    let settled = false
+    let timer: NodeJS.Timeout | null = null
+    const finish = (fallbackToChildKill: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
+      killer.removeAllListeners()
+      if (fallbackToChildKill) {
+        child.kill()
+      }
+      resolve()
+    }
+    killer.once('error', () => finish(true))
+    killer.once('close', (code) => finish(code !== 0))
+    timer = setTimeout(() => {
+      killer.kill()
+      finish(true)
+    }, WINDOWS_TREE_KILL_WAIT_MS)
     killer.unref()
-  } catch {
-    child.kill()
-  }
+  })
 }
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
+  stdin?: string
 }
 
 function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
@@ -305,6 +392,7 @@ function execFileCapture(
     }
 
     let settled = false
+    let terminating = false
     let child: ChildProcess | null = null
     let timer: NodeJS.Timeout | null = null
     const cleanup = (): void => {
@@ -334,24 +422,38 @@ function execFileCapture(
       resolve({ stdout, stderr })
     }
     const onAbort = (): void => {
-      if (child) {
-        killSpawnedCommandTree(child)
+      if (settled || terminating) {
+        return
       }
-      finish(createAbortError())
+      terminating = true
+      const abortError = createAbortError()
+      if (!child) {
+        terminating = false
+        finish(abortError)
+        return
+      }
+      void killSpawnedCommandTree(child).then(() => {
+        terminating = false
+        finish(abortError)
+      })
     }
 
     try {
+      const spawnStartedAt = performance.now()
+      // Why: our abort listener owns tree cleanup; Node's signal handler could kill wsl.exe before taskkill sees its children.
       child = execFile(
         command,
         args,
         {
           cwd: options.cwd,
           encoding: options.encoding,
-          maxBuffer: options.maxBuffer,
-          env: options.env,
-          signal: options.signal
+          maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
+          env: options.env
         },
         (error, stdout, stderr) => {
+          if (terminating) {
+            return
+          }
           if (!error && stderr === undefined && isExecFileResultObject(stdout)) {
             finish(null, stdout.stdout, stdout.stderr)
             return
@@ -359,20 +461,39 @@ function execFileCapture(
           finish(error, stdout, stderr)
         }
       )
+      recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
     } catch (error) {
       finish(error instanceof Error ? error : new Error(String(error)))
       return
     }
 
-    // Why: Node's native execFile timeout waits for the child to exit after
-    // signaling it. Some CLIs ignore that signal, so reject the UI operation
-    // on our own timer and kill the child only as best effort.
+    child.once('error', (error) => {
+      if (!terminating) {
+        finish(error)
+      }
+    })
+
+    if (options.stdin !== undefined) {
+      endSubprocessStdin(child.stdin, options.stdin)
+    }
+
+    // Why: Node's timeout waits forever on signal-ignoring CLIs; enforce our own deadline with bounded tree cleanup.
     if (options.timeout && options.timeout > 0) {
       timer = setTimeout(() => {
-        if (child) {
-          killSpawnedCommandTree(child)
+        if (settled || terminating) {
+          return
         }
-        finish(new Error(`${command} timed out.`))
+        terminating = true
+        const timeoutError = new Error(`${command} timed out.`)
+        if (!child) {
+          terminating = false
+          finish(timeoutError)
+          return
+        }
+        void killSpawnedCommandTree(child).then(() => {
+          terminating = false
+          finish(timeoutError)
+        })
       }, options.timeout)
     }
     options.signal?.addEventListener('abort', onAbort, { once: true })
@@ -395,15 +516,17 @@ async function spawnCommandCapture(
     let stderr = ''
     let stdoutBytes = 0
     let stderrBytes = 0
+    const spawnStartedAt = performance.now()
     const child = spawn(spawnCmd, spawnArgs, {
       cwd: options.cwd,
       env: options.env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
+    recordSubprocessSpawn(spawnCmd, spawnArgs, performance.now() - spawnStartedAt)
     let timer: NodeJS.Timeout | null = null
     const onAbort = (): void => {
-      killSpawnedCommandTree(child)
+      void killSpawnedCommandTree(child)
       finish(createAbortError())
     }
     const cleanupListeners = (): void => {
@@ -431,7 +554,7 @@ async function spawnCommandCapture(
     }
     timer = options.timeout
       ? setTimeout(() => {
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(new Error(`${command} timed out.`))
         }, options.timeout)
       : null
@@ -439,7 +562,7 @@ async function spawnCommandCapture(
     function onStdoutData(chunk: Buffer): void {
       stdoutBytes += chunk.byteLength
       if (options.maxBuffer && stdoutBytes > options.maxBuffer) {
-        killSpawnedCommandTree(child)
+        void killSpawnedCommandTree(child)
         finish(new Error(`${command} stdout exceeded maxBuffer.`))
         return
       }
@@ -448,7 +571,7 @@ async function spawnCommandCapture(
     function onStderrData(chunk: Buffer): void {
       stderrBytes += chunk.byteLength
       if (options.maxBuffer && stderrBytes > options.maxBuffer) {
-        killSpawnedCommandTree(child)
+        void killSpawnedCommandTree(child)
         finish(new Error(`${command} stderr exceeded maxBuffer.`))
         return
       }
@@ -481,6 +604,232 @@ export function gitOptionalLocksDisabledEnv(
 }
 
 /**
+ * Append git config via the GIT_CONFIG_COUNT/KEY_n/VALUE_n env protocol (git >= 2.31),
+ * composing with any count already in `env` so we never clobber a caller's config.
+ */
+export { appendGitConfigEnv }
+
+/**
+ * Pin Orca-spawned git to untranslated English output so stderr/progress parsers
+ * work under any user locale (issue #7808). Terminal git is untouched.
+ */
+export function untranslatedGitOutputEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return { ...env, ...UNTRANSLATED_GIT_OUTPUT_ENV }
+}
+
+export function promptGuardGitEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  return gitCredentialPromptGuardEnv(untranslatedGitOutputEnv(env), platform)
+}
+
+/**
+ * Credential-prompt guard for a general-purpose shell (PTYs, hook scripts):
+ * like promptGuardGitEnv but without the issue-7808 locale pins, which would
+ * change the locale of every child process, not just git's.
+ */
+export function promptGuardShellEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  return gitCredentialPromptGuardEnv(env, platform)
+}
+
+/**
+ * Force git non-interactive so it fails fast instead of hanging on a prompt with
+ * no terminal to answer it; on headless `serve` those stuck calls wedge every
+ * client (issue #5308).
+ *
+ * - GIT_TERMINAL_PROMPT=0: git errors instead of prompting for credentials.
+ * - GIT_ASKPASS / SSH_ASKPASS: emptied when unset so no GUI helper blocks; a
+ *   caller-provided askpass is preserved (custom setups serve creds non-interactively).
+ * - GIT_SSH_COMMAND BatchMode=yes: SSH errors instead of prompting (doesn't change
+ *   host trust); only added when the caller hasn't set its own.
+ */
+export function nonInteractiveGitEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  const next = promptGuardGitEnv(env, platform)
+  if (!next.GIT_SSH_COMMAND) {
+    next.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
+    if (platform === 'win32') {
+      // Why: forward GIT_SSH_COMMAND to WSL only when we set it — a caller's Windows-specific value must not leak into Linux git.
+      addWslEnvKeys(next, ['GIT_SSH_COMMAND'])
+    }
+  }
+  return next
+}
+
+type GitSshPolicyMode =
+  | 'default'
+  | 'explicit-env'
+  | 'fallback'
+  | 'configured-openssh'
+  | 'configured-wrapper-passthrough'
+
+const CORE_SSH_COMMAND_PROBE_TIMEOUT_MS = 2500
+
+function commandBasename(command: string): string {
+  const pieces = command.split(/[\\/]+/)
+  return pieces.at(-1)?.toLowerCase() ?? command.toLowerCase()
+}
+
+function isMergeableOpenSshCommand(command: string): boolean {
+  const basename = commandBasename(command)
+  return basename === 'ssh' || basename === 'ssh.exe'
+}
+
+function shellTokenize(command: string): string[] | null {
+  const tokens: string[] = []
+  let current = ''
+  let quote: "'" | '"' | null = null
+  let escaped = false
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i]
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      const next = command[i + 1]
+      if (next && /[\s'"\\]/.test(next)) {
+        escaped = true
+      } else {
+        current += char
+      }
+      continue
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = null
+      } else {
+        current += char
+      }
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      continue
+    }
+    if (/\s/.test(char)) {
+      if (current) {
+        tokens.push(current)
+        current = ''
+      }
+      continue
+    }
+    if (';&|<>()`'.includes(char)) {
+      return null
+    }
+    current += char
+  }
+
+  if (escaped || quote) {
+    return null
+  }
+  if (current) {
+    tokens.push(current)
+  }
+  return tokens
+}
+
+function shellQuoteToken(token: string): string {
+  return /^[A-Za-z0-9_@%+=:,./~-]+$/.test(token) ? token : quotePosixShell(token)
+}
+
+function containsShellExpansionSyntax(command: string): boolean {
+  return command.includes('$')
+}
+
+function withoutBatchModeOptions(tokens: string[]): string[] {
+  const next: string[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    const lower = token.toLowerCase()
+    if (lower === '-o') {
+      const option = tokens[i + 1]?.toLowerCase()
+      if (option?.startsWith('batchmode')) {
+        i += 1
+        continue
+      }
+    }
+    if (lower.startsWith('-obatchmode')) {
+      continue
+    }
+    next.push(token)
+  }
+  return next
+}
+
+function buildOpenSshBatchModeCommand(configuredCommand: string): string | null {
+  if (containsShellExpansionSyntax(configuredCommand)) {
+    return null
+  }
+  const tokens = shellTokenize(configuredCommand)
+  if (!tokens || tokens.length === 0 || !isMergeableOpenSshCommand(tokens[0])) {
+    return null
+  }
+  return [...withoutBatchModeOptions(tokens), '-o', 'BatchMode=yes'].map(shellQuoteToken).join(' ')
+}
+
+async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
+  env: NodeJS.ProcessEnv
+  mode: GitSshPolicyMode
+}> {
+  const promptEnv = promptGuardGitEnv(options.env)
+  if (promptEnv.GIT_SSH_COMMAND) {
+    return { env: promptEnv, mode: 'explicit-env' }
+  }
+
+  const resolved = resolveCommand(
+    'git',
+    ['config', '--get', 'core.sshCommand'],
+    options.cwd,
+    options.wslDistro,
+    { useWslLoginShell: Boolean(options.wslDistro) }
+  )
+  let configuredCommand = ''
+  try {
+    const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
+      cwd: resolved.cwd,
+      encoding: 'utf-8',
+      maxBuffer: DEFAULT_GIT_MAX_BUFFER,
+      timeout: CORE_SSH_COMMAND_PROBE_TIMEOUT_MS,
+      env: promptEnv,
+      signal: options.signal
+    })
+    configuredCommand = String(stdout).trim()
+  } catch {
+    configuredCommand = ''
+  }
+
+  if (!configuredCommand) {
+    const env = { ...promptEnv, GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }
+    // Why: WSL routing can come from either an explicit distro or a UNC cwd.
+    if (resolved.wsl) {
+      addWslEnvKeys(env, ['GIT_SSH_COMMAND'])
+    }
+    return { env, mode: 'fallback' }
+  }
+
+  const batchModeCommand = buildOpenSshBatchModeCommand(configuredCommand)
+  if (!batchModeCommand) {
+    // Why: custom SSH wrappers are user policy; rewriting their argv is riskier than relying on prompt guards + timeout.
+    return { env: promptEnv, mode: 'configured-wrapper-passthrough' }
+  }
+
+  const env = { ...promptEnv, GIT_SSH_COMMAND: batchModeCommand }
+  if (resolved.wsl) {
+    addWslEnvKeys(env, ['GIT_SSH_COMMAND'])
+  }
+  return { env, mode: 'configured-openssh' }
+}
+
+/**
  * Async git command execution. Drop-in replacement for
  * `execFileAsync('git', args, { cwd, encoding, ... })`.
  */
@@ -488,21 +837,35 @@ export async function gitExecFileAsync(
   args: string[],
   options: GitExecOptions
 ): Promise<{ stdout: string; stderr: string }> {
-  // Why wrap here: the resolved binary path / WSL detection is internal
-  // detail; the span attributes track the user-visible `git <subcommand>
-  // <args…>` form so dashboards group cleanly by intent rather than by
-  // platform-conditional binary path.
+  // Why: span the user-visible `git <subcommand>` form, not the resolved binary, so dashboards group by intent.
   return withGitSpan(
     { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
     async () => {
-      const resolved = resolveCommand('git', args, options.cwd)
-      const { stdout, stderr } = await execFileCapture(resolved.binary, resolved.args, {
-        cwd: resolved.cwd,
-        encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
-        maxBuffer: options.maxBuffer,
-        timeout: options.timeout,
-        env: options.env
+      const resolved = resolveCommand('git', args, options.cwd, options.wslDistro, {
+        useWslLoginShell: Boolean(options.wslDistro)
       })
+      const policy = options.useConfiguredSshCommandForNetwork
+        ? await buildNetworkSshPolicyEnv(options)
+        : { env: nonInteractiveGitEnv(options.env), mode: 'default' as const }
+      let result: { stdout: string | Buffer; stderr: string | Buffer }
+      try {
+        result = await execFileCapture(resolved.binary, resolved.args, {
+          cwd: resolved.cwd,
+          encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+          maxBuffer: options.maxBuffer,
+          timeout: options.timeout,
+          stdin: options.stdin,
+          // Why: never let a git read-path call block on an interactive prompt (issue #5308) — fail fast.
+          env: policy.env,
+          signal: options.signal
+        })
+      } catch (error) {
+        if (options.useConfiguredSshCommandForNetwork && error && typeof error === 'object') {
+          Object.assign(error, { gitSshPolicyMode: policy.mode })
+        }
+        throw error
+      }
+      const { stdout, stderr } = result
       return { stdout: stdout as string, stderr: stderr as string }
     }
   )
@@ -517,23 +880,24 @@ export async function commandExecFileAsync(
   args: string[],
   options: CommandExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
-  const resolved = resolveCommand(command, args, options.cwd)
+  const { wslDistro, ...execOptions } = options
+  const resolved = resolveCommand(command, args, options.cwd, wslDistro)
   const binary =
     resolved.wsl === null ? resolveWindowsCommand(resolved.binary, options.env) : resolved.binary
   if (isWindowsBatchScript(binary)) {
     return spawnCommandCapture(binary, resolved.args, {
-      ...options,
+      ...execOptions,
       cwd: resolved.cwd
     })
   }
   try {
     const { stdout, stderr } = await execFileCapture(binary, resolved.args, {
       cwd: resolved.cwd,
-      encoding: options.encoding ?? 'utf-8',
-      maxBuffer: options.maxBuffer,
-      timeout: options.timeout,
-      env: options.env,
-      signal: options.signal
+      encoding: execOptions.encoding ?? 'utf-8',
+      maxBuffer: execOptions.maxBuffer,
+      timeout: execOptions.timeout,
+      env: execOptions.env,
+      signal: execOptions.signal
     })
     return { stdout: stdout as string, stderr: stderr as string }
   } catch (error) {
@@ -542,7 +906,7 @@ export async function commandExecFileAsync(
         resolveWindowsCommand(`${resolved.binary}.cmd`, options.env),
         resolved.args,
         {
-          ...options,
+          ...execOptions,
           cwd: resolved.cwd
         }
       )
@@ -557,16 +921,164 @@ export async function commandExecFileAsync(
  */
 export async function gitExecFileAsyncBuffer(
   args: string[],
-  options: { cwd: string; maxBuffer?: number }
+  options: { cwd: string; maxBuffer?: number; wslDistro?: string }
 ): Promise<{ stdout: Buffer }> {
-  const resolved = resolveCommand('git', args, options.cwd)
+  const resolved = resolveCommand('git', args, options.cwd, options.wslDistro, {
+    useWslLoginShell: Boolean(options.wslDistro)
+  })
   const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
     encoding: 'buffer',
-    maxBuffer: options.maxBuffer
+    maxBuffer: options.maxBuffer,
+    env: untranslatedGitOutputEnv()
   })) as { stdout: Buffer }
   return { stdout }
 }
+
+/** Result of a streamed git command; `stoppedEarly` is true when onStdout asked to stop before the child exited. */
+export type GitStreamResult = { stoppedEarly: boolean }
+
+type GitStreamOptions = {
+  cwd: string
+  env?: NodeJS.ProcessEnv
+  wslDistro?: string
+  signal?: AbortSignal
+  /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
+  maxBuffer?: number
+  /**
+   * Called for each decoded stdout chunk. Return true to stop: the child is
+   * killed and the promise resolves with stoppedEarly=true.
+   */
+  onStdout: (chunk: string) => boolean | void
+}
+
+/**
+ * Stream a git command's stdout incrementally instead of buffering it whole.
+ *
+ * Why: output larger than V8's max string (e.g. status on a repo with a huge
+ * un-ignored folder) crashes the process when buffered; streaming keeps memory
+ * bounded and lets the parser stop git early. Built on gitSpawn for WSL routing.
+ */
+export async function gitStreamStdout(
+  args: string[],
+  options: GitStreamOptions
+): Promise<GitStreamResult> {
+  const maxBuffer = options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER
+  return withGitSpan({ args, cwd: options.cwd }, async () => {
+    return new Promise<GitStreamResult>((resolve, reject) => {
+      if (options.signal?.aborted) {
+        reject(createAbortError())
+        return
+      }
+      const child = gitSpawn(args, {
+        cwd: options.cwd,
+        env: nonInteractiveGitEnv(options.env),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        wslDistro: options.wslDistro,
+        windowsHide: true
+      })
+
+      let settled = false
+      let stoppedEarly = false
+      let stdoutBytes = 0
+      let stderr = ''
+      let stderrBytes = 0
+      // Why: decode statefully so a multibyte UTF-8 char split across chunks isn't corrupted into replacement chars.
+      const stdoutDecoder = new StringDecoder('utf8')
+      const stderrDecoder = new StringDecoder('utf8')
+
+      const cleanup = (): void => {
+        child.stdout?.off('data', onStdoutData)
+        child.stderr?.off('data', onStderrData)
+        child.off('error', onError)
+        child.off('close', onClose)
+        options.signal?.removeEventListener('abort', onAbort)
+        // Flush any bytes the decoders were holding for an incomplete sequence.
+        stdoutDecoder.end()
+        stderrDecoder.end()
+      }
+      const finish = (error: Error | null): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        if (error) {
+          reject(Object.assign(error, { stderr }))
+          return
+        }
+        resolve({ stoppedEarly })
+      }
+
+      function onStdoutData(chunk: Buffer): void {
+        stdoutBytes += chunk.byteLength
+        if (stdoutBytes > maxBuffer) {
+          void killSpawnedCommandTree(child)
+          finish(new Error('git stdout exceeded maxBuffer.'))
+          return
+        }
+        const decoded = stdoutDecoder.write(chunk)
+        if (decoded.length === 0) {
+          return
+        }
+        // Why: a throw from the caller's parser would escape this event handler and crash main; convert to a rejection.
+        let shouldStop: boolean | void
+        try {
+          shouldStop = options.onStdout(decoded)
+        } catch (error) {
+          void killSpawnedCommandTree(child)
+          finish(error instanceof Error ? error : new Error(String(error)))
+          return
+        }
+        if (shouldStop === true) {
+          // Parser hit its limit: kill git and resolve cleanly with the partial output.
+          stoppedEarly = true
+          void killSpawnedCommandTree(child)
+          finish(null)
+        }
+      }
+      function onStderrData(chunk: Buffer): void {
+        stderrBytes += chunk.byteLength
+        if (stderrBytes > maxBuffer) {
+          void killSpawnedCommandTree(child)
+          finish(new Error('git stderr exceeded maxBuffer.'))
+          return
+        }
+        stderr += stderrDecoder.write(chunk)
+      }
+      function onError(error: Error): void {
+        finish(error)
+      }
+      function onClose(code: number | null): void {
+        if (stoppedEarly || code === 0) {
+          finish(null)
+          return
+        }
+        finish(new Error(`git exited with ${code}: ${stderr}`))
+      }
+      function onAbort(): void {
+        if (!child.pid) {
+          // Why: failed spawn reports ENOENT after abort cleanup; retain a listener so it cannot crash main.
+          child.once('error', () => {})
+        }
+        void killSpawnedCommandTree(child)
+        finish(createAbortError())
+      }
+
+      child.stdout?.on('data', onStdoutData)
+      child.stderr?.on('data', onStderrData)
+      child.on('error', onError)
+      child.on('close', onClose)
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+      if (options.signal?.aborted) {
+        onAbort()
+      }
+    })
+  })
+}
+
+// Why: sync git blocks the main thread; a dead network drive can hang git for minutes without a timeout (issue #7225's 127s freeze).
+const GIT_EXEC_SYNC_TIMEOUT_MS = 15_000
 
 /**
  * Sync git command execution. Drop-in replacement for
@@ -580,56 +1092,65 @@ export function gitExecFileSync(
     cwd: string
     encoding?: BufferEncoding
     stdio?: SpawnOptions['stdio']
+    timeout?: number
   }
 ): string {
   const resolved = resolveCommand('git', args, options.cwd)
-  return execFileSync(resolved.binary, resolved.args, {
-    cwd: resolved.cwd,
-    encoding: options.encoding ?? 'utf-8',
-    stdio: options.stdio ?? ['pipe', 'pipe', 'pipe']
-  }) as string
+  const spawnStartedAt = performance.now()
+  try {
+    return execFileSync(resolved.binary, resolved.args, {
+      cwd: resolved.cwd,
+      encoding: options.encoding ?? 'utf-8',
+      env: untranslatedGitOutputEnv(),
+      stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
+      timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
+    }) as string
+  } finally {
+    // Sync exec blocks the main thread for its whole duration — the cost issue #7576 flags.
+    recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
+  }
 }
 
 /**
  * Spawn a git child process. Drop-in replacement for
  * `spawn('git', args, { cwd, stdio, ... })`.
  */
-export function gitSpawn(args: string[], options: SpawnOptions & { cwd: string }): ChildProcess {
-  const resolved = resolveCommand('git', args, options.cwd)
-  return spawn(resolved.binary, resolved.args, {
-    ...options,
+export function gitSpawn(
+  args: string[],
+  options: SpawnOptions & { cwd: string; wslDistro?: string }
+): ChildProcess {
+  const { wslDistro, ...spawnOptions } = options
+  const resolved = resolveCommand('git', args, options.cwd, wslDistro, {
+    useWslLoginShell: Boolean(wslDistro)
+  })
+  const spawnStartedAt = performance.now()
+  const child = spawn(resolved.binary, resolved.args, {
+    ...spawnOptions,
+    env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
     cwd: resolved.cwd
   })
+  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
+  return child
 }
 
 // ─── gh CLI runners ─────────────────────────────────────────────────
 
-// Why: non-repo-scoped gh calls (listAccessibleProjects, rate_limit, etc.)
-// have no meaningful cwd. Allow it to be omitted so the one WSL-aware wrapper
-// serves both repo-scoped and global callers and we stop having two spawn
-// sites (the other one — a plain execFileAsync in project-view.ts — bypasses
-// retry/backoff and any future quota tracker).
-// Why: `wslDistro` is an explicit hint for global (cwd-less) gh callers on
-// WSL-only Windows installs where gh.exe isn't on the host PATH. When set,
-// resolveCommand routes the spawn through `wsl.exe -d <distro> -- gh ...`
-// even without a UNC cwd to parse a distro from. Repo-scoped callers should
-// keep using cwd — the distro derives from the path automatically there.
-// Why: `idempotent` gates the transient-error retry. When undefined we
-// auto-detect from argv (writes are detected by `-X POST/PATCH/PUT/DELETE`
-// or a `query=mutation …` arg); callers can also pass an explicit override.
-// A 5xx/socket reset after the request reaches GitHub but before the
-// response returns is the canonical case where the server-side write
-// succeeded; retrying would create a duplicate comment/issue/label addition.
-// See bug-scan finding 1.
+// `cwd?` omitted for non-repo-scoped gh calls (rate_limit, listAccessibleProjects) so one WSL-aware wrapper serves both.
+// `wslDistro?` routes global cwd-less gh through `wsl.exe -d <distro>` on WSL-only Windows where gh.exe isn't on host PATH.
+// `idempotent?` gates transient-error retry (auto-detected from argv); retrying a write that already reached GitHub would duplicate it.
 type GhExecOptions = Omit<GitExecOptions, 'cwd'> & {
   cwd?: string
   wslDistro?: string
   idempotent?: boolean
+  // Why: `gh api` and `--repo OWNER/REPO` shorthand resolve against gh's
+  // default host, not the repo's remote. Carrying the host here lets the
+  // runner qualify every spawn once, so call sites can't silently fall back
+  // to github.com for GHES repos; it also scopes the rate-limit breaker.
+  host?: string
 }
 
 const NON_IDEMPOTENT_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
-// `gh <noun> <verb>` write subcommands. Reads (view/list/status/checks)
-// are absent on purpose so the default of "retry" stays for them.
+// `gh <noun> <verb>` write subcommands; reads are absent on purpose so they keep retrying.
 const NON_IDEMPOTENT_GH_VERBS = new Set([
   'create',
   'edit',
@@ -671,9 +1192,7 @@ function argsLookIdempotent(args: string[]): boolean {
         return false
       }
     }
-    // `gh api` auto-switches GET→POST when -f/-F/--field/--raw-field body
-    // fields are supplied without an explicit -X. Track those to classify
-    // such calls as non-idempotent.
+    // `gh api` auto-POSTs when -f/-F/--field body fields are given without -X; track them.
     if (a === '-f' || a === '-F' || a === '--field' || a === '--raw-field') {
       hasApiBodyField = true
     } else if (
@@ -684,8 +1203,7 @@ function argsLookIdempotent(args: string[]): boolean {
     ) {
       hasApiBodyField = true
     }
-    // `gh api graphql -f query=mutation(...){ ... }` — detect mutation queries
-    // so writes via the GraphQL endpoint also fail fast on transient errors.
+    // Detect GraphQL `query=mutation(…)` so endpoint writes also fail fast on transient errors.
     if (a.startsWith('query=')) {
       hasGraphQlQuery = true
       const trimmed = a.slice('query='.length).trimStart().toLowerCase()
@@ -694,10 +1212,7 @@ function argsLookIdempotent(args: string[]): boolean {
       }
     }
   }
-  // `gh api ... -f foo=bar` with no explicit method: gh switches to POST.
-  // Treat as non-idempotent so a transient 5xx after the server applied
-  // the write doesn't retry and duplicate it. GraphQL reads are the exception:
-  // gh sends them as POST body fields, but a query operation is idempotent.
+  // `gh api -f foo=bar` with no -X auto-POSTs → non-idempotent; GraphQL query bodies are the exception (still reads).
   if (
     args[0] === 'api' &&
     hasApiBodyField &&
@@ -706,10 +1221,7 @@ function argsLookIdempotent(args: string[]): boolean {
   ) {
     return false
   }
-  // `gh issue close`, `gh pr edit`, `gh pr merge`, etc. The first arg is the
-  // noun (issue/pr/repo/label/...) and the second is the verb. Defaulting
-  // `gh api` calls without an explicit -X to GET-equivalent (idempotent) is
-  // intentional: callers that POST through `gh api` set `-X POST`.
+  // `gh <noun> <verb>` writes (args[1]); `gh api` without -X defaults to idempotent GET, so it's excluded here.
   if (args.length >= 2 && args[0] !== 'api') {
     if (NON_IDEMPOTENT_GH_VERBS.has(args[1])) {
       return false
@@ -719,75 +1231,11 @@ function argsLookIdempotent(args: string[]): boolean {
 }
 
 /**
- * Extract stderr from an execFile rejection.
- *
- * Why: Node's execFile rejects with an Error that has `.stdout` and `.stderr`
- * fields populated separately from `.message`. Reading `err.message` alone is
- * unreliable — it can truncate stderr or omit it entirely depending on Node
- * version and maxBuffer behavior. We prefer the explicit fields and fall
- * back to `.message` only when neither is present.
- */
-export function extractExecError(err: unknown): { stderr: string; stdout: string } {
-  if (err && typeof err === 'object') {
-    const e = err as { stderr?: unknown; stdout?: unknown; message?: unknown }
-    const stderr =
-      typeof e.stderr === 'string'
-        ? e.stderr
-        : Buffer.isBuffer(e.stderr)
-          ? e.stderr.toString('utf-8')
-          : ''
-    const stdout =
-      typeof e.stdout === 'string'
-        ? e.stdout
-        : Buffer.isBuffer(e.stdout)
-          ? e.stdout.toString('utf-8')
-          : ''
-    if (stderr || stdout) {
-      return { stderr, stdout }
-    }
-    if (typeof e.message === 'string') {
-      return { stderr: e.message, stdout: '' }
-    }
-  }
-  return { stderr: String(err), stdout: '' }
-}
-
-/**
- * Detect a Retry-After hint in gh stderr and return the suggested delay in ms,
- * or null when the response includes no Retry-After.
- *
- * Why: gh forwards response headers when verbose, and prints "Retry-After:
- * <seconds>" in error output for primary rate-limit 429s. When present, the
- * caller is better served by propagating the error so the UI can surface the
- * real wait time — retrying on our own 250ms cadence just earns another 429
- * and burns the retry budget. Also supports HTTP-date Retry-After values.
- */
-export function parseRetryAfterMs(stderr: string): number | null {
-  const m = stderr.match(/retry-after:\s*([^\r\n]+)/i)
-  if (!m) {
-    return null
-  }
-  const raw = m[1].trim()
-  if (/^\d+$/.test(raw)) {
-    const seconds = Number(raw)
-    return Number.isFinite(seconds) ? seconds * 1000 : null
-  }
-  const ts = Date.parse(raw)
-  if (Number.isNaN(ts)) {
-    return null
-  }
-  return Math.max(0, ts - Date.now())
-}
-
-/**
  * Classify whether a gh execFile rejection is worth retrying.
  *
- * Why: gh surfaces HTTP status in stderr as "HTTP 504", "HTTP 502", etc.
- * Network resets and DNS hiccups also show up as stderr substrings. We retry
- * those and 429 (rate-limited) — but only 429s without an explicit
- * Retry-After (the caller is better off propagating so the UI can show the
- * actual wait time). The primary-rate-limit 403 branch is NOT retried: those
- * require the user to back off for minutes, which is not transient.
+ * Why: gh surfaces HTTP status as stderr substrings ("HTTP 504", econnreset, …).
+ * Retry 5xx/network resets and 429 only without Retry-After (propagate those so
+ * the UI can show the wait); primary-rate-limit 403 is never transient.
  */
 export function isTransientGhError(stderr: string): boolean {
   const s = stderr.toLowerCase()
@@ -809,37 +1257,175 @@ export function isTransientGhError(stderr: string): boolean {
   return false
 }
 
-// Why: total of 3 attempts (original + 2 retries) with 250ms → 1s backoff.
-// These are standard "transient 5xx" values. Longer waits push past user
-// patience for an interactive action; shorter waits would hammer the same
-// unhealthy upstream that just failed. The array length defines retry count;
-// total attempts = length + 1.
+// Why: 3 attempts total (250ms → 1s backoff); array length defines retry count (total attempts = length + 1).
 const GH_RETRY_DELAYS_MS = [250, 1000] as const
 
-// Why: the upstream Retry-After header is server-suggested but unbounded —
-// GitHub has been observed to send tens-of-seconds values on rare incidents,
-// and a malicious or misconfigured proxy could send anything. Cap the wait
-// at 30s so a single transient gh call can never block the IPC main thread
-// for longer than the user's patience budget for an interactive action.
+// Why: Retry-After is unbounded and untrusted; cap at 30s so a gh call can't block the IPC thread indefinitely.
 const GH_RETRY_AFTER_MAX_MS = 30_000
+const DEFAULT_GH_EXEC_TIMEOUT_MS = 30_000
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function defaultGhExecTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.ORCA_GH_EXEC_TIMEOUT_MS
+  if (!raw) {
+    return DEFAULT_GH_EXEC_TIMEOUT_MS
+  }
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GH_EXEC_TIMEOUT_MS
+}
+
+function nonInteractiveGhEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    GH_PROMPT_DISABLED: env.GH_PROMPT_DISABLED ?? '1'
+  }
+}
+
+function hasGhHostnameFlag(args: readonly string[]): boolean {
+  return args.some((arg) => arg === '--hostname' || arg.startsWith('--hostname='))
+}
+
+function hostQualifiedGhRepoValue(value: string, host: string): string {
+  // URLs and already-qualified HOST/OWNER/REPO values pass through untouched.
+  if (value.includes('://') || value.split('/').length !== 2) {
+    return value
+  }
+  return `${host}/${value}`
+}
+
+/**
+ * Host-qualify a gh invocation from `options.host`: `--hostname` for `api`
+ * calls, `HOST/OWNER/REPO` for `--repo`/`-R` shorthand. SSH-backed repos run
+ * gh with no cwd, so this is their only host signal (#8312).
+ *
+ * @internal exported for tests.
+ */
+export function applyGhHostToArgs(args: string[], host?: string): string[] {
+  if (!host) {
+    return args
+  }
+  let result = args
+  if (result[0] === 'api' && !hasGhHostnameFlag(result)) {
+    result = ['api', '--hostname', host, ...result.slice(1)]
+  }
+  // Why: bare OWNER/REPO shorthand resolves against gh's default host — GH_HOST
+  // when set — so github.com must be qualified too, not just GHES, or a
+  // process-level GH_HOST redirects pinned github.com commands.
+  // Combined short forms (`-Ra/b`, `-R=a/b`) are deliberately not rewritten:
+  // no call site uses them, and prefix-matching `-R` corrupts free-text values
+  // of other flags (e.g. a --title that happens to start with `-R`).
+  const qualified: string[] = []
+  for (let i = 0; i < result.length; i += 1) {
+    const arg = result[i]
+    if (arg === '--repo' || arg === '-R') {
+      qualified.push(arg)
+      const value = result[i + 1]
+      if (value !== undefined) {
+        qualified.push(hostQualifiedGhRepoValue(value, host))
+        i += 1
+      }
+      continue
+    }
+    if (arg.startsWith('--repo=')) {
+      qualified.push(`--repo=${hostQualifiedGhRepoValue(arg.slice('--repo='.length), host)}`)
+      continue
+    }
+    qualified.push(arg)
+  }
+  return qualified
+}
+
+function explicitGhHostname(args: readonly string[]): string | undefined {
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '--hostname') {
+      const value = args[i + 1]?.trim()
+      return value || undefined
+    }
+    if (args[i].startsWith('--hostname=')) {
+      const value = args[i].slice('--hostname='.length).trim()
+      return value || undefined
+    }
+  }
+  return undefined
+}
+
+function explicitGhRepoHostname(args: readonly string[]): string | undefined {
+  for (let i = 0; i < args.length; i += 1) {
+    let value: string | undefined
+    if (args[i] === '--repo' || args[i] === '-R') {
+      value = args[i + 1]
+    } else if (args[i].startsWith('--repo=')) {
+      value = args[i].slice('--repo='.length)
+    }
+    const parts = value?.trim().split('/')
+    if (parts?.length === 3 && parts.every(Boolean)) {
+      return parts[0]
+    }
+  }
+  return undefined
+}
+
+function ghRateLimitScope(
+  args: readonly string[],
+  options: GhExecOptions,
+  resolved: ResolvedCommand
+): string {
+  const runtime = resolved.wsl ? `wsl:${resolved.wsl.distro.toLowerCase()}` : 'native'
+  // Why: an explicit argv hostname controls the actual gh request even when
+  // GH_HOST or options.host disagree, so breaker state must follow that host.
+  const host =
+    explicitGhHostname(args) ??
+    options.host ??
+    explicitGhRepoHostname(args) ??
+    options.env?.GH_HOST ??
+    process.env.GH_HOST ??
+    'github.com'
+  return ghRateLimitScopeKey(runtime, host)
+}
+
+function assertGhRateLimitScopeAvailable(
+  args: readonly string[],
+  options: GhExecOptions,
+  resolved: ResolvedCommand,
+  bucket: GhRateLimitBucket,
+  exemptProbe: boolean
+): void {
+  if (exemptProbe) {
+    return
+  }
+  const blockedUntilMs = getGhRateLimitBlockedUntilMs(
+    bucket,
+    Date.now(),
+    ghRateLimitScope(args, options, resolved)
+  )
+  if (blockedUntilMs !== null) {
+    throw createGhRateLimitBlockedError(bucket, blockedUntilMs)
+  }
 }
 
 /**
  * Async gh CLI execution. Drop-in replacement for
  * `execFileAsync('gh', args, { cwd, encoding, ... })`.
  *
- * Retries transient 5xx / 429 (without Retry-After) / network-reset failures
- * with exponential backoff. Non-transient errors (auth, 404, rate-limit 403,
- * validation, 429-with-Retry-After) fail fast on the first attempt.
+ * Retries transient 5xx / 429-without-Retry-After / network-reset failures with
+ * exponential backoff; other errors fail fast.
  */
 export async function ghExecFileAsync(
   args: string[],
   options: GhExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
+  // Why: retry safety must reflect the original call even when fallbacks replace the resolved command.
+  const idempotent = options.idempotent ?? argsLookIdempotent(args)
+  args = applyGhHostToArgs(args, options.host)
   let resolved = resolveCommand('gh', args, options.cwd, options.wslDistro)
+  // Why: while a bucket is rate-limited every spawn returns 403 — fail fast; the probe is exempt so the breaker can learn the reset.
+  // Why: scope by runtime and host so unrelated github.com, GHES, and WSL quotas cannot block each other.
+  const rateLimitBucket = classifyGhRateLimitBucket(args)
+  const rateLimitProbe = isGhRateLimitProbe(args)
+  assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitProbe)
   let lastError: unknown
   let attemptedHostFallback = false
   let attemptedDefaultWslFallback = false
@@ -849,13 +1435,17 @@ export async function ghExecFileAsync(
         cwd: resolved.cwd,
         encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
         maxBuffer: options.maxBuffer,
-        timeout: options.timeout,
-        env: options.env
+        // Why: bound gh so one stuck child fails visibly instead of wedging the IPC lane.
+        timeout: options.timeout ?? defaultGhExecTimeoutMs(options.env),
+        env: nonInteractiveGhEnv(options.env)
       })
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
       lastError = err
       const { stderr } = extractExecError(err)
+      if (isGhPrimaryRateLimitStderr(stderr)) {
+        notifyGhPrimaryRateLimit(rateLimitBucket, ghRateLimitScope(args, options, resolved))
+      }
       if (
         process.platform === 'win32' &&
         !attemptedDefaultWslFallback &&
@@ -866,10 +1456,10 @@ export async function ghExecFileAsync(
       ) {
         const wslResolved = resolveDefaultWslCli('gh', args)
         if (wslResolved) {
-          // Why: WSL-only Windows installs have no gh.exe on the host PATH, but
-          // global calls like rate_limit/auth do not carry a repo cwd to route by.
+          // Why: WSL-only Windows installs have no host gh.exe, and global calls (rate_limit/auth) carry no cwd to route by.
           resolved = wslResolved
           attemptedDefaultWslFallback = true
+          assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitProbe)
           attempt = -1
           continue
         }
@@ -877,26 +1467,13 @@ export async function ghExecFileAsync(
       if (!attemptedHostFallback && canFallBackToHostGitHubCli('gh', args, resolved, stderr)) {
         resolved = resolveHostGitHubCli('gh', args)
         attemptedHostFallback = true
+        assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitProbe)
         attempt = -1
         continue
       }
       const isLastAttempt = attempt >= GH_RETRY_DELAYS_MS.length
-      // Why: only retry idempotent calls. A 5xx/socket reset can arrive
-      // after the server already applied a POST/PATCH/PUT/DELETE; retrying
-      // would duplicate the write (e.g. double-post a comment, double-add
-      // a label). When the caller doesn't say, we auto-detect from argv —
-      // explicit `-X <method>` and GraphQL `query=mutation …` are treated
-      // as non-idempotent. See bug-scan finding 1.
-      const idempotent = options.idempotent ?? argsLookIdempotent(args)
       if (idempotent && !isLastAttempt && isTransientGhError(stderr)) {
-        // Why: when the upstream surfaced a Retry-After (e.g. on a transient
-        // 5xx that GitHub explicitly recommends backing off for), honor it
-        // instead of using our default backoff — sleeping less than the
-        // server suggests just earns another failure and burns our retry
-        // budget. Cap at GH_RETRY_AFTER_MAX_MS so a pathologically large
-        // hint can't block IPC for minutes; if the real wait is longer, the
-        // attempt will fail again and the error will propagate to the UI
-        // where the user can see it.
+        // Why: honor the server's Retry-After over our backoff (a shorter sleep just re-fails); cap so a huge hint can't stall IPC.
         const retryAfterMs = parseRetryAfterMs(stderr)
         const delayMs =
           retryAfterMs !== null
@@ -913,30 +1490,43 @@ export async function ghExecFileAsync(
 }
 
 // ─── glab CLI runner ────────────────────────────────────────────────
-// Why: parallel to gh CLI runner above. GitLab support is added by
-// cloning gh's surface rather than abstracting both behind a generic
-// runner — keeping them as parallel implementations matches the
-// project's clone-and-adapt approach for new providers and avoids
-// touching the working gh path. Reuses the shared retry/transient
-// helpers since HTTP-status- and TCP-error-based classification is
-// provider-agnostic.
+// Why: cloned from the gh runner rather than abstracted behind a generic runner, to avoid touching the working gh path.
 
 type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & {
   cwd?: string
   wslDistro?: string
   idempotent?: boolean
+  allowDefaultWslFallback?: boolean
 }
 
+/** Async glab CLI execution; drop-in for execFileAsync('glab', …). Retry policy mirrors ghExecFileAsync. */
 /**
- * Async glab CLI execution. Drop-in replacement for
- * `execFileAsync('glab', args, { cwd, encoding, ... })`.
- *
- * Retry policy mirrors ghExecFileAsync.
+ * glab's `--hostname` rejects host:port, so a ported self-hosted GitLab must use the GITLAB_HOST env var instead — translate it.
+ * @internal exported for tests.
  */
+export function redirectPortedHostnameToEnv(
+  args: string[],
+  options: GlabExecOptions
+): { args: string[]; options: GlabExecOptions } {
+  const i = args.indexOf('--hostname')
+  if (i === -1 || i + 1 >= args.length) {
+    return { args, options }
+  }
+  const host = args[i + 1]
+  if (!/^[^/\s]+:\d+$/.test(host)) {
+    return { args, options }
+  }
+  return {
+    args: [...args.slice(0, i), ...args.slice(i + 2)],
+    options: { ...options, env: { ...(options.env ?? process.env), GITLAB_HOST: host } }
+  }
+}
+
 export async function glabExecFileAsync(
   args: string[],
   options: GlabExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
+  ;({ args, options } = redirectPortedHostnameToEnv(args, options))
   let resolved = resolveCommand('glab', args, options.cwd, options.wslDistro)
   let lastError: unknown
   let attemptedDefaultWslFallback = false
@@ -947,7 +1537,8 @@ export async function glabExecFileAsync(
         encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
         maxBuffer: options.maxBuffer,
         timeout: options.timeout,
-        env: options.env
+        env: options.env,
+        signal: options.signal
       })
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
@@ -959,6 +1550,7 @@ export async function glabExecFileAsync(
         resolved.wsl === null &&
         !options.cwd &&
         !options.wslDistro &&
+        options.allowDefaultWslFallback !== false &&
         isHostCommandMissing(err, 'glab')
       ) {
         const wslResolved = resolveDefaultWslCli('glab', args)
@@ -971,9 +1563,7 @@ export async function glabExecFileAsync(
         }
       }
       const isLastAttempt = attempt >= GH_RETRY_DELAYS_MS.length
-      // Why: mirror gh's write-safety gate. A transient error after GitLab
-      // applies a POST/PATCH/PUT/DELETE must not create duplicate comments,
-      // issues, or merge actions through an automatic retry.
+      // Why: mirror gh's write-safety gate — don't auto-retry a non-idempotent write that GitLab may already have applied.
       const idempotent = options.idempotent ?? argsLookIdempotent(args)
       if (idempotent && !isLastAttempt && isTransientGhError(stderr)) {
         const retryAfterMs = parseRetryAfterMs(stderr)
@@ -999,39 +1589,43 @@ export async function glabExecFileAsync(
 export function wslAwareSpawn(
   command: string,
   args: string[],
-  options: SpawnOptions & { cwd?: string }
+  options: SpawnOptions & { cwd?: string; wslDistro?: string; useWslLoginShell?: boolean }
 ): ChildProcess {
-  const resolved = resolveCommand(command, args, options.cwd)
-  return spawn(resolved.binary, resolved.args, {
-    ...options,
+  const { wslDistro, useWslLoginShell, ...spawnOptions } = options
+  const resolved = resolveCommand(command, args, options.cwd, wslDistro, {
+    useWslLoginShell
+  })
+  const spawnStartedAt = performance.now()
+  const child = spawn(resolved.binary, resolved.args, {
+    ...spawnOptions,
     cwd: resolved.cwd
   })
+  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
+  return child
 }
 
 // ─── Path translation helpers ───────────────────────────────────────
 
 /**
  * Translate absolute Linux paths in git output back to Windows UNC paths.
- *
- * Why: when git runs inside WSL, paths in output (e.g. `git worktree list`)
- * are Linux-native (/home/user/repo). The rest of Orca needs Windows UNC
- * paths (\\wsl.localhost\Ubuntu\home\user\repo) to read files via Node fs.
+ * Why: git-in-WSL emits Linux-native paths, but Orca reads files via Node fs, which needs Windows UNC.
  */
-export function translateWslOutputPaths(output: string, originalCwd: string): string {
+export function translateWslOutputPaths(
+  output: string,
+  originalCwd: string,
+  options: { wslDistro?: string } = {}
+): string {
   const wsl = parseWslPath(originalCwd)
-  if (!wsl) {
+  const distro = wsl?.distro ?? options.wslDistro
+  if (!distro) {
     return output
   }
 
-  // Replace absolute Linux paths that start with / and look like filesystem
-  // paths in structured git output (e.g. "worktree /home/user/repo/feature")
+  // Rewrite absolute Linux paths in structured git output (e.g. "worktree /home/user/repo/feature") to Windows UNC.
   return output.replace(/(?<=worktree )(\/.+)$/gm, (_match, linuxPath: string) =>
-    toWindowsWslPath(linuxPath, wsl.distro)
+    toWindowsWslPath(linuxPath, distro)
   )
 }
 
-/**
- * Get the WSL info for a path, if applicable. Convenience re-export so
- * consumers don't need to import from wsl.ts directly.
- */
+/** Convenience re-export of wsl.ts path helpers so consumers don't import it directly. */
 export { parseWslPath, toLinuxPath, toWindowsWslPath, isWslPath } from '../wsl'

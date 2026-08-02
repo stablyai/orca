@@ -1,34 +1,27 @@
 import type { LinearIssue } from '../../../shared/types'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import { buildLinearIssueContextSnapshot } from '@/lib/linear-issue-context-snapshot'
+import {
+  buildLinearWorkspaceSource,
+  getUsableLinearBranchName
+} from '../../../shared/new-workspace/workspace-source'
 
 export function isLinearLinkedWorkItem(
-  item: Pick<LinkedWorkItemSummary, 'linearIdentifier'> | null | undefined
+  item: Pick<LinkedWorkItemSummary, 'provider' | 'linearIdentifier'> | null | undefined
 ): boolean {
-  return Boolean(item?.linearIdentifier)
+  return item?.provider === 'linear' || Boolean(item?.linearIdentifier?.trim())
 }
 
-export function buildLinearIssueLinkedWorkItem(
-  issue: LinearIssue,
-  renderedText = buildLinearIssueContextSnapshot(issue)
-): LinkedWorkItemSummary {
-  return {
-    type: 'issue',
-    provider: 'linear',
-    // Why: Linear issue identifiers are strings; keep numeric issue metadata
-    // empty while preserving the real source through `linearIdentifier`.
-    number: 0,
-    title: issue.title,
-    url: issue.url,
-    linearIdentifier: issue.identifier,
-    ...(renderedText.trim()
-      ? {
-          linkedContext: {
-            provider: 'linear' as const,
-            version: 1 as const,
-            renderedText
-          }
-        }
-      : {})
-  }
+export function getLinearLinkedWorkItemBranchName(
+  item:
+    | Pick<LinkedWorkItemSummary, 'provider' | 'linearIdentifier' | 'linearBranchName'>
+    | null
+    | undefined
+): string | undefined {
+  return isLinearLinkedWorkItem(item)
+    ? getUsableLinearBranchName(item?.linearBranchName)
+    : undefined
+}
+
+export function buildLinearIssueLinkedWorkItem(issue: LinearIssue): LinkedWorkItemSummary {
+  return buildLinearWorkspaceSource(issue)
 }

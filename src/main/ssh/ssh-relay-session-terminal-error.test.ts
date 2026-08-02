@@ -7,8 +7,21 @@ import type { SshPortForwardManager } from './ssh-port-forward'
 import { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import type { BrowserWindow } from 'electron'
 
+const { filesystemProviderConstructorMock } = vi.hoisted(() => ({
+  filesystemProviderConstructorMock: vi.fn()
+}))
+
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
+}))
+
+vi.mock('./ssh-pty-consumer-session', () => ({
+  openSshPtyConsumerSession: vi.fn(async (_mux, options) => ({
+    clientInstanceId: options.clientInstanceId,
+    clientGeneration: 1,
+    ownerGeneration: 1,
+    ownerLease: 'test-owner-lease'
+  }))
 }))
 
 vi.mock('./ssh-channel-multiplexer', () => {
@@ -17,6 +30,7 @@ vi.mock('./ssh-channel-multiplexer', () => {
       notify = vi.fn()
       request = vi.fn().mockResolvedValue([])
       onNotification = vi.fn().mockReturnValue(() => {})
+      onNotificationByMethod = vi.fn().mockReturnValue(() => {})
       onRequest = vi.fn().mockReturnValue(() => {})
       onDispose = vi.fn().mockReturnValue(() => {})
       dispose = vi.fn()
@@ -39,6 +53,9 @@ vi.mock('../providers/ssh-pty-provider', () => ({
 
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
+    constructor(...args: unknown[]) {
+      filesystemProviderConstructorMock(...args)
+    }
     dispose = vi.fn()
   }
 }))
@@ -83,9 +100,14 @@ function createMockDeps(): {
   const mockConn = {} as SshConnection
   const mockStore = {
     getRepos: vi.fn().mockReturnValue([]),
+    getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
+    upsertSshPtyConsumerRecovery: vi.fn(),
+    removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
-    markSshRemotePtyLeases: vi.fn()
+    markSshRemotePtyLeases: vi.fn(),
+    markSshRemotePtyLeasesAsync: vi.fn(),
+    markSshRemotePtyLeasesAttachedAsync: vi.fn()
   } as unknown as Store
   const mockPortForward = {
     removeAllForwards: vi.fn()
@@ -113,7 +135,26 @@ function mockDeploySuccess(): void {
 describe('SshRelaySession terminal relay error (RelayVersionMismatchError)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    filesystemProviderConstructorMock.mockReset()
     mockDeploySuccess()
+  })
+
+  it('omits the SFTP folder factory while retaining raw transfer on system SSH', async () => {
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockConn = {
+      usesSystemSshTransport: vi.fn(() => true)
+    } as unknown as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    expect(filesystemProviderConstructorMock).toHaveBeenCalledWith(
+      'target-1',
+      expect.anything(),
+      undefined,
+      expect.objectContaining({ downloadFile: expect.any(Function) }),
+      undefined
+    )
   })
 
   it('fires onTerminalRelayError on initial establish() and rethrows', async () => {

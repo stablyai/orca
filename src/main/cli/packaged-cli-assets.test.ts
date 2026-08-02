@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { copyFile, mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
@@ -11,6 +11,8 @@ const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
 const itRunsUnixShell = process.platform === 'win32' ? it.skip : it
 const builderConfig = require('../../../config/electron-builder.config.cjs') as {
+  files?: string[]
+  asarUnpack?: string[]
   mac?: { extraResources?: { from?: string; to?: string }[] }
   linux?: { extraResources?: { from?: string; to?: string }[] }
   win?: { extraResources?: { from?: string; to?: string }[] }
@@ -18,13 +20,20 @@ const builderConfig = require('../../../config/electron-builder.config.cjs') as 
 const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
 
 describe('packaged CLI assets', () => {
+  it('ships embedded skill guides with the CLI instead of source Markdown', () => {
+    // Why: `skills get` must work from the packaged CLI without falling back to
+    // authoring-only files that do not exist in installed applications.
+    expect(builderConfig.asarUnpack).toContain('out/cli/**')
+    expect(builderConfig.files).toContain('!skill-guides{,/**/*}')
+  })
+
   it('copies runtime dependencies used before Electron asar integration is available', () => {
     const runtimeResourceTargets = new Set(
       [
         ...(builderConfig.mac?.extraResources ?? []),
         ...(builderConfig.linux?.extraResources ?? []),
         ...(builderConfig.win?.extraResources ?? [])
-      ].map((resource) => resource.to)
+      ].map((resource) => normalizeResourceTarget(resource.to))
     )
 
     expect([...runtimeResourceTargets]).toEqual(
@@ -33,6 +42,7 @@ describe('packaged CLI assets', () => {
         join('node_modules', 'tweetnacl'),
         join('node_modules', 'zod'),
         join('node_modules', 'yaml'),
+        join('node_modules', 'jsonc-parser'),
         join('node_modules', 'node-pty'),
         join('node_modules', 'sherpa-onnx-darwin-${arch}'),
         join('node_modules', 'sherpa-onnx-linux-${arch}'),
@@ -40,6 +50,10 @@ describe('packaged CLI assets', () => {
       ])
     )
   })
+
+  function normalizeResourceTarget(target: string | undefined): string | undefined {
+    return target?.replace(/[\\/]/g, sep)
+  }
 
   itRunsUnixShell('keeps the Linux launcher executable in packaged resources', async () => {
     const launcherStats = await stat(linuxLauncherAsset)

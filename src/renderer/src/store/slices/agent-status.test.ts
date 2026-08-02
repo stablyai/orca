@@ -104,6 +104,31 @@ describe('agent status freshness expiry', () => {
     // No additional bump since the entry was removed before the timer fires
     expect(store.getState().agentStatusEpoch).toBe(2)
   })
+
+  it('arms freshness expiry for status rows written by an external mirror', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
+    const store = createTestStore()
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    const now = Date.now()
+
+    store.setState({
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          state: 'working',
+          prompt: 'Mirrored agent',
+          updatedAt: now,
+          stateStartedAt: now,
+          stateHistory: []
+        }
+      }
+    })
+    store.getState().scheduleAgentStatusFreshness()
+    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
+
+    expect(store.getState().agentStatusEpoch).toBe(1)
+  })
 })
 
 describe('agent status routing attribution', () => {
@@ -156,6 +181,8 @@ describe('agent status runtime orchestration metadata', () => {
       [childPaneKey]: {
         taskId: 'task-1',
         dispatchId: 'ctx-1',
+        taskTitle: 'Checkout race',
+        displayName: 'Fix checkout race',
         parentPaneKey
       }
     })
@@ -163,6 +190,8 @@ describe('agent status runtime orchestration metadata', () => {
     expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
       taskId: 'task-1',
       dispatchId: 'ctx-1',
+      taskTitle: 'Checkout race',
+      displayName: 'Fix checkout race',
       parentPaneKey
     })
     expect(store.getState().agentStatusEpoch).toBe(epochBeforeRuntime + 1)
@@ -235,6 +264,63 @@ describe('agent status runtime orchestration metadata', () => {
       coordinatorHandle: 'term-current-coordinator'
     })
   })
+
+  it('updates runtime status for the same dispatch', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'done',
+      prompt: 'child agent',
+      agentType: 'claude',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'dispatched'
+      }
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'completed'
+      }
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      dispatchStatus: 'completed'
+    })
+  })
+
+  it.each(['failed', 'circuit_broken'] as const)(
+    'updates runtime status to %s for the same dispatch',
+    (dispatchStatus) => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'done',
+        prompt: 'child agent',
+        agentType: 'claude',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          dispatchStatus: 'dispatched'
+        }
+      })
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({
+        [childPaneKey]: { taskId: 'task-1', dispatchId: 'ctx-1', dispatchStatus }
+      })
+
+      expect(
+        store.getState().agentStatusByPaneKey[childPaneKey].orchestration?.dispatchStatus
+      ).toBe(dispatchStatus)
+    }
+  )
 
   it('keeps current payload orchestration ahead of a stale runtime map entry', () => {
     vi.useFakeTimers()
@@ -594,6 +680,30 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })
 
+  it('bumps aggregate epochs when a same-state entry gains worktree attribution', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p' }, 'claude', {
+      updatedAt: 1_000,
+      stateStartedAt: 1_000
+    })
+    const firstEpoch = store.getState().agentStatusEpoch
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p' },
+        'claude',
+        { updatedAt: 2_000, stateStartedAt: 1_000 },
+        { worktreeId: 'wt-1', tabId: 'tab-1' }
+      )
+
+    expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
+
   it('bumps the status epoch, not sort epoch, for same-state done updates', () => {
     vi.useFakeTimers()
     const store = createTestStore()
@@ -658,6 +768,101 @@ describe('agent status tool + assistant fields', () => {
     // Why: a stale same-state refresh can promote the worktree back into a
     // smart-sort attention class, so both freshness and sort epochs must tick.
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
+
+  it('bumps sort epoch when Command Code starts a new prompt while still working', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'first task', agentType: 'command-code' },
+        'command-code',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'second task', agentType: 'command-code' },
+        'command-code',
+        { updatedAt: 2_000, stateStartedAt: 2_000 }
+      )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry.prompt).toBe('second task')
+    expect(entry.stateStartedAt).toBe(2_000)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
+
+  it('bumps sort epoch when Command Code reruns the same prompt with a new turn key', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'working',
+        prompt: 'same task',
+        agentType: 'command-code',
+        promptInteractionKey: 'command-code-transcript-a'
+      },
+      'command-code',
+      { updatedAt: 1_000, stateStartedAt: 1_000 }
+    )
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'working',
+        prompt: 'same task',
+        agentType: 'command-code',
+        promptInteractionKey: 'command-code-transcript-b'
+      },
+      'command-code',
+      { updatedAt: 2_000, stateStartedAt: 2_000 }
+    )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry.prompt).toBe('same task')
+    expect(entry.promptInteractionKey).toBe('command-code-transcript-b')
+    expect(entry.stateStartedAt).toBe(2_000)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
+
+  it('bumps sort epoch when main advances Command Code stateStartedAt without a renderer-visible key change', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    // First turn carries no interaction key (e.g. transcript read failed), so
+    // the renderer stores no promptInteractionKey to compare against.
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'same task', agentType: 'command-code' },
+        'command-code',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstSortEpoch = store.getState().sortEpoch
+
+    // Main detected a new turn via interaction-key change and reset stateStartedAt,
+    // but the renderer can't see the key change (no key, identical prompt text).
+    // The authoritative stateStartedAt advance must still re-sort.
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'same task', agentType: 'command-code' },
+        'command-code',
+        { updatedAt: 2_000, stateStartedAt: 2_000 }
+      )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry.stateStartedAt).toBe(2_000)
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })
 })
@@ -736,7 +941,7 @@ describe('agent status PR refresh handoff', () => {
     })
   })
 
-  it('does not spend a PR refresh when no PR surface is visible', async () => {
+  it('does not spend a PR refresh when no status lane or PR surface is visible', async () => {
     vi.useFakeTimers()
     const enqueuePRRefresh = stubGitHubPRRefreshApi()
     const store = createTestStore()
@@ -897,6 +1102,62 @@ describe('agent status retention + prefix sweep', () => {
     // Why: the ":" delimiter on the prefix guards against false-prefix matches
     // across tab ids that share a leading substring (tab-1 vs tab-10).
     expect(map['tab-10:0']).toBeDefined()
+  })
+
+  it('setAgentStatus clears a retained snapshot for the same paneKey', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const oldEntry: AgentStatusEntry = {
+      state: 'done',
+      prompt: 'old turn',
+      updatedAt: 1_000,
+      stateStartedAt: 1_000,
+      paneKey: 'tab-a:0',
+      stateHistory: [],
+      agentType: 'claude'
+    }
+    const siblingEntry: AgentStatusEntry = {
+      state: 'done',
+      prompt: 'sibling turn',
+      updatedAt: 1_000,
+      stateStartedAt: 1_000,
+      paneKey: 'tab-a:1',
+      stateHistory: [],
+      agentType: 'claude'
+    }
+    const retainedA: RetainedAgentEntry = {
+      entry: oldEntry,
+      worktreeId: 'wt-a',
+      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
+      agentType: 'claude',
+      startedAt: 1_000
+    }
+    const retainedSibling: RetainedAgentEntry = {
+      entry: siblingEntry,
+      worktreeId: 'wt-a',
+      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
+      agentType: 'claude',
+      startedAt: 1_000
+    }
+
+    store.getState().retainAgents([retainedA, retainedSibling])
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-a:0',
+        { state: 'done', prompt: 'interrupted turn', agentType: 'claude', interrupted: true },
+        'claude',
+        { updatedAt: 2_000, stateStartedAt: 2_000 }
+      )
+
+    const state = store.getState()
+    expect(state.agentStatusByPaneKey['tab-a:0']).toMatchObject({
+      state: 'done',
+      prompt: 'interrupted turn',
+      interrupted: true
+    })
+    expect(state.retainedAgentsByPaneKey['tab-a:0']).toBeUndefined()
+    expect(state.retainedAgentsByPaneKey['tab-a:1']).toBe(retainedSibling)
   })
 
   it('dismissRetainedAgentsByWorktree removes only entries for the given worktreeId', () => {

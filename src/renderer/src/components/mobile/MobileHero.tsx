@@ -1,145 +1,50 @@
-import { ArrowLeft, ArrowRight, Copy, RefreshCw, Smartphone, Trash2 } from 'lucide-react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, Copy } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
+import { getChannelTagline, type InstallCopy, type IosChannel } from './mobile-platform-copy'
+import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import { MobileHeroPairingStep } from './MobileHeroPairingStep'
+export { HeroIntro } from './MobileHeroIntro'
+export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
+import { translate } from '@/i18n/i18n'
 
 export type Platform = 'ios' | 'android'
 export type StepIndex = 0 | 1
-
-export type PairedDevice = {
-  deviceId: string
-  name: string
-  pairedAt: number
-  lastSeenAt: number
-}
-
-// Why: header copy needs to refer to the *user's* device by its native name.
-function getDeviceLabel(): string {
-  const ua = navigator.userAgent
-  if (ua.includes('Mac')) {
-    return 'Mac'
-  }
-  if (ua.includes('Windows')) {
-    return 'PC'
-  }
-  return 'computer'
-}
-
-export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Element {
-  return (
-    <div className="mp-intro-shell">
-      <div className="mp-eyebrow-row">
-        <span className="mp-eyebrow">Orca Mobile</span>
-      </div>
-      <h1 className="mp-h1">Your workspaces, in your pocket.</h1>
-      <p className="mp-lead">
-        Control Orca from your phone. Check on agents, review changes, and kick off tasks while
-        you&apos;re away from your desk.
-      </p>
-      <div className="mp-platform-badges" aria-label="Supported mobile platforms">
-        <span className="mp-platform-label">Available on</span>
-        <span className="mp-platform-badge">
-          <IosBrandIcon />
-          iOS
-        </span>
-        <span className="mp-platform-badge">
-          <AndroidLogo />
-          Android
-        </span>
-      </div>
-      <div className="mp-cta-row">
-        <button
-          type="button"
-          className="mp-primary-action mp-flow-primary-action"
-          onClick={onStart}
-        >
-          Get started
-          <ArrowRight className="size-3.5" />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-type HeroPairedProps = {
-  devices: readonly PairedDevice[]
-  onPairAnother: () => void
-  onRevoke: (deviceId: string) => void
-  revokingDeviceIds: readonly string[]
-}
-
-export function HeroPaired({
-  devices,
-  onPairAnother,
-  onRevoke,
-  revokingDeviceIds
-}: HeroPairedProps): React.JSX.Element {
-  return (
-    <div>
-      <div className="mp-eyebrow-row">
-        <span className="mp-eyebrow">Orca Mobile</span>
-      </div>
-      <h1 className="mp-h1">
-        {devices.length === 1 ? 'Your phone is paired.' : 'Your phones are paired.'}
-      </h1>
-      <p className="mp-lead-sm">
-        Open Orca Mobile to pick up where you left off, or pair another device.
-      </p>
-      <ul className="mp-paired-list">
-        {devices.map((device) => {
-          const revoking = revokingDeviceIds.includes(device.deviceId)
-          return (
-            <li key={device.deviceId} className="mp-paired-row">
-              <div className="mp-paired-icon">
-                <Smartphone className="size-4" />
-              </div>
-              <div className="mp-paired-main">
-                <div className="mp-paired-name">{device.name}</div>
-                <div className="mp-paired-meta">
-                  Paired {new Date(device.pairedAt).toLocaleDateString()}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="mp-paired-revoke"
-                onClick={() => onRevoke(device.deviceId)}
-                disabled={revoking}
-                aria-label={`Revoke ${device.name}`}
-                title="Revoke device"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-      <div className="mp-flow-actions">
-        <button type="button" className="mp-secondary-action" onClick={onPairAnother}>
-          <Smartphone className="size-3.5" />
-          Pair another device
-        </button>
-        <span />
-      </div>
-    </div>
-  )
-}
 
 type HeroFlowProps = {
   stepIdx: StepIndex
   platform: Platform
   onPlatformChange: (next: Platform) => void
   installQrUrl: string | null
-  installCopy: { description: string; ctaLabel: string; url: string }
+  installCopy: InstallCopy
+  iosChannel: IosChannel
+  onIosChannelChange: (next: IosChannel) => void
   onOpenInstallUrl: () => void
   onCopyInstallUrl: () => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
+  pairingQrError: boolean
+  relayMintFailure: MobileRelayMintFailure | null
+  onUseLan: () => void
+  onRetryRelay: () => void
+  onCopyRelayDiagnostics: () => void
   pairLoading: boolean
+  connectionMode: MobilePairingConnectionMode
+  onConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   onRegeneratePairing: () => void
+  canGeneratePairing: boolean
   onCopyPairingCode: () => void
   networkInterfaces: readonly MobileNetworkInterface[]
+  customAddresses: readonly string[]
   selectedAddress: string | undefined
+  selectedAddressIsCustom: boolean
   onSelectedAddressChange: (address: string) => void
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
+  beforeCustomAddressChange: (address: string) => Promise<boolean>
   onRefreshNetworkInterfaces: () => void
   refreshingNetworkInterfaces: boolean
   onBack: () => void
@@ -153,16 +58,31 @@ export function HeroFlow({
   onPlatformChange,
   installQrUrl,
   installCopy,
+  iosChannel,
+  onIosChannelChange,
   onOpenInstallUrl,
   onCopyInstallUrl,
   pairQrDataUrl,
   pairingUrl,
+  pairingQrError,
+  relayMintFailure,
+  onUseLan,
+  onRetryRelay,
+  onCopyRelayDiagnostics,
   pairLoading,
+  connectionMode,
+  onConnectionModeChange,
   onRegeneratePairing,
+  canGeneratePairing,
   onCopyPairingCode,
   networkInterfaces,
+  customAddresses,
   selectedAddress,
+  selectedAddressIsCustom,
   onSelectedAddressChange,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
+  beforeCustomAddressChange,
   onRefreshNetworkInterfaces,
   refreshingNetworkInterfaces,
   onBack,
@@ -170,20 +90,56 @@ export function HeroFlow({
   onDone
 }: HeroFlowProps): React.JSX.Element {
   const isLast = stepIdx === 1
+  const screenRefs = useRef<(HTMLDivElement | null)[]>([])
+  const [viewportHeight, setViewportHeight] = useState<number>()
+
+  useLayoutEffect(() => {
+    const activeScreen = screenRefs.current[stepIdx]
+    if (!activeScreen) {
+      return
+    }
+
+    const measure = (): void => setViewportHeight(activeScreen.scrollHeight)
+    measure()
+
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(activeScreen)
+    return () => observer.disconnect()
+  }, [stepIdx])
 
   return (
     <div className="mp-flow-card">
-      <div className="mp-flow-viewport">
-        <div className={cn('mp-flow-screen', stepIdx === 0 ? 'is-active' : 'is-past')}>
+      <div
+        className="mp-flow-viewport"
+        style={viewportHeight === undefined ? undefined : { height: viewportHeight }}
+      >
+        <div
+          ref={(element) => {
+            screenRefs.current[0] = element
+          }}
+          className={cn('mp-flow-screen', stepIdx === 0 ? 'is-active' : 'is-past')}
+          aria-hidden={stepIdx !== 0}
+          inert={stepIdx !== 0}
+        >
           <div className="mp-step2-layout">
             <div className="mp-step2-copy">
               <div className="mp-eyebrow-row">
                 <div className="mp-step-num">{stepIdx + 1}</div>
-                <span className="mp-eyebrow">Step 1 of 2</span>
+                <span className="mp-eyebrow">
+                  {translate('auto.components.mobile.MobileHero.92ddfdfa1f', 'Step 1 of 2')}
+                </span>
               </div>
-              <h2 className="mp-h2">Get the app.</h2>
+              <h2 className="mp-h2">
+                {translate('auto.components.mobile.MobileHero.0d9b33299e', 'Get the app.')}
+              </h2>
               <p className="mp-lead-sm">
-                Scan the QR with your phone or open the install link to grab Orca Mobile.
+                {translate(
+                  'auto.components.mobile.MobileHero.e75647ace0',
+                  'Scan the QR with your phone or open the install link to grab Orca Mobile.'
+                )}
               </p>
               <div className="mp-tab-toggle">
                 <button
@@ -193,7 +149,7 @@ export function HeroFlow({
                   onClick={() => onPlatformChange('ios')}
                 >
                   <IosBrandIcon />
-                  iOS
+                  {translate('auto.components.mobile.MobileHero.711e6f4b47', 'iOS')}
                 </button>
                 <button
                   type="button"
@@ -202,113 +158,100 @@ export function HeroFlow({
                   onClick={() => onPlatformChange('android')}
                 >
                   <AndroidLogo />
-                  Android
+                  {translate('auto.components.mobile.MobileHero.ac1eb64952', 'Android')}
                 </button>
               </div>
+              {platform === 'ios' ? (
+                <div
+                  className="mp-channel-toggle"
+                  role="radiogroup"
+                  aria-label={translate(
+                    'auto.components.mobile.MobileHero.channel.group',
+                    'Release channel'
+                  )}
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={iosChannel === 'preview'}
+                    className={cn(iosChannel === 'preview' && 'is-active')}
+                    onClick={() => onIosChannelChange('preview')}
+                  >
+                    {translate('auto.components.mobile.MobileHero.channel.preview', 'Preview')}
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={iosChannel === 'stable'}
+                    className={cn(iosChannel === 'stable' && 'is-active')}
+                    onClick={() => onIosChannelChange('stable')}
+                  >
+                    {translate('auto.components.mobile.MobileHero.channel.stable', 'Stable')}
+                  </button>
+                  <span className="mp-channel-tagline">{getChannelTagline(iosChannel)}</span>
+                </div>
+              ) : null}
               <div className="mp-inline-actions">
                 <button type="button" className="mp-ghost-action" onClick={onOpenInstallUrl}>
                   {installCopy.ctaLabel}
                 </button>
                 <button type="button" className="mp-text-link" onClick={onCopyInstallUrl}>
                   <Copy className="size-3.5" />
-                  Copy install link
+                  {translate('auto.components.mobile.MobileHero.aa97420ba4', 'Copy install link')}
                 </button>
               </div>
             </div>
-            <div className="mp-qr" aria-label="Install QR code">
-              {installQrUrl ? <img src={installQrUrl} alt="Install QR" /> : null}
+            <div className="mp-qr mp-qr-large">
+              {installQrUrl ? (
+                <img
+                  src={installQrUrl}
+                  alt={translate('auto.components.mobile.MobileHero.3241f3c26a', 'Install QR')}
+                />
+              ) : null}
             </div>
           </div>
         </div>
 
-        <div className={cn('mp-flow-screen', stepIdx === 1 && 'is-active')}>
-          <div className="mp-step2-layout">
-            <div className="mp-step2-copy">
-              <div className="mp-eyebrow-row">
-                <div className="mp-step-num">2</div>
-                <span className="mp-eyebrow">Step 2 of 2</span>
-              </div>
-              <h2 className="mp-h2">Pair this {getDeviceLabel()}.</h2>
-              <p className="mp-lead-sm">
-                Open Orca Mobile, tap <strong>Pair Desktop</strong>, and scan the code.
-              </p>
-
-              <div className="mp-network-row">
-                <span className="mp-network-label">Network</span>
-                <Select
-                  value={selectedAddress ?? ''}
-                  onValueChange={onSelectedAddressChange}
-                  disabled={networkInterfaces.length === 0}
-                >
-                  <SelectTrigger
-                    size="sm"
-                    className="mp-network-select"
-                    aria-label="Network interface to advertise"
-                  >
-                    <SelectValue placeholder="No interfaces found" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {networkInterfaces.map((iface) => (
-                      <SelectItem key={`${iface.name}-${iface.address}`} value={iface.address}>
-                        {iface.address} ({iface.name})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <button
-                  type="button"
-                  className={cn('mp-network-refresh', refreshingNetworkInterfaces && 'is-spinning')}
-                  onClick={onRefreshNetworkInterfaces}
-                  disabled={refreshingNetworkInterfaces}
-                  aria-label="Refresh network interfaces"
-                  title="Refresh network interfaces"
-                >
-                  <RefreshCw className="size-3.5" />
-                </button>
-              </div>
-
-              <div className="mp-inline-actions">
-                <span className="mp-action-divider">Can&apos;t scan?</span>
-                <button
-                  type="button"
-                  className="mp-text-link"
-                  onClick={onCopyPairingCode}
-                  disabled={!pairingUrl || pairLoading}
-                >
-                  <Copy className="size-3.5" />
-                  Copy pairing code
-                </button>
-              </div>
-            </div>
-            <div className="mp-qr-stack">
-              <div
-                className="mp-qr"
-                aria-label="Pairing QR code"
-                aria-busy={pairLoading && !pairQrDataUrl}
-              >
-                {pairQrDataUrl ? (
-                  <img src={pairQrDataUrl} alt="Pairing QR" />
-                ) : pairLoading ? (
-                  <span className="mp-qr-loading">Generating…</span>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="mp-link-under"
-                onClick={onRegeneratePairing}
-                disabled={pairLoading}
-              >
-                {pairLoading ? 'Generating…' : pairQrDataUrl ? 'Regenerate code' : 'Generate code'}
-              </button>
-            </div>
-          </div>
+        <div
+          ref={(element) => {
+            screenRefs.current[1] = element
+          }}
+          className={cn('mp-flow-screen', stepIdx === 1 && 'is-active')}
+          aria-hidden={stepIdx !== 1}
+          inert={stepIdx !== 1}
+        >
+          <MobileHeroPairingStep
+            pairQrDataUrl={pairQrDataUrl}
+            pairingUrl={pairingUrl}
+            pairingQrError={pairingQrError}
+            relayMintFailure={relayMintFailure}
+            onUseLan={onUseLan}
+            onRetryRelay={onRetryRelay}
+            onCopyRelayDiagnostics={onCopyRelayDiagnostics}
+            pairLoading={pairLoading}
+            connectionMode={connectionMode}
+            onConnectionModeChange={onConnectionModeChange}
+            onRegeneratePairing={onRegeneratePairing}
+            canGeneratePairing={canGeneratePairing}
+            onCopyPairingCode={onCopyPairingCode}
+            networkInterfaces={networkInterfaces}
+            customAddresses={customAddresses}
+            selectedAddress={selectedAddress}
+            selectedAddressIsCustom={selectedAddressIsCustom}
+            onSelectedAddressChange={onSelectedAddressChange}
+            onCustomAddressSelect={onCustomAddressSelect}
+            onCustomAddressRemove={onCustomAddressRemove}
+            beforeCustomAddressChange={beforeCustomAddressChange}
+            onRefreshNetworkInterfaces={onRefreshNetworkInterfaces}
+            refreshingNetworkInterfaces={refreshingNetworkInterfaces}
+          />
         </div>
       </div>
 
       <div className="mp-flow-actions">
         <button type="button" className="mp-flow-back" onClick={onBack}>
           <ArrowLeft className="size-3" />
-          Back
+          {translate('auto.components.mobile.MobileHero.b622eba64d', 'Back')}
         </button>
         {isLast ? (
           onDone ? (
@@ -317,7 +260,7 @@ export function HeroFlow({
               className="mp-primary-action mp-flow-primary-action"
               onClick={onDone}
             >
-              Done
+              {translate('auto.components.mobile.MobileHero.3f90dbd274', 'Done')}
               <ArrowRight className="size-3.5" />
             </button>
           ) : (
@@ -329,28 +272,11 @@ export function HeroFlow({
             className="mp-flow-continue mp-flow-primary-action"
             onClick={onContinue}
           >
-            Continue
+            {translate('auto.components.mobile.MobileHero.a8fb43cf1c', 'Continue')}
             <ArrowRight className="size-3.5" />
           </button>
         )}
       </div>
     </div>
-  )
-}
-
-// Why: these are exact filled brand paths, not generic line approximations.
-function IosBrandIcon(): React.JSX.Element {
-  return (
-    <svg className="mp-platform-brand-icon" viewBox="0 0 24 24" aria-hidden>
-      <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
-    </svg>
-  )
-}
-
-function AndroidLogo(): React.JSX.Element {
-  return (
-    <svg className="mp-platform-brand-icon" viewBox="0 0 24 24" aria-hidden>
-      <path d="M18.4395 5.5586c-.675 1.1664-1.352 2.3318-2.0274 3.498-.0366-.0155-.0742-.0286-.1113-.043-1.8249-.6957-3.484-.8-4.42-.787-1.8551.0185-3.3544.4643-4.2597.8203-.084-.1494-1.7526-3.021-2.0215-3.4864a1.1451 1.1451 0 0 0-.1406-.1914c-.3312-.364-.9054-.4859-1.379-.203-.475.282-.7136.9361-.3886 1.5019 1.9466 3.3696-.0966-.2158 1.9473 3.3593.0172.031-.4946.2642-1.3926 1.0177C2.8987 12.176.452 14.772 0 18.9902h24c-.119-1.1108-.3686-2.099-.7461-3.0683-.7438-1.9118-1.8435-3.2928-2.7402-4.1836a12.1048 12.1048 0 0 0-2.1309-1.6875c.6594-1.122 1.312-2.2559 1.9649-3.3848.2077-.3615.1886-.7956-.0079-1.1191a1.1001 1.1001 0 0 0-.8515-.5332c-.5225-.0536-.9392.3128-1.0488.5449zm-.0391 8.461c.3944.5926.324 1.3306-.1563 1.6503-.4799.3197-1.188.0985-1.582-.4941-.3944-.5927-.324-1.3307.1563-1.6504.4727-.315 1.1812-.1086 1.582.4941zM7.207 13.5273c.4803.3197.5506 1.0577.1563 1.6504-.394.5926-1.1038.8138-1.584.4941-.48-.3197-.5503-1.0577-.1563-1.6504.4008-.6021 1.1087-.8106 1.584-.4941z" />
-    </svg>
   )
 }

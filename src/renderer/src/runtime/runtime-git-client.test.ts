@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: runtime git routing tests share compatibility-cache and IPC stubs; splitting would hide cross-environment contract drift. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   bulkDiscardRuntimeGitPaths,
@@ -9,10 +8,12 @@ import {
   fastForwardRuntimeGit,
   fetchRuntimeGit,
   generateRuntimeCommitMessage,
+  generateRuntimePullRequestFields,
   getRuntimeGitDiff,
   getRuntimeGitHistory,
   getRuntimeGitIgnoredPaths,
   getRuntimeGitStatus,
+  getRuntimeGitSubmoduleStatus,
   pushRuntimeGit,
   rebaseRuntimeGitFromBase
 } from './runtime-git-client'
@@ -23,7 +24,9 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const gitStatus = vi.fn()
+const gitCancelStatus = vi.fn()
 const gitCheckIgnored = vi.fn()
+const gitSubmoduleStatus = vi.fn()
 const gitDiff = vi.fn()
 const gitHistory = vi.fn()
 const gitBulkStage = vi.fn()
@@ -34,6 +37,7 @@ const gitFastForward = vi.fn()
 const gitPush = vi.fn()
 const gitRebaseFromBase = vi.fn()
 const gitGenerateCommitMessage = vi.fn()
+const gitGeneratePullRequestFields = vi.fn()
 const gitDiscoverCommitMessageModels = vi.fn()
 const gitCancelGenerateCommitMessage = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -43,7 +47,10 @@ const runtimeCall = vi.fn()
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   gitStatus.mockReset()
+  gitCancelStatus.mockReset()
+  gitCancelStatus.mockResolvedValue(undefined)
   gitCheckIgnored.mockReset()
+  gitSubmoduleStatus.mockReset()
   gitDiff.mockReset()
   gitHistory.mockReset()
   gitBulkStage.mockReset()
@@ -54,6 +61,7 @@ beforeEach(() => {
   gitPush.mockReset()
   gitRebaseFromBase.mockReset()
   gitGenerateCommitMessage.mockReset()
+  gitGeneratePullRequestFields.mockReset()
   gitDiscoverCommitMessageModels.mockReset()
   gitCancelGenerateCommitMessage.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -66,7 +74,9 @@ beforeEach(() => {
     api: {
       git: {
         status: gitStatus,
+        cancelStatus: gitCancelStatus,
         checkIgnored: gitCheckIgnored,
+        submoduleStatus: gitSubmoduleStatus,
         diff: gitDiff,
         history: gitHistory,
         bulkStage: gitBulkStage,
@@ -77,6 +87,7 @@ beforeEach(() => {
         push: gitPush,
         rebaseFromBase: gitRebaseFromBase,
         generateCommitMessage: gitGenerateCommitMessage,
+        generatePullRequestFields: gitGeneratePullRequestFields,
         discoverCommitMessageModels: gitDiscoverCommitMessageModels,
         cancelGenerateCommitMessage: gitCancelGenerateCommitMessage
       },
@@ -99,6 +110,44 @@ describe('runtime git client', () => {
 
     expect(gitStatus).toHaveBeenCalledWith({ worktreePath: '/repo', connectionId: 'ssh-1' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('uses the backing folder path for local folder-workspace status', async () => {
+    gitStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
+
+    await getRuntimeGitStatus({
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId: `folder-repo::/home/user::workspace:${workspaceId}`,
+      worktreePath: `/home/user::workspace:${workspaceId}`
+    })
+
+    expect(gitStatus).toHaveBeenCalledWith({
+      worktreePath: '/home/user',
+      connectionId: undefined
+    })
+  })
+
+  it('uses the backing folder path for other local folder-workspace git ops', async () => {
+    // Why: status is not the only command run as a subprocess cwd. Every local
+    // op (diff, submodule status, upstream, stage, …) must strip the synthetic
+    // `::workspace:<uuid>` suffix or Git spawns against a nonexistent directory.
+    gitDiff.mockResolvedValue({ hunks: [] })
+    gitSubmoduleStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
+    const context = {
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId: `folder-repo::/home/user::workspace:${workspaceId}`,
+      worktreePath: `/home/user::workspace:${workspaceId}`
+    }
+
+    await getRuntimeGitDiff(context, { filePath: 'a.ts', staged: false })
+    await getRuntimeGitSubmoduleStatus(context, 'sub')
+
+    expect(gitDiff).toHaveBeenCalledWith(expect.objectContaining({ worktreePath: '/home/user' }))
+    expect(gitSubmoduleStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreePath: '/home/user' })
+    )
   })
 
   it('forwards includeIgnored to local git status only when enabled', async () => {
@@ -132,6 +181,72 @@ describe('runtime git client', () => {
     })
   })
 
+  it('forwards upstream-negative-cache bypass to local git status only when enabled', async () => {
+    gitStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { bypassEffectiveUpstreamNegativeCache: true }
+    )
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { bypassEffectiveUpstreamNegativeCache: false }
+    )
+
+    expect(gitStatus).toHaveBeenNthCalledWith(1, {
+      worktreePath: '/repo',
+      connectionId: undefined,
+      bypassEffectiveUpstreamNegativeCache: true
+    })
+    expect(gitStatus).toHaveBeenNthCalledWith(2, {
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+  })
+
+  it('forwards line-stat reuse to local status and cancels tokenized work on abort', async () => {
+    const controller = new AbortController()
+    let resolveStatus!: (value: { entries: never[]; conflictOperation: string }) => void
+    gitStatus.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveStatus = resolve
+        })
+    )
+
+    const request = getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { reuseLineStats: true, signal: controller.signal }
+    )
+    await vi.waitFor(() => expect(gitStatus).toHaveBeenCalled())
+    const statusArgs = gitStatus.mock.calls[0]?.[0] as { requestToken?: string }
+    controller.abort()
+    resolveStatus({ entries: [], conflictOperation: 'unknown' })
+    // Why: cancel is best-effort on the main process; even if status still
+    // settles, the aborted local call must reject rather than look fresh.
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(gitStatus).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      reuseLineStats: true,
+      requestToken: expect.any(String)
+    })
+    expect(gitCancelStatus).toHaveBeenCalledWith({ requestToken: statusArgs.requestToken })
+  })
+
   it('checks ignored paths through local git IPC', async () => {
     gitCheckIgnored.mockResolvedValue(['dist/bundle.js'])
 
@@ -151,6 +266,29 @@ describe('runtime git client', () => {
       paths: ['dist/bundle.js', 'src/index.ts']
     })
     expect(result).toEqual(['dist/bundle.js'])
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('passes submodule status area through local git IPC', async () => {
+    gitSubmoduleStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await getRuntimeGitSubmoduleStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      'vendor/lib',
+      'staged'
+    )
+
+    expect(gitSubmoduleStatus).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      submodulePath: 'vendor/lib',
+      connectionId: 'ssh-1',
+      area: 'staged'
+    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
@@ -237,6 +375,32 @@ describe('runtime git client', () => {
     })
   })
 
+  it('passes submodule status area through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { entries: [], conflictOperation: 'unknown' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await getRuntimeGitSubmoduleStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      'vendor/lib',
+      'staged'
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.submoduleStatus',
+      params: { worktree: 'id:wt-1', submodulePath: 'vendor/lib', area: 'staged' },
+      timeoutMs: 15_000
+    })
+  })
+
   it('forwards includeIgnored through the active runtime environment', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
@@ -258,6 +422,82 @@ describe('runtime git client', () => {
       selector: 'env-1',
       method: 'git.status',
       params: { worktree: 'id:wt-1', includeIgnored: true },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('forwards upstream-negative-cache bypass through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { entries: [], conflictOperation: 'unknown' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { bypassEffectiveUpstreamNegativeCache: true }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.status',
+      params: { worktree: 'id:wt-1', bypassEffectiveUpstreamNegativeCache: true },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('keeps safety (reuse) refreshes on the pooled call transport even with a signal', async () => {
+    const controller = new AbortController()
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { entries: [], conflictOperation: 'unknown' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { reuseLineStats: true, signal: controller.signal }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.status',
+      params: { worktree: 'id:wt-1', reuseLineStats: true },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('forwards line-stat reuse through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { entries: [], conflictOperation: 'unknown' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { reuseLineStats: true }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.status',
+      params: { worktree: 'id:wt-1', reuseLineStats: true },
       timeoutMs: 15_000
     })
   })
@@ -422,6 +662,56 @@ describe('runtime git client', () => {
     })
   })
 
+  it('passes one-shot commit-message params to local and runtime generation', async () => {
+    const sourceControlAiResolvedParams = {
+      agentId: 'codex' as const,
+      model: 'gpt-5.5',
+      thinkingLevel: 'high',
+      customPrompt: 'Use Conventional Commits.'
+    }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { success: true, message: 'feat: test' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await generateRuntimeCommitMessage(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'repo-1::/repo',
+        worktreePath: '/repo'
+      },
+      { sourceControlAiResolvedParams }
+    )
+    await generateRuntimeCommitMessage(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { sourceControlAiResolvedParams }
+    )
+
+    expect(gitGenerateCommitMessage).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      worktreeId: 'repo-1::/repo',
+      repoId: 'repo-1',
+      connectionId: undefined,
+      sourceControlAiResolvedParams
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.generateCommitMessage',
+      params: {
+        worktree: 'id:wt-1',
+        commitMessageDiscoveryHostKey: 'runtime:env-1',
+        sourceControlAiResolvedParams
+      },
+      timeoutMs: 75_000
+    })
+  })
+
   it('discovers commit-message models through the active runtime', async () => {
     const agentCmdOverrides = { cursor: 'cursor-agent' }
     runtimeEnvironmentCall.mockResolvedValue({
@@ -447,5 +737,43 @@ describe('runtime git client', () => {
       timeoutMs: 75_000
     })
     expect(gitDiscoverCommitMessageModels).not.toHaveBeenCalled()
+  })
+
+  it('passes the raw worktree id to local generation IPC', async () => {
+    // Why: the meta key keeps the `::workspace:<uuid>` suffix that the cwd path strips.
+    const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
+    const worktreeId = `folder-repo::/home/user::workspace:${workspaceId}`
+    const context = {
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId,
+      worktreePath: `/home/user::workspace:${workspaceId}`
+    }
+
+    await generateRuntimeCommitMessage(context)
+    await generateRuntimePullRequestFields(context, {
+      base: 'main',
+      title: '',
+      body: '',
+      draft: false
+    })
+
+    expect(gitGenerateCommitMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId, worktreePath: '/home/user' })
+    )
+    expect(gitGeneratePullRequestFields).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId, worktreePath: '/home/user' })
+    )
+  })
+
+  it('omits worktreeId from local generation IPC when the context has none', async () => {
+    const context = {
+      settings: { activeRuntimeEnvironmentId: null },
+      worktreeId: null,
+      worktreePath: '/repo'
+    }
+
+    await generateRuntimeCommitMessage(context)
+
+    expect(gitGenerateCommitMessage.mock.calls[0][0]).not.toHaveProperty('worktreeId')
   })
 })

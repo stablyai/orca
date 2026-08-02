@@ -1,4 +1,5 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import { findTransport } from '../../shared/runtime-bootstrap'
 import { tryReadMetadata } from './metadata'
 import { sendRequest } from './transport'
 import { RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
@@ -7,7 +8,8 @@ export async function getCliStatus(
   userDataPath: string
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
   const metadata = tryReadMetadata(userDataPath)
-  if (!metadata?.transports?.length || !metadata.authToken) {
+  const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
+  if (!transport || !metadata?.authToken) {
     return buildCliStatusResponse({
       app: {
         running: false,
@@ -33,15 +35,22 @@ export async function getCliStatus(
       throw new RuntimeRpcFailureError(response)
     }
     const graphState = response.result.graphStatus
+    const desktopWindowStatus = resolveDesktopWindowStatus(response.result)
     return buildCliStatusResponse({
       app: {
         running: true,
-        pid: metadata.pid
+        pid: metadata.pid,
+        ...(desktopWindowStatus ? { desktopWindowStatus } : {})
       },
       runtime: {
         state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
         reachable: true,
-        runtimeId: response.result.runtimeId
+        runtimeId: response.result.runtimeId,
+        ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
+        ...(response.result.remoteUpdateSupport
+          ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
+          : {}),
+        ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {})
       },
       graph: {
         state: graphState
@@ -64,6 +73,19 @@ export async function getCliStatus(
       }
     })
   }
+}
+
+export function resolveDesktopWindowStatus(
+  status: RuntimeStatus
+): CliStatusResult['app']['desktopWindowStatus'] {
+  if (status.desktopWindowStatus) {
+    return status.desktopWindowStatus
+  }
+  // Why: older desktop runtimes predate the explicit status but a positive
+  // Electron id still proves that a real window owns the graph.
+  return status.authoritativeWindowId !== null && status.authoritativeWindowId > 0
+    ? 'available'
+    : undefined
 }
 
 function buildCliStatusResponse(result: CliStatusResult): RuntimeRpcSuccess<CliStatusResult> {

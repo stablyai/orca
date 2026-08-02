@@ -1,4 +1,4 @@
-import path from 'path'
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
@@ -32,6 +32,10 @@ import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
+import {
+  resetSshConnectionGenerations,
+  setSshConnectionGeneration
+} from '../ssh/ssh-connection-generation'
 
 // Why: paths are resolved via path.resolve() in production code, so test
 // data must use resolved paths to avoid Unix-vs-Windows mismatches.
@@ -72,6 +76,7 @@ describe('registerFilesystemMutationHandlers', () => {
     renameMock.mockReset()
     writeFileMock.mockReset()
     realpathMock.mockReset()
+    resetSshConnectionGenerations()
 
     handleMock.mockImplementation((channel: string, handler: never) => {
       handlers.set(channel, handler)
@@ -166,6 +171,36 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
   })
 
+  it('serializes concurrent local renames targeting the same destination', async () => {
+    const firstPath = path.resolve('/workspace/repo/first.ts')
+    const secondPath = path.resolve('/workspace/repo/second.ts')
+    const destinationPath = path.resolve('/workspace/repo/destination.ts')
+    let destinationExists = false
+    lstatMock.mockImplementation(async (filePath: string) => {
+      if (filePath === destinationPath && destinationExists) {
+        return mockStats(1, 30)
+      }
+      if (filePath === firstPath) {
+        return mockStats(1, 10)
+      }
+      if (filePath === secondPath) {
+        return mockStats(1, 20)
+      }
+      throw enoent()
+    })
+    renameMock.mockImplementation(async () => {
+      destinationExists = true
+    })
+
+    const results = await Promise.allSettled([
+      handlers.get('fs:rename')!(null, { oldPath: firstPath, newPath: destinationPath }),
+      handlers.get('fs:rename')!(null, { oldPath: secondPath, newPath: destinationPath })
+    ])
+
+    expect(results.map(({ status }) => status).sort()).toEqual(['fulfilled', 'rejected'])
+    expect(renameMock).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects rename when destination already exists as a true collision', async () => {
     const oldPath = path.resolve('/workspace/repo/old.ts')
     const resolvedNewPath = path.resolve('/workspace/repo/new.ts')
@@ -192,12 +227,30 @@ describe('registerFilesystemMutationHandlers', () => {
   it('allows case-only rename when destination is the same entry in the same parent', async () => {
     const oldPath = path.resolve('/workspace/repo/README.md')
     const newPath = path.resolve('/workspace/repo/readme.md')
+    const canonicalPath = path.resolve('/workspace/repo/README.md')
     lstatMock.mockImplementation(async (p: string) => {
       if (p === oldPath || p === newPath) {
         return mockStats(2, 20)
       }
       throw enoent()
     })
+    mockRealpath({ [oldPath]: canonicalPath, [newPath]: canonicalPath })
+
+    await handlers.get('fs:rename')!(null, { oldPath, newPath })
+
+    expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
+  })
+
+  it('allows a native Unicode alias rename for the same directory entry', async () => {
+    const oldPath = path.resolve('/workspace/repo/Straße.md')
+    const newPath = path.resolve('/workspace/repo/STRASSE.md')
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === oldPath || p === newPath) {
+        return mockStats(2, 21)
+      }
+      throw enoent()
+    })
+    mockRealpath({ [oldPath]: oldPath, [newPath]: oldPath })
 
     await handlers.get('fs:rename')!(null, { oldPath, newPath })
 
@@ -218,6 +271,25 @@ describe('registerFilesystemMutationHandlers', () => {
       "A file or folder named 'README-hardlink.md' already exists in this location"
     )
 
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when same-entry realpath encounters a permission error', async () => {
+    const oldPath = path.resolve('/workspace/repo/README.md')
+    const newPath = path.resolve('/workspace/repo/readme.md')
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === oldPath || p === newPath) {
+        return mockStats(3, 30)
+      }
+      throw enoent()
+    })
+    realpathMock.mockRejectedValue(
+      Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    )
+
+    await expect(handlers.get('fs:rename')!(null, { oldPath, newPath })).rejects.toMatchObject({
+      code: 'EACCES'
+    })
     expect(renameMock).not.toHaveBeenCalled()
   })
 
@@ -281,7 +353,9 @@ describe('registerFilesystemMutationHandlers', () => {
       await handlers.get('fs:rename')!(null, {
         oldPath: '/home/me/repo/old.ts',
         newPath: '/home/me/repo/new.ts',
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 0
       })
     } finally {
       unregisterSshFilesystemProvider('ssh-1')
@@ -300,7 +374,9 @@ describe('registerFilesystemMutationHandlers', () => {
         handlers.get('fs:rename')!(null, {
           oldPath: '/home/me/repo/old.ts',
           newPath: '/home/me/repo/new.ts',
-          connectionId: 'ssh-1'
+          connectionId: 'ssh-1',
+          expectedSshTargetId: 'ssh-1',
+          expectedSshConnectionGeneration: 0
         })
       ).rejects.toThrow('destination exists')
     } finally {
@@ -309,6 +385,120 @@ describe('registerFilesystemMutationHandlers', () => {
 
     expect(renameMock).not.toHaveBeenCalled()
   })
+
+  it('rejects direct SSH rename without target-bound generation provenance', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    registerSshFilesystemProvider('ssh-1', { renameNoClobber } as never)
+
+    try {
+      await expect(
+        handlers.get('fs:rename')!(null, {
+          oldPath: '/home/me/repo/old.ts',
+          newPath: '/home/me/repo/new.ts',
+          connectionId: 'ssh-1'
+        })
+      ).rejects.toThrow('SSH connection changed')
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(renameNoClobber).not.toHaveBeenCalled()
+  })
+
+  it('rejects equal-generation provenance for another direct SSH target', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    registerSshFilesystemProvider('ssh-b', { renameNoClobber } as never)
+
+    try {
+      await expect(
+        handlers.get('fs:rename')!(null, {
+          oldPath: '/home/me/repo/old.ts',
+          newPath: '/home/me/repo/new.ts',
+          connectionId: 'ssh-b',
+          expectedSshTargetId: 'ssh-a',
+          expectedSshConnectionGeneration: 0
+        })
+      ).rejects.toThrow('SSH connection changed')
+    } finally {
+      unregisterSshFilesystemProvider('ssh-b')
+    }
+
+    expect(renameNoClobber).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale generation provenance for a direct SSH target', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    registerSshFilesystemProvider('ssh-1', { renameNoClobber } as never)
+    setSshConnectionGeneration('ssh-1', 8)
+
+    try {
+      await expect(
+        handlers.get('fs:rename')!(null, {
+          oldPath: '/home/me/repo/old.ts',
+          newPath: '/home/me/repo/new.ts',
+          connectionId: 'ssh-1',
+          expectedSshTargetId: 'ssh-1',
+          expectedSshConnectionGeneration: 7
+        })
+      ).rejects.toThrow('SSH connection changed')
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(renameNoClobber).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale SSH provenance when a direct mutation resolves local', async () => {
+    await expect(
+      handlers.get('fs:rename')!(null, {
+        oldPath: path.resolve('/workspace/repo/old.ts'),
+        newPath: path.resolve('/workspace/repo/new.ts'),
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 0
+      })
+    ).rejects.toThrow('SSH connection changed')
+
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['fs:createFile', { filePath: path.resolve('/workspace/repo/new.ts') }],
+    ['fs:createDir', { dirPath: path.resolve('/workspace/repo/new-dir') }],
+    [
+      'fs:rename',
+      {
+        oldPath: path.resolve('/workspace/repo/old.ts'),
+        newPath: path.resolve('/workspace/repo/new.ts')
+      }
+    ],
+    [
+      'fs:copy',
+      {
+        sourcePath: path.resolve('/workspace/repo/source.ts'),
+        destinationPath: path.resolve('/workspace/repo/copy.ts')
+      }
+    ],
+    [
+      'fs:importExternalPaths',
+      { sourcePaths: [path.resolve('/tmp/source.ts')], destDir: path.resolve('/workspace/repo') }
+    ],
+    [
+      'fs:resolveDroppedPathsForAgent',
+      { paths: [path.resolve('/tmp/source.ts')], worktreePath: path.resolve('/workspace/repo') }
+    ]
+  ])(
+    'rejects %s before local fallback when the expected execution host is SSH',
+    async (channel, args) => {
+      await expect(
+        handlers.get(channel)!(null, { ...args, expectedExecutionHostId: 'ssh:ssh-1' })
+      ).rejects.toThrow('Workspace host changed; refresh and try again')
+
+      expect(writeFileMock).not.toHaveBeenCalled()
+      expect(mkdirMock).not.toHaveBeenCalled()
+      expect(renameMock).not.toHaveBeenCalled()
+      expect(copyFileMock).not.toHaveBeenCalled()
+    }
+  )
 
   // ── fs:copy ────────────────────────────────────────────────────
 
@@ -330,7 +520,9 @@ describe('registerFilesystemMutationHandlers', () => {
       await handlers.get('fs:copy')!(null, {
         sourcePath: '/home/me/repo/source.ts',
         destinationPath: '/home/me/repo/source copy.ts',
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 0
       })
     } finally {
       unregisterSshFilesystemProvider('ssh-1')

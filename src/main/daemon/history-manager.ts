@@ -1,55 +1,73 @@
-import { join } from 'path'
-import {
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  existsSync,
-  rmSync,
-  renameSync,
-  unlinkSync
-} from 'fs'
+import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { getHistorySessionDirName } from './history-paths'
-import type { TerminalSnapshot } from './types'
+import {
+  fingerprintTerminalHistorySession,
+  hasTerminalHistoryRecoveryProtection,
+  quarantineTerminalHistorySession,
+  type ActiveHistoryRecoveryFreeze,
+  type HistoryRecoveryFreeze
+} from './terminal-history-recovery-quarantine'
+import {
+  removeTerminalHistorySessionTrees,
+  schedulePendingSessionTreeRemovals
+} from './terminal-history-session-tombstone'
+import { TerminalHistorySessionWriter } from './terminal-history-session-writer'
+import {
+  readTerminalHistoryMetaFromDir,
+  updateTerminalHistoryMeta,
+  type SessionMeta
+} from './terminal-history-metadata'
+import type { PendingOutputRecord, TerminalSnapshot } from './types'
+import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
+import { TerminalHistoryMutationTracker } from './terminal-history-mutation-tracker'
+import type {
+  HistoryCheckpointResult,
+  HistoryManagerOptions,
+  OpenSessionOptions
+} from './terminal-history-manager-options'
 
-export type SessionMeta = {
-  cwd: string
-  cols: number
-  rows: number
-  startedAt: string
-  endedAt: string | null
-  exitCode: number | null
-}
-
-export type OpenSessionOptions = {
-  cwd: string
-  cols: number
-  rows: number
-}
-
-type SessionWriter = {
-  dir: string
-  checkpointPath: string
-}
-
-export type HistoryManagerOptions = {
-  onWriteError?: (sessionId: string, error: Error) => void
-}
+export type { SessionMeta } from './terminal-history-metadata'
+export type { HistoryRecoveryFreeze } from './terminal-history-recovery-quarantine'
+export type * from './terminal-history-manager-options'
 
 export class HistoryManager {
-  private basePath: string
-  private writers = new Map<string, SessionWriter>()
+  private writers = new Map<string, TerminalHistorySessionWriter>()
   private disabledSessions = new Set<string>()
+  private mutations = new TerminalHistoryMutationTracker()
+  private recoveryFreezes = new Map<string, ActiveHistoryRecoveryFreeze>()
   private onWriteError?: (sessionId: string, error: Error) => void
+  private checkpointMaxBytes: number
 
-  constructor(basePath: string, opts?: HistoryManagerOptions) {
-    this.basePath = basePath
+  constructor(
+    private readonly basePath: string,
+    opts?: HistoryManagerOptions
+  ) {
     this.onWriteError = opts?.onWriteError
+    this.checkpointMaxBytes = opts?.checkpointMaxBytes ?? TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
+    // Why: a quit between tombstone and reclaim leaves the tree on disk; nothing else rescans the queue.
+    schedulePendingSessionTreeRemovals(this.basePath)
   }
 
   async openSession(sessionId: string, opts: OpenSessionOptions): Promise<void> {
+    let recoveryFreeze = opts.recoveryFreeze
     try {
       this.disabledSessions.delete(sessionId)
       const dir = join(this.basePath, getHistorySessionDirName(sessionId))
+      recoveryFreeze ??= await this.freezeForRecovery(sessionId)
+      const activeFreeze = this.requireRecoveryFreeze(sessionId, recoveryFreeze)
+
+      if (opts.quarantineUnreadableRecovery) {
+        quarantineTerminalHistorySession(this.basePath, sessionId, activeFreeze.fingerprint ?? null)
+      } else if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
+        throw new Error('terminal_history_recovery_protected')
+      } else if (
+        fingerprintTerminalHistorySession(this.basePath, sessionId) !== activeFreeze.fingerprint
+      ) {
+        throw new Error('terminal_history_recovery_generation_changed')
+      }
+      this.recoveryFreezes.delete(sessionId)
       mkdirSync(dir, { recursive: true })
 
       const meta: SessionMeta = {
@@ -62,89 +80,178 @@ export class HistoryManager {
       }
       writeFileSync(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
 
-      // Why: if a session ID is reused after a previous clean exit, stale
-      // recovery files may still be on disk. Without removing them, a crash
-      // before the first 5s checkpoint tick would cause detectColdRestore to
-      // replay stale terminal content from the previous session. Both
-      // checkpoint.json and scrollback.bin (legacy) must be cleaned up
-      // because the reader falls back to scrollback.bin when no checkpoint
-      // exists.
-      const checkpointPath = join(dir, 'checkpoint.json')
-      for (const staleFile of [checkpointPath, join(dir, 'scrollback.bin')]) {
-        try {
-          unlinkSync(staleFile)
-        } catch {
-          // ENOENT is expected for new sessions
+      if (!opts.quarantineUnreadableRecovery) {
+        // Why: a crash before the first checkpoint must not replay a cleanly ended prior session.
+        for (const staleFile of [
+          join(dir, 'checkpoint.json'),
+          join(dir, 'scrollback.bin'),
+          join(dir, 'output.log')
+        ]) {
+          try {
+            unlinkSync(staleFile)
+          } catch {
+            // ENOENT is expected for new sessions
+          }
         }
       }
 
-      this.writers.set(sessionId, {
-        dir,
-        checkpointPath
-      })
+      this.writers.set(
+        sessionId,
+        new TerminalHistorySessionWriter(dir, true, this.checkpointMaxBytes)
+      )
     } catch (err) {
+      if (recoveryFreeze) {
+        this.abandonRecoveryFreeze(recoveryFreeze)
+      }
       this.handleWriteError(sessionId, err)
     }
   }
 
-  // Why: on warm reattach after app relaunch, the HistoryManager is a fresh
-  // instance with no in-memory writers. This registers the writer so
-  // checkpoint() calls work, without overwriting meta.json or deleting the
-  // existing checkpoint.json (which is the only valid recovery data until
-  // the next checkpoint tick writes a fresh one).
-  registerWriter(sessionId: string): void {
+  async freezeForRecovery(sessionId: string): Promise<HistoryRecoveryFreeze> {
+    if (this.recoveryFreezes.has(sessionId)) {
+      throw new Error('terminal_history_recovery_already_frozen')
+    }
+
+    this.writers.delete(sessionId)
+    const handle: HistoryRecoveryFreeze = {
+      sessionId,
+      token: randomUUID()
+    }
+    const activeFreeze: ActiveHistoryRecoveryFreeze = { handle }
+    this.recoveryFreezes.set(sessionId, activeFreeze)
+    try {
+      await this.mutations.wait(sessionId)
+      activeFreeze.fingerprint = fingerprintTerminalHistorySession(this.basePath, sessionId)
+      return handle
+    } catch (err) {
+      if (this.recoveryFreezes.get(sessionId) === activeFreeze) {
+        this.recoveryFreezes.delete(sessionId)
+      }
+      throw err
+    }
+  }
+
+  abandonRecoveryFreeze(freeze?: HistoryRecoveryFreeze): void {
+    const activeFreeze = freeze ? this.recoveryFreezes.get(freeze.sessionId) : undefined
+    if (activeFreeze && activeFreeze.handle === freeze) {
+      this.recoveryFreezes.delete(activeFreeze.handle.sessionId)
+    }
+  }
+
+  // Why: warm reattach has no in-memory writers; re-register without touching meta.json or checkpoint.json (only recovery data until the next tick).
+  registerWriter(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): void {
     if (this.writers.has(sessionId)) {
       return
     }
-    const dir = join(this.basePath, getHistorySessionDirName(sessionId))
-    this.writers.set(sessionId, {
-      dir,
-      checkpointPath: join(dir, 'checkpoint.json')
-    })
-  }
-
-  // Why: replaces the old appendData (which wrote every PTY chunk to disk).
-  // Checkpoints happen every ~5 seconds from a timer, not on every data event,
-  // so disk I/O drops from O(PTY throughput) to O(1 write per interval).
-  async checkpoint(sessionId: string, snapshot: TerminalSnapshot): Promise<void> {
-    if (this.disabledSessions.has(sessionId)) {
+    if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
+      this.abandonRecoveryFreeze(recoveryFreeze)
+      return void this.disabledSessions.add(sessionId)
+    }
+    if (recoveryFreeze) {
+      try {
+        const activeFreeze = this.requireRecoveryFreeze(sessionId, recoveryFreeze)
+        if (
+          fingerprintTerminalHistorySession(this.basePath, sessionId) !== activeFreeze.fingerprint
+        ) {
+          throw new Error('terminal_history_recovery_generation_changed')
+        }
+        this.recoveryFreezes.delete(sessionId)
+      } catch (err) {
+        this.abandonRecoveryFreeze(recoveryFreeze)
+        this.handleWriteError(sessionId, err)
+        return
+      }
+    } else if (this.recoveryFreezes.has(sessionId)) {
       return
     }
+    const dir = join(this.basePath, getHistorySessionDirName(sessionId))
+    this.writers.set(
+      sessionId,
+      new TerminalHistorySessionWriter(dir, false, this.checkpointMaxBytes)
+    )
+  }
+
+  // Why: wake re-spawns a sleep-killed session; re-register without deleting checkpoint.json, clear endedAt so it can cold-restore again.
+  reopenSession(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): void {
+    this.disabledSessions.delete(sessionId)
+    this.registerWriter(sessionId, recoveryFreeze)
     const writer = this.writers.get(sessionId)
     if (!writer) {
       return
     }
-
     try {
-      // Why: shells that haven't emitted OSC-7 have snapshot.cwd = null.
-      // Persisting null would overwrite the usable cwd from meta.json,
-      // breaking cold restore cwd recovery. Fall back to the meta cwd
-      // so the revived shell inherits the original working directory.
-      let effectiveCwd = snapshot.cwd
-      if (effectiveCwd === null) {
-        const meta = this.readMetaFromDir(writer.dir)
-        effectiveCwd = meta?.cwd ?? null
-      }
-
-      const data = JSON.stringify({
-        snapshotAnsi: snapshot.snapshotAnsi,
-        scrollbackAnsi: snapshot.scrollbackAnsi,
-        rehydrateSequences: snapshot.rehydrateSequences,
-        cwd: effectiveCwd,
-        cols: snapshot.cols,
-        rows: snapshot.rows,
-        modes: snapshot.modes,
-        scrollbackLines: snapshot.scrollbackLines,
-        checkpointedAt: new Date().toISOString()
-      })
-      // Why: atomic write via tmp+rename prevents half-written checkpoints
-      // on crash. Reading a corrupt checkpoint is worse than reading a
-      // slightly stale one.
-      const tmpPath = `${writer.checkpointPath}.tmp`
-      writeFileSync(tmpPath, data)
-      renameSync(tmpPath, writer.checkpointPath)
+      updateTerminalHistoryMeta(writer.dir, { endedAt: null, exitCode: null })
     } catch (err) {
       this.handleWriteError(sessionId, err)
+    }
+  }
+
+  suspendSession(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): void {
+    // Why: leaving the writer active would let the next checkpoint overwrite the only good recovered-scrollback copy.
+    this.writers.delete(sessionId)
+    if (recoveryFreeze) {
+      this.abandonRecoveryFreeze(recoveryFreeze)
+    }
+    this.disabledSessions.delete(sessionId)
+  }
+
+  /** Appends one batch to the incremental log; returns 'needs-checkpoint' at capacity, signalling the caller to checkpoint() (which resets the log). */
+  appendIncrements(
+    sessionId: string,
+    seq: number,
+    records: PendingOutputRecord[]
+  ): Promise<'ok' | 'needs-checkpoint'> {
+    return this.mutations.track(sessionId, this.appendIncrementsUntracked(sessionId, seq, records))
+  }
+
+  private async appendIncrementsUntracked(
+    sessionId: string,
+    seq: number,
+    records: PendingOutputRecord[]
+  ): Promise<'ok' | 'needs-checkpoint'> {
+    if (this.disabledSessions.has(sessionId) || records.length === 0) {
+      return 'ok'
+    }
+    const writer = this.writers.get(sessionId)
+    if (!writer) {
+      return 'ok'
+    }
+    try {
+      return await writer.appendIncrements(seq, records)
+    } catch (err) {
+      this.handleWriteError(sessionId, err)
+      return 'ok'
+    }
+  }
+
+  // Full checkpoints are rare (clean disconnect, pending-buffer overflow, log cap); the 5s tick appends increments instead.
+  checkpoint(sessionId: string, snapshot: TerminalSnapshot): Promise<HistoryCheckpointResult> {
+    return this.mutations.track(sessionId, this.checkpointUntracked(sessionId, snapshot))
+  }
+
+  private async checkpointUntracked(
+    sessionId: string,
+    snapshot: TerminalSnapshot
+  ): Promise<HistoryCheckpointResult> {
+    if (this.disabledSessions.has(sessionId)) {
+      return 'unavailable'
+    }
+    const writer = this.writers.get(sessionId)
+    if (!writer) {
+      return 'unavailable'
+    }
+
+    try {
+      // Why: tmp+rename is atomic (corrupt checkpoint > stale); async so a sync ~MB write can't stall IPC (worse under Windows AV).
+      // The adapter's checkpointInFlight guard serializes checkpoints, so concurrent async writes can't collide on the fixed .tmp path.
+      const checkpoint = await writer.checkpoint(snapshot)
+      if (checkpoint.result === 'retryable') {
+        this.onWriteError?.(sessionId, checkpoint.error)
+      }
+      return checkpoint.result
+    } catch (err) {
+      this.handleWriteError(sessionId, err)
+      return 'unavailable'
     }
   }
 
@@ -155,12 +262,12 @@ export class HistoryManager {
     }
 
     this.writers.delete(sessionId)
+    // Why: session is dead; without this a transient-error-poisoned id leaks forever (sessionIds never reused).
+    this.disabledSessions.delete(sessionId)
     try {
-      this.updateMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode })
+      updateTerminalHistoryMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode })
     } catch (err) {
-      // Why: if endedAt can't be written, the session looks like an unclean
-      // shutdown and triggers a false cold restore on next launch. Disable
-      // further writes and report, but don't crash the app.
+      // Why: an unwritten endedAt looks like an unclean shutdown → false cold restore next launch.
       this.handleWriteError(sessionId, err)
     }
   }
@@ -168,10 +275,23 @@ export class HistoryManager {
   async removeSession(sessionId: string): Promise<void> {
     this.writers.delete(sessionId)
     this.disabledSessions.delete(sessionId)
-    rmSync(join(this.basePath, getHistorySessionDirName(sessionId)), {
-      recursive: true,
-      force: true
-    })
+    this.recoveryFreezes.delete(sessionId)
+    await this.mutations.wait(sessionId)
+    // Why tombstoned: writer handles are closed by here, so the trees only have to become unreachable —
+    // they reach hundreds of MB and every terminal a worktree delete tears down awaits this.
+    await removeTerminalHistorySessionTrees(this.basePath, sessionId)
+  }
+
+  isSessionDisabled(sessionId: string): boolean {
+    return this.disabledSessions.has(sessionId)
+  }
+
+  disabledSessionCount(): number {
+    return this.disabledSessions.size
+  }
+
+  hasWriter(sessionId: string): boolean {
+    return this.writers.has(sessionId)
   }
 
   hasHistory(sessionId: string): boolean {
@@ -179,23 +299,18 @@ export class HistoryManager {
   }
 
   readMeta(sessionId: string): SessionMeta | null {
-    const metaPath = join(this.basePath, getHistorySessionDirName(sessionId), 'meta.json')
-    if (!existsSync(metaPath)) {
-      return null
-    }
-    try {
-      return JSON.parse(readFileSync(metaPath, 'utf-8'))
-    } catch {
-      return null
-    }
+    const dir = join(this.basePath, getHistorySessionDirName(sessionId))
+    return readTerminalHistoryMetaFromDir(dir)
   }
 
   async dispose(): Promise<void> {
-    // Why: mark all open sessions as cleanly ended so they don't trigger
-    // false cold-restores on next launch.
+    // Why: mark open sessions cleanly ended so they don't trigger false cold-restores next launch.
     for (const [sessionId, writer] of this.writers) {
       try {
-        this.updateMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode: null })
+        updateTerminalHistoryMeta(writer.dir, {
+          endedAt: new Date().toISOString(),
+          exitCode: null
+        })
       } catch {
         this.disabledSessions.add(sessionId)
       }
@@ -203,32 +318,24 @@ export class HistoryManager {
     this.writers.clear()
   }
 
-  // Why: history is best-effort — any error should disable the session
-  // rather than crash the app. Callers use fire-and-forget `void` promises,
-  // so a re-thrown error would become an unhandled rejection.
+  // Why: history is best-effort; callers fire-and-forget so a throw would be an unhandled rejection — disable instead.
   private handleWriteError(sessionId: string, err: unknown): void {
     this.disabledSessions.add(sessionId)
     this.onWriteError?.(sessionId, err as Error)
   }
 
-  private readMetaFromDir(dir: string): SessionMeta | null {
-    const metaPath = join(dir, 'meta.json')
-    try {
-      return JSON.parse(readFileSync(metaPath, 'utf-8'))
-    } catch {
-      return null
+  private requireRecoveryFreeze(
+    sessionId: string,
+    recoveryFreeze: HistoryRecoveryFreeze
+  ): ActiveHistoryRecoveryFreeze {
+    const activeFreeze = this.recoveryFreezes.get(sessionId)
+    if (
+      recoveryFreeze.sessionId !== sessionId ||
+      activeFreeze?.handle !== recoveryFreeze ||
+      activeFreeze.fingerprint === undefined
+    ) {
+      throw new Error('terminal_history_recovery_freeze_invalid')
     }
-  }
-
-  private updateMeta(dir: string, updates: Partial<SessionMeta>): void {
-    const metaPath = join(dir, 'meta.json')
-    let meta: SessionMeta
-    try {
-      meta = JSON.parse(readFileSync(metaPath, 'utf-8'))
-    } catch {
-      return
-    }
-    Object.assign(meta, updates)
-    writeFileSync(metaPath, JSON.stringify(meta, null, 2))
+    return activeFreeze
   }
 }

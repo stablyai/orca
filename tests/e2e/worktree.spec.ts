@@ -65,10 +65,10 @@ test.describe('Create Workspace', () => {
       await expect(dialog).toBeVisible()
 
       // Wait for the composer to settle. The card fires several async effects
-      // on mount (detected-agent probe, repo combobox autofocus + hydration,
+      // on mount (detected-agent probe, name-field autofocus + hydration,
       // setup-hooks fetch). Clicking before those settle can race Radix's
       // FocusScope reparenting.
-      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
       // Force the `getBaseRefDefault` IPC to round-trip so any consumer that
       // renders the envelope (e.g. SourceControl) has a chance to crash
@@ -152,9 +152,82 @@ test.describe('Create Workspace', () => {
     }
   })
 
-  test('keeps the composer open and preserves inputs when worktree creation fails', async ({
-    orcaPage
-  }) => {
+  test('creates an emoji-named worktree with a safe git branch', async ({ orcaPage }) => {
+    const workspaceName = '🚀🧪✨'
+
+    try {
+      await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+
+      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+      await expect(dialog).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
+
+      const nameInput = dialog.getByPlaceholder(/Type a name/i)
+      await nameInput.fill(workspaceName)
+
+      const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
+      await expect(createButton).toBeEnabled()
+      await createButton.click()
+
+      await expect(dialog).toBeHidden({ timeout: 15_000 })
+      await expect(orcaPage.getByRole('option', { name: new RegExp(workspaceName) })).toBeVisible({
+        timeout: 10_000
+      })
+
+      const branch = await orcaPage.evaluate((displayName) => {
+        const worktrees = Object.values(window.__store!.getState().worktreesByRepo).flat()
+        return worktrees.find((worktree) => worktree.displayName === displayName)?.branch ?? null
+      }, workspaceName)
+      expect(branch).toBe('refs/heads/rocket-test-tube-sparkles')
+    } finally {
+      await orcaPage
+        .evaluate(() => {
+          window.__store?.getState().closeModal()
+        })
+        .catch(() => {
+          /* page may already be torn down */
+        })
+    }
+  })
+
+  test('enters the Korean flag with the flag_kr shortcode suggestion', async ({ orcaPage }) => {
+    try {
+      await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+
+      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+      const nameInput = dialog.getByPlaceholder(/Type a name/i)
+      await expect(nameInput).toBeVisible()
+
+      await nameInput.pressSequentially('Launch :flag_kr', { delay: 100 })
+      const emojiSuggestions = orcaPage.locator('[data-workspace-emoji-suggestions="true"]')
+      const sourceSuggestions = orcaPage.locator('[data-workspace-source-suggestions="true"]')
+      await expect(emojiSuggestions).toBeVisible()
+      await expect(emojiSuggestions.getByRole('option', { name: ':flag_kr:' })).toBeVisible()
+      await expect(emojiSuggestions).toHaveAttribute('data-side', 'top')
+      await expect(sourceSuggestions).toBeVisible()
+      await expect(sourceSuggestions).toHaveAttribute('data-side', 'bottom')
+      // Keep both independently positioned suggestion surfaces visible in proof recordings.
+      await orcaPage.waitForTimeout(750)
+
+      await nameInput.pressSequentially(':')
+      await expect(nameInput).toHaveValue('Launch 🇰🇷')
+      await expect(orcaPage.getByRole('option', { name: /:flag_kr:/i })).toHaveCount(0)
+      await nameInput.pressSequentially(' experiment')
+      await expect(nameInput).toHaveValue('Launch 🇰🇷 experiment')
+      // Keep the asserted result visible in retained proof recordings.
+      await orcaPage.waitForTimeout(750)
+    } finally {
+      await orcaPage
+        .evaluate(() => {
+          window.__store?.getState().closeModal()
+        })
+        .catch(() => {
+          /* page may already be torn down */
+        })
+    }
+  })
+
+  test('shows a failed workspace entry when worktree creation fails', async ({ orcaPage }) => {
     await orcaPage.evaluate(() => {
       const store = window.__store
       if (!store) {
@@ -182,7 +255,7 @@ test.describe('Create Workspace', () => {
 
       const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
-      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
       const nameInput = dialog.getByPlaceholder(/Type a name/i)
       await expect(nameInput).toBeVisible()
@@ -192,13 +265,14 @@ test.describe('Create Workspace', () => {
       await expect(createButton).toBeEnabled()
       await createButton.click()
 
-      const alert = dialog.getByRole('alert')
-      await expect(alert).toContainText('No base branch found')
-      await expect(alert).toContainText('Orca could not resolve a usable base ref')
-      await expect(alert).toContainText('Create an initial commit')
-      await expect(dialog).toBeVisible()
-      await expect(nameInput).toHaveValue(workspaceName)
-      await expect(createButton).toBeEnabled()
+      await expect(dialog).toBeHidden()
+      const failedWorkspace = orcaPage.getByRole('button', {
+        name: new RegExp(`${workspaceName} No base branch found`)
+      })
+      await expect(failedWorkspace).toBeVisible()
+      await expect(orcaPage.getByText('Couldn’t create worktree')).toBeVisible()
+      await expect(failedWorkspace).toContainText('No base branch found')
+      await expect(orcaPage.getByRole('button', { name: 'Retry' })).toBeVisible()
     } finally {
       await orcaPage
         .evaluate(() => {
@@ -221,14 +295,14 @@ test.describe('Create Workspace', () => {
   }) => {
     const title = `E2E smart URL resolution ${Date.now()}`
     const url = 'https://github.com/stablyai/orca/pull/2049'
-    const titlePattern = new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const linkedWorkspacePattern = new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
 
     try {
       await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
 
       const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
-      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
       await electronApp.evaluate(
         ({ ipcMain }, { title, url }) => {
@@ -264,9 +338,12 @@ test.describe('Create Workspace', () => {
             }
           )
           ipcMain.removeHandler('worktrees:resolvePrBase')
+          // Why: the fixture repo has no remote and its default branch name
+          // depends on the host's git init.defaultBranch (main vs master), so
+          // resolve the PR base to HEAD, which always exists regardless.
           ipcMain.handle('worktrees:resolvePrBase', () => {
             counters.__smartResolvePrBaseCount += 1
-            return { baseBranch: 'origin/main' }
+            return { baseBranch: 'HEAD' }
           })
         },
         { title, url }
@@ -295,9 +372,15 @@ test.describe('Create Workspace', () => {
       await createButton.click()
 
       await expect(dialog).toBeHidden({ timeout: 15_000 })
-      await expect(orcaPage.getByRole('option', { name: titlePattern })).toBeVisible({
+      await expect(orcaPage.getByRole('option', { name: linkedWorkspacePattern })).toBeVisible({
         timeout: 10_000
       })
+      await expect(orcaPage.getByRole('option', { name: url })).toHaveCount(0)
+      await expect(orcaPage.getByText('Linked PR #2049')).toBeVisible()
+      // Why: quick create reuses the single GitHub lookup from typing (no
+      // redundant re-fetch), and since #5733 ("Create PR worktrees from the PR
+      // head") it resolves the PR start point exactly once at submit time — so
+      // the base resolves once here rather than being skipped.
       await expect
         .poll(() =>
           electronApp.evaluate(() => {
@@ -311,7 +394,82 @@ test.describe('Create Workspace', () => {
             }
           })
         )
-        .toEqual({ githubLookupCount: 1, resolvePrBaseCount: 0 })
+        .toEqual({ githubLookupCount: 1, resolvePrBaseCount: 1 })
+    } finally {
+      await orcaPage
+        .evaluate(() => {
+          window.__store?.getState().closeModal()
+        })
+        .catch(() => {
+          /* page may already be torn down */
+        })
+    }
+  })
+
+  test('names the workspace after the PR title when the pasted URL suggestion is selected', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    const title = `E2E selected URL resolution ${Date.now()}`
+    const url = 'https://github.com/stablyai/orca/pull/2050'
+    const linkedWorkspacePattern = new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
+    try {
+      await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+
+      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+      await expect(dialog).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
+
+      await electronApp.evaluate(
+        ({ ipcMain }, { title, url }) => {
+          ipcMain.removeHandler('gh:workItemByOwnerRepo')
+          ipcMain.handle(
+            'gh:workItemByOwnerRepo',
+            (_event: unknown, args: { number: number; repoId?: string }) => ({
+              id: `e2e-pr-${args.number}`,
+              type: 'pr',
+              number: args.number,
+              title,
+              state: 'open',
+              url,
+              labels: [],
+              updatedAt: '2026-05-26T00:00:00.000Z',
+              author: 'e2e',
+              repoId: args.repoId ?? 'e2e-repo'
+            })
+          )
+          ipcMain.removeHandler('worktrees:resolvePrBase')
+          // Why: the fixture repo has no remote and its default branch name
+          // depends on the host's git init.defaultBranch (main vs master), so
+          // resolve the PR base to HEAD, which always exists regardless.
+          ipcMain.handle('worktrees:resolvePrBase', () => ({ baseBranch: 'HEAD' }))
+        },
+        { title, url }
+      )
+
+      const nameInput = dialog.getByPlaceholder(/Type a name/i)
+      await expect(nameInput).toBeVisible()
+      await nameInput.fill(url)
+
+      // Why: this is the regression PR #4900 missed — selecting the resolved
+      // suggestion row (instead of submitting the raw URL) must not leave the
+      // pasted URL behind as the workspace name. The suggestion popover is
+      // portaled outside the dialog element, so locate it page-wide.
+      const suggestion = orcaPage.getByRole('option', { name: linkedWorkspacePattern })
+      await expect(suggestion).toBeVisible()
+      await suggestion.click()
+
+      const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
+      await expect(createButton).toBeEnabled()
+      await createButton.click()
+
+      await expect(dialog).toBeHidden({ timeout: 15_000 })
+      await expect(orcaPage.getByRole('option', { name: linkedWorkspacePattern })).toBeVisible({
+        timeout: 10_000
+      })
+      await expect(orcaPage.getByRole('option', { name: /https-github/i })).toHaveCount(0)
+      await expect(orcaPage.getByText('Linked PR #2050')).toBeVisible()
     } finally {
       await orcaPage
         .evaluate(() => {

@@ -19,6 +19,8 @@ import {
   type ImageViewerSurfaceSize,
   getZoomedImageLayoutSize
 } from './image-viewer-zoom'
+import { translate } from '@/i18n/i18n'
+import { buildImageDataUri } from '../../../../shared/image-data-uri'
 
 const FALLBACK_IMAGE_MIME_TYPE = 'image/png'
 
@@ -58,10 +60,12 @@ export default function ImageViewer({
   const isPdf = mimeType === 'application/pdf'
   const isIntrinsicLayout = layout === 'intrinsic'
   const previewSrc = useMemo(
-    () => (cleanedContent && !isPdf ? `data:${mimeType};base64,${cleanedContent}` : null),
-    [cleanedContent, isPdf, mimeType]
+    () => buildImageDataUri(mimeType, cleanedContent),
+    [cleanedContent, mimeType]
   )
-  const imageError = previewSrc !== null && failedPreviewSrc === previewSrc
+  const imageError =
+    (previewSrc === null && cleanedContent.length > 0) ||
+    (previewSrc !== null && failedPreviewSrc === previewSrc)
   const estimatedSize = useMemo(() => {
     const bytes = Math.floor((cleanedContent.length * 3) / 4)
     if (bytes < 1024) {
@@ -218,7 +222,12 @@ export default function ImageViewer({
         )}
       >
         <ImageIcon size={40} />
-        <div>Failed to load file preview</div>
+        <div>
+          {translate(
+            'auto.components.editor.ImageViewer.d9d2944855',
+            'Failed to load file preview'
+          )}
+        </div>
         <div className="max-w-md break-all text-center text-xs">{filename}</div>
       </div>
     )
@@ -232,7 +241,7 @@ export default function ImageViewer({
           isIntrinsicLayout ? 'min-h-64' : 'h-full'
         )}
       >
-        Loading preview...
+        {translate('auto.components.editor.ImageViewer.3ef9551ba2', 'Loading preview...')}
       </div>
     )
   }
@@ -249,7 +258,7 @@ export default function ImageViewer({
               : 'flex-1 overflow-auto scrollbar-editor'
           )}
           onClick={openPopup}
-          title="Open image in popup"
+          title={translate('auto.components.editor.ImageViewer.77bfc9b35a', 'Open image in popup')}
         >
           <div
             className={cn(
@@ -299,7 +308,7 @@ export default function ImageViewer({
                 applyInlineZoomChange((currentZoom) => currentZoom / IMAGE_VIEWER_ZOOM_STEP)
               }
               disabled={inlineZoom <= MIN_IMAGE_VIEWER_ZOOM}
-              title="Zoom out"
+              title={translate('auto.components.editor.ImageViewer.be27304574', 'Zoom out')}
             >
               <ZoomOut size={14} />
             </button>
@@ -308,7 +317,7 @@ export default function ImageViewer({
               className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
               onClick={() => applyInlineZoomChange(() => 1)}
               disabled={inlineZoom === 1}
-              title="Reset zoom"
+              title={translate('auto.components.editor.ImageViewer.6c89c73d9f', 'Reset zoom')}
             >
               <RotateCcw size={14} />
             </button>
@@ -319,7 +328,7 @@ export default function ImageViewer({
                 applyInlineZoomChange((currentZoom) => currentZoom * IMAGE_VIEWER_ZOOM_STEP)
               }
               disabled={inlineZoom >= MAX_IMAGE_VIEWER_ZOOM}
-              title="Zoom in"
+              title={translate('auto.components.editor.ImageViewer.3c9217f5a6', 'Zoom in')}
             >
               <ZoomIn size={14} />
             </button>

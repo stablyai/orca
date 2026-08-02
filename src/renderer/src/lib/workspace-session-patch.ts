@@ -4,13 +4,15 @@ import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-sessio
 import {
   buildActiveConnectionIdsAtShutdown,
   buildEditorSessionData,
-  buildLastVisitedAtByWorktreeId,
   buildPersistedBrowserPagesByWorkspace,
   buildPersistedBrowserTabsByWorktree,
   buildSanitizedTabsByWorktree,
   buildTerminalSessionData,
   type WorkspaceSessionSnapshot
 } from './workspace-session'
+import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
+import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
+import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 
 type SessionRelevantField = keyof WorkspaceSessionSnapshot
 
@@ -70,10 +72,21 @@ export function buildWorkspaceSessionPatch(
       'worktreesByRepo'
     ] as const)
   ) {
-    Object.assign(patch, buildTerminalSessionData(snapshot))
-  }
-  if (changed.has('sshConnectionStates')) {
-    patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(snapshot)
+    const terminalSessionData = buildTerminalSessionData(snapshot)
+    Object.assign(patch, terminalSessionData)
+    // Why: the reconnect list is derived from persisted remote session ids as
+    // well as live SSH state. Recompute it alongside remoteSessionIdsByTabId
+    // so a crash between patches cannot leave a target on disk whose sessions
+    // were all closed (or vice versa).
+    patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(
+      snapshot,
+      terminalSessionData.remoteSessionIdsByTabId ?? null
+    )
+  } else if (changed.has('sshConnectionStates')) {
+    patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(
+      snapshot,
+      buildTerminalSessionData(snapshot).remoteSessionIdsByTabId ?? null
+    )
   }
   if (
     hasAnyChangedField(changed, [
@@ -111,17 +124,15 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('browserUrlHistory')) {
     patch.browserUrlHistory = normalizeBrowserHistoryEntries(snapshot.browserUrlHistory)
   }
-  if (changed.has('unifiedTabsByWorktree')) {
-    patch.unifiedTabs = snapshot.unifiedTabsByWorktree
-  }
-  if (changed.has('groupsByWorktree')) {
-    patch.tabGroups = snapshot.groupsByWorktree
-  }
-  if (changed.has('layoutByWorktree')) {
-    patch.tabGroupLayouts = snapshot.layoutByWorktree
-  }
-  if (changed.has('activeGroupIdByWorktree')) {
-    patch.activeGroupIdByWorktree = snapshot.activeGroupIdByWorktree
+  if (
+    hasAnyChangedField(changed, [
+      'activeGroupIdByWorktree',
+      'groupsByWorktree',
+      'layoutByWorktree',
+      'unifiedTabsByWorktree'
+    ] as const)
+  ) {
+    Object.assign(patch, buildPersistedUnifiedTabSessionData(snapshot))
   }
   if (changed.has('lastVisitedAtByWorktreeId')) {
     patch.lastVisitedAtByWorktreeId = buildLastVisitedAtByWorktreeId(snapshot)
@@ -132,6 +143,10 @@ export function buildWorkspaceSessionPatch(
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined
+  }
+  if (changed.has('sleepingAgentSessionsByPaneKey')) {
+    patch.sleepingAgentSessionsByPaneKey =
+      buildSleepingAgentSessionData(snapshot).sleepingAgentSessionsByPaneKey
   }
 
   return patch

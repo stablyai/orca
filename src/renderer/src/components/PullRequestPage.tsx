@@ -1,8 +1,5 @@
 /* eslint-disable max-lines -- Why: duplicated from GitHubItemDialog so the dedicated PR full-page surface can evolve its Primer-styled header without destabilizing the issue dialog; planned to refactor shared parts out later. */
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: PR pages hydrate provider data, diff sections, snippets, and cache refetches from async provider/virtualizer lifecycles. */
 import React, {
-  Suspense,
-  lazy,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -12,12 +9,11 @@ import React, {
   useSyncExternalStore
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useShallow } from 'zustand/react/shallow'
 import type { editor as monacoEditor } from 'monaco-editor'
 import {
-  ArrowDown,
+  ArrowLeft,
   ArrowRight,
-  ArrowUp,
-  Braces,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -30,6 +26,7 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
+  GitPullRequestDraft,
   ListChecks,
   LoaderCircle,
   MessageSquare,
@@ -39,8 +36,6 @@ import {
   Plus,
   RefreshCw,
   Send,
-  UndoDot,
-  Users,
   Wrench,
   X
 } from 'lucide-react'
@@ -49,7 +44,7 @@ import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   Accordion,
   AccordionContent,
@@ -58,7 +53,7 @@ import {
 } from '@/components/ui/accordion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,7 +62,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -83,8 +77,17 @@ import {
   isIntrinsicHeightImageDiff
 } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
-import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
+import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
+import {
+  getCombinedDiffBranchEntriesInTreeOrder,
+  type CombinedDiffFileTreeEntry
+} from '@/components/editor/combined-diff-file-tree-model'
+import {
+  getStoredTextDiffContent,
+  getStoredTextDiffResult
+} from '@/components/editor/large-diff-section-content'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
+import { SourceControlAgentActionDialog } from '@/components/right-sidebar/SourceControlAgentActionDialog'
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
@@ -107,9 +110,10 @@ import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   getPRCommentAudienceEmptyLabel,
-  PR_COMMENT_AUDIENCE_FILTERS,
+  getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
 } from '@/lib/pr-comment-audience'
+import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
   getPRCommentGroupCount,
   getPRCommentGroupId,
@@ -121,12 +125,6 @@ import {
   PR_COMMENT_RESOLVED_CONTAINER_CLASS,
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
-import {
-  createCommentCodeContextExpansionState,
-  resolveCommentCodeContextExpansionState,
-  updateCommentCodeContextExpansionState,
-  type CommentCodeContextLineUpdate
-} from '@/components/comment-code-context-state'
 import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
@@ -135,24 +133,54 @@ import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/u
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import {
   getGitHubPRReviewerRows,
-  normalizeGitHubReviewerLogins
+  normalizeGitHubReviewerLogins,
+  parseGitHubReviewerInputLogins
 } from '@/components/github-pr-reviewer-display'
+import {
+  filterGitHubPRReviewerCandidates,
+  getGitHubPRReviewerQueryState
+} from '@/components/github/github-pr-reviewer-candidate-filter'
+import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
+import { filterGitHubMentionOptions } from '@/components/github/github-mention-option-filter'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
+import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-details-cache-events'
+import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
+import {
+  canUseGitHubRepoContext,
+  getGitHubMutationRoutingSettings,
+  getGitHubRuntimeRepoId,
+  getGitHubSourceRuntimeHost
+} from '@/lib/github-source-runtime-context'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github-pr-merge-methods'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
-import { getConnectionId } from '@/lib/connection-context'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
 import {
   findGithubPrWorkspaceAttachment,
   getGithubPrWorkspaceAttachmentLabel
 } from '@/lib/github-work-item-workspace-attachment'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
+import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
+import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { buildFixBrokenChecksPrompt, getBrokenChecks } from '@/components/pr-checks-fix-prompt'
+import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
+import type {
+  SourceControlActionRecipe,
+  SourceControlLaunchActionId
+} from '../../../shared/source-control-ai-actions'
+import {
+  saveSourceControlActionRecipe,
+  type SourceControlAiWriteTarget
+} from '../../../shared/source-control-ai-recipe-save'
 import type {
   GitHubOwnerRepo,
   GitHubPRFile,
@@ -161,40 +189,78 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubAssignableUser,
-  GitHubReaction,
   GitHubPRMergeMethod,
   GitBranchChangeEntry,
   GitDiffResult,
   PRCheckDetail,
-  PRComment,
-  TuiAgent
+  PRComment
 } from '../../../shared/types'
+import {
+  getTaskSourceCacheScope,
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../shared/task-source-context'
+import { translate } from '@/i18n/i18n'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { sortChecksBySeverity } from '../../../shared/pr-check-severity-order'
+import {
+  getCheckConclusion,
+  getCheckCountChips,
+  getCheckCounts,
+  getChecksSummaryLabel
+} from '@/components/pr-check-counts'
+import {
+  normalizeItemDialogTab,
+  parseOwnerRepoFromItemUrl,
+  resolvePullRequestRepo,
+  type GitHubWorkItemProjectOrigin,
+  type ItemDialogTab
+} from '@/components/github/github-work-item-identity'
+import {
+  addIssueCommentForRepo,
+  addPRReviewCommentForRepo,
+  addPRReviewCommentReplyForRepo,
+  notifyWorkItemDetailsMutation,
+  setPRFileViewedForRepo
+} from '@/components/github/github-work-item-comment-mutations'
+import {
+  runIssueUpdate,
+  runPullRequestStateUpdate,
+  runWorkItemBodyUpdate
+} from '@/components/github/github-work-item-edit-mutations'
+import {
+  PR_FILE_CONTENT_CACHE_MAX_BYTES,
+  getRetainedPRFileContentsByteCount,
+  isPRFileViewed
+} from '@/components/github/pr-file-content-size'
+import {
+  PR_DIFF_OVERSCAN,
+  getPRFileContentsRenderLimit,
+  getPRFileDiffResult,
+  getPRFileSectionKey,
+  gitHubPRFileToBranchEntry,
+  type PRFilesCombinedDiffViewerProps
+} from '@/components/github/pr-file-diff-mapping'
+import {
+  buildRequestedReviewUsers,
+  formatRelativeTime,
+  getStateLabel,
+  mergeReviewerSuggestions,
+  ReviewerAvatar
+} from '@/components/github/work-item-state-presentation'
+import {
+  formatCheckTimestamp,
+  getCheckDetailsKey,
+  getCheckStatusLabel
+} from '@/components/github/pr-check-presentation'
+import { CommentCodeContext } from '@/components/github/CommentCodeContext'
+import { CommentReactions } from '@/components/github/CommentReactions'
+import { PRAssigneesPanel } from '@/components/github/PRAssigneesPanel'
+import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
 
-// Why: the GH item dialog can be opened from any work-item list surface and
-// doesn't have the full owner/repo context the list's cache entry carries.
-// Parsing the canonical `https://github.com/{owner}/{repo}/...` URL is the
-// simplest reliable source — the URL is already present on every work item
-// and survives the main-process → IPC boundary. Non-GitHub hosts return null,
-// which matches the indicator's suppression rule.
-function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
-  try {
-    const parsed = new URL(url)
-    if (parsed.hostname !== 'github.com') {
-      return null
-    }
-    const segments = parsed.pathname.split('/').filter(Boolean)
-    if (segments.length < 2) {
-      return null
-    }
-    return { owner: segments[0], repo: segments[1] }
-  } catch {
-    return null
-  }
-}
+export type { ItemDialogTab }
 
-const MonacoCodeExcerpt = lazy(() => import('@/components/editor/MonacoCodeExcerpt'))
-
-export type ItemDialogTab = 'conversation' | 'checks' | 'files'
+export type PullRequestPageProjectOrigin = GitHubWorkItemProjectOrigin
 
 type MentionOption = {
   login: string
@@ -208,52 +274,11 @@ type MentionQuery = {
   query: string
 }
 
-const CODE_CONTEXT_EXPAND_STEP = 5
-const CODE_CONTEXT_FALLBACK_LINES = 20
-const CODE_CONTEXT_MAX_BLOCK_LINES = CODE_CONTEXT_FALLBACK_LINES * 2 + 1
-
-const REACTION_EMOJI: Record<GitHubReaction['content'], string> = {
-  '+1': '👍',
-  '-1': '👎',
-  laugh: '😄',
-  confused: '😕',
-  heart: '❤️',
-  hooray: '🎉',
-  rocket: '🚀',
-  eyes: '👀'
-}
-
-function normalizeItemDialogTab(
-  item: GitHubWorkItem | null,
-  tab: ItemDialogTab | undefined
-): ItemDialogTab {
-  if (item?.type !== 'pr') {
-    return 'conversation'
-  }
-  return tab ?? 'conversation'
-}
-
-/** Why: Project-origin rows don't always belong to the active local repo.
- *  When set, GHEditSection routes label/assignee/state mutations through
- *  slug-addressed IPCs against `owner`/`repo` instead of through `repoPath`,
- *  preventing edits from silently landing on the workspace's repo when the
- *  Project view is showing rows from a different repo. See
- *  docs/design/github-project-view-tasks.md §Dialog editing from Project rows.
- */
-export type PullRequestPageProjectOrigin = {
-  owner: string
-  repo: string
-  number: number
-  type: 'issue' | 'pr'
-  projectId: string
-  projectItemId: string
-  cacheKey: string
-}
-
 type PullRequestPageProps = {
   workItem: GitHubWorkItem | null
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
   backLabel?: string
   /** Called when the user clicks the primary CTA to start work from this item. */
@@ -263,31 +288,8 @@ type PullRequestPageProps = {
     reviewRequests: GitHubAssignableUser[]
   ) => void
   onClose: () => void
-  /** Optional Project-origin context. When set, edits in the dialog are
-   *  routed via slug-addressed mutation IPCs against the row's actual repo
-   *  instead of the active workspace's `repoPath`. Both can be set
-   *  simultaneously (Project mode where the row also lives in the active
-   *  workspace) — slug routing wins for writes. */
+  /** Optional Project-origin context; when set, slug-addressed IPCs route writes to the row's repo instead of `repoPath` (both may be set — slug wins for writes). */
   projectOrigin?: PullRequestPageProjectOrigin
-}
-
-function formatRelativeTime(input: string): string {
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) {
-    return 'recently'
-  }
-  const diffMs = date.getTime() - Date.now()
-  const diffMinutes = Math.round(diffMs / 60_000)
-  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-  if (Math.abs(diffMinutes) < 60) {
-    return formatter.format(diffMinutes, 'minute')
-  }
-  const diffHours = Math.round(diffMinutes / 60)
-  if (Math.abs(diffHours) < 24) {
-    return formatter.format(diffHours, 'hour')
-  }
-  const diffDays = Math.round(diffHours / 24)
-  return formatter.format(diffDays, 'day')
 }
 
 function findMentionQuery(value: string, caret: number): MentionQuery | null {
@@ -352,34 +354,6 @@ function buildMentionOptions({
   return Array.from(byLogin.values())
 }
 
-function filterMentionOptions(options: MentionOption[], query: string): MentionOption[] {
-  const normalizedQuery = query.toLowerCase()
-  const filtered = normalizedQuery
-    ? options.filter(
-        (option) =>
-          option.login.toLowerCase().includes(normalizedQuery) ||
-          (option.name ?? '').toLowerCase().includes(normalizedQuery)
-      )
-    : options
-  return filtered.slice(0, 8)
-}
-
-function getStateLabel(item: GitHubWorkItem): string {
-  if (item.type === 'pr') {
-    if (item.state === 'merged') {
-      return 'Merged'
-    }
-    if (item.state === 'draft') {
-      return 'Draft'
-    }
-    if (item.state === 'closed') {
-      return 'Closed'
-    }
-    return 'Open'
-  }
-  return item.state === 'closed' ? 'Closed' : 'Open'
-}
-
 function getStateTone(item: GitHubWorkItem): string {
   if (item.type === 'pr') {
     if (item.state === 'merged') {
@@ -419,90 +393,27 @@ function WorkItemStateBadge({
   )
 }
 
-function ReviewerAvatar({
-  login,
-  avatarUrl
-}: {
-  login: string
-  avatarUrl: string
-}): React.JSX.Element {
-  if (avatarUrl) {
-    return (
-      <img
-        src={avatarUrl}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        title={login}
-        className="size-6 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
-      />
-    )
-  }
-  return (
-    <span
-      title={login}
-      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[10px] font-medium text-muted-foreground"
-    >
-      {login.slice(0, 1).toUpperCase()}
-    </span>
-  )
-}
-
-function mergeReviewerSuggestions(
-  users: GitHubAssignableUser[],
-  seedUsers: GitHubAssignableUser[]
-): GitHubAssignableUser[] {
-  const byLogin = new Map<string, GitHubAssignableUser>()
-  for (const user of [...seedUsers, ...users]) {
-    const key = user.login.toLowerCase()
-    const existing = byLogin.get(key)
-    if (!existing) {
-      byLogin.set(key, user)
-      continue
-    }
-    if (!existing.avatarUrl && user.avatarUrl) {
-      byLogin.set(key, { ...existing, avatarUrl: user.avatarUrl })
-    }
-  }
-  return Array.from(byLogin.values()).sort((a, b) => a.login.localeCompare(b.login))
-}
-
-function buildRequestedReviewUsers(
-  logins: string[],
-  candidates: GitHubAssignableUser[],
-  existingRequests: GitHubAssignableUser[]
-): GitHubAssignableUser[] {
-  const byLogin = new Map<string, GitHubAssignableUser>()
-  for (const user of existingRequests) {
-    byLogin.set(user.login.toLowerCase(), user)
-  }
-  const candidatesByLogin = new Map(candidates.map((user) => [user.login.toLowerCase(), user]))
-  for (const login of logins) {
-    const key = login.toLowerCase()
-    if (byLogin.has(key)) {
-      continue
-    }
-    byLogin.set(key, candidatesByLogin.get(key) ?? { login, name: null, avatarUrl: '' })
-  }
-  return Array.from(byLogin.values())
-}
-
 function PRReviewersPanel({
   item,
   loading,
   repoPath,
+  sourceContext,
+  projectOrigin,
   onReviewersRequested
 }: {
   item: GitHubWorkItem
   loading: boolean
   repoPath: string | null
+  sourceContext?: TaskSourceContext | null
+  projectOrigin?: PullRequestPageProjectOrigin
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
-  const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
-  const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
-  const [activeReviewerCursor, setActiveReviewerCursor] = useState({ resetKey: '', index: 0 })
+  const [activeReviewerCursor, setActiveReviewerCursor] = useState({
+    resetKey: '',
+    index: 0
+  })
   const [submitting, setSubmitting] = useState(false)
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
@@ -513,7 +424,19 @@ function PRReviewersPanel({
     reviewRequests: item.reviewRequests
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const settings = useAppStore((s) => s.settings)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
@@ -544,8 +467,7 @@ function PRReviewersPanel({
     }
   }, [cancelReviewerInputFocusFrame])
 
-  // Why: reviewer edits are optimistic, but item switches/refetches must clear
-  // stale local requests before paint; a passive Effect leaves one stale render.
+  // Why: clear stale optimistic review requests before paint on item switch/refetch (a passive Effect leaves one stale render).
   if (
     reviewRequestsSource.itemId !== item.id ||
     reviewRequestsSource.repoId !== item.repoId ||
@@ -583,18 +505,23 @@ function PRReviewersPanel({
     return Array.from(byLogin.values())
   }, [item.author, item.latestReviews, localReviewRequests])
 
-  const reviewSlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const reviewRepo = useMemo(
+    () => resolvePullRequestRepo(item, projectOrigin),
+    [item, projectOrigin]
+  )
   const reviewerMetadataBySlug = useRepoAssigneesBySlug(
-    open && reviewSlug ? reviewSlug.owner : null,
-    open && reviewSlug ? reviewSlug.repo : null,
+    open && reviewRepo ? reviewRepo.owner : null,
+    open && reviewRepo ? reviewRepo.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    settings
+    sourceSettings,
+    reviewRepo?.host
   )
   const reviewerMetadataByPath = useRepoAssignees(
-    open && !reviewSlug ? repoPath : null,
-    open && !reviewSlug ? item.repoId : null
+    open && !reviewRepo ? repoPath : null,
+    open && !reviewRepo ? item.repoId : null,
+    sourceSettings
   )
-  const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
+  const reviewerMetadata = reviewRepo ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
   const reviewers = getGitHubPRReviewerRows(displayItem)
   const authorLogin = item.author?.toLowerCase() ?? null
@@ -616,32 +543,22 @@ function PRReviewersPanel({
       ),
     [localReviewRequests]
   )
-  const reviewerQuery = reviewerInput.trim().replace(/^@/, '').toLowerCase()
-  const filteredReviewerCandidates = useMemo(() => {
-    const query = reviewerQuery
-    return reviewerCandidates
-      .filter((user) => {
-        const login = user.login.toLowerCase()
-        return (
-          query.length === 0 ||
-          login.includes(query) ||
-          (user.name ?? '').toLowerCase().includes(query)
-        )
-      })
-      .sort((a, b) => {
-        const aLogin = a.login.toLowerCase()
-        const bLogin = b.login.toLowerCase()
-        const aStarts = aLogin.startsWith(query)
-        const bStarts = bLogin.startsWith(query)
-        if (aStarts !== bStarts) {
-          return aStarts ? -1 : 1
-        }
-        return a.login.localeCompare(b.login)
-      })
-  }, [reviewerCandidates, reviewerQuery])
+  const reviewerQueryState = useMemo(
+    () => getGitHubPRReviewerQueryState(reviewerInput),
+    [reviewerInput]
+  )
+  const reviewerQuery = reviewerQueryState.query
+  const filteredReviewerCandidates = useMemo(
+    () =>
+      filterGitHubPRReviewerCandidates({
+        candidates: reviewerCandidates,
+        queryState: reviewerQueryState
+      }),
+    [reviewerCandidates, reviewerQueryState]
+  )
   const suggestedReviewerRows = useMemo(
     () =>
-      reviewerQuery.length === 0
+      reviewerQuery.length === 0 && !reviewerQueryState.isTooLarge
         ? reviewerSeedUsers
             .filter((user) => !selectedReviewerLogins.has(user.login.toLowerCase()))
             .filter((user) => user.login.toLowerCase() !== authorLogin)
@@ -652,6 +569,7 @@ function PRReviewersPanel({
       authorLogin,
       reviewerCandidatesByLogin,
       reviewerQuery.length,
+      reviewerQueryState.isTooLarge,
       reviewerSeedUsers,
       selectedReviewerLogins
     ]
@@ -691,70 +609,72 @@ function PRReviewersPanel({
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
-  const canRequestReview = !!repoPath || getActiveRuntimeTarget(settings).kind === 'environment'
-
-  const measureReviewerPickerPlacement = useCallback(() => {
-    const rect = reviewerInputRef.current?.getBoundingClientRect()
-    if (!rect) {
-      setReviewerPickerSide('bottom')
-      setReviewerPickerMaxHeight(null)
-      return
-    }
-
-    const gap = 8
-    const minUsefulHeight = 180
-    const availableBelow = window.innerHeight - rect.bottom - gap
-    const availableAbove = rect.top - gap
-    const nextSide =
-      availableBelow < minUsefulHeight && availableAbove > availableBelow ? 'top' : 'bottom'
-    const available = nextSide === 'top' ? availableAbove : availableBelow
-
-    setReviewerPickerSide(nextSide)
-    setReviewerPickerMaxHeight(Math.max(120, Math.min(330, available)))
-  }, [])
+  const canRequestReview =
+    !!repoPath || getActiveRuntimeTarget(sourceSettings).kind === 'environment'
 
   const handleRequestReview = async (requestedLogins?: string[]): Promise<void> => {
     if (submitting) {
       return
     }
     const logins = normalizeGitHubReviewerLogins(
-      requestedLogins ?? reviewerInput.split(/[\s,]+/),
+      requestedLogins ?? parseGitHubReviewerInputLogins(reviewerInput),
       selectedReviewerLogins
     )
     if (logins.length === 0) {
-      toast.error('Enter a reviewer')
+      toast.error(translate('auto.components.PullRequestPage.dace0d1a9f', 'Enter a reviewer'))
       return
     }
     if (localReviewRequests.length + logins.length > 15) {
-      toast.error('You can request up to 15 reviewers')
+      toast.error(
+        translate(
+          'auto.components.PullRequestPage.8f369a6b6b',
+          'You can request up to 15 reviewers'
+        )
+      )
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(sourceSettings)
     if (target.kind !== 'environment' && !repoPath) {
-      toast.error('No repo context available for this pull request.')
+      toast.error(
+        translate(
+          'auto.components.PullRequestPage.1ae11c905c',
+          'No repo context available for this pull request.'
+        )
+      )
       return
     }
     setSubmitting(true)
     try {
+      const runtimeRepo = getGitHubRuntimeRepoId(sourceContext, item.repoId)
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.requestPRReviewers',
-              { repo: item.repoId, prNumber: item.number, reviewers: logins },
+              {
+                repo: runtimeRepo,
+                prNumber: item.number,
+                reviewers: logins,
+                prRepo: reviewRepo
+              },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.requestPRReviewers({
               repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
-              reviewers: logins
+              reviewers: logins,
+              prRepo: reviewRepo
             })
       if (!reviewerPanelMountedRef.current) {
         return
       }
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to request reviewer')
+        toast.error(
+          result.error ??
+            translate('auto.components.PullRequestPage.2560588245', 'Failed to request reviewer')
+        )
         return
       }
       const nextReviewRequests = buildRequestedReviewUsers(
@@ -763,13 +683,33 @@ function PRReviewersPanel({
         localReviewRequests
       )
       setLocalReviewRequests(nextReviewRequests)
-      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
       onReviewersRequested(nextReviewRequests)
+      if (target.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
+      }
       setReviewerInput('')
-      toast.success(logins.length === 1 ? 'Reviewer requested' : 'Reviewers requested')
+      toast.success(
+        logins.length === 1
+          ? translate('auto.components.PullRequestPage.03282ff3b9', 'Reviewer requested')
+          : translate('auto.components.PullRequestPage.102d3d177f', 'Reviewers requested')
+      )
     } catch {
       if (reviewerPanelMountedRef.current) {
-        toast.error('Failed to request reviewer')
+        toast.error(
+          translate('auto.components.PullRequestPage.2560588245', 'Failed to request reviewer')
+        )
       }
     } finally {
       if (reviewerPanelMountedRef.current) {
@@ -789,32 +729,48 @@ function PRReviewersPanel({
     if (logins.length === 0) {
       return
     }
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(sourceSettings)
     if (target.kind !== 'environment' && !repoPath) {
-      toast.error('No repo context available for this pull request.')
+      toast.error(
+        translate(
+          'auto.components.PullRequestPage.1ae11c905c',
+          'No repo context available for this pull request.'
+        )
+      )
       return
     }
     setSubmitting(true)
     try {
+      const runtimeRepo = getGitHubRuntimeRepoId(sourceContext, item.repoId)
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.removePRReviewers',
-              { repo: item.repoId, prNumber: item.number, reviewers: logins },
+              {
+                repo: runtimeRepo,
+                prNumber: item.number,
+                reviewers: logins,
+                prRepo: reviewRepo
+              },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.removePRReviewers({
               repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
-              reviewers: logins
+              reviewers: logins,
+              prRepo: reviewRepo
             })
       if (!reviewerPanelMountedRef.current) {
         return
       }
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to remove reviewer')
+        toast.error(
+          result.error ??
+            translate('auto.components.PullRequestPage.c798fa0ec7', 'Failed to remove reviewer')
+        )
         return
       }
       const removed = new Set(logins.map((login) => login.toLowerCase()))
@@ -822,13 +778,33 @@ function PRReviewersPanel({
         (reviewer) => !removed.has(reviewer.login.toLowerCase())
       )
       setLocalReviewRequests(nextReviewRequests)
-      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
       onReviewersRequested(nextReviewRequests)
+      if (target.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
+      }
       setReviewerInput('')
-      toast.success(logins.length === 1 ? 'Reviewer removed' : 'Reviewers removed')
+      toast.success(
+        logins.length === 1
+          ? translate('auto.components.PullRequestPage.2c1d93da43', 'Reviewer removed')
+          : translate('auto.components.PullRequestPage.1e6d089420', 'Reviewers removed')
+      )
     } catch {
       if (reviewerPanelMountedRef.current) {
-        toast.error('Failed to remove reviewer')
+        toast.error(
+          translate('auto.components.PullRequestPage.c798fa0ec7', 'Failed to remove reviewer')
+        )
       }
     } finally {
       if (reviewerPanelMountedRef.current) {
@@ -845,9 +821,6 @@ function PRReviewersPanel({
   }
 
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
-    if (nextOpen) {
-      measureReviewerPickerPlacement()
-    }
     setOpen(nextOpen)
     if (nextOpen) {
       scheduleReviewerInputFocus()
@@ -867,7 +840,17 @@ function PRReviewersPanel({
         key={`${options.suggested ? 'suggested' : 'reviewer'}:${reviewer.login}`}
         type="button"
         aria-label={
-          selected ? `Unrequest reviewer ${reviewer.login}` : `Request reviewer ${reviewer.login}`
+          selected
+            ? translate(
+                'auto.components.PullRequestPage.36b514a457',
+                'Unrequest reviewer {{value0}}',
+                { value0: reviewer.login }
+              )
+            : translate(
+                'auto.components.PullRequestPage.41d275d3ec',
+                'Request reviewer {{value0}}',
+                { value0: reviewer.login }
+              )
         }
         aria-pressed={selected}
         className={cn(
@@ -903,7 +886,10 @@ function PRReviewersPanel({
           </span>
           {options.suggested ? (
             <span className="block truncate text-[12px] leading-4 text-muted-foreground">
-              Recently edited these files
+              {translate(
+                'auto.components.PullRequestPage.f4a4b3fd9f',
+                'Recently edited these files'
+              )}
             </span>
           ) : null}
         </span>
@@ -912,164 +898,103 @@ function PRReviewersPanel({
   }
 
   return (
-    <aside className="rounded-lg border border-border/50 bg-card shadow-xs">
-      <div className="flex h-10 items-center gap-2 border-b border-border/50 px-3">
-        <Users className="size-3.5 text-muted-foreground" />
-        <span className="text-[13px] font-medium text-foreground">Reviewers</span>
-        {reviewers.length > 0 ? (
-          <span className="ml-auto rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-            {reviewers.length}
-          </span>
-        ) : null}
-      </div>
-      <div className="px-3 py-2.5">
-        {loading && !hasReviewerMetadata ? (
-          <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
-            <LoaderCircle className="size-3.5 animate-spin" />
-            Loading reviewers
-          </div>
-        ) : reviewers.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {reviewers.map((reviewer) => {
-              const canRemoveReviewer = selectedReviewerLogins.has(reviewer.login.toLowerCase())
-              return (
-                <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
-                  <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-medium text-foreground">
-                      {reviewer.login}
-                    </div>
-                    {reviewer.name ? (
-                      <div className="truncate text-[11px] text-muted-foreground">
-                        {reviewer.name}
-                      </div>
-                    ) : null}
-                  </div>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {reviewer.stateLabel}
-                  </span>
-                  {canRemoveReviewer ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
-                          disabled={submitting || !canRequestReview}
-                          aria-label={`Remove reviewer ${reviewer.login}`}
-                          onClick={() => {
-                            void handleRemoveReviewers([reviewer.login])
-                          }}
-                        >
-                          <X className="size-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Remove reviewer</TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="py-1 text-[12px] text-muted-foreground">No reviewers requested.</div>
-        )}
+    <section>
+      <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <span>{translate('auto.components.PullRequestPage.00d3be6bcd', 'Reviewers')}</span>
         <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
-          <PopoverAnchor asChild>
-            <Input
-              ref={reviewerInputRef}
-              value={reviewerInput}
-              onChange={(event) => {
-                setReviewerInput(event.target.value)
-                if (!open) {
-                  handleReviewerPickerOpenChange(true)
-                }
-              }}
+          <PopoverTrigger asChild>
+            <button
+              type="button"
               disabled={submitting || !canRequestReview}
-              placeholder="Type or choose a user"
-              aria-label="Reviewer"
-              aria-expanded={open}
-              aria-haspopup="listbox"
-              className="mt-3 h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
-              onFocus={() => {
-                if (canRequestReview) {
-                  handleReviewerPickerOpenChange(true)
-                }
-              }}
-              onClick={() => {
-                if (canRequestReview) {
-                  handleReviewerPickerOpenChange(true)
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
-                  event.preventDefault()
-                  setOpen(true)
-                  setActiveReviewerIndex((current) => (current + 1) % actionableReviewerRows.length)
-                  return
-                }
-                if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
-                  event.preventDefault()
-                  setOpen(true)
-                  setActiveReviewerIndex(
-                    (current) =>
-                      (current - 1 + actionableReviewerRows.length) % actionableReviewerRows.length
-                  )
-                  return
-                }
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  const activeReviewer = actionableReviewerRows[activeReviewerIndex]
-                  if (activeReviewer) {
-                    void requestReviewer(activeReviewer)
-                    return
-                  }
-                  void handleRequestReview()
-                  return
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  handleReviewerPickerOpenChange(false)
-                }
-              }}
-            />
-          </PopoverAnchor>
+              aria-label={translate('auto.components.PullRequestPage.a04c137bb7', 'Reviewer')}
+              className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+            >
+              {submitting ? (
+                <LoaderCircle className="size-3 animate-spin" />
+              ) : (
+                <Pencil className="size-3" />
+              )}
+            </button>
+          </PopoverTrigger>
           <PopoverContent
-            className="flex w-[330px] flex-col overflow-hidden rounded-md border-border/70 p-0"
-            align="start"
-            side={reviewerPickerSide}
+            className="flex max-h-[420px] w-[330px] flex-col overflow-hidden rounded-md border-border/70 p-0"
+            align="end"
+            side="bottom"
             sideOffset={6}
-            avoidCollisions={false}
-            style={{
-              maxHeight: reviewerPickerMaxHeight ? `${reviewerPickerMaxHeight}px` : undefined
-            }}
             onOpenAutoFocus={(event) => {
               event.preventDefault()
             }}
           >
-            <div className="border-b border-border/70 px-3 py-2">
-              <div className="text-[13px] font-semibold text-foreground">
-                Request up to 15 reviewers
-              </div>
+            <div className="border-b border-border/70 p-2">
+              <Input
+                ref={reviewerInputRef}
+                value={reviewerInput}
+                onChange={(event) => setReviewerInput(event.target.value)}
+                disabled={submitting || !canRequestReview}
+                placeholder={translate(
+                  'auto.components.PullRequestPage.3bde131f49',
+                  'Type or choose a user'
+                )}
+                aria-label={translate('auto.components.PullRequestPage.a04c137bb7', 'Reviewer')}
+                aria-expanded={open}
+                aria-haspopup="listbox"
+                className="h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
+                    event.preventDefault()
+                    setActiveReviewerIndex(
+                      (current) => (current + 1) % actionableReviewerRows.length
+                    )
+                    return
+                  }
+                  if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
+                    event.preventDefault()
+                    setActiveReviewerIndex(
+                      (current) =>
+                        (current - 1 + actionableReviewerRows.length) %
+                        actionableReviewerRows.length
+                    )
+                    return
+                  }
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    const activeReviewer = actionableReviewerRows[activeReviewerIndex]
+                    if (activeReviewer) {
+                      void requestReviewer(activeReviewer)
+                      return
+                    }
+                    void handleRequestReview()
+                    return
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    handleReviewerPickerOpenChange(false)
+                  }
+                }}
+              />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
               {reviewerMetadata.loading ? (
-                <div className="px-3 py-2 text-[13px] text-muted-foreground">Loading...</div>
+                <div className="px-3 py-2 text-[13px] text-muted-foreground">
+                  {translate('auto.components.PullRequestPage.57750f4a8c', 'Loading...')}
+                </div>
               ) : filteredReviewerCandidates.length > 0 ? (
                 <>
                   {suggestedReviewerRows.length > 0 ? (
                     <>
                       <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                        Suggestions
+                        {translate('auto.components.PullRequestPage.828f045847', 'Suggestions')}
                       </div>
                       {suggestedReviewerRows.map((reviewer, index) =>
-                        renderReviewerPickerRow(reviewer, { suggested: true, activeIndex: index })
+                        renderReviewerPickerRow(reviewer, {
+                          suggested: true,
+                          activeIndex: index
+                        })
                       )}
                     </>
                   ) : null}
                   <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                    Everyone else
+                    {translate('auto.components.PullRequestPage.2760fa29a4', 'Everyone else')}
                   </div>
                   {everyoneElseReviewerRows.length > 0 ? (
                     everyoneElseReviewerRows.map((reviewer, index) =>
@@ -1080,7 +1005,10 @@ function PRReviewersPanel({
                     )
                   ) : (
                     <div className="px-3 py-2 text-[13px] text-muted-foreground">
-                      No matching reviewers.
+                      {translate(
+                        'auto.components.PullRequestPage.5ad00c7a0e',
+                        'No matching reviewers.'
+                      )}
                     </div>
                   )}
                 </>
@@ -1088,69 +1016,88 @@ function PRReviewersPanel({
                 <div className="px-3 py-2 text-[13px] text-muted-foreground">
                   {reviewerMetadata.error ??
                     (hasReviewerMetadata
-                      ? 'No matching reviewers.'
-                      : 'Open the PR details to view current reviewers.')}
+                      ? translate(
+                          'auto.components.PullRequestPage.5ad00c7a0e',
+                          'No matching reviewers.'
+                        )
+                      : translate(
+                          'auto.components.PullRequestPage.56ec6eafb7',
+                          'Open the PR details to view current reviewers.'
+                        ))}
                 </div>
               )}
             </div>
           </PopoverContent>
         </Popover>
       </div>
-    </aside>
+      {loading && !hasReviewerMetadata ? (
+        <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
+          <LoaderCircle className="size-3.5 animate-spin" />
+          {translate('auto.components.PullRequestPage.acbd110867', 'Loading reviewers')}
+        </div>
+      ) : reviewers.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {reviewers.map((reviewer) => {
+            const canRemoveReviewer = selectedReviewerLogins.has(reviewer.login.toLowerCase())
+            return (
+              <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
+                <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-medium text-foreground">
+                    {reviewer.login}
+                  </div>
+                  {reviewer.name ? (
+                    <div className="truncate text-[11px] text-muted-foreground">
+                      {reviewer.name}
+                    </div>
+                  ) : null}
+                </div>
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  {reviewer.stateLabel}
+                </span>
+                {canRemoveReviewer ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                        disabled={submitting || !canRequestReview}
+                        aria-label={translate(
+                          'auto.components.PullRequestPage.ae9a38fd4a',
+                          'Remove reviewer {{value0}}',
+                          { value0: reviewer.login }
+                        )}
+                        onClick={() => {
+                          void handleRemoveReviewers([reviewer.login])
+                        }}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {translate('auto.components.PullRequestPage.7f964a365a', 'Remove reviewer')}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="py-1 text-[12px] text-muted-foreground">
+          {translate('auto.components.PullRequestPage.d10b6d5209', 'No reviewers requested.')}
+        </div>
+      )}
+    </section>
   )
 }
 
-function isPRFileViewed(file: GitHubPRFile): boolean {
-  return file.viewerViewedState === 'VIEWED'
-}
-
-function findNearestBraceBlock(
-  lines: string[],
-  targetLine: number
-): { startLine: number; endLine: number } | null {
-  const stack: number[] = []
-  const ranges: { startLine: number; endLine: number }[] = []
-  const targetIndex = targetLine - 1
-
-  lines.forEach((line, lineIndex) => {
-    for (const character of line) {
-      if (character === '{') {
-        stack.push(lineIndex)
-      } else if (character === '}') {
-        const startLine = stack.pop()
-        if (startLine !== undefined && startLine <= lineIndex) {
-          ranges.push({ startLine: startLine + 1, endLine: lineIndex + 1 })
-        }
-      }
-    }
-  })
-
-  const containingRange = ranges
-    .filter((range) => range.startLine - 1 <= targetIndex && targetIndex <= range.endLine - 1)
-    .sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine))[0]
-
-  if (containingRange) {
-    return containingRange
-  }
-
-  return (
-    ranges
-      .filter(
-        (range) => range.startLine - 1 >= targetIndex && range.startLine - 1 - targetIndex <= 8
-      )
-      .sort((a, b) => a.startLine - b.startLine)[0] ?? null
-  )
-}
-
-// Why: SWR cache for the work-item details fetch. Reopening the same drawer
-// pays full IPC + `gh` process startup latency without this; with it, cached
-// data paints immediately while a background refetch keeps the view honest.
-// Cache is keyed by repoPath + issueSourcePreference + type + number so
-// upstream/origin source toggles and issue#N vs pr#N never collide. Bounded
-// to ~50 entries to cap memory; entries older than FRESH_MS trigger a
-// background refetch on open. See docs/gh-work-item-drawer-cache.md.
+// SWR cache: reopening a drawer paints cached data instantly while a background refetch reconciles. See docs/gh-work-item-drawer-cache.md.
 const WORK_ITEM_DETAILS_CACHE_MAX = 50
 const WORK_ITEM_DETAILS_FRESH_MS = 30_000
+const WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE = 'Unable to load details for this GitHub item.'
 type WorkItemDetailsCacheEntry = {
   details: GitHubWorkItemDetails | null
   fetchedAt: number
@@ -1159,10 +1106,7 @@ type WorkItemDetailsCacheEntry = {
 }
 const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
-// Why: drawers subscribe via useSyncExternalStore so reopening a cached item
-// paints synchronously on first render. Stability of the snapshot relies on
-// every cache write replacing the entry object identity (delete+set), which
-// touchWorkItemDetailsCache already does.
+// Why: useSyncExternalStore snapshot stability relies on every cache write replacing the entry object identity (delete+set).
 const workItemDetailsCacheListeners = new Set<() => void>()
 function subscribeWorkItemDetailsCache(listener: () => void): () => void {
   workItemDetailsCacheListeners.add(listener)
@@ -1180,17 +1124,19 @@ function getWorkItemDetailsCacheKey(args: {
   repoPath: string
   repoId: string
   issueSourcePreference: string | undefined
+  sourceCacheScope?: string | null
   type: 'issue' | 'pr'
   number: number
 }): string {
-  // Why: include all axes that change which (repo, item) the IPC resolves to.
-  // `\0` separator avoids ambiguity between fields that may contain `:` or `/`.
-  return [args.repoId, args.issueSourcePreference ?? 'auto', args.type, args.number].join('\0')
+  // Why: `\0` separator avoids collisions between key fields that may contain `:` or `/`.
+  const keyParts = args.sourceCacheScope
+    ? [args.repoId, args.sourceCacheScope, args.issueSourcePreference ?? 'auto', args.type]
+    : [args.repoId, args.issueSourcePreference ?? 'auto', args.type]
+  return [...keyParts, args.number].join('\0')
 }
 
 function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
-  // Why: re-insert to move to MRU position; Map preserves insertion order so
-  // the oldest key is always first when evicting.
+  // Why: re-insert moves the key to MRU; Map insertion order keeps the oldest key first when evicting.
   workItemDetailsCache.delete(key)
   workItemDetailsCache.set(key, entry)
   while (workItemDetailsCache.size > WORK_ITEM_DETAILS_CACHE_MAX) {
@@ -1203,12 +1149,9 @@ function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry
   notifyWorkItemDetailsCache()
 }
 
-// Why: exposed so mutation handlers (in this file and elsewhere) can drop a
-// stale entry after a successful local mutation. Cross-window invalidation
-// arrives via the `gh:workItemMutated` event listener installed below.
+// Exposed so mutation handlers can drop a stale entry after a local mutation (cross-window invalidation arrives via the `gh:workItemMutated` listener below).
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
-  // Why: bump generation so an in-flight fetch launched before this exact-key
-  // invalidation will not write its stale result back into the cache.
+  // Why: bump generation so an in-flight fetch launched before this invalidation won't write its stale result back.
   workItemDetailsCacheGeneration += 1
   const existed = workItemDetailsCache.delete(key)
   if (existed) {
@@ -1216,23 +1159,16 @@ export function invalidateWorkItemDetailsCacheForKey(key: string): void {
   }
 }
 
-// Why: monotonically increases on every invalidation so an in-flight refetch
-// that started before a mutation can detect that its result is stale and
-// must not be written back. Without this, a mutation that lands while a
-// refetch is in flight would have its invalidation silently undone when the
-// stale promise resolves and re-populates the entry.
+// Why: monotonic counter so an in-flight refetch that started before a mutation detects its result is stale and skips the write-back.
 let workItemDetailsCacheGeneration = 0
 
-// Why: when we don't have the exact cache key (e.g. an event from another
-// window only carries repoPath + number + type), drop every entry that
-// matches the (repoPath, type, number) tuple regardless of source preference.
+// Why: without the exact key (cross-window events carry only repoPath+number+type), drop every entry matching that tuple regardless of source preference.
 function invalidateWorkItemDetailsCacheByMatch(args: {
   repoPath: string
   repoId?: string
   type: 'issue' | 'pr'
   number: number
 }): void {
-  workItemDetailsCacheGeneration += 1
   const suffix = `\0${args.type}\0${args.number}`
   const prefix = `${args.repoId ?? args.repoPath}\0`
   let removed = false
@@ -1243,6 +1179,7 @@ function invalidateWorkItemDetailsCacheByMatch(args: {
     }
   }
   if (removed) {
+    workItemDetailsCacheGeneration += 1
     notifyWorkItemDetailsCache()
   }
 }
@@ -1321,12 +1258,9 @@ function patchCachedWorkItemBody(cacheKey: string, body: string): void {
   })
 }
 
-// Why: install once at module load — every dialog instance shares the cache,
-// so a single subscription is enough. The preload bridge re-emits the
-// main-process broadcast for every window, so each renderer invalidates its
-// own cache when any window's mutation lands. We track the unsubscribe so
-// Vite HMR doesn't accumulate listeners across module reloads in dev.
+// Install once at module load (all dialogs share the cache); track the unsubscribe so Vite HMR doesn't accumulate listeners across reloads.
 let workItemMutatedUnsub: (() => void) | undefined
+let workItemDetailsCacheEventUnsub: (() => void) | undefined
 if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
   workItemMutatedUnsub = window.api.gh.onWorkItemMutated((payload) => {
     invalidateWorkItemDetailsCacheByMatch({
@@ -1336,31 +1270,55 @@ if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
       number: payload.number
     })
   })
+  workItemDetailsCacheEventUnsub = onGitHubWorkItemDetailsCacheMutation((payload) => {
+    invalidateWorkItemDetailsCacheByMatch(payload)
+  })
 }
 if (typeof import.meta !== 'undefined' && import.meta.hot) {
   import.meta.hot.dispose(() => {
     workItemMutatedUnsub?.()
+    workItemDetailsCacheEventUnsub?.()
   })
 }
 
-// Why: bounded LRU — opening many PRs with many files during a session
-// would otherwise grow this module-level map without bound until reload.
+// Why: bounded LRU so a session of opening many PR files can't grow this module map without bound.
 const PR_FILE_CONTENT_CACHE_MAX = 64
-const prFileContentCache = new Map<string, Promise<GitHubPRFileContents> | GitHubPRFileContents>()
+type PRFileContentCacheEntry = {
+  value: Promise<GitHubPRFileContents> | GitHubPRFileContents
+  byteCount: number
+}
+const prFileContentCache = new Map<string, PRFileContentCacheEntry>()
+let prFileContentCacheBytes = 0
 
 function touchPRFileContentCache(
   key: string,
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
 ): void {
-  // Why: re-insert to move to the most-recently-used position; Map preserves
-  // insertion order so the oldest key is always first when evicting.
+  const retainedByteCount = value instanceof Promise ? 0 : getRetainedPRFileContentsByteCount(value)
+  if (retainedByteCount === null) {
+    const existing = prFileContentCache.get(key)
+    prFileContentCacheBytes -= existing?.byteCount ?? 0
+    prFileContentCache.delete(key)
+    return
+  }
+
+  const existing = prFileContentCache.get(key)
+  prFileContentCacheBytes -= existing?.byteCount ?? 0
+  // Why: re-insert moves the key to MRU; Map insertion order makes the oldest key first when evicting.
   prFileContentCache.delete(key)
-  prFileContentCache.set(key, value)
-  while (prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX) {
+  const byteCount = retainedByteCount
+  prFileContentCache.set(key, { value, byteCount })
+  prFileContentCacheBytes += byteCount
+  while (
+    prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX ||
+    prFileContentCacheBytes > PR_FILE_CONTENT_CACHE_MAX_BYTES
+  ) {
     const oldest = prFileContentCache.keys().next().value
     if (oldest === undefined) {
       break
     }
+    const evicted = prFileContentCache.get(oldest)
+    prFileContentCacheBytes -= evicted?.byteCount ?? 0
     prFileContentCache.delete(oldest)
   }
 }
@@ -1368,14 +1326,23 @@ function touchPRFileContentCache(
 function getPRFileContentCacheKey(args: {
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   file: GitHubPRFile
   headSha: string
   baseSha: string
 }): string {
+  const repositoryKey = args.repoId ? `repo:${args.repoId}` : `path:${args.repoPath}`
+  const sourceKey =
+    args.sourceContext?.provider === 'github'
+      ? `source:${getTaskSourceCacheScope(args.sourceContext)}`
+      : 'source:local'
   return [
-    args.repoId,
+    repositoryKey,
+    sourceKey,
     args.prNumber,
+    args.prRepo ? githubRepoIdentityKey(args.prRepo) : '',
     args.file.path,
     args.file.oldPath ?? '',
     args.file.status,
@@ -1387,7 +1354,9 @@ function getPRFileContentCacheKey(args: {
 function loadPRFileContents(args: {
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
+  prRepo?: GitHubOwnerRepo | null
   file: GitHubPRFile
   headSha: string
   baseSha: string
@@ -1395,179 +1364,58 @@ function loadPRFileContents(args: {
   const cacheKey = getPRFileContentCacheKey(args)
   const cached = prFileContentCache.get(cacheKey)
   if (cached) {
-    touchPRFileContentCache(cacheKey, cached)
-    return Promise.resolve(cached)
+    touchPRFileContentCache(cacheKey, cached.value)
+    return Promise.resolve(cached.value)
   }
-  const request = window.api.gh
-    .prFileContents({
-      repoPath: args.repoPath,
-      repoId: args.repoId,
-      prNumber: args.prNumber,
-      path: args.file.path,
-      oldPath: args.file.oldPath,
-      status: args.file.status,
-      headSha: args.headSha,
-      baseSha: args.baseSha
-    })
+  let request: Promise<GitHubPRFileContents>
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  request = (
+    runtimeHost
+      ? callRuntimeRpc<GitHubPRFileContents>(
+          { kind: 'environment', environmentId: runtimeHost.environmentId },
+          'github.prFileContents',
+          {
+            repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
+            prNumber: args.prNumber,
+            prRepo: args.prRepo ?? null,
+            path: args.file.path,
+            oldPath: args.file.oldPath,
+            status: args.file.status,
+            headSha: args.headSha,
+            baseSha: args.baseSha
+          },
+          { timeoutMs: 30_000 }
+        )
+      : window.api.gh.prFileContents({
+          repoPath: args.repoPath,
+          repoId: args.repoId,
+          sourceContext: args.sourceContext,
+          prNumber: args.prNumber,
+          prRepo: args.prRepo ?? null,
+          path: args.file.path,
+          oldPath: args.file.oldPath,
+          status: args.file.status,
+          headSha: args.headSha,
+          baseSha: args.baseSha
+        })
+  )
     .then((contents) => {
-      touchPRFileContentCache(cacheKey, contents)
+      if (prFileContentCache.get(cacheKey)?.value === request) {
+        touchPRFileContentCache(cacheKey, contents)
+      }
       return contents
     })
     .catch((err) => {
-      prFileContentCache.delete(cacheKey)
+      const cachedRequest = prFileContentCache.get(cacheKey)
+      if (cachedRequest?.value === request) {
+        prFileContentCacheBytes -= cachedRequest.byteCount
+        prFileContentCache.delete(cacheKey)
+      }
       throw err
     })
   touchPRFileContentCache(cacheKey, request)
   return request
 }
-
-function addIssueCommentForRepo(args: {
-  repoId?: string
-  repoPath: string
-  number: number
-  body: string
-  type?: 'issue' | 'pr'
-}): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
-  return window.api.gh.addIssueComment({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    number: args.number,
-    body: args.body,
-    type: args.type
-  })
-}
-
-function addPRReviewCommentForRepo(args: {
-  repoId?: string
-  repoPath: string
-  prNumber: number
-  commitId: string
-  path: string
-  line: number
-  startLine?: number
-  body: string
-}): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>> {
-  return window.api.gh.addPRReviewComment({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    prNumber: args.prNumber,
-    commitId: args.commitId,
-    path: args.path,
-    line: args.line,
-    startLine: args.startLine,
-    body: args.body
-  })
-}
-
-function addPRReviewCommentReplyForRepo(args: {
-  repoId?: string
-  repoPath: string
-  prNumber: number
-  commentId: number
-  body: string
-  threadId?: string
-  path?: string
-  line?: number
-}): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>> {
-  return window.api.gh.addPRReviewCommentReply({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    prNumber: args.prNumber,
-    commentId: args.commentId,
-    body: args.body,
-    threadId: args.threadId,
-    path: args.path,
-    line: args.line
-  })
-}
-
-function setPRFileViewedForRepo(args: {
-  repoId?: string
-  repoPath: string
-  prNumber: number
-  pullRequestId: string
-  path: string
-  viewed: boolean
-}): Promise<boolean> {
-  return window.api.gh.setPRFileViewed({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    prNumber: args.prNumber,
-    pullRequestId: args.pullRequestId,
-    path: args.path,
-    viewed: args.viewed
-  })
-}
-
-function getWorkItemDetailsForRepo(args: {
-  repoId?: string
-  repoPath: string
-  number: number
-  type: 'issue' | 'pr'
-}): Promise<GitHubWorkItemDetails | null> {
-  return window.api.gh.workItemDetails({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    number: args.number,
-    type: args.type
-  })
-}
-
-function PRViewedCheckbox({
-  checked,
-  pending,
-  filePath,
-  onToggle
-}: {
-  checked: boolean
-  pending: boolean
-  filePath: string
-  onToggle: () => void
-}): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={checked}
-          aria-label={`${checked ? 'Unmark' : 'Mark'} ${filePath} as viewed`}
-          disabled={pending}
-          onClick={(event) => {
-            event.stopPropagation()
-            onToggle()
-          }}
-          className={cn(
-            'flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-[11px] text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            checked && 'text-foreground',
-            pending && 'cursor-default opacity-60'
-          )}
-        >
-          <span
-            className={cn(
-              'flex size-4 items-center justify-center rounded-sm border transition-colors',
-              checked
-                ? 'border-foreground bg-foreground text-background'
-                : 'border-muted-foreground/50 bg-background text-transparent'
-            )}
-          >
-            {pending ? (
-              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
-            ) : checked ? (
-              <Check className="size-3" strokeWidth={3} />
-            ) : null}
-          </span>
-          <span>Viewed</span>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={4}>
-        {checked ? 'Unmark viewed' : 'Mark viewed'}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-const PR_DIFF_OVERSCAN = 5
 
 type CachedPRFilesDiffViewState = {
   entrySignature: string
@@ -1583,86 +1431,14 @@ type CachedPRFilesDiffViewState = {
 const prFilesDiffViewStateCache = new Map<string, CachedPRFilesDiffViewState>()
 const prFilesDiffScrollTopCache = new Map<string, number>()
 
-function mapPRFileStatus(status: GitHubPRFile['status']): GitBranchChangeEntry['status'] {
-  switch (status) {
-    case 'added':
-      return 'added'
-    case 'removed':
-      return 'deleted'
-    case 'renamed':
-      return 'renamed'
-    case 'copied':
-      return 'copied'
-    case 'changed':
-    case 'modified':
-    case 'unchanged':
-      return 'modified'
-  }
-}
-
-function getPRFileSectionKey(path: string): string {
-  return `combined-commit:${path}`
-}
-
-function gitHubPRFileToBranchEntry(file: GitHubPRFile): GitBranchChangeEntry {
-  return {
-    path: file.path,
-    oldPath: file.oldPath,
-    status: mapPRFileStatus(file.status),
-    added: file.additions,
-    removed: file.deletions
-  }
-}
-
-function getPRFileDiffResult(contents: GitHubPRFileContents): GitDiffResult {
-  if (contents.originalIsBinary) {
-    return {
-      kind: 'binary',
-      originalContent: contents.original,
-      modifiedContent: contents.modified,
-      originalIsBinary: true,
-      modifiedIsBinary: contents.modifiedIsBinary
-    }
-  }
-  if (contents.modifiedIsBinary) {
-    return {
-      kind: 'binary',
-      originalContent: contents.original,
-      modifiedContent: contents.modified,
-      originalIsBinary: false,
-      modifiedIsBinary: true
-    }
-  }
-
-  return {
-    kind: 'text',
-    originalContent: contents.original,
-    modifiedContent: contents.modified,
-    originalIsBinary: false,
-    modifiedIsBinary: false
-  }
-}
-
-type PRFilesCombinedDiffViewerProps = {
-  files: GitHubPRFile[]
-  comments: PRComment[]
-  repoPath: string
-  repoId: string
-  prNumber: number
-  prUrl: string
-  headSha: string | undefined
-  baseSha: string | undefined
-  pendingViewedPaths: ReadonlySet<string>
-  onCommentAdded: (comment: PRComment) => void
-  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
-}
-
 function PRFilesCombinedDiffViewer({
   files,
   comments,
   repoPath,
   repoId,
+  sourceContext,
   prNumber,
+  prRepo,
   prUrl,
   headSha,
   baseSha,
@@ -1696,16 +1472,21 @@ function PRFilesCombinedDiffViewer({
     if (entriesCacheRef.current?.signature === diffEntrySignature) {
       return entriesCacheRef.current.entries
     }
-    const nextEntries = files.map(gitHubPRFileToBranchEntry)
-    entriesCacheRef.current = { signature: diffEntrySignature, entries: nextEntries }
+    const nextEntries = getCombinedDiffBranchEntriesInTreeOrder(
+      'commit',
+      files.map(gitHubPRFileToBranchEntry)
+    )
+    entriesCacheRef.current = {
+      signature: diffEntrySignature,
+      entries: nextEntries
+    }
     return nextEntries
   }, [diffEntrySignature, files])
   const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
   const inlineReviewComments = useMemo<DecoratedDiffComment[]>(
     () =>
       comments.flatMap((comment): DecoratedDiffComment[] => {
-        // Why: stale threads keep originalLine for the sidebar, but rendering
-        // that number inline can attach the comment to unrelated current code.
+        // Why: outdated threads keep originalLine for the sidebar, but rendering it inline can attach the comment to unrelated current code.
         if (comment.isOutdated || !comment.path || typeof comment.line !== 'number') {
           return []
         }
@@ -1737,15 +1518,16 @@ function PRFilesCombinedDiffViewer({
       JSON.stringify({
         repoId,
         prNumber,
+        prRepo: prRepo ? githubRepoIdentityKey(prRepo) : null,
         headSha: headSha ?? null,
         baseSha: baseSha ?? null,
         files: diffEntrySignature
       }),
-    [baseSha, diffEntrySignature, headSha, prNumber, repoId]
+    [baseSha, diffEntrySignature, headSha, prNumber, prRepo, repoId]
   )
   const viewStateKey = useMemo(
-    () => [repoId || repoPath, prNumber].join('\0'),
-    [prNumber, repoId, repoPath]
+    () => [repoId || repoPath, prNumber, prRepo ? githubRepoIdentityKey(prRepo) : ''].join('\0'),
+    [prNumber, prRepo, repoId, repoPath]
   )
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sideBySide, setSideBySide] = useState(false)
@@ -1763,8 +1545,7 @@ function PRFilesCombinedDiffViewer({
   sectionsRef.current = sections
 
   useEffect(() => {
-    // Why: even cached restores represent a new PR/file generation; stale async
-    // diff loads from the previous view must not patch the restored sections.
+    // Why: bump generation so stale async diff loads from the previous view can't patch the restored sections.
     generationRef.current += 1
     const cached = prFilesDiffViewStateCache.get(viewStateKey)
     if (cached && cached.entrySignature === entrySignature) {
@@ -1802,7 +1583,8 @@ function PRFilesCombinedDiffViewer({
         loading: true,
         error: undefined,
         dirty: false,
-        diffResult: null
+        diffResult: null,
+        largeDiffRenderLimit: null
       }))
     )
   }, [entries, entrySignature, viewStateKey])
@@ -1823,7 +1605,11 @@ function PRFilesCombinedDiffViewer({
       const generation = generationRef.current
       loadingIndicesRef.current.add(index)
 
-      const load = async (): Promise<{ result: GitDiffResult; error?: string }> => {
+      const load = async (): Promise<{
+        result: GitDiffResult
+        resultContents?: GitHubPRFileContents
+        error?: string
+      }> => {
         if (file.isBinary) {
           return {
             result: {
@@ -1844,18 +1630,23 @@ function PRFilesCombinedDiffViewer({
               originalIsBinary: false,
               modifiedIsBinary: false
             },
-            error: 'Diff unavailable because the PR commit SHAs are missing.'
+            error: translate(
+              'auto.components.PullRequestPage.74660bd80b',
+              'Diff unavailable because the PR commit SHAs are missing.'
+            )
           }
         }
         const contents = await loadPRFileContents({
           repoPath,
           repoId,
+          sourceContext,
           prNumber,
+          prRepo,
           file,
           headSha,
           baseSha
         })
-        return { result: getPRFileDiffResult(contents) }
+        return { result: getPRFileDiffResult(contents), resultContents: contents }
       }
 
       load()
@@ -1867,37 +1658,46 @@ function PRFilesCombinedDiffViewer({
             originalIsBinary: false,
             modifiedIsBinary: false
           } as GitDiffResult,
+          resultContents: undefined,
           error: error instanceof Error ? error.message : 'Failed to load diff.'
         }))
-        .then(({ result, error }) => {
+        .then(({ result, resultContents, error }) => {
           loadingIndicesRef.current.delete(index)
           if (generationRef.current !== generation) {
             return
           }
+          const largeDiffRenderLimit =
+            !error && result.kind === 'text' && resultContents
+              ? getPRFileContentsRenderLimit(resultContents)
+              : null
+          const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
+          const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
           loadedIndicesRef.current.add(index)
           setSections((prev) =>
             prev.map((current, currentIndex) =>
               currentIndex === index
                 ? {
                     ...current,
-                    diffResult: result,
-                    originalContent: result.kind === 'text' ? result.originalContent : '',
-                    modifiedContent: result.kind === 'text' ? result.modifiedContent : '',
+                    diffResult: storedResult,
+                    originalContent: storedContent.originalContent,
+                    modifiedContent: storedContent.modifiedContent,
                     loading: false,
-                    error
+                    error,
+                    largeDiffRenderLimit
                   }
                 : current
             )
           )
         })
     },
-    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath]
+    [baseSha, fileByPath, headSha, prNumber, prRepo, repoId, repoPath, sourceContext]
   )
 
   const retrySection = useCallback(
     (index: number) => {
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
+      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
@@ -1907,7 +1707,8 @@ function PRFilesCombinedDiffViewer({
                 originalContent: '',
                 modifiedContent: '',
                 loading: true,
-                error: undefined
+                error: undefined,
+                largeDiffRenderLimit: null
               }
             : section
         )
@@ -1968,7 +1769,9 @@ function PRFilesCombinedDiffViewer({
           section.added === undefined && section.removed === undefined
             ? undefined
             : (section.added ?? 0) + (section.removed ?? 0),
-        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
+        isLargeDiffLimited: section.largeDiffRenderLimit?.limited === true,
+        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
       })
     },
     overscan: PR_DIFF_OVERSCAN,
@@ -2109,13 +1912,20 @@ function PRFilesCombinedDiffViewer({
       }
     ) => {
       if (!headSha) {
-        toast.error('Unable to comment without the PR head SHA.')
+        toast.error(
+          translate(
+            'auto.components.PullRequestPage.d8c3ba91c4',
+            'Unable to comment without the PR head SHA.'
+          )
+        )
         return false
       }
       const result = await addPRReviewCommentForRepo({
         repoPath,
         repoId,
+        sourceContext,
         prNumber,
+        prRepo,
         commitId: headSha,
         path: section.path,
         line: lineNumber,
@@ -2123,14 +1933,19 @@ function PRFilesCombinedDiffViewer({
         body
       })
       if (!result.ok) {
-        toast.error(result.error || 'Failed to add review comment.')
+        toast.error(
+          result.error ||
+            translate('auto.components.PullRequestPage.19628e058d', 'Failed to add review comment.')
+        )
         return false
       }
       onCommentAdded(result.comment)
-      toast.success('Review comment added.')
+      toast.success(
+        translate('auto.components.PullRequestPage.eff839f438', 'Review comment added.')
+      )
       return true
     },
-    [headSha, onCommentAdded, prNumber, repoId, repoPath]
+    [headSha, onCommentAdded, prNumber, prRepo, repoId, repoPath, sourceContext]
   )
 
   const renderViewedCheckbox = useCallback(
@@ -2168,19 +1983,23 @@ function PRFilesCombinedDiffViewer({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="Show file tree"
+                  aria-label={translate(
+                    'auto.components.PullRequestPage.319cf2d54b',
+                    'Show file tree'
+                  )}
                   onClick={() => setFileTreeCollapsed(false)}
                 >
                   <PanelLeftOpen className="size-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                Show file tree
+                {translate('auto.components.PullRequestPage.319cf2d54b', 'Show file tree')}
               </TooltipContent>
             </Tooltip>
           )}
           <span className="truncate text-xs text-muted-foreground">
-            {files.filter(isPRFileViewed).length} / {files.length} files viewed
+            {files.filter(isPRFileViewed).length} / {files.length}{' '}
+            {translate('auto.components.PullRequestPage.89e80af1c7', 'files viewed')}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -2189,14 +2008,18 @@ function PRFilesCombinedDiffViewer({
             className="w-20 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
           >
-            {allSectionsCollapsed ? 'Expand All' : 'Collapse All'}
+            {allSectionsCollapsed
+              ? translate('auto.components.PullRequestPage.eb722a5a8c', 'Expand All')
+              : translate('auto.components.PullRequestPage.dd94111c18', 'Collapse All')}
           </button>
           <button
             type="button"
             className="w-24 rounded border border-border px-2 py-0.5 text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => setSideBySide((prev) => !prev)}
           >
-            {sideBySide ? 'Inline' : 'Side by Side'}
+            {sideBySide
+              ? translate('auto.components.PullRequestPage.e5f4a24f78', 'Inline')
+              : translate('auto.components.PullRequestPage.1378d79e83', 'Side by Side')}
           </button>
         </div>
       </div>
@@ -2264,278 +2087,11 @@ function PRFilesCombinedDiffViewer({
   )
 }
 
-function CommentCodeContext({
-  comment,
-  repoPath,
-  repoId,
-  prNumber,
-  files,
-  headSha,
-  baseSha
-}: {
-  comment: PRComment
-  repoPath: string | null
-  repoId: string
-  prNumber: number
-  files: GitHubPRFile[]
-  headSha: string | undefined
-  baseSha: string | undefined
-}): React.JSX.Element | null {
-  const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
-  const [error, setError] = useState(false)
-  const [contextExpansionState, setContextExpansionState] = useState(() =>
-    createCommentCodeContextExpansionState(comment.id)
-  )
-  const file = useMemo(
-    () => files.find((candidate) => candidate.path === comment.path),
-    [comment.path, files]
-  )
-  const line = comment.line
-  const startLine = comment.startLine ?? line
-
-  useEffect(() => {
-    setContents(null)
-    setError(false)
-    if (!repoPath || !file || !headSha || !baseSha || !line || file.isBinary) {
-      return
-    }
-    let cancelled = false
-    loadPRFileContents({ repoPath, repoId, prNumber, file, headSha, baseSha })
-      .then((result) => {
-        if (!cancelled) {
-          setContents(result)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError(true)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath])
-
-  const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
-    contextExpansionState,
-    comment.id
-  )
-  if (resolvedContextExpansionState !== contextExpansionState) {
-    // Why: comment rows can be reused when a PR refreshes; reset before paint
-    // so expanded context from the previous comment is never shown on the next.
-    setContextExpansionState(resolvedContextExpansionState)
-  }
-  const contextBefore = resolvedContextExpansionState.contextBefore
-  const contextAfter = resolvedContextExpansionState.contextAfter
-  const setContextBefore = useCallback(
-    (contextBeforeUpdate: CommentCodeContextLineUpdate) => {
-      setContextExpansionState((current) =>
-        updateCommentCodeContextExpansionState(current, comment.id, {
-          contextBefore: contextBeforeUpdate
-        })
-      )
-    },
-    [comment.id]
-  )
-  const setContextAfter = useCallback(
-    (contextAfterUpdate: CommentCodeContextLineUpdate) => {
-      setContextExpansionState((current) =>
-        updateCommentCodeContextExpansionState(current, comment.id, {
-          contextAfter: contextAfterUpdate
-        })
-      )
-    },
-    [comment.id]
-  )
-
-  if (!comment.path || !line || !file || file.isBinary || error) {
-    return null
-  }
-
-  if (!contents) {
-    return (
-      <div className="mb-3 flex items-center gap-2 rounded-md border border-border/40 bg-muted/20 px-3 py-2 text-[12px] text-muted-foreground">
-        <LoaderCircle className="size-3.5 animate-spin" />
-        Loading code context…
-      </div>
-    )
-  }
-
-  const source = contents.modified || contents.original
-  const lines = source.split(/\r?\n/)
-  const language = detectLanguage(comment.path)
-  const commentFrom = Math.max(1, Math.min(startLine ?? line, line))
-  const commentTo = Math.min(lines.length, Math.max(startLine ?? line, line))
-  const from = Math.max(1, commentFrom - contextBefore)
-  const to = Math.min(lines.length, commentTo + contextAfter)
-  const selectedLines = lines.slice(from - 1, to)
-  const candidateBlockRange = findNearestBraceBlock(lines, commentFrom)
-  const candidateBlockLineCount = candidateBlockRange
-    ? candidateBlockRange.endLine - candidateBlockRange.startLine + 1
-    : 0
-  const isWholeFileBlock =
-    candidateBlockRange !== null &&
-    candidateBlockRange.startLine <= 2 &&
-    candidateBlockRange.endLine >= lines.length - 1
-  const shouldUseBlockRange =
-    candidateBlockRange !== null &&
-    !isWholeFileBlock &&
-    candidateBlockLineCount <= CODE_CONTEXT_MAX_BLOCK_LINES
-  const blockRange = shouldUseBlockRange
-    ? candidateBlockRange
-    : {
-        startLine: Math.max(1, commentFrom - CODE_CONTEXT_FALLBACK_LINES),
-        endLine: Math.min(lines.length, commentTo + CODE_CONTEXT_FALLBACK_LINES)
-      }
-  const canExpandAbove = from > 1
-  const canExpandBelow = to < lines.length
-  const canExpandBlock = blockRange.startLine < from || blockRange.endLine > to
-  const blockTooltip = shouldUseBlockRange
-    ? 'Show surrounding code block'
-    : 'Show nearby code context'
-
-  if (selectedLines.length === 0) {
-    return null
-  }
-
-  return (
-    <div className="mb-3 overflow-hidden rounded-md border border-border/50 bg-muted/20">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border/40 px-3 py-1.5 text-[11px] text-muted-foreground">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="truncate font-mono">{comment.path}</span>
-          <span className="shrink-0 font-mono">
-            L{from}
-            {to !== from ? `-L${to}` : ''}
-          </span>
-          {(from !== commentFrom || to !== commentTo) && (
-            <span className="shrink-0 font-mono text-muted-foreground/70">
-              comment L{commentFrom}
-              {commentTo !== commentFrom ? `-L${commentTo}` : ''}
-            </span>
-          )}
-        </div>
-        <ButtonGroup className="text-muted-foreground" aria-label="Code context controls">
-          {(contextBefore > 0 || contextAfter > 0) && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-xs"
-                  className="size-7 border-border/55 bg-background/35 text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
-                  onClick={() => {
-                    setContextBefore(0)
-                    setContextAfter(0)
-                  }}
-                  aria-label="Reset code context"
-                >
-                  <UndoDot className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Reset code context</TooltipContent>
-            </Tooltip>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-xs"
-                className="size-7 border-border/55 bg-background/35 text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
-                disabled={!canExpandAbove}
-                onClick={() =>
-                  setContextBefore((current) =>
-                    Math.min(current + CODE_CONTEXT_EXPAND_STEP, commentFrom - 1)
-                  )
-                }
-                aria-label={`Show ${CODE_CONTEXT_EXPAND_STEP} more lines above`}
-              >
-                <ArrowUp className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Show more lines above</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-xs"
-                className="size-7 border-border/55 bg-background/35 text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
-                disabled={!canExpandBelow}
-                onClick={() =>
-                  setContextAfter((current) =>
-                    Math.min(current + CODE_CONTEXT_EXPAND_STEP, lines.length - commentTo)
-                  )
-                }
-                aria-label={`Show ${CODE_CONTEXT_EXPAND_STEP} more lines below`}
-              >
-                <ArrowDown className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Show more lines below</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-xs"
-                className="size-7 border-border/55 bg-background/35 text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
-                disabled={!canExpandBlock}
-                onClick={() => {
-                  setContextBefore((current) =>
-                    Math.max(current, Math.max(0, commentFrom - blockRange.startLine))
-                  )
-                  setContextAfter((current) =>
-                    Math.max(current, Math.max(0, blockRange.endLine - commentTo))
-                  )
-                }}
-                aria-label={blockTooltip}
-              >
-                <Braces className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{blockTooltip}</TooltipContent>
-          </Tooltip>
-        </ButtonGroup>
-      </div>
-      <Suspense
-        fallback={
-          <pre className="overflow-x-auto py-1 text-[12px] leading-5">
-            {selectedLines.map((codeLine, index) => {
-              const lineNumber = from + index
-              const isCommentedLine = lineNumber >= commentFrom && lineNumber <= commentTo
-              return (
-                <div
-                  key={lineNumber}
-                  className={cn('flex font-mono', isCommentedLine && 'bg-emerald-500/10')}
-                >
-                  <span className="w-12 shrink-0 select-none border-r border-border/40 px-2 text-right text-muted-foreground">
-                    {lineNumber}
-                  </span>
-                  <code className="min-w-0 flex-1 px-3 text-foreground">{codeLine || ' '}</code>
-                </div>
-              )
-            })}
-          </pre>
-        }
-      >
-        <MonacoCodeExcerpt
-          lines={selectedLines}
-          firstLineNumber={from}
-          highlightedStartLine={commentFrom}
-          highlightedEndLine={commentTo}
-          language={language}
-        />
-      </Suspense>
-    </div>
-  )
-}
-
 function ConversationTab({
   item,
   repoPath,
+  repoId,
+  sourceContext,
   body,
   comments,
   files,
@@ -2557,6 +2113,7 @@ function ConversationTab({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   body: string
   comments: PRComment[]
   files: GitHubPRFile[]
@@ -2583,11 +2140,29 @@ function ConversationTab({
   const [bodySaving, setBodySaving] = useState(false)
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
-  const repoAssignees = useRepoAssignees(repoPath, item.repoId)
-  const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
+  const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
+  const repoAssignees = useRepoAssignees(repoPath, item.repoId, sourceSettings)
+  const botAuthorOverrides = usePRBotAuthorOverrides()
+  const commentCounts = useMemo(
+    () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
+    [botAuthorOverrides, comments]
+  )
   const visibleComments = useMemo(
-    () => filterPRCommentsByAudience(comments, commentFilter),
-    [commentFilter, comments]
+    () => filterPRCommentsByAudience(comments, commentFilter, botAuthorOverrides),
+    [botAuthorOverrides, commentFilter, comments]
   )
   const visibleCommentGroups = useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const resolvedReplyingTo = resolveCommentReplyTarget(replyingTo, visibleComments)
@@ -2610,15 +2185,13 @@ function ConversationTab({
   }, [])
 
   if (resolvedReplyingTo !== replyingTo) {
-    // Why: comment filters/refetches can hide the active reply target; clear it
-    // before paint so a stale composer does not flash for the wrong comment set.
+    // Why: clear before paint when filters/refetches hide the reply target, so a stale composer doesn't flash for the wrong comment set.
     setReplyingTo(resolvedReplyingTo)
   }
 
   const resolvedBodyDraft = resolveGitHubBodyDraft(bodyDraft, body, bodyEditing)
   if (shouldSyncGitHubBodyDraft(bodyDraft, body, bodyEditing)) {
-    // Why: background detail refreshes can change the body while the editor is
-    // closed; reconcile before paint so reopening never sees a stale draft.
+    // Why: reconcile before paint so a background body refresh while the editor is closed doesn't show a stale draft on reopen.
     setBodyDraft(resolvedBodyDraft)
   }
 
@@ -2636,12 +2209,18 @@ function ConversationTab({
   }, [bodyEditing, cancelBodyTextareaFocusFrame])
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const prRepo = useMemo(() => resolvePullRequestRepo(item, projectOrigin), [item, projectOrigin])
   const markdownGitHubRepo = useMemo(
-    () => (projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : bodySlug),
+    () =>
+      projectOrigin
+        ? { owner: projectOrigin.owner, repo: projectOrigin.repo, host: projectOrigin.host }
+        : bodySlug,
     [bodySlug, projectOrigin]
   )
   const canEditBody =
-    item.type === 'pr' ? Boolean(projectOrigin || bodySlug) : Boolean(projectOrigin || repoPath)
+    item.type === 'pr'
+      ? Boolean(projectOrigin || bodySlug)
+      : Boolean(projectOrigin || canUseRepoMutationContext)
   const bodyChanged = resolvedBodyDraft !== body
 
   const handleSaveBody = useCallback(async (): Promise<void> => {
@@ -2654,15 +2233,20 @@ function ConversationTab({
       await runWorkItemBodyUpdate({
         item,
         repoPath,
+        sourceContext,
         projectOrigin,
         body: resolvedBodyDraft,
         parsedSlug: bodySlug
       })
       onBodyUpdated(resolvedBodyDraft)
       setBodyEditing(false)
-      toast.success('Description updated.')
+      toast.success(translate('auto.components.PullRequestPage.9b4190dc98', 'Description updated.'))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update description.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.PullRequestPage.d94810f652', 'Failed to update description.')
+      )
     } finally {
       setBodySaving(false)
     }
@@ -2674,21 +2258,29 @@ function ConversationTab({
     item,
     onBodyUpdated,
     projectOrigin,
-    repoPath
+    repoPath,
+    sourceContext
   ])
 
   const handleReply = useCallback(
     async (comment: PRComment, replyBody: string): Promise<boolean> => {
-      if (!repoPath) {
-        toast.error('Unable to reply without a repository path.')
+      if (!canUseRepoMutationContext) {
+        toast.error(
+          translate(
+            'auto.components.PullRequestPage.6885c619e7',
+            'Unable to reply without a repository path.'
+          )
+        )
         return false
       }
       const result =
         comment.path && item.type === 'pr'
           ? await addPRReviewCommentReplyForRepo({
-              repoPath,
+              repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
+              prRepo,
               commentId: comment.id,
               body: replyBody,
               threadId: comment.threadId,
@@ -2696,41 +2288,65 @@ function ConversationTab({
               line: comment.line
             })
           : await addIssueCommentForRepo({
-              repoPath,
+              repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
-              type: item.type
+              type: item.type,
+              prRepo
             })
 
       if (!result.ok) {
-        toast.error(result.error || 'Failed to post reply.')
+        toast.error(
+          result.error ||
+            translate('auto.components.PullRequestPage.5821aab360', 'Failed to post reply.')
+        )
         return false
       }
       onCommentAdded(result.comment)
       setReplyingTo(null)
-      toast.success('Reply posted.')
+      toast.success(translate('auto.components.PullRequestPage.11505c7a71', 'Reply posted.'))
       return true
     },
-    [item.number, item.repoId, item.type, onCommentAdded, repoPath]
+    [
+      canUseRepoMutationContext,
+      item.number,
+      item.repoId,
+      item.type,
+      onCommentAdded,
+      prRepo,
+      repoPath,
+      sourceContext
+    ]
   )
 
   const rightPanel =
     item.type === 'pr' ? (
-      <div className="flex h-fit flex-col gap-3 xl:sticky xl:top-4">
+      <div className="flex h-fit flex-col gap-5 xl:sticky xl:top-4">
         <PRActionsPanel
           item={item}
           repoPath={repoPath}
           repoId={item.repoId}
+          sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           localState={localState}
           onStateChange={onStateChange}
+          onMutated={onMutated}
+        />
+        <PRAssigneesPanel
+          item={item}
+          repoPath={repoPath}
+          projectOrigin={projectOrigin}
+          sourceContext={sourceContext}
           onMutated={onMutated}
         />
         <PRReviewersPanel
           item={item}
           loading={loading}
           repoPath={repoPath}
+          sourceContext={sourceContext}
+          projectOrigin={projectOrigin}
           onReviewersRequested={onReviewersRequested}
         />
         <aside className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
@@ -2738,6 +2354,7 @@ function ConversationTab({
             item={item}
             repoPath={repoPath}
             repoId={item.repoId}
+            sourceContext={sourceContext}
             headSha={headSha}
             checks={checks}
             loading={loading || !detailsLoaded}
@@ -2780,12 +2397,16 @@ function ConversationTab({
         {comment.path && (
           <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">
             {comment.path.split('/').pop()}
-            {comment.line ? `:L${comment.line}` : ''}
+            {comment.line
+              ? translate('auto.components.PullRequestPage.34b9f7c264', ':L{{value0}}', {
+                  value0: comment.line
+                })
+              : ''}
           </span>
         )}
         {comment.isResolved && (
           <span className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground">
-            resolved
+            {translate('auto.components.PullRequestPage.76b2a0ac5b', 'resolved')}
           </span>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -2798,12 +2419,17 @@ function ConversationTab({
                 onClick={() =>
                   setReplyingTo((current) => (current === comment.id ? null : comment.id))
                 }
-                aria-label="Reply to comment"
+                aria-label={translate(
+                  'auto.components.PullRequestPage.d6c6679de7',
+                  'Reply to comment'
+                )}
               >
                 <MessageSquarePlus className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Reply to comment</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.PullRequestPage.d6c6679de7', 'Reply to comment')}
+            </TooltipContent>
           </Tooltip>
           {comment.url && (
             <Tooltip>
@@ -2814,12 +2440,17 @@ function ConversationTab({
                   size="icon-xs"
                   className="size-7"
                   onClick={() => window.api.shell.openUrl(comment.url)}
-                  aria-label="Open comment on GitHub"
+                  aria-label={translate(
+                    'auto.components.PullRequestPage.0ac19bb52e',
+                    'Open comment on GitHub'
+                  )}
                 >
                   <ExternalLink className="size-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Open comment on GitHub</TooltipContent>
+              <TooltipContent>
+                {translate('auto.components.PullRequestPage.0ac19bb52e', 'Open comment on GitHub')}
+              </TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -2829,10 +2460,13 @@ function ConversationTab({
           comment={comment}
           repoPath={repoPath}
           repoId={item.repoId}
+          sourceContext={sourceContext}
           prNumber={item.number}
+          prRepo={prRepo}
           files={files}
           headSha={headSha}
           baseSha={baseSha}
+          loadPRFileContents={loadPRFileContents}
         />
         <CommentMarkdown
           content={comment.body}
@@ -2845,7 +2479,14 @@ function ConversationTab({
           <CommentReplyForm
             className="mt-3"
             placeholder={
-              comment.path ? 'Reply in this review thread' : `Reply to @${comment.author}`
+              comment.path
+                ? translate(
+                    'auto.components.PullRequestPage.408e634fbb',
+                    'Reply in this review thread'
+                  )
+                : translate('auto.components.PullRequestPage.31a7b202f2', 'Reply to @{{value0}}', {
+                    value0: comment.author
+                  })
             }
             mentionOptions={mentionOptions}
             onCancel={() => setReplyingTo(null)}
@@ -2883,7 +2524,11 @@ function ConversationTab({
         >
           <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
             <span className="min-w-0 truncate">
-              Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
+              {translate('auto.components.PullRequestPage.f4fe47c2bb', 'Resolved')}{' '}
+              {group.kind === 'thread'
+                ? translate('auto.components.PullRequestPage.345b68254c', 'thread')
+                : translate('auto.components.PullRequestPage.e01e34f5fa', 'comment')}{' '}
+              {translate('auto.components.PullRequestPage.3c891789f6', 'by')} {root.author}
               {count > 1 ? ` (${count})` : ''}
             </span>
           </AccordionTrigger>
@@ -2899,9 +2544,7 @@ function ConversationTab({
     <div
       className={cn(
         'grid min-w-0 gap-5 px-4 py-4',
-        // Why: the drawer expands nearly full-width on narrow app windows, so
-        // keep PR controls beside the conversation instead of hiding them below
-        // long review threads.
+        // Why: on narrow windows the drawer is near full-width, so keep PR controls beside the conversation, not below long threads.
         item.type === 'pr' && 'grid-cols-[minmax(0,1fr)_300px]'
       )}
     >
@@ -2909,7 +2552,10 @@ function ConversationTab({
         <div className="rounded-lg border border-border/50 bg-card shadow-xs">
           <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
             <span className="font-medium text-foreground">{authorLabel}</span>
-            <span>updated {formatRelativeTime(item.updatedAt)}</span>
+            <span>
+              {translate('auto.components.PullRequestPage.169a93b29a', 'updated')}{' '}
+              {formatRelativeTime(item.updatedAt)}
+            </span>
             {canEditBody && !loading && detailsLoaded ? (
               bodyEditing ? (
                 <div className="ml-auto flex items-center gap-1">
@@ -2925,7 +2571,7 @@ function ConversationTab({
                     }}
                   >
                     <X className="size-3.5" />
-                    Cancel
+                    {translate('auto.components.PullRequestPage.6591b1fa82', 'Cancel')}
                   </Button>
                   <Button
                     type="button"
@@ -2939,7 +2585,7 @@ function ConversationTab({
                     ) : (
                       <Check className="size-3.5" />
                     )}
-                    Save
+                    {translate('auto.components.PullRequestPage.4a337ac05f', 'Save')}
                   </Button>
                 </div>
               ) : (
@@ -2954,12 +2600,17 @@ function ConversationTab({
                         setBodyDraft(body)
                         setBodyEditing(true)
                       }}
-                      aria-label="Edit description"
+                      aria-label={translate(
+                        'auto.components.PullRequestPage.da9aaa8bcf',
+                        'Edit description'
+                      )}
                     >
                       <Pencil className="size-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Edit description</TooltipContent>
+                  <TooltipContent>
+                    {translate('auto.components.PullRequestPage.da9aaa8bcf', 'Edit description')}
+                  </TooltipContent>
                 </Tooltip>
               )
             ) : null}
@@ -2986,7 +2637,7 @@ function ConversationTab({
                     void handleSaveBody()
                   }
                 }}
-                placeholder="Description"
+                placeholder={translate('auto.components.PullRequestPage.778683ec84', 'Description')}
                 rows={12}
                 mentionOptions={mentionOptions}
                 wrapperClassName="flex min-h-64 w-full items-stretch"
@@ -3000,7 +2651,12 @@ function ConversationTab({
                 className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
               />
             ) : (
-              <span className="italic text-muted-foreground">No description provided.</span>
+              <span className="italic text-muted-foreground">
+                {translate(
+                  'auto.components.PullRequestPage.c8ea6c7c4c',
+                  'No description provided.'
+                )}
+              </span>
             )}
           </div>
         </div>
@@ -3009,7 +2665,9 @@ function ConversationTab({
           <>
             <div className="flex items-center gap-2 pt-1">
               <MessageSquare className="size-4 text-muted-foreground" />
-              <span className="text-[13px] font-medium text-foreground">Comments</span>
+              <span className="text-[13px] font-medium text-foreground">
+                {translate('auto.components.PullRequestPage.3463d10a63', 'Comments')}
+              </span>
               {comments.length > 0 && (
                 <span className="rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
                   {comments.length}
@@ -3019,7 +2677,7 @@ function ConversationTab({
 
             {item.type === 'pr' && comments.length > 0 && (
               <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
-                {PR_COMMENT_AUDIENCE_FILTERS.map((filter) => {
+                {getPrCommentAudienceFilters().map((filter) => {
                   const isActive = commentFilter === filter.value
                   return (
                     <button
@@ -3042,7 +2700,7 @@ function ConversationTab({
 
             {comments.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
-                No comments yet.
+                {translate('auto.components.PullRequestPage.d2d589556c', 'No comments yet.')}
               </div>
             ) : visibleComments.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
@@ -3056,13 +2714,15 @@ function ConversationTab({
           </>
         ) : null}
 
-        {detailsLoaded && repoPath && (
+        {detailsLoaded && canUseRepoMutationContext && (
           <GHCommentComposer
             className="mt-1"
-            repoPath={repoPath}
+            repoPath={repoPath ?? ''}
             repoId={item.repoId}
+            sourceContext={sourceContext}
             issueNumber={item.number}
             itemType={item.type}
+            prRepo={prRepo}
             mentionOptions={mentionOptions}
             onCommentAdded={onCommentAdded}
           />
@@ -3078,6 +2738,7 @@ function PRActionsPanel({
   item,
   repoPath,
   repoId,
+  sourceContext,
   projectOrigin,
   localState,
   onStateChange,
@@ -3086,6 +2747,7 @@ function PRActionsPanel({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   onStateChange: (state: GitHubWorkItem['state']) => void
@@ -3099,9 +2761,20 @@ function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
-  const canMutateState = localState !== 'merged' && (!!repoPath || !!projectOrigin)
+  const sourceSettings = useAppStore(
+    useShallow((s) =>
+      getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)
+    )
+  )
+  const mergeTarget = getActiveRuntimeTarget(sourceSettings)
+  const prRepo = resolvePullRequestRepo(item, projectOrigin)
+  const canMutateWithRepoContext =
+    !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
+  const canMutateState = localState !== 'merged' && canMutateWithRepoContext
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
-  const mergeDisabled = !repoPath || mergePending || !mergePresentation.directMergeAvailable
+  const canMergeWithRepoContext = !!repoPath || mergeTarget.kind === 'environment'
+  const mergeDisabled =
+    !canMergeWithRepoContext || mergePending || !mergePresentation.directMergeAvailable
 
   const patchProjectRowIfNeeded = useCallback(
     (state: GitHubWorkItem['state']) => {
@@ -3116,10 +2789,10 @@ function PRActionsPanel({
   const applyStatePatch = useCallback(
     (state: GitHubWorkItem['state']) => {
       onStateChange(state)
-      patchWorkItem(item.id, { state }, item.repoId)
+      patchWorkItem(item.id, { state }, item.repoId, { sourceContext })
       patchProjectRowIfNeeded(state)
     },
-    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem]
+    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem, sourceContext]
   )
 
   const handleStateChange = async (): Promise<void> => {
@@ -3128,11 +2801,20 @@ function PRActionsPanel({
     }
     const label = nextState === 'closed' ? 'Close' : 'Reopen'
     const confirmed = await confirm({
-      title: `${label} PR #${item.number}?`,
+      title: translate('auto.components.PullRequestPage.eec3706a6a', '{{value0}} PR #{{value1}}?', {
+        value0: label,
+        value1: item.number
+      }),
       description:
         nextState === 'closed'
-          ? 'This will close the pull request on GitHub.'
-          : 'This will reopen the pull request on GitHub.',
+          ? translate(
+              'auto.components.PullRequestPage.5a65651096',
+              'This will close the pull request on GitHub.'
+            )
+          : translate(
+              'auto.components.PullRequestPage.3d77438c92',
+              'This will reopen the pull request on GitHub.'
+            ),
       confirmLabel: label,
       confirmVariant: nextState === 'closed' ? 'destructive' : 'default'
     })
@@ -3146,28 +2828,46 @@ function PRActionsPanel({
       await runPullRequestStateUpdate({
         repoPath,
         repoId,
+        sourceContext,
         projectOrigin,
         number: item.number,
+        prRepo,
         updates: { state: nextState }
       })
-      toast.success(nextState === 'closed' ? 'Pull request closed' : 'Pull request reopened')
+      toast.success(
+        nextState === 'closed'
+          ? translate('auto.components.PullRequestPage.7aa3b5f706', 'Pull request closed')
+          : translate('auto.components.PullRequestPage.710e47aa06', 'Pull request reopened')
+      )
       onMutated()
     } catch (err) {
       applyStatePatch(previousState)
-      toast.error(err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} PR`)
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.PullRequestPage.b8c6cbb8c4', 'Failed to {{value0}} PR', {
+              value0: label.toLowerCase()
+            })
+      )
     } finally {
       setStatePending(false)
     }
   }
 
   const handleMerge = async (method: GitHubPRMergeMethod): Promise<void> => {
-    if (!repoPath || mergeDisabled) {
+    if (mergeDisabled) {
       return
     }
     const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
     const confirmed = await confirm({
-      title: `${label} PR #${item.number}?`,
-      description: 'This will update the pull request on GitHub.',
+      title: translate('auto.components.PullRequestPage.eec3706a6a', '{{value0}} PR #{{value1}}?', {
+        value0: label,
+        value1: item.number
+      }),
+      description: translate(
+        'auto.components.PullRequestPage.a63b3c159c',
+        'This will update the pull request on GitHub.'
+      ),
       confirmLabel: label
     })
     if (!confirmed) {
@@ -3175,49 +2875,113 @@ function PRActionsPanel({
     }
     setMergePending(true)
     try {
-      const result = await window.api.gh.mergePR({
-        repoPath,
-        repoId: repoId ?? undefined,
-        prNumber: item.number,
-        method,
-        prRepo: item.prRepo ?? null
-      })
+      const result =
+        mergeTarget.kind === 'environment'
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.mergePR>>>(
+              mergeTarget,
+              'github.mergePR',
+              {
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+                prNumber: item.number,
+                method,
+                prRepo
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.mergePR({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
+              prNumber: item.number,
+              method,
+              prRepo
+            })
       if (!result.ok) {
         toast.error(result.error)
         return
       }
       applyStatePatch('merged')
-      toast.success('Pull request merged')
+      if (mergeTarget.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
+      }
+      toast.success(translate('auto.components.PullRequestPage.c57873d721', 'Pull request merged'))
       onMutated()
     } catch {
-      toast.error('Failed to merge pull request')
+      toast.error(
+        translate('auto.components.PullRequestPage.aae645d36d', 'Failed to merge pull request')
+      )
     } finally {
       setMergePending(false)
     }
   }
 
   const handleAutoMerge = async (): Promise<void> => {
-    if (!repoPath || !mergePresentation.autoMergeAction) {
+    if (!canMergeWithRepoContext || !mergePresentation.autoMergeAction) {
       return
     }
     const enabled = mergePresentation.autoMergeAction.kind === 'enable'
     setMergePending(true)
     try {
-      const result = await window.api.gh.setPRAutoMerge({
-        repoPath,
-        repoId: repoId ?? undefined,
-        prNumber: item.number,
-        enabled,
-        prRepo: item.prRepo ?? null
-      })
+      const result =
+        mergeTarget.kind === 'environment'
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.setPRAutoMerge>>>(
+              mergeTarget,
+              'github.setPRAutoMerge',
+              {
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+                prNumber: item.number,
+                enabled,
+                method: enabled ? mergeMethods.defaultMethod : undefined,
+                prRepo
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.setPRAutoMerge({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
+              prNumber: item.number,
+              enabled,
+              method: enabled ? mergeMethods.defaultMethod : undefined,
+              prRepo
+            })
       if (!result.ok) {
         toast.error(result.error)
         return
       }
-      toast.success(enabled ? 'Auto-merge enabled' : 'Auto-merge disabled')
+      if (mergeTarget.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
+      }
+      toast.success(
+        enabled
+          ? translate('auto.components.PullRequestPage.5edbe7eefa', 'Auto-merge enabled')
+          : translate('auto.components.PullRequestPage.0f5821b035', 'Auto-merge disabled')
+      )
       onMutated()
     } catch {
-      toast.error(enabled ? 'Failed to enable auto-merge' : 'Failed to disable auto-merge')
+      toast.error(
+        enabled
+          ? translate('auto.components.PullRequestPage.d31f4b508c', 'Failed to enable auto-merge')
+          : translate('auto.components.PullRequestPage.973ef2fac9', 'Failed to disable auto-merge')
+      )
     } finally {
       setMergePending(false)
     }
@@ -3228,7 +2992,9 @@ function PRActionsPanel({
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <GitPullRequest className="size-3.5 text-muted-foreground" />
-          <span className="text-[13px] font-medium text-foreground">Pull request</span>
+          <span className="text-[13px] font-medium text-foreground">
+            {translate('auto.components.PullRequestPage.1939d0f663', 'Pull request')}
+          </span>
         </div>
         <WorkItemStateBadge item={actionItem} />
       </div>
@@ -3260,13 +3026,18 @@ function PRActionsPanel({
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {!repoPath ? 'Merge requires a registered local repo' : mergePresentation.tooltip}
+              {!canMergeWithRepoContext
+                ? translate(
+                    'auto.components.PullRequestPage.eca289e593',
+                    'Merge requires a registered local repo'
+                  )
+                : mergePresentation.tooltip}
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="start" className="w-52">
             {mergePresentation.autoMergeAction && (
               <DropdownMenuItem
-                disabled={!repoPath || mergePending}
+                disabled={!canMergeWithRepoContext || mergePending}
                 onSelect={() => void handleAutoMerge()}
               >
                 <GitMerge className="size-4" />
@@ -3286,7 +3057,7 @@ function PRActionsPanel({
             ))}
             <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
               <ExternalLink className="size-4" />
-              Open GitHub merge box
+              {translate('auto.components.PullRequestPage.7df8d5fc60', 'Open GitHub merge box')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -3310,36 +3081,12 @@ function PRActionsPanel({
           ) : (
             <CircleDot className="size-3.5" />
           )}
-          {nextState === 'closed' ? 'Close pull request' : 'Reopen PR'}
+          {nextState === 'closed'
+            ? translate('auto.components.PullRequestPage.96d013ed28', 'Close pull request')
+            : translate('auto.components.PullRequestPage.9d5425918e', 'Reopen PR')}
         </Button>
       </div>
     </aside>
-  )
-}
-
-function CommentReactions({
-  reactions
-}: {
-  reactions?: GitHubReaction[]
-}): React.JSX.Element | null {
-  const visibleReactions = (reactions ?? []).filter((reaction) => reaction.count > 0)
-  if (visibleReactions.length === 0) {
-    return null
-  }
-
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {visibleReactions.map((reaction) => (
-        <span
-          key={reaction.content}
-          className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/35 px-2 text-[12px] leading-none text-foreground"
-          aria-label={`${reaction.count} ${reaction.content} reaction${reaction.count === 1 ? '' : 's'}`}
-        >
-          <span aria-hidden="true">{REACTION_EMOJI[reaction.content]}</span>
-          <span className="tabular-nums">{reaction.count}</span>
-        </span>
-      ))}
-    </div>
   )
 }
 
@@ -3366,13 +3113,22 @@ function CommentReplyForm({
   }, [])
 
   const submit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed || submitting) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty' || submitting) {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.PullRequestPage.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
     try {
-      const ok = await onSubmit(trimmed)
+      const ok = await onSubmit(bodyState.body)
       if (!mountedRef.current) {
         return
       }
@@ -3385,6 +3141,7 @@ function CommentReplyForm({
       }
     }
   }, [body, mountedRef, onSubmit, submitting])
+  const canSubmitReply = hasBoundedCommentBodyText(body)
 
   return (
     <div className={cn('rounded-md border border-border/50 bg-background/60 p-2', className)}>
@@ -3410,173 +3167,23 @@ function CommentReplyForm({
       />
       <div className="mt-2 flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
+          {translate('auto.components.PullRequestPage.6591b1fa82', 'Cancel')}
         </Button>
-        <Button size="sm" disabled={!body.trim() || submitting} onClick={() => void submit()}>
-          {submitting ? 'Posting…' : 'Reply'}
+        <Button size="sm" disabled={!canSubmitReply || submitting} onClick={() => void submit()}>
+          {submitting
+            ? translate('auto.components.PullRequestPage.894cfd884b', 'Posting…')
+            : translate('auto.components.PullRequestPage.f119e5f5ef', 'Reply')}
         </Button>
       </div>
     </div>
   )
 }
 
-const CHECK_SORT_ORDER: Record<string, number> = {
-  failure: 0,
-  timed_out: 0,
-  cancelled: 1,
-  pending: 2,
-  neutral: 3,
-  skipped: 4,
-  success: 5
-}
-
-function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
-  return check.conclusion ?? 'pending'
-}
-
-function getCheckStatusLabel(check: PRCheckDetail): string {
-  const conclusion = getCheckConclusion(check)
-  if (conclusion === 'success') {
-    return 'Successful'
-  }
-  if (conclusion === 'failure') {
-    return 'Failed'
-  }
-  if (conclusion === 'cancelled') {
-    return 'Cancelled'
-  }
-  if (conclusion === 'timed_out') {
-    return 'Timed out'
-  }
-  if (conclusion === 'neutral') {
-    return 'Neutral'
-  }
-  if (conclusion === 'skipped') {
-    return 'Skipped'
-  }
-  if (check.status === 'queued') {
-    return 'Queued'
-  }
-  if (check.status === 'in_progress') {
-    return 'In progress'
-  }
-  return 'Pending'
-}
-
-function getCheckCounts(checks: PRCheckDetail[]): {
-  passing: number
-  failing: number
-  pending: number
-  skipped: number
-  neutral: number
-} {
-  return checks.reduce(
-    (counts, check) => {
-      const conclusion = getCheckConclusion(check)
-      if (conclusion === 'success') {
-        counts.passing += 1
-      } else if (['failure', 'cancelled', 'timed_out'].includes(conclusion)) {
-        counts.failing += 1
-      } else if (conclusion === 'skipped') {
-        counts.skipped += 1
-      } else if (conclusion === 'neutral') {
-        counts.neutral += 1
-      } else {
-        counts.pending += 1
-      }
-      return counts
-    },
-    { passing: 0, failing: 0, pending: 0, skipped: 0, neutral: 0 }
-  )
-}
-
-function getChecksSummaryLabel(checks: PRCheckDetail[]): string {
-  const counts = getCheckCounts(checks)
-  if (checks.length === 0) {
-    return 'No checks found'
-  }
-  if (counts.failing > 0) {
-    return `${counts.failing} ${counts.failing === 1 ? 'check' : 'checks'} failing`
-  }
-  if (counts.pending > 0) {
-    return `${counts.pending} ${counts.pending === 1 ? 'check' : 'checks'} pending`
-  }
-  if (counts.passing === checks.length) {
-    return 'All checks passing'
-  }
-  return `${counts.passing} of ${checks.length} checks passing`
-}
-
-function getBrokenChecks(checks: PRCheckDetail[]): PRCheckDetail[] {
-  return checks.filter((check) =>
-    ['failure', 'cancelled', 'timed_out'].includes(getCheckConclusion(check))
-  )
-}
-
-function buildFixBrokenChecksPrompt(item: GitHubWorkItem, checks: PRCheckDetail[]): string {
-  const brokenChecks = getBrokenChecks(checks)
-  const checkLines =
-    brokenChecks.length > 0
-      ? brokenChecks.map((check) => {
-          const details = [
-            getCheckStatusLabel(check),
-            check.checkRunId ? `check run ${check.checkRunId}` : null,
-            check.workflowRunId ? `workflow run ${check.workflowRunId}` : null,
-            check.url ? `details: ${check.url}` : null
-          ]
-            .filter(Boolean)
-            .join(', ')
-          return `- ${check.name}${details ? ` (${details})` : ''}`
-        })
-      : ['- No failing check is currently listed; refresh PR checks first, then inspect CI.']
-
-  return [
-    `Fix the broken checks for PR #${item.number}: ${item.title}`,
-    `PR: ${item.url}`,
-    '',
-    'Broken checks:',
-    ...checkLines,
-    '',
-    'Focus only on making the failing checks pass. Inspect the CI output first, make the smallest correct code or test changes, and do not work on unrelated cleanup.'
-  ].join('\n')
-}
-
-function pickDefaultAgent(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detectedAgents: TuiAgent[],
-  disabledAgents?: TuiAgent[]
-): TuiAgent | null {
-  const enabledAgents = filterEnabledTuiAgents(detectedAgents, disabledAgents)
-  if (defaultAgent && defaultAgent !== 'blank' && enabledAgents.includes(defaultAgent)) {
-    return defaultAgent
-  }
-  return AGENT_CATALOG.find((entry) => enabledAgents.includes(entry.id))?.id ?? null
-}
-
-function getCheckDetailsKey(check: PRCheckDetail): string {
-  return String(check.checkRunId ?? check.workflowRunId ?? check.url ?? check.name)
-}
-
-function formatCheckTimestamp(input: string | null | undefined): string | null {
-  if (!input) {
-    return null
-  }
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) {
-    return null
-  }
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
-}
-
 function ChecksTab({
   item,
   repoPath,
   repoId,
+  sourceContext,
   headSha,
   checks,
   loading,
@@ -3586,207 +3193,371 @@ function ChecksTab({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   headSha: string | undefined
   checks: GitHubWorkItemDetails['checks']
   loading: boolean
   variant?: 'compact' | 'page'
   onChecksUpdated: (checks: PRCheckDetail[]) => void
 }): React.JSX.Element {
+  const targetRepoId = repoId ?? item.repoId
+  const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateRepo = useAppStore((s) => s.updateRepo)
+  const repo = useAppStore((s) =>
+    targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
+  )
   const [refreshing, setRefreshing] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [fixingChecks, setFixingChecks] = useState(false)
+  const [fixChecksComposerPrompt, setFixChecksComposerPrompt] = useState<string | null>(null)
   const [checksState, setChecksState] = useState(() => createGitHubChecksTabState(checks))
   const mountedRef = useMountedRef()
   const resolvedChecksState = resolveGitHubChecksTabState(checksState, checks)
   if (resolvedChecksState !== checksState) {
-    // Why: parent check refreshes replace the source list; clear local refresh
-    // and inline detail state before stale rows/details can paint.
+    // Why: reconcile before paint when a parent check refresh replaces the source list, so stale rows/details never show.
     setChecksState(resolvedChecksState)
   }
   const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
-  const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
-  const sorted = [...list].sort(
-    (a, b) =>
-      (CHECK_SORT_ORDER[getCheckConclusion(a)] ?? 3) -
-      (CHECK_SORT_ORDER[getCheckConclusion(b)] ?? 3)
+  const fixChecksRecipe = useMemo(
+    () =>
+      resolveSourceControlActionRecipe({
+        settings,
+        repo,
+        actionId: 'fixChecks'
+      }),
+    [repo, settings]
   )
+  const fixChecksLaunchPlatform = useMemo(
+    () =>
+      resolveSourceControlLaunchPlatform({
+        connectionId: repo?.connectionId ?? null,
+        worktreePath: repo?.path ?? null,
+        projectRuntime: repo?.connectionId
+          ? undefined
+          : getLocalRepoProjectExecutionRuntimeContext(
+              useAppStore.getState(),
+              repo?.id,
+              CLIENT_PLATFORM
+            )
+      }),
+    [repo?.connectionId, repo?.id, repo?.path]
+  )
+  const saveFixChecksActionDefault = useCallback(
+    async (
+      target: SourceControlAiWriteTarget,
+      actionId: SourceControlLaunchActionId,
+      recipe: SourceControlActionRecipe
+    ): Promise<void> => {
+      const state = useAppStore.getState()
+      const latestSettings = state.settings
+      if (!latestSettings) {
+        throw new Error('Settings are not loaded.')
+      }
+      const latestRepo =
+        target.type === 'repo'
+          ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
+          : null
+      const result = saveSourceControlActionRecipe({
+        target,
+        settings: latestSettings,
+        repo: latestRepo,
+        actionId,
+        recipe
+      })
+      if ('sourceControlAi' in result) {
+        await updateSettings({ sourceControlAi: result.sourceControlAi })
+        return
+      }
+      await updateRepo(result.target.repoId, result.update)
+    },
+    [updateRepo, updateSettings]
+  )
+  const handleStartFixChecksFromDialog = useCallback(
+    async ({
+      agent,
+      commandInput,
+      agentArgs
+    }: {
+      agent: Parameters<typeof launchWorkItemDirect>[0]['agentOverride']
+      commandInput: string
+      agentArgs: string
+    }): Promise<boolean> => {
+      if (!targetRepoId) {
+        return false
+      }
+      return await launchWorkItemDirect({
+        item: { ...item, repoId: targetRepoId, pasteContent: commandInput },
+        repoId: targetRepoId,
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
+        promptDelivery: 'submit-after-ready',
+        agentOverride: agent,
+        agentArgs,
+        openModalFallback: () => {
+          toast.error(
+            translate(
+              'auto.components.PullRequestPage.c4c02ea23e',
+              'Unable to create a fix workspace automatically.'
+            )
+          )
+        }
+      })
+    },
+    [item, targetRepoId]
+  )
+  const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
+  const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
+  const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
+  const sorted = sortChecksBySeverity(list)
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
   const summaryLabel = getChecksSummaryLabel(list)
+  // Why: keying the green tick off `list.length` painted an all-neutral PR green above the words
+  // "0 of N checks passing"; nothing passed, so it reads unresolved like the checks pill does.
   const SummaryIcon =
     counts.failing > 0
       ? CHECK_ICON.failure
-      : counts.pending > 0
-        ? CHECK_ICON.pending
-        : list.length > 0
-          ? CHECK_ICON.success
-          : CircleDashed
+      : counts.needsAction > 0
+        ? CHECK_ICON.action_required
+        : counts.pending > 0
+          ? CHECK_ICON.pending
+          : counts.passing > 0
+            ? CHECK_ICON.success
+            : CircleDashed
   const summaryColor =
     counts.failing > 0
       ? CHECK_COLOR.failure
-      : counts.pending > 0
-        ? CHECK_COLOR.pending
-        : list.length > 0
-          ? CHECK_COLOR.success
-          : 'text-muted-foreground'
+      : counts.needsAction > 0
+        ? CHECK_COLOR.action_required
+        : counts.pending > 0
+          ? CHECK_COLOR.pending
+          : counts.passing > 0
+            ? CHECK_COLOR.success
+            : 'text-muted-foreground'
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
   const handleRefresh = useCallback(async (): Promise<PRCheckDetail[] | null> => {
-    if (!repoPath) {
-      toast.error('Unable to refresh checks without a repository path.')
+    if (!canUseChecksRepoContext) {
+      toast.error(
+        translate(
+          'auto.components.PullRequestPage.c057f2fcb0',
+          'Unable to refresh checks without a repository path.'
+        )
+      )
       return null
     }
     setRefreshing(true)
     try {
-      const nextChecks = (await window.api.gh.prChecks({
-        repoPath,
-        repoId: repoId ?? undefined,
-        prNumber: item.number,
-        headSha,
-        noCache: true
-      })) as PRCheckDetail[]
+      const nextChecks = (await (runtimeHost
+        ? callRuntimeRpc<PRCheckDetail[]>(
+            { kind: 'environment', environmentId: runtimeHost.environmentId },
+            'github.prChecks',
+            {
+              repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+              prNumber: item.number,
+              headSha,
+              prRepo,
+              noCache: true
+            },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.prChecks({
+            repoPath: repoPath ?? '',
+            repoId: repoId ?? undefined,
+            sourceContext,
+            prNumber: item.number,
+            headSha,
+            prRepo,
+            noCache: true
+          }))) as PRCheckDetail[]
       setChecksState((current) => updateGitHubChecksTabLocalChecks(current, nextChecks))
       onChecksUpdated(nextChecks)
       return nextChecks
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to refresh checks')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.PullRequestPage.246b2c6456', 'Failed to refresh checks')
+      )
       return null
     } finally {
       setRefreshing(false)
     }
-  }, [headSha, item.number, onChecksUpdated, repoId, repoPath])
+  }, [
+    canUseChecksRepoContext,
+    headSha,
+    item.number,
+    item.repoId,
+    onChecksUpdated,
+    runtimeHost,
+    prRepo,
+    repoId,
+    repoPath,
+    sourceContext
+  ])
 
   const handleRerun = useCallback(
     async (failedOnly: boolean): Promise<void> => {
-      if (!repoPath || rerunning) {
+      if (!canUseChecksRepoContext || rerunning) {
         return
       }
       setRerunning(true)
       try {
-        const result = await window.api.gh.rerunPRChecks({
-          repoPath,
-          repoId: repoId ?? undefined,
-          prNumber: item.number,
-          headSha,
-          failedOnly
-        })
+        const result = runtimeHost
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.rerunPRChecks>>>(
+              { kind: 'environment', environmentId: runtimeHost.environmentId },
+              'github.rerunPRChecks',
+              {
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+                prNumber: item.number,
+                headSha,
+                failedOnly,
+                prRepo
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.rerunPRChecks({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
+              prNumber: item.number,
+              headSha,
+              failedOnly,
+              prRepo
+            })
         if (!result.ok) {
           toast.error(result.error)
           return
         }
-        toast.success(result.count === 1 ? 'Check rerun requested' : 'Check reruns requested')
+        toast.success(
+          result.count === 1
+            ? translate('auto.components.PullRequestPage.5963a6a852', 'Check rerun requested')
+            : translate('auto.components.PullRequestPage.18f2af42ac', 'Check reruns requested')
+        )
         await handleRefresh()
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to rerun checks')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.PullRequestPage.788a782bb0', 'Failed to rerun checks')
+        )
       } finally {
         setRerunning(false)
       }
     },
-    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath]
+    [
+      canUseChecksRepoContext,
+      handleRefresh,
+      headSha,
+      item.number,
+      item.repoId,
+      prRepo,
+      runtimeHost,
+      rerunning,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
   )
 
   const handleFixBrokenChecks = useCallback(async (): Promise<void> => {
-    const targetRepoId = repoId ?? item.repoId
     if (!targetRepoId || fixingChecks) {
       return
     }
     if (failedChecks.length === 0) {
-      toast.message('No broken checks to fix.')
+      toast.message(
+        translate('auto.components.PullRequestPage.51c65c0265', 'No broken checks to fix.')
+      )
       return
     }
 
+    const basePrompt = buildFixBrokenChecksPrompt({
+      reviewKind: 'PR',
+      reviewNumber: item.number,
+      reviewTitle: item.title,
+      reviewUrl: item.url,
+      checks: list
+    })
     setFixingChecks(true)
     try {
-      const prompt = buildFixBrokenChecksPrompt(item, list)
-      const store = useAppStore.getState()
-      const attachedWorkspace = findGithubPrWorkspaceAttachment(
-        store.allWorktrees(),
-        targetRepoId,
-        item.number
-      )
-
-      if (!attachedWorkspace) {
-        await launchWorkItemDirect({
-          item: { ...item, pasteContent: prompt },
-          repoId: targetRepoId,
-          launchSource: 'task_page',
-          telemetrySource: 'sidebar',
-          openModalFallback: () => {
-            toast.error('Unable to create a fix workspace automatically.')
-          }
-        })
-        return
-      }
-
-      if (!activateAndRevealWorktree(attachedWorkspace.id)) {
-        toast.error('Unable to open the workspace attached to this pull request.')
-        return
-      }
-
-      const connectionId = getConnectionId(attachedWorkspace.id)
-      if (connectionId === undefined) {
-        toast.error('Unable to resolve the workspace connection.')
-        return
-      }
-
-      const activeStore = useAppStore.getState()
-      const detectedAgents =
-        typeof connectionId === 'string'
-          ? await activeStore.ensureRemoteDetectedAgents(connectionId)
-          : await activeStore.ensureDetectedAgents()
-      const agent = pickDefaultAgent(
-        activeStore.settings?.defaultTuiAgent,
-        detectedAgents,
-        activeStore.settings?.disabledTuiAgents
-      )
-      if (!agent) {
-        toast.error('No enabled AI agents. Configure agents in Settings.')
-        return
-      }
-
-      const result = launchAgentInNewTab({
-        agent,
-        worktreeId: attachedWorkspace.id,
-        prompt,
-        promptDelivery: 'draft',
-        launchSource: 'task_page'
+      const started = await startFixChecksAgent({
+        item,
+        repoId: targetRepoId,
+        basePrompt,
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
+        openModalFallback: () => {
+          setFixChecksComposerPrompt(basePrompt)
+        }
       })
-      if (!result) {
-        toast.error('Could not build the agent launch command.')
-        return
+      if (started) {
+        toast.success(
+          translate(
+            'auto.components.PullRequestPage.85e62c5266',
+            'Started an AI agent for the broken checks.'
+          )
+        )
       }
-      focusTerminalTabSurface(result.tabId)
-      toast.success('Started an AI agent for the broken checks.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('Failed to start fix checks agent', err)
+      toast.error(
+        translate(
+          'auto.components.PullRequestPage.98583589c6',
+          'Failed to start an AI agent for the broken checks: {{value0}}',
+          { value0: message }
+        )
+      )
     } finally {
       setFixingChecks(false)
     }
-  }, [failedChecks.length, fixingChecks, item, list, repoId])
+  }, [failedChecks.length, fixingChecks, item, list, targetRepoId])
 
   const handleToggleCheckDetails = useCallback(
     (check: PRCheckDetail): void => {
       const key = getCheckDetailsKey(check)
       setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
       if (
-        !repoPath ||
+        !canUseChecksRepoContext ||
         detailsByCheckKey[key] ||
         (!check.checkRunId && !check.workflowRunId && !check.url)
       ) {
         return
       }
       setChecksState((current) =>
-        updateGitHubChecksTabDetails(current, key, { loading: true, details: null, error: null })
-      )
-      void window.api.gh
-        .prCheckDetails({
-          repoPath,
-          repoId: repoId ?? undefined,
-          checkRunId: check.checkRunId,
-          workflowRunId: check.workflowRunId,
-          checkName: check.name,
-          url: check.url,
-          prRepo
+        updateGitHubChecksTabDetails(current, key, {
+          loading: true,
+          details: null,
+          error: null
         })
+      )
+      const detailsRequest = runtimeHost
+        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.prCheckDetails>>>(
+            { kind: 'environment', environmentId: runtimeHost.environmentId },
+            'github.prCheckDetails',
+            {
+              repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+              checkRunId: check.checkRunId,
+              workflowRunId: check.workflowRunId,
+              checkName: check.name,
+              url: check.url,
+              prRepo
+            },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.prCheckDetails({
+            repoPath: repoPath ?? '',
+            repoId: repoId ?? undefined,
+            sourceContext,
+            checkRunId: check.checkRunId,
+            workflowRunId: check.workflowRunId,
+            checkName: check.name,
+            url: check.url,
+            prRepo
+          })
+      void detailsRequest
         .then((details) => {
           if (!mountedRef.current) {
             return
@@ -3812,7 +3583,17 @@ function ChecksTab({
           )
         })
     },
-    [detailsByCheckKey, mountedRef, prRepo, repoId, repoPath]
+    [
+      canUseChecksRepoContext,
+      detailsByCheckKey,
+      item.repoId,
+      mountedRef,
+      runtimeHost,
+      prRepo,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
   )
 
   const refreshAction = (
@@ -3823,15 +3604,15 @@ function ChecksTab({
           variant="ghost"
           size="icon-xs"
           className="size-7 shrink-0"
-          disabled={!repoPath || refreshing}
+          disabled={!canUseChecksRepoContext || refreshing}
           onClick={() => void handleRefresh()}
-          aria-label="Refresh checks"
+          aria-label={translate('auto.components.PullRequestPage.5d0f42766d', 'Refresh checks')}
         >
           <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        Refresh checks
+        {translate('auto.components.PullRequestPage.5d0f42766d', 'Refresh checks')}
       </TooltipContent>
     </Tooltip>
   )
@@ -3852,11 +3633,16 @@ function ChecksTab({
             ) : (
               <Wrench className="size-3" />
             )}
-            {variant === 'compact' ? 'Fix checks' : 'Fix broken checks'}
+            {variant === 'compact'
+              ? translate('auto.components.PullRequestPage.c808db1dd1', 'Fix checks')
+              : translate('auto.components.PullRequestPage.a4541fd3db', 'Fix broken checks')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          Start the default AI agent on these checks
+          {translate(
+            'auto.components.PullRequestPage.0fa8b8faec',
+            'Start the default AI agent on these checks'
+          )}
         </TooltipContent>
       </Tooltip>
     ) : null
@@ -3869,14 +3655,14 @@ function ChecksTab({
             variant="outline"
             size="xs"
             className="h-7 gap-1 px-2 text-[11px]"
-            disabled={!repoPath || rerunning || list.length === 0}
+            disabled={!canUseChecksRepoContext || rerunning || list.length === 0}
           >
             {rerunning ? (
               <LoaderCircle className="size-3 animate-spin" />
             ) : (
               <RefreshCw className="size-3" />
             )}
-            Rerun
+            {translate('auto.components.PullRequestPage.522d9353e1', 'Rerun')}
             <ChevronDown className="size-3 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
@@ -3886,11 +3672,11 @@ function ChecksTab({
             onSelect={() => void handleRerun(true)}
           >
             <RefreshCw className="size-4" />
-            Rerun failed checks
+            {translate('auto.components.PullRequestPage.68605516dd', 'Rerun failed checks')}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={rerunning} onSelect={() => void handleRerun(false)}>
             <RefreshCw className="size-4" />
-            Rerun all checks
+            {translate('auto.components.PullRequestPage.54cddd1858', 'Rerun all checks')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -3922,7 +3708,9 @@ function ChecksTab({
             )}
           />
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-medium leading-5 text-foreground">Checks</div>
+            <div className="text-[13px] font-medium leading-5 text-foreground">
+              {translate('auto.components.PullRequestPage.94d95cf1f7', 'Checks')}
+            </div>
             {list.length > 0 && (
               <div className="truncate text-[11px] leading-4 text-muted-foreground">
                 {summaryLabel}
@@ -4004,18 +3792,32 @@ function ChecksTab({
         {state?.loading ? (
           <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground">
             <LoaderCircle className="size-3.5 animate-spin" />
-            Loading check details…
+            {translate('auto.components.PullRequestPage.d8e82b7f15', 'Loading check details…')}
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
               <span>
-                Status:{' '}
+                {translate('auto.components.PullRequestPage.662bc2998d', 'Status:')}{' '}
                 {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
               </span>
-              {startedAt && <span>Started {startedAt}</span>}
-              {completedAt && <span>Completed {completedAt}</span>}
-              {check.checkRunId && <span className="font-mono">check #{check.checkRunId}</span>}
+              {startedAt && (
+                <span>
+                  {translate('auto.components.PullRequestPage.76551b1161', 'Started')} {startedAt}
+                </span>
+              )}
+              {completedAt && (
+                <span>
+                  {translate('auto.components.PullRequestPage.000f90afcf', 'Completed')}{' '}
+                  {completedAt}
+                </span>
+              )}
+              {check.checkRunId && (
+                <span className="font-mono">
+                  {translate('auto.components.PullRequestPage.f01bf79a79', 'check #')}
+                  {check.checkRunId}
+                </span>
+              )}
             </div>
 
             {state?.error && <div className="text-[12px] text-muted-foreground">{state.error}</div>}
@@ -4047,7 +3849,7 @@ function ChecksTab({
             {hasAnnotations && (
               <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
                 <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
-                  Annotations
+                  {translate('auto.components.PullRequestPage.8432d17901', 'Annotations')}
                 </div>
                 <div className="flex flex-col">
                   {details!.annotations.map((annotation, index) => (
@@ -4060,7 +3862,8 @@ function ChecksTab({
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
-                          {annotation.path ?? 'Annotation'}
+                          {annotation.path ??
+                            translate('auto.components.PullRequestPage.35a0573f41', 'Annotation')}
                           {annotation.startLine ? `:${annotation.startLine}` : ''}
                         </span>
                         {annotation.annotationLevel && (
@@ -4091,7 +3894,7 @@ function ChecksTab({
             {hasJobs && (
               <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
                 <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
-                  Jobs
+                  {translate('auto.components.PullRequestPage.7720c9c3f5', 'Jobs')}
                 </div>
                 <div className="flex flex-col">
                   {details!.jobs.map((job, index) => (
@@ -4107,7 +3910,9 @@ function ChecksTab({
                           {job.name}
                         </span>
                         <span className="shrink-0 text-[11px] text-muted-foreground">
-                          {job.conclusion ?? job.status ?? 'unknown'}
+                          {job.conclusion ??
+                            job.status ??
+                            translate('auto.components.PullRequestPage.77d9388fb0', 'unknown')}
                         </span>
                       </div>
                       {job.steps.length > 0 && (
@@ -4131,7 +3936,15 @@ function ChecksTab({
 
             {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
               <div className="text-[12px] text-muted-foreground">
-                No inline output is available for this check.
+                {getCheckConclusion(check) === 'action_required'
+                  ? translate(
+                      'auto.components.PullRequestPage.checkActionRequiredHint',
+                      'Needs a manual action on GitHub (e.g. approving the run) to unblock merging.'
+                    )
+                  : translate(
+                      'auto.components.PullRequestPage.1550675e5f',
+                      'No inline output is available for this check.'
+                    )}
               </div>
             )}
 
@@ -4144,7 +3957,7 @@ function ChecksTab({
                   className="h-7 gap-1 px-2 text-[11px]"
                   onClick={() => window.api.shell.openUrl(openUrl)}
                 >
-                  Open in GitHub
+                  {translate('auto.components.PullRequestPage.1b14d0a69c', 'Open in GitHub')}
                   <ExternalLink className="size-3" />
                 </Button>
               </div>
@@ -4154,6 +3967,42 @@ function ChecksTab({
       </div>
     )
   }
+
+  const fixChecksAgentDialog = (
+    <SourceControlAgentActionDialog
+      open={fixChecksComposerPrompt !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          setFixChecksComposerPrompt(null)
+        }
+      }}
+      actionId="fixChecks"
+      title={translate('auto.components.PullRequestPage.a053bdd082', 'Fix Broken Checks With AI')}
+      description={translate(
+        'auto.components.PullRequestPage.ddfd42f460',
+        'Review the prompt before starting an agent.'
+      )}
+      baseCommandInput={fixChecksComposerPrompt ?? ''}
+      connectionId={repo?.connectionId ?? null}
+      repoId={targetRepoId}
+      promptDelivery="submit-after-ready"
+      launchPlatform={fixChecksLaunchPlatform}
+      launchSource="task_page"
+      savedAgentId={readSourceControlLaunchRecipeAgentId(fixChecksRecipe)}
+      savedCommandInputTemplate={fixChecksRecipe.commandInputTemplate ?? null}
+      savedAgentArgs={fixChecksRecipe.agentArgs ?? null}
+      onSaveAgentDefault={saveFixChecksActionDefault}
+      onLaunched={() => {
+        toast.success(
+          translate(
+            'auto.components.PullRequestPage.85e62c5266',
+            'Started an AI agent for the broken checks.'
+          )
+        )
+      }}
+      onStart={handleStartFixChecksFromDialog}
+    />
+  )
 
   if (loading && list.length === 0) {
     return (
@@ -4173,10 +4022,13 @@ function ChecksTab({
             <CircleDashed className="size-4 shrink-0 text-muted-foreground" />
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-[13px] font-medium text-foreground">
-                No checks found
+                {translate('auto.components.PullRequestPage.45877f5089', 'No checks found')}
               </span>
               <span className="truncate text-[11px] text-muted-foreground">
-                This pull request has no reported checks yet.
+                {translate(
+                  'auto.components.PullRequestPage.3912daf310',
+                  'This pull request has no reported checks yet.'
+                )}
               </span>
             </div>
             {actions}
@@ -4189,64 +4041,56 @@ function ChecksTab({
         {compactHeader}
         <div className="flex flex-col items-center justify-center gap-1 px-4 py-6 text-center">
           <CircleDashed className="size-4 text-muted-foreground/60" />
-          <div className="text-[12px] text-muted-foreground">No checks reported yet</div>
+          <div className="text-[12px] text-muted-foreground">
+            {translate('auto.components.PullRequestPage.a18d01cda3', 'No checks reported yet')}
+          </div>
         </div>
       </>
     )
   }
   if (variant === 'page') {
-    const countChips: { label: string; className: string }[] = []
-    if (counts.passing > 0) {
-      countChips.push({ label: `${counts.passing} passing`, className: CHECK_COLOR.success })
-    }
-    if (counts.failing > 0) {
-      countChips.push({ label: `${counts.failing} failing`, className: CHECK_COLOR.failure })
-    }
-    if (counts.pending > 0) {
-      countChips.push({ label: `${counts.pending} pending`, className: CHECK_COLOR.pending })
-    }
-    if (counts.skipped + counts.neutral > 0) {
-      countChips.push({
-        label: `${counts.skipped + counts.neutral} skipped`,
-        className: 'text-muted-foreground'
-      })
-    }
+    const countChips = getCheckCountChips(counts)
     return (
-      <div className="flex flex-col gap-3 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <SummaryIcon
-            className={cn(
-              'size-4 shrink-0',
-              summaryColor,
-              counts.pending > 0 && counts.failing === 0 && 'animate-spin'
-            )}
-          />
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="truncate text-[13px] font-medium text-foreground">{summaryLabel}</span>
-            {countChips.length > 1 && (
-              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                {countChips.map((chip, i) => (
-                  <React.Fragment key={chip.label}>
-                    {i > 0 && <span className="opacity-40">·</span>}
-                    <span className={chip.className}>{chip.label}</span>
-                  </React.Fragment>
-                ))}
+      <>
+        <div className="flex flex-col gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <SummaryIcon
+              className={cn(
+                'size-4 shrink-0',
+                summaryColor,
+                counts.pending > 0 && counts.failing === 0 && 'animate-spin'
+              )}
+            />
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="truncate text-[13px] font-medium text-foreground">
+                {summaryLabel}
               </span>
-            )}
-          </div>
-          {actions}
-        </div>
-        <div className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
-          {sorted.map((check, index) => (
-            <div
-              key={getCheckDetailsKey(check)}
-              className={cn(index > 0 && 'border-t border-border/40')}
-            >
-              {renderCheckRow(check)}
+              {countChips.length > 1 && (
+                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  {countChips.map((chip, i) => (
+                    <React.Fragment key={chip.tone}>
+                      {i > 0 && <span className="opacity-40">·</span>}
+                      <span className={CHECK_COLOR[chip.tone]}>{chip.label}</span>
+                    </React.Fragment>
+                  ))}
+                </span>
+              )}
             </div>
-          ))}
+            {actions}
+          </div>
+          <div className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
+            {sorted.map((check, index) => (
+              <div
+                key={getCheckDetailsKey(check)}
+                className={cn(index > 0 && 'border-t border-border/40')}
+              >
+                {renderCheckRow(check)}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+        {fixChecksAgentDialog}
+      </>
     )
   }
   return (
@@ -4255,6 +4099,7 @@ function ChecksTab({
       <div className="max-h-[280px] overflow-y-auto p-1 scrollbar-sleek">
         {sorted.map(renderCheckRow)}
       </div>
+      {fixChecksAgentDialog}
     </>
   )
 }
@@ -4283,7 +4128,7 @@ function MentionTextarea({
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const suggestions = useMemo(
-    () => (mentionQuery ? filterMentionOptions(mentionOptions, mentionQuery.query) : []),
+    () => (mentionQuery ? filterGitHubMentionOptions(mentionOptions, mentionQuery.query) : []),
     [mentionOptions, mentionQuery]
   )
   const showSuggestions = mentionQuery !== null && suggestions.length > 0
@@ -4402,147 +4247,11 @@ function MentionTextarea({
   )
 }
 
-// Why: when the dialog opens for a Project row whose repo differs from the
-// active workspace, mutations must target the row's actual repo via
-// slug-addressed IPCs. Otherwise edits silently apply to the workspace's
-// repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
-// to a thrown rejection so the existing `useImmediateMutation` flow
-// (which expects throws on failure) continues to work unchanged.
-async function runIssueUpdate(args: {
-  repoPath: string | null
-  repoId?: string | null
-  projectOrigin: PullRequestPageProjectOrigin | undefined
-  number: number
-  updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
-}): Promise<void> {
-  if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
-    const updateArgs = {
-      owner: args.projectOrigin.owner,
-      repo: args.projectOrigin.repo,
-      number: args.number,
-      updates: args.updates
-    }
-    const res =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssueBySlug>>>(
-            target,
-            'github.project.updateIssueBySlug',
-            updateArgs,
-            { timeoutMs: 30_000 }
-          )
-        : await window.api.gh.updateIssueBySlug(updateArgs)
-    if (!res.ok) {
-      throw new Error(res.error.message)
-    }
-    return
-  }
-  if (!args.repoPath) {
-    throw new Error('No repo context available for this edit.')
-  }
-  const res = await window.api.gh.updateIssue({
-    repoPath: args.repoPath,
-    repoId: args.repoId ?? undefined,
-    number: args.number,
-    updates: args.updates
-  })
-  if (!res.ok) {
-    throw new Error(res.error)
-  }
-}
-
-async function runWorkItemBodyUpdate(args: {
-  item: GitHubWorkItem
-  repoPath: string | null
-  projectOrigin: PullRequestPageProjectOrigin | undefined
-  body: string
-  parsedSlug: GitHubOwnerRepo | null
-}): Promise<void> {
-  if (args.item.type === 'pr') {
-    const targetSlug = args.projectOrigin
-      ? { owner: args.projectOrigin.owner, repo: args.projectOrigin.repo }
-      : args.parsedSlug
-    if (!targetSlug) {
-      throw new Error('No GitHub repository context available for this pull request.')
-    }
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
-    const updateArgs = {
-      owner: targetSlug.owner,
-      repo: targetSlug.repo,
-      number: args.item.number,
-      updates: { body: args.body }
-    }
-    const res =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePullRequestBySlug>>>(
-            target,
-            'github.project.updatePullRequestBySlug',
-            updateArgs,
-            { timeoutMs: 30_000 }
-          )
-        : await window.api.gh.updatePullRequestBySlug(updateArgs)
-    if (!res.ok) {
-      throw new Error(res.error.message)
-    }
-    return
-  }
-
-  await runIssueUpdate({
-    repoPath: args.repoPath,
-    repoId: args.item.repoId,
-    projectOrigin: args.projectOrigin,
-    number: args.item.number,
-    updates: { body: args.body }
-  })
-}
-
-async function runPullRequestStateUpdate(args: {
-  repoPath: string | null
-  repoId?: string | null
-  projectOrigin: PullRequestPageProjectOrigin | undefined
-  number: number
-  updates: { state: 'open' | 'closed' }
-}): Promise<void> {
-  if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
-    const updateArgs = {
-      owner: args.projectOrigin.owner,
-      repo: args.projectOrigin.repo,
-      number: args.number,
-      updates: args.updates
-    }
-    const res =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePullRequestBySlug>>>(
-            target,
-            'github.project.updatePullRequestBySlug',
-            updateArgs,
-            { timeoutMs: 30_000 }
-          )
-        : await window.api.gh.updatePullRequestBySlug(updateArgs)
-    if (!res.ok) {
-      throw new Error(res.error.message)
-    }
-    return
-  }
-  if (!args.repoPath) {
-    throw new Error('No repo context available for this pull request.')
-  }
-  const res = await window.api.gh.updatePRState({
-    repoPath: args.repoPath,
-    repoId: args.repoId ?? undefined,
-    prNumber: args.number,
-    updates: args.updates
-  })
-  if (!res.ok) {
-    throw new Error(res.error)
-  }
-}
-
 function GHEditSection({
   item,
   repoPath,
   repoId,
+  sourceContext,
   projectOrigin,
   localState,
   localLabels,
@@ -4555,14 +4264,13 @@ function GHEditSection({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   localLabels: string[]
   onStateChange: (state: GitHubWorkItem['state']) => void
   onLabelsChange: (labels: string[]) => void
-  /** Why: called after a successful issue mutation so the parent dialog can
-   *  invalidate its work-item-details cache entry. Without this, reopening the
-   *  drawer in the FRESH_MS window would paint pre-mutation data. */
+  /** Called after a successful issue mutation so the parent can invalidate its details cache; otherwise a reopen within FRESH_MS paints pre-mutation data. */
   onMutated: () => void
   assignees: string[]
   onUse: (item: GitHubWorkItem) => void
@@ -4574,12 +4282,21 @@ function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const { isPending, run } = useImmediateMutation()
-  // Why: when the dialog opens from a Project view, mutations route through
-  // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
-  // `workItemsCache` — `patchWorkItem` only walks the latter, so without this
-  // helper the Project table would render stale data until manual refresh.
-  // See docs/design/github-project-view-tasks.md §Dialog editing from Project rows.
+  // Why: patchWorkItem only updates workItemsCache; Project-view rows also need projectViewCache patched or the table stays stale. See docs/design/github-project-view-tasks.md.
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
       if (!projectOrigin) {
@@ -4590,27 +4307,36 @@ function GHEditSection({
     [projectOrigin, patchProjectRowContent]
   )
 
-  // Why: when projectOrigin is set we MUST read labels/assignees from the
-  // row's repo, not from the workspace path — otherwise the popovers list
-  // values from a different repo than the writes target.
+  // Why: with projectOrigin set, read labels/assignees from the row's repo (not workspace path) so popovers match where writes target.
   const slugOwner = projectOrigin?.owner ?? null
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    sourceSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
+  const repoLabelsBySlug = useRepoLabelsBySlug(
+    slugOwner,
+    slugRepo,
+    sourceSettings,
+    projectOrigin?.host
+  )
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : repoId
+    projectOrigin ? null : repoId,
+    sourceSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(
+    slugOwner,
+    slugRepo,
+    assignees,
+    sourceSettings,
+    projectOrigin?.host
+  )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
-  // Why: sync local assignees when item changes or when the detail fetch
-  // resolves with real data — but skip if the user already made an
-  // optimistic edit so we don't clobber in-flight changes.
+  // Why: sync local assignees on item change / detail resolve, but skip if the user made an optimistic edit so we don't clobber in-flight changes.
   useEffect(() => {
     if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
       return
@@ -4629,22 +4355,23 @@ function GHEditSection({
           runIssueUpdate({
             repoId: item.repoId,
             repoPath,
+            sourceContext,
             projectOrigin,
             number: item.number,
             updates: { state: newState }
           }),
         onOptimistic: () => {
           onStateChange(newState)
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
           onStateChange(prevState)
-          patchWorkItem(item.id, { state: prevState }, item.repoId)
+          patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
         },
@@ -4657,6 +4384,7 @@ function GHEditSection({
       item.repoId,
       localState,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -4678,13 +4406,14 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
@@ -4692,7 +4421,7 @@ function GHEditSection({
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onError: (err) => toast.error(err)
@@ -4703,18 +4432,19 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
@@ -4730,6 +4460,7 @@ function GHEditSection({
       item.repoId,
       localLabels,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -4747,8 +4478,7 @@ function GHEditSection({
         ? prevAssignees.filter((l) => l !== login)
         : [...prevAssignees, login]
 
-      // Why: the optimistic guard is scoped to this repo item so switching
-      // items does not suppress the next item's assignee sync.
+      // Why: scope the optimistic guard to this repo item so switching items doesn't suppress the next item's assignee sync.
       editedAssigneesItemKeyRef.current = assigneesItemKey
       if (isAssigned) {
         run('assignees', {
@@ -4756,6 +4486,7 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeAssignees: [login] }
@@ -4779,6 +4510,7 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addAssignees: [login] }
@@ -4803,6 +4535,7 @@ function GHEditSection({
       item.repoId,
       assigneesItemKey,
       repoPath,
+      sourceContext,
       projectOrigin,
       localAssignees,
       patchProjectRowIfNeeded,
@@ -4853,7 +4586,7 @@ function GHEditSection({
             )}
           >
             <CircleDot className="size-3 text-emerald-500" />
-            Open
+            {translate('auto.components.PullRequestPage.7b8f6bf6d8', 'Open')}
           </button>
           <button
             type="button"
@@ -4864,7 +4597,7 @@ function GHEditSection({
             )}
           >
             <CircleDashed className="size-3 text-rose-500" />
-            Closed
+            {translate('auto.components.PullRequestPage.b936cc51a4', 'Closed')}
           </button>
         </PopoverContent>
       </Popover>
@@ -4878,7 +4611,9 @@ function GHEditSection({
             className="group/labels inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
           >
             {localLabels.length === 0 ? (
-              <span className="text-muted-foreground">+ Label</span>
+              <span className="text-muted-foreground">
+                {translate('auto.components.PullRequestPage.bc215fea4d', '+ Label')}
+              </span>
             ) : (
               localLabels.map((name) => (
                 <span key={name} className="text-[10px] text-muted-foreground">
@@ -4934,7 +4669,9 @@ function GHEditSection({
             className="group/assignees inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
           >
             {localAssignees.length === 0 ? (
-              <span className="text-muted-foreground">+ Assignee</span>
+              <span className="text-muted-foreground">
+                {translate('auto.components.PullRequestPage.14c9fc70ed', '+ Assignee')}
+              </span>
             ) : (
               localAssignees.map((login) => (
                 <span key={login} className="text-[10px] text-muted-foreground">
@@ -4992,9 +4729,12 @@ function GHEditSection({
         size="sm"
         onClick={() => onUse(item)}
         className="ml-auto gap-2"
-        aria-label="Start workspace from issue"
+        aria-label={translate(
+          'auto.components.PullRequestPage.61452f2143',
+          'Start workspace from issue'
+        )}
       >
-        Start workspace from issue
+        {translate('auto.components.PullRequestPage.61452f2143', 'Start workspace from issue')}
         <ArrowRight className="size-4" />
       </Button>
     </div>
@@ -5005,16 +4745,20 @@ function GHCommentComposer({
   className,
   repoPath,
   repoId,
+  sourceContext,
   issueNumber,
   itemType,
+  prRepo,
   mentionOptions,
   onCommentAdded
 }: {
   className?: string
   repoPath: string
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   issueNumber: number
   itemType: 'issue' | 'pr'
+  prRepo?: GitHubOwnerRepo | null
   mentionOptions: MentionOption[]
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
@@ -5033,8 +4777,17 @@ function GHCommentComposer({
   }, [])
 
   const handleSubmit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty') {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.PullRequestPage.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
@@ -5042,9 +4795,11 @@ function GHCommentComposer({
       const result = await addIssueCommentForRepo({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         number: issueNumber,
-        body: trimmed,
-        type: itemType
+        body: bodyState.body,
+        type: itemType,
+        prRepo
       })
       if (!mountedRef.current) {
         return
@@ -5052,22 +4807,40 @@ function GHCommentComposer({
       if (result.ok) {
         setBody('')
         requestAnimationFrame(autoGrow)
-        // Why: use the comment returned by GitHub so the optimistic row shows
-        // the real login/avatar immediately instead of waiting for a reopen.
+        // Why: use GitHub's returned comment so the optimistic row shows the real login/avatar without a reopen.
         onCommentAdded(result.comment)
       } else {
-        toast.error(result.error ?? 'Failed to add comment')
+        toast.error(
+          result.error ??
+            translate('auto.components.PullRequestPage.1208347ac0', 'Failed to add comment')
+        )
       }
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.PullRequestPage.1208347ac0', 'Failed to add comment')
+        )
       }
     } finally {
       if (mountedRef.current) {
         setSubmitting(false)
       }
     }
-  }, [autoGrow, body, mountedRef, repoPath, repoId, issueNumber, itemType, onCommentAdded])
+  }, [
+    autoGrow,
+    body,
+    mountedRef,
+    repoPath,
+    repoId,
+    sourceContext,
+    issueNumber,
+    itemType,
+    prRepo,
+    onCommentAdded
+  ])
+  const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -5080,7 +4853,7 @@ function GHCommentComposer({
   )
 
   return (
-    <div className={cn('flex flex-col items-start gap-2', className)}>
+    <div className={cn('relative', className)}>
       <MentionTextarea
         textareaRef={textareaRef}
         value={body}
@@ -5089,36 +4862,44 @@ function GHCommentComposer({
           requestAnimationFrame(autoGrow)
         }}
         onKeyDown={handleKeyDown}
-        placeholder="Add a comment…"
+        placeholder={translate('auto.components.PullRequestPage.d2030fc8cd', 'Add a comment…')}
         rows={4}
         mentionOptions={mentionOptions}
         wrapperClassName="flex min-h-20 w-full items-stretch"
-        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 pb-12 pr-12 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
-      <Button
-        onClick={handleSubmit}
-        disabled={!body.trim() || submitting}
-        className="gap-2"
-        aria-label="Send comment"
-      >
-        {submitting ? (
-          <LoaderCircle className="size-3.5 animate-spin" />
-        ) : (
-          <Send className="size-3.5" />
-        )}
-        Comment
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            size="icon-sm"
+            onClick={handleSubmit}
+            disabled={!canSubmitComment || submitting}
+            className="absolute bottom-3 right-3 shadow-sm"
+            aria-label={translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+          >
+            {submitting ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }
 
-// Why: the issue-source indicator is issue-only and lives on GitHubItemDialog;
-// PullRequestPage doesn't render it.
+// Note: the issue-source indicator is issue-only and lives on GitHubItemDialog, not here.
 
 export default function PullRequestPage({
   workItem,
   repoPath,
   repoId,
+  sourceContext,
   initialTab,
   backLabel = 'Pull requests',
   projectOrigin,
@@ -5134,8 +4915,7 @@ export default function PullRequestPage({
   const [linkCopyState, setLinkCopyState] = useState(() => createGitHubLinkCopyState(workItemId))
   const resolvedLinkCopyState = resolveGitHubLinkCopyState(linkCopyState, workItemId)
   if (resolvedLinkCopyState !== linkCopyState) {
-    // Why: switching GitHub items should not paint a stale copied indicator
-    // from the previous item while waiting for a passive Effect pass.
+    // Why: reconcile before paint so switching items doesn't flash the previous item's copied indicator.
     setLinkCopyState(resolvedLinkCopyState)
   }
   const linkCopied = resolvedLinkCopyState.copied
@@ -5155,11 +4935,7 @@ export default function PullRequestPage({
     ? getGithubPrWorkspaceAttachmentLabel(attachedWorkspace)
     : null
 
-  // Why: the cache key has to include the issue source preference so a user
-  // toggling between origin/upstream for the same issue number doesn't read
-  // back the wrong repo's details. We pull it from the repos slice rather
-  // than threading it as a prop because every existing call site already has
-  // the repo registered in the store.
+  // Why: key must include issue source preference so origin/upstream toggles for the same issue number don't read back the wrong repo's details.
   const issueSourcePreference = useAppStore((s) => {
     if (!repoPath && !effectiveRepoId) {
       return undefined
@@ -5167,21 +4943,30 @@ export default function PullRequestPage({
     return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
       ?.issueSourcePreference
   })
+  const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const detailsCacheKey = useMemo(() => {
-    if (!workItem || !repoPath || !effectiveRepoId) {
+    if (!workItem || !effectiveRepoId || !canUseDetailsRepoContext) {
       return null
     }
     return getWorkItemDetailsCacheKey({
-      repoPath,
+      repoPath: repoPath ?? '',
       repoId: effectiveRepoId,
       issueSourcePreference,
+      sourceCacheScope:
+        sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null,
       type: workItem.type,
       number: workItem.number
     })
-  }, [repoPath, effectiveRepoId, workItem, issueSourcePreference])
+  }, [
+    canUseDetailsRepoContext,
+    repoPath,
+    effectiveRepoId,
+    sourceContext,
+    workItem,
+    issueSourcePreference
+  ])
 
-  // Why: reset lifted edit state when the dialog switches items or when the
-  // same item receives an optimistic cache patch from the surrounding table.
+  // Why: reset lifted edit state on item switch or when the same item gets an optimistic cache patch from the table.
   useEffect(() => {
     if (workItemState && workItemLabels) {
       setLocalState(workItemState)
@@ -5223,24 +5008,21 @@ export default function PullRequestPage({
 
     const result = activateAndRevealWorktree(currentAttached.id)
     if (result === false) {
-      toast.error('Unable to open the workspace attached to this pull request.')
+      toast.error(
+        translate(
+          'auto.components.PullRequestPage.61bfc81ada',
+          'Unable to open the workspace attached to this pull request.'
+        )
+      )
     }
   }, [effectiveRepoId, handleUseWorkItem, workItem])
 
-  // Why: track comments added optimistically before the detail fetch resolves
-  // so they can be merged into the fetch result instead of being overwritten.
+  // Why: hold optimistically-added comments so they merge into the fetch result instead of being overwritten.
   const optimisticCommentsRef = useRef<PRComment[]>([])
-  // Why: track the last item we fetched so we can distinguish "reopen same
-  // item" from "switch to a different item". Reopening the same item must
-  // preserve optimistic comments because gh's 60s response cache will return
-  // stale data that doesn't include the just-posted comment.
+  // Why: track last fetched item to distinguish reopen from switch — reopen must preserve optimistic comments since gh's 60s cache omits the just-posted one.
   const prevItemIdRef = useRef<string | null>(null)
 
-  // Why: when this dialog opens immediately after another Radix overlay
-  // (e.g. the New Issue dialog) closed, Radix may leave `pointer-events: none`
-  // on <body>. That silently kills clicks on the header's Close/open-in-GitHub
-  // buttons. Poll a few frames to clear it whenever Radix re-applies it during
-  // its own mount sequence.
+  // Why: Radix can leave `pointer-events: none` on <body> when opening right after another overlay closes, killing header clicks; poll a few frames to clear it.
   useEffect(() => {
     if (!workItem) {
       return
@@ -5269,10 +5051,7 @@ export default function PullRequestPage({
     }
   }, [workItem])
 
-  // Why: subscribe to the module-level cache so reopening a cached item
-  // paints synchronously on first render. getSnapshot returns the entry
-  // object directly — touchWorkItemDetailsCache writes always replace entry
-  // identity (delete+set), so Map.get is referentially stable between writes.
+  // Why: subscribe to the module cache so reopening a cached item paints synchronously; writes replace entry identity (delete+set), so Map.get is a stable snapshot.
   const cachedEntry = useSyncExternalStore(
     subscribeWorkItemDetailsCache,
     useCallback(
@@ -5281,24 +5060,15 @@ export default function PullRequestPage({
     )
   )
 
-  // Why: bumped by appendOptimisticComment on cold open (no cached details
-  // yet) so the details memo re-runs and surfaces the optimistic comment via
-  // the loading-shell fallback. Without this, the comment would sit in the
-  // ref alone and not render until the in-flight fetch lands. The cache
-  // notify path handles the warm case.
+  // Why: bumped on cold open (no cached details) so the details memo re-runs and surfaces the optimistic comment via the loading shell; cache-notify handles the warm case.
   const [optimisticTick, setOptimisticTick] = useState(0)
 
-  // Why: merge optimistic comments into the cached details. Keyed off
-  // cachedEntry identity (stable) rather than the optimistic ref array (a
-  // fresh array each render) to avoid unnecessary recomputation. Cache
-  // notifications after optimistic writes will re-render this anyway.
+  // Why: merge optimistic comments into cached details; keyed off stable cachedEntry identity (not the per-render ref array) to avoid needless recompute.
   const details = useMemo<GitHubWorkItemDetails | null>(() => {
     const cachedDetails = cachedEntry?.details ?? null
     const opt = optimisticCommentsRef.current
     if (!cachedDetails) {
-      // Why: details may still be loading on a cold open — surface optimistic
-      // comments via a minimal shell so a comment posted before the fetch
-      // resolves isn't held invisibly in ref-land.
+      // Why: on a cold open details may still be loading; surface optimistic comments via a minimal shell so a just-posted comment isn't held invisibly in the ref.
       if (opt.length > 0 && workItem) {
         return { item: workItem, body: '', comments: [...opt] }
       }
@@ -5312,25 +5082,19 @@ export default function PullRequestPage({
     if (missing.length === 0) {
       return cachedDetails
     }
-    return { ...cachedDetails, comments: [...cachedDetails.comments, ...missing] }
-    // Why: optimisticTick is the rerender signal for cold-open writes — the
-    // memo reads optimisticCommentsRef.current (a ref, no subscription), so
-    // bumping the tick is what forces this memo to re-run. The lint flags it
-    // as "unnecessary" because it's not referenced in the body, but removing
-    // it would silently break the cold-open optimistic-shell path.
+    return {
+      ...cachedDetails,
+      comments: [...cachedDetails.comments, ...missing]
+    }
+    // Why: optimisticTick isn't read in the body but is the rerender signal for cold-open writes (memo reads a ref); removing it breaks the optimistic shell.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cachedEntry, workItem, optimisticTick])
 
   const loading = !!cachedEntry?.pending && !cachedEntry?.details
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
-  const detailsLoaded =
-    Boolean(cachedEntry?.details) ||
-    Boolean(cachedEntry && !cachedEntry.pending && !cachedEntry.error && cachedEntry.fetchedAt > 0)
+  const detailsLoaded = Boolean(cachedEntry?.details)
 
-  // Why: if a cross-window mutation invalidates the open drawer's entry
-  // (cachedEntry becomes undefined while workItem is still set), the main
-  // fetch effect won't re-run because its deps haven't changed. Bump a local
-  // tick so the fetch effect fires a refetch in that case.
+  // Why: if a cross-window mutation invalidates the open drawer's entry (cachedEntry undefined, fetch deps unchanged), bump a tick so it refetches.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
     if (workItem && detailsCacheKey && !cachedEntry) {
@@ -5339,14 +5103,10 @@ export default function PullRequestPage({
   }, [workItem, detailsCacheKey, cachedEntry])
 
   useEffect(() => {
-    if (!workItem || !repoPath || !detailsCacheKey) {
+    if (!workItem || !effectiveRepoId || !detailsCacheKey || !canUseDetailsRepoContext) {
       return
     }
-    // Why: only clear optimistic comments when switching to a genuinely
-    // different item. When reopening the same item (close → reopen), the
-    // gh API's 60s response cache will return stale data that omits the
-    // just-posted comment — preserving the optimistic ref lets the merge
-    // logic above re-attach it to the stale response.
+    // Why: only clear optimistic comments on a genuine item switch; on reopen gh's 60s cache omits the just-posted comment, so preserve the ref for re-merge.
     if (workItem.id !== prevItemIdRef.current) {
       optimisticCommentsRef.current = []
     }
@@ -5360,21 +5120,18 @@ export default function PullRequestPage({
       return
     }
 
-    // Why: dedupe concurrent opens for the same key — concurrent dialogs or
-    // a rapid close→reopen must share one in-flight promise instead of
-    // racing two `gh` subprocesses against each other.
+    // Why: dedupe concurrent opens on the same key so a rapid close→reopen shares one in-flight promise instead of racing two `gh` subprocesses.
     const inflight: Promise<GitHubWorkItemDetails | null> =
       cached?.pending ??
-      getWorkItemDetailsForRepo({
-        repoPath,
-        repoId: effectiveRepoId ?? undefined,
+      lookupGitHubWorkItemDetailsForSource({
+        repoPath: repoPath ?? '',
+        repoId: effectiveRepoId,
+        sourceContext,
         number: workItem.number,
         type: workItem.type
       })
 
-    // Why: snapshot the invalidation generation at fetch start; if the
-    // generation advances before we resolve, a mutation invalidated the
-    // entry mid-flight and we must not write a stale result back.
+    // Why: snapshot the generation so a mid-flight invalidation (generation advance) blocks writing a stale result back.
     const launchedAtGeneration = workItemDetailsCacheGeneration
 
     if (!cached?.pending) {
@@ -5390,19 +5147,22 @@ export default function PullRequestPage({
       .then((result) => {
         const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
         const prev = workItemDetailsCache.get(detailsCacheKey)
-        if (invalidatedMidFlight) {
-          // Why: entry was deliberately dropped; do not recreate it. If the
-          // entry still exists (later open repopulated it) leave it alone too.
+        if (invalidatedMidFlight && prev?.pending !== inflight) {
+          // Why: entry was deliberately dropped (or later repopulated) — don't recreate or clobber it.
           return
         }
-        // Why: 404/unauthorized must not overwrite valid cached data. When the
-        // IPC resolves to null and we already have cached details, keep the
-        // stale data — only blank entries get the null payload.
+        // Why: null means unavailable/not found, not loaded empty content.
         if (result === null && prev?.details) {
           touchWorkItemDetailsCache(detailsCacheKey, {
             details: prev.details,
             fetchedAt: prev.fetchedAt,
             error: undefined
+          })
+        } else if (result === null) {
+          touchWorkItemDetailsCache(detailsCacheKey, {
+            details: null,
+            fetchedAt: 0,
+            error: WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE
           })
         } else {
           touchWorkItemDetailsCache(detailsCacheKey, {
@@ -5415,22 +5175,38 @@ export default function PullRequestPage({
       .catch((err) => {
         const message = err instanceof Error ? err.message : 'Failed to load details'
         const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
-        if (invalidatedMidFlight) {
+        const prev = workItemDetailsCache.get(detailsCacheKey)
+        if (invalidatedMidFlight && prev?.pending !== inflight) {
           return
         }
-        const prev = workItemDetailsCache.get(detailsCacheKey)
-        // Why: stale-on-error — keep cached data if we have it, drop the
-        // pending promise so the next open can retry. Only surface the
-        // blocking error when nothing is cached.
+        // Why: stale-on-error — keep cached data, drop the pending promise so next open retries; surface the error only when nothing is cached.
         touchWorkItemDetailsCache(detailsCacheKey, {
           details: prev?.details ?? null,
           fetchedAt: prev?.fetchedAt ?? 0,
           error: message
         })
       })
-  }, [repoPath, effectiveRepoId, workItem, detailsCacheKey, refetchTick])
+  }, [
+    canUseDetailsRepoContext,
+    repoPath,
+    effectiveRepoId,
+    sourceContext,
+    workItem,
+    detailsCacheKey,
+    refetchTick
+  ])
 
-  const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
+  // Why: icon must track resolved state so a merged PR reads as merged, not as the open-PR glyph.
+  const Icon =
+    workItem?.type === 'pr'
+      ? localState === 'merged'
+        ? GitMerge
+        : localState === 'closed'
+          ? GitPullRequestClosed
+          : localState === 'draft'
+            ? GitPullRequestDraft
+            : GitPullRequest
+      : CircleDot
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
     if (!workItem) {
       return null
@@ -5445,8 +5221,7 @@ export default function PullRequestPage({
     if (!workItem || details?.item.reviewRequests === undefined) {
       return
     }
-    // Why: PR details can carry fresher reviewer metadata than the list row;
-    // push it back so the Tasks review chip doesn't keep a stale snapshot.
+    // Why: PR details can carry fresher reviewer metadata than the list row; push it back so the Tasks review chip isn't stale.
     onReviewRequestsChange?.(
       { id: workItem.id, repoId: workItem.repoId },
       details.item.reviewRequests
@@ -5456,10 +5231,10 @@ export default function PullRequestPage({
   const body = details?.body ?? ''
   const comments = details?.comments ?? []
   const files = details?.files ?? []
+  const filesUnavailable = details?.filesUnavailable ?? false
   const checks = details?.checks ?? []
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
-  // Why: clipboard IPC can resolve after the page unmounts; skip copied-state
-  // feedback instead of starting its reset timer on a stale surface.
+  // Why: clipboard IPC can resolve after unmount; skip copied-state feedback rather than start a reset timer on a stale surface.
   const linkCopyMountedRef = useRef(false)
   const linkCopiedResetTimerRef = useRef<number | null>(null)
   const clearLinkCopiedResetTimer = useCallback((): void => {
@@ -5473,8 +5248,7 @@ export default function PullRequestPage({
     (node: HTMLButtonElement | null) => {
       linkCopyMountedRef.current = node !== null
       if (node === null) {
-        // Why: the copied-state timer belongs to the copy control surface;
-        // clear it when that surface detaches without a passive cleanup Effect.
+        // Why: clear the copied-state timer on ref detach instead of via a passive cleanup Effect.
         clearLinkCopiedResetTimer()
       }
     },
@@ -5486,8 +5260,7 @@ export default function PullRequestPage({
       return
     }
     try {
-      // Why: Electron's clipboard IPC is reliable even when browser clipboard
-      // APIs lose focus/activation inside nested overlay surfaces.
+      // Why: Electron clipboard IPC works even when browser clipboard APIs lose focus/activation in nested overlays.
       await window.api.ui.writeClipboardText(workItem.url)
       if (!linkCopyMountedRef.current) {
         return
@@ -5499,30 +5272,29 @@ export default function PullRequestPage({
         linkCopiedResetTimerRef.current = null
         setLinkCopyState((current) => clearGitHubLinkCopied(current, copiedWorkItemId))
       }, 1500)
-      toast.success('GitHub link copied')
+      toast.success(translate('auto.components.PullRequestPage.992e799227', 'GitHub link copied'))
     } catch {
-      toast.error('Failed to copy GitHub link')
+      toast.error(
+        translate('auto.components.PullRequestPage.e0b15c793f', 'Failed to copy GitHub link')
+      )
     }
   }, [clearLinkCopiedResetTimer, workItem])
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
-      // Why: skip refreshDetails() — gh api --cache 60s returns stale data
-      // that overwrites the optimistic comment. The next dialog open (after
-      // cache expiry) will pick up the server-confirmed version.
+      // Why: skip refreshDetails() — gh api --cache 60s returns stale data that would overwrite the optimistic comment.
       optimisticCommentsRef.current.push(comment)
-      // Why: write through the module-level cache so subscribers (this
-      // drawer plus any concurrent ones on the same item) re-render with the
-      // optimistic comment. Mark fetchedAt as stale (0) so the next open
-      // still triggers a background refresh to pick up server-side fields
-      // like reaction groups or thread bindings.
+      // Why: write through the shared cache so subscribers re-render; fetchedAt=0 forces a background refresh next open for server-side fields.
       if (detailsCacheKey) {
         const prev = workItemDetailsCache.get(detailsCacheKey)
         if (prev?.details) {
           const ids = new Set(prev.details.comments.map((c) => c.id))
           if (!ids.has(comment.id)) {
             touchWorkItemDetailsCache(detailsCacheKey, {
-              details: { ...prev.details, comments: [...prev.details.comments, comment] },
+              details: {
+                ...prev.details,
+                comments: [...prev.details.comments, comment]
+              },
               fetchedAt: 0,
               error: undefined
             })
@@ -5530,19 +5302,45 @@ export default function PullRequestPage({
           }
         }
       }
-      // Why: when the cache has no details yet (still loading), no cache
-      // write/notify fires above. Bump local state so the details memo
-      // re-runs and surfaces the optimistic comment via the loading-shell
-      // fallback instead of holding it invisibly in the ref.
+      // Why: cache empty (still loading) so no write/notify above; bump local state so the memo re-runs and surfaces the optimistic comment.
       setOptimisticTick((n) => n + 1)
     },
     [detailsCacheKey]
   )
 
+  const invalidateCurrentDetailsCache = useCallback((): void => {
+    if (!workItem) {
+      return
+    }
+    // Why: local repos invalidate all source-preference variants; runtime-only entries need their exact source-scoped key (no local path).
+    if (repoPath) {
+      invalidateWorkItemDetailsCacheByMatch({
+        repoPath,
+        repoId: effectiveRepoId ?? undefined,
+        type: workItem.type,
+        number: workItem.number
+      })
+      return
+    }
+    if (detailsCacheKey) {
+      invalidateWorkItemDetailsCacheForKey(detailsCacheKey)
+    }
+  }, [detailsCacheKey, effectiveRepoId, repoPath, workItem])
+
   const handlePRFileViewedChange = useCallback(
     async (path: string, viewed: boolean): Promise<boolean> => {
-      if (!repoPath || !details?.pullRequestId || !workItem || workItem.type !== 'pr') {
-        toast.error('Unable to sync viewed state for this pull request.')
+      if (
+        !canUseDetailsRepoContext ||
+        !details?.pullRequestId ||
+        !workItem ||
+        workItem.type !== 'pr'
+      ) {
+        toast.error(
+          translate(
+            'auto.components.PullRequestPage.996a1897d2',
+            'Unable to sync viewed state for this pull request.'
+          )
+        )
         return false
       }
       setPendingViewedPaths((prev) => new Set(prev).add(path))
@@ -5553,8 +5351,10 @@ export default function PullRequestPage({
       try {
         const ok = await setPRFileViewedForRepo({
           repoId: workItem.repoId,
-          repoPath,
+          repoPath: repoPath ?? '',
+          sourceContext,
           prNumber: workItem.number,
+          prRepo: resolvePullRequestRepo(workItem, projectOrigin),
           pullRequestId: details.pullRequestId,
           path,
           viewed
@@ -5563,7 +5363,12 @@ export default function PullRequestPage({
           if (detailsCacheKey && previousState) {
             patchCachedPRFileViewedState(detailsCacheKey, path, previousState)
           }
-          toast.error('Failed to sync viewed state with GitHub.')
+          toast.error(
+            translate(
+              'auto.components.PullRequestPage.5a01ca7253',
+              'Failed to sync viewed state with GitHub.'
+            )
+          )
           return false
         }
         return true
@@ -5575,7 +5380,15 @@ export default function PullRequestPage({
         })
       }
     },
-    [details?.pullRequestId, detailsCacheKey, repoPath, workItem]
+    [
+      canUseDetailsRepoContext,
+      details?.pullRequestId,
+      detailsCacheKey,
+      projectOrigin,
+      repoPath,
+      sourceContext,
+      workItem
+    ]
   )
 
   const ownerRepo = parseOwnerRepoFromItemUrl(workItem?.url ?? '')
@@ -5607,15 +5420,15 @@ export default function PullRequestPage({
             <ChevronLeft className="size-4" />
             {backLabel}
           </Button>
-          <span className="text-border">·</span>
+          <span className="text-muted-foreground/40">·</span>
           {ownerRepo ? (
             <>
               <span className="truncate">
                 <span className="text-muted-foreground">{ownerRepo.owner}</span>
-                <span className="mx-1 text-muted-foreground/60">/</span>
+                <span className="mx-1 text-muted-foreground/40">/</span>
                 <span className="font-medium text-foreground">{ownerRepo.repo}</span>
               </span>
-              <span className="text-muted-foreground/60">·</span>
+              <span className="text-muted-foreground/40">·</span>
             </>
           ) : null}
           <span className="font-mono text-muted-foreground">#{workItem.number}</span>
@@ -5628,7 +5441,10 @@ export default function PullRequestPage({
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => void handleCopyWorkItemLink()}
-                  aria-label="Copy GitHub link"
+                  aria-label={translate(
+                    'auto.components.PullRequestPage.347034903a',
+                    'Copy GitHub link'
+                  )}
                 >
                   {linkCopied ? (
                     <Check className="size-4 text-emerald-500" />
@@ -5638,7 +5454,9 @@ export default function PullRequestPage({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {linkCopied ? 'Copied' : 'Copy GitHub link'}
+                {linkCopied
+                  ? translate('auto.components.PullRequestPage.3b6886b2ee', 'Copied')
+                  : translate('auto.components.PullRequestPage.347034903a', 'Copy GitHub link')}
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -5647,13 +5465,16 @@ export default function PullRequestPage({
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => window.api.shell.openUrl(workItem.url)}
-                  aria-label="Open on GitHub"
+                  aria-label={translate(
+                    'auto.components.PullRequestPage.8ecda455a0',
+                    'Open on GitHub'
+                  )}
                 >
                   <ExternalLink className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                Open on GitHub
+                {translate('auto.components.PullRequestPage.8ecda455a0', 'Open on GitHub')}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -5661,34 +5482,49 @@ export default function PullRequestPage({
       </div>
 
       {/* Row 2: PR title block — large weight-400 title + state row, mirrors Primer pr-title-block */}
-      <div className="flex-none border-b border-border/60 px-6 py-4">
+      <div className="flex-none border-b border-border/60 px-6 py-5">
         <div className="flex items-start gap-4">
-          <h1 className="min-w-0 flex-1 text-[28px] font-medium leading-tight text-foreground">
+          <h1 className="min-w-0 flex-1 text-[26px] font-medium leading-snug text-foreground">
             <span className="break-words">{workItem.title}</span>
-            <span className="ml-2 font-light text-muted-foreground">#{workItem.number}</span>
+            <span className="ml-2 align-baseline text-[20px] font-normal text-muted-foreground/70">
+              #{workItem.number}
+            </span>
           </h1>
           <div className="flex shrink-0 items-center gap-2">
-            {/* Why: Orca's signature affordance — keep this primary so it stands out
-                against GitHub's familiar surface. */}
+            {/* Why: Orca's signature affordance — keep primary so it stands out against GitHub's familiar surface. */}
             <DropdownMenu modal={false}>
               <ButtonGroup>
                 <Button
                   type="button"
-                  size="sm"
                   onClick={handleOpenOrUsePR}
-                  className="gap-1.5 whitespace-nowrap font-semibold"
+                  className="w-[180px] justify-center gap-1.5 whitespace-nowrap"
                   aria-label={
                     attachedWorkspace
-                      ? 'Resume workspace attached to PR'
-                      : 'Start workspace from PR'
+                      ? translate(
+                          'auto.components.PullRequestPage.a459866967',
+                          'Resume workspace attached to PR'
+                        )
+                      : translate(
+                          'auto.components.PullRequestPage.25690a3855',
+                          'Start workspace from PR'
+                        )
                   }
                 >
-                  {attachedWorkspace ? 'Resume workspace' : 'Start workspace from PR'}
-                  <ArrowRight className="size-3.5" />
+                  {attachedWorkspace
+                    ? translate('auto.components.PullRequestPage.c9e7094a7b', 'Resume workspace')
+                    : translate('auto.components.PullRequestPage.71a3c0f9d2', 'Start workspace')}
+                  <ArrowRight className="size-4" />
                 </Button>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" size="icon-sm" aria-label="More PR workspace actions">
-                    <ChevronDown className="size-3.5" />
+                  <Button
+                    type="button"
+                    size="icon"
+                    aria-label={translate(
+                      'auto.components.PullRequestPage.57c13a5aa4',
+                      'More PR workspace actions'
+                    )}
+                  >
+                    <ChevronDown className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
               </ButtonGroup>
@@ -5696,18 +5532,18 @@ export default function PullRequestPage({
                 {attachedWorkspace ? (
                   <DropdownMenuItem onSelect={handleUseWorkItem}>
                     <Plus className="size-4" />
-                    Start new workspace
+                    {translate('auto.components.PullRequestPage.1a2570e18e', 'Start new workspace')}
                   </DropdownMenuItem>
                 ) : null}
                 <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
                   <ExternalLink className="size-4" />
-                  Open on GitHub
+                  {translate('auto.components.PullRequestPage.8ecda455a0', 'Open on GitHub')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
+        <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-2 text-[13px] text-muted-foreground">
           <span
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium',
@@ -5717,62 +5553,71 @@ export default function PullRequestPage({
             <Icon className="size-3.5" />
             {stateBadgeLabel}
           </span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            {workItem.author ? (
+              <GitHubUserAvatar
+                login={workItem.author}
+                avatarUrl={displayWorkItem?.authorAvatarUrl ?? workItem.authorAvatarUrl}
+                className="size-5"
+              />
+            ) : null}
+            <span className="font-semibold text-foreground">
+              {workItem.author ??
+                translate('auto.components.PullRequestPage.77d9388fb0', 'unknown')}
+            </span>
+          </span>
+          {/* Why: base ← head scans faster than prose and matches how reviewers think about merge direction. */}
           <span className="flex flex-wrap items-center gap-1.5">
-            <span className="font-semibold text-foreground">{workItem.author ?? 'unknown'}</span>
-            <span>wants to merge into</span>
             {baseBranch ? (
-              <span className="rounded-md bg-accent/40 px-1.5 py-0.5 font-mono text-[12px] text-accent-foreground">
+              <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[12px] text-foreground">
                 {baseBranch}
               </span>
             ) : (
-              <span className="italic">base branch</span>
+              <span className="italic">
+                {translate('auto.components.PullRequestPage.c44b70352b', 'base branch')}
+              </span>
             )}
-            <span>from</span>
+            <ArrowLeft className="size-3.5 shrink-0 text-muted-foreground/70" />
             {headBranch ? (
-              <span className="rounded-md bg-accent/40 px-1.5 py-0.5 font-mono text-[12px] text-accent-foreground">
+              <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[12px] text-foreground">
                 {headBranch}
               </span>
             ) : (
-              <span className="italic">head branch</span>
+              <span className="italic">
+                {translate('auto.components.PullRequestPage.00b7b82329', 'head branch')}
+              </span>
             )}
-            <span className="text-muted-foreground/80">
-              · updated {formatRelativeTime(workItem.updatedAt)}
-            </span>
+          </span>
+          <span className="text-muted-foreground/40">·</span>
+          <span className="text-muted-foreground/80">
+            {translate('auto.components.PullRequestPage.dd5d9a4f17', 'updated {{value0}}', {
+              value0: formatRelativeTime(workItem.updatedAt)
+            })}
           </span>
           {attachedWorkspaceLabel ? (
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <FolderKanban className="size-3.5 shrink-0" />
-              <span className="truncate">{attachedWorkspaceLabel}</span>
-            </span>
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <FolderKanban className="size-3.5 shrink-0" />
+                <span className="truncate">{attachedWorkspaceLabel}</span>
+              </span>
+            </>
           ) : null}
         </div>
       </div>
 
-      {(repoPath || projectOrigin) && (
+      {(canUseDetailsRepoContext || projectOrigin) && (
         <GHEditSection
           item={workItem}
           repoPath={repoPath}
           repoId={effectiveRepoId}
+          sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           localState={localState}
           localLabels={localLabels}
           onStateChange={setLocalState}
           onLabelsChange={setLocalLabels}
-          onMutated={() => {
-            // Why: drop the cached details for this item so the next
-            // open issues a fresh fetch instead of painting pre-edit
-            // state. We invalidate by (repoPath, type, number) match
-            // because a single mutation can affect entries across all
-            // issueSourcePreference values for the same number.
-            if (repoPath) {
-              invalidateWorkItemDetailsCacheByMatch({
-                repoPath,
-                repoId: effectiveRepoId ?? undefined,
-                type: workItem.type,
-                number: workItem.number
-              })
-            }
-          }}
+          onMutated={invalidateCurrentDetailsCache}
           assignees={details?.assignees ?? []}
           onUse={onUse}
         />
@@ -5787,20 +5632,18 @@ export default function PullRequestPage({
             onValueChange={(value) => setTab(value as ItemDialogTab)}
             className="flex h-full min-h-0 flex-col gap-0"
           >
-            {/* Why: page-level tabs sit on a flat strip; the line variant
-                already paints an underline under the active tab via its own
-                ::after, so don't add a second border that boxes the trigger. */}
+            {/* Why: the line variant already underlines the active tab via ::after; a second border would box the trigger. */}
             <TabsList
               variant="line"
               className="mx-0 justify-start gap-2 border-b border-border/60 bg-transparent px-6"
             >
               <TabsTrigger value="conversation" className="px-3 py-2.5">
                 <MessageSquare className="size-3.5" />
-                Conversation
+                {translate('auto.components.PullRequestPage.9e8d45700e', 'Conversation')}
               </TabsTrigger>
               <TabsTrigger value="checks" className="px-3 py-2.5">
                 <ListChecks className="size-3.5" />
-                Checks
+                {translate('auto.components.PullRequestPage.94d95cf1f7', 'Checks')}
                 {checks.length > 0 && (
                   <span className="ml-1 rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
                     {checks.length}
@@ -5809,7 +5652,7 @@ export default function PullRequestPage({
               </TabsTrigger>
               <TabsTrigger value="files" className="px-3 py-2.5">
                 <FileText className="size-3.5" />
-                Files changed
+                {translate('auto.components.PullRequestPage.4d18310d55', 'Files changed')}
                 {files.length > 0 && (
                   <span className="ml-1 rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
                     {files.length}
@@ -5824,6 +5667,7 @@ export default function PullRequestPage({
                   item={displayWorkItem ?? workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
                   body={body}
                   comments={comments}
                   files={files}
@@ -5836,16 +5680,7 @@ export default function PullRequestPage({
                   localState={localState}
                   onStateChange={setLocalState}
                   projectOrigin={projectOrigin}
-                  onMutated={() => {
-                    if (repoPath) {
-                      invalidateWorkItemDetailsCacheByMatch({
-                        repoPath,
-                        repoId: effectiveRepoId ?? undefined,
-                        type: workItem.type,
-                        number: workItem.number
-                      })
-                    }
-                  }}
+                  onMutated={invalidateCurrentDetailsCache}
                   onChecksUpdated={(nextChecks) => {
                     if (detailsCacheKey) {
                       patchCachedPRChecks(detailsCacheKey, nextChecks)
@@ -5874,6 +5709,7 @@ export default function PullRequestPage({
                   item={workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
                   headSha={details?.headSha}
                   checks={checks}
                   loading={loading || !detailsLoaded}
@@ -5891,9 +5727,23 @@ export default function PullRequestPage({
                   <div className="flex items-center justify-center py-10">
                     <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
                   </div>
+                ) : filesUnavailable && files.length === 0 ? (
+                  // Why: fetch failed (rate limit/auth/unresolved remote); offer retry instead of implying the PR is empty.
+                  <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+                    <div className="text-[12px] text-muted-foreground">
+                      {translate(
+                        'auto.components.PullRequestPage.filesUnavailable',
+                        "Couldn't load changed files."
+                      )}
+                    </div>
+                    <Button variant="outline" size="sm" onClick={invalidateCurrentDetailsCache}>
+                      <RefreshCw className="size-3.5" />
+                      {translate('auto.components.PullRequestPage.filesRetry', 'Retry')}
+                    </Button>
+                  </div>
                 ) : files.length === 0 ? (
                   <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-                    No files changed.
+                    {translate('auto.components.PullRequestPage.6ad2c1ab9c', 'No files changed.')}
                   </div>
                 ) : (
                   <PRFilesCombinedDiffViewer
@@ -5901,7 +5751,9 @@ export default function PullRequestPage({
                     comments={comments}
                     repoPath={repoPath ?? ''}
                     repoId={effectiveRepoId ?? ''}
+                    sourceContext={sourceContext}
                     prNumber={workItem.number}
+                    prRepo={resolvePullRequestRepo(workItem, projectOrigin)}
                     prUrl={workItem.url}
                     headSha={details?.headSha}
                     baseSha={details?.baseSha}

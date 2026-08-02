@@ -1,20 +1,21 @@
-import { basename, resolve, relative, isAbsolute, posix, sep, win32 } from 'path'
-import type {
-  GitWorktreeInfo,
-  GlobalSettings,
-  OrcaWorkspaceLayout,
-  Repo,
-  Worktree,
-  WorktreeMeta
-} from '../../shared/types'
-import { resolveRuntimePath } from '../../shared/cross-platform-path'
+import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
+import type { GlobalSettings, OrcaWorkspaceLayout, Repo } from '../../shared/types'
+import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree-id'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
+import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
 import { getWslHome, parseWslPath } from '../wsl'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
+
+export {
+  computeBranchName,
+  getConfiguredBranchPrefix,
+  computeValidatedBranchName
+} from './worktree-branch-name'
+export { mergeWorktree } from './worktree-metadata-merge'
+export { areWorktreePathsEqual } from './worktree-path-comparison'
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
@@ -25,7 +26,7 @@ export function sanitizeWorktreeName(input: string): string {
   // name workspaces in their own language. Git ref-format permits non-ASCII
   // bytes, and modern filesystems handle UTF-8 paths. Only strip characters
   // git or the filesystem actually rejects.
-  const sanitized = input
+  const sanitized = replaceKnownEmojiWithShortcodes(input)
     .trim()
     .replace(/[^\p{L}\p{N}._-]+/gu, '-')
     .replace(/-+/g, '-')
@@ -37,11 +38,21 @@ export function sanitizeWorktreeName(input: string): string {
     .replace(/\.{2,}/g, '.')
     .replace(/^[.-]+|[.-]+$/g, '')
 
+  if (!sanitized && containsEmoji(input)) {
+    return 'workspace'
+  }
+
   if (!sanitized || sanitized === '.' || sanitized === '..') {
     throw new Error('Invalid worktree name')
   }
 
   return sanitized
+}
+
+function containsEmoji(input: string): boolean {
+  return /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(
+    input
+  )
 }
 
 export function sanitizeWorktreeDisplayName(input: string): string | undefined {
@@ -74,24 +85,6 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
   }
 
   return resolvedTargetPath
-}
-
-/**
- * Compute the full branch name by applying the configured prefix strategy.
- */
-export function computeBranchName(
-  sanitizedName: string,
-  settings: { branchPrefix: string; branchPrefixCustom?: string },
-  gitUsername: string | null
-): string {
-  if (settings.branchPrefix === 'git-username') {
-    if (gitUsername) {
-      return `${gitUsername}/${sanitizedName}`
-    }
-  } else if (settings.branchPrefix === 'custom' && settings.branchPrefixCustom) {
-    return `${settings.branchPrefixCustom}/${sanitizedName}`
-  }
-  return sanitizedName
 }
 
 /**
@@ -147,9 +140,10 @@ export function computeRemoteWorktreePath(
     return computeWorktreePath(sanitizedName, repoPath, settings)
   }
   // Why: absolute global workspaceDir values belong to the desktop machine.
-  // SSH worktrees keep the legacy repo-sibling root unless a repo-specific
-  // path opts into a remote-host location.
-  return getRuntimePathOps(repoPath, repoPath).join(repoPath, '..', sanitizedName)
+  // SSH falls back to repo-qualified sibling paths so origin/main is not shared.
+  const pathOps = getRuntimePathOps(repoPath, repoPath)
+  const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+  return pathOps.join(repoPath, '..', `${repoName}-${sanitizedName}`)
 }
 
 export function getWorktreePathSettings(
@@ -176,50 +170,13 @@ export function hasRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): b
   return getRepoWorktreeBasePath(repo) !== undefined
 }
 
-export function areWorktreePathsEqual(
-  leftPath: string,
-  rightPath: string,
-  platform = process.platform
-): boolean {
-  if (platform === 'win32' || looksLikeWindowsPath(leftPath) || looksLikeWindowsPath(rightPath)) {
-    const left = win32.normalize(win32.resolve(leftPath))
-    const right = win32.normalize(win32.resolve(rightPath))
-    // Why: `git worktree list` can report the same Windows path with different
-    // slash styles or drive-letter casing than the path we computed before
-    // creation. Orca must treat those as the same worktree or a successful
-    // create spuriously fails until the next full reload repopulates state.
-    return left.toLowerCase() === right.toLowerCase()
-  }
-  const left = normalizePosixWorktreePathForComparison(leftPath, platform)
-  const right = normalizePosixWorktreePathForComparison(rightPath, platform)
-  return left === right
-}
-
-function looksLikeWindowsPath(pathValue: string): boolean {
-  return (
-    /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\') || pathValue.startsWith('//')
-  )
-}
-
-function normalizePosixWorktreePathForComparison(
-  pathValue: string,
-  platform: NodeJS.Platform
-): string {
-  const normalized = posix.normalize(posix.resolve(pathValue))
-  if (platform !== 'darwin') {
-    return normalized
-  }
-  if (normalized === '/private/tmp') {
-    return '/tmp'
-  }
-  return normalized.startsWith('/private/tmp/') ? normalized.slice('/private'.length) : normalized
-}
-
 function getRuntimePathOps(
   repoPath: string,
   workspaceDir: string
 ): Pick<typeof posix, 'basename' | 'isAbsolute' | 'join' | 'normalize'> {
-  return looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(workspaceDir) ? win32 : posix
+  return isWindowsAbsolutePathLike(repoPath) || isWindowsAbsolutePathLike(workspaceDir)
+    ? win32
+    : posix
 }
 
 function resolveWorkspaceDirForRepo(repoPath: string, workspaceDir: string): string {
@@ -266,61 +223,6 @@ export function shouldSetDisplayName(
 }
 
 /**
- * Merge raw git worktree info with persisted user metadata into a full Worktree.
- */
-export function mergeWorktree(
-  repoId: string,
-  git: GitWorktreeInfo,
-  meta: WorktreeMeta | undefined,
-  defaultDisplayName?: string
-): Worktree {
-  const branchShort = git.branch.replace(/^refs\/heads\//, '')
-  return {
-    id: `${repoId}::${git.path}`,
-    ...(meta?.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
-    repoId,
-    path: git.path,
-    head: git.head,
-    branch: git.branch,
-    isBare: git.isBare,
-    ...(git.isSparse === true ? { isSparse: true } : {}),
-    isMainWorktree: git.isMainWorktree,
-    displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
-    comment: meta?.comment || '',
-    linkedIssue: meta?.linkedIssue ?? null,
-    linkedPR: meta?.linkedPR ?? null,
-    linkedLinearIssue: meta?.linkedLinearIssue ?? null,
-    linkedGitLabMR: meta?.linkedGitLabMR ?? null,
-    linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
-    isArchived: meta?.isArchived ?? false,
-    isUnread: meta?.isUnread ?? false,
-    isPinned: meta?.isPinned ?? false,
-    sortOrder: meta?.sortOrder ?? 0,
-    ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
-    lastActivityAt: meta?.lastActivityAt ?? 0,
-    ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-    ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
-    ...(meta?.pendingFirstAgentMessageRename !== undefined
-      ? { pendingFirstAgentMessageRename: meta.pendingFirstAgentMessageRename }
-      : {}),
-    ...(git.isSparse === true
-      ? {
-          sparseDirectories: meta?.sparseDirectories,
-          sparseBaseRef: meta?.sparseBaseRef,
-          sparsePresetId: meta?.sparsePresetId
-        }
-      : {}),
-    ...(meta?.baseRef !== undefined ? { baseRef: meta.baseRef } : {}),
-    ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
-    workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-    // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
-    // shared/types) and forwarded verbatim so the renderer store mirrors
-    // on-disk state. `undefined` here means the worktree has no comments yet.
-    diffComments: meta?.diffComments
-  }
-}
-
-/**
  * Parse a composite worktreeId ("repoId::worktreePath") into its parts.
  */
 export function parseWorktreeId(worktreeId: string): { repoId: string; worktreePath: string } {
@@ -342,6 +244,23 @@ export function isOrphanedWorktreeError(error: unknown): boolean {
   }
   const msg = (error as { stderr?: string }).stderr || error.message
   return /is not a working tree/.test(msg)
+}
+
+export function isWindowsLongPathWorktreeRemovalError(
+  error: unknown,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (platform !== 'win32' || typeof error !== 'object' || error === null) {
+    return false
+  }
+  const errorWithDetails = error as { message?: unknown; stderr?: unknown; stdout?: unknown }
+  const details = [errorWithDetails.stderr, errorWithDetails.stdout, errorWithDetails.message]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join('\n')
+
+  // Why: Git for Windows has reported this failure through both stderr and the
+  // thrown message, with wording that varies between "filename" and "path".
+  return /(?:file ?name|path).{0,40}too long|too long.{0,40}(?:file ?name|path)/i.test(details)
 }
 
 export function isOrphanCompatiblePreflightError(error: unknown): boolean {

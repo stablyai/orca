@@ -75,6 +75,10 @@ export async function mapLinearIssue(
     id: issue.id,
     identifier: issue.identifier,
     title: issue.title,
+    branchName:
+      'branchName' in issue
+        ? ((issue.branchName as string | null | undefined) ?? undefined)
+        : undefined,
     description: issue.description ?? undefined,
     url: issue.url,
     state: {
@@ -107,6 +111,7 @@ export async function mapLinearIssue(
       : undefined,
     estimate: issue.estimate ?? null,
     priority: issue.priority,
+    dueDate: 'dueDate' in issue ? ((issue.dueDate as string | null | undefined) ?? null) : null,
     updatedAt: issue.updatedAt.toISOString()
   }
 }

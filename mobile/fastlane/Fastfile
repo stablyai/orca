@@ -1,0 +1,235 @@
+# Orca Mobile iOS release lane.
+#
+# Builds the prebuilt iOS workspace, signs it with the distribution identity
+# imported into the CI keychain plus an explicit App Store provisioning profile
+# fetched via the App Store Connect API key, then uploads the .ipa to
+# TestFlight. All Apple credentials come from CI env vars
+# (see .github/workflows/mobile-ios-release.yml) so nothing secret lives in the
+# repo.
+#
+# Why manual signing (not -allowProvisioningUpdates / automatic cloud signing):
+# mixing a pre-imported distribution .p12 with xcodebuild's cloud-managed
+# automatic signing produced "Cloud signing permission error / No profiles
+# found" at exportArchive (cloud signing also needs an Admin-role API key).
+# Instead we fetch an explicit profile with the API key (sigh) and sign
+# manually against the imported cert — works with any team API key.
+
+require "base64"
+require "json"
+require_relative "ios_release_version"
+
+default_platform(:ios)
+
+MOBILE_ROOT = File.expand_path("..", __dir__)
+# Why: fastlane executes lanes from mobile/fastlane even when GitHub Actions
+# starts in mobile/, so release file paths must be rooted at the mobile app.
+APP_CONFIG_PATH = File.join(MOBILE_ROOT, "app.json")
+WORKSPACE = File.join(MOBILE_ROOT, "ios", "Orca.xcworkspace")
+BUILD_OUTPUT_DIRECTORY = File.join(MOBILE_ROOT, "build")
+SCHEME = "Orca"
+BUNDLE_ID = "com.stably.orca.mobile"
+TESTFLIGHT_GROUPS = ["peeps"].freeze
+DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
+
+# App Store version states in which the version "train" is terminally closed to
+# new TestFlight build uploads (altool rejects with 90186 "train ... is
+# closed"). Only approved/released/removed states qualify: a version that is
+# merely IN_REVIEW / WAITING_FOR_REVIEW / PROCESSING_FOR_APP_STORE still accepts
+# TestFlight builds, so bumping on those would break normal beta iteration.
+#
+# Covers both vocabularies: `appStoreState` is deprecated as of App Store
+# Connect API 3.3 in favor of `appVersionState`, which renames the shipped state
+# (READY_FOR_SALE -> READY_FOR_DISTRIBUTION) and drops the removed-from-sale
+# ones. Reading whichever field Apple populates keeps the guard working through
+# the transition instead of silently finding zero closed versions.
+CLOSED_APP_STORE_STATES = %w[
+  READY_FOR_SALE
+  READY_FOR_DISTRIBUTION
+  PENDING_DEVELOPER_RELEASE
+  PENDING_APPLE_RELEASE
+  REPLACED_WITH_NEW_VERSION
+  REMOVED_FROM_SALE
+  DEVELOPER_REMOVED_FROM_SALE
+].freeze
+
+def app_store_connect_api_key_from_env
+  app_store_connect_api_key(
+    key_id: ENV.fetch("ASC_KEY_ID"),
+    issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+    key_content: ENV.fetch("ASC_API_KEY_P8"),
+    is_key_content_base64: true,
+    in_house: false,
+  )
+end
+
+def load_mobile_app_config
+  JSON.parse(File.read(APP_CONFIG_PATH))
+end
+
+def write_mobile_app_config(config)
+  File.write(APP_CONFIG_PATH, "#{JSON.pretty_generate(config)}\n")
+end
+
+def current_mobile_version(config)
+  config.fetch("expo").fetch("version")
+end
+
+# True when either state field reports a terminally closed train. `respond_to?`
+# guards the newer field, which older spaceship versions do not define.
+def closed_state?(app_store_version)
+  states = [app_store_version.app_store_state]
+  states << app_store_version.app_version_state if app_store_version.respond_to?(:app_version_state)
+
+  states.compact.any? { |state| CLOSED_APP_STORE_STATES.include?(state) }
+end
+
+# Highest version whose App Store record is in a terminally closed state, or nil
+# when none is (or the lookup fails). Fetched once because the answer is a
+# property of the app, not of any single candidate version.
+#
+# Why the whole list rather than a per-version lookup: a version only gets an
+# App Store record once someone submits it. 0.0.34 was uploaded to TestFlight
+# but never submitted, so it had no record and a filtered lookup found nothing
+# closed — while 0.0.35 shipped, which closes 0.0.34 too (Apple: 90062 requires
+# a *higher* version than the last approved one).
+#
+# On a nil app or any API error, degrade to "open": we then proceed as before
+# this check existed — the upload either succeeds or fails with the same 90186
+# we have always seen, never worse than today's behavior.
+def highest_closed_app_store_version(app)
+  return nil unless app
+
+  closed = app
+    .get_app_store_versions
+    .select { |app_store_version| closed_state?(app_store_version) }
+    .map(&:version_string)
+
+  IosReleaseVersion.max_version(closed)
+rescue StandardError => error
+  # Loud, not silent: a swallowed error here un-fixes the 90186 guard, so the
+  # degraded run must be visible rather than buried.
+  UI.error("Could not determine closed App Store versions (#{error.message}); assuming open and proceeding.")
+  nil
+end
+
+def testflight_changelog
+  changelog = ENV.fetch("TESTFLIGHT_CHANGELOG", "").strip
+  changelog.empty? ? DEFAULT_TESTFLIGHT_CHANGELOG : changelog
+end
+
+platform :ios do
+  desc "Resolve the iOS release version and next TestFlight build number"
+  lane :prepare_release_version do |options|
+    api_key = app_store_connect_api_key_from_env
+    config = load_mobile_app_config
+
+    app =
+      begin
+        Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+      rescue StandardError => error
+        UI.error("Could not look up App Store app #{BUNDLE_ID} (#{error.message}); skipping closed-train check.")
+        nil
+      end
+    highest_closed = highest_closed_app_store_version(app)
+    UI.message("Highest closed App Store version: #{highest_closed || 'none'}")
+
+    version =
+      begin
+        IosReleaseVersion.resolve(
+          requested: options[:version],
+          bump_patch: options[:bump_patch],
+          current_version: current_mobile_version(config),
+          train_closed: ->(candidate) { IosReleaseVersion.closed_train?(candidate, highest_closed) },
+        )
+      rescue ArgumentError => error
+        UI.user_error!(error.message)
+      end
+
+    # Explicit and checked-in versions still fail fast when closed. Patch bumps
+    # skip closed trains above because workflow-only releases can outpace Git.
+    if IosReleaseVersion.closed_train?(version, highest_closed)
+      retry_guidance =
+        if IosReleaseVersion.truthy?(options[:bump_patch])
+          "Use a higher release_version or land a \"Prepare mobile <version>\" commit."
+        else
+          "Re-dispatch with bump_patch_version: true (or a higher release_version), " \
+            "or land a \"Prepare mobile <version>\" commit."
+        end
+      UI.user_error!(
+        "iOS version #{version} is not higher than #{highest_closed}, which is already " \
+        "submitted/released on the App Store, so Apple will reject the upload. #{retry_guidance}",
+      )
+    end
+
+    latest_build_number = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      version: version,
+      initial_build_number: 0,
+    )
+    build_number = latest_build_number.to_i + 1
+
+    # Keep app.json authoritative because Expo prebuild copies these values into
+    # the native project and runtime manifest used by the About screen.
+    config.fetch("expo")["version"] = version
+    config.fetch("expo").fetch("ios")["buildNumber"] = build_number.to_s
+    write_mobile_app_config(config)
+
+    UI.message("Prepared Orca Mobile iOS #{version} (#{build_number})")
+  end
+
+  desc "Build, sign, upload, and share Orca Mobile on TestFlight"
+  lane :release do
+    api_key = app_store_connect_api_key_from_env
+
+    team_id = ENV.fetch("APPLE_TEAM_ID")
+
+    # Fetch (or create) the App Store distribution profile via the API key and
+    # install it locally, then feed its name to the manual archive + export.
+    get_provisioning_profile(
+      api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      force: true,
+    )
+    # sigh exposes the chosen profile's name in SIGH_NAME (SIGH_PROFILE_MAPPING
+    # doesn't exist in this fastlane version).
+    profile_name = lane_context[SharedValues::SIGH_NAME]
+
+    # Manual signing: the archive needs the team, profile, and signing style set
+    # explicitly (no -allowProvisioningUpdates). Without DEVELOPMENT_TEAM the
+    # archive fails: "Signing for Orca requires a development team".
+    build_app(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      xcargs: "DEVELOPMENT_TEAM=#{team_id} " \
+        "CODE_SIGN_STYLE=Manual " \
+        "CODE_SIGN_IDENTITY='Apple Distribution' " \
+        "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
+      export_options: {
+        teamID: team_id,
+        signingStyle: "manual",
+        provisioningProfiles: {
+          BUNDLE_ID => profile_name,
+        },
+      },
+      output_directory: BUILD_OUTPUT_DIRECTORY,
+      output_name: "Orca.ipa",
+      clean: true,
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      # Why: fastlane can only assign external TestFlight groups after Apple
+      # finishes processing the uploaded build.
+      skip_waiting_for_build_processing: false,
+      distribute_external: true,
+      groups: TESTFLIGHT_GROUPS,
+      notify_external_testers: true,
+      # Why: fastlane requires release notes when distributing to external
+      # TestFlight testers, even for CI-triggered smoke releases.
+      changelog: testflight_changelog,
+    )
+  end
+end

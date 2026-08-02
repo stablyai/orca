@@ -6,7 +6,9 @@ const { handleMock, networkInterfacesMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
-  ipcMain: { handle: handleMock }
+  app: { isPackaged: false },
+  ipcMain: { handle: handleMock },
+  shell: { openExternal: vi.fn() }
 }))
 
 vi.mock('qrcode', () => ({
@@ -57,18 +59,90 @@ describe('registerMobileHandlers', () => {
     })
   })
 
+  it('excludes proxy fake-ip addresses so pairing defaults to LAN (#10404)', async () => {
+    networkInterfacesMock.mockReturnValue({
+      utun4: [
+        { family: 'IPv4', internal: false, address: '198.18.0.1' },
+        { family: 'IPv4', internal: false, address: '198.19.255.254' }
+      ],
+      en0: [
+        { family: 'IPv4', internal: false, address: '192.168.50.238' },
+        { family: 'IPv4', internal: false, address: '198.17.255.254' },
+        { family: 'IPv4', internal: false, address: '198.20.0.1' }
+      ]
+    })
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#lan',
+      endpoint: 'ws://192.168.50.238:6768',
+      deviceId: 'mobile-lan',
+      connectionMode: 'automatic'
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+
+    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+      interfaces: [
+        { name: 'en0', address: '192.168.50.238' },
+        { name: 'en0', address: '198.17.255.254' },
+        { name: 'en0', address: '198.20.0.1' }
+      ]
+    })
+
+    await handlers.get('mobile:getPairingQR')?.(null, {})
+    expect(createMobilePairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ address: '192.168.50.238' })
+    )
+  })
+
+  it('includes IPv6 addresses (ranked after IPv4) and excludes link-local IPv6', () => {
+    networkInterfacesMock.mockReturnValue({
+      en0: [
+        { family: 'IPv4', internal: false, address: '192.168.1.24' },
+        { family: 'IPv6', internal: false, address: 'fe80::1' },
+        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
+      ],
+      lo0: [{ family: 'IPv6', internal: true, address: '::1' }]
+    })
+
+    registerMobileHandlers({} as never)
+
+    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+      interfaces: [
+        { name: 'en0', address: '192.168.1.24' },
+        { name: 'en0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
+      ]
+    })
+  })
+
+  it('returns an IPv6 interface on an IPv6-only host (regression: was empty, breaking mobile pairing)', () => {
+    networkInterfacesMock.mockReturnValue({
+      eth0: [
+        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
+        { family: 'IPv6', internal: false, address: 'fe80::42:acff:fe11:2' }
+      ]
+    })
+
+    registerMobileHandlers({} as never)
+
+    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+      interfaces: [{ name: 'eth0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }]
+    })
+  })
+
   it('generates mobile pairing urls with the tailnet address by default', async () => {
     networkInterfacesMock.mockReturnValue({
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }],
       utun4: [{ family: 'IPv4', internal: false, address: '100.102.47.57' }]
     })
-    const createPairingOffer = vi.fn().mockReturnValue({
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
       pairingUrl: 'orca://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
-      deviceId: 'mobile-1'
+      deviceId: 'mobile-1',
+      connectionMode: 'automatic'
     })
-    const rpcServer = { createPairingOffer }
+    const rpcServer = { createMobilePairingOffer }
 
     registerMobileHandlers(rpcServer as never)
 
@@ -76,14 +150,87 @@ describe('registerMobileHandlers', () => {
       available: true,
       pairingUrl: 'orca://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
-      deviceId: 'mobile-1'
+      deviceId: 'mobile-1',
+      connectionMode: 'automatic'
     })
 
-    expect(createPairingOffer).toHaveBeenCalledWith({
+    expect(createMobilePairingOffer).toHaveBeenCalledWith({
       address: '100.102.47.57',
+      connectionMode: undefined,
       rotate: undefined,
-      name: expect.stringMatching(/^Mobile /),
-      scope: 'mobile'
+      name: expect.stringMatching(/^Mobile /)
+    })
+  })
+
+  it('forwards structured Relay mint failures to the renderer', async () => {
+    networkInterfacesMock.mockReturnValue({
+      en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
+    })
+    const relayFailure = {
+      code: 'relay_mint_failed',
+      stage: 'create_pairing_relay',
+      message: 'Relay pairing invite request failed'
+    }
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: false,
+      reason: 'relay_mint_failed',
+      guidance: 'Use LAN or retry Relay.',
+      relayFailure
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+
+    await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toEqual({
+      available: false,
+      reason: 'relay_mint_failed',
+      guidance: 'Use LAN or retry Relay.',
+      relayFailure
+    })
+  })
+
+  it('forwards an explicit local-only pairing choice', async () => {
+    networkInterfacesMock.mockReturnValue({
+      en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
+    })
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#local',
+      endpoint: 'ws://192.168.1.24:6768',
+      deviceId: 'mobile-local',
+      connectionMode: 'local-only'
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+    await handlers.get('mobile:getPairingQR')?.(null, { connectionMode: 'local-only' })
+
+    expect(createMobilePairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionMode: 'local-only' })
+    )
+  })
+
+  it('preserves a copyable pairing URL when QR encoding fails', async () => {
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair?code=copy-me',
+      endpoint: 'wss://pair.example/oversized',
+      deviceId: 'mobile-large',
+      connectionMode: 'local-only'
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never, {
+      encodePairingQr: vi.fn().mockResolvedValue({ ok: false, reason: 'encoding_failed' })
+    })
+
+    await expect(
+      handlers.get('mobile:getPairingQR')?.(null, { address: 'pair.example' })
+    ).resolves.toEqual({
+      available: true,
+      qrDataUrl: null,
+      qrError: 'encoding_failed',
+      pairingUrl: 'orca://pair?code=copy-me',
+      endpoint: 'wss://pair.example/oversized',
+      deviceId: 'mobile-large',
+      connectionMode: 'local-only'
     })
   })
 
@@ -225,5 +372,96 @@ describe('registerMobileHandlers', () => {
       revoked: true
     })
     expect(revokeRuntimeAccess).toHaveBeenCalledWith('runtime-1')
+  })
+
+  it('awaits mobile device revocation before replying', async () => {
+    const revokeMobileDevice = vi.fn().mockResolvedValue(true)
+    const rpcServer = {
+      getDeviceRegistry: () => ({}),
+      revokeMobileDevice
+    }
+
+    registerMobileHandlers(rpcServer as never)
+
+    await expect(
+      handlers.get('mobile:revokeDevice')?.(null, { deviceId: 'mobile-1' })
+    ).resolves.toEqual({ revoked: true })
+    expect(revokeMobileDevice).toHaveBeenCalledWith('mobile-1')
+  })
+
+  it('reports the current relay broker status without exposing a toggle', () => {
+    registerMobileHandlers({} as never, { getRelayStatus: () => 'registered' })
+
+    expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({ status: 'registered' })
+  })
+
+  it('consumes a pending auth-failure notification only from a window renderer', () => {
+    const consumePendingUnpairedDeviceAuthFailure = vi.fn(() => true)
+    registerMobileHandlers({} as never, { consumePendingUnpairedDeviceAuthFailure })
+
+    expect(
+      handlers.get('mobile:consumePendingUnpairedDeviceAuthFailure')?.({
+        sender: { id: 42, isDestroyed: () => false, getType: () => 'window' }
+      })
+    ).toBe(true)
+    expect(consumePendingUnpairedDeviceAuthFailure).toHaveBeenCalledWith(42)
+
+    expect(
+      handlers.get('mobile:consumePendingUnpairedDeviceAuthFailure')?.({
+        sender: { id: 99, isDestroyed: () => false, getType: () => 'webview' }
+      })
+    ).toBe(false)
+    expect(consumePendingUnpairedDeviceAuthFailure).toHaveBeenCalledOnce()
+  })
+
+  it('inspects and repairs the current packaged Windows websocket port', async () => {
+    const runPowerShell = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          ruleAllowed: false,
+          privateFirewallEnabled: true,
+          networkCategory: 'Private'
+        })
+      )
+      .mockResolvedValueOnce('{"launched":true,"exitCode":0}')
+    const rpcServer = { getWebSocketEndpoint: () => 'ws://0.0.0.0:6768' }
+    registerMobileHandlers(rpcServer as never, {
+      firewallEnvironment: {
+        platform: 'win32',
+        isPackaged: true,
+        executablePath: 'C:\\Program Files\\Orca\\Orca.exe',
+        runPowerShell
+      }
+    })
+
+    await expect(
+      handlers.get('mobile:getWindowsFirewallStatus')?.(null, { address: '192.168.0.108' })
+    ).resolves.toMatchObject({ supported: true, port: 6768, ruleAllowed: false })
+    await expect(
+      handlers.get('mobile:repairWindowsFirewall')?.({
+        sender: { isDestroyed: () => false, getType: () => 'window' }
+      })
+    ).resolves.toEqual({ ok: true })
+  })
+
+  it('rejects firewall mutation from a non-window renderer', async () => {
+    const runPowerShell = vi.fn()
+    const rpcServer = { getWebSocketEndpoint: () => 'ws://0.0.0.0:6768' }
+    registerMobileHandlers(rpcServer as never, {
+      firewallEnvironment: {
+        platform: 'win32',
+        isPackaged: true,
+        executablePath: 'C:\\Program Files\\Orca\\Orca.exe',
+        runPowerShell
+      }
+    })
+
+    expect(
+      handlers.get('mobile:repairWindowsFirewall')?.({
+        sender: { isDestroyed: () => false, getType: () => 'webview' }
+      })
+    ).toEqual({ ok: false, reason: 'unsupported' })
+    expect(runPowerShell).not.toHaveBeenCalled()
   })
 })

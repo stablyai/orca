@@ -15,6 +15,9 @@ import {
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    // Why: subscribe streams register as remote view subscribers for Phase-5
+    // query-authority suppression (terminal-query-authority.md).
+    registerRemoteTerminalViewSubscriber: () => () => {},
     ...overrides
   } as OrcaRuntimeService
 }
@@ -52,7 +55,10 @@ describe('terminal output batching', () => {
         }),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -78,7 +84,9 @@ describe('terminal output batching', () => {
         .map((msg) => JSON.parse(msg))
         .filter((message) => message.result?.type === 'data')
       expect(dataMessages).toHaveLength(1)
-      expect(dataMessages[0]).toMatchObject({ result: { type: 'data', chunk: 'ab' } })
+      expect(dataMessages[0]).toMatchObject({
+        result: { type: 'data', chunk: 'ab' }
+      })
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
       await dispatchPromise
@@ -123,7 +131,10 @@ describe('terminal output batching', () => {
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', {
@@ -134,7 +145,9 @@ describe('terminal output batching', () => {
         (msg) => messages.push(msg),
         {
           connectionId: 'conn-1',
-          sendBinary: (bytes) => binaryFrames.push(bytes)
+          sendBinary: (bytes) => {
+            binaryFrames.push(bytes)
+          }
         }
       )
 
@@ -144,7 +157,10 @@ describe('terminal output batching', () => {
       const subscribed = messages
         .map((msg) => JSON.parse(msg))
         .find((msg) => msg.result?.type === 'subscribed')
-      expect(subscribed?.result).toMatchObject({ type: 'subscribed', streamId: expect.any(Number) })
+      expect(subscribed?.result).toMatchObject({
+        type: 'subscribed',
+        streamId: expect.any(Number)
+      })
       await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
 
       const emitData = dataListenerRef.current
@@ -171,12 +187,108 @@ describe('terminal output batching', () => {
     }
   })
 
-  it('routes binary terminal input frames back to the subscribed PTY', async () => {
+  it('encodes large binary terminal output lazily before the first output frame', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+      const cleanups = new Map<string, () => void>()
+      const dataListenerRef: { current?: (data: string) => void } = {}
+      let captureOutputFrames = false
+      let firstOutputEncodeCount: number | undefined
+      const encodeSpy = vi.spyOn(TextEncoder.prototype, 'encode')
+      const runtime = stubRuntime({
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
+          dataListenerRef.current = listener
+          return vi.fn()
+        }),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
+        }),
+        cleanupSubscription: vi.fn((id: string) => {
+          const cleanup = cleanups.get(id)
+          cleanups.delete(id)
+          cleanup?.()
+        }),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+        sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+        updateMobileViewport: vi.fn().mockResolvedValue(false)
+      })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.subscribe', {
+          terminal: 'terminal-1',
+          client: { id: 'desktop-1', type: 'desktop' },
+          capabilities: { terminalBinaryStream: 1 }
+        }),
+        (msg) => messages.push(msg),
+        {
+          connectionId: 'conn-1',
+          sendBinary: (bytes) => {
+            const frame = decodeTerminalStreamFrame(bytes)
+            if (
+              captureOutputFrames &&
+              firstOutputEncodeCount === undefined &&
+              frame?.opcode === TerminalStreamOpcode.Output
+            ) {
+              firstOutputEncodeCount = encodeSpy.mock.calls.length
+            }
+            binaryFrames.push(bytes)
+          }
+        }
+      )
+
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+      )
+      await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
+
+      binaryFrames.length = 0
+      encodeSpy.mockClear()
+      captureOutputFrames = true
+      const output = 'x'.repeat(48 * 1024 * 3 + 17)
+      dataListenerRef.current?.(output)
+
+      const outputFrames = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+      expect(outputFrames.length).toBeGreaterThan(1)
+      expect(firstOutputEncodeCount).toBe(1)
+      expect(
+        outputFrames.map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : '')).join('')
+      ).toBe(output)
+
+      runtime.cleanupSubscription('terminal-1:desktop-1')
+      await dispatchPromise
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('claims the mobile floor before binary terminal input and rolls back rejection', async () => {
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
     const cleanups = new Map<string, () => void>()
+    const write = vi.fn()
+    const commit = vi.fn().mockResolvedValue(undefined)
+    const rollback = vi.fn()
+    const beginMobileInputFloor = vi.fn(
+      (): ReturnType<OrcaRuntimeService['beginMobileInputFloor']> => ({ commit, rollback })
+    )
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -187,7 +299,11 @@ describe('terminal output batching', () => {
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+      getTerminalFitOverride: vi.fn().mockReturnValue(null),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      handleMobileSubscribe: vi.fn().mockResolvedValue(undefined),
+      handleMobileUnsubscribe: vi.fn(),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
       }),
@@ -196,16 +312,25 @@ describe('terminal output batching', () => {
         cleanups.delete(id)
       }),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
-      sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+      sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
+        options.reserveWrite('pty-1')
+        write()
+        await options.afterWrite('pty-1')
+        return { accepted: true }
+      }),
+      beginMobileInputFloor,
       updateMobileViewport: vi.fn().mockResolvedValue(false)
     })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: TERMINAL_METHODS
+    })
     const messages: string[] = []
 
     const dispatchPromise = dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', {
         terminal: 'terminal-1',
-        client: { id: 'desktop-1', type: 'desktop' },
+        client: { id: 'mobile-1', type: 'mobile' },
         capabilities: { terminalBinaryStream: 1 }
       }),
       (msg) => messages.push(msg),
@@ -236,14 +361,54 @@ describe('terminal output batching', () => {
     )
 
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-        text: 'ls\r',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-1',
+        { text: 'ls\r', enter: false, interrupt: false },
+        { reserveWrite: expect.any(Function), afterWrite: expect.any(Function) }
+      )
     )
+    expect(beginMobileInputFloor).toHaveBeenCalledWith('pty-1', 'mobile-1')
+    expect(beginMobileInputFloor.mock.invocationCallOrder[0]).toBeLessThan(
+      write.mock.invocationCallOrder[0]!
+    )
+    expect(write.mock.invocationCallOrder[0]).toBeLessThan(commit.mock.invocationCallOrder[0]!)
 
-    runtime.cleanupSubscription('terminal-1:desktop-1')
+    vi.mocked(runtime.sendTerminal).mockImplementationOnce(async (_handle, _action, options) => {
+      options?.reserveWrite?.('pty-1')
+      return { handle: 'terminal-1', accepted: false, bytesWritten: 0 }
+    })
+    handlers.get(streamId)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Input,
+          streamId,
+          seq: 2,
+          payload: encodeTerminalStreamText('rejected')
+        })
+      )!
+    )
+    await vi.waitFor(() => expect(rollback).toHaveBeenCalledOnce())
+    expect(commit).toHaveBeenCalledOnce()
+
+    // Post-unsubscribe: capture the still-registered handler, tear down the
+    // subscription, then replay a frame. The closed guard must drop it, so no
+    // further sendTerminal dispatch and no write reach the PTY.
+    const staleHandler = handlers.get(streamId)!
+    runtime.cleanupSubscription('terminal-1:mobile-1')
+    staleHandler(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Input,
+          streamId,
+          seq: 3,
+          payload: encodeTerminalStreamText('after-unsubscribe')
+        })
+      )!
+    )
+    await Promise.resolve()
+    expect(runtime.sendTerminal).toHaveBeenCalledTimes(2)
+    expect(write).toHaveBeenCalledOnce()
+
     await dispatchPromise
   })
 })

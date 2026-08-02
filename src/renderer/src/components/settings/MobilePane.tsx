@@ -1,65 +1,125 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, Copy, Maximize2, Smartphone, Trash2 } from 'lucide-react'
-import { Button } from '../ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useAppStore } from '../../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { useMobilePairingDevicePolling } from './mobile-pairing-device-polling'
 import {
-  selectRefreshedNetworkAddress,
-  type MobileNetworkInterface
-} from './mobile-network-interface-selection'
-import { MobileNetworkInterfaceSection } from './MobileNetworkInterfaceSection'
-export { MOBILE_PANE_SEARCH_ENTRIES } from './mobile-pane-search'
-
-// Why: the section heading "When you leave the mobile app" carries the
-// "what happens" framing so the option labels only need to vary on the
-// duration knob. Indefinite hold (`null`) is the default. Server clamps
-// anything outside [5_000ms, 60min]. See docs/mobile-fit-hold.md.
-const AUTO_RESTORE_FIT_OPTIONS: { value: string; label: string; ms: number | null }[] = [
-  { value: 'indefinite', label: 'Keep at phone size (default)', ms: null },
-  { value: '60s', label: 'After 1 minute', ms: 60_000 },
-  { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
-  { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
-]
-
-function autoRestoreValueFromMs(ms: number | null | undefined): string {
-  if (ms == null) {
-    return 'indefinite'
-  }
-  const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
-  return exact ? exact.value : 'indefinite'
-}
-
-type PairedDevice = {
-  deviceId: string
-  name: string
-  pairedAt: number
-  lastSeenAt: number
-}
+  getPairedMobileDevicesSnapshot,
+  replacePairedMobileDevices,
+  usePairedMobileDevices
+} from '../mobile/paired-mobile-devices'
+import { useMobilePairingDevicePolling } from './mobile-pairing-device-polling'
+import type { MobileNetworkInterface } from './mobile-network-interface-selection'
+import { MobilePairingQrSection } from './MobilePairingQrSection'
+import { MobilePairedDevicesSection } from './MobilePairedDevicesSection'
+import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
+import { MobilePairingConnectionOptions } from './MobilePairingConnectionOptions'
+import { MobilePairingSetupSection } from './MobilePairingSetupSection'
+import { MobileRelayMintFailureNotice } from '../mobile/mobile-relay-mint-failure-notice'
+import { WindowsFirewallNotice } from '../mobile/WindowsFirewallNotice'
+import { translate } from '@/i18n/i18n'
+import {
+  canMintMobilePairingOffer,
+  type MobilePairingConnectionMode
+} from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import { useMobilePairingConnectionMode } from '../mobile/use-mobile-pairing-connection-mode'
+import { useMobilePairingAddressPreference } from '../mobile/use-mobile-pairing-address-preference'
+export { getMobilePaneSearchEntries } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
   const autoRestoreFitMs = useAppStore((s) => s.settings?.mobileAutoRestoreFitMs ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
+  const [qrError, setQrError] = useState(false)
+  const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [endpoint, setEndpoint] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [devices, setDevices] = useState<PairedDevice[]>([])
   const [qrEnlarged, setQrEnlarged] = useState(false)
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
-  const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
-  const devicesRef = useRef<PairedDevice[]>([])
+  const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
+  const [rotateNextQr, setRotateNextQr] = useState(false)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
+  const wasSignedInRef = useRef(signedIn)
+  // Why: monotonically bumped per pairing request so a late getPairingQR
+  // response cannot paint a stale QR after sign-out, a mode switch, or an
+  // address change invalidated the request that produced it.
+  const pairingRequestIdRef = useRef(0)
+  // Tracks the mode we last acted on so the connectionMode effect can tell a
+  // cross-window preference sync apart from our own path change.
+  const handledModeRef = useRef(connectionMode)
+  // Ref mirrors of QR-visible / loading so invalidatePairing stays stable and
+  // cannot make loadNetworkInterfaces re-fetch on every generate.
+  const qrDisplayedRef = useRef(false)
+  const loadingRef = useRef(false)
   const mountedRef = useMountedRef()
-  // Why: clipboard IPC can resolve after settings navigation; avoid starting
-  // a reset timer that will outlive this pane.
-  const pairingCodeButtonMountedRef = useRef(false)
+  const {
+    devices,
+    loaded: devicesLoaded,
+    refresh: refreshDevices
+  } = usePairedMobileDevices({ refreshOnMount: false })
+
+  useEffect(() => {
+    qrDisplayedRef.current = qrDataUrl != null
+  }, [qrDataUrl])
+
+  useEffect(() => {
+    loadingRef.current = loading
+  }, [loading])
+
+  // Why: an offer encodes a specific policy + endpoint. When the selection that
+  // produced it changes, drop any displayed QR and invalidate the in-flight
+  // request so a late response can't restore it; arm rotation so the next mint
+  // issues a fresh credential rather than the discarded pending one.
+  const invalidatePairing = useCallback((opts: { armRotate?: boolean } = {}): void => {
+    pairingRequestIdRef.current += 1
+    const hadPending = qrDisplayedRef.current || loadingRef.current
+    setQrDataUrl(null)
+    setPairingUrl(null)
+    setQrError(false)
+    setRelayMintFailure(null)
+    setEndpoint(null)
+    // Why: a superseded in-flight generate no longer clears loading in its
+    // finally (the epoch bump skips it), so drop the spinner here or Generate
+    // stays disabled forever after a mid-flight path/sign-out/address change.
+    loadingRef.current = false
+    setLoading(false)
+    // armRotate:false for path changes — the main process rotates exactly once
+    // when the requested mode differs from the pending token's minted mode, so
+    // an extra renderer rotate would only race other windows off the new token.
+    if (hadPending && opts.armRotate !== false) {
+      setRotateNextQr(true)
+    }
+  }, [])
+  const invalidatePairingAddress = useCallback(() => invalidatePairing(), [invalidatePairing])
+  const {
+    selectedAddress,
+    selectedAddressIsCustom,
+    customAddresses,
+    selectAddress: handleSelectedAddressChange,
+    selectCustomAddress: handleCustomAddressSelect,
+    removeCustomAddress: handleCustomAddressRemove,
+    selectAddressAfterRefresh
+  } = useMobilePairingAddressPreference({
+    networkInterfaces,
+    onSelectionInvalidated: invalidatePairingAddress
+  })
+
+  // Why: a Relay QR minted while signed in must not linger on a now-signed-out
+  // desktop — Generate is disabled in that state. Invalidate any pending relay
+  // mint too, not just a displayed QR, so a late response can't paint a Relay
+  // code after sign-out. Anywhere stays selected.
+  useEffect(() => {
+    const wasSignedIn = wasSignedInRef.current
+    wasSignedInRef.current = signedIn
+    if (wasSignedIn && !signedIn && connectionMode === 'automatic') {
+      invalidatePairing()
+    }
+  }, [signedIn, connectionMode, invalidatePairing])
 
   const clearCodeCopiedResetTimer = useCallback((): void => {
     if (codeCopiedResetTimerRef.current !== null) {
@@ -68,27 +128,13 @@ export function MobilePane(): React.JSX.Element {
     }
   }, [])
 
-  const setPairingCodeButtonRef = useCallback(
-    (node: HTMLButtonElement | null) => {
-      pairingCodeButtonMountedRef.current = node !== null
-      if (node === null) {
-        clearCodeCopiedResetTimer()
-      }
-    },
-    [clearCodeCopiedResetTimer]
-  )
-
   const loadDevices = useCallback(async () => {
     try {
-      const result = await window.api.mobile.listDevices()
-      if (mountedRef.current) {
-        devicesRef.current = result.devices
-        setDevices(result.devices)
-      }
+      await refreshDevices()
     } catch {
       // Silently fail — device list is non-critical
     }
-  }, [mountedRef])
+  }, [refreshDevices])
 
   const loadNetworkInterfaces = useCallback(
     async (opts: { notifyOnError?: boolean } = {}) => {
@@ -97,13 +143,16 @@ export function MobilePane(): React.JSX.Element {
         const result = await window.api.mobile.listNetworkInterfaces()
         if (mountedRef.current) {
           setNetworkInterfaces(result.interfaces)
-          setSelectedAddress((currentAddress) =>
-            selectRefreshedNetworkAddress(currentAddress, result.interfaces)
-          )
+          selectAddressAfterRefresh(result.interfaces)
         }
       } catch {
         if (opts.notifyOnError && mountedRef.current) {
-          toast.error('Failed to refresh network interfaces')
+          toast.error(
+            translate(
+              'auto.components.settings.MobilePane.d714614dbf',
+              'Failed to refresh network interfaces'
+            )
+          )
         }
       } finally {
         if (mountedRef.current) {
@@ -111,56 +160,191 @@ export function MobilePane(): React.JSX.Element {
         }
       }
     },
-    [mountedRef]
+    [mountedRef, selectAddressAfterRefresh]
   )
 
   const generateQR = useCallback(
-    async (opts: { rotate?: boolean } = {}) => {
+    async (
+      opts: {
+        rotate?: boolean
+        connectionModeOverride?: MobilePairingConnectionMode
+      } = {}
+    ) => {
+      const preferredMode = opts.connectionModeOverride ?? connectionMode
+      // Why: refuse signed-out Anywhere rather than degrading to a local-only QR
+      // under the Relay label (canMint is the shared honesty gate).
+      if (!canMintMobilePairingOffer({ connectionMode: preferredMode, signedIn })) {
+        return
+      }
+      const requestId = ++pairingRequestIdRef.current
       setLoading(true)
+      setQrError(false)
       try {
-        // Why: pass rotate=true on explicit Regenerate clicks so the runtime
-        // invalidates any pending token (which may have been screenshotted or
-        // copied to clipboard) and mints a fresh credential.
         const result = await window.api.mobile.getPairingQR({
           ...(selectedAddress ? { address: selectedAddress } : {}),
-          ...(opts.rotate ? { rotate: true } : {})
+          connectionMode: preferredMode,
+          ...(opts.rotate || rotateNextQr ? { rotate: true } : {})
         })
+        // Why: sign-out, a mode switch, or an address change bump the epoch.
+        // A response for a superseded request must not paint a QR that no
+        // longer matches the current selection.
+        if (requestId !== pairingRequestIdRef.current) {
+          return
+        }
         if (result.available) {
           useAppStore.getState().recordFeatureInteraction('mobile-pairing')
           if (mountedRef.current) {
             setQrDataUrl(result.qrDataUrl)
             setPairingUrl(result.pairingUrl)
+            setQrError(result.qrDataUrl === null)
+            setRelayMintFailure(null)
             setEndpoint(result.endpoint)
-            // Why: async QR generation may overlap a device-list refresh; use
-            // the latest committed list, then keep this baseline ahead of the
-            // post-QR refresh below.
-            setDeviceCountAtQr(devicesRef.current.length)
+            setDeviceCountAtQr(getPairedMobileDevicesSnapshot().length)
             clearCodeCopiedResetTimer()
             setCodeCopied(false)
+            setRotateNextQr(false)
             void loadDevices()
           }
-        } else {
-          if (mountedRef.current) {
-            toast.error('WebSocket transport is not running')
+        } else if (mountedRef.current) {
+          setQrDataUrl(null)
+          setPairingUrl(null)
+          setQrError(false)
+          setEndpoint(null)
+          if (result.reason === 'relay_mint_failed' && result.relayFailure) {
+            setRelayMintFailure(result.relayFailure)
+          } else {
+            setRelayMintFailure(null)
+            // Why: IPC now forwards reason/guidance for all unavailability paths;
+            // prefer that copy over a hard-coded WebSocket-only message.
+            toast.error(
+              result.guidance ??
+                translate(
+                  'auto.components.settings.MobilePane.cb9067c1c1',
+                  'WebSocket transport is not running'
+                )
+            )
           }
         }
       } catch {
-        if (mountedRef.current) {
-          toast.error('Failed to generate QR code')
+        if (mountedRef.current && requestId === pairingRequestIdRef.current) {
+          setRelayMintFailure(null)
+          toast.error(
+            translate(
+              'auto.components.settings.MobilePane.e3c427e020',
+              'Failed to generate QR code'
+            )
+          )
         }
       } finally {
-        if (mountedRef.current) {
+        if (mountedRef.current && requestId === pairingRequestIdRef.current) {
           setLoading(false)
         }
       }
     },
-    [clearCodeCopiedResetTimer, loadDevices, mountedRef, selectedAddress]
+    [
+      clearCodeCopiedResetTimer,
+      connectionMode,
+      loadDevices,
+      mountedRef,
+      rotateNextQr,
+      selectedAddress,
+      signedIn
+    ]
   )
 
+  const changeConnectionMode = useCallback(
+    (nextMode: MobilePairingConnectionMode) => {
+      if (nextMode === connectionMode) {
+        return
+      }
+      // Why: remember the path so reopening Settings keeps the user's choice
+      // instead of snapping back to the default.
+      handledModeRef.current = nextMode
+      setConnectionMode(nextMode)
+      void updateSettings({ mobilePairingConnectionMode: nextMode })
+      // Why: after a Relay mint failure, LAN should mint immediately — including
+      // when the renderer has not chosen an address yet (main picks the default).
+      const shouldRecoverWithLan = relayMintFailure != null && nextMode === 'local-only'
+      // A displayed or in-flight code encodes the old connection policy. The
+      // main process rotates on the mode mismatch, so don't arm a second rotate.
+      invalidatePairing({ armRotate: false })
+      // Why: switching to LAN after a Relay failure should mint immediately.
+      if (
+        shouldRecoverWithLan &&
+        canMintMobilePairingOffer({ connectionMode: nextMode, signedIn })
+      ) {
+        void generateQR({ rotate: false, connectionModeOverride: 'local-only' })
+      }
+    },
+    [
+      connectionMode,
+      generateQR,
+      invalidatePairing,
+      relayMintFailure,
+      signedIn,
+      updateSettings,
+      setConnectionMode
+    ]
+  )
+
+  const copyRelayDiagnostics = useCallback(async (): Promise<void> => {
+    if (relayMintFailure == null) {
+      return
+    }
+    try {
+      await window.api.ui.writeClipboardText(
+        JSON.stringify(
+          {
+            kind: 'mobile_pairing_relay_failure',
+            preferredConnectionMode: connectionMode,
+            failure: relayMintFailure,
+            selectedAddress: selectedAddress ?? null,
+            at: new Date().toISOString()
+          },
+          null,
+          2
+        )
+      )
+      if (mountedRef.current) {
+        toast.success(
+          translate('auto.components.settings.MobilePane.diagnosticsCopied', 'Diagnostics copied')
+        )
+      }
+    } catch {
+      if (mountedRef.current) {
+        toast.error(
+          translate(
+            'auto.components.settings.MobilePane.diagnosticsCopyFailed',
+            'Failed to copy diagnostics'
+          )
+        )
+      }
+    }
+  }, [connectionMode, mountedRef, relayMintFailure, selectedAddress])
+
+  // Why: another window can persist a different path; the shared hook syncs
+  // connectionMode here without routing through changeConnectionMode. Treat
+  // that external change like a user path change so a QR for the old policy
+  // can't linger. No updateSettings call here — avoids a cross-window loop.
   useEffect(() => {
-    void loadDevices()
+    if (connectionMode === handledModeRef.current) {
+      return
+    }
+    handledModeRef.current = connectionMode
+    invalidatePairing({ armRotate: false })
+  }, [connectionMode, invalidatePairing])
+
+  useEffect(() => {
     void loadNetworkInterfaces()
-  }, [loadDevices, loadNetworkInterfaces])
+  }, [loadNetworkInterfaces])
+
+  // Why: another surface (e.g. the sidebar) may have already populated the
+  // shared cache; only fetch on mount when it hasn't loaded yet.
+  useEffect(() => {
+    if (!devicesLoaded) {
+      void loadDevices()
+    }
+  }, [devicesLoaded, loadDevices])
 
   useMobilePairingDevicePolling({
     deviceCountAtQr,
@@ -168,195 +352,105 @@ export function MobilePane(): React.JSX.Element {
     loadDevices
   })
 
-  async function copyPairingCode() {
-    if (!pairingUrl) {
-      return
-    }
-    try {
-      // Why: Electron renderer's navigator.clipboard fails in some contexts
-      // (no transient activation, non-secure context). Use the main-process
-      // IPC clipboard which the rest of the app uses everywhere.
-      await window.api.ui.writeClipboardText(pairingUrl)
-      if (!pairingCodeButtonMountedRef.current) {
-        return
-      }
-      clearCodeCopiedResetTimer()
-      setCodeCopied(true)
-      codeCopiedResetTimerRef.current = window.setTimeout(() => {
-        codeCopiedResetTimerRef.current = null
-        setCodeCopied(false)
-      }, 2000)
-    } catch {
-      if (mountedRef.current) {
-        toast.error('Failed to copy pairing code')
-      }
-    }
-  }
-
   async function revokeDevice(deviceId: string) {
     try {
-      await window.api.mobile.revokeDevice({ deviceId })
+      const { revoked } = await window.api.mobile.revokeDevice({ deviceId })
+      // Why: the backend can resolve revoked=false without removing the device;
+      // surface that as an error instead of a false "Device revoked".
+      if (!revoked) {
+        throw new Error('mobile.revokeDevice returned revoked=false')
+      }
+      try {
+        // Why: the backend may have learned about another phone while Settings
+        // was open, so refresh from source-of-truth after mutating it.
+        await refreshDevices({ force: true })
+      } catch (err) {
+        console.error('mobile.listDevices failed after revoke', err)
+        const nextDevices = getPairedMobileDevicesSnapshot().filter((d) => d.deviceId !== deviceId)
+        replacePairedMobileDevices(nextDevices)
+      }
       if (mountedRef.current) {
-        setDevices((prev) => {
-          const nextDevices = prev.filter((d) => d.deviceId !== deviceId)
-          devicesRef.current = nextDevices
-          return nextDevices
-        })
-        toast.success('Device revoked')
+        toast.success(translate('auto.components.settings.MobilePane.2e3dd0bc29', 'Device revoked'))
       }
     } catch {
       if (mountedRef.current) {
-        toast.error('Failed to revoke device')
+        toast.error(
+          translate('auto.components.settings.MobilePane.870e1b5ca5', 'Failed to revoke device')
+        )
       }
     }
   }
 
   return (
     <div className="space-y-6">
-      <MobileNetworkInterfaceSection
+      <MobilePairingSetupSection
+        connectionMode={connectionMode}
+        canGenerate={canMintMobilePairingOffer({ connectionMode, signedIn })}
+        connectionPathControl={
+          <MobilePairingConnectionOptions
+            value={connectionMode}
+            onChange={changeConnectionMode}
+            relayMintFailed={relayMintFailure != null && connectionMode === 'automatic'}
+            relayMintRetrying={
+              relayMintFailure != null && connectionMode === 'automatic' && loading
+            }
+          />
+        }
         networkInterfaces={networkInterfaces}
+        customAddresses={customAddresses}
         selectedAddress={selectedAddress}
-        onSelectedAddressChange={setSelectedAddress}
+        selectedAddressIsCustom={selectedAddressIsCustom}
+        onSelectedAddressChange={handleSelectedAddressChange}
+        onCustomAddressSelect={handleCustomAddressSelect}
+        onCustomAddressRemove={handleCustomAddressRemove}
         refreshingNetworkInterfaces={refreshingNetworkInterfaces}
         onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ notifyOnError: true })}
         loading={loading}
         hasQrCode={qrDataUrl != null}
+        showGenerateAction={relayMintFailure == null}
         onGenerateQr={() => void generateQR({ rotate: qrDataUrl != null })}
       />
 
-      {/* QR code display */}
-      {qrDataUrl && (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-border/60 py-6">
-          <button
-            type="button"
-            onClick={() => setQrEnlarged(true)}
-            className="group relative cursor-pointer rounded-lg border border-border/60 bg-white p-3"
-          >
-            <img src={qrDataUrl} alt="QR Code for mobile pairing" className="size-48" />
-            <Maximize2 className="absolute top-1.5 right-1.5 size-3 text-black/30 opacity-0 transition-opacity group-hover:opacity-100" />
-          </button>
-          {endpoint && <span className="text-muted-foreground font-mono text-xs">{endpoint}</span>}
-          <p className="text-muted-foreground max-w-xs text-center text-xs">
-            Scan this code with the Orca mobile app. Each code creates a unique device token.
-          </p>
-          {pairingUrl && (
-            <div className="flex w-full max-w-lg flex-col gap-1.5 px-4">
-              <div className="text-muted-foreground text-center text-xs">
-                Or paste this code in the mobile app:
-              </div>
-              <Button
-                ref={setPairingCodeButtonRef}
-                variant="outline"
-                size="sm"
-                onClick={() => void copyPairingCode()}
-                className="font-mono text-[11px] leading-tight whitespace-normal break-all h-auto py-2 px-3"
-              >
-                <span className="flex-1 text-left">{pairingUrl}</span>
-                {codeCopied ? (
-                  <Check className="ml-2 size-3.5 shrink-0 text-emerald-500" />
-                ) : (
-                  <Copy className="ml-2 size-3.5 shrink-0" />
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+      {relayMintFailure != null && connectionMode === 'automatic' ? (
+        <MobileRelayMintFailureNotice
+          failure={relayMintFailure}
+          onUseLan={() => changeConnectionMode('local-only')}
+          onRetry={() => void generateQR({ rotate: true })}
+          onCopyDiagnostics={() => void copyRelayDiagnostics()}
+          busy={loading}
+        />
+      ) : null}
 
-      {/* Paired devices */}
-      <div>
-        <h3 className="mb-2 text-sm font-medium">Paired Devices</h3>
-        {devices.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {qrDataUrl
-              ? 'No devices paired yet. Scan the QR code with the Orca mobile app.'
-              : 'No devices paired yet.'}
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {devices.map((device) => (
-              <div
-                key={device.deviceId}
-                className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
-              >
-                <div>
-                  <div className="text-sm font-medium">{device.name}</div>
-                  <div className="text-muted-foreground text-xs">
-                    Paired {new Date(device.pairedAt).toLocaleDateString()}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void revokeDevice(device.deviceId)}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-        {devices.length > 0 && (
-          <p className="text-muted-foreground mt-3 text-xs">
-            Revoking a device disconnects it immediately.
-          </p>
-        )}
-      </div>
+      <span className="sr-only" role="status" aria-live="polite">
+        {pairingUrl != null && !loading
+          ? translate('auto.components.settings.MobilePane.pairingCodeReady', 'Pairing code ready')
+          : ''}
+      </span>
 
-      {/* Mobile behavior — terminal sizing when leaving the app */}
-      <div className="rounded-lg border border-border/60 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Smartphone className="size-4 text-muted-foreground" />
-          <span className="text-sm font-medium">When you leave the mobile app</span>
-        </div>
-        <p className="text-muted-foreground mb-3 text-xs">
-          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your phone
-          screen. When you close the app or switch away, this controls whether it stays at phone
-          size (so interactive CLI tools don&apos;t reflow) or resizes back to your desktop. You can
-          always click Restore on the terminal banner to resize it manually.
-        </p>
-        <Select
-          value={autoRestoreValueFromMs(autoRestoreFitMs)}
-          onValueChange={(v) => {
-            const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === v)
-            if (!opt) {
-              return
-            }
-            void updateSettings({ mobileAutoRestoreFitMs: opt.ms })
-          }}
-        >
-          <SelectTrigger size="sm" className="min-w-[220px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {AUTO_RESTORE_FIT_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <MobilePairingQrSection
+        qrDataUrl={qrDataUrl}
+        qrError={qrError}
+        pairingUrl={pairingUrl}
+        endpoint={endpoint}
+        qrEnlarged={qrEnlarged}
+        codeCopied={codeCopied}
+        onQrEnlargedChange={setQrEnlarged}
+        onCodeCopiedChange={setCodeCopied}
+        onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
+      />
 
-      {/* Enlarged QR dialog */}
-      <Dialog open={qrEnlarged} onOpenChange={setQrEnlarged}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Scan with Orca Mobile</DialogTitle>
-          </DialogHeader>
-          {qrDataUrl && (
-            <div className="flex flex-col items-center gap-3">
-              <div className="rounded-lg bg-white p-4">
-                <img src={qrDataUrl} alt="QR Code for mobile pairing" className="size-72" />
-              </div>
-              {endpoint && (
-                <span className="text-muted-foreground font-mono text-xs">{endpoint}</span>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <WindowsFirewallNotice pairingReady={pairingUrl != null} address={selectedAddress} />
+
+      <MobilePairedDevicesSection
+        devices={devices}
+        hasQrCode={qrDataUrl != null}
+        onRevokeDevice={(deviceId) => void revokeDevice(deviceId)}
+      />
+
+      <MobileAutoRestoreFitSection
+        autoRestoreFitMs={autoRestoreFitMs}
+        onAutoRestoreFitChange={(ms) => void updateSettings({ mobileAutoRestoreFitMs: ms })}
+      />
     </div>
   )
 }

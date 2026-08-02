@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isMacAppDataPath, shouldPollActiveGitStatus } from './passive-macos-app-data-access'
-import type { OpenFile, RightSidebarTab } from '@/store/slices/editor'
+import type { ActiveRightSidebarTab, OpenFile } from '@/store/slices/editor'
 
 const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
 const LINUX = 'Mozilla/5.0 (X11; Linux x86_64)'
@@ -12,7 +12,8 @@ function pollArgs(
     activeWorktreeId: 'wt-1',
     worktreePath: '/Users/me/Library/Containers/com.apple.TextEdit/Data/Documents/repo',
     rightSidebarOpen: false,
-    rightSidebarTab: 'explorer' as RightSidebarTab,
+    rightSidebarTab: 'explorer' as ActiveRightSidebarTab,
+    rightSidebarExplorerView: 'files',
     openFiles: [],
     userAgent: MAC,
     ...overrides
@@ -41,6 +42,18 @@ describe('shouldPollActiveGitStatus', () => {
         pollArgs({ rightSidebarOpen: true, rightSidebarTab: 'source-control' })
       )
     ).toBe(true)
+  })
+
+  it('does not treat Explorer search as a file-tree visibility signal', () => {
+    expect(
+      shouldPollActiveGitStatus(
+        pollArgs({
+          rightSidebarOpen: true,
+          rightSidebarTab: 'explorer',
+          rightSidebarExplorerView: 'search'
+        })
+      )
+    ).toBe(false)
   })
 
   it('allows polling when an editor file is open in the worktree', () => {

@@ -2,9 +2,8 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { basename, dirname, joinPath } from '@/lib/path'
 import type { TreeNode } from './file-explorer-types'
-import { useAppStore } from '@/store'
 import { copyRuntimePath, runtimePathExists } from '@/runtime/runtime-file-client'
-import { getConnectionId } from '@/lib/connection-context'
+import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
 
 /**
  * Electron's ipcRenderer.invoke wraps errors as:
@@ -42,12 +41,21 @@ export function useFileDuplicate({
       const ext = dotIndex > 0 ? name.slice(dotIndex) : ''
 
       const run = async (): Promise<void> => {
-        const settings = useAppStore.getState().settings
+        let operationGuard
+        try {
+          operationGuard = captureFileExplorerOperationGuard(activeWorktreeId, node.operationOwner)
+        } catch (err) {
+          toast.error(extractIpcErrorMessage(err, `Failed to duplicate '${name}'.`))
+          return
+        }
         const context = {
-          settings,
+          settings: operationGuard.route.settings,
           worktreeId: activeWorktreeId,
           worktreePath,
-          connectionId: getConnectionId(activeWorktreeId) ?? undefined
+          connectionId: operationGuard.route.connectionId,
+          expectedExecutionHostId: operationGuard.route.expectedExecutionHostId,
+          expectedSshTargetId: operationGuard.route.expectedSshTargetId,
+          expectedSshConnectionGeneration: operationGuard.route.expectedSshConnectionGeneration
         }
         // Why: generate a unique "stem copy.ext", "stem copy 2.ext", … name
         // so we never collide with an existing file. pathExists checks are
@@ -70,6 +78,7 @@ export function useFileDuplicate({
         // eslint-disable-next-line no-constant-condition
         while (true) {
           try {
+            operationGuard.assertCurrent()
             await copyRuntimePath(context, node.path, candidate)
             break
           } catch (err) {

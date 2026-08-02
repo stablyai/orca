@@ -45,6 +45,10 @@ describe('TERMINAL_ACCESSORY_KEYS', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
+  it('keeps all built-in terminal keys byte-backed', () => {
+    expect(TERMINAL_ACCESSORY_KEYS.every((key) => key.bytes.length > 0)).toBe(true)
+  })
+
   it('keeps repeat behavior explicit for built-in terminal keys', () => {
     const repeatableIds = new Set([
       'backspace',

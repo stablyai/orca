@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: browser guest UI policy is the single
-privileged bridge for context menus, grab-mode shortcuts, and app-shortcut
-forwarding from webContents guests. Splitting this rebase-only integration
-would make the security boundary harder to audit. */
+/* eslint-disable max-lines -- Why: single privileged bridge for guest context menus, grab-mode, and app-shortcut forwarding; splitting would blur the security boundary. */
 import { screen, webContents } from 'electron'
 import {
   normalizeBrowserNavigationUrl,
@@ -9,17 +6,87 @@ import {
   redactKagiSessionToken
 } from '../../shared/browser-url'
 import {
+  isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord,
-  resolveWindowShortcutAction
+  nativeZoomCommandMatchesKeybindings,
+  resolveWindowShortcutAction,
+  type WindowShortcutInput
 } from '../../shared/window-shortcut-policy'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/keybindings'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
+import {
+  ModifierDoubleTapDetector,
+  toModifierDoubleTapEvent
+} from '../../shared/modifier-double-tap-detector'
+import type { BrowserFindSource } from '../../shared/browser-find-source'
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 type ShouldForwardDictationShortcut = () => boolean
+type IsMobileEmulatorEnabled = () => boolean
 
-function isControlKeyRelease(input: Electron.Input): boolean {
-  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
+const CONTROL_MODIFIERS = new Set(['control', 'ctrl'])
+const MAC_COMMAND_MODIFIERS = new Set(['meta', 'command', 'cmd'])
+const WHEEL_ZOOM_BLOCKING_MODIFIERS = new Set(['alt', 'shift'])
+const GUEST_WHEEL_ZOOM_DEDUPE_MS = 250
+
+type GuestWheelZoomDirection = Exclude<BrowserPageZoomDirection, 'reset'>
+
+const recentGuestWheelZoomByGuest = new WeakMap<
+  Electron.WebContents,
+  { direction: GuestWheelZoomDirection; at: number }
+>()
+
+function markGuestWheelZoom(guest: Electron.WebContents, direction: GuestWheelZoomDirection): void {
+  recentGuestWheelZoomByGuest.set(guest, { direction, at: Date.now() })
+}
+
+function consumeRecentGuestWheelZoom(
+  guest: Electron.WebContents,
+  direction: GuestWheelZoomDirection
+): boolean {
+  const recent = recentGuestWheelZoomByGuest.get(guest)
+  if (!recent) {
+    return false
+  }
+  const elapsed = Date.now() - recent.at
+  if (elapsed < 0 || elapsed > GUEST_WHEEL_ZOOM_DEDUPE_MS) {
+    recentGuestWheelZoomByGuest.delete(guest)
+    return false
+  }
+  if (recent.direction !== direction) {
+    return false
+  }
+  recentGuestWheelZoomByGuest.delete(guest)
+  return true
+}
+
+function hasModifier(mouse: Electron.MouseInputEvent, modifiers: ReadonlySet<string>): boolean {
+  return mouse.modifiers?.some((modifier) => modifiers.has(modifier)) ?? false
+}
+
+export function resolveGuestMouseWheelZoomDirection(
+  mouse: Electron.MouseInputEvent,
+  platform: NodeJS.Platform = process.platform
+): GuestWheelZoomDirection | null {
+  if (mouse.type !== 'mouseWheel') {
+    return null
+  }
+  if (hasModifier(mouse, WHEEL_ZOOM_BLOCKING_MODIFIERS)) {
+    return null
+  }
+  const hasZoomModifier =
+    hasModifier(mouse, CONTROL_MODIFIERS) ||
+    (platform === 'darwin' && hasModifier(mouse, MAC_COMMAND_MODIFIERS))
+  if (!hasZoomModifier) {
+    return null
+  }
+  const deltaY = (mouse as Electron.MouseWheelInputEvent).deltaY
+  if (typeof deltaY !== 'number' || deltaY === 0) {
+    return null
+  }
+  return deltaY < 0 ? 'in' : 'out'
 }
 
 export function setupGuestContextMenu(args: {
@@ -33,23 +100,15 @@ export function setupGuestContextMenu(args: {
     if (!renderer) {
       return
     }
-    // Why: redact Kagi session tokens before the URL leaves main; the renderer
-    // pipes pageUrl into clipboard writes and shell.openExternal, both of which
-    // would otherwise expose the bearer token outside Orca.
+    // Why: redact the Kagi session token before pageUrl leaves main — the renderer pipes it into clipboard and shell.openExternal.
     const pageUrl = redactKagiSessionToken(guest.getURL())
-    // Why: params.linkURL is empty when the user right-clicks non-link
-    // content. Normalizing an empty string through normalizeBrowserNavigationUrl
-    // produces the blank-page constant (a truthy string), which would trick the
-    // renderer into showing "Open Link…" items for every right-click.
+    // Why: empty linkURL normalized would yield the truthy blank-page constant, showing "Open Link…" on every non-link right-click.
     const rawLinkUrl = params.linkURL || ''
     const linkUrl =
       rawLinkUrl.length > 0
         ? (normalizeExternalBrowserUrl(rawLinkUrl) ?? normalizeBrowserNavigationUrl(rawLinkUrl))
         : null
-    // Why: send BOTH the guest viewport coordinates AND the OS screen cursor
-    // position. The renderer will try the screen cursor approach (which is
-    // immune to guest/renderer coordinate space mismatches) and fall back to
-    // guest coords if the screen API is unavailable.
+    // Why: send both viewport and screen-cursor coords; screen cursor avoids coordinate-space mismatch, guest coords are the fallback.
     const cursor = screen.getCursorScreenPoint()
     const navigationState = readGuestNavigationState(guest)
     renderer.send('browser:context-menu-requested', {
@@ -60,13 +119,13 @@ export function setupGuestContextMenu(args: {
       screenY: cursor.y,
       pageUrl,
       linkUrl,
+      // Why: forward the native selection so the renderer can Copy it directly, bypassing pages that suppress copy via oncopy handlers.
+      selectionText: params.selectionText ?? '',
       ...navigationState
     })
   }
 
-  // Why: `before-mouse-event` fires for every mouse event (move, down, up,
-  // scroll) on the guest. Installing the dismiss listener only while a context
-  // menu is open avoids an IPC dispatch per mouse event on idle guests.
+  // Why: before-mouse-event fires on every move/scroll; install the dismiss listener only while a menu is open to avoid per-event IPC.
   let dismissHandler: ((_event: Electron.Event, mouse: Electron.MouseInputEvent) => void) | null =
     null
 
@@ -89,10 +148,7 @@ export function setupGuestContextMenu(args: {
       if (mouse.type !== 'mouseDown') {
         return
       }
-      // Why: a right-click mouseDown will be followed by a new context-menu
-      // event with updated coordinates. Sending a dismiss here would cause
-      // the renderer to briefly close the menu (trigger snaps to 0,0) then
-      // reopen it, producing a visible flash at the top-left corner.
+      // Why: a right-click mouseDown precedes a new context-menu event; dismissing here flashes the menu closed then reopens it at 0,0.
       if (mouse.button === 'right') {
         return
       }
@@ -112,20 +168,12 @@ export function setupGuestContextMenu(args: {
       guest.off('context-menu', contextMenuHandler)
       removeDismissListener()
     } catch {
-      // Why: browser tabs can outlive the guest webContents briefly during
-      // teardown. Cleanup should be best-effort instead of throwing while the
-      // IDE is closing a tab.
+      // Why: browser tabs can briefly outlive the guest webContents during teardown, so cleanup is best-effort.
     }
   }
 }
 
-// Why: browser grab mode intentionally uses Cmd/Ctrl+C as its entry
-// gesture, but a focused webview guest is a separate Chromium process so
-// the renderer's window-level keydown handler never sees that shortcut.
-// Only forward the chord when Chromium would not perform a normal copy:
-// no editable element is focused and there is no selected text. That keeps
-// native page copy working while still making the grab shortcut reachable
-// from focused web content.
+// Why: a focused guest never surfaces Cmd/Ctrl+C to the renderer; forward only when it wouldn't do a normal copy (no editable focus, no selection).
 export function setupGrabShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
@@ -151,9 +199,7 @@ export function setupGrabShortcutForwarding(args: {
       if (!renderer) {
         return
       }
-      // Why: a focused guest swallows bare keys before the renderer sees them.
-      // While grab mode is actively awaiting a pick, plain C/S belong to Orca's
-      // copy/screenshot shortcuts rather than the page's typing behavior.
+      // Why: a focused guest swallows bare keys; during an active grab pick, plain C/S are Orca's copy/screenshot, not page typing.
       event.preventDefault()
       renderer.send('browser:grabActionShortcut', { browserPageId: browserTabId, key: bareKey })
       return
@@ -195,8 +241,7 @@ export function setupGrabShortcutForwarding(args: {
         renderer.send('browser:grabModeToggle', browserTabId)
       })
       .catch(() => {
-        // Why: shortcut forwarding is best-effort. Guest teardown or a
-        // transient executeJavaScript failure should not break normal copy.
+        // Why: shortcut forwarding is best-effort — guest teardown or a transient executeJavaScript failure must not break normal copy.
       })
   }
 
@@ -205,93 +250,81 @@ export function setupGrabShortcutForwarding(args: {
     try {
       guest.off('before-input-event', handler)
     } catch {
-      // Why: browser tabs can outlive the guest webContents briefly during
-      // teardown. Cleanup should be best-effort.
+      // Why: browser tabs can briefly outlive the guest webContents during teardown, so cleanup is best-effort.
     }
   }
 }
 
-// Why: a focused webview guest is a separate Chromium process — keyboard
-// events go to the guest's own webContents and never fire the renderer's
-// window-level keydown handler or the main window's before-input-event.
-// Intercept common app shortcuts on the guest and forward them to the
-// renderer so they work consistently regardless of which surface has focus.
+// Why: a focused webview guest is its own Chromium process whose key events never reach the renderer; forward shortcuts from here.
 export function setupGuestShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
+  isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
+  // Why: a floating-panel guest owns a distinct workspace; its close/index chords must route to the panel, not the main tab strip.
+  resolveWorktreeId?: (browserTabId: string) => string | null
+  resolveWorkspaceId?: (browserTabId: string) => string | null
 }): () => void {
-  const { browserTabId, guest, resolveRenderer, shouldForwardDictationShortcut, getKeybindings } =
-    args
+  const {
+    browserTabId,
+    guest,
+    resolveRenderer,
+    shouldForwardDictationShortcut,
+    isMobileEmulatorEnabled,
+    getKeybindings,
+    resolveWorktreeId,
+    resolveWorkspaceId
+  } = args
   let ctrlTabSwitching = false
-  const handler = (event: Electron.Event, input: Electron.Input): void => {
+  const doubleTapDetector = new ModifierDoubleTapDetector()
+  const resetDoubleTapDetector = (): void => doubleTapDetector.reset()
+  type GuestShortcutInput = WindowShortcutInput & { isAutoRepeat?: boolean }
+
+  const forwardBrowserPageZoom = (
+    event: Electron.Event,
+    direction: BrowserPageZoomDirection
+  ): void => {
+    event.preventDefault()
+    const renderer = resolveRenderer(browserTabId)
+    renderer?.send('ui:zoomBrowserPage', direction)
+  }
+
+  const forwardShortcutInput = (
+    event: Electron.Event,
+    input: GuestShortcutInput,
+    action = resolveWindowShortcutAction(input, process.platform, getKeybindings?.())
+  ): boolean => {
     const keybindings = getKeybindings?.()
-    if (matchesRecentTabSwitcherChord(input, process.platform, keybindings)) {
-      event.preventDefault()
-      if (input.type === 'keyDown') {
-        ctrlTabSwitching = true
-        const renderer = resolveRenderer(browserTabId)
-        renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
-      }
-      return
-    }
-
-    if (ctrlTabSwitching && isControlKeyRelease(input)) {
-      event.preventDefault()
-      ctrlTabSwitching = false
-      const renderer = resolveRenderer(browserTabId)
-      renderer?.send('ui:ctrlTabKeyUp')
-      return
-    }
-
-    if (input.type !== 'keyDown') {
-      return
-    }
-    // Why: resolve the policy action once per keystroke. The history-navigate
-    // chord (Cmd/Ctrl+Alt+Arrow) is the only allowlisted chord that carries
-    // Alt and must be handled before the generic modifier-chord gate below,
-    // which rejects Alt. Every other chord handled further down can reuse
-    // the same `action` rather than re-running the full predicate chain.
-    const action = resolveWindowShortcutAction(input, process.platform, keybindings)
     if (action?.type === 'zoom') {
-      // Why: browser page zoom must consume repeats and teardown races before
-      // Chromium or the guest page can apply its own shortcut behavior.
-      event.preventDefault()
-      const renderer = resolveRenderer(browserTabId)
-      renderer?.send('ui:zoomBrowserPage', action.direction)
-      return
+      // Why: focused guest key events never reach the renderer-owned webview ref that applies Orca's page zoom.
+      forwardBrowserPageZoom(event, action.direction)
+      return true
     }
     if (input.isAutoRepeat) {
       if (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
         event.preventDefault()
+        return true
       }
-      return
+      return false
     }
     if (action?.type === 'worktreeHistoryNavigate') {
-      // Why: preventDefault unconditionally — if we cannot resolve the
-      // renderer (torn-down tab or teardown race), dropping the keystroke
-      // into the guest's webContents would let Chromium / the guest page
-      // handle Cmd+Alt+Arrow as their own chord (e.g. guest-side text
-      // navigation). Consistency with the main-window path is preserved
-      // only by suppressing the event here too.
+      // Why: preventDefault unconditionally so the guest never handles Cmd+Alt+Arrow itself, even when the renderer can't be resolved.
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:worktreeHistoryNavigate', action.direction)
-      return
+      return true
     }
 
     if (action?.type === 'toggleFloatingTerminal') {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:toggleFloatingTerminal')
-      return
+      return true
     }
 
-    // Why: Cmd/Ctrl+Alt+[ / ] cycles across every tab type. Handled before
-    // the generic modifier-chord gate below because that gate rejects Alt.
-    // Mirrors the Alt-exempt branch pattern used for worktreeHistoryNavigate.
+    // Why: match outside the allowlist so both the new Shift binding and upgraders' seeded Alt binding reach the renderer.
     const switchAllTypesDirection = keybindingMatchesAction(
       'tab.nextAllTypes',
       input,
@@ -306,18 +339,17 @@ export function setupGuestShortcutForwarding(args: {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:switchTabAcrossAllTypes', switchAllTypesDirection)
-      return
+      return true
     }
 
     if (keybindingMatchesAction('tab.previousRecent', input, process.platform, keybindings)) {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:switchRecentTab')
-      return
+      return true
     }
 
-    // Why: terminal-only tab switching defaults to Ctrl+PageUp/PageDown on every
-    // platform, but still goes through the registry so disable/rebind is real.
+    // Why: terminal-tab switching defaults to Ctrl+PageUp/PageDown but goes through the registry so disable/rebind still works.
     const terminalTabDirection = keybindingMatchesAction(
       'tab.nextTerminal',
       input,
@@ -332,51 +364,63 @@ export function setupGuestShortcutForwarding(args: {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:switchTerminalTab', terminalTabDirection)
-      return
+      return true
     }
 
     const renderer = resolveRenderer(browserTabId)
     if (!renderer) {
-      return
+      return false
     }
+    // Why: floating-panel guests route close/index chords to the panel (carrying their source id) so they hit the floating workspace, not the main tab strip.
+    const isFloatingGuest = resolveWorktreeId?.(browserTabId) === FLOATING_TERMINAL_WORKTREE_ID
     if (keybindingMatchesAction('tab.newBrowser', input, process.platform, keybindings)) {
       renderer.send('ui:newBrowserTab')
+    } else if (
+      process.platform === 'darwin' &&
+      (isMobileEmulatorEnabled?.() ?? true) &&
+      keybindingMatchesAction('tab.newSimulator', input, process.platform, keybindings)
+    ) {
+      renderer.send('ui:newSimulatorTab')
     } else if (keybindingMatchesAction('tab.newMarkdown', input, process.platform, keybindings)) {
       renderer.send('ui:newMarkdownTab')
     } else if (keybindingMatchesAction('tab.newTerminal', input, process.platform, keybindings)) {
-      // Why: Cmd/Ctrl+T opens a terminal in the user's active terminal surface
-      // even when focus is inside a browser guest. Cmd/Ctrl+Shift+B is the
-      // dedicated shortcut for new browser tabs.
+      // Why: Cmd/Ctrl+T opens a terminal even when a browser guest is focused (Shift+B is the new-browser-tab shortcut).
       renderer.send('ui:newTerminalTab')
     } else if (
       keybindingMatchesAction('browser.focusAddressBar', input, process.platform, keybindings)
     ) {
-      // Why: the address bar lives in the renderer chrome, not the guest
-      // page. Forward Cmd/Ctrl+L out of the guest so the active BrowserPane
-      // can focus its own input just like a standalone browser would.
+      // Why: the address bar lives in renderer chrome, not the guest page; forward so the active BrowserPane can focus its input.
       renderer.send('ui:focusBrowserAddressBar')
     } else if (
       keybindingMatchesAction('browser.hardReload', input, process.platform, keybindings)
     ) {
-      // Why: Cmd/Ctrl+Shift+R is the browser convention for hard reload
-      // (bypass cache). The guest would handle it natively, but Orca's webview
-      // reloadIgnoringCache() call must come from the renderer side so it goes
-      // through the same parked-webview ref that owns the guest surface.
+      // Why: forward hard reload so reloadIgnoringCache() runs on the renderer's parked-webview ref that owns the guest surface.
       renderer.send('ui:hardReloadBrowserPage')
     } else if (keybindingMatchesAction('browser.reload', input, process.platform, keybindings)) {
-      // Why: same as above for soft reload — Cmd/Ctrl+R must be forwarded so
-      // the renderer can call reload() on its own webview ref rather than
-      // relying on the guest's built-in shortcut, which may not reach the
-      // parked-webview eviction logic.
+      // Why: forward soft reload so the renderer's reload() hits the parked-webview eviction the guest's built-in shortcut skips.
       renderer.send('ui:reloadBrowserPage')
     } else if (keybindingMatchesAction('browser.find', input, process.platform, keybindings)) {
-      // Why: Cmd/Ctrl+F must be forwarded out of the guest so the renderer can
-      // open its own find-in-page bar and call webview.findInPage(). Letting the
-      // guest handle it natively would open Chromium's built-in find UI inside
-      // the guest frame, which is invisible behind Orca's chrome.
-      renderer.send('ui:findInBrowserPage')
+      const browserWorkspaceId = resolveWorkspaceId?.(browserTabId)
+      if (browserWorkspaceId) {
+        const source: BrowserFindSource = {
+          browserPageId: browserTabId,
+          browserWorkspaceId
+        }
+        // Why: active browser splits share one renderer; preserve the registered guest owner so only its Find bar opens.
+        renderer.send('ui:findInBrowserPage', source)
+      }
+    } else if (keybindingMatchesAction('browser.back', input, process.platform, keybindings)) {
+      // Why: macOS Logitech side-button remaps arrive as history keystrokes, not mouse events; forward so the renderer can goBack().
+      renderer.send('ui:browserHistoryNavigate', 'back')
+    } else if (keybindingMatchesAction('browser.forward', input, process.platform, keybindings)) {
+      // Why: same as browser.back; the focused guest cannot call the renderer-owned webview's goForward() directly.
+      renderer.send('ui:browserHistoryNavigate', 'forward')
     } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
-      renderer.send('ui:closeActiveTab')
+      if (isFloatingGuest) {
+        renderer.send('ui:closeFloatingItem', { sourceId: browserTabId })
+      } else {
+        renderer.send('ui:closeActiveTab')
+      }
     } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
       renderer.send('ui:switchTab', 1)
     } else if (
@@ -387,37 +431,153 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:toggleWorktreePalette')
     } else if (action?.type === 'openQuickOpen') {
       renderer.send('ui:openQuickOpen')
+    } else if (action?.type === 'toggleQuickCommandsMenu') {
+      renderer.send('ui:toggleQuickCommandsMenu')
     } else if (action?.type === 'openNewWorkspace') {
       renderer.send('ui:openNewWorkspace')
+    } else if (action?.type === 'openWorkspaceBoard') {
+      renderer.send('ui:openWorkspaceBoard')
     } else if (action?.type === 'openTasks') {
       renderer.send('ui:openTasks')
     } else if (action?.type === 'openSettings') {
       renderer.send('ui:openSettings')
-    } else if (action?.type === 'exportPdf') {
-      renderer.send('export:requestPdf')
     } else if (action?.type === 'forceReload') {
       renderer.reloadIgnoringCache()
     } else if (action?.type === 'jumpToWorktreeIndex') {
-      renderer.send('ui:jumpToWorktreeIndex', action.index)
+      if (isFloatingGuest) {
+        renderer.send('ui:selectFloatingIndex', { index: action.index })
+      } else {
+        renderer.send('ui:jumpToWorktreeIndex', action.index)
+      }
     } else if (action?.type === 'jumpToTabIndex') {
-      renderer.send('ui:jumpToTabIndex', action.index)
+      if (isFloatingGuest) {
+        renderer.send('ui:selectFloatingIndex', { index: action.index })
+      } else {
+        renderer.send('ui:jumpToTabIndex', action.index)
+      }
     } else if (action?.type === 'dictationKeyDown') {
       if (!shouldForwardDictationShortcut?.()) {
-        return
+        return false
       }
       renderer.send('ui:dictationKeyDown')
     } else {
+      return false
+    }
+    // Why: preventDefault stops the guest page from also processing the chord (e.g. Cmd+T opening a browser-internal new-tab page).
+    event.preventDefault()
+    return true
+  }
+
+  const handler = (event: Electron.Event, input: Electron.Input): void => {
+    const keybindings = getKeybindings?.()
+    if (
+      input.type === 'keyDown' &&
+      matchesRecentTabSwitcherChord(input, process.platform, keybindings)
+    ) {
+      // Why: held switcher commits on Control keyup; preventDefault on Tab
+      // keydown suppresses that keyup in Electron and strands the overlay.
+      ctrlTabSwitching = true
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
       return
     }
-    // Why: preventDefault stops the guest page from also processing the chord
-    // (e.g. Cmd+T opening a browser-internal new-tab page).
-    event.preventDefault()
+
+    if (ctrlTabSwitching && isRecentTabSwitcherCommitRelease(input)) {
+      event.preventDefault()
+      ctrlTabSwitching = false
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:ctrlTabKeyUp')
+      return
+    }
+
+    if (input.type === 'keyDown' || input.type === 'keyUp') {
+      const detected = doubleTapDetector.process(
+        toModifierDoubleTapEvent({
+          type: input.type,
+          code: input.code,
+          key: input.key,
+          shift: input.shift,
+          control: input.control,
+          alt: input.alt,
+          meta: input.meta,
+          isAutoRepeat: input.isAutoRepeat
+        }),
+        Date.now()
+      )
+      if (detected) {
+        const doubleTapInput: GuestShortcutInput = { doubleTapModifier: detected.modifier }
+        forwardShortcutInput(
+          event,
+          doubleTapInput,
+          resolveWindowShortcutAction(doubleTapInput, process.platform, keybindings, {
+            context: 'app'
+          })
+        )
+        return
+      }
+    }
+
+    if (input.type !== 'keyDown') {
+      return
+    }
+    // Why: Cmd/Ctrl+Alt+Arrow is the only allowlisted chord carrying Alt, so resolve it before the Alt-rejecting chord gate below.
+    const action = resolveWindowShortcutAction(input, process.platform, keybindings)
+    forwardShortcutInput(event, input, action)
+  }
+
+  const zoomCommandHandler = (
+    event: Electron.Event,
+    zoomDirection: 'in' | 'out' | 'reset'
+  ): void => {
+    if (zoomDirection !== 'in' && zoomDirection !== 'out') {
+      return
+    }
+    // Why: some layouts/platforms turn Ctrl/Cmd +/- into Electron's native zoom before before-input-event reaches the guest.
+    if (consumeRecentGuestWheelZoom(guest, zoomDirection)) {
+      event.preventDefault()
+      return
+    }
+    if (!nativeZoomCommandMatchesKeybindings(zoomDirection, process.platform, getKeybindings?.())) {
+      return
+    }
+    forwardBrowserPageZoom(event, zoomDirection)
   }
 
   guest.on('before-input-event', handler)
+  guest.on('zoom-changed', zoomCommandHandler)
+  guest.on('blur', resetDoubleTapDetector)
   return () => {
     try {
       guest.off('before-input-event', handler)
+      guest.off('zoom-changed', zoomCommandHandler)
+      guest.off('blur', resetDoubleTapDetector)
+    } catch {
+      // Why: best-effort — guest may already be destroyed during teardown.
+    }
+  }
+}
+
+export function setupGuestMouseWheelZoomForwarding(args: {
+  browserTabId: string
+  guest: Electron.WebContents
+  resolveRenderer: ResolveRenderer
+}): () => void {
+  const { browserTabId, guest, resolveRenderer } = args
+  const handler = (event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
+    const direction = resolveGuestMouseWheelZoomDirection(mouse)
+    if (!direction) {
+      return
+    }
+    // Why: wheel input over a focused webview never reaches renderer DOM handlers, so consume and forward here.
+    event.preventDefault()
+    markGuestWheelZoom(guest, direction)
+    resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', direction)
+  }
+
+  guest.on('before-mouse-event', handler)
+  return () => {
+    try {
+      guest.off('before-mouse-event', handler)
     } catch {
       // Why: best-effort — guest may already be destroyed during teardown.
     }

@@ -1,5 +1,6 @@
 import { Plus, Minus, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 
 export function BulkActionBar({
   selectedCount,
@@ -25,7 +26,10 @@ export function BulkActionBar({
           {isExecuting ? (
             <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
           ) : (
-            <span className="tabular-nums">{selectedCount} selected</span>
+            <span className="tabular-nums">
+              {selectedCount}{' '}
+              {translate('auto.components.right.sidebar.BulkActionBar.60ed678138', 'selected')}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
@@ -39,7 +43,8 @@ export function BulkActionBar({
               disabled={isExecuting}
             >
               <Plus className="mr-1 size-3" />
-              Stage ({stageableCount})
+              {translate('auto.components.right.sidebar.BulkActionBar.ef5f5bd06e', 'Stage (')}
+              {stageableCount})
             </Button>
           )}
           {unstageableCount > 0 && (
@@ -52,7 +57,8 @@ export function BulkActionBar({
               disabled={isExecuting}
             >
               <Minus className="mr-1 size-3" />
-              Unstage ({unstageableCount})
+              {translate('auto.components.right.sidebar.BulkActionBar.79a9f5f712', 'Unstage (')}
+              {unstageableCount})
             </Button>
           )}
           <Button

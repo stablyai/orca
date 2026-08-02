@@ -1,3 +1,5 @@
+import type { DeviceScope } from '../../../shared/runtime-types'
+
 const PAIRING_OFFER_VERSION = 2
 
 export type WebPairingOffer = {
@@ -5,7 +7,13 @@ export type WebPairingOffer = {
   endpoint: string
   deviceToken: string
   publicKeyB64: string
+  scope?: DeviceScope
 }
+
+export type WebPairingStartupDecision =
+  | { kind: 'auto-save-runtime-offer'; offer: WebPairingOffer }
+  | { kind: 'show-connect'; initialPairingInput: string | null }
+  | { kind: 'use-stored-environment' }
 
 export function parseWebPairingInput(input: string): WebPairingOffer | null {
   const trimmed = input.trim()
@@ -50,6 +58,22 @@ export function readPairingInputFromLocation(location: Location): string | null 
   return hash
 }
 
+export function decideWebPairingStartup(args: {
+  initialPairingInput: string | null
+  hasStoredEnvironment: boolean
+}): WebPairingStartupDecision {
+  const offer = args.initialPairingInput ? parseWebPairingInput(args.initialPairingInput) : null
+  if (offer?.scope === 'runtime') {
+    return { kind: 'auto-save-runtime-offer', offer }
+  }
+  if (offer) {
+    return { kind: 'show-connect', initialPairingInput: args.initialPairingInput }
+  }
+  return args.hasStoredEnvironment
+    ? { kind: 'use-stored-environment' }
+    : { kind: 'show-connect', initialPairingInput: null }
+}
+
 export function clearPairingInputFromAddressBar(): void {
   if (!window.location.hash && !window.location.search) {
     return
@@ -74,12 +98,18 @@ function decodePairingPayload(base64url: string): WebPairingOffer | null {
   ) {
     return null
   }
+  const scope = parseWebPairingScope(parsed.scope)
   return {
     v: PAIRING_OFFER_VERSION,
     endpoint: normalizeWebSocketEndpoint(parsed.endpoint),
     deviceToken: parsed.deviceToken,
-    publicKeyB64: parsed.publicKeyB64
+    publicKeyB64: parsed.publicKeyB64,
+    ...(scope ? { scope } : {})
   }
+}
+
+function parseWebPairingScope(value: unknown): DeviceScope | null {
+  return value === 'mobile' || value === 'runtime' ? value : null
 }
 
 function extractPairingCodeFromUrl(url: string): string | null {

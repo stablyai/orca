@@ -1,3 +1,5 @@
+import type { GitPushTarget } from './types'
+
 export type ComposerBranchSelection = {
   baseBranch: string
   branchNameOverride: string | undefined
@@ -36,17 +38,159 @@ export function resolveComposerBranchSelection(args: {
   }
 }
 
+/**
+ * True when `branchName` is already checked out in one of the given worktree
+ * branch refs (which may be `refs/heads/foo` or short `foo`). Git refuses to
+ * check out a branch in two worktrees, so such a branch cannot be reused.
+ */
+export function isBranchCheckedOutInWorktrees(
+  branchName: string,
+  worktreeBranches: readonly string[]
+): boolean {
+  return worktreeBranches.some((ref) => ref.replace(/^refs\/heads\//, '') === branchName)
+}
+
+export function getComposerRepoWorktreeBranches(
+  worktrees: readonly { repoId: string; branch: string }[],
+  repoId: string | null
+): string[] {
+  return repoId
+    ? worktrees.filter((worktree) => worktree.repoId === repoId).map((worktree) => worktree.branch)
+    : []
+}
+
+/**
+ * Issue #5181: decide whether a picked branch row is an existing LOCAL branch
+ * that can be reused (checked out) instead of branched off, and whether reuse
+ * should default ON.
+ *
+ * Reuse is only possible for a LOCAL branch (ref === local name; remote-only
+ * refs carry an `origin/`-style prefix) that is NOT already checked out in
+ * another worktree — git allows a branch in only one worktree at a time. Reuse
+ * defaults ON only when the worktree name was auto-derived from the branch (the
+ * selection produced a branch-name override); a user who typed a custom
+ * worktree name first is branching off the ref, so reuse stays OFF unless they
+ * opt in.
+ */
+export function resolveComposerBranchReuse(args: {
+  refName: string
+  localBranchName: string
+  selectionProducedOverride: boolean
+  branchCheckedOutElsewhere: boolean
+}): { reuseEligibleBranch: string | null; defaultReuse: boolean } {
+  const reuseEligibleBranch =
+    args.refName === args.localBranchName && !args.branchCheckedOutElsewhere
+      ? args.localBranchName
+      : null
+  return {
+    reuseEligibleBranch,
+    defaultReuse: reuseEligibleBranch !== null && args.selectionProducedOverride
+  }
+}
+
+/**
+ * Issue #5181: the branch-name override to apply for a picked branch. A local
+ * branch already checked out in another worktree can't be reused, so it must
+ * NOT be pinned as the override — pinning it would collide and silently produce
+ * a suffixed branch. In that case fall back to letting the worktree name derive
+ * a fresh branch from the selected ref as base; otherwise use the selection's
+ * override unchanged.
+ */
+export function resolveComposerReuseOverride(args: {
+  refName: string
+  localBranchName: string
+  branchNameOverride: string | undefined
+  branchCheckedOutElsewhere: boolean
+}): string | undefined {
+  if (args.branchCheckedOutElsewhere && args.refName === args.localBranchName) {
+    return undefined
+  }
+  return args.branchNameOverride
+}
+
+export type ComposerBranchPick = ComposerBranchSelection & {
+  reuseEligibleBranch: string | null
+  defaultReuse: boolean
+}
+
+export function resolveComposerBranchPick(args: {
+  refName: string
+  localBranchName: string
+  currentName: string
+  lastAutoName: string
+  worktreeBranches: readonly string[]
+}): ComposerBranchPick {
+  const selection = resolveComposerBranchSelection(args)
+  const branchCheckedOutElsewhere = isBranchCheckedOutInWorktrees(
+    args.localBranchName,
+    args.worktreeBranches
+  )
+  const reuse = resolveComposerBranchReuse({
+    refName: args.refName,
+    localBranchName: args.localBranchName,
+    selectionProducedOverride: selection.branchNameOverride !== undefined,
+    branchCheckedOutElsewhere
+  })
+  return {
+    ...selection,
+    branchNameOverride: resolveComposerReuseOverride({
+      refName: args.refName,
+      localBranchName: args.localBranchName,
+      branchNameOverride: selection.branchNameOverride,
+      branchCheckedOutElsewhere
+    }),
+    ...reuse
+  }
+}
+
+/**
+ * The branch-name override to apply when creating a worktree from the composer.
+ *
+ * With no resolver-provided override, branch mode (#6721) keeps a
+ * slash-containing typed name as the git branch — validated downstream by
+ * `git check-ref-format` — while the worktree folder name is sanitized
+ * separately; every other mode leaves the branch to be derived from the
+ * sanitized name. With an override, keep it verbatim when the workspace name is
+ * user-edited (`preserveWorkspaceNameEdits`) or still matches the auto-name.
+ */
 export function resolveComposerBranchNameOverrideForCreate(args: {
   branchNameOverride: string | undefined
   branchAutoName: string
   workspaceName: string
   preserveWorkspaceNameEdits: boolean
+  createBranchFromWorkspaceName?: boolean
 }): string | undefined {
   if (!args.branchNameOverride) {
-    return undefined
+    return args.createBranchFromWorkspaceName && args.workspaceName.includes('/')
+      ? args.workspaceName
+      : undefined
   }
   if (args.preserveWorkspaceNameEdits) {
     return args.branchNameOverride
   }
   return args.workspaceName === args.branchAutoName ? args.branchNameOverride : undefined
+}
+
+export function resolveComposerManualBranchNameChange(args: {
+  value: string | undefined
+  pushTarget: GitPushTarget | undefined
+  forkPushWarning: string | null
+}): {
+  branchNameOverride: string | undefined
+  pushTarget: GitPushTarget | undefined
+  forkPushWarning: string | null
+} {
+  const branchNameOverride = args.value?.trim() || undefined
+  if (args.pushTarget && args.pushTarget.branchName !== branchNameOverride) {
+    return {
+      branchNameOverride,
+      pushTarget: undefined,
+      forkPushWarning: null
+    }
+  }
+  return {
+    branchNameOverride,
+    pushTarget: args.pushTarget,
+    forkPushWarning: args.forkPushWarning
+  }
 }

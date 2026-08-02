@@ -1,66 +1,50 @@
-import type { CSSProperties, JSX } from 'react'
-import type { ContextualTourPanelPlacement } from './contextual-tour-panel-position'
+import type { CSSProperties, JSX, RefObject } from 'react'
+import {
+  CONTEXTUAL_TOUR_ARROW_SIZE,
+  CONTEXTUAL_TOUR_PANEL_BORDER_WIDTH,
+  type ContextualTourPanelPlacement
+} from './contextual-tour-floating-position'
+
+const ARROW_WIDTH = CONTEXTUAL_TOUR_ARROW_SIZE.width
+const ARROW_HEIGHT = CONTEXTUAL_TOUR_ARROW_SIZE.height
+
+// Why: CSS rotation pivots on the svg center, so horizontal placements must
+// also shift by (width - height) / 2 to keep the rotated arrow flush with the
+// panel edge instead of half-swallowed by it.
+const PLACEMENT_TRANSFORM = {
+  top: 'rotate(0deg)',
+  bottom: 'rotate(180deg)',
+  left: `translateX(${(ARROW_WIDTH - ARROW_HEIGHT) / 2}px) rotate(-90deg)`,
+  right: `translateX(${(ARROW_HEIGHT - ARROW_WIDTH) / 2}px) rotate(90deg)`
+} satisfies Record<ContextualTourPanelPlacement, string>
 
 export function ContextualTourArrow({
-  placement
+  arrowRef,
+  placement,
+  style
 }: {
+  arrowRef: RefObject<SVGSVGElement | null>
   placement: ContextualTourPanelPlacement
+  style: CSSProperties
 }): JSX.Element {
-  // Why: a small triangle pointing at the target makes the panel/target
-  // relationship readable when the user's eye starts on the panel.
-  const offsetCss = 'var(--contextual-tour-arrow-offset, 50%)'
-  const horizontal = placement === 'top' || placement === 'bottom'
-  const longSide = 12
-  const shortSide = 6
-  const wrapperStyle: CSSProperties = horizontal
-    ? {
-        width: longSide,
-        height: shortSide,
-        left: offsetCss,
-        transform: 'translateX(-50%)',
-        ...(placement === 'top' ? { top: '100%' } : { bottom: '100%' })
-      }
-    : {
-        width: shortSide,
-        height: longSide,
-        top: offsetCss,
-        transform: 'translateY(-50%)',
-        ...(placement === 'left' ? { left: '100%' } : { right: '100%' })
-      }
-  const path =
-    placement === 'top'
-      ? 'M0 0 L6 6 L12 0'
-      : placement === 'bottom'
-        ? 'M0 6 L6 0 L12 6'
-        : placement === 'left'
-          ? 'M0 0 L6 6 L0 12'
-          : 'M6 0 L0 6 L6 12'
-  const maskPath =
-    placement === 'top'
-      ? 'M0 0 L12 0'
-      : placement === 'bottom'
-        ? 'M0 6 L12 6'
-        : placement === 'left'
-          ? 'M0 0 L0 12'
-          : 'M6 0 L6 12'
   return (
-    <span aria-hidden="true" className="absolute block" style={wrapperStyle}>
-      <svg
-        viewBox={horizontal ? '0 0 12 6' : '0 0 6 12'}
-        width={horizontal ? longSide : shortSide}
-        height={horizontal ? shortSide : longSide}
-        className="overflow-visible"
-        preserveAspectRatio="none"
-      >
-        <path
-          d={path}
-          className="fill-popover stroke-border"
-          strokeWidth={1}
-          strokeLinejoin="round"
-        />
-        {/* Why: hide the join with the panel border so the panel edge reads as continuous. */}
-        <path d={maskPath} className="stroke-popover" strokeWidth={1.5} fill="none" />
-      </svg>
-    </span>
+    <svg
+      ref={arrowRef}
+      aria-hidden="true"
+      width={ARROW_WIDTH}
+      height={ARROW_HEIGHT}
+      viewBox={`0 0 ${ARROW_WIDTH} ${ARROW_HEIGHT}`}
+      className="absolute block overflow-visible fill-(--contextual-tour-panel-surface) stroke-(--contextual-tour-panel-border)"
+      style={{ ...style, transform: PLACEMENT_TRANSFORM[placement] }}
+    >
+      {/* Why: an open path fills as a triangle but strokes only the two slanted
+          edges; a closed polygon (Radix Arrow) also strokes the base, drawing a
+          seam across the panel border. Stroke width must match the 1px panel
+          border so the outline reads as continuous. */}
+      <path
+        d={`M0,0 L${ARROW_WIDTH / 2},${ARROW_HEIGHT} L${ARROW_WIDTH},0`}
+        strokeWidth={CONTEXTUAL_TOUR_PANEL_BORDER_WIDTH}
+      />
+    </svg>
   )
 }

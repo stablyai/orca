@@ -8,15 +8,17 @@ import {
   _getGitHubPRRefreshStartedEntryCountForTest,
   _getGitHubPRRequestGenerationCountForTest,
   createGitHubSlice,
+  issueCacheKey,
   mergePRCommentIntoList,
   prChecksCacheSuffix,
   prCommentsCacheSuffix,
   projectViewCacheKey,
+  shouldClearBranchMismatchedLinkedOpenPR,
   workItemsCacheKey
 } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
-import type { GitHubWorkItem, PRInfo } from '../../../../shared/types'
+import type { GitHubWorkItem, PRInfo, Worktree } from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
 import {
@@ -25,6 +27,9 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
+import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from './github-work-items-query-bounds'
 
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
@@ -42,7 +47,13 @@ const mockApi = {
     addPRReviewCommentReply: vi.fn(),
     resolveReviewThread: vi.fn(),
     listWorkItems: vi.fn(),
-    getProjectViewTable: vi.fn()
+    countWorkItems: vi.fn().mockResolvedValue(0),
+    getProjectViewTable: vi.fn(),
+    updateProjectItemField: vi.fn(),
+    clearProjectItemField: vi.fn(),
+    updateIssueBySlug: vi.fn(),
+    updatePullRequestBySlug: vi.fn(),
+    updateIssueTypeBySlug: vi.fn()
   },
   hostedReview: {
     forBranch: vi.fn().mockResolvedValue(null),
@@ -91,6 +102,87 @@ function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
     mergeable: 'UNKNOWN',
     headSha: 'head-oid',
     ...overrides
+  }
+}
+
+function makePRRefreshWorktree(overrides: Partial<Worktree> = {}): Worktree {
+  return {
+    id: 'wt-pr-refresh',
+    repoId: 'repo-1',
+    path: '/repo/worktrees/pr-refresh',
+    displayName: 'PR refresh',
+    branch: 'feature/pr-refresh',
+    head: 'head-oid',
+    isBare: false,
+    isMainWorktree: false,
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 1,
+    ...overrides
+  }
+}
+
+function installLinkedPRClearStub(
+  store: ReturnType<typeof createTestStore>,
+  args: {
+    repoId: string
+    repoPath: string
+    branch: string
+    worktree: Worktree
+  }
+) {
+  const cacheKey = `${args.repoId}::${args.branch}`
+  const updateWorktreeMeta = vi.fn(
+    async (
+      worktreeId: string,
+      updates: Parameters<AppState['updateWorktreeMeta']>[1],
+      options?: Parameters<AppState['updateWorktreeMeta']>[2]
+    ) => {
+      const currentWorktree = store
+        .getState()
+        .worktreesByRepo[args.repoId]?.find((worktree) => worktree.id === worktreeId)
+      if (options?.shouldApply && !options.shouldApply(currentWorktree)) {
+        return
+      }
+      store.setState((state) => {
+        const nextWorktrees = {
+          ...state.worktreesByRepo,
+          [args.repoId]: (state.worktreesByRepo[args.repoId] ?? []).map((worktree) =>
+            worktree.id === worktreeId ? { ...worktree, ...updates } : worktree
+          )
+        }
+        const nextPRCache = { ...state.prCache }
+        delete nextPRCache[cacheKey]
+        return { worktreesByRepo: nextWorktrees, prCache: nextPRCache } as Partial<AppState>
+      })
+    }
+  )
+  store.setState({
+    repos: [{ id: args.repoId, path: args.repoPath, name: 'repo', kind: 'git' }],
+    worktreesByRepo: { [args.repoId]: [args.worktree] },
+    updateWorktreeMeta
+  } as unknown as Partial<AppState>)
+  return updateWorktreeMeta
+}
+
+function githubSourceContext(
+  hostId: TaskSourceContext['hostId'],
+  repoId = 'source-repo-id'
+): TaskSourceContext {
+  return {
+    kind: 'task-source',
+    provider: 'github',
+    projectId: 'github:stablyai/orca',
+    hostId,
+    projectHostSetupId: 'setup-1',
+    repoId,
+    providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
   }
 }
 
@@ -163,7 +255,7 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
     const store = createTestStore()
     type WorkItemsEnvelope = {
       items: []
-      sources: { issues: null; prs: null; upstreamCandidate: null }
+      sources: { issues: null; prs: null; originCandidate: null; upstreamCandidate: null }
     }
     let resolveFirst: (value: WorkItemsEnvelope) => void = () => {}
     const firstRequest = new Promise<WorkItemsEnvelope>((resolve) => {
@@ -171,7 +263,7 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
     })
     mockApi.gh.listWorkItems.mockReturnValueOnce(firstRequest).mockResolvedValueOnce({
       items: [],
-      sources: { issues: null, prs: null, upstreamCandidate: null }
+      sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
     })
 
     const firstFetch = store.getState().fetchWorkItems('repo-1', '/repo/one', 20, '')
@@ -180,12 +272,54 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
     const secondFetch = store.getState().fetchWorkItems('repo-1', '/repo/one', 20, '')
     resolveFirst({
       items: [],
-      sources: { issues: null, prs: null, upstreamCandidate: null }
+      sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
     })
     await firstFetch
     await secondFetch
 
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let a stale pre-invalidation work-item response rewrite the cache', async () => {
+    const store = createTestStore()
+    const item = {
+      type: 'pr',
+      number: 42,
+      title: 'Old origin PR',
+      url: 'https://example.test/42',
+      updatedAt: '2026-05-22T00:00:00Z'
+    } as GitHubWorkItem
+    let resolveFirst: (value: {
+      items: GitHubWorkItem[]
+      sources: {
+        issues: null
+        prs: { owner: 'fork'; repo: 'r' }
+        originCandidate: { owner: 'fork'; repo: 'r' }
+        upstreamCandidate: { owner: 'up'; repo: 'r' }
+      }
+    }) => void = () => {}
+    mockApi.gh.listWorkItems.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve
+        })
+    )
+
+    const firstFetch = store.getState().fetchWorkItems('repo-1', '/repo/one', 20, '')
+    await Promise.resolve()
+    store.setState((s) => ({ workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }))
+    resolveFirst({
+      items: [item],
+      sources: {
+        issues: null,
+        prs: { owner: 'fork', repo: 'r' },
+        originCandidate: { owner: 'fork', repo: 'r' },
+        upstreamCandidate: { owner: 'up', repo: 'r' }
+      }
+    })
+
+    await expect(firstFetch).resolves.toEqual([{ ...item, repoId: 'repo-1' }])
+    expect(store.getState().workItemsCache[workItemsCacheKey('repo-1', 20, '')]).toBeUndefined()
   })
 })
 
@@ -259,6 +393,134 @@ describe('createGitHubSlice cache bounds', () => {
 
     await vi.runOnlyPendingTimersAsync()
   })
+
+  it('routes runtime-owned issue fetches through the owning runtime when local is focused', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-issue-owner',
+      ok: true,
+      result: {
+        number: 123,
+        title: 'Runtime issue',
+        state: 'open',
+        url: 'https://example.com/issues/123'
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/runtime/repo'
+    store.setState({
+      settings: null,
+      repos: [
+        {
+          id: 'repo-runtime',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchIssue(repoPath, 123, { repoId: 'repo-runtime' })
+    ).resolves.toMatchObject({ number: 123, title: 'Runtime issue' })
+
+    expect(mockApi.gh.issue).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.issue',
+      params: { repo: 'repo-runtime', number: 123 },
+      timeoutMs: 30_000
+    })
+    expect(
+      store.getState().issueCache[
+        issueCacheKey(repoPath, 'repo-runtime', 123, null, null, 'runtime:env-1')
+      ]?.data
+    ).toMatchObject({ number: 123 })
+  })
+
+  it('routes explicit source-context issue fetches through the source runtime', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-source-issue',
+      ok: true,
+      result: {
+        number: 19,
+        title: 'Source issue',
+        state: 'open',
+        url: 'https://example.com/issues/19'
+      },
+      _meta: { runtimeId: 'source-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'caller-repo-id'
+    const sourceContext = githubSourceContext('runtime:source-runtime', 'runtime-repo-id')
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchIssue(repoPath, 19, { repoId, sourceContext })
+    ).resolves.toMatchObject({ number: 19, title: 'Source issue' })
+
+    expect(mockApi.gh.issue).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'source-runtime',
+      method: 'github.issue',
+      params: { repo: 'runtime-repo-id', number: 19 },
+      timeoutMs: 30_000
+    })
+    expect(
+      store.getState().issueCache[`${getTaskSourceCacheScope(sourceContext)}::${repoId}::19`]?.data
+    ).toMatchObject({ number: 19 })
+  })
+
+  it('routes SSH-owned issue fetches through local IPC when a runtime is focused', async () => {
+    mockApi.gh.issue.mockResolvedValueOnce({
+      number: 321,
+      title: 'SSH issue',
+      state: 'open',
+      url: 'https://example.com/issues/321'
+    })
+    const store = createTestStore()
+    const repoPath = '/ssh/repo'
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-focused' } as AppState['settings'],
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchIssue(repoPath, 321, { repoId: 'repo-ssh' })
+    ).resolves.toMatchObject({
+      number: 321,
+      title: 'SSH issue'
+    })
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.issue).toHaveBeenCalledWith({ repoPath, repoId: 'repo-ssh', number: 321 })
+    expect(
+      store.getState().issueCache[
+        issueCacheKey(repoPath, 'repo-ssh', 321, null, 'ssh-1', 'ssh:ssh-1')
+      ]?.data
+    ).toMatchObject({ number: 321 })
+    expect(
+      store.getState().issueCache[
+        issueCacheKey(repoPath, 'repo-ssh', 321, {
+          activeRuntimeEnvironmentId: 'env-focused'
+        } as AppState['settings'])
+      ]
+    ).toBeUndefined()
+  })
 })
 
 describe('createGitHubSlice.patchWorkItem', () => {
@@ -301,6 +563,58 @@ describe('createGitHubSlice.patchWorkItem', () => {
       reviewRequests: []
     })
     expect(repoTwoPatched).toBe(repoTwoItem)
+  })
+
+  it('can scope patches to one GitHub task source when hosts share a repo id and work-item id', () => {
+    const store = createTestStore()
+    const firstSourceContext = githubSourceContext('runtime:first-host', 'repo-1')
+    const secondSourceContext = githubSourceContext('runtime:second-host', 'repo-1')
+    const firstItem = {
+      id: 'pr:42',
+      repoId: 'repo-1',
+      type: 'pr',
+      number: 42,
+      title: 'First host PR'
+    } as GitHubWorkItem
+    const secondItem = {
+      id: 'pr:42',
+      repoId: 'repo-1',
+      type: 'pr',
+      number: 42,
+      title: 'Second host PR'
+    } as GitHubWorkItem
+
+    store.setState({
+      workItemsCache: {
+        [workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(firstSourceContext))]: {
+          data: [firstItem],
+          fetchedAt: 1
+        },
+        [workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(secondSourceContext))]: {
+          data: [secondItem],
+          fetchedAt: 1
+        }
+      }
+    })
+
+    store.getState().patchWorkItem('pr:42', { reviewRequests: [] }, 'repo-1', {
+      sourceContext: firstSourceContext
+    })
+
+    const state = store.getState()
+    const firstPatched =
+      state.workItemsCache[
+        workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(firstSourceContext))
+      ]?.data?.[0]
+    const secondPatched =
+      state.workItemsCache[
+        workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(secondSourceContext))
+      ]?.data?.[0]
+    expect(firstPatched).toMatchObject({
+      title: 'First host PR',
+      reviewRequests: []
+    })
+    expect(secondPatched).toBe(secondItem)
   })
 })
 
@@ -360,7 +674,15 @@ describe('createGitHubSlice.fetchPRChecks', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       prCache: {
         [runtimePrCacheKey]: {
           data: makePR({ checksStatus: 'pending' }),
@@ -384,6 +706,51 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     ])
     expect(store.getState().checksCache[localChecksCacheKey]).toBeUndefined()
     expect(store.getState().prCache[runtimePrCacheKey]?.data?.checksStatus).toBe('success')
+  })
+
+  it('keeps known local repo checks on local cache keys when a runtime is focused', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const branch = 'feature/local-checks'
+    const localPrCacheKey = `${repoId}::${branch}`
+    const localChecksCacheKey = `${repoId}::pr-checks::12`
+    const runtimeChecksCacheKey = `runtime:env-1::${repoId}::pr-checks::12`
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      prCache: {
+        [localPrCacheKey]: {
+          data: makePR({ checksStatus: 'pending' }),
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    mockApi.gh.prChecks.mockResolvedValueOnce([
+      { name: 'build', status: 'completed', conclusion: 'success', url: null }
+    ])
+
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.prChecks).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      prNumber: 12,
+      headSha: undefined,
+      prRepo: null,
+      noCache: true,
+      sourceContext: undefined
+    })
+    expect(store.getState().checksCache[localChecksCacheKey]?.data).toEqual([
+      { name: 'build', status: 'completed', conclusion: 'success', url: null }
+    ])
+    expect(store.getState().checksCache[runtimeChecksCacheKey]).toBeUndefined()
+    expect(store.getState().prCache[localPrCacheKey]?.data?.checksStatus).toBe('success')
   })
 
   it('marks the PR cache entry as failure when any check fails', async () => {
@@ -599,6 +966,22 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     })
   })
 
+  it('isolates PR detail caches by Enterprise host', () => {
+    const githubRepo = { owner: 'Acme', repo: 'Widgets', host: 'github.com' }
+    const enterpriseRepo = {
+      owner: 'Acme',
+      repo: 'Widgets',
+      host: 'github.acme-corp.com'
+    }
+
+    expect(prChecksCacheSuffix(12, enterpriseRepo, 'head')).not.toBe(
+      prChecksCacheSuffix(12, githubRepo, 'head')
+    )
+    expect(prCommentsCacheSuffix(12, enterpriseRepo)).not.toBe(
+      prCommentsCacheSuffix(12, githubRepo)
+    )
+  })
+
   it('bounds checks cache entries across many repo and head combinations', async () => {
     vi.useFakeTimers()
 
@@ -691,6 +1074,48 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     expect(store.getState().prCache[repoScopedKey]?.data?.checksStatus).toBe('success')
     expect(store.getState().prCache[pathScopedKey]?.data?.checksStatus).toBe('pending')
   })
+
+  it('routes explicit source-context PR checks through the source runtime', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-source-checks',
+      ok: true,
+      result: [{ name: 'source-build', status: 'completed', conclusion: 'success', url: null }],
+      _meta: { runtimeId: 'source-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'caller-repo-id'
+    const sourceContext = githubSourceContext('runtime:source-runtime', 'runtime-repo-id')
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchPRChecks(repoPath, 12, 'feature/source', 'head-1', null, {
+      force: true,
+      repoId,
+      sourceContext
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'source-runtime',
+      method: 'github.prChecks',
+      params: {
+        repo: 'runtime-repo-id',
+        prNumber: 12,
+        headSha: 'head-1',
+        prRepo: null,
+        noCache: true
+      },
+      timeoutMs: 30_000
+    })
+    expect(
+      store.getState().checksCache[
+        `${getTaskSourceCacheScope(sourceContext)}::${repoId}::${prChecksCacheSuffix(12, null, 'head-1')}`
+      ]?.data?.[0].name
+    ).toBe('source-build')
+    expect(mockApi.gh.prChecks).not.toHaveBeenCalled()
+  })
 })
 
 describe('createGitHubSlice.fetchPRComments', () => {
@@ -752,7 +1177,15 @@ describe('createGitHubSlice.fetchPRComments', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
     } as unknown as Partial<AppState>)
 
     await store.getState().fetchPRComments(repoPath, 12, {
@@ -779,6 +1212,84 @@ describe('createGitHubSlice.fetchPRComments', () => {
     expect(
       store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]
     ).toBeUndefined()
+  })
+
+  it('keeps known local repo comments on local cache keys when a runtime is focused', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    mockApi.gh.prComments.mockResolvedValueOnce([
+      { id: 1, author: 'local', authorAvatarUrl: '', body: '', createdAt: '', url: '' }
+    ])
+
+    await store.getState().fetchPRComments(repoPath, 12, {
+      force: true,
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.prComments).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      prNumber: 12,
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      noCache: true,
+      sourceContext: undefined
+    })
+    expect(
+      store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]?.data?.[0].author
+    ).toBe('local')
+    expect(
+      store.getState().commentsCache[`runtime:env-1::${repoId}::pr-comments::acme/widgets::12`]
+    ).toBeUndefined()
+  })
+
+  it('routes explicit source-context PR comments through the source runtime', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-source-comments',
+      ok: true,
+      result: [{ id: 1, author: 'source', authorAvatarUrl: '', body: '', createdAt: '', url: '' }],
+      _meta: { runtimeId: 'source-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'caller-repo-id'
+    const sourceContext = githubSourceContext('runtime:source-runtime', 'runtime-repo-id')
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchPRComments(repoPath, 12, {
+      force: true,
+      repoId,
+      sourceContext,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'source-runtime',
+      method: 'github.prComments',
+      params: {
+        repo: 'runtime-repo-id',
+        prNumber: 12,
+        prRepo: { owner: 'Acme', repo: 'Widgets' },
+        noCache: true
+      },
+      timeoutMs: 30_000
+    })
+    expect(
+      store.getState().commentsCache[
+        `${getTaskSourceCacheScope(sourceContext)}::${repoId}::pr-comments::acme/widgets::12`
+      ]?.data?.[0].author
+    ).toBe('source')
+    expect(mockApi.gh.prComments).not.toHaveBeenCalled()
   })
 
   it('bounds PR comment cache entries across many repos', async () => {
@@ -895,7 +1406,15 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
     } as unknown as Partial<AppState>)
 
     await store.getState().fetchPRCheckDetails(
@@ -922,6 +1441,39 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
       timeoutMs: 30_000
     })
     expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
+  })
+
+  it('loads known local repo check details through local IPC when a runtime is focused', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchPRCheckDetails(
+      repoPath,
+      {
+        checkRunId: 123,
+        checkName: 'build',
+        prRepo: { owner: 'Acme', repo: 'Widgets' }
+      },
+      { repoId }
+    )
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.prCheckDetails).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      checkRunId: 123,
+      workflowRunId: undefined,
+      checkName: 'build',
+      url: undefined,
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      sourceContext: undefined
+    })
   })
 })
 
@@ -1021,6 +1573,37 @@ describe('createGitHubSlice PR comment mutations', () => {
     ).toBe('done')
   })
 
+  it('posts top-level PR comments with explicit local source context', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const sourceContext = githubSourceContext('local', repoId)
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().addPRConversationComment(repoPath, 12, 'done', {
+      repoId,
+      sourceContext,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(mockApi.gh.addIssueComment).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      number: 12,
+      body: 'done',
+      type: 'pr',
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      sourceContext
+    })
+    expect(
+      store.getState().commentsCache[
+        `${getTaskSourceCacheScope(sourceContext)}::${repoId}::pr-comments::acme/widgets::12`
+      ]?.data?.[0].body
+    ).toBe('done')
+  })
+
   it('routes runtime PR review replies with prRepo and merges returned thread metadata', async () => {
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-pr-reply',
@@ -1043,7 +1626,15 @@ describe('createGitHubSlice PR comment mutations', () => {
     const repoId = 'repo-id'
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
     } as unknown as Partial<AppState>)
 
     await store.getState().addPRReviewCommentReply(repoPath, 12, 99, 'reply', {
@@ -1109,6 +1700,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 
   afterEach(() => {
     _clearGitHubPRRefreshStartedEntriesForTest()
+    vi.useRealTimers()
   })
 
   it('lets a forced refresh bypass a non-forced inflight request and keeps the newer result', async () => {
@@ -1291,9 +1883,39 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     await expect(request).resolves.toMatchObject({ title: 'Local request result' })
     expect(store.getState().hostedReviewCache[localHostedReviewCacheKey]).toMatchObject({
       data: expect.objectContaining({ provider: 'github', title: 'Local request result' }),
-      linkedReviewHintKey: 'github:12'
+      linkedReviewHintKey: 'github:12',
+      branchLookupGitHubPRNumber: 12
     })
     expect(store.getState().hostedReviewCache[runtimeHostedReviewCacheKey]).toBeUndefined()
+  })
+
+  it('does not mark an exact linked PR refresh as branch-discovered', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/exact-linked-provenance'
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ number: 12 }),
+      fetchedAt: 2
+    })
+
+    await store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      linkedPRNumber: 12
+    })
+
+    const cacheEntry = store.getState().hostedReviewCache[hostedReviewCacheKey]
+    expect(cacheEntry).toMatchObject({
+      data: expect.objectContaining({ provider: 'github', number: 12 }),
+      linkedReviewHintKey: 'github:12'
+    })
+    expect(cacheEntry).not.toHaveProperty('branchLookupGitHubPRNumber')
   })
 
   it('does not let an older direct PR refresh overwrite a newer hosted-review cache entry', async () => {
@@ -1531,6 +2153,556 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     }
   })
 
+  it('ignores a direct exact linked PR refresh after the worktree was unlinked', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/unlinked-direct-pr'
+    const worktreeId = 'wt-unlinked-direct-pr'
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+    let resolveRefresh: (
+      value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
+    ) => void = () => {}
+    const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
+      resolveRefresh = resolve
+    })
+    mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          {
+            id: worktreeId,
+            repoId,
+            path: '/repo/worktrees/unlinked-direct-pr',
+            branch,
+            displayName: 'unlinked-direct-pr',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            linkedPR: 12
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    const request = store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId,
+      linkedPRNumber: 12
+    })
+    store.setState({
+      worktreesByRepo: {
+        [repoId]: [
+          {
+            id: worktreeId,
+            repoId,
+            path: '/repo/worktrees/unlinked-direct-pr',
+            branch,
+            displayName: 'unlinked-direct-pr',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            linkedPR: null
+          }
+        ]
+      },
+      hostedReviewCache: {},
+      prCache: {}
+    } as unknown as Partial<AppState>)
+    resolveRefresh({
+      kind: 'found',
+      pr: makePR({ number: 12, title: 'Stale exact linked PR' }),
+      fetchedAt: Date.now()
+    })
+
+    await expect(request).resolves.toBeNull()
+    expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toBeUndefined()
+  })
+
+  it('clears a linked merged PR when the resolved PR definitively diverged from the request head', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/new-work'
+    const worktreeId = 'wt-diverged-linked-pr'
+    const worktree = makePRRefreshWorktree({
+      id: worktreeId,
+      repoId,
+      branch,
+      head: 'current-head',
+      linkedPR: 12
+    })
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree
+    })
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({
+        number: 12,
+        state: 'merged',
+        headSha: 'merged-pr-head',
+        headDivergedFromMergedPRAtOid: 'current-head'
+      }),
+      fetchedAt: 2
+    })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, {
+        force: true,
+        repoId,
+        worktreeId,
+        linkedPRNumber: 12
+      })
+    ).resolves.toMatchObject({ number: 12 })
+
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      worktreeId,
+      { linkedPR: null },
+      { shouldApply: expect.any(Function) }
+    )
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
+    expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
+  })
+
+  it('unlinks a stale open PR and re-resolves the current branch with one follow-up lookup', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/current'
+    const worktreeId = 'wt-stale-open-pr'
+    const stalePR = makePR({
+      number: 12,
+      title: 'Stale linked PR',
+      headSha: 'old-head',
+      headRefName: 'feature/old'
+    })
+    const currentPR = makePR({
+      number: 13,
+      title: 'Current branch PR',
+      headSha: 'current-head',
+      headRefName: branch
+    })
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'current-head',
+        linkedPR: 12
+      })
+    })
+    mockApi.gh.refreshPRNow
+      .mockResolvedValueOnce({ kind: 'found', pr: stalePR, fetchedAt: 2 })
+      .mockResolvedValueOnce({ kind: 'found', pr: currentPR, fetchedAt: 3 })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, {
+        force: true,
+        repoId,
+        worktreeId,
+        linkedPRNumber: 12
+      })
+    ).resolves.toEqual(stalePR)
+
+    await vi.waitFor(() => {
+      expect(mockApi.gh.refreshPRNow).toHaveBeenCalledTimes(2)
+      expect(store.getState().prCache[`${repoId}::${branch}`]?.data).toEqual(currentPR)
+    })
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      worktreeId,
+      { linkedPR: null },
+      {
+        suppressHostedReviewRefresh: true,
+        shouldApply: expect.any(Function)
+      }
+    )
+    expect(mockApi.gh.refreshPRNow.mock.calls[1]?.[0]).toMatchObject({
+      candidate: expect.objectContaining({
+        branch,
+        linkedPRNumber: null,
+        worktreeId
+      })
+    })
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
+  })
+
+  it('clears a linked merged PR on a fresh cache hit that already carries a head-scoped divergence signal', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/cached-diverged'
+    const worktreeId = 'wt-cached-diverged'
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'current-head',
+        linkedPR: 12
+      })
+    })
+    store.setState({
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: makePR({
+            number: 12,
+            state: 'merged',
+            headSha: 'merged-pr-head',
+            headDivergedFromMergedPRAtOid: 'current-head'
+          }),
+          fetchedAt: Date.now()
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    const result = await store.getState().fetchPRForBranch(repoPath, branch, {
+      repoId,
+      worktreeId,
+      linkedPRNumber: 12
+    })
+
+    expect(result).toMatchObject({ number: 12 })
+    expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      worktreeId,
+      { linkedPR: null },
+      { shouldApply: expect.any(Function) }
+    )
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
+  })
+
+  it('does not clear a linked merged PR when the request head equals the PR head', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/at-pr-head'
+    const worktreeId = 'wt-at-pr-head'
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'same-head',
+        linkedPR: 12
+      })
+    })
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({
+        number: 12,
+        state: 'merged',
+        headSha: 'same-head',
+        headDivergedFromMergedPRAtOid: 'same-head'
+      }),
+      fetchedAt: 2
+    })
+
+    await store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId,
+      linkedPRNumber: 12
+    })
+
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
+  })
+
+  it('does not clear a linked merged PR when the request head is confirmed contained', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/contained'
+    const worktreeId = 'wt-contained'
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'contained-head',
+        linkedPR: 12
+      })
+    })
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({
+        number: 12,
+        state: 'merged',
+        headSha: 'merged-pr-head',
+        confirmedContainedHeadOid: 'contained-head',
+        headDivergedFromMergedPRAtOid: 'contained-head'
+      }),
+      fetchedAt: 2
+    })
+
+    await store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId,
+      linkedPRNumber: 12
+    })
+
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
+  })
+
+  it('does not clear a linked open PR even when a divergence bit is present', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/open-pr'
+    const worktreeId = 'wt-open-pr'
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'current-head',
+        linkedPR: 12
+      })
+    })
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({
+        number: 12,
+        state: 'open',
+        headSha: 'pr-head',
+        headDivergedFromMergedPRAtOid: 'current-head'
+      }),
+      fetchedAt: 2
+    })
+
+    await store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId,
+      linkedPRNumber: 12
+    })
+
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('does not clear a linked PR on a null PR result', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/null-pr'
+    const worktreeId = 'wt-null-pr'
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'current-head',
+        linkedPR: 12
+      })
+    })
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+
+    await store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId,
+      linkedPRNumber: 12
+    })
+
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('does not clear when divergence is unset even if containment does not match the head', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/unknown-probe'
+    const worktreeId = 'wt-unknown-probe'
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'current-head',
+        linkedPR: 12
+      })
+    })
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({
+        number: 12,
+        state: 'merged',
+        headSha: 'merged-pr-head',
+        confirmedContainedHeadOid: 'other-head'
+      }),
+      fetchedAt: 2
+    })
+
+    await store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId,
+      linkedPRNumber: 12
+    })
+
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
+  })
+
+  it('does not clear when the linked PR number changed before the lookup completed', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/relinked'
+    const worktreeId = 'wt-relinked'
+    let resolveRefresh: (
+      value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
+    ) => void = () => {}
+    const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
+      resolveRefresh = resolve
+    })
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'current-head',
+        linkedPR: 12
+      })
+    })
+    mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
+
+    const request = store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId,
+      linkedPRNumber: 12
+    })
+    store.setState({
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'current-head',
+            linkedPR: 13
+          })
+        ]
+      }
+    } as unknown as Partial<AppState>)
+    resolveRefresh({
+      kind: 'found',
+      pr: makePR({
+        number: 12,
+        state: 'merged',
+        headSha: 'merged-pr-head',
+        headDivergedFromMergedPRAtOid: 'current-head'
+      }),
+      fetchedAt: 2
+    })
+
+    await expect(request).resolves.toBeNull()
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(13)
+  })
+
+  it('does not clear when the worktree head moved after the lookup started', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/head-moved'
+    const worktreeId = 'wt-head-moved'
+    let resolveRefresh: (
+      value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
+    ) => void = () => {}
+    const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
+      resolveRefresh = resolve
+    })
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'request-head',
+        linkedPR: 12
+      })
+    })
+    mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
+
+    const request = store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId,
+      linkedPRNumber: 12
+    })
+    store.setState({
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'new-head',
+            linkedPR: 12
+          })
+        ]
+      }
+    } as unknown as Partial<AppState>)
+    resolveRefresh({
+      kind: 'found',
+      pr: makePR({
+        number: 12,
+        state: 'merged',
+        headSha: 'merged-pr-head',
+        headDivergedFromMergedPRAtOid: 'request-head'
+      }),
+      fetchedAt: 2
+    })
+
+    await expect(request).resolves.toMatchObject({ number: 12 })
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      worktreeId,
+      { linkedPR: null },
+      { shouldApply: expect.any(Function) }
+    )
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
+    expect(store.getState().prCache[`${repoId}::${branch}`]).toMatchObject({
+      data: expect.objectContaining({ number: 12 })
+    })
+  })
+
   it('preserves cached PR data when a forced coordinator refresh errors', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -1559,12 +2731,74 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(store.getState().prCache[`repo-1::${branch}`]?.data).toEqual(cachedPR)
   })
 
-  it('preserves visible cached PR data when a fallback refresh misses', async () => {
+  it.each(['open', 'draft'] as const)(
+    'clears visible cached %s PR data when a fallback refresh misses',
+    async (state) => {
+      const store = createTestStore()
+      const repoPath = '/repo'
+      const repoId = 'repo-1'
+      const branch = 'feature/fallback-miss'
+      const cachedPR = makePR({ number: 12, state, title: 'Visible cached PR' })
+      const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+      store.setState({
+        repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+        prCache: {
+          [`${repoId}::${branch}`]: {
+            data: cachedPR,
+            fetchedAt: 1
+          }
+        },
+        hostedReviewCache: {
+          [hostedReviewCacheKey]: {
+            data: {
+              provider: 'github',
+              number: 12,
+              title: 'Visible cached PR',
+              state,
+              url: 'https://github.com/acme/orca/pull/12',
+              status: 'pending',
+              updatedAt: '2026-03-28T00:00:00Z',
+              mergeable: 'UNKNOWN'
+            },
+            fetchedAt: 1,
+            linkedReviewHintKey: 'github:12'
+          }
+        }
+      } as unknown as Partial<AppState>)
+      mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+
+      await expect(
+        store.getState().fetchPRForBranch(repoPath, branch, {
+          force: true,
+          repoId,
+          fallbackPRNumber: 12
+        })
+      ).resolves.toBeNull()
+      expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
+        data: null,
+        fetchedAt: 2
+      })
+      expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
+        data: null,
+        fetchedAt: 2,
+        linkedReviewHintKey: 'github:12'
+      })
+    }
+  )
+
+  it('writes a merged fallback result over an open cached PR', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const repoId = 'repo-1'
-    const branch = 'feature/fallback-miss'
-    const cachedPR = makePR({ number: 12, title: 'Visible cached PR' })
+    const branch = 'feature/fallback-found-merged'
+    const cachedPR = makePR({ number: 12, title: 'Visible open PR', state: 'open' })
+    const mergedPR = makePR({
+      number: 12,
+      title: 'Merged PR',
+      state: 'merged',
+      headSha: 'head-oid'
+    })
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
     store.setState({
@@ -1580,7 +2814,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
           data: {
             provider: 'github',
             number: 12,
-            title: 'Visible cached PR',
+            title: 'Visible open PR',
             state: 'open',
             url: 'https://github.com/acme/orca/pull/12',
             status: 'pending',
@@ -1592,7 +2826,11 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         }
       }
     } as unknown as Partial<AppState>)
-    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: mergedPR,
+      fetchedAt: 2
+    })
 
     await expect(
       store.getState().fetchPRForBranch(repoPath, branch, {
@@ -1600,15 +2838,208 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         repoId,
         fallbackPRNumber: 12
       })
+    ).resolves.toEqual(mergedPR)
+    expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
+      data: mergedPR,
+      fetchedAt: 2
+    })
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toMatchObject({
+      data: expect.objectContaining({ provider: 'github', number: 12, state: 'merged' }),
+      fetchedAt: 2,
+      linkedReviewHintKey: 'github:12'
+    })
+  })
+
+  it('preserves cached merged PR data when a forced no-PR refresh matches the worktree head', async () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/merged-pr-head-match'
+    const worktreeId = 'wt-merged-direct-match'
+    const cachedPR = makePR({
+      number: 12,
+      title: 'Merged PR still checked out',
+      state: 'merged',
+      headSha: 'merged-head'
+    })
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'merged-head'
+          })
+        ]
+      },
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, {
+        force: true,
+        repoId,
+        worktreeId
+      })
     ).resolves.toEqual(cachedPR)
     expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
       data: cachedPR,
       fetchedAt: 1
     })
-    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toMatchObject({
-      data: expect.objectContaining({ provider: 'github', number: 12 }),
-      fetchedAt: 1,
-      linkedReviewHintKey: 'github:12'
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mockApi.cache.setGitHub).not.toHaveBeenCalled()
+  })
+
+  it('preserves cached merged PR data when the worktree head is a confirmed PR commit', async () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/merged-pr-behind-head'
+    const worktreeId = 'wt-merged-behind-head'
+    const cachedPR = makePR({
+      number: 13,
+      title: 'Merged PR with unpulled final head',
+      state: 'merged',
+      headSha: 'merged-final-head',
+      confirmedContainedHeadOid: 'behind-head'
+    })
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'behind-head'
+          })
+        ]
+      },
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, {
+        force: true,
+        repoId,
+        worktreeId
+      })
+    ).resolves.toEqual(cachedPR)
+    expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
+      data: cachedPR,
+      fetchedAt: 1
+    })
+  })
+
+  it.each([
+    {
+      name: 'worktree id is missing',
+      worktreeId: undefined,
+      linkedPRNumber: undefined,
+      worktreesByRepo: {}
+    },
+    {
+      name: 'worktree cannot be found',
+      worktreeId: 'wt-missing',
+      linkedPRNumber: undefined,
+      worktreesByRepo: { 'repo-1': [] }
+    },
+    {
+      name: 'worktree head is empty',
+      worktreeId: 'wt-empty-head',
+      linkedPRNumber: undefined,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-empty-head',
+            branch: 'feature/merged-pr-stale-direct',
+            head: ''
+          })
+        ]
+      }
+    },
+    {
+      name: 'cached PR head differs from worktree head',
+      worktreeId: 'wt-moved-head',
+      linkedPRNumber: undefined,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-moved-head',
+            branch: 'feature/merged-pr-stale-direct',
+            head: 'new-head'
+          })
+        ]
+      }
+    },
+    {
+      name: 'an explicit linked PR lookup misses',
+      worktreeId: 'wt-linked-pr-miss',
+      linkedPRNumber: 12,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-linked-pr-miss',
+            branch: 'feature/merged-pr-stale-direct',
+            head: 'merged-head',
+            linkedPR: 12
+          })
+        ]
+      }
+    }
+  ])('clears cached merged PR data on forced no-PR refresh when $name', async (testCase) => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/merged-pr-stale-direct'
+    const cachedPR = makePR({
+      number: 12,
+      title: 'Stale merged PR',
+      state: 'merged',
+      headSha: 'merged-head'
+    })
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: testCase.worktreesByRepo,
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, {
+        force: true,
+        repoId,
+        worktreeId: testCase.worktreeId,
+        linkedPRNumber: testCase.linkedPRNumber
+      })
+    ).resolves.toBeNull()
+    expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
+      data: null,
+      fetchedAt: 2
     })
   })
 
@@ -1752,53 +3183,719 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
   })
 
-  it('preserves visible cached PR data when a fallback refresh event misses', () => {
+  it('clears a linked merged PR from a coordinator refresh event when the request head diverged', () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const repoId = 'repo-1'
-    const branch = 'feature/event-fallback-miss'
+    const branch = 'feature/coordinator-diverged'
+    const worktreeId = 'wt-coordinator-diverged'
     const cacheKey = `${repoId}::${branch}`
-    const cachedPR = makePR({ number: 12, title: 'Visible event PR' })
-    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+    const worktree = makePRRefreshWorktree({
+      id: worktreeId,
+      repoId,
+      branch,
+      head: 'current-head',
+      linkedPR: 12
+    })
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree
+    })
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases: [
+        {
+          cacheKey,
+          repoPath,
+          repoId,
+          branch,
+          worktreeId,
+          linkedPRNumber: 12,
+          currentHeadOid: 'current-head'
+        }
+      ],
+      outcome: {
+        kind: 'found',
+        pr: makePR({
+          number: 12,
+          state: 'merged',
+          headSha: 'merged-pr-head',
+          headDivergedFromMergedPRAtOid: 'current-head'
+        }),
+        fetchedAt: 2
+      }
+    })
+
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      worktreeId,
+      { linkedPR: null },
+      { shouldApply: expect.any(Function) }
+    )
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
+  })
+
+  it('clears a branch-mismatched linked open PR from an accepted coordinator event', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/current'
+    const worktreeId = 'wt-coordinator-open-mismatch'
+    const cacheKey = `${repoId}::${branch}`
+    const worktree = makePRRefreshWorktree({
+      id: worktreeId,
+      repoId,
+      branch,
+      head: 'current-head',
+      linkedPR: 12
+    })
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree
+    })
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases: [
+        {
+          cacheKey,
+          repoPath,
+          repoId,
+          branch,
+          worktreeId,
+          linkedPRNumber: 12,
+          currentHeadOid: 'current-head'
+        }
+      ],
+      outcome: {
+        kind: 'found',
+        pr: makePR({ number: 12, state: 'open', headSha: 'old-head', headRefName: 'feature/old' }),
+        fetchedAt: 2
+      }
+    })
+
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      worktreeId,
+      { linkedPR: null },
+      { shouldApply: expect.any(Function) }
+    )
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
+  })
+
+  it('does not scan worktrees for a found coordinator outcome without a durable PR link', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/unlinked'
+    let worktreeIdReads = 0
+    const worktrees = Array.from({ length: 100 }, (_, index) => {
+      const worktree = makePRRefreshWorktree({
+        id: `wt-${index}`,
+        repoId,
+        branch: `feature/${index}`,
+        head: `head-${index}`,
+        linkedPR: null
+      })
+      Object.defineProperty(worktree, 'id', {
+        enumerable: true,
+        get: () => {
+          worktreeIdReads += 1
+          return `wt-${index}`
+        }
+      })
+      return worktree
+    })
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: { [repoId]: worktrees }
+    } as unknown as Partial<AppState>)
+    worktreeIdReads = 0
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases: [
+        {
+          cacheKey: `${repoId}::${branch}`,
+          repoPath,
+          repoId,
+          branch,
+          worktreeId: 'wt-0',
+          linkedPRNumber: null,
+          currentHeadOid: 'head-0'
+        }
+      ],
+      outcome: {
+        kind: 'found',
+        pr: makePR({ number: 12, state: 'open', headRefName: branch }),
+        fetchedAt: 2
+      }
+    })
+
+    expect(worktreeIdReads).toBe(0)
+  })
+
+  it('indexes worktrees once for a coordinator outcome with many linked aliases', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/shared'
+    let worktreeIdReads = 0
+    const worktrees = Array.from({ length: 100 }, (_, index) => {
+      const worktree = makePRRefreshWorktree({
+        id: `wt-${index}`,
+        repoId,
+        branch,
+        head: 'shared-head',
+        linkedPR: 12
+      })
+      Object.defineProperty(worktree, 'id', {
+        enumerable: true,
+        get: () => {
+          worktreeIdReads += 1
+          return `wt-${index}`
+        }
+      })
+      return worktree
+    })
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: { [repoId]: worktrees }
+    } as unknown as Partial<AppState>)
+    worktreeIdReads = 0
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases: worktrees.map((_, index) => ({
+        cacheKey: `${repoId}::${branch}::${index}`,
+        repoPath,
+        repoId,
+        branch,
+        worktreeId: `wt-${index}`,
+        linkedPRNumber: 12,
+        currentHeadOid: 'shared-head'
+      })),
+      outcome: {
+        kind: 'found',
+        pr: makePR({ number: 12, state: 'open', headSha: 'shared-head', headRefName: branch }),
+        fetchedAt: 2
+      }
+    })
+
+    // One read per stored row proves aliases share the event-local index.
+    expect(worktreeIdReads).toBe(worktrees.length)
+  })
+
+  it('does not unlink from a branch-mismatched outcome rejected by the sequence gate', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/current'
+    const worktreeId = 'wt-coordinator-stale-sequence'
+    const cacheKey = `${repoId}::${branch}`
+    const worktree = makePRRefreshWorktree({
+      id: worktreeId,
+      repoId,
+      branch,
+      head: 'current-head',
+      linkedPR: 12
+    })
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree
+    })
+    const aliases = [
+      {
+        cacheKey,
+        repoPath,
+        repoId,
+        branch,
+        worktreeId,
+        linkedPRNumber: 12,
+        currentHeadOid: 'current-head'
+      }
+    ]
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 2,
+      reason: 'swr',
+      aliases,
+      outcome: {
+        kind: 'found',
+        pr: makePR({ number: 12, state: 'open', headRefName: branch }),
+        fetchedAt: 3
+      }
+    })
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases,
+      outcome: {
+        kind: 'found',
+        pr: makePR({ number: 12, state: 'open', headSha: 'old-head', headRefName: 'feature/old' }),
+        fetchedAt: 4
+      }
+    })
+
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
+    expect(store.getState().prRefreshSequences[cacheKey]).toBe(2)
+  })
+
+  it('does not unlink an ambiguous worktree id shared by multiple hosts', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/current'
+    const worktreeId = 'repo-1::/same/path'
+    const cacheKey = `${repoId}::${branch}`
+    const updateWorktreeMeta = vi.fn()
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'local-head',
+            linkedPR: 12,
+            hostId: 'local'
+          }),
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'ssh-head',
+            linkedPR: 12,
+            hostId: 'ssh:ssh-1'
+          })
+        ]
+      },
+      updateWorktreeMeta
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases: [
+        {
+          cacheKey,
+          repoPath,
+          repoId,
+          branch,
+          worktreeId,
+          linkedPRNumber: 12,
+          currentHeadOid: 'local-head'
+        }
+      ],
+      outcome: {
+        kind: 'found',
+        pr: makePR({ number: 12, state: 'open', headSha: 'old-head', headRefName: 'feature/old' }),
+        fetchedAt: 2
+      }
+    })
+
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[repoId]).toHaveLength(2)
+    expect(
+      store.getState().worktreesByRepo[repoId]?.every((worktree) => worktree.linkedPR === 12)
+    ).toBe(true)
+  })
+
+  it('does not let an old-host coordinator event unlink a row now owned by another host', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/current'
+    const worktreeId = 'repo-1::/same/path'
+    const cacheKey = `ssh:ssh-1::${repoId}::${branch}`
+    const updateWorktreeMeta = vi.fn()
+    store.setState({
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          connectionId: 'ssh-2'
+        }
+      ],
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'ssh-2-head',
+            linkedPR: 12,
+            hostId: 'ssh:ssh-2'
+          })
+        ]
+      },
+      updateWorktreeMeta
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases: [
+        {
+          cacheKey,
+          repoPath,
+          repoId,
+          branch,
+          worktreeId,
+          linkedPRNumber: 12,
+          currentHeadOid: 'old-host-head',
+          executionHostId: 'ssh:ssh-1'
+        }
+      ],
+      outcome: {
+        kind: 'found',
+        pr: makePR({ number: 12, state: 'open', headSha: 'old-head', headRefName: 'feature/old' }),
+        fetchedAt: 2
+      }
+    })
+
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
+  })
+
+  it('does not clear a linked merged PR from a coordinator refresh event without a request head', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/coordinator-no-head'
+    const worktreeId = 'wt-coordinator-no-head'
+    const cacheKey = `${repoId}::${branch}`
+    const updateWorktreeMeta = installLinkedPRClearStub(store, {
+      repoId,
+      repoPath,
+      branch,
+      worktree: makePRRefreshWorktree({
+        id: worktreeId,
+        repoId,
+        branch,
+        head: 'current-head',
+        linkedPR: 12
+      })
+    })
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases: [
+        { cacheKey, repoPath, repoId, branch, worktreeId, linkedPRNumber: 12, currentHeadOid: null }
+      ],
+      outcome: {
+        kind: 'found',
+        pr: makePR({
+          number: 12,
+          state: 'merged',
+          headSha: 'merged-pr-head',
+          headDivergedFromMergedPRAtOid: 'current-head'
+        }),
+        fetchedAt: 2
+      }
+    })
+
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
+  })
+
+  it('clears only the diverged worktree when a PR-number-coalesced event fans out to sibling aliases', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const worktreeA = makePRRefreshWorktree({
+      id: 'wt-a',
+      repoId,
+      branch: 'feature/a',
+      head: 'head-a',
+      linkedPR: 12
+    })
+    const worktreeB = makePRRefreshWorktree({
+      id: 'wt-b',
+      repoId,
+      branch: 'feature/b',
+      head: 'head-b',
+      linkedPR: 12
+    })
+    const updateWorktreeMeta = vi.fn(
+      async (
+        worktreeId: string,
+        updates: Parameters<AppState['updateWorktreeMeta']>[1],
+        options?: Parameters<AppState['updateWorktreeMeta']>[2]
+      ) => {
+        const current = store
+          .getState()
+          .worktreesByRepo[repoId]?.find((worktree) => worktree.id === worktreeId)
+        if (options?.shouldApply && !options.shouldApply(current)) {
+          return
+        }
+        store.setState((state) => ({
+          worktreesByRepo: {
+            ...state.worktreesByRepo,
+            [repoId]: (state.worktreesByRepo[repoId] ?? []).map((worktree) =>
+              worktree.id === worktreeId ? { ...worktree, ...updates } : worktree
+            )
+          }
+        }))
+      }
+    )
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: { [repoId]: [worktreeA, worktreeB] },
+      updateWorktreeMeta
+    } as unknown as Partial<AppState>)
+
+    // The coordinator coalesces linked PR refreshes by PR number, so one probe
+    // (worktree A's head) is broadcast to both aliases. Only A actually diverged;
+    // B is still on a contained commit and must keep its link.
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      reason: 'swr',
+      aliases: [
+        {
+          cacheKey: `${repoId}::feature/a`,
+          repoPath,
+          repoId,
+          branch: 'feature/a',
+          worktreeId: 'wt-a',
+          linkedPRNumber: 12,
+          currentHeadOid: 'head-a'
+        },
+        {
+          cacheKey: `${repoId}::feature/b`,
+          repoPath,
+          repoId,
+          branch: 'feature/b',
+          worktreeId: 'wt-b',
+          linkedPRNumber: 12,
+          currentHeadOid: 'head-b'
+        }
+      ],
+      outcome: {
+        kind: 'found',
+        pr: makePR({
+          number: 12,
+          state: 'merged',
+          headSha: 'merged-pr-head',
+          headDivergedFromMergedPRAtOid: 'head-a'
+        }),
+        fetchedAt: 2
+      }
+    })
+
+    const worktrees = store.getState().worktreesByRepo[repoId] ?? []
+    expect(worktrees.find((worktree) => worktree.id === 'wt-a')?.linkedPR).toBeNull()
+    expect(worktrees.find((worktree) => worktree.id === 'wt-b')?.linkedPR).toBe(12)
+  })
+
+  it.each(['open', 'draft'] as const)(
+    'clears visible cached %s PR data when a fallback refresh event misses',
+    (state) => {
+      const store = createTestStore()
+      const repoPath = '/repo'
+      const repoId = 'repo-1'
+      const branch = 'feature/event-fallback-miss'
+      const cacheKey = `${repoId}::${branch}`
+      const cachedPR = makePR({ number: 12, state, title: 'Visible event PR' })
+      const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+      store.setState({
+        prCache: {
+          [cacheKey]: {
+            data: cachedPR,
+            fetchedAt: 1
+          }
+        },
+        hostedReviewCache: {
+          [hostedReviewCacheKey]: {
+            data: {
+              provider: 'github',
+              number: 12,
+              title: 'Visible event PR',
+              state,
+              url: 'https://github.com/acme/orca/pull/12',
+              status: 'pending',
+              updatedAt: '2026-03-28T00:00:00Z',
+              mergeable: 'UNKNOWN'
+            },
+            fetchedAt: 1,
+            linkedReviewHintKey: 'github:12'
+          }
+        }
+      } as unknown as Partial<AppState>)
+
+      store.getState().applyGitHubPRRefreshEvent({
+        sequence: 1,
+        aliases: [{ cacheKey, repoId, repoPath, branch, fallbackPRNumber: 12 }],
+        reason: 'visible',
+        outcome: { kind: 'no-pr', fetchedAt: 2 }
+      })
+
+      expect(store.getState().prCache[cacheKey]).toEqual({ data: null, fetchedAt: 2 })
+      expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
+        data: null,
+        fetchedAt: 2,
+        linkedReviewHintKey: 'github:12'
+      })
+    }
+  )
+
+  it('preserves cached merged PR data when a no-PR refresh event matches the worktree head', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/event-merged-pr-head-match'
+    const cacheKey = `${repoId}::${branch}`
+    const worktreeId = 'wt-merged-event-match'
+    const cachedPR = makePR({
+      number: 12,
+      title: 'Merged event PR still checked out',
+      state: 'merged',
+      headSha: 'merged-head'
+    })
 
     store.setState({
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'merged-head'
+          })
+        ]
+      },
       prCache: {
         [cacheKey]: {
           data: cachedPR,
           fetchedAt: 1
-        }
-      },
-      hostedReviewCache: {
-        [hostedReviewCacheKey]: {
-          data: {
-            provider: 'github',
-            number: 12,
-            title: 'Visible event PR',
-            state: 'open',
-            url: 'https://github.com/acme/orca/pull/12',
-            status: 'pending',
-            updatedAt: '2026-03-28T00:00:00Z',
-            mergeable: 'UNKNOWN'
-          },
-          fetchedAt: 1,
-          linkedReviewHintKey: 'github:12'
         }
       }
     } as unknown as Partial<AppState>)
 
     store.getState().applyGitHubPRRefreshEvent({
       sequence: 1,
-      aliases: [{ cacheKey, repoId, repoPath, branch, fallbackPRNumber: 12 }],
+      aliases: [{ cacheKey, repoId, repoPath, branch, worktreeId }],
       reason: 'visible',
       outcome: { kind: 'no-pr', fetchedAt: 2 }
     })
 
     expect(store.getState().prCache[cacheKey]).toEqual({ data: cachedPR, fetchedAt: 1 })
-    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toMatchObject({
-      data: expect.objectContaining({ provider: 'github', number: 12 }),
-      fetchedAt: 1,
-      linkedReviewHintKey: 'github:12'
+    vi.advanceTimersByTime(1000)
+    expect(mockApi.cache.setGitHub).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      name: 'worktree id is missing',
+      worktreeId: undefined,
+      linkedPRNumber: undefined,
+      worktreesByRepo: {}
+    },
+    {
+      name: 'worktree cannot be found',
+      worktreeId: 'wt-missing-event',
+      linkedPRNumber: undefined,
+      worktreesByRepo: { 'repo-1': [] }
+    },
+    {
+      name: 'worktree head is empty',
+      worktreeId: 'wt-empty-event-head',
+      linkedPRNumber: undefined,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-empty-event-head',
+            branch: 'feature/event-merged-pr-stale',
+            head: ''
+          })
+        ]
+      }
+    },
+    {
+      name: 'cached PR head differs from worktree head',
+      worktreeId: 'wt-moved-event-head',
+      linkedPRNumber: undefined,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-moved-event-head',
+            branch: 'feature/event-merged-pr-stale',
+            head: 'new-head'
+          })
+        ]
+      }
+    },
+    {
+      name: 'an explicit linked PR lookup misses',
+      worktreeId: 'wt-linked-event-miss',
+      linkedPRNumber: 12,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-linked-event-miss',
+            branch: 'feature/event-merged-pr-stale',
+            head: 'merged-head',
+            linkedPR: 12
+          })
+        ]
+      }
+    }
+  ])('clears cached merged PR data on no-PR refresh event when $name', (testCase) => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/event-merged-pr-stale'
+    const cacheKey = `${repoId}::${branch}`
+    const cachedPR = makePR({
+      number: 12,
+      title: 'Stale merged event PR',
+      state: 'merged',
+      headSha: 'merged-head'
     })
+
+    store.setState({
+      worktreesByRepo: testCase.worktreesByRepo,
+      prCache: {
+        [cacheKey]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [
+        {
+          cacheKey,
+          repoId,
+          repoPath,
+          branch,
+          worktreeId: testCase.worktreeId,
+          linkedPRNumber: testCase.linkedPRNumber
+        }
+      ],
+      reason: 'visible',
+      outcome: { kind: 'no-pr', fetchedAt: 2 }
+    })
+
+    expect(store.getState().prCache[cacheKey]).toEqual({ data: null, fetchedAt: 2 })
   })
 
   it('updates hosted review cache from GitHub PR refresh events', () => {
@@ -1960,6 +4057,51 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       fetchedAt: 3,
       linkedReviewHintKey: 'github:12'
     })
+  })
+
+  it('ignores a queued exact linked PR refresh after the worktree was unlinked', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/unlinked-event-pr'
+    const cacheKey = `${repoId}::${branch}`
+    const worktreeId = 'wt-unlinked-event-pr'
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+    store.setState({
+      worktreesByRepo: {
+        [repoId]: [
+          {
+            id: worktreeId,
+            repoId,
+            path: '/repo/worktrees/unlinked-event-pr',
+            branch,
+            displayName: 'unlinked-event-pr',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            linkedPR: null
+          }
+        ]
+      },
+      hostedReviewCache: {},
+      prCache: {}
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch, worktreeId, linkedPRNumber: 12 }],
+      reason: 'visible',
+      requestStartedAt: Date.now() - 1_000,
+      outcome: {
+        kind: 'found',
+        pr: makePR({ number: 12, title: 'Stale queued linked PR' }),
+        fetchedAt: Date.now()
+      }
+    })
+
+    expect(store.getState().prCache[cacheKey]).toBeUndefined()
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toBeUndefined()
   })
 
   it('uses the in-flight event entry to allow same-millisecond coordinator refreshes', () => {
@@ -2139,7 +4281,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
   })
 
-  it('does not apply local GitHub PR refresh events while a runtime is active', () => {
+  it('applies local GitHub PR refresh events without touching runtime-scoped cache', () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const repoId = 'repo-1'
@@ -2147,8 +4289,29 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const cacheKey = `${repoId}::${branch}`
     const settings = { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
     const runtimeHostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, settings, repoId)
+    const localHostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+    const localChecksCacheKey = `${repoId}::${prChecksCacheSuffix(12, null, 'head-oid')}`
+    const runtimeChecksCacheKey = `runtime:env-1::${repoId}::${prChecksCacheSuffix(
+      12,
+      null,
+      'head-oid'
+    )}`
 
-    store.setState({ settings } as Partial<AppState>)
+    store.setState({
+      settings,
+      checksCache: {
+        [localChecksCacheKey]: {
+          data: [{ name: 'test', status: 'completed', conclusion: 'failure', url: null }],
+          fetchedAt: 1,
+          headSha: 'head-oid'
+        },
+        [runtimeChecksCacheKey]: {
+          data: [{ name: 'test', status: 'completed', conclusion: 'success', url: null }],
+          fetchedAt: 1,
+          headSha: 'head-oid'
+        }
+      }
+    } as Partial<AppState>)
 
     store.getState().applyGitHubPRRefreshEvent({
       sequence: 1,
@@ -2156,13 +4319,21 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       reason: 'visible',
       outcome: {
         kind: 'found',
-        pr: makePR({ number: 12, title: 'Local PR status' }),
+        pr: makePR({ number: 12, title: 'Local PR status', checksStatus: 'pending' }),
         fetchedAt: 2
       }
     })
 
-    expect(store.getState().prCache[cacheKey]).toBeUndefined()
-    expect(store.getState().prRefreshSequences[cacheKey]).toBeUndefined()
+    expect(store.getState().prCache[cacheKey]?.data).toMatchObject({
+      number: 12,
+      title: 'Local PR status',
+      checksStatus: 'failure'
+    })
+    expect(store.getState().prRefreshSequences[cacheKey]).toBe(1)
+    expect(store.getState().hostedReviewCache[localHostedReviewCacheKey]?.data).toMatchObject({
+      provider: 'github',
+      number: 12
+    })
     expect(store.getState().hostedReviewCache[runtimeHostedReviewCacheKey]).toBeUndefined()
   })
 
@@ -2291,6 +4462,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(1)
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith({
       branch,
+      currentHeadOid: null,
       linkedAzureDevOpsPR: null,
       linkedBitbucketPR: null,
       linkedGitHubPR: null,
@@ -2458,7 +4630,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
           }
         ]
       },
-      worktreeCardProperties: ['pr'],
+      worktreeCardProperties: ['status', 'pr'],
       prCache: {
         [`repo-1::${branch}`]: {
           data: makePR({ state: 'open' }),
@@ -2480,6 +4652,166 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       reason: 'active',
       priority: 80
     })
+  })
+
+  it('does not direct-fetch when enqueue returns an automatic validation skip', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+    mockApi.gh.enqueuePRRefresh.mockResolvedValueOnce({
+      kind: 'skipped',
+      skippedReason: 'validation-denied'
+    })
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().enqueueGitHubPRRefresh(worktreeId, 'active', 80)
+    await Promise.resolve()
+
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledTimes(1)
+    expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
+  })
+
+  it('keeps a confirmed behind-head merged PR as the refresh fallback number', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/merged-pr-behind-head'
+    const worktreeId = 'wt-merged-behind-fallback'
+    mockApi.gh.enqueuePRRefresh.mockResolvedValueOnce({ kind: 'queued' })
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'behind-head'
+          })
+        ]
+      },
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: makePR({
+            number: 13,
+            title: 'Merged PR with unpulled final head',
+            state: 'merged',
+            headSha: 'merged-final-head',
+            confirmedContainedHeadOid: 'behind-head'
+          }),
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().enqueueGitHubPRRefresh(worktreeId, 'active', 80)
+    await Promise.resolve()
+
+    // Why 13: a merged PR confirmed to contain this worktree head is still the
+    // branch's PR; losing the fallback number would blank the panel whenever
+    // GitHub stops reporting the deleted head by branch name.
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledWith(
+      expect.objectContaining({
+        candidate: expect.objectContaining({
+          fallbackPRNumber: 13,
+          // Why: main can only head-gate fallback preservation when the
+          // candidate carries the worktree head it was built for.
+          currentHeadOid: 'behind-head'
+        })
+      })
+    )
+  })
+
+  it('direct-fetches when enqueue returns an explicit fallback result', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+    mockApi.gh.enqueuePRRefresh.mockResolvedValueOnce({ kind: 'fallback' })
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 1 })
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().enqueueGitHubPRRefresh(worktreeId, 'active', 80)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledTimes(1)
+    expect(mockApi.gh.refreshPRNow).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds rejected active PR refresh IPCs during worktree activation', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+    const error = new Error('Access denied: unknown repository path')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.enqueuePRRefresh.mockRejectedValueOnce(error)
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      },
+      worktreeCardProperties: ['status', 'pr']
+    } as unknown as Partial<AppState>)
+
+    try {
+      store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
+
+      await vi.waitFor(() =>
+        expect(warn).toHaveBeenCalledWith('Failed to enqueue PR refresh:', error)
+      )
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('enqueues active PR refresh with a GitHub hosted-review fallback number', () => {
@@ -2507,7 +4839,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
           }
         ]
       },
-      worktreeCardProperties: ['pr'],
+      worktreeCardProperties: ['status', 'pr'],
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: {
@@ -2748,14 +5080,25 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       {
         activeRuntimeEnvironmentId: 'env-1'
       } as AppState['settings'],
-      'repo-1'
+      'repo-1',
+      null,
+      'runtime:env-1',
+      true
     )
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       groupBy: 'pr-status',
-      worktreeCardProperties: ['pr'],
+      worktreeCardProperties: ['status'],
       worktreesByRepo: {
         'repo-1': [
           {
@@ -2780,7 +5123,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-1', branch, linkedPRNumber: 12 },
+      params: { repo: 'repo-1', branch, linkedPRNumber: 12, currentHeadOid: null },
       timeoutMs: 30_000
     })
     expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toMatchObject({
@@ -2794,6 +5137,92 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       number: 12
     })
     expect(store.getState().prCache[`repo-1::${branch}`]).toBeUndefined()
+  })
+
+  it('fetches PR through the owning runtime when local host is focused', async () => {
+    resetRemoteRuntimeMocks()
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: makePR({ number: 23, title: 'Owner runtime PR' }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/runtime/repo'
+    const branch = 'feature/owner-runtime'
+
+    store.setState({
+      settings: null,
+      repos: [
+        {
+          id: 'repo-runtime',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          connectionId: null,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, { repoId: 'repo-runtime' })
+    ).resolves.toMatchObject({ number: 23 })
+
+    expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.prForBranch',
+      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: null },
+      timeoutMs: 30_000
+    })
+    expect(store.getState().prCache[`runtime:env-1::repo-runtime::${branch}`]?.data).toMatchObject({
+      number: 23,
+      title: 'Owner runtime PR'
+    })
+  })
+
+  it('fetches SSH-owned PRs through local IPC when a runtime host is focused', async () => {
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ number: 34, title: 'SSH PR' }),
+      fetchedAt: 10
+    })
+    const store = createTestStore()
+    const repoPath = '/ssh/repo'
+    const branch = 'feature/ssh-owner'
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-focused' } as AppState['settings'],
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, { repoId: 'repo-ssh' })
+    ).resolves.toMatchObject({ number: 34 })
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
+      candidate: expect.objectContaining({
+        cacheKey: `ssh:ssh-1::repo-ssh::${branch}`,
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1'
+      })
+    })
+    expect(store.getState().prCache[`ssh:ssh-1::repo-ssh::${branch}`]?.data).toMatchObject({
+      number: 34,
+      title: 'SSH PR'
+    })
+    expect(store.getState().prCache[`runtime:env-focused::repo-ssh::${branch}`]).toBeUndefined()
   })
 
   it('uses the cached PR number as a fallback refresh hint when worktree metadata is not linked yet', () => {
@@ -2887,6 +5316,49 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     })
   })
 
+  it('bounds rejected stale PR refresh IPCs', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const error = new Error('Access denied: unknown repository path')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.enqueuePRRefresh.mockRejectedValueOnce(error)
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      groupBy: 'repo',
+      worktreeCardProperties: ['comment'],
+      activeWorktreeId: 'wt-1',
+      rightSidebarOpen: true,
+      rightSidebarTab: 'source-control',
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            lastActivityAt: 1
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    try {
+      store.getState().refreshAllGitHub()
+
+      await vi.waitFor(() =>
+        expect(warn).toHaveBeenCalledWith('Failed to enqueue PR refresh:', error)
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('refreshes runtime PR data directly instead of enqueueing local coordinator work', async () => {
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-1',
@@ -2900,7 +5372,15 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
       activeWorktreeId: 'wt-1',
@@ -2930,7 +5410,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-1', branch, linkedPRNumber: null },
+      params: { repo: 'repo-1', branch, linkedPRNumber: null, currentHeadOid: null },
       timeoutMs: 30_000
     })
   })
@@ -3028,7 +5508,15 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       worktreesByRepo: {
         'repo-1': [
           {
@@ -3052,9 +5540,47 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-1', branch, linkedPRNumber: null },
+      params: { repo: 'repo-1', branch, linkedPRNumber: null, currentHeadOid: null },
       timeoutMs: 30_000
     })
+  })
+
+  it('bounds rejected post-push PR refresh IPCs', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const worktreeId = 'wt-1'
+    const error = new Error('Access denied: unknown repository path')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.enqueuePRRefresh.mockRejectedValueOnce(error)
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: worktreeId,
+            repoId: 'repo-1',
+            path: '/repo/worktrees/test',
+            branch,
+            displayName: 'test',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+
+    try {
+      store.getState().refreshGitHubForWorktree(worktreeId)
+
+      await vi.waitFor(() =>
+        expect(warn).toHaveBeenCalledWith('Failed to enqueue PR refresh:', error)
+      )
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 
@@ -3065,7 +5591,10 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
-      result: { items: [], sources: { issues: null, prs: null, upstreamCandidate: null } },
+      result: {
+        items: [],
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+      },
       _meta: { runtimeId: 'remote-runtime' }
     })
   })
@@ -3077,7 +5606,12 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const store = createTestStore()
     mockApi.gh.listWorkItems.mockResolvedValueOnce({
       items: [],
-      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'fork', repo: 'r' } }
+      sources: {
+        issues: { owner: 'up', repo: 'r' },
+        prs: { owner: 'fork', repo: 'r' },
+        originCandidate: { owner: 'fork', repo: 'r' },
+        upstreamCandidate: { owner: 'up', repo: 'r' }
+      }
     })
 
     await store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
@@ -3085,7 +5619,9 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const result = store.getState().getWorkItemsSourcesAndError('repo-id', 24, '')
     expect(result.sources).toEqual({
       issues: { owner: 'up', repo: 'r' },
-      prs: { owner: 'fork', repo: 'r' }
+      prs: { owner: 'fork', repo: 'r' },
+      originCandidate: { owner: 'fork', repo: 'r' },
+      upstreamCandidate: { owner: 'up', repo: 'r' }
     })
     expect(result.error).toBeNull()
   })
@@ -3100,7 +5636,12 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const store = createTestStore()
     mockApi.gh.listWorkItems.mockResolvedValueOnce({
       items: [],
-      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'fork', repo: 'r' } },
+      sources: {
+        issues: { owner: 'up', repo: 'r' },
+        prs: { owner: 'fork', repo: 'r' },
+        originCandidate: { owner: 'fork', repo: 'r' },
+        upstreamCandidate: { owner: 'up', repo: 'r' }
+      },
       errors: { issues: { type: 'permission_denied', message: 'no access' } }
     })
 
@@ -3126,7 +5667,12 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
     mockApi.gh.listWorkItems.mockReturnValueOnce(failingRequest).mockResolvedValueOnce({
       items: [],
-      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'fork', repo: 'r' } }
+      sources: {
+        issues: { owner: 'up', repo: 'r' },
+        prs: { owner: 'fork', repo: 'r' },
+        originCandidate: { owner: 'fork', repo: 'r' },
+        upstreamCandidate: { owner: 'up', repo: 'r' }
+      }
     })
 
     const initialFetch = store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
@@ -3135,7 +5681,12 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     // Let the initial request settle with an error so the force path runs.
     resolveFailing({
       items: [],
-      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'fork', repo: 'r' } },
+      sources: {
+        issues: { owner: 'up', repo: 'r' },
+        prs: { owner: 'fork', repo: 'r' },
+        originCandidate: { owner: 'fork', repo: 'r' },
+        upstreamCandidate: { owner: 'up', repo: 'r' }
+      },
       errors: { issues: { type: 'permission_denied', message: 'no access' } }
     })
     await initialFetch.catch(() => {})
@@ -3151,15 +5702,15 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     mockApi.gh.listWorkItems
       .mockResolvedValueOnce({
         items: [],
-        sources: { issues: null, prs: null, upstreamCandidate: null }
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
       })
       .mockResolvedValueOnce({
         items: [],
-        sources: { issues: null, prs: null, upstreamCandidate: null }
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
       })
       .mockResolvedValueOnce({
         items: [],
-        sources: { issues: null, prs: null, upstreamCandidate: null }
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
       })
 
     await store.getState().fetchWorkItems('repo-normal', '/repo/normal', 24, '')
@@ -3194,7 +5745,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const store = createTestStore()
     type WorkItemsEnvelope = {
       items: []
-      sources: { issues: null; prs: null; upstreamCandidate: null }
+      sources: { issues: null; prs: null; originCandidate: null; upstreamCandidate: null }
     }
     let resolveCacheable: (value: WorkItemsEnvelope) => void = () => {}
     const cacheableRequest = new Promise<WorkItemsEnvelope>((resolve) => {
@@ -3202,7 +5753,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
     mockApi.gh.listWorkItems.mockReturnValueOnce(cacheableRequest).mockResolvedValueOnce({
       items: [],
-      sources: { issues: null, prs: null, upstreamCandidate: null }
+      sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
     })
 
     const landingProbe = store
@@ -3216,7 +5767,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(1)
     resolveCacheable({
       items: [],
-      sources: { issues: null, prs: null, upstreamCandidate: null }
+      sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
     })
     await landingProbe
     await noCacheRefresh
@@ -3231,13 +5782,27 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
   })
 
-  it('routes work item fetches through repo-scoped IPC even when a runtime is active', async () => {
+  it('routes work item fetches through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items',
+      ok: true,
+      result: {
+        items: [{ type: 'issue', number: 7, title: 'Server issue', url: 'https://example.test/7' }],
+        sources: {
+          issues: { owner: 'up', repo: 'r' },
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       repos: [
         {
-          id: 'repo-id',
+          id: 'runtime-repo-id',
           path: '/server/repo',
           displayName: 'repo',
           badgeColor: 'blue',
@@ -3245,24 +5810,470 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         }
       ]
     } as Partial<AppState>)
-    mockApi.gh.listWorkItems.mockResolvedValueOnce({
-      items: [{ type: 'issue', number: 7, title: 'Server issue', url: 'https://example.test/7' }],
-      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+
+    await store.getState().fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open', {
+      force: true,
+      noCache: true
     })
 
-    await store.getState().fetchWorkItems('repo-id', '/server/repo', 24, '')
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'runtime-repo-id',
+        limit: 24,
+        query: 'is:open',
+        noCache: true
+      },
+      timeoutMs: 30_000
+    })
+    expect(
+      store.getState().workItemsCache[
+        workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-1')
+      ].data?.[0]
+    ).toMatchObject({
+      repoId: 'caller-repo-id',
+      number: 7
+    })
+  })
+
+  it('routes work item fetches through the owning runtime when local is focused', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-owner',
+      ok: true,
+      result: {
+        items: [
+          { type: 'issue', number: 17, title: 'Owner issue', url: 'https://example.test/17' }
+        ],
+        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: null,
+      repos: [
+        {
+          id: 'runtime-repo-id',
+          path: '/server/repo',
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as Partial<AppState>)
+
+    await store.getState().fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open')
+
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'runtime-repo-id',
+        limit: 24,
+        query: 'is:open'
+      },
+      timeoutMs: 30_000
+    })
+    expect(
+      store.getState().workItemsCache[
+        workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-1')
+      ]?.data?.[0]
+    ).toMatchObject({ repoId: 'caller-repo-id', number: 17 })
+  })
+
+  it('routes work item fetches through an explicit GitHub source context', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-source-context',
+      ok: true,
+      result: {
+        items: [
+          { type: 'issue', number: 19, title: 'Source issue', url: 'https://example.test/19' }
+        ],
+        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+      },
+      _meta: { runtimeId: 'source-runtime' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+      repos: [
+        {
+          id: 'local-repo-id',
+          path: '/server/repo',
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1
+        }
+      ]
+    } as Partial<AppState>)
+
+    const sourceContext = {
+      kind: 'task-source' as const,
+      provider: 'github' as const,
+      projectId: 'github:stablyai/orca',
+      hostId: 'runtime:source-runtime' as const,
+      projectHostSetupId: 'setup-1',
+      repoId: 'source-runtime-repo-id',
+      providerIdentity: { provider: 'github' as const, owner: 'stablyai', repo: 'orca' }
+    }
+
+    await store.getState().fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open', {
+      sourceContext
+    })
+
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'source-runtime',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'source-runtime-repo-id',
+        limit: 24,
+        query: 'is:open'
+      },
+      timeoutMs: 30_000
+    })
+    expect(
+      store.getState().workItemsCache[
+        workItemsCacheKey('caller-repo-id', 24, 'is:open', getTaskSourceCacheScope(sourceContext))
+      ]?.data?.[0]
+    ).toMatchObject({ repoId: 'caller-repo-id', number: 19 })
+    expect(
+      store.getState().workItemsCache[
+        workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:focused-runtime')
+      ]
+    ).toBeUndefined()
+  })
+
+  it('keeps explicit GitHub source identities in separate work-item cache buckets', async () => {
+    const store = createTestStore()
+    const firstSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'github' as const,
+      projectId: 'project-1',
+      hostId: 'local' as const,
+      projectHostSetupId: 'setup-1',
+      repoId: 'repo-1',
+      providerIdentity: { provider: 'github' as const, owner: 'acme', repo: 'orca' }
+    }
+    const secondSourceContext = {
+      ...firstSourceContext,
+      providerIdentity: { provider: 'github' as const, owner: 'stablyai', repo: 'orca' }
+    }
+    mockApi.gh.listWorkItems
+      .mockResolvedValueOnce({
+        items: [{ type: 'issue', number: 1, title: 'Acme', url: 'https://example.test/1' }],
+        sources: { issues: { owner: 'acme', repo: 'orca' }, prs: { owner: 'acme', repo: 'orca' } }
+      })
+      .mockResolvedValueOnce({
+        items: [{ type: 'issue', number: 2, title: 'Stably', url: 'https://example.test/2' }],
+        sources: {
+          issues: { owner: 'stablyai', repo: 'orca' },
+          prs: { owner: 'stablyai', repo: 'orca' }
+        }
+      })
+
+    await store.getState().fetchWorkItems('repo-1', '/repo', 24, '', {
+      sourceContext: firstSourceContext
+    })
+    await store.getState().fetchWorkItems('repo-1', '/repo', 24, '', {
+      sourceContext: secondSourceContext
+    })
+
+    expect(
+      store.getState().workItemsCache[
+        workItemsCacheKey('repo-1', 24, '', getTaskSourceCacheScope(firstSourceContext))
+      ]?.data?.[0]?.number
+    ).toBe(1)
+    expect(
+      store.getState().workItemsCache[
+        workItemsCacheKey('repo-1', 24, '', getTaskSourceCacheScope(secondSourceContext))
+      ]?.data?.[0]?.number
+    ).toBe(2)
+  })
+
+  it('routes SSH-owned work item fetches through local IPC when a runtime is focused', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [{ type: 'issue', number: 27, title: 'SSH issue', url: 'https://example.test/27' }],
+      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-focused' } as AppState['settings'],
+      repos: [
+        {
+          id: 'ssh-repo-id',
+          path: '/ssh/repo',
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1'
+        }
+      ]
+    } as Partial<AppState>)
+
+    await store.getState().fetchWorkItems('ssh-repo-id', '/ssh/repo', 24, '')
 
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledWith({
-      repoPath: '/server/repo',
+      repoPath: '/ssh/repo',
+      repoId: 'ssh-repo-id',
+      limit: 24,
+      query: undefined
+    })
+    expect(
+      store.getState().workItemsCache[workItemsCacheKey('ssh-repo-id', 24, '', 'ssh:ssh-1')]
+        ?.data?.[0]
+    ).toMatchObject({ repoId: 'ssh-repo-id', number: 27 })
+    expect(
+      store.getState().workItemsCache[
+        workItemsCacheKey('ssh-repo-id', 24, '', 'runtime:env-focused')
+      ]
+    ).toBeUndefined()
+  })
+
+  it('falls back to local work-item IPC when no runtime environment is active', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [{ type: 'issue', number: 7, title: 'Local issue', url: 'https://example.test/7' }],
+      sources: {
+        issues: { owner: 'up', repo: 'r' },
+        prs: { owner: 'up', repo: 'r' },
+        originCandidate: { owner: 'up', repo: 'r' },
+        upstreamCandidate: null
+      }
+    })
+
+    await store.getState().fetchWorkItems('repo-id', '/local/repo', 24, '')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledWith({
+      repoPath: '/local/repo',
       repoId: 'repo-id',
       limit: 24,
       query: undefined
     })
-    expect(store.getState().workItemsCache['repo-id::24::'].data?.[0]).toMatchObject({
+  })
+
+  it('falls back to local work-item IPC when the active runtime has no matching repo path', async () => {
+    const store = createTestStore()
+    const error = new Error('Access denied: unknown repository path')
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/known-repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    mockApi.gh.listWorkItems.mockRejectedValueOnce(error)
+
+    try {
+      await expect(
+        store.getState().fetchWorkItems('repo-id', '/server/missing-repo', 24, '')
+      ).rejects.toThrow(error)
+    } finally {
+      consoleError.mockRestore()
+    }
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledWith({
+      repoPath: '/server/missing-repo',
       repoId: 'repo-id',
-      number: 7
+      limit: 24,
+      query: undefined
     })
+  })
+
+  it('uses the request-start runtime repo snapshot and skips cache writes after a runtime switch', async () => {
+    const store = createTestStore()
+    type WorkItemsEnvelope = {
+      items: GitHubWorkItem[]
+      sources: { issues: null; prs: null; originCandidate: null; upstreamCandidate: null }
+    }
+    const blockingResolvers: ((value: WorkItemsEnvelope) => void)[] = []
+    for (let i = 0; i < 8; i++) {
+      mockApi.gh.listWorkItems.mockImplementationOnce(
+        () =>
+          new Promise<WorkItemsEnvelope>((resolve) => {
+            blockingResolvers.push(resolve)
+          })
+      )
+    }
+
+    const blockers = Array.from({ length: 8 }, (_, i) =>
+      store.getState().fetchWorkItems(`blocker-${i}`, `/local/blocker-${i}`, 24, '')
+    )
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(blockingResolvers).toHaveLength(8)
+
+    const item = {
+      type: 'issue',
+      number: 42,
+      title: 'Started before switch',
+      url: 'https://example.test/42',
+      updatedAt: '2026-05-22T00:00:00Z'
+    } as GitHubWorkItem
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-started-before-switch',
+      ok: true,
+      result: {
+        items: [item],
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-start' },
+      repos: [{ id: 'repo-start', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    const queued = store
+      .getState()
+      .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open', { force: true })
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-switched' },
+      repos: [{ id: 'repo-switched', path: '/server/repo', name: 'repo', kind: 'git' }],
+      workItemsCache: {}
+    } as unknown as Partial<AppState>)
+    for (const resolve of blockingResolvers) {
+      resolve({
+        items: [],
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+      })
+    }
+
+    const result = await queued
+    await Promise.all(blockers)
+
+    expect(result).toEqual([{ ...item, repoId: 'caller-repo-id' }])
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-start',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'repo-start',
+        limit: 24,
+        query: 'is:open'
+      },
+      timeoutMs: 30_000
+    })
+    expect(
+      store.getState().workItemsCache[workItemsCacheKey('caller-repo-id', 24, 'is:open')]
+    ).toBeUndefined()
+  })
+
+  it('does not reuse an old-runtime in-flight work-item fetch after a runtime switch', async () => {
+    const store = createTestStore()
+    type WorkItemsEnvelope = {
+      items: GitHubWorkItem[]
+      sources: { issues: null; prs: null; originCandidate: null; upstreamCandidate: null }
+    }
+    type WorkItemsRpcResponse = {
+      id: string
+      ok: true
+      result: WorkItemsEnvelope
+      _meta: { runtimeId: string }
+    }
+    let resolveOldRuntime: (value: WorkItemsRpcResponse) => void = () => {}
+    let resolveNewRuntime: (value: WorkItemsRpcResponse) => void = () => {}
+    runtimeEnvironmentCall
+      .mockImplementationOnce(
+        () =>
+          new Promise<WorkItemsRpcResponse>((resolve) => {
+            resolveOldRuntime = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<WorkItemsRpcResponse>((resolve) => {
+            resolveNewRuntime = resolve
+          })
+      )
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-old' },
+      repos: [{ id: 'repo-old-runtime', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    const oldFetch = store
+      .getState()
+      .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open')
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-new' },
+      repos: [{ id: 'repo-new-runtime', path: '/server/repo', name: 'repo', kind: 'git' }],
+      workItemsCache: {}
+    } as unknown as Partial<AppState>)
+    const newFetch = store
+      .getState()
+      .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open')
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2))
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
+      selector: 'env-old',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'repo-old-runtime',
+        limit: 24,
+        query: 'is:open'
+      },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-new',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'repo-new-runtime',
+        limit: 24,
+        query: 'is:open'
+      },
+      timeoutMs: 30_000
+    })
+
+    const newRuntimeItem = {
+      type: 'issue',
+      number: 2,
+      title: 'New runtime item',
+      url: 'https://example.test/new',
+      updatedAt: '2026-05-22T00:00:00Z'
+    } as GitHubWorkItem
+    resolveNewRuntime({
+      id: 'rpc-new-work-items',
+      ok: true,
+      result: {
+        items: [newRuntimeItem],
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+      },
+      _meta: { runtimeId: 'new-runtime' }
+    })
+    await expect(newFetch).resolves.toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
+
+    const oldRuntimeItem = {
+      type: 'issue',
+      number: 1,
+      title: 'Old runtime item',
+      url: 'https://example.test/old',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+    resolveOldRuntime({
+      id: 'rpc-old-work-items',
+      ok: true,
+      result: {
+        items: [oldRuntimeItem],
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+      },
+      _meta: { runtimeId: 'old-runtime' }
+    })
+    await expect(oldFetch).resolves.toEqual([{ ...oldRuntimeItem, repoId: 'caller-repo-id' }])
+    expect(
+      store.getState().workItemsCache[
+        workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-new')
+      ]?.data
+    ).toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
   })
 
   it('bounds work-item cache entries across many repos', async () => {
@@ -3272,7 +6283,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       const store = createTestStore()
       mockApi.gh.listWorkItems.mockResolvedValue({
         items: [],
-        sources: { issues: null, prs: null, upstreamCandidate: null }
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
       })
 
       for (let i = 0; i <= 500; i++) {
@@ -3305,7 +6316,12 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       .mockRejectedValueOnce(new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE))
       .mockResolvedValueOnce({
         items: [item],
-        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+        sources: {
+          issues: { owner: 'up', repo: 'r' },
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
       })
 
     try {
@@ -3329,6 +6345,222 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     }
   })
 
+  it('flags githubUnavailable when a GitHub repo fails with a 5xx outage and no cache', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems.mockRejectedValue(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'github-repo', path: '/server/github-repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.items).toEqual([])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(true)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('flags a GitHub outage returned by a remote runtime method', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-outage',
+      ok: false,
+      error: { code: 'runtime_error', message: 'HTTP 503: Service Unavailable' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.githubUnavailable).toBe(true)
+      expect(result.failedCount).toBe(1)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not attribute a remote runtime transport timeout to GitHub', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-runtime-timeout',
+      ok: false,
+      error: {
+        code: 'runtime_unavailable',
+        message: 'Runtime request timed out before github.listWorkItems completed'
+      },
+      _meta: { runtimeId: null }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.githubUnavailable).toBe(false)
+      expect(result.failedCount).toBe(1)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('flags githubUnavailable while serving stale cached rows after a failed refresh', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const item = {
+      type: 'pr',
+      number: 8,
+      title: 'Cached PR',
+      url: 'https://example.test/8',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+    mockApi.gh.listWorkItems
+      .mockResolvedValueOnce({
+        items: [item],
+        sources: {
+          issues: null,
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
+      })
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const repos = [{ repoId: 'github-repo', path: '/server/github-repo' }]
+      await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '')
+
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(repos, 24, 100, '', { force: true })
+
+      expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
+      expect(result.failedCount).toBe(0)
+      expect(result.githubUnavailable).toBe(true)
+      expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('ignores an ineligible SSH repo when every GitHub source is unavailable', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems
+      .mockRejectedValueOnce(new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE))
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const result = await store.getState().fetchWorkItemsAcrossRepos(
+        [
+          { repoId: 'ssh-repo', path: '/server/ssh-repo' },
+          { repoId: 'github-repo', path: '/server/github-repo' }
+        ],
+        24,
+        100,
+        ''
+      )
+
+      expect(result.items).toEqual([])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(true)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('keeps the partial-failure count when another GitHub repo still loads', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const item = {
+      type: 'pr',
+      number: 8,
+      title: 'Loaded PR',
+      url: 'https://example.test/8',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+    mockApi.gh.listWorkItems
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+      .mockResolvedValueOnce({
+        items: [item],
+        sources: {
+          issues: null,
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
+      })
+
+    try {
+      const result = await store.getState().fetchWorkItemsAcrossRepos(
+        [
+          { repoId: 'unavailable-repo', path: '/server/unavailable-repo' },
+          { repoId: 'loaded-repo', path: '/server/loaded-repo' }
+        ],
+        24,
+        100,
+        ''
+      )
+
+      expect(result.items).toEqual([{ ...item, repoId: 'loaded-repo' }])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(false)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not flag githubUnavailable for a 404 (not an outage)', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems.mockRejectedValue(new Error('HTTP 404: Not Found'))
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'github-repo', path: '/server/github-repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(false)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
   it('quietly skips SSH repos without a resolved GitHub remote in next-page fetches', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -3344,7 +6576,12 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       .mockRejectedValueOnce(new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE))
       .mockResolvedValueOnce({
         items: [item],
-        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+        sources: {
+          issues: { owner: 'up', repo: 'r' },
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
       })
 
     try {
@@ -3356,7 +6593,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         24,
         100,
         '',
-        '2026-05-21T00:00:00Z'
+        1
       )
 
       expect(result.failedCount).toBe(0)
@@ -3365,6 +6602,312 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     } finally {
       consoleWarn.mockRestore()
     }
+  })
+
+  it('routes work-item next-page fetches through the active runtime environment', async () => {
+    const item = {
+      type: 'pr',
+      number: 9,
+      title: 'Server PR',
+      url: 'https://example.test/9',
+      updatedAt: '2026-05-22T00:00:00Z'
+    } as GitHubWorkItem
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-page',
+      ok: true,
+      result: {
+        items: [item],
+        sources: {
+          issues: null,
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsNextPage(
+        [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+        24,
+        100,
+        'is:open',
+        1
+      )
+
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'runtime-repo-id',
+        limit: 24,
+        query: 'is:open',
+        page: 1
+      },
+      timeoutMs: 30_000
+    })
+    expect(result).toEqual({
+      items: [{ ...item, repoId: 'caller-repo-id' }],
+      failedCount: 0,
+      errorTypes: []
+    })
+  })
+
+  it('surfaces issue-side envelope errors as errorTypes on next-page fetches', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-page-422',
+      ok: true,
+      result: {
+        items: [],
+        sources: {
+          issues: { owner: 'up', repo: 'r' },
+          prs: null,
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        },
+        errors: {
+          issues: { type: 'validation_error', message: 'only the first 1000 search results' }
+        }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsNextPage([{ repoId: 'caller-repo-id', path: '/server/repo' }], 24, 100, '', 34)
+
+    // The window 422 travels on the envelope error channel, not failedCount —
+    // resolveEmptyPageOutcome keys on this exact string (#11485).
+    expect(result).toEqual({ items: [], failedCount: 0, errorTypes: ['validation_error'] })
+  })
+
+  it('demotes non-window validation errors so they cannot drive the unreachable clamp', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-page-422-other',
+      ok: true,
+      result: {
+        items: [],
+        sources: {
+          issues: { owner: 'up', repo: 'r' },
+          prs: null,
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        },
+        errors: {
+          issues: { type: 'validation_error', message: 'Validation Failed: query is malformed' }
+        }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsNextPage([{ repoId: 'caller-repo-id', path: '/server/repo' }], 24, 100, '', 2)
+
+    expect(result).toEqual({ items: [], failedCount: 0, errorTypes: ['unknown'] })
+  })
+
+  it('surfaces PR-side envelope errors demoted so they read as failures, never window 422s', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-page-prs-error',
+      ok: true,
+      result: {
+        items: [],
+        sources: {
+          issues: null,
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        },
+        errors: {
+          prs: { type: 'validation_error', message: 'Failed to load pull requests: bad flag' }
+        }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsNextPage([{ repoId: 'caller-repo-id', path: '/server/repo' }], 24, 100, '', 2)
+
+    // A swallowed PR-side failure must not read as end-of-data (#11485), and a
+    // PR-side validation error must never join the issue-only window signal.
+    expect(result).toEqual({ items: [], failedCount: 0, errorTypes: ['unknown'] })
+  })
+
+  it('routes work-item counts through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-count',
+      ok: true,
+      result: 12,
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .countWorkItemsAcrossRepos(
+        [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+        'is:open',
+        10
+      )
+
+    expect(result).toEqual({ totalCount: 12, totalPages: 2 })
+    expect(mockApi.gh.countWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.countWorkItems',
+      params: {
+        repo: 'runtime-repo-id',
+        query: 'is:open'
+      },
+      timeoutMs: 30_000
+    })
+  })
+
+  it('falls back to local IPC for work-item counts without an active runtime environment', async () => {
+    const store = createTestStore()
+    mockApi.gh.countWorkItems.mockResolvedValueOnce(7)
+
+    const result = await store
+      .getState()
+      .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], '', 10)
+
+    expect(result).toEqual({ totalCount: 7, totalPages: 1 })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.countWorkItems).toHaveBeenCalledWith({
+      repoPath: '/local/repo',
+      repoId: 'repo-id',
+      query: undefined
+    })
+  })
+
+  it('derives page count from the repo with the most results', async () => {
+    const store = createTestStore()
+    mockApi.gh.countWorkItems.mockResolvedValueOnce(100).mockResolvedValueOnce(1)
+
+    const result = await store.getState().countWorkItemsAcrossRepos(
+      [
+        { repoId: 'large-repo', path: '/local/large' },
+        { repoId: 'small-repo', path: '/local/small' }
+      ],
+      'is:issue',
+      36
+    )
+
+    expect(result).toEqual({ totalCount: 101, totalPages: 3 })
+  })
+
+  it('caps advertised pages at the GitHub search result window', async () => {
+    const store = createTestStore()
+    mockApi.gh.countWorkItems.mockResolvedValueOnce(1170).mockResolvedValueOnce(1)
+
+    const result = await store.getState().countWorkItemsAcrossRepos(
+      [
+        { repoId: 'large-repo', path: '/local/large' },
+        { repoId: 'small-repo', path: '/local/small' }
+      ],
+      'is:issue',
+      30
+    )
+
+    // 1170 results → 39 naive pages, but the Search API 422s once a page
+    // starts past its 1000-result window; ceil(1000 / 30) = 34 stay reachable.
+    expect(result).toEqual({ totalCount: 1171, totalPages: 34 })
+  })
+
+  it('pins the search-window cap at dividing and non-dividing per-repo limits', async () => {
+    const store = createTestStore()
+    // 36 is the shipped single-repo limit: page 28 starts at result 973 and is
+    // served; page 29 starts past 1000 and 422s.
+    mockApi.gh.countWorkItems.mockResolvedValueOnce(2000)
+    await expect(
+      store
+        .getState()
+        .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], 'is:issue', 36)
+    ).resolves.toEqual({ totalCount: 2000, totalPages: 28 })
+    // 25 divides 1000 evenly: the full window stays reachable (40 pages).
+    mockApi.gh.countWorkItems.mockResolvedValueOnce(2000)
+    await expect(
+      store
+        .getState()
+        .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], 'is:issue', 25)
+    ).resolves.toEqual({ totalCount: 2000, totalPages: 40 })
+  })
+
+  it('rejects oversized work-item queries before cache keys or provider calls', async () => {
+    const store = createTestStore()
+    const secret = 'github-work-items-secret'
+    const oversizedQuery = secret + 'x'.repeat(GITHUB_WORK_ITEMS_QUERY_MAX_BYTES)
+
+    await expect(
+      store.getState().fetchWorkItems('repo-id', '/local/repo', 24, oversizedQuery)
+    ).resolves.toEqual([])
+    await expect(
+      store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'repo-id', path: '/local/repo' }],
+          24,
+          24,
+          oversizedQuery
+        )
+    ).resolves.toEqual({ items: [], failedCount: 0, githubUnavailable: false })
+    await expect(
+      store
+        .getState()
+        .fetchWorkItemsNextPage(
+          [{ repoId: 'repo-id', path: '/local/repo' }],
+          24,
+          24,
+          oversizedQuery,
+          1
+        )
+    ).resolves.toEqual({ items: [], failedCount: 0, errorTypes: [] })
+    await expect(
+      store
+        .getState()
+        .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], oversizedQuery, 24)
+    ).resolves.toEqual({ totalCount: 0, totalPages: 0 })
+    store.getState().prefetchWorkItems('repo-id', '/local/repo', 24, oversizedQuery)
+
+    expect(store.getState().getCachedWorkItems('repo-id', 24, oversizedQuery, '/local/repo')).toBe(
+      null
+    )
+    expect(
+      store.getState().getWorkItemsSourcesAndError('repo-id', 24, oversizedQuery, '/local/repo')
+    ).toEqual({ sources: null, error: null })
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(mockApi.gh.countWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(JSON.stringify(store.getState().workItemsCache)).not.toContain(secret)
   })
 
   it('routes project table fetches through the active runtime environment', async () => {
@@ -3423,6 +6966,330 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         viewId: 'view-1'
       },
       timeoutMs: 60_000
+    })
+  })
+
+  it('keeps GitHub project view caches separate for runtime and local sources', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' }
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: {
+        ok: true,
+        data: {
+          project: {
+            id: 'project-remote',
+            owner: 'acme',
+            ownerType: 'organization',
+            number: 1,
+            title: 'Remote Roadmap',
+            url: 'https://github.com/orgs/acme/projects/1'
+          },
+          selectedView: {
+            id: 'view-1',
+            number: 1,
+            name: 'Table',
+            layout: 'TABLE_LAYOUT',
+            filter: '',
+            fields: [],
+            groupByFields: [],
+            sortByFields: []
+          },
+          rows: [],
+          totalCount: 0,
+          parentFieldDropped: false
+        }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await store.getState().fetchProjectViewTable({
+      owner: 'acme',
+      ownerType: 'organization',
+      projectNumber: 1,
+      viewId: 'view-1'
+    })
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: null }
+    } as Partial<AppState>)
+    mockApi.gh.getProjectViewTable.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        project: {
+          id: 'project-local',
+          owner: 'acme',
+          ownerType: 'organization',
+          number: 1,
+          title: 'Local Roadmap',
+          url: 'https://github.com/orgs/acme/projects/1'
+        },
+        selectedView: {
+          id: 'view-1',
+          number: 1,
+          name: 'Table',
+          layout: 'TABLE_LAYOUT',
+          filter: '',
+          fields: [],
+          groupByFields: [],
+          sortByFields: []
+        },
+        rows: [],
+        totalCount: 0,
+        parentFieldDropped: false
+      }
+    })
+
+    const localResult = await store.getState().fetchProjectViewTable({
+      owner: 'acme',
+      ownerType: 'organization',
+      projectNumber: 1,
+      viewId: 'view-1'
+    })
+
+    expect(localResult.ok).toBe(true)
+    expect(mockApi.gh.getProjectViewTable).toHaveBeenCalledTimes(1)
+    expect(
+      store.getState().projectViewCache[
+        projectViewCacheKey('organization', 'acme', 1, 'view-1', undefined, 'runtime:env-1')
+      ]?.data?.project.id
+    ).toBe('project-remote')
+    expect(
+      store.getState().projectViewCache[projectViewCacheKey('organization', 'acme', 1, 'view-1')]
+        ?.data?.project.id
+    ).toBe('project-local')
+  })
+
+  it('keeps same-named github.com and GHES project cache entries separate', async () => {
+    const store = createTestStore()
+    const makeTable = (host: string, id: string) => ({
+      project: {
+        id,
+        host,
+        owner: 'acme',
+        ownerType: 'organization' as const,
+        number: 1,
+        title: id,
+        url: `https://${host}/orgs/acme/projects/1`
+      },
+      selectedView: {
+        id: 'view-1',
+        number: 1,
+        name: 'Table',
+        layout: 'TABLE_LAYOUT' as const,
+        filter: '',
+        fields: [],
+        groupByFields: [],
+        sortByFields: []
+      },
+      rows: [],
+      totalCount: 0,
+      parentFieldDropped: false
+    })
+    mockApi.gh.getProjectViewTable
+      .mockResolvedValueOnce({ ok: true, data: makeTable('github.com', 'dotcom-project') })
+      .mockResolvedValueOnce({ ok: true, data: makeTable('ghe.example', 'enterprise-project') })
+
+    for (const host of ['github.com', 'ghe.example']) {
+      await store.getState().fetchProjectViewTable({
+        owner: 'acme',
+        ownerType: 'organization',
+        projectNumber: 1,
+        viewId: 'view-1',
+        host
+      })
+    }
+
+    expect(mockApi.gh.getProjectViewTable).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ host: 'ghe.example' })
+    )
+    expect(
+      store.getState().projectViewCache[
+        projectViewCacheKey('organization', 'acme', 1, 'view-1', undefined, 'local', 'ghe.example')
+      ]?.data?.project.id
+    ).toBe('enterprise-project')
+    expect(
+      store.getState().projectViewCache[
+        projectViewCacheKey('organization', 'acme', 1, 'view-1', undefined, 'local', 'github.com')
+      ]?.data?.project.id
+    ).toBe('dotcom-project')
+  })
+
+  it('routes project field mutations through the source encoded in the cache key', async () => {
+    const store = createTestStore()
+    const cacheKey = projectViewCacheKey(
+      'organization',
+      'acme',
+      1,
+      'view-1',
+      undefined,
+      'runtime:env-project',
+      'ghe.example:8443'
+    )
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-focused' },
+      projectViewCache: {
+        [cacheKey]: {
+          fetchedAt: 1,
+          data: {
+            project: {
+              id: 'project-1',
+              host: 'ghe.example:8443',
+              owner: 'acme',
+              ownerType: 'organization',
+              number: 1,
+              title: 'Roadmap',
+              url: 'https://github.com/orgs/acme/projects/1'
+            },
+            selectedView: {
+              id: 'view-1',
+              number: 1,
+              name: 'Table',
+              layout: 'TABLE_LAYOUT',
+              filter: '',
+              fields: [{ id: 'field-1', name: 'Notes', dataType: 'TEXT', kind: 'text' }],
+              groupByFields: [],
+              sortByFields: []
+            },
+            rows: [
+              {
+                id: 'row-1',
+                itemType: 'ISSUE',
+                content: {
+                  repository: 'acme/repo',
+                  number: 12,
+                  title: 'Issue',
+                  body: '',
+                  url: 'https://github.com/acme/repo/issues/12',
+                  state: 'OPEN',
+                  labels: [],
+                  assignees: [],
+                  issueType: null,
+                  parentIssue: null
+                },
+                fieldValuesByFieldId: {}
+              }
+            ],
+            totalCount: 1,
+            parentFieldDropped: false
+          }
+        }
+      }
+    } as unknown as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-field',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    const result = await store
+      .getState()
+      .updateProjectFieldValue(cacheKey, 'row-1', 'field-1', { kind: 'text', text: 'next' })
+
+    expect(result).toEqual({ ok: true })
+    expect(mockApi.gh.updateProjectItemField).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-project',
+      method: 'github.project.updateItemField',
+      params: {
+        projectId: 'project-1',
+        host: 'ghe.example:8443',
+        itemId: 'row-1',
+        fieldId: 'field-1',
+        value: { kind: 'text', text: 'next' }
+      },
+      timeoutMs: 30_000
+    })
+  })
+
+  it('routes slug-only project row mutations through the source encoded in the cache key', async () => {
+    const store = createTestStore()
+    const cacheKey = projectViewCacheKey(
+      'organization',
+      'acme',
+      1,
+      'view-1',
+      undefined,
+      'runtime:env-project'
+    )
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-focused' },
+      repos: [],
+      projectViewCache: {
+        [cacheKey]: {
+          fetchedAt: 1,
+          data: {
+            project: {
+              id: 'project-1',
+              owner: 'acme',
+              ownerType: 'organization',
+              number: 1,
+              title: 'Roadmap',
+              url: 'https://github.com/orgs/acme/projects/1'
+            },
+            selectedView: {
+              id: 'view-1',
+              number: 1,
+              name: 'Table',
+              layout: 'TABLE_LAYOUT',
+              filter: '',
+              fields: [],
+              groupByFields: [],
+              sortByFields: []
+            },
+            rows: [
+              {
+                id: 'row-1',
+                itemType: 'ISSUE',
+                content: {
+                  repository: 'acme/repo',
+                  number: 12,
+                  title: 'Issue',
+                  body: '',
+                  url: 'https://github.com/acme/repo/issues/12',
+                  state: 'OPEN',
+                  labels: [],
+                  assignees: [],
+                  issueType: null,
+                  parentIssue: null
+                },
+                fieldValuesByFieldId: {}
+              }
+            ],
+            totalCount: 1,
+            parentFieldDropped: false
+          }
+        }
+      }
+    } as unknown as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-issue',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    const result = await store
+      .getState()
+      .patchProjectIssueOrPr(cacheKey, 'row-1', { addLabels: ['bug'] })
+
+    expect(result).toEqual({ ok: true })
+    expect(mockApi.gh.updateIssueBySlug).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-project',
+      method: 'github.project.updateIssueBySlug',
+      params: {
+        owner: 'acme',
+        repo: 'repo',
+        number: 12,
+        updates: { addLabels: ['bug'] }
+      },
+      timeoutMs: 30_000
     })
   })
 
@@ -3497,6 +7364,12 @@ describe('IssueSourceIndicator suppression', () => {
     expect(
       sameGitHubOwnerRepo({ owner: 'StablyAI', repo: 'Orca' }, { owner: 'stablyai', repo: 'orca' })
     ).toBe(true)
+    expect(
+      sameGitHubOwnerRepo(
+        { owner: 'stablyai', repo: 'orca', host: 'github.com' },
+        { owner: 'stablyai', repo: 'orca', host: 'ghe.example.test' }
+      )
+    ).toBe(false)
     expect(sameGitHubOwnerRepo({ owner: 'a', repo: 'r' }, { owner: 'b', repo: 'r' })).toBe(false)
 
     // null on either side → element renders as null (empty render)
@@ -3532,5 +7405,105 @@ describe('IssueSourceIndicator suppression', () => {
     expect(itemMarkup).toContain('up/r')
     expect(itemMarkup).toContain('Issue from')
     expect(itemMarkup).not.toContain('Issues from')
+
+    const enterpriseEl = React.createElement(IssueSourceIndicator, {
+      issues: { owner: 'up', repo: 'r', host: 'ghe.example.test' },
+      prs: { owner: 'fork', repo: 'r', host: 'ghe.example.test' }
+    })
+    expect(renderToStaticMarkup(enterpriseEl)).toContain('ghe.example.test/up/r')
+  })
+})
+
+describe('shouldClearBranchMismatchedLinkedOpenPR', () => {
+  const basePR = (overrides: Partial<PRInfo> = {}): PRInfo =>
+    ({
+      number: 20,
+      title: 'Sample PR',
+      state: 'open',
+      url: 'https://github.com/o/r/pull/20',
+      checksStatus: 'success',
+      updatedAt: '2026-01-01T00:00:00Z',
+      mergeable: 'MERGEABLE',
+      headSha: 'prhead',
+      headRefName: 'feature-one',
+      ...overrides
+    }) as PRInfo
+
+  const baseArgs = {
+    pr: basePR(),
+    linkedPRNumber: 20,
+    branch: 'feature-two',
+    requestHeadOid: 'otherhead',
+    pushTargetBranch: null
+  }
+
+  it('clears when an open linked PR heads a different branch than the worktree', () => {
+    expect(shouldClearBranchMismatchedLinkedOpenPR(baseArgs)).toBe(true)
+  })
+
+  it('clears when the mismatched linked PR is a draft', () => {
+    expect(
+      shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, pr: basePR({ state: 'draft' }) })
+    ).toBe(true)
+  })
+
+  it('strips refs/heads/ from the worktree branch before comparing', () => {
+    expect(
+      shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, branch: 'refs/heads/feature-one' })
+    ).toBe(false)
+    expect(
+      shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, branch: 'refs/heads/feature-two' })
+    ).toBe(true)
+  })
+
+  it('keeps the link when the branch matches the PR head', () => {
+    expect(shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, branch: 'feature-one' })).toBe(
+      false
+    )
+  })
+
+  it('keeps the link when the push target routes to the PR head branch', () => {
+    expect(
+      shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, pushTargetBranch: 'feature-one' })
+    ).toBe(false)
+  })
+
+  it('keeps the link when the worktree HEAD is the PR head commit', () => {
+    expect(shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, requestHeadOid: 'prhead' })).toBe(
+      false
+    )
+  })
+
+  it('only applies to active PRs', () => {
+    expect(
+      shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, pr: basePR({ state: 'merged' }) })
+    ).toBe(false)
+    expect(
+      shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, pr: basePR({ state: 'closed' }) })
+    ).toBe(false)
+  })
+
+  it('requires a known PR head branch and a current branch', () => {
+    expect(
+      shouldClearBranchMismatchedLinkedOpenPR({
+        ...baseArgs,
+        pr: basePR({ headRefName: undefined })
+      })
+    ).toBe(false)
+    // Detached HEAD reports an empty branch; there is no mismatch to act on.
+    expect(shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, branch: '' })).toBe(false)
+    expect(shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, requestHeadOid: null })).toBe(
+      false
+    )
+  })
+
+  it('ignores lookups that resolved a different PR than the link', () => {
+    expect(
+      shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, pr: basePR({ number: 21 }) })
+    ).toBe(false)
+    expect(shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, pr: null })).toBe(false)
+    expect(shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, linkedPRNumber: null })).toBe(
+      false
+    )
   })
 })

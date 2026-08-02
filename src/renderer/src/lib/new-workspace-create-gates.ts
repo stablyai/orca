@@ -4,6 +4,7 @@ export type ComposerCreateGateInput = {
   creating: boolean
   shouldWaitForSetupCheck: boolean
   shouldWaitForIssueAutomationCheck: boolean
+  sourceIntentBlocksCreate?: boolean
   requiresExplicitSetupChoice: boolean
   hasSetupDecision: boolean
   selectedRepoRequiresConnection: boolean
@@ -12,8 +13,8 @@ export type ComposerCreateGateInput = {
 
 function hasBlockingCreateState(input: ComposerCreateGateInput): boolean {
   return (
-    !input.repoId ||
     !input.workspaceSeedName ||
+    input.sourceIntentBlocksCreate === true ||
     input.creating ||
     input.selectedRepoRequiresConnection ||
     (input.requiresExplicitSetupChoice && !input.hasSetupDecision) ||

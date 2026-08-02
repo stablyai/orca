@@ -82,6 +82,7 @@ describe('OrcaRuntimeService automation methods', () => {
       agentId: 'codex',
       repo: 'repo-1',
       workspaceMode: 'new_per_run',
+      setupDecision: 'skip',
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: 1
     })
@@ -94,7 +95,8 @@ describe('OrcaRuntimeService automation methods', () => {
         agentId: 'codex',
         projectId: 'repo-1',
         workspaceMode: 'new_per_run',
-        workspaceId: null
+        workspaceId: null,
+        setupDecision: 'skip'
       })
     )
     expect(automation.id).toBe('auto-1')
@@ -125,6 +127,15 @@ describe('OrcaRuntimeService automation methods', () => {
     await runtime.updateAutomation('auto-1', { baseBranch: null })
 
     expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { baseBranch: null })
+  })
+
+  it('passes setup decision updates through the shared store', async () => {
+    const store = makeStore([existingAutomation])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await runtime.updateAutomation('auto-1', { setupDecision: 'run' })
+
+    expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { setupDecision: 'run' })
   })
 
   it('passes session reuse updates for existing-workspace automations', async () => {

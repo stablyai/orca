@@ -8,11 +8,29 @@ export const WorktreeSelector = z.object({
 })
 
 export const GitStatusParams = WorktreeSelector.extend({
-  includeIgnored: z.boolean().optional()
+  includeIgnored: z.boolean().optional(),
+  bypassEffectiveUpstreamNegativeCache: z.boolean().optional(),
+  reuseLineStats: z.boolean().optional()
 })
 
 export const GitCheckIgnored = WorktreeSelector.extend({
   paths: z.array(z.string().min(1, 'Missing path')).max(2000)
+})
+
+export const GitSubmoduleStatus = WorktreeSelector.extend({
+  submodulePath: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(
+      z
+        .string()
+        .min(1, 'Missing submodule path')
+        // Why: never let a submodule path be parsed as a git flag (arg injection).
+        .refine((value) => !value.startsWith('-'), 'Submodule path must not start with -')
+    ),
+  // Why: submodule expansion is requested from a Source Control row; the row
+  // area determines whether the gitlink range is HEAD->index or index->worktree.
+  area: z.enum(['staged', 'unstaged', 'untracked']).optional()
 })
 
 export const GitFilePath = WorktreeSelector.extend({
@@ -100,6 +118,16 @@ const CommitMessageAiSettings = z.object({
 })
 
 const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: true }).extend({
+  actions: z
+    .record(
+      z.string(),
+      z.object({
+        agentId: z.string().nullable().optional(),
+        commandInputTemplate: z.string().optional(),
+        agentArgs: z.string().optional()
+      })
+    )
+    .optional(),
   instructionsByOperation: z.record(z.string(), z.string()).optional(),
   modelOverridesByOperation: z
     .record(
@@ -120,12 +148,34 @@ const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: tru
       generateDetailsOnOpen: z.boolean().optional(),
       openAfterCreate: z.boolean().optional()
     })
+    .optional(),
+  launchActionDefaults: z
+    .record(
+      z.string(),
+      z.object({
+        agentId: z.string().nullable().optional(),
+        commandInputTemplate: z.string().optional(),
+        agentArgs: z.string().optional()
+      })
+    )
     .optional()
+})
+
+const ResolvedSourceControlAiGenerationParams = z.object({
+  agentId: z.string(),
+  model: z.string(),
+  thinkingLevel: z.string().optional(),
+  customPrompt: z.string().optional(),
+  commandInputTemplate: z.string().optional(),
+  agentArgs: z.string().optional(),
+  customAgentCommand: z.string().optional(),
+  agentCommandOverride: z.string().optional()
 })
 
 export const GitGenerateCommitMessage = WorktreeSelector.extend({
   commitMessageAi: CommitMessageAiSettings.optional(),
   sourceControlAi: SourceControlAiSettings.optional(),
+  sourceControlAiResolvedParams: ResolvedSourceControlAiGenerationParams.optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional(),
   enableGitHubAttribution: z.boolean().optional(),
   commitMessageDiscoveryHostKey: z.string().optional()
@@ -140,7 +190,11 @@ export const GitGeneratePullRequestFields = GitGenerateCommitMessage.extend({
   base: z.string().min(1, 'Missing base branch'),
   title: z.string(),
   body: z.string(),
-  draft: z.boolean()
+  draft: z.boolean(),
+  provider: z
+    .enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'unsupported'])
+    .optional(),
+  useTemplate: z.boolean().optional()
 })
 
 export const GitBulkPaths = WorktreeSelector.extend({
@@ -164,6 +218,13 @@ export const GitTargetedRemote = WorktreeSelector.extend({
   pushTarget: GitPushTargetParam.optional()
 })
 
+export const GitForkSync = WorktreeSelector.extend({
+  expectedUpstream: z.object({
+    owner: z.string().trim().min(1),
+    repo: z.string().trim().min(1)
+  })
+})
+
 export const GitRebaseFromBase = WorktreeSelector.extend({
   baseRef: z
     .unknown()
@@ -176,10 +237,30 @@ export const GitRebaseFromBase = WorktreeSelector.extend({
     )
 })
 
+export const GitCheckout = WorktreeSelector.extend({
+  branch: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(
+      z
+        .string()
+        .min(1, 'Missing branch')
+        // Why: never let a branch arg be parsed as a git flag (arg injection).
+        .refine((value) => !value.startsWith('-'), 'Branch must not start with -')
+    )
+})
+
 export const GitRemoteFileUrl = WorktreeSelector.extend({
   relativePath: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing relative path')),
   line: z.number().int().min(1)
+})
+
+export const GitRemoteCommitUrl = WorktreeSelector.extend({
+  sha: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(FullGitObjectId)
 })

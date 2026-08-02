@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { buildWorktreeDragPreviewOffsets } from './worktree-drag-preview-offsets'
 import {
   buildManualOrderUpdatesForGroupDrop,
-  buildWorktreeDragPreviewOffsets,
   buildManualOrderUpdatesForVisibleGroups,
   expandDraggedWorktreeIdsForVisibleLineage,
   moveWorktreeIdsWithinGroup,
@@ -69,7 +69,7 @@ describe('moveWorktreeIdsWithinGroup', () => {
 
 describe('buildWorktreeDragPreviewOffsets', () => {
   it('slides intervening rows up while dragging a row down', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b', 'c', 'd'],
       draggedIds: ['b'],
       dropIndex: 4,
@@ -88,7 +88,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('slides intervening rows down while dragging a row up', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b', 'c'],
       draggedIds: ['c'],
       dropIndex: 0,
@@ -106,13 +106,99 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('returns no preview offsets for a no-op hover', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b'],
       draggedIds: ['a'],
       dropIndex: 1,
       rects: [
         { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 40 },
         { worktreeId: 'b', groupIndex: 1, top: 46, bottom: 86 }
+      ]
+    })
+
+    expect(offsets.size).toBe(0)
+  })
+
+  it('uses the dragged unit height when previewing variable-height rows', () => {
+    const { offsets } = buildWorktreeDragPreviewOffsets({
+      groupIds: ['parent', 'sibling'],
+      draggedIds: ['parent'],
+      dropIndex: 2,
+      rects: [
+        { worktreeId: 'parent', groupIndex: 0, top: 0, bottom: 300 },
+        { worktreeId: 'sibling', groupIndex: 1, top: 308, bottom: 408 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([['sibling', -308]])
+  })
+
+  it('uses the dragged unit height when previewing a short row above a tall row', () => {
+    const { offsets } = buildWorktreeDragPreviewOffsets({
+      groupIds: ['parent', 'sibling'],
+      draggedIds: ['sibling'],
+      dropIndex: 0,
+      rects: [
+        { worktreeId: 'parent', groupIndex: 0, top: 0, bottom: 300 },
+        { worktreeId: 'sibling', groupIndex: 1, top: 308, bottom: 408 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([['parent', 108]])
+  })
+
+  it('reserves one card-height slot while previewing a multi-select batch', () => {
+    const { offsets } = buildWorktreeDragPreviewOffsets({
+      groupIds: ['a', 'b', 'c', 'd', 'e'],
+      draggedIds: ['b', 'c', 'd'],
+      draggingWorktreeId: 'b',
+      dropIndex: 5,
+      rects: [
+        { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 50 },
+        { worktreeId: 'b', groupIndex: 1, top: 56, bottom: 106 },
+        { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 162 },
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([
+      ['c', -56],
+      ['d', -56],
+      ['e', -56]
+    ])
+  })
+
+  it('uses the grabbed selected card as the one preview placeholder', () => {
+    const { offsets } = buildWorktreeDragPreviewOffsets({
+      groupIds: ['a', 'b', 'c', 'd', 'e'],
+      draggedIds: ['b', 'c', 'd'],
+      draggingWorktreeId: 'd',
+      dropIndex: 5,
+      rects: [
+        { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 50 },
+        { worktreeId: 'b', groupIndex: 1, top: 56, bottom: 106 },
+        { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 162 },
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([['e', -56]])
+  })
+
+  it('returns no preview offsets for a no-op multi-select hover', () => {
+    const { offsets } = buildWorktreeDragPreviewOffsets({
+      groupIds: ['a', 'b', 'c', 'd', 'e'],
+      draggedIds: ['b', 'c', 'd'],
+      draggingWorktreeId: 'b',
+      dropIndex: 4,
+      rects: [
+        { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 50 },
+        { worktreeId: 'b', groupIndex: 1, top: 56, bottom: 106 },
+        { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 162 },
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 }
       ]
     })
 

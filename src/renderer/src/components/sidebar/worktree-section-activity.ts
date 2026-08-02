@@ -64,17 +64,18 @@ export function buildWorktreeSectionActivitySummaries({
   const summaries = new Map<string, WorktreeSectionActivitySummary>()
 
   for (const worktree of worktrees) {
-    const groupKeys = worktree.isPinned
-      ? [PINNED_GROUP_KEY]
-      : getGroupKeysForWorktree(
-          groupBy,
-          worktree,
-          repoMap,
-          prCache,
-          workspaceStatuses,
-          settings,
-          projectGroups
-        )
+    const groupKeys = [
+      ...(worktree.isPinned ? [PINNED_GROUP_KEY] : []),
+      ...getGroupKeysForWorktree(
+        groupBy,
+        worktree,
+        repoMap,
+        prCache,
+        workspaceStatuses,
+        settings,
+        projectGroups
+      )
+    ]
     if (groupKeys.length === 0) {
       continue
     }

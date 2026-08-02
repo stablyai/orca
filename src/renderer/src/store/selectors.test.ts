@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Repo, TerminalTab, Worktree } from '../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
+import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { AppState } from './types'
 import {
   getAllWorktreesFromState,
+  getProjectHostSetupProjectionFromState,
   getWorktreeMapFromState,
   resetFloatingVisibleTabCountSelectorCacheForTest,
-  selectFloatingVisibleTabCount
+  selectRepoByIdForActiveWorkspace,
+  selectFloatingVisibleTabCount,
+  selectFloatingWorkspaceHasUnread
 } from './selectors'
+import { selectActiveTerminalChromeState } from './active-terminal-chrome-selector'
 
 function makeWorktree(args: { id: string; repoId: string; displayName: string }): Worktree {
   return {
@@ -28,6 +34,28 @@ function makeWorktree(args: { id: string; repoId: string; displayName: string })
     branch: 'main',
     isBare: false,
     isMainWorktree: false
+  }
+}
+
+function makeRepo(args: Pick<Repo, 'id' | 'path' | 'displayName'> & Partial<Repo>): Repo {
+  return {
+    badgeColor: '#737373',
+    addedAt: 100,
+    kind: 'git',
+    ...args
+  }
+}
+
+function makeTerminalTab(args: { id: string; worktreeId: string; title: string }): TerminalTab {
+  return {
+    id: args.id,
+    ptyId: null,
+    worktreeId: args.worktreeId,
+    title: args.title,
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
   }
 }
 
@@ -134,13 +162,22 @@ describe('store selectors', () => {
         createdAt: 3
       },
       {
+        id: 'simulator-1',
+        entityId: 'simulator-1',
+        worktreeId,
+        contentType: 'simulator',
+        label: 'Mobile Emulator',
+        sortOrder: 3,
+        createdAt: 4
+      },
+      {
         id: 'unified-stale-terminal',
         entityId: 'missing-term',
         worktreeId,
         contentType: 'terminal',
         label: 'Stale',
-        sortOrder: 3,
-        createdAt: 4
+        sortOrder: 4,
+        createdAt: 5
       }
     ] as AppState['unifiedTabsByWorktree'][string]
     const state = {
@@ -150,10 +187,483 @@ describe('store selectors', () => {
       unifiedTabsByWorktree: { [worktreeId]: unifiedTabs }
     } satisfies Parameters<typeof selectFloatingVisibleTabCount>[0]
 
-    expect(selectFloatingVisibleTabCount(state)).toBe(3)
+    expect(selectFloatingVisibleTabCount(state)).toBe(4)
     expect(openFileScans).toBe(1)
 
-    expect(selectFloatingVisibleTabCount({ ...state })).toBe(3)
+    expect(selectFloatingVisibleTabCount({ ...state })).toBe(4)
     expect(openFileScans).toBe(1)
+  })
+
+  it('keeps active terminal chrome stable across title-only tab updates', () => {
+    const activeTab = makeTerminalTab({
+      id: 'term-1',
+      worktreeId: 'wt-1',
+      title: 'Codex working'
+    })
+    const secondTab = makeTerminalTab({
+      id: 'term-2',
+      worktreeId: 'wt-1',
+      title: 'Shell'
+    })
+    const otherWorktreeTab = makeTerminalTab({
+      id: 'term-other',
+      worktreeId: 'wt-2',
+      title: 'Background'
+    })
+    const state = {
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'term-1',
+      tabsByWorktree: {
+        'wt-1': [activeTab, secondTab],
+        'wt-2': [otherWorktreeTab]
+      },
+      canExpandPaneByTabId: { 'term-1': true, 'term-2': false },
+      expandedPaneByTabId: { 'term-1': true, 'term-2': false }
+    } satisfies Parameters<typeof selectActiveTerminalChromeState>[0]
+
+    const selected = selectActiveTerminalChromeState(state)
+    const retitledState = {
+      ...state,
+      tabsByWorktree: {
+        'wt-1': [{ ...activeTab, title: 'Codex working · frame 2' }, secondTab],
+        'wt-2': [{ ...otherWorktreeTab, title: 'Background · frame 2' }]
+      }
+    } satisfies Parameters<typeof selectActiveTerminalChromeState>[0]
+
+    expect(selected).toEqual({
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'term-1',
+      tabCount: 2,
+      effectiveActiveTabId: 'term-1',
+      activeTabCanExpand: true,
+      effectiveActiveTabExpanded: true
+    })
+    expect(selectActiveTerminalChromeState(retitledState)).toEqual(selected)
+  })
+
+  it('caches the project host setup projection by repo slice identity', () => {
+    const repos = [
+      makeRepo({
+        id: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca'
+      })
+    ]
+    const state = { repos }
+
+    const projection = getProjectHostSetupProjectionFromState(state)
+
+    expect(projection.projects).toHaveLength(1)
+    expect(projection.setups[0]).toMatchObject({
+      id: 'repo-1',
+      projectId: 'repo:repo-1',
+      hostId: 'local'
+    })
+    expect(getProjectHostSetupProjectionFromState({ repos })).toBe(projection)
+    expect(getProjectHostSetupProjectionFromState({ repos: [...repos] })).not.toBe(projection)
+  })
+
+  it('does not fall back to a same-ID local repo when the active runtime row is absent', () => {
+    const local = makeRepo({
+      id: 'same-repo',
+      path: '/local/repo',
+      displayName: 'local',
+      executionHostId: 'local'
+    })
+    const runtime = makeRepo({
+      id: 'same-repo',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      executionHostId: toRuntimeExecutionHostId('env-1')
+    })
+    const activeState = {
+      activeRepoId: 'same-repo',
+      activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('env-1')
+    }
+
+    expect(
+      selectRepoByIdForActiveWorkspace({ ...activeState, repos: [local, runtime] }, 'same-repo')
+    ).toBe(runtime)
+    expect(
+      selectRepoByIdForActiveWorkspace({ ...activeState, repos: [local] }, 'same-repo')
+    ).toBeNull()
+  })
+
+  it('keeps the repo when a paired-hub worktree reports a different execution host', () => {
+    // Why: withRepoHostOwnership deliberately keeps an SSH worktree's own host while its repo stays hub-owned.
+    const repo = makeRepo({
+      id: 'hub-repo',
+      path: '/hub/repo',
+      displayName: 'hub',
+      executionHostId: toRuntimeExecutionHostId('hub-a')
+    })
+    const local = makeRepo({
+      id: 'hub-repo',
+      path: '/local/repo',
+      displayName: 'local',
+      executionHostId: 'local'
+    })
+    const activeState = {
+      activeRepoId: 'hub-repo',
+      activeWorkspaceExecutionHostId: toSshExecutionHostId('hub-private-target')
+    }
+
+    for (const repos of [[repo], [local, repo], [repo, local]]) {
+      expect(selectRepoByIdForActiveWorkspace({ ...activeState, repos }, 'hub-repo')).toBe(repo)
+    }
+    // Why: useGitStatusPolling gates every lane on this exact expression, so a null repo silently stops polling.
+    const activeRepo = selectRepoByIdForActiveWorkspace(
+      { ...activeState, repos: [repo] },
+      'hub-repo'
+    )
+    expect(activeRepo ? isGitRepoKind(activeRepo) : false).toBe(true)
+  })
+
+  it('fails a paired-hub repo fallback closed when rival HUB rows share the repo ID', () => {
+    const repoForHub = (environmentId: string) =>
+      makeRepo({
+        id: 'hub-repo',
+        path: `/hub/${environmentId}/repo`,
+        displayName: environmentId,
+        executionHostId: toRuntimeExecutionHostId(environmentId)
+      })
+
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [repoForHub('hub-a'), repoForHub('hub-b')],
+          activeRepoId: 'hub-repo',
+          activeWorkspaceExecutionHostId: toSshExecutionHostId('shared-private-target')
+        },
+        'hub-repo'
+      )
+    ).toBeNull()
+  })
+
+  it('still prefers the host-matching row when one repo ID spans hosts', () => {
+    const hub = makeRepo({
+      id: 'shared-repo',
+      path: '/hub/repo',
+      displayName: 'hub',
+      executionHostId: toRuntimeExecutionHostId('hub-a')
+    })
+    const ssh = makeRepo({
+      id: 'shared-repo',
+      path: '/ssh/repo',
+      displayName: 'ssh',
+      executionHostId: toSshExecutionHostId('hub-private-target')
+    })
+
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [hub, ssh],
+          activeRepoId: 'shared-repo',
+          activeWorkspaceExecutionHostId: toSshExecutionHostId('hub-private-target')
+        },
+        'shared-repo'
+      )
+    ).toBe(ssh)
+  })
+
+  it('keeps every non-paired-hub host mismatch failing closed', () => {
+    // Why: the paired-hub exemption is ssh-selection-over-runtime-repo only; anything else is a wrong host.
+    const runtime = makeRepo({
+      id: 'same-repo',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      executionHostId: toRuntimeExecutionHostId('env-1')
+    })
+    const ssh = makeRepo({
+      id: 'ssh-repo',
+      path: '/ssh/repo',
+      displayName: 'ssh',
+      executionHostId: toSshExecutionHostId('target-1')
+    })
+
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [runtime],
+          activeRepoId: 'same-repo',
+          activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('env-2')
+        },
+        'same-repo'
+      )
+    ).toBeNull()
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [ssh],
+          activeRepoId: 'ssh-repo',
+          activeWorkspaceExecutionHostId: toSshExecutionHostId('target-2')
+        },
+        'ssh-repo'
+      )
+    ).toBeNull()
+  })
+
+  it('prefers hydrated project host setup state when present', () => {
+    const repos = [
+      makeRepo({
+        id: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca'
+      })
+    ]
+    const projects = [
+      {
+        id: 'project-1',
+        displayName: 'Project',
+        badgeColor: '#737373',
+        sourceRepoIds: ['repo-1'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    const projectHostSetups = [
+      {
+        id: 'setup-1',
+        projectId: 'project-1',
+        hostId: 'local' as const,
+        repoId: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca',
+        setupState: 'ready' as const,
+        setupMethod: 'legacy-repo' as const,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+
+    expect(getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups })).toEqual({
+      projects,
+      setups: projectHostSetups
+    })
+  })
+
+  it('groups hydrated VM project setups under the repo-derived project identity', () => {
+    const repos = [
+      makeRepo({
+        id: 'local-orca',
+        path: '/Users/alice/stably/orca',
+        displayName: 'orca',
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      }),
+      makeRepo({
+        id: 'vm-orca',
+        path: '/vercel/sandbox/orca',
+        displayName: 'orca',
+        upstream: { owner: 'stablyai', repo: 'orca' },
+        executionHostId: toRuntimeExecutionHostId('vm-env')
+      })
+    ]
+    const projects = [
+      {
+        id: 'github:stablyai/orca',
+        displayName: 'orca',
+        badgeColor: '#737373',
+        sourceRepoIds: ['local-orca'],
+        createdAt: 1,
+        updatedAt: 1
+      },
+      {
+        id: 'repo:vm-orca',
+        displayName: 'vercel/sandbox/orca',
+        badgeColor: '#737373',
+        sourceRepoIds: ['vm-orca'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    const projectHostSetups = [
+      {
+        id: 'local-setup',
+        projectId: 'github:stablyai/orca',
+        hostId: 'local' as const,
+        repoId: 'local-orca',
+        path: '/Users/alice/stably/orca',
+        displayName: 'orca',
+        setupState: 'ready' as const,
+        setupMethod: 'legacy-repo' as const,
+        createdAt: 1,
+        updatedAt: 1
+      },
+      {
+        id: 'vm-setup',
+        projectId: 'repo:vm-orca',
+        hostId: toRuntimeExecutionHostId('vm-env'),
+        repoId: 'vm-orca',
+        path: '/vercel/sandbox/orca',
+        displayName: 'orca',
+        setupState: 'ready' as const,
+        setupMethod: 'provisioned' as const,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+
+    const projection = getProjectHostSetupProjectionFromState({
+      repos,
+      projects,
+      projectHostSetups
+    })
+
+    expect(projection.projects.map((project) => project.id)).toEqual(['github:stablyai/orca'])
+    expect(projection.setups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'local-setup', projectId: 'github:stablyai/orca' }),
+        expect.objectContaining({ id: 'vm-setup', projectId: 'github:stablyai/orca' })
+      ])
+    )
+  })
+
+  it('falls back to repo compatibility projection when hydrated setup state is empty', () => {
+    const repos = [
+      makeRepo({
+        id: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca',
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      })
+    ]
+
+    const projection = getProjectHostSetupProjectionFromState({
+      repos,
+      projects: [],
+      projectHostSetups: []
+    })
+
+    expect(projection.projects).toEqual([
+      expect.objectContaining({
+        id: 'github:stablyai/orca',
+        sourceRepoIds: ['repo-1']
+      })
+    ])
+    expect(projection.setups).toEqual([
+      expect.objectContaining({
+        id: 'repo-1',
+        projectId: 'github:stablyai/orca',
+        repoId: 'repo-1',
+        hostId: 'local',
+        path: '/Users/alice/orca'
+      })
+    ])
+  })
+
+  it('merges missing repo compatibility rows with independent hydrated setups', () => {
+    const repos = [
+      makeRepo({
+        id: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca'
+      })
+    ]
+    const projects = [
+      {
+        id: 'cloud-project',
+        displayName: 'Cloud Project',
+        badgeColor: '#737373',
+        sourceRepoIds: [],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    const projectHostSetups = [
+      {
+        id: 'cloud-project::gpu-vm',
+        projectId: 'cloud-project',
+        hostId: toRuntimeExecutionHostId('gpu-vm'),
+        repoId: '',
+        path: '/srv/cloud-project',
+        displayName: 'GPU VM',
+        setupState: 'ready' as const,
+        setupMethod: 'provisioned' as const,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+
+    const projection = getProjectHostSetupProjectionFromState({
+      repos,
+      projects,
+      projectHostSetups
+    })
+
+    expect(projection.projects.map((project) => project.id)).toEqual([
+      'repo:repo-1',
+      'cloud-project'
+    ])
+    expect(projection.setups.map((setup) => setup.id)).toEqual(['repo-1', 'cloud-project::gpu-vm'])
+    expect(getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups })).toBe(
+      projection
+    )
+  })
+})
+
+describe('selectFloatingWorkspaceHasUnread', () => {
+  const FLOATING = FLOATING_TERMINAL_WORKTREE_ID
+
+  type UnreadState = Parameters<typeof selectFloatingWorkspaceHasUnread>[0]
+
+  function makeState(overrides: Partial<UnreadState>): UnreadState {
+    return {
+      tabsByWorktree: {},
+      unreadTerminalTabs: {},
+      unreadAgentCompletionPanes: {},
+      ...overrides
+    } as UnreadState
+  }
+
+  function floatingTab(id: string): TerminalTab {
+    return { id, title: id, ptyId: null } as unknown as TerminalTab
+  }
+
+  it('is false when the floating workspace has no tabs', () => {
+    expect(selectFloatingWorkspaceHasUnread(makeState({}))).toBe(false)
+  })
+
+  it('is true for a bell — an unread floating tab', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
+      unreadTerminalTabs: { ft1: true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
+  })
+
+  it('is true for an agent completion — an unread floating pane', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
+      unreadAgentCompletionPanes: { 'ft1:leaf-a': true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
+  })
+
+  it('stays true while any of several floating tabs is still unacknowledged', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1'), floatingTab('ft2'), floatingTab('ft3')] },
+      unreadTerminalTabs: { ft3: true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
+  })
+
+  it('ignores unread that belongs to non-floating (main workspace) tabs', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
+      unreadTerminalTabs: { 'main-tab': true },
+      unreadAgentCompletionPanes: { 'main-tab:leaf-x': true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
+  })
+
+  it('does not light for a stale unread entry whose floating tab no longer exists', () => {
+    // Mirrors closing a floating tab: the tab is gone from tabsByWorktree, so even
+    // a lingering map entry (there should be none — closeTab purges) cannot show.
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft-live')] },
+      unreadTerminalTabs: { 'ft-closed': true },
+      unreadAgentCompletionPanes: { 'ft-closed:leaf-a': true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
   })
 })

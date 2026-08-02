@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: Claude account switching has one safety
-boundary: runtime auth materialization. Keeping file, Keychain, snapshot, and
-env-patch semantics together prevents PTY launch and quota fetch paths drifting. */
+/* eslint-disable max-lines -- Why: keeps file/Keychain/snapshot/env-patch auth semantics together so PTY launch and quota-fetch paths can't drift. */
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -15,9 +13,11 @@ import {
   writeClaudeManagedAuthFile
 } from './managed-auth-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import { getDefaultWslDistro, getWslHome, toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
 import { hasLiveClaudePtys } from './live-pty-gate'
+import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from './oauth-refresh'
 import { ClaudeRuntimePathResolver } from './runtime-paths'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
@@ -43,6 +43,7 @@ export type ClaudeRuntimeAuthPreparation = {
   wslLinuxConfigDir?: string | null
   envPatch: ClaudeEnvPatch
   stripAuthEnv: boolean
+  managedRefreshDeferredByLivePty?: boolean
   provenance: string
 }
 
@@ -65,7 +66,12 @@ type ClaudeAuthIdentity = {
 
 type ClaudeReadBackResult =
   | { status: 'unchanged' | 'persisted' }
-  | { status: 'rejected'; runtimeCredentialsChanged: boolean; runtimeCredentialsJson?: string }
+  | {
+      status: 'rejected'
+      runtimeCredentialsChanged: boolean
+      hasValidChangedRuntimeCredentials: boolean
+      runtimeCredentialsJson?: string
+    }
 type ClaudeReadBackMatch =
   | { kind: 'matched'; account: ClaudeManagedAccount; managedCredentialsJson: string }
   | { kind: 'none' | 'ambiguous' }
@@ -91,15 +97,13 @@ export class ClaudeRuntimeAuthService {
   private readonly pathResolver = new ClaudeRuntimePathResolver()
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private lastSyncedAccountId: string | null = null
-  // Why: tracks the credentials Orca last wrote to the shared credentials file.
-  // On managed→system-default transition, if the file differs from this value,
-  // an external login (e.g. `claude auth login`) overwrote it — so Orca adopts
-  // the file as the new system default instead of restoring a stale snapshot.
+  // Why: creds Orca last wrote to the shared file; a mismatch on managed→default transition means an external login overwrote it, so adopt it as the new default.
   private lastWrittenCredentialsJson: string | null = null
   private hasMaterializedRuntimeAuth = false
   private hasLastWrittenOauthAccount = false
   private lastWrittenOauthAccount: unknown = null
   private skipNextReadBackForAccountId: string | null = null
+  private managedRefreshDeferredByLivePtyAccountId: string | null = null
 
   constructor(private readonly store: Store) {
     this.initializeLastSyncedState()
@@ -109,19 +113,23 @@ export class ClaudeRuntimeAuthService {
   async prepareForClaudeLaunch(
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection(target)
-    return this.getPreparation(target)
+    const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
+    await this.syncForCurrentSelection(effectiveTarget)
+    return this.getPreparation(effectiveTarget)
   }
 
   async prepareForRateLimitFetch(
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection(target)
-    return this.getPreparation(target)
+    const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
+    await this.syncForCurrentSelection(effectiveTarget)
+    return this.getPreparation(effectiveTarget)
   }
 
   async syncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
-    await this.serializeMutation(() => this.doSyncForCurrentSelection(target))
+    await this.serializeMutation(() =>
+      this.doSyncForCurrentSelection(target ?? this.getDefaultAccountSelectionTarget())
+    )
   }
 
   async forceMaterializeCurrentSelectionForRollback(): Promise<void> {
@@ -176,6 +184,7 @@ export class ClaudeRuntimeAuthService {
       settings.claudeManagedAccounts,
       this.lastSyncedAccountId
     )
+    this.managedRefreshDeferredByLivePtyAccountId = null
     const previousManagedCredentialsJson = previousAccount
       ? await this.readManagedCredentials(previousAccount)
       : null
@@ -184,9 +193,38 @@ export class ClaudeRuntimeAuthService {
       : null
     if (previousAccount && previousAccount.id !== activeAccount?.id) {
       if (previousManagedCredentialsJson) {
-        await this.readBackRefreshedTokens(previousManagedCredentialsJson, {
-          updateLastWrittenCredentialsJson: true
-        })
+        const outgoingReadBackResult = await this.readBackRefreshedTokens(
+          previousManagedCredentialsJson,
+          {
+            updateLastWrittenCredentialsJson: true
+          }
+        )
+        if (
+          outgoingReadBackResult.status === 'rejected' &&
+          outgoingReadBackResult.runtimeCredentialsChanged &&
+          hasLiveClaudePtys()
+        ) {
+          if (
+            outgoingReadBackResult.runtimeCredentialsJson &&
+            this.liveRuntimeCredentialsCanUpdateActiveAccount(
+              outgoingReadBackResult.runtimeCredentialsJson,
+              previousAccount,
+              previousManagedCredentialsJson,
+              previousManagedOauthAccount
+            )
+          ) {
+            // Why: switching away while Claude is live must preserve verified token refreshes before replacing shared runtime credentials.
+            await this.writeManagedCredentials(
+              previousAccount,
+              outgoingReadBackResult.runtimeCredentialsJson
+            )
+          } else {
+            // Why: the runtime blob may lack identity proof for a live-session refresh; skip persisting it, but still let new terminals move to the account.
+            console.warn(
+              '[claude-runtime-auth] Skipping unverified live Claude auth read-back while switching accounts'
+            )
+          }
+        }
       }
     }
     if (!activeAccount) {
@@ -251,9 +289,7 @@ export class ClaudeRuntimeAuthService {
         })
         return
       }
-      // Why: WSL managed Claude accounts are already isolated by their Linux
-      // CLAUDE_CONFIG_DIR. Materializing them into Windows ~/.claude would mix
-      // two runtime auth stores and break the Terminal-default runtime contract.
+      // Why: WSL managed accounts are isolated by their Linux CLAUDE_CONFIG_DIR; materializing into Windows ~/.claude would mix two auth stores.
       this.clearLastWrittenRuntimeState()
       return
     }
@@ -318,10 +354,7 @@ export class ClaudeRuntimeAuthService {
       )
     }
 
-    // Why: Claude CLI refreshes expired OAuth tokens and writes them back to
-    // .credentials.json. If we detect the runtime file differs from what Orca
-    // last wrote, the CLI must have refreshed — so we preserve those tokens
-    // back to managed storage before overwriting runtime with managed state.
+    // Why: the CLI writes refreshed tokens to .credentials.json; if runtime differs from our last write, preserve them to managed storage before overwriting.
     if (this.lastSyncedAccountId === activeAccount.id) {
       if (this.skipNextReadBackForAccountId === activeAccount.id) {
         this.skipNextReadBackForAccountId = null
@@ -337,6 +370,8 @@ export class ClaudeRuntimeAuthService {
         } else if (
           readBackResult.status === 'rejected' &&
           readBackResult.runtimeCredentialsChanged &&
+          // Why: a live Claude that lost a refresh race can wipe its runtime blob (empty tokens); preserving that would log out every new session.
+          readBackResult.hasValidChangedRuntimeCredentials &&
           hasLiveClaudePtys()
         ) {
           if (
@@ -348,13 +383,11 @@ export class ClaudeRuntimeAuthService {
               this.readManagedOauthAccount(activeAccount)
             )
           ) {
-            // Why: this Claude process was launched under the active managed
-            // account, but persistence still needs positive account proof.
+            // Why: this Claude launched under the active managed account, but persistence still needs positive account proof.
             await this.writeManagedCredentials(activeAccount, readBackResult.runtimeCredentialsJson)
             credentialsJson = readBackResult.runtimeCredentialsJson
           } else {
-            // Why: while Claude is running, an unknown refresh can still belong
-            // to a live session. Rewriting stale managed auth logs that session out.
+            // Why: while Claude runs, an unknown refresh may belong to a live session; rewriting stale managed auth logs it out.
             console.warn(
               '[claude-runtime-auth] Preserving changed Claude runtime credentials while live Claude terminals are running'
             )
@@ -369,11 +402,26 @@ export class ClaudeRuntimeAuthService {
     if (this.lastSyncedAccountId !== activeAccount.id) {
       this.skipNextReadBackForAccountId = null
     }
+
+    // Why: rotate+persist the single-use token to managed storage before materializing (else runtime gets a stale token that fails invalid_grant); skip while a live PTY owns the creds since refreshing would double-rotate it (invalidating one copy) — read-back preserves its refresh instead.
+    const liveClaudePtys = hasLiveClaudePtys()
+    if (liveClaudePtys && isOauthTokenExpiring(credentialsJson)) {
+      this.managedRefreshDeferredByLivePtyAccountId = activeAccount.id
+    }
+    if (!liveClaudePtys) {
+      const refreshed = await this.refreshManagedAccountTokenIfNeeded(
+        activeAccount,
+        credentialsJson
+      )
+      if (refreshed) {
+        credentialsJson = refreshed
+      }
+    }
+
     const paths = this.pathResolver.getRuntimePaths()
     this.writeRuntimeCredentials(credentialsJson)
     if (process.platform === 'darwin') {
-      // Why: Claude Code 2.1+ reads the scoped service, while older builds read
-      // the legacy unsuffixed service. Runtime switching must satisfy both.
+      // Why: Claude Code 2.1+ reads the scoped service, older builds the legacy unsuffixed one; runtime switching must satisfy both.
       try {
         await writeActiveClaudeKeychainCredentialsForRuntime(credentialsJson, paths.configDir)
       } catch (error) {
@@ -396,10 +444,7 @@ export class ClaudeRuntimeAuthService {
     this.hasMaterializedRuntimeAuth = true
   }
 
-  // Why: called by ClaudeAccountService before syncForCurrentSelection() after
-  // re-auth or add-account. Those flows write fresh tokens to managed storage,
-  // so the read-back must be skipped to avoid overwriting them with stale
-  // runtime tokens.
+  // Why: re-auth/add-account write fresh managed tokens; skip the next read-back so stale runtime tokens can't overwrite them.
   clearLastWrittenCredentialsJson(
     accountId = this.store.getSettings().activeClaudeManagedAccountId
   ): void {
@@ -435,10 +480,12 @@ export class ClaudeRuntimeAuthService {
       }[] = []
       const ambiguousCandidates: string[] = []
       let sawAmbiguousCandidate = false
+      let sawValidChangedCandidate = false
       for (const runtimeContents of changedCandidates) {
         if (!this.isValidCredentialsJsonObject(runtimeContents.credentialsJson)) {
           continue
         }
+        sawValidChangedCandidate = true
         const match = await this.findManagedAccountForRuntimeCredentials(
           runtimeContents.credentialsJson,
           runtimeContents.runtimeOauthAccount
@@ -451,16 +498,22 @@ export class ClaudeRuntimeAuthService {
         if (match.kind !== 'matched') {
           continue
         }
-        // Why: on cold app start we cannot tell whether matching runtime
-        // credentials are a fresh CLI refresh or stale state unless token
-        // metadata proves runtime is newer than managed storage.
+        // Why: on cold start we can't tell a fresh CLI refresh from stale runtime creds; adopt only when expiry or a rotated refresh token proves runtime is newer than managed.
         if (this.lastWrittenCredentialsJson === null) {
-          if (
-            !this.runtimeCredentialsAreFresher(
+          const fresher = this.runtimeCredentialsAreFresher(
+            runtimeContents.credentialsJson,
+            match.managedCredentialsJson
+          )
+          const refreshTokenRotated =
+            this.compareRefreshTokens(
               runtimeContents.credentialsJson,
               match.managedCredentialsJson
-            )
-          ) {
+            ) === 'different'
+          const older = this.runtimeCredentialsAreOlder(
+            runtimeContents.credentialsJson,
+            match.managedCredentialsJson
+          )
+          if (!fresher && !(refreshTokenRotated && !older)) {
             continue
           }
         } else if (
@@ -480,6 +533,7 @@ export class ClaudeRuntimeAuthService {
         return {
           status: 'rejected',
           runtimeCredentialsChanged: true,
+          hasValidChangedRuntimeCredentials: sawValidChangedCandidate,
           runtimeCredentialsJson:
             ambiguousCandidates.length === 1 ? ambiguousCandidates[0] : undefined
         }
@@ -498,14 +552,14 @@ export class ClaudeRuntimeAuthService {
       }
       return { status: 'persisted' }
     } catch (error) {
-      // Why: read-back is best-effort. A transient fs error must not block the
-      // forward sync path — the worst case is one more stale-token cycle, which
-      // is strictly better than failing the entire sync.
+      // Why: read-back is best-effort; a transient fs error must not block forward sync (worst case: one more stale-token cycle).
       console.warn('[claude-runtime-auth] Failed to read back refreshed tokens:', error)
       return {
         status: 'rejected',
         runtimeCredentialsChanged:
-          this.runtimeCredentialsChangedSinceLastWrite(baselineCredentialsJson)
+          this.runtimeCredentialsChangedSinceLastWrite(baselineCredentialsJson),
+        // Why: an fs error hides whether a live session's refresh is present, so err toward preserving runtime state.
+        hasValidChangedRuntimeCredentials: true
       }
     }
   }
@@ -551,13 +605,7 @@ export class ClaudeRuntimeAuthService {
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
     const normalizedTarget = this.resolveWslDefaultTarget(
-      target ??
-        (process.platform === 'win32' && settings.terminalWindowsShell === 'wsl.exe'
-          ? ({
-              runtime: 'wsl',
-              wslDistro: settings.terminalWindowsWslDistro ?? null
-            } satisfies ClaudeAccountSelectionTarget)
-          : ({ runtime: 'host' } satisfies ClaudeAccountSelectionTarget))
+      target ?? this.getDefaultAccountSelectionTarget(settings)
     )
     const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
     const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
@@ -611,6 +659,11 @@ export class ClaudeRuntimeAuthService {
       wslLinuxConfigDir: null,
       envPatch: paths.envPatch,
       stripAuthEnv: Boolean(activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'),
+      managedRefreshDeferredByLivePty: Boolean(
+        activeAccountId &&
+        activeAccount?.managedAuthRuntime !== 'wsl' &&
+        this.managedRefreshDeferredByLivePtyAccountId === activeAccountId
+      ),
       provenance:
         activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'
           ? `managed:${activeAccountId}`
@@ -626,6 +679,17 @@ export class ClaudeRuntimeAuthService {
       return null
     }
     return accounts.find((account) => account.id === activeAccountId) ?? null
+  }
+
+  private getDefaultAccountSelectionTarget(
+    settings = this.store.getSettings()
+  ): ClaudeAccountSelectionTarget {
+    // Why: Windows auth follows the resolved account runtime; stale cross-platform WSL pins must stay local-host.
+    const resolved = resolveLocalAccountRuntimeTarget(settings)
+    if (process.platform === 'win32' && resolved.runtime === 'wsl') {
+      return { runtime: 'wsl', wslDistro: resolved.wslDistro }
+    }
+    return { runtime: 'host' }
   }
 
   private resolveWslDefaultTarget(
@@ -697,9 +761,7 @@ export class ClaudeRuntimeAuthService {
       return 'mismatch'
     }
 
-    // Why: this mirrors the Codex runtime-home guard. If another Claude login
-    // or missed live process rewrites shared runtime credentials, do not
-    // persist those credentials into the selected managed account.
+    // Why: mirrors the Codex runtime-home guard; don't persist shared runtime creds into the managed account if another login rewrote them.
     const selectedOrganizationUuid = this.normalizeField(
       account.organizationUuid ??
         managedIdentity?.organizationUuid ??
@@ -971,6 +1033,34 @@ export class ClaudeRuntimeAuthService {
     writeClaudeManagedAuthFile(managedAuthPath, '.credentials.json', credentialsJson)
   }
 
+  /**
+   * Proactively refresh an account's OAuth token and persist the rotation to
+   * managed storage. Returns the refreshed credentials JSON, or null when no
+   * refresh happened (token valid, no refresh token, or network failure).
+   *
+   * Caller guarantees this account isn't the live/active one and runs inside the
+   * serialized mutation queue, so the single-use refresh token can't rotate concurrently.
+   */
+  private async refreshManagedAccountTokenIfNeeded(
+    account: ClaudeManagedAccount,
+    credentialsJson: string
+  ): Promise<string | null> {
+    if (!isOauthTokenExpiring(credentialsJson)) {
+      return null
+    }
+    const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
+    if (!refreshed || !this.isValidCredentialsJsonObject(refreshed)) {
+      return null
+    }
+    try {
+      await this.writeManagedCredentials(account, refreshed)
+    } catch (error) {
+      console.warn('[claude-runtime-auth] Failed to persist refreshed Claude token:', error)
+      return null
+    }
+    return refreshed
+  }
+
   private readManagedOauthAccount(account: ClaudeManagedAccount): unknown {
     const managedAuthPath = this.getOwnedManagedAuthPath(account)
     if (!managedAuthPath) {
@@ -1138,9 +1228,7 @@ export class ClaudeRuntimeAuthService {
       previouslyWrittenCredentialsJson
     )
     let hasCredentialSurfaceOwnership = fileCredentialsOwned
-    // Why: runtime auth restore is two-phase: prove ownership before mutating
-    // any surface, then restore OAuth first. If OAuth fails, the credential
-    // proof remains intact for retry.
+    // Why: prove ownership before mutating anything, and restore OAuth first so a failure leaves the credential proof intact for retry.
     this.lastWrittenCredentialsJson = previouslyWrittenCredentialsJson
     let scopedSnapshot: ClaudeKeychainSnapshotValue | null = null
     let legacySnapshot: ClaudeKeychainSnapshotValue | null = null
@@ -1193,9 +1281,7 @@ export class ClaudeRuntimeAuthService {
     if (this.hasLastWrittenOauthAccount) {
       return this.lastWrittenOauthAccount
     }
-    // Why: persisted managed metadata is an account identity hint, not proof
-    // that Orca wrote .claude.json. Use it only after another surface proves
-    // the current runtime auth still belongs to the managed account.
+    // Why: managed metadata hints identity but isn't proof Orca wrote .claude.json; use only after a credential surface proves ownership.
     if (hasCredentialSurfaceOwnership && ownedOauthAccount !== undefined) {
       return ownedOauthAccount
     }
@@ -1646,10 +1732,7 @@ export class ClaudeRuntimeAuthService {
   private writeRuntimeCredentials(contents: string): void {
     const credentialsPath = this.pathResolver.getRuntimePaths().credentialsPath
     mkdirSync(dirname(credentialsPath), { recursive: true })
-    // Why: repeated Claude spawns sync auth, but credentials rarely change.
-    // Skipping unchanged rewrites avoids Windows EPERM contention in #1507.
-    // Still verify the file because another Claude process may have rewritten
-    // runtime credentials since Orca last materialized them.
+    // Why: skip unchanged rewrites to dodge Windows EPERM contention (#1507); re-verify the file since another Claude may have rewritten it.
     if (
       this.lastWrittenCredentialsJson === contents &&
       this.fileContentsEqual(credentialsPath, contents)
@@ -1705,8 +1788,7 @@ export class ClaudeRuntimeAuthService {
         return parsed as Record<string, unknown>
       }
     } catch {
-      // Why: invalid config is an unknown external state. Replacing it with a
-      // fresh object could silently erase user or Claude-owned settings.
+      // Why: invalid config is unknown external state; return null so we don't erase user or Claude-owned settings.
       return null
     }
     return null

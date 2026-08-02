@@ -5,10 +5,13 @@ const WINDOWS_CONTROL_TERMINATION_EXIT_CODES = new Set([0xc000013a, 0x40010004])
 const RECOVERABLE_CHILD_PROCESS_TYPES = new Set(['gpu'])
 const RECOVERABLE_UTILITY_SERVICE_NAMES = new Set([
   'audio.mojom.AudioService',
-  'network.mojom.NetworkService'
+  'network.mojom.NetworkService',
+  // Why: Windows media/screen capture can churn this Chromium utility without
+  // taking down Orca; prompting users for those child exits is noise.
+  'video_capture.mojom.VideoCaptureService'
 ])
 const RECOVERABLE_CHILD_PROCESS_REASONS = new Set(['abnormal-exit', 'crashed', 'killed'])
-const NON_RECOVERABLE_RENDERER_REASONS = new Set(['integrity-failure', 'launch-failed'])
+const NON_RECOVERABLE_RENDERER_REASONS = new Set(['integrity-failure'])
 
 function isWindowsControlTerminationExitCode(exitCode: number | null): boolean {
   if (exitCode === null) {
@@ -92,8 +95,9 @@ export function shouldRecoverRendererAfterProcessGone({
   if (expectedTeardown === 'app-shutdown') {
     return false
   }
-  // Why: these mean Chromium could not start or trust the renderer process;
-  // retrying the same BrowserWindow load can loop indefinitely on Windows.
+  // Why: an integrity failure means Chromium cannot trust the renderer, so a
+  // reload cannot safely recover it. Launch failures can be transient and are
+  // bounded by the caller's renderer-recovery circuit breaker.
   if (NON_RECOVERABLE_RENDERER_REASONS.has(reason)) {
     return false
   }

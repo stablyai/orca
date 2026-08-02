@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { ORCA_BROWSER_BLANK_URL } from './constants'
 import {
   buildSearchUrl,
+  classifySchemeLessLocalDevAddress,
+  isEligibleLocalCertificateHost,
   normalizeKagiSessionLink,
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
-  redactKagiSessionToken
+  redactKagiSessionToken,
+  resolveRemoteFailureExternalUrl,
+  toSecureCertificateEndpoint,
+  toHttpsRecoveryUrl
 } from './browser-url'
 
 describe('browser-url helpers', () => {
@@ -18,6 +23,98 @@ describe('browser-url helpers', () => {
     expect(normalizeBrowserNavigationUrl('localhost:3000#preview')).toBe(
       'http://localhost:3000/#preview'
     )
+  })
+
+  it('keeps the legacy scheme-less local-dev classifier broader than certificate eligibility', () => {
+    for (const input of [
+      'localhost:3000/path',
+      '127.0.0.1:5173',
+      '0.0.0.0:8080',
+      '[::1]:3000',
+      '[2001:db8::1]:3000'
+    ]) {
+      expect(classifySchemeLessLocalDevAddress(input), input).not.toBeNull()
+    }
+    expect(classifySchemeLessLocalDevAddress('app.localhost:3000')).toBeNull()
+    expect(isEligibleLocalCertificateHost('0.0.0.0')).toBe(false)
+    expect(isEligibleLocalCertificateHost('[2001:db8::1]')).toBe(false)
+  })
+
+  it('recognizes only canonical loopback certificate hosts', () => {
+    for (const hostname of [
+      'localhost',
+      'LOCALHOST.',
+      'app.localhost',
+      'deep.app.localhost.',
+      '127.0.0.1',
+      '127.255.255.255',
+      '::1',
+      '[::1]'
+    ]) {
+      expect(isEligibleLocalCertificateHost(hostname), hostname).toBe(true)
+    }
+    for (const hostname of [
+      '0.0.0.0',
+      '::',
+      '[2001:db8::1]',
+      '192.168.1.1',
+      'localhost.example.com',
+      'notlocalhost',
+      '.localhost',
+      '-bad.localhost',
+      'bad-.localhost',
+      '127.0.0.999',
+      '127.00.0.1'
+    ]) {
+      expect(isEligibleLocalCertificateHost(hostname), hostname).toBe(false)
+    }
+  })
+
+  it('constructs HTTPS recovery URLs without changing the rest of the address', () => {
+    expect(toHttpsRecoveryUrl('http://localhost:3000/path?q=1#preview')).toBe(
+      'https://localhost:3000/path?q=1#preview'
+    )
+    expect(toHttpsRecoveryUrl('http://user:pass@127.0.0.2:8080/')).toBe(
+      'https://user:pass@127.0.0.2:8080/'
+    )
+    expect(toHttpsRecoveryUrl('http://localhost:80/path')).toBe('https://localhost/path')
+    expect(toHttpsRecoveryUrl('https://localhost:3000/')).toBeNull()
+    expect(toHttpsRecoveryUrl('http://0.0.0.0:3000/')).toBeNull()
+    expect(toHttpsRecoveryUrl('http://example.com/')).toBeNull()
+    expect(toHttpsRecoveryUrl('not a url')).toBeNull()
+  })
+
+  it('canonicalizes secure certificate endpoints without path or credential data', () => {
+    expect(toSecureCertificateEndpoint('https://User:secret@LOCALHOST.:443/path?q=1')).toBe(
+      'https://localhost:443'
+    )
+    expect(toSecureCertificateEndpoint('wss://localhost:3000/socket')).toBe(
+      'https://localhost:3000'
+    )
+    expect(toSecureCertificateEndpoint('https://[::1]/')).toBe('https://[::1]:443')
+    expect(toSecureCertificateEndpoint('http://localhost:3000/')).toBeNull()
+    expect(toSecureCertificateEndpoint('not a url')).toBeNull()
+  })
+
+  it('offers Open Externally for a remote failure only when the URL is desktop-reachable', () => {
+    // Loopback / wildcard hosts are unreachable from the desktop system browser.
+    expect(resolveRemoteFailureExternalUrl('https://localhost:3000/')).toBeNull()
+    expect(resolveRemoteFailureExternalUrl('https://127.0.0.1:3000/')).toBeNull()
+    expect(resolveRemoteFailureExternalUrl('https://127.0.0.9:3000/')).toBeNull()
+    expect(resolveRemoteFailureExternalUrl('https://[::1]:3000/')).toBeNull()
+    expect(resolveRemoteFailureExternalUrl('https://app.localhost:3000/')).toBeNull()
+    expect(resolveRemoteFailureExternalUrl('http://0.0.0.0:3000/')).toBeNull()
+    expect(resolveRemoteFailureExternalUrl('http://[::]:3000/')).toBeNull()
+    // Public hosts are reachable, so the action is offered.
+    expect(resolveRemoteFailureExternalUrl('https://example.com/app')).toBe(
+      'https://example.com/app'
+    )
+    expect(resolveRemoteFailureExternalUrl('http://example.com:8080/x')).toBe(
+      'http://example.com:8080/x'
+    )
+    // Non-web schemes and garbage never become an external target.
+    expect(resolveRemoteFailureExternalUrl('file:///etc/passwd')).toBeNull()
+    expect(resolveRemoteFailureExternalUrl('not a url')).toBeNull()
   })
 
   it('keeps normal web URLs and blank tabs in the allowed set', () => {

@@ -1,5 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset'
+import {
+  getVisibleFileExplorerWorktreePath,
+  shouldResetFileExplorerForVisibleWorktree
+} from './file-explorer-reset'
+
+describe('getVisibleFileExplorerWorktreePath', () => {
+  it('exposes the worktree path only while the Files view is visible', () => {
+    expect(
+      getVisibleFileExplorerWorktreePath({
+        explorerView: 'files',
+        rightSidebarOpen: true,
+        worktreePath: '/repo'
+      })
+    ).toBe('/repo')
+    expect(
+      getVisibleFileExplorerWorktreePath({
+        explorerView: 'search',
+        rightSidebarOpen: true,
+        worktreePath: '/repo'
+      })
+    ).toBeNull()
+    expect(
+      getVisibleFileExplorerWorktreePath({
+        explorerView: 'files',
+        rightSidebarOpen: false,
+        worktreePath: '/repo'
+      })
+    ).toBeNull()
+  })
+})
 
 describe('shouldResetFileExplorerForVisibleWorktree', () => {
   it('preserves explorer state across hide and reopen of the same worktree', () => {
