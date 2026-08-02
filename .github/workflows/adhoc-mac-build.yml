@@ -18,10 +18,15 @@ name: Adhoc macOS Dev Build
 # from someone's branch must never be picked up by a developer who only meant to
 # ride main; the two are different levels of "unvetted".
 #
-# Dispatch from main (the workflow file is read from the dispatch ref), naming the
-# branch you want built:
+# From the Actions tab: pick this workflow, "Run workflow", leave "Use workflow
+# from" on main, and type your branch in the first field. Or from the CLI:
 #
 #   gh workflow run adhoc-mac-build.yml --ref main -f ref=my-branch -f label=wasm-terminal
+#
+# Leaving the ref field empty builds whatever "Use workflow from" is set to, which
+# is what someone who only touched that picker means. Naming the branch explicitly
+# is still better: the workflow file is always read from the dispatch ref, so a
+# branch carrying a stale copy of this file would otherwise run that copy.
 #
 # GITHUB_TOKEN is scoped to this repo and cannot publish there, so writes use the
 # same GitHub App as hourly, additionally installed on orca-adhoc with
@@ -33,11 +38,19 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Branch, tag, or SHA to build
-        required: true
+        # Why optional: the Actions UI already shows its own "Use workflow from"
+        # branch picker directly above this field, and picking a branch there is
+        # what most people will read as "build this". Defaulting to that branch
+        # makes the obvious action correct. Fill this in only to build a ref other
+        # than the one the workflow file itself is read from — normally leave the
+        # picker on main and name your branch here, so a stale copy of this
+        # workflow on an old branch is not what runs.
+        description: 'Branch, tag, or SHA to build (default: the branch selected above)'
+        required: false
+        default: ''
         type: string
       label:
-        description: Short name shown in the release title (defaults to the ref)
+        description: 'Short name shown in the release title (default: the ref)'
         required: false
         default: ''
         type: string
@@ -50,7 +63,7 @@ concurrency:
   # different branches at the same time is the ordinary case here, and serialising
   # them would make each wait out the other's notary queue. Re-dispatching the
   # *same* branch still queues, so a push mid-build cannot race itself.
-  group: adhoc-mac-build-${{ inputs.ref }}
+  group: adhoc-mac-build-${{ inputs.ref || github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -75,11 +88,11 @@ jobs:
       - name: Checkout the requested ref
         uses: actions/checkout@v6
         with:
-          # Why inputs.ref and not github.ref: the whole point is to build code
-          # that has not landed. The workflow definition itself still comes from
-          # the dispatch ref, so dispatch from main to get this file's current
-          # behaviour applied to an arbitrary branch.
-          ref: ${{ inputs.ref }}
+          # Why an input at all rather than just github.ref: the whole point is to
+          # build code that has not landed, and the workflow definition itself
+          # always comes from the dispatch ref — naming the branch here instead
+          # applies main's current copy of this file to an arbitrary branch.
+          ref: ${{ inputs.ref || github.ref_name }}
           fetch-depth: 0
           # This job only reads stablyai/orca and never pushes; every write goes
           # to the adhoc repo through a minted App token passed by env. Not
@@ -131,7 +144,7 @@ jobs:
         id: adhoc
         shell: bash
         env:
-          REF: ${{ inputs.ref }}
+          REF: ${{ inputs.ref || github.ref_name }}
           LABEL: ${{ inputs.label }}
         run: |
           set -euo pipefail
@@ -181,7 +194,7 @@ jobs:
           TAG: v${{ steps.adhoc.outputs.version }}
           NAME: ${{ steps.adhoc.outputs.name }}
           SHA: ${{ steps.adhoc.outputs.head_sha }}
-          REF: ${{ inputs.ref }}
+          REF: ${{ inputs.ref || github.ref_name }}
           # Via env, not inline `${{ }}`: both land inside a shell string, and an
           # expression expanded there is substituted before bash parses the line
           # (zizmor: template-injection).
