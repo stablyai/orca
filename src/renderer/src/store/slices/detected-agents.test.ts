@@ -13,6 +13,17 @@ import {
 } from '../../../../shared/protocol-version'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
+const { hasCachedWindowsTerminalCapabilitiesMock, getCachedWindowsTerminalCapabilitiesMock } =
+  vi.hoisted(() => ({
+    hasCachedWindowsTerminalCapabilitiesMock: vi.fn(() => false),
+    getCachedWindowsTerminalCapabilitiesMock: vi.fn()
+  }))
+
+vi.mock('@/lib/windows-terminal-capabilities', () => ({
+  hasCachedWindowsTerminalCapabilities: hasCachedWindowsTerminalCapabilitiesMock,
+  getCachedWindowsTerminalCapabilities: getCachedWindowsTerminalCapabilitiesMock
+}))
+
 const detectAgents = vi.fn()
 const refreshAgents = vi.fn()
 const detectRemoteAgents = vi.fn()
@@ -88,6 +99,8 @@ function makeWorktree(
 describe('createDetectedAgentsSlice WSL context', () => {
   beforeEach(() => {
     clearRuntimeCompatibilityCacheForTests()
+    hasCachedWindowsTerminalCapabilitiesMock.mockReset().mockReturnValue(false)
+    getCachedWindowsTerminalCapabilitiesMock.mockReset()
     detectAgents.mockReset().mockResolvedValue(['claude'])
     refreshAgents.mockReset().mockResolvedValue({
       agents: ['codex'],
@@ -288,6 +301,34 @@ describe('createDetectedAgentsSlice WSL context', () => {
         }
       }
     })
+  })
+
+  it('retries an empty WSL result after capability loading recovers', async () => {
+    hasCachedWindowsTerminalCapabilitiesMock.mockReturnValue(true)
+    getCachedWindowsTerminalCapabilitiesMock.mockReturnValue({
+      wslAvailable: false,
+      wslDistros: []
+    })
+    detectAgents.mockReset().mockResolvedValueOnce([]).mockResolvedValueOnce(['codex'])
+    const store = createTestStore({
+      settings: {
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Ubuntu'
+      } as AppState['settings'],
+      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null
+    })
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual([])
+
+    getCachedWindowsTerminalCapabilitiesMock.mockReturnValue({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu']
+    })
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['codex'])
+    expect(detectAgents).toHaveBeenCalledTimes(2)
   })
 
   it('detects agents in the global WSL runtime when no project is active', async () => {

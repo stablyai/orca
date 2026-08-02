@@ -54,9 +54,10 @@ export function getWslPreflightContext(wslDistro: string): NonNullable<LocalPref
 }
 
 export function getProjectRuntimePreflightContext(
-  resolution: ProjectExecutionRuntimeResolution
+  resolution: ProjectExecutionRuntimeResolution,
+  runtimeContextKey?: string
 ): NonNullable<LocalPreflightContext> {
-  const cacheKey = getProjectRuntimeContextObjectCacheKey(resolution)
+  const cacheKey = getProjectRuntimeContextObjectCacheKey(resolution, runtimeContextKey)
   const cached = projectRuntimePreflightContextsByKey.get(cacheKey)
   if (cached) {
     return cached
@@ -70,6 +71,7 @@ export function getProjectRuntimePreflightContext(
   // adding projectRuntime does not reintroduce useSyncExternalStore churn.
   const context = Object.freeze({
     ...(wslDistro ? { wslDistro } : {}),
+    ...(runtimeContextKey ? { runtimeContextKey } : {}),
     projectRuntime: resolution
   })
   storeCacheEntry(
@@ -82,8 +84,12 @@ export function getProjectRuntimePreflightContext(
 }
 
 function getProjectRuntimeContextObjectCacheKey(
-  resolution: ProjectExecutionRuntimeResolution
+  resolution: ProjectExecutionRuntimeResolution,
+  runtimeContextKey?: string
 ): string {
+  if (runtimeContextKey) {
+    return `${runtimeContextKey}:override`
+  }
   if (resolution.status === 'resolved') {
     return `${resolution.runtime.cacheKey}:${resolution.runtime.reason}`
   }
