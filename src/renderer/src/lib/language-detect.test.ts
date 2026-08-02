@@ -38,6 +38,20 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\rtl\\TOP.SV')).toBe('systemverilog')
   })
 
+  it('maps the less-common Verilog extensions onto the same grammar', () => {
+    expect(detectLanguage('rtl/legacy.vl')).toBe('verilog')
+    expect(detectLanguage('ip/fifo.veo')).toBe('verilog')
+  })
+
+  it('maps VHDL files, including generated ones, to the custom vhdl language id', () => {
+    expect(detectLanguage('rtl/counter.vhd')).toBe('vhdl')
+    expect(detectLanguage('rtl/counter.vhdl')).toBe('vhdl')
+    expect(detectLanguage('gate/top.vho')).toBe('vhdl')
+    expect(detectLanguage('tb/top_tb.vht')).toBe('vhdl')
+    expect(detectLanguage('gen/pll.vhi')).toBe('vhdl')
+    expect(detectLanguage('C:\\rtl\\TOP.VHD')).toBe('vhdl')
+  })
+
   it('maps .proto files to the Monaco built-in proto language id, not the alias', () => {
     expect(detectLanguage('api/v1/service.proto')).toBe('proto')
   })

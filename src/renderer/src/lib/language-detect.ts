@@ -89,6 +89,20 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.svh': 'systemverilog',
   '.v': 'verilog',
   '.vh': 'verilog',
+  // .vl is the older Verilog extension; .veo is a Xilinx instantiation template.
+  '.vl': 'verilog',
+  '.veo': 'verilog',
+  // Why: the long tail is Quartus/Xilinx output — netlists (.vho), testbenches
+  // (.vht) and generated components — all of which are plain VHDL source. Set
+  // taken from GitHub Linguist rather than guessed.
+  '.vhd': 'vhdl',
+  '.vhdl': 'vhdl',
+  '.vhf': 'vhdl',
+  '.vhi': 'vhdl',
+  '.vho': 'vhdl',
+  '.vhs': 'vhdl',
+  '.vht': 'vhdl',
+  '.vhw': 'vhdl',
   '.nim': 'nim',
   '.nims': 'nim',
   '.nimble': 'nim',
