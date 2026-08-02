@@ -520,6 +520,27 @@ describe('xterm IME composition de-duplication', () => {
     terminal.dispose()
   })
 
+  it('flushes the previous Hangul commit while the next composition is active', async () => {
+    const { emitted, terminal, textarea } = openTerminal()
+    startComposition(textarea, '가')
+    textarea.setSelectionRange(1, 1)
+    dispatchCompositionEvent(textarea, 'compositionend', '가')
+
+    dispatchCompositionEvent(textarea, 'compositionstart')
+    dispatchCompositionEvent(textarea, 'compositionupdate', '나')
+    textarea.value = '가나'
+    textarea.setSelectionRange(2, 2)
+    await nextEventLoop()
+
+    expect(emitted.join('')).toBe('가')
+
+    dispatchCompositionEvent(textarea, 'compositionend', '나')
+    await nextEventLoop()
+
+    expect(emitted.join('')).toBe('가나')
+    terminal.dispose()
+  })
+
   it('flushes a pending commit before blur clears the textarea', async () => {
     const { emitted, terminal, textarea } = openTerminal()
     terminal.focus()
