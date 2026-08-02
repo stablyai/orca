@@ -7,6 +7,7 @@ import type {
 } from '../runtime/orchestration/conversation-wake-provider'
 import { CodexControlledSessionRegistry } from './codex-controlled-session-registry'
 import type { ControlledCodexSession } from './codex-controlled-session-registry'
+import { createControlledSessionFence } from './codex-controlled-session-fence'
 import { CodexControlledTurnFinalizer } from './codex-controlled-turn-finalizer'
 import {
   getControlledSocketRoot,
@@ -68,6 +69,7 @@ export type CodexControlledSessionManagerOptions = {
   ) => Promise<CodexControlledSessionIdentity>
   closeVisibleTerminal: (terminal: CodexControlledSessionIdentity) => Promise<void>
   resolveCurrentAccountId: () => string | null
+  resolveCurrentAccountRevision?: () => number
   isControlledLaunchEnabled?: () => boolean
   isProviderEnabled?: () => boolean
   isWakeEnabled?: () => boolean
@@ -76,10 +78,7 @@ export type CodexControlledSessionManagerOptions = {
   spawnProcess?: typeof spawn
 }
 
-type ThreadShape = {
-  status?: { type?: unknown }
-  canAcceptDirectInput?: unknown
-}
+type ThreadShape = { status?: { type?: unknown }; canAcceptDirectInput?: unknown }
 
 const CODEX_THREAD_NOT_FOUND_RPC_CODE = -32600
 
@@ -137,12 +136,20 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
     if (!session || session.missing) {
       return 'missing'
     }
-    if (!this.isAccountCurrent(session)) {
+    if (!this.isAccountCurrent(session.launch)) {
       return 'unknown'
     }
+    const fence = this.createSessionFence(session)
     try {
-      session.terminal = await this.registry.refresh(session)
+      const terminal = await this.registry.refresh(session)
+      if (!fence()) {
+        return 'unknown'
+      }
       const thread = await this.readThread(session, false)
+      if (!fence()) {
+        return 'unknown'
+      }
+      session.terminal = terminal
       if (thread.status?.type === 'active') {
         return 'active'
       }
@@ -150,6 +157,9 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
         ? 'idle'
         : 'unsupported'
     } catch (error) {
+      if (!fence()) {
+        return 'unknown'
+      }
       return isMissingThreadError(error) ? 'missing' : 'unknown'
     }
   }
@@ -165,11 +175,10 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
       throw new Error('controlled Codex conversation is missing')
     }
     this.assertAccountCurrent(session)
+    const fence = this.createSessionFence(session)
     return new CodexControlledTurnFinalizer(
       { threadId: session.launch.threadId, client: session.client, state: session.state },
-      () =>
-        this.isProviderAvailable() &&
-        this.options.resolveCurrentAccountId() === session.launch.accountId
+      fence
     ).prepareAndFinalize(request)
   }
 
@@ -184,13 +193,21 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
     }
     await Promise.allSettled(
       [...this.registry.values()]
-        .filter((session) => !session.missing && this.isAccountCurrent(session))
+        .filter((session) => !session.missing && this.isAccountCurrent(session.launch))
         .map(async (session) => {
+          const fence = this.createSessionFence(session)
           try {
-            session.terminal = await this.registry.refresh(session)
+            const terminal = await this.registry.refresh(session)
+            if (!fence()) {
+              return
+            }
             await this.readThread(session, false)
+            if (!fence()) {
+              return
+            }
+            session.terminal = terminal
           } catch (error) {
-            if (isMissingThreadError(error)) {
+            if (isMissingThreadError(error) && fence()) {
               session.missing = true
             }
           }
@@ -219,7 +236,11 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
       threadId: session.launch.threadId,
       includeTurns
     })
-    if (!isRecord(response) || !isRecord(response.thread)) {
+    if (
+      !isRecord(response) ||
+      !isRecord(response.thread) ||
+      response.thread.id !== session.launch.threadId
+    ) {
       throw new Error('controlled Codex thread/read returned an invalid response')
     }
     return response.thread as ThreadShape
@@ -231,8 +252,9 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
     params: Record<string, unknown>
   ): void {
     if (
-      (method === 'turn/completed' || method === 'thread/status/changed') &&
-      params.threadId === session.launch.threadId
+      method === 'turn/completed' &&
+      params.threadId === session.launch.threadId &&
+      this.createSessionFence(session)()
     ) {
       this.emitTerminal(session.launch.conversationId)
     }
@@ -264,13 +286,22 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
   }
 
   private assertAccountCurrent(session: ControlledCodexSession): void {
-    if (!this.isAccountCurrent(session)) {
+    if (!this.isAccountCurrent(session.launch)) {
       throw new Error('controlled Codex account changed')
     }
   }
 
-  private isAccountCurrent(session: ControlledCodexSession): boolean {
-    return this.options.resolveCurrentAccountId() === session.launch.accountId
+  private isAccountCurrent(launch: CodexControlledSessionLaunch): boolean {
+    return this.options.resolveCurrentAccountId() === launch.accountId
+  }
+
+  private createSessionFence(session: ControlledCodexSession): () => boolean {
+    return createControlledSessionFence(session, {
+      getCurrentSession: (conversationId) => this.registry.get(conversationId),
+      resolveCurrentAccountId: this.options.resolveCurrentAccountId,
+      resolveCurrentAccountRevision: this.options.resolveCurrentAccountRevision,
+      isProviderAvailable: () => this.isProviderAvailable()
+    })
   }
 
   private isProviderAvailable(): boolean {

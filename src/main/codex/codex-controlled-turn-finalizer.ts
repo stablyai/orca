@@ -114,19 +114,41 @@ export class CodexControlledTurnFinalizer {
       threadId: this.session.threadId,
       includeTurns: true
     })
-    const turns = isRecord(response) && isRecord(response.thread) ? response.thread.turns : null
-    if (!Array.isArray(turns)) {
-      return null
-    }
-    for (const turn of turns) {
-      if (!isRecord(turn) || typeof turn.id !== 'string' || !Array.isArray(turn.items)) {
-        continue
-      }
-      const matched = turn.items.some(
-        (item) => isRecord(item) && item.type === 'userMessage' && item.clientId === clientMessageId
+    if (
+      !isRecord(response) ||
+      !isRecord(response.thread) ||
+      response.thread.id !== this.session.threadId ||
+      !Array.isArray(response.thread.turns)
+    ) {
+      throw new Error(
+        'controlled Codex turn reconciliation thread/read returned an invalid response'
       )
-      if (matched) {
-        return turn.id
+    }
+    const turns = response.thread.turns
+    for (const turn of turns) {
+      if (
+        !isRecord(turn) ||
+        typeof turn.id !== 'string' ||
+        turn.id.length === 0 ||
+        !Array.isArray(turn.items)
+      ) {
+        throwInvalidReconciliationResponse()
+      }
+      for (const item of turn.items) {
+        if (
+          !isRecord(item) ||
+          typeof item.type !== 'string' ||
+          item.type.length === 0 ||
+          (item.type === 'userMessage' &&
+            item.clientId !== undefined &&
+            item.clientId !== null &&
+            typeof item.clientId !== 'string')
+        ) {
+          throwInvalidReconciliationResponse()
+        }
+        if (item.type === 'userMessage' && item.clientId === clientMessageId) {
+          return turn.id
+        }
       }
     }
     return null
@@ -160,4 +182,8 @@ function extractTurnId(response: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function throwInvalidReconciliationResponse(): never {
+  throw new Error('controlled Codex turn reconciliation thread/read returned an invalid response')
 }
