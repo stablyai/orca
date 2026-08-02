@@ -178,7 +178,9 @@ type E2eRemoteTerminalMultiplexAckGateSnapshot = {
 
 type E2eRemoteTerminalMultiplexAckGateApi = {
   dropOutputUntilResubscribe: (terminals: string[]) => number
+  forceError: (terminals: string[], message: string) => number
   hold: (terminals: string[]) => void
+  holdEnd: (terminals: string[]) => void
   release: () => void
   sendInput: (terminal: string, text: string) => number
   snapshot: () => E2eRemoteTerminalMultiplexAckGateSnapshot
@@ -189,6 +191,7 @@ type E2eRemoteTerminalMultiplexAckGateWindow = Window & {
 }
 
 const e2eHeldRemoteAckTerminals = new Set<string>()
+const e2eHeldRemoteEndTerminals = new Set<string>()
 const e2eDroppedOutputStreams = new Set<RemoteRuntimeMultiplexedTerminalState>()
 let e2eDroppedOutputBytes = 0
 let e2eDroppedOutputFrames = 0
@@ -262,15 +265,30 @@ function exposeE2eRemoteTerminalMultiplexAckGate(): void {
       }
       return e2eDroppedOutputStreams.size
     },
+    forceError: (terminals, message) => {
+      let dispatched = 0
+      const targets = new Set(terminals)
+      for (const multiplexer of multiplexers.values()) {
+        dispatched += multiplexer.forceErrorForE2e(targets, message)
+      }
+      return dispatched
+    },
     hold: (terminals) => {
       releaseE2eRemoteTerminalAcks()
       for (const terminal of terminals) {
         e2eHeldRemoteAckTerminals.add(terminal)
       }
     },
+    holdEnd: (terminals) => {
+      e2eHeldRemoteEndTerminals.clear()
+      for (const terminal of terminals) {
+        e2eHeldRemoteEndTerminals.add(terminal)
+      }
+    },
     release: () => {
       releaseE2eRemoteTerminalAcks()
       resetE2eDroppedRemoteOutput()
+      e2eHeldRemoteEndTerminals.clear()
     },
     sendInput: (terminal, value) => {
       let sent = 0
@@ -544,6 +562,13 @@ class RemoteRuntimeTerminalMultiplexer {
       return
     }
     stream.watchdog.recordInbound()
+    if (
+      event.type === 'end' &&
+      e2eConfig.exposeStore &&
+      e2eHeldRemoteEndTerminals.has(stream.terminal)
+    ) {
+      return
+    }
     if (event.type === 'subscribed') {
       const capabilities =
         typeof event.capabilities === 'object' && event.capabilities !== null
@@ -1183,6 +1208,17 @@ class RemoteRuntimeTerminalMultiplexer {
 
   getStreamsForE2e(): Iterable<RemoteRuntimeMultiplexedTerminalState> {
     return this.streams.values()
+  }
+
+  forceErrorForE2e(terminals: ReadonlySet<string>, message: string): number {
+    let dispatched = 0
+    for (const stream of this.streams.values()) {
+      if (terminals.has(stream.terminal)) {
+        stream.callbacks.onError?.(message)
+        dispatched += 1
+      }
+    }
+    return dispatched
   }
 
   releaseHeldAcksForE2e(): number {
