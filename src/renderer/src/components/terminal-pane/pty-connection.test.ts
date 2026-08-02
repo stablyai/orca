@@ -6183,6 +6183,35 @@ describe('connectPanePty', () => {
     _resetTerminalPaneRecoveryForTests()
   })
 
+  it('remounts a connected pane when an ASCII letter produces no xterm input', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
+    _resetTerminalPaneRecoveryForTests()
+    const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+    mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+    const transport = createMockTransport('pty-input-blackhole')
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const terminalTarget = createKeyboardEventTarget()
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    const binding = connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    await flushAsyncTicks(20)
+
+    terminalTarget.dispatch(keyEvent({ key: 'z' }))
+    await vi.advanceTimersByTimeAsync(500)
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.hasPty).toHaveBeenCalledWith('tab-pty')
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+    binding.dispose()
+    _resetTerminalPaneRecoveryForTests()
+  })
+
   it('quarantines the interrupted line after a write-unavailable remount, but never device replies', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')

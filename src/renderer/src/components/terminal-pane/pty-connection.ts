@@ -136,6 +136,7 @@ import {
 } from '../../../../shared/terminal-color-scheme-protocol'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { subscribeToTerminalUserInput } from './terminal-user-input-signal'
+import { createTerminalInputDeliveryWatch } from './terminal-input-delivery-watch'
 import {
   hasPtySerializer,
   registerPtySerializer,
@@ -2198,10 +2199,12 @@ export function connectPanePty(
     },
     onCommandFinished: handleCommandFinished
   })
+  let inputDeliveryWatch: ReturnType<typeof createTerminalInputDeliveryWatch> | null = null
   // Why: the xterm OSC 133 swallow is rendering hygiene, not a side effect —
   // it stays attached in every authority mode.
   commandLifecycle.attachXtermConsumer(pane.terminal)
   const onTerminalKeyDown = (event: KeyboardEvent): void => {
+    inputDeliveryWatch?.observeKeydown(event)
     if (isPlainEscapeKeyEvent(event)) {
       setPendingTerminalInputIntent('plain-escape')
       // Why: plain Escape produces real terminal input (\x1b), so it is a
@@ -3686,7 +3689,10 @@ export function connectPanePty(
   // solely as the fallback when the internal API is unavailable.
   const userInputActivityDisposable = subscribeToTerminalUserInput(
     pane.terminal,
-    recordTerminalInputForHibernation
+    () => {
+      inputDeliveryWatch?.observeDeliveredInput()
+      recordTerminalInputForHibernation()
+    }
   )
   const recordTerminalInputForHibernationFallback = (): void => {
     if (userInputActivityDisposable === null) {
@@ -3923,8 +3929,16 @@ export function connectPanePty(
   // pre-existing session when a late reattach resolves, so a remount racing
   // a slow-but-alive connect costs a wasted view rebuild, not a shell.
   const TRANSPORT_CONNECT_SETTLE_GRACE_MS = 60_000
-  const requestRecoveryForUndeliverableInput = (providerRejected = false): void => {
-    if (!providerRejected && transport.isConnected?.() && transport.getPtyId() !== null) {
+  const requestRecoveryForUndeliverableInput = (
+    providerRejected = false,
+    rendererInputMissing = false
+  ): void => {
+    if (
+      !providerRejected &&
+      !rendererInputMissing &&
+      transport.isConnected?.() &&
+      transport.getPtyId() !== null
+    ) {
       return
     }
     // Why: input rejected while a connect/reattach is still settling is "not
@@ -3959,6 +3973,9 @@ export function connectPanePty(
       endpointReplaced: providerRejected
     })
   }
+  inputDeliveryWatch = createTerminalInputDeliveryWatch({
+    onUndeliverable: () => requestRecoveryForUndeliverableInput(false, true)
+  })
   // Why: the write-pipeline health watch (scheduler stall probe, replay-guard
   // wedge certification) detects a dead xterm pipeline; route its verdict to
   // the same tab remount. Registered per xterm instance — recovery replaces
@@ -3981,6 +3998,9 @@ export function connectPanePty(
   )
 
   const onDataDisposable = pane.terminal.onData((data) => {
+    if (userInputActivityDisposable === null) {
+      inputDeliveryWatch?.observeDeliveredInput()
+    }
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
     // OSC 10/11, focus, CPR) via onData. When we replay recorded PTY bytes
     // into xterm for scrollback/cold-restore/snapshot, those queries would
@@ -8957,6 +8977,8 @@ export function connectPanePty(
       if (terminalKeyTargetSupportsEvents) {
         terminalKeyTarget.removeEventListener('keydown', onTerminalKeyDown, { capture: true })
       }
+      inputDeliveryWatch?.dispose()
+      inputDeliveryWatch = null
       clearPendingTerminalInputIntent()
       pendingTerminalInputWrite = null
       interruptInference.dispose()
