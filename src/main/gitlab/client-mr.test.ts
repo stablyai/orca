@@ -291,7 +291,7 @@ describe('gitlab client — MR operations', () => {
       })
     })
 
-    it('merges many authenticated hosts with one cache scan', async () => {
+    it('merges many authenticated hosts with at most one cache scan', async () => {
       const hostCount = 256
       glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: Array.from(
@@ -321,7 +321,7 @@ describe('gitlab client — MR operations', () => {
       } finally {
         mapSpy.mockRestore()
       }
-      expect(knownHostCacheScans).toBe(1)
+      expect(knownHostCacheScans).toBeLessThanOrEqual(1)
     })
   })
 

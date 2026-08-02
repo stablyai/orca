@@ -6821,7 +6821,7 @@
       "id": "terminal-performance.store-and-git-hot-paths",
       "title": "Terminal-adjacent store and git polling work stays off hot interaction paths",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-performance",
       "layer": "renderer-main-perf-contract",
       "surfaces": [
@@ -6835,31 +6835,56 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap on main. The boot-hydration counters and their tests exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh"],
+      "coverageNotes": "Focused GitLab host-probe coverage on main bounds failed glab auth subprocesses per native or WSL execution context, shares the native probe across SSH targets, isolates connection-derived hosts by SSH generation, refreshes after a short cooldown, and caps retained state. Broader store, git-status, provider-listing, and boot-hydration counters remain gaps.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/7002"],
       "invariant": "Terminal typing, focus, resize, tab/workspace switch, and agent/session restore must not trigger unbounded store projection, git status, provider listing, or per-pane polling work.",
-      "oracle": "The current executable slice instruments boot-time local PTY registry hydration with repo counts, local-vs-remote repo skips, worktree enumeration counts, adapter/session listing counts, registration/skipped-session counts, duration, and failure phase. The broader oracle still needs instrumentation that counts store selector recomputes, git status requests, provider listings, and session scans during scripted hot interactions with many worktrees and terminal panes.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "oracle": "Issue 64 sequential failed GitLab known-host requests across distinct SSH targets and require one native glab probe during the cooldown. Advance past the cooldown and require one retry; explicitly refresh auth and require immediate recovery. Replace the SSH provider generation and require connection-derived hosts to expire without repeating the native probe. Fill 129 distinct successful and failed WSL contexts and require the oldest entry to be re-probed after the 128-entry cap. The broader oracle still needs store-selector, git-status, provider-listing, and session-scan counters during scripted hot interactions.",
+      "commands": [
+        "pnpm exec vitest run src/main/gitlab/gl-utils.test.ts --config config/vitest.config.ts",
+        "pnpm exec vitest run src/main/gitlab --config config/vitest.config.ts"
+      ],
+      "testFiles": ["src/main/gitlab/gl-utils.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "src/main/gitlab/gl-utils.test.ts",
+          "assertions": [
+            "bounds sequential failed probes within the retry cooldown",
+            "bounds successful host caches across execution contexts",
+            "bounds failed-probe cooldowns across execution contexts",
+            "shares local auth hosts across SSH lookups but isolates remembered remote hosts",
+            "lets an explicit auth refresh bypass a failed-probe cooldown",
+            "reuses local auth but drops remembered remote hosts after an SSH reconnect"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-31",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run src/main/gitlab --config config/vitest.config.ts",
+          "result": "passed",
+          "durationSeconds": 0.3,
+          "summary": "On main 139f756064, 11 files and 214 GitLab tests passed; the focused red baseline made 64 probes and the candidate made one across 64 SSH lookup contexts. A same-base 35-second Electron A/B reduced glab auth spawns from 7 to 1 and spawn-initiation blocking from 236.39 ms to 18.50 ms."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 60,
         "scope": "renderer-main perf/count gate"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Focused boot-hydration counter slice passed locally once; needs CI/runtime history before promotion."
+        "evidence": "The focused GitLab probe contract and one local Electron A/B run passed; broader hot-path counters and CI history are still required."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests would fail if boot hydration enumerated SSH worktrees, stopped recording provider-unavailable retry state, lost the startup counter surface, stopped recording fatal hydration failures, or missed router adapter fanout/list-failure counters. Needs intentional-break proof for git/status polling or store scans triggered by terminal hot paths."
+        "evidence": "The byte-identical failed-probe contract was red on main with 64 glab calls and green on the candidate with one, including across 64 distinct SSH lookup contexts. Needs intentional-break proof for git-status polling, provider listings, or store scans triggered by terminal hot paths."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Current slice records boot-hydration repo, worktree, adapter, session, skip, register, and duration counters. Promotion still requires count budgets for listSessions, git status, provider scans, store recomputes, and elapsed hot-interaction time."
+        "evidence": "Failed GitLab host discovery is capped at one subprocess probe per native or WSL execution context per 30 seconds; SSH targets share the native probe, and successful, failed, and connection-derived state are each capped at 128 entries. Promotion still requires count budgets for listSessions, git status, other provider scans, store recomputes, and elapsed hot-interaction time."
       },
       "promotionCriteria": [
         "Use deterministic counters before broad perf scenarios.",
@@ -6867,8 +6892,8 @@
         "Keep stress variants non-blocking until stable."
       ],
       "knownGaps": [
-        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
-        "Current command covers boot hydration counters only, not interactive terminal hot paths.",
+        "Current executable coverage is limited to GitLab host probing, not interactive terminal hot paths.",
+        "Boot-hydration counters remain on the pending reliability stack.",
         "No Electron count gate yet proves focus, typing, tab switch, workspace switch, render, or high-session provider fanout avoids broad store/git/provider scans."
       ],
       "demotionRule": "Cannot promote without count budgets and actionable artifacts."
