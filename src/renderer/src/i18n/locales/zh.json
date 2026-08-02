@@ -1856,7 +1856,10 @@
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
         "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
-        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
+        "loadPageUnreachable": "第 {{value0}} 页超出了 GitHub 搜索可返回的范围。",
+        "loadPageFailed": "无法从 GitHub 加载第 {{value0}} 页。",
+        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -11091,6 +11094,7 @@
             "transcriptsSkipped": "跳过了 {{count}} 个记录",
             "noAgentSessionsFound": "未找到智能体会话",
             "noSessionsMatchFilters": "没有会话符合当前筛选条件",
+            "noAgentsSelected": "未选择任何智能体",
             "sessionId": "会话 ID",
             "logPath": "日志路径",
             "agents": "智能体",
@@ -11116,6 +11120,8 @@
             "viewOptionsAriaLabel": "会话历史查看选项",
             "viewOptions": "查看选项",
             "agents": "智能体",
+            "selectAllAgents": "选择全部",
+            "clearAgents": "清除",
             "sort": "排序",
             "lastUpdated": "最后更新",
             "created": "创建时间",

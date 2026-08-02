@@ -55,6 +55,7 @@ import {
   release,
   classifyGhError,
   classifyListIssuesError,
+  classifyListPrsError,
   ghRepoExecOptions,
   githubRepoContext,
   getRemoteUrlForRepo,
@@ -1122,10 +1123,11 @@ function buildWorkItemListRequest(args: {
   return { args: out, offset: (page - 1) * limit }
 }
 
-// Why: shared shape so listWorkItems can lift the issue-side error (#1076 silent wrongness) into the IPC envelope; PR errors out of scope (§6).
+// Why: shared shape so listWorkItems can lift per-side errors (#1076 silent wrongness) into the IPC envelope — a swallowed side reads as end-of-data to pagination (#11485).
 type PartialWorkItemsResult = {
   items: MainWorkItem[]
   issuesError?: ClassifiedError
+  prsError?: ClassifiedError
 }
 
 function assertSshRepoHasResolvedGitHubSource(args: {
@@ -1279,6 +1281,7 @@ async function listQueriedWorkItems(
   let successfulRequestCount = 0
   let nonAvailabilityFailureCount = 0
   let availabilityError: unknown
+  let prsError: ClassifiedError | undefined
 
   // Why: surface the issue-side error separately for the IPC envelope; PR-side keeps prior swallow-and-log (parent doc §6).
   const issueFetch = (async (): Promise<PartialWorkItemsResult> => {
@@ -1350,6 +1353,7 @@ async function listQueriedWorkItems(
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
       const stderr = err instanceof Error ? err.message : String(err)
+      prsError = classifyListPrsError(stderr)
       if (classifyGitHubUnavailable(stderr)) {
         availabilityError ??= err
       } else {
@@ -1366,7 +1370,8 @@ async function listQueriedWorkItems(
   }
   return {
     items: sortWorkItemsByNumber([...issueResult.items, ...prItems]).slice(0, limit),
-    issuesError: issueResult.issuesError
+    issuesError: issueResult.issuesError,
+    prsError
   }
 }
 
@@ -1424,7 +1429,13 @@ export async function listWorkItems(
           localGitOptions
         )
 
-    const errors = partial.issuesError ? { issues: partial.issuesError } : undefined
+    const errors =
+      partial.issuesError || partial.prsError
+        ? {
+            ...(partial.issuesError ? { issues: partial.issuesError } : {}),
+            ...(partial.prsError ? { prs: partial.prsError } : {})
+          }
+        : undefined
     return {
       items: partial.items,
       sources: {

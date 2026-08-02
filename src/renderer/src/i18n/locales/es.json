@@ -1856,7 +1856,10 @@
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
         "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
-        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
+        "loadPageUnreachable": "La página {{value0}} está más allá de lo que la búsqueda de GitHub puede devolver.",
+        "loadPageFailed": "No se pudo cargar la página {{value0}} desde GitHub.",
+        "loadPageNoMoreResults": "No hay más resultados en la página {{value0}}."
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -11091,6 +11094,7 @@
             "transcriptsSkipped": "{{count}} transcripciones omitidas",
             "noAgentSessionsFound": "No se encontraron sesiones de agentes",
             "noSessionsMatchFilters": "Ninguna sesión coincide con los filtros actuales",
+            "noAgentsSelected": "Ningún agente seleccionado",
             "sessionId": "ID de sesión",
             "logPath": "Ruta del log",
             "agents": "Agentes",
@@ -11116,6 +11120,8 @@
             "viewOptionsAriaLabel": "Opciones de vista del historial de sesiones",
             "viewOptions": "Opciones de vista",
             "agents": "Agentes",
+            "selectAllAgents": "Seleccionar todo",
+            "clearAgents": "Limpiar",
             "sort": "Ordenar",
             "lastUpdated": "Última actualización",
             "created": "Creado",

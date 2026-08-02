@@ -2065,6 +2065,7 @@ export type ListWorkItemsResult<T> = {
   }
   errors?: {
     issues?: ClassifiedError
+    prs?: ClassifiedError
   }
   /** True when the user's per-repo preference was `'upstream'` but no upstream
    *  remote is configured, so the resolver fell back to origin. Renderer uses
