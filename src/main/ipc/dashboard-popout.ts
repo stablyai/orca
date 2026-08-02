@@ -15,8 +15,13 @@ import {
   admitDashboardSnapshot,
   isDashboardPaneKey,
   isDashboardRevealAgentArgs,
+<<<<<<< HEAD
   isDashboardSleepWorkspaceArgs,
   isDashboardSpawnAgentArgs,
+||||||| parent of 31b18a4607 (fix(dashboard): remove unused validation import)
+  isDashboardSnapshot,
+=======
+>>>>>>> 31b18a4607 (fix(dashboard): remove unused validation import)
   isDashboardStopAgentArgs
 } from './dashboard-payload-validation'
 
