@@ -5,6 +5,7 @@ const {
   discoverSkillsMock,
   discoverSkillsInWslMock,
   inventorySkillFreshnessMock,
+  isNpxOnPathForSkillInstallMock,
   getDefaultWslDistroMock,
   getWslHomeMock,
   parseWslPathMock
@@ -13,6 +14,7 @@ const {
   discoverSkillsMock: vi.fn(),
   discoverSkillsInWslMock: vi.fn(),
   inventorySkillFreshnessMock: vi.fn(),
+  isNpxOnPathForSkillInstallMock: vi.fn(),
   getDefaultWslDistroMock: vi.fn(),
   getWslHomeMock: vi.fn(),
   parseWslPathMock: vi.fn()
@@ -37,6 +39,10 @@ vi.mock('../skills/skill-discovery-wsl', () => ({
 
 vi.mock('../skills/skill-freshness-inventory', () => ({
   inventorySkillFreshness: inventorySkillFreshnessMock
+}))
+
+vi.mock('../skills/skill-install-npx-preflight', () => ({
+  isNpxOnPathForSkillInstall: isNpxOnPathForSkillInstallMock
 }))
 
 vi.mock('../wsl', () => ({
@@ -80,6 +86,7 @@ describe('registerSkillsHandlers', () => {
       scanIssues: [],
       scannedAt: 1
     })
+    isNpxOnPathForSkillInstallMock.mockResolvedValue(true)
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\alice')
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -111,6 +118,15 @@ describe('registerSkillsHandlers', () => {
       throw new Error('skills:freshnessInventory handler was not registered')
     }
     return call[1] as (_event: unknown) => Promise<unknown>
+  }
+
+  function getNpxPreflightHandler() {
+    registerSkillsHandlers(store as never)
+    const call = handleMock.mock.calls.find((entry: unknown[]) => entry[0] === 'skills:isNpxOnPath')
+    if (!call) {
+      throw new Error('skills:isNpxOnPath handler was not registered')
+    }
+    return call[1] as (_event: unknown, context?: unknown, options?: unknown) => Promise<boolean>
   }
 
   it('uses host skill discovery when resolved project runtime overrides stale WSL target state', async () => {
@@ -224,5 +240,15 @@ describe('registerSkillsHandlers', () => {
       repos
     })
     expect(getWslHomeMock).not.toHaveBeenCalled()
+  })
+
+  it('registers the npx preflight and forwards its runtime context', async () => {
+    const handler = getNpxPreflightHandler()
+    const context = { wslDistro: 'Ubuntu' }
+    const options = { forceRefresh: true }
+
+    await expect(handler(null, context, options)).resolves.toBe(true)
+
+    expect(isNpxOnPathForSkillInstallMock).toHaveBeenCalledWith(context, options)
   })
 })

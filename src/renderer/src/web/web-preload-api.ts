@@ -2968,6 +2968,8 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     cancelUpdateRun: () => Promise.resolve(),
     acknowledgeUpdateRun: () => Promise.resolve(),
     getUpdateRun: () => Promise.resolve({ state: 'idle' as const }),
+    // Why: the browser client cannot inspect the host PATH; avoid a false block.
+    isNpxOnPath: () => Promise.resolve(true),
     onUpdateRun: () => () => {}
   }
 }

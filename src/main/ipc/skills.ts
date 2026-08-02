@@ -11,9 +11,11 @@ import type {
   SkillUpdateStartResult
 } from '../../shared/skill-freshness'
 import { inventorySkillFreshness } from '../skills/skill-freshness-inventory'
+import { isNpxOnPathForSkillInstall } from '../skills/skill-install-npx-preflight'
 import { SkillUpdateRunner } from '../skills/skill-update-run'
 import { skillUpdateFailedNames } from '../skills/skill-update-outcome'
 import { readGloballyUpdatableSkillLocks } from '../skills/skill-update-registration'
+import type { PreflightRuntimeContext } from './preflight-runtime-target'
 import {
   discoverSkillsOnTarget,
   resolveSkillDiscoveryTarget
@@ -79,4 +81,15 @@ export function registerSkillsHandlers(store: Store): void {
   ipcMain.handle('skills:getUpdateRun', async (): Promise<SkillUpdateRun> => {
     return runner.getState()
   })
+
+  ipcMain.handle(
+    'skills:isNpxOnPath',
+    async (
+      _event,
+      context?: PreflightRuntimeContext,
+      options?: { forceRefresh?: boolean }
+    ): Promise<boolean> => {
+      return isNpxOnPathForSkillInstall(context, options)
+    }
+  )
 }

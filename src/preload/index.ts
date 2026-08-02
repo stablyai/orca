@@ -2409,6 +2409,10 @@ const api = {
     cancelUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:cancelUpdateRun'),
     acknowledgeUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:acknowledgeUpdateRun'),
     getUpdateRun: (): Promise<SkillUpdateRun> => ipcRenderer.invoke('skills:getUpdateRun'),
+    isNpxOnPath: (
+      context?: PreflightRuntimeContext,
+      options?: { forceRefresh?: boolean }
+    ): Promise<boolean> => ipcRenderer.invoke('skills:isNpxOnPath', context, options),
     onUpdateRun: (callback: (run: SkillUpdateRun) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, run: SkillUpdateRun): void =>
         callback(run)

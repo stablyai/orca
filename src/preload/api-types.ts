@@ -2535,6 +2535,10 @@ export type PreloadApi = {
     cancelUpdateRun: () => Promise<void>
     acknowledgeUpdateRun: () => Promise<void>
     getUpdateRun: () => Promise<SkillUpdateRun>
+    isNpxOnPath: (
+      context?: PreflightRuntimeContext,
+      options?: { forceRefresh?: boolean }
+    ) => Promise<boolean>
     onUpdateRun: (callback: (run: SkillUpdateRun) => void) => () => void
   }
   pet: {
