@@ -28,6 +28,7 @@ type StubState = {
   rejectNextRead: boolean
   missingNextRead: boolean
   leaveNextStartAmbiguous: boolean
+  reportedThreadId: string
   servers: Server[]
   sockets: WebSocketServer[]
 }
@@ -496,6 +497,17 @@ describe.skipIf(process.platform === 'win32')('CodexControlledSessionManager', (
     expect(fixture.stub.turnStarts).toBe(1)
   })
 
+  it('rejects turn reconciliation from a different thread', async () => {
+    const fixture = createFixture()
+    await fixture.manager.launch(fixture.input)
+    fixture.stub.reportedThreadId = 'thread-other'
+
+    await expect(
+      fixture.manager.prepareAndFinalizeTurn(turnRequest(fixture.input.conversationId, () => true))
+    ).rejects.toThrow('turn reconciliation thread/read returned an invalid response')
+    expect(fixture.stub.turnStarts).toBe(0)
+  })
+
   it('queues while active through provider state and emits terminal observation', async () => {
     const fixture = createFixture()
     await fixture.manager.launch(fixture.input)
@@ -643,6 +655,7 @@ function createFixture(
     rejectNextRead: false,
     missingNextRead: false,
     leaveNextStartAmbiguous: false,
+    reportedThreadId: 'thread-1',
     servers: [],
     sockets: []
   }
@@ -838,7 +851,7 @@ function createFixture(
 
 function thread(stub: StubState): Record<string, unknown> {
   return {
-    id: 'thread-1',
+    id: stub.reportedThreadId,
     status: { type: stub.status },
     canAcceptDirectInput: true,
     turns: stub.turns

@@ -2792,6 +2792,7 @@ export class Store {
   private pendingGithubCacheWrite: Promise<void> | null = null
   private readonly staleGithubCacheTempCleanup: Promise<void>
   private gitUsernameCache = new Map<string, string>()
+  private codexAccountSelectionRevision = 0
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
     (
@@ -5631,6 +5632,10 @@ export class Store {
     return this.state.settings
   }
 
+  getCodexAccountSelectionRevision(): number {
+    return this.codexAccountSelectionRevision
+  }
+
   onSettingsChanged(
     listener: (
       updates: Partial<GlobalSettings>,
@@ -5676,6 +5681,12 @@ export class Store {
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
+    if (
+      'activeCodexManagedAccountId' in sanitizedUpdates ||
+      'activeCodexManagedAccountIdsByRuntime' in sanitizedUpdates
+    ) {
+      this.codexAccountSelectionRevision += 1
+    }
     // Why: coerce to boolean here (not the IPC edge) so every write path is covered and a truthy non-bool can't persist as "tray-minimize on".
     if ('minimizeToTrayOnClose' in updates) {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true

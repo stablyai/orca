@@ -2356,6 +2356,8 @@ void app.whenReady().then(async () => {
       }
     },
     resolveCurrentAccountId: () => normalizeCodexRuntimeSelection(store!.getSettings()).host,
+    // Why: monotonic selection writes detect A-to-B-to-A changes when rollback restores prior state.
+    resolveCurrentAccountRevision: () => store!.getCodexAccountSelectionRevision(),
     isControlledLaunchEnabled: () => process.env.ORCA_FEATURE_CODEX_CONTROLLED_LAUNCH === '1',
     isProviderEnabled: () => process.env.ORCA_FEATURE_CODEX_CONTROLLED_PROVIDER === '1',
     isWakeEnabled: () => process.env.ORCA_FEATURE_ORCHESTRATION_CONVERSATION_WAKE === '1',
