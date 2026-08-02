@@ -3006,6 +3006,48 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('does not apply Claude background evidence from a rejected local status', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postClaudeHook = async (payload: Record<string, unknown>): Promise<void> => {
+        const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+        expect(response.status).toBe(204)
+      }
+
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        prompt: 'approve shell',
+        tool_name: 'Bash',
+        background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }],
+        session_crons: [{ id: 'cron-1', status: 'running' }]
+      })
+      const waiting = server.getStatusSnapshot()[0]
+
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        prompt: 'approve shell',
+        tool_name: 'OtherTool',
+        background_tasks: [],
+        session_crons: []
+      })
+
+      expect(server.getStatusSnapshot()[0]).toEqual(waiting)
+      expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
+      expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
+    } finally {
+      server.stop()
+    }
+  })
+
   it('maps registered legacy numeric HTTP pane keys to stable pane keys', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
