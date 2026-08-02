@@ -536,6 +536,7 @@ describe('computeVisibleWorktreeIds', () => {
 
   it('does not restore inactive lineage parents when sleeping workspaces are hidden', () => {
     const parent = makeWorktree('parent')
+    parent.isMainWorktree = true
     const child = makeWorktree('child')
     const lineage = makeWorktreeLineage(child, parent)
 
@@ -543,6 +544,7 @@ describe('computeVisibleWorktreeIds', () => {
       { repo1: [parent, child] },
       [child.id, parent.id],
       visibleOptions({
+        hideDefaultBranchWorkspace: true,
         showSleepingWorkspaces: false,
         tabsByWorktree: { [child.id]: [makeTab('t-child', child.id, 'p-child')] },
         ptyIdsByTabId: { 't-child': ['p-child'] },

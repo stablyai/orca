@@ -212,7 +212,7 @@ export function computeVisibleWorktreeIds(
 
   const inactiveWorktreeIds = new Set<string>()
   if (!opts.showSleepingWorkspaces) {
-    all = all.filter((worktree) => {
+    for (const worktree of lineageAncestorById.values()) {
       const isInactive = isInactiveWorkspace(
         worktree.id,
         opts.tabsByWorktree,
@@ -223,8 +223,8 @@ export function computeVisibleWorktreeIds(
       if (isInactive) {
         inactiveWorktreeIds.add(worktree.id)
       }
-      return !isInactive
-    })
+    }
+    all = all.filter((worktree) => !inactiveWorktreeIds.has(worktree.id))
   }
 
   if (opts.forcedVisibleWorktreeIds && opts.forcedVisibleWorktreeIds.length > 0) {
