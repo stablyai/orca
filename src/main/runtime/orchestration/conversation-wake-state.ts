@@ -32,7 +32,7 @@ export type ConversationWakeProvenanceSource =
 export type ConversationWakeProvenanceRow = {
   message_id: string
   run_id: string
-  message_type: 'worker_done' | 'escalation' | 'decision_gate' | 'question'
+  message_type: ConversationWakeMessageType
   task_id: string
   dispatch_id: string
   source: ConversationWakeProvenanceSource
@@ -46,7 +46,7 @@ export type ConversationWakeJobRow = {
   consumer_generation: number
   provider: string
   conversation_id: string
-  message_type: 'worker_done' | 'escalation' | 'decision_gate' | 'question'
+  message_type: ConversationWakeMessageType
   task_id: string | null
   dispatch_id: string | null
   status: ConversationWakeJobStatus
@@ -60,3 +60,4 @@ export type ConversationWakeJobRow = {
   updated_at: string
   submitted_at: string | null
 }
+import type { ConversationWakeMessageType } from './conversation-wake-identifiers'

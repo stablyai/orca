@@ -122,6 +122,7 @@ import {
   patchPackagedProcessPath,
   shouldInstallManagedHooks
 } from './startup/configure-process'
+import { configureWakeDevBuildFlavor, isWakeDevRuntime } from './startup/wake-dev-build-flavor'
 import {
   installUncaughtPipeErrorGuard,
   installUnhandledRejectionLogging
@@ -552,7 +553,9 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
   )
 }
 
-const devInstanceIdentity = getDevInstanceIdentity(is.dev)
+const isWakeDevBuild = ORCA_WAKE_DEV_BUILD
+configureWakeDevBuildFlavor(app, isWakeDevBuild)
+const devInstanceIdentity = getDevInstanceIdentity(is.dev, process.env, isWakeDevBuild)
 const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
   ? devInstanceIdentity.appUserModelId
   : undefined
@@ -1118,6 +1121,9 @@ function quitFromSystemTray(): void {
 
 // Why: menu/tray are clickable before anything else configures the updater.
 function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
+  if (isWakeDevRuntime()) {
+    return
+  }
   ensureAutoUpdaterConfigured()
   checkForUpdatesFromMenu(options)
 }

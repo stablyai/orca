@@ -11,9 +11,11 @@ describe('conversation wake schema migration', () => {
 
   afterEach(() => {
     db?.close()
+    db = undefined
     if (root) {
       rmSync(root, { recursive: true, force: true })
     }
+    root = undefined
   })
 
   it('preserves v22 Run mail while adding generation-scoped wake state', () => {

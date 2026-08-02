@@ -6,12 +6,12 @@ import type {
   ConversationWakeTurnRequest
 } from './conversation-wake-provider'
 import type { ConversationWakeJobRow } from './conversation-wake-state'
+import { isBoundedConversationWakeId } from './conversation-wake-identifiers'
 
 const DEFAULT_RETRY_BASE_MS = 1_000
 const DEFAULT_RETRY_MAX_MS = 30_000
 const DEFAULT_RETRY_ATTEMPTS = 5
 const DEFAULT_ACCEPTANCE_LEASE_MS = 30_000
-const MAX_ID_LENGTH = 512
 
 export type ConversationWakeJobProcessorOptions = {
   db: OrchestrationDb
@@ -126,7 +126,7 @@ export class ConversationWakeJobProcessor {
       return
     }
     const request = buildTurnRequest(claimed, null, (providerTurnId) => {
-      if (!this.options.isEnabled() || !isBoundedId(providerTurnId)) {
+      if (!this.options.isEnabled() || !isBoundedConversationWakeId(providerTurnId)) {
         return false
       }
       return this.options.db.commitConversationWakeAcceptance({
@@ -175,9 +175,10 @@ export class ConversationWakeJobProcessor {
         }
       }
     } catch (error) {
-      if (this.options.db.getConversationWakeJob(job.wake_id)?.status === 'accepted') {
+      const current = this.options.db.getConversationWakeJob(job.wake_id)
+      if (current?.status === 'accepted') {
         this.recordAcceptedFailure(job.wake_id, error, false)
-      } else if (this.options.db.getConversationWakeJob(job.wake_id)?.status !== 'submitted') {
+      } else if (current?.status !== 'submitted') {
         this.recordFailure(job.wake_id, error, false)
       }
     }
@@ -283,8 +284,4 @@ function buildTurnRequest(
       'Orca committed a supervised orchestration event. Check the durable mailbox for the bound Run and continue without inferring acknowledgment from this wake.',
     commitPrepared
   }
-}
-
-function isBoundedId(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH
 }

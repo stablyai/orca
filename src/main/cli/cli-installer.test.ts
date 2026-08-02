@@ -62,6 +62,16 @@ async function createPackagedMacLauncher(root: string): Promise<string> {
   return resourcesPath
 }
 
+async function createPackagedWakeDevMacLauncher(root: string): Promise<string> {
+  const resourcesPath = join(root, 'resources')
+  await mkdir(join(resourcesPath, 'bin'), { recursive: true })
+  await writeFile(join(resourcesPath, 'bin', 'orca-wake'), '#!/usr/bin/env bash\necho wake\n', {
+    encoding: 'utf8',
+    mode: 0o755
+  })
+  return resourcesPath
+}
+
 describe('CliInstaller', () => {
   beforeEach(() => {
     execFileMock.mockReset()
@@ -71,6 +81,33 @@ describe('CliInstaller', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps the packaged wake-dev command and launcher separate from Orca',
+    async () => {
+      const fixture = await makeFixture()
+      const resourcesPath = await createPackagedWakeDevMacLauncher(fixture.root)
+      const commandPath = join(fixture.root, 'bin', 'orca-wake')
+      const installer = new CliInstaller({
+        platform: 'darwin',
+        isPackaged: true,
+        resourcesPath,
+        packagedCommandName: 'orca-wake',
+        commandPathOverride: commandPath,
+        processPathEnv: dirname(commandPath)
+      })
+
+      const status = await installer.install()
+
+      expect(status).toMatchObject({
+        commandName: 'orca-wake',
+        commandPath,
+        launcherPath: join(resourcesPath, 'bin', 'orca-wake'),
+        state: 'installed'
+      })
+      await expect(readlink(commandPath)).resolves.toBe(join(resourcesPath, 'bin', 'orca-wake'))
+    }
+  )
 
   // Why: this test creates Unix symlinks and shell scripts that only apply on macOS.
   it.skipIf(process.platform === 'win32')(

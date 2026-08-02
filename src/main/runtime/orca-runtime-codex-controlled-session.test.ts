@@ -35,6 +35,19 @@ describe('OrcaRuntimeService controlled Codex binding', () => {
     expect(manager.disposeConversation).toHaveBeenCalledWith('conversation-1')
   })
 
+  it('preserves the binding failure when controller cleanup also fails', async () => {
+    const manager = createManager()
+    manager.disposeConversation.mockRejectedValue(new Error('cleanup failed'))
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      codexControlledSessionManager: manager as unknown as CodexControlledSessionManager
+    })
+    const bindingError = new Error('fenced')
+    vi.spyOn(runtime, 'bindOrchestrationConversationWake').mockRejectedValue(bindingError)
+
+    await expect(runtime.launchControlledCodexConversation(launch())).rejects.toBe(bindingError)
+    expect(bindingError).toMatchObject({ cleanupError: expect.any(Error) })
+  })
+
   it('preserves a reused valid controller when a stale Run binding fails', async () => {
     const manager = createManager('reused')
     const runtime = new OrcaRuntimeService(null, undefined, {

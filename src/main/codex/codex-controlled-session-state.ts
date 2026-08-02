@@ -43,18 +43,26 @@ export class CodexControlledSessionStateStore {
     if (!existsSync(this.filePath)) {
       return { version: 1, ...this.identity, turns: {} }
     }
-    const parsed = JSON.parse(readFileSync(this.filePath, 'utf8')) as CodexControlledSessionState
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(readFileSync(this.filePath, 'utf8'))
+    } catch {
+      throw new Error('controlled Codex session state is unreadable')
+    }
     if (
+      !isRecord(parsed) ||
       parsed.version !== 1 ||
       parsed.conversationId !== this.identity.conversationId ||
       parsed.threadId !== this.identity.threadId ||
       parsed.accountId !== this.identity.accountId ||
-      parsed.launchFingerprint !== this.identity.launchFingerprint ||
-      !parsed.turns
+      parsed.launchFingerprint !== this.identity.launchFingerprint
     ) {
       throw new Error('controlled Codex session state identity mismatch')
     }
-    return parsed
+    if (!isRecord(parsed.turns) || !Object.values(parsed.turns).every(isControlledTurnRecord)) {
+      throw new Error('controlled Codex session state is unreadable')
+    }
+    return parsed as CodexControlledSessionState
   }
 
   private write(state: CodexControlledSessionState): void {
@@ -66,4 +74,19 @@ export class CodexControlledSessionStateStore {
     renameSync(temporary, this.filePath)
     chmodSync(this.filePath, 0o600)
   }
+}
+
+function isControlledTurnRecord(value: unknown): value is CodexControlledTurnRecord {
+  return (
+    isRecord(value) &&
+    typeof value.operationId === 'string' &&
+    typeof value.clientMessageId === 'string' &&
+    typeof value.prompt === 'string' &&
+    ['prepared', 'accepted', 'ambiguous', 'finalized', 'rejected'].includes(String(value.phase)) &&
+    (value.codexTurnId === null || typeof value.codexTurnId === 'string')
+  )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }

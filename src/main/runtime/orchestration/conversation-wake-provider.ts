@@ -15,7 +15,7 @@ export type ConversationWakeTurnRequest = ConversationWakeTarget & {
   wakeId: string
   idempotencyKey: string
   messageId: string
-  messageType: 'worker_done' | 'escalation' | 'decision_gate' | 'question'
+  messageType: ConversationWakeMessageType
   taskId: string | null
   dispatchId: string | null
   prompt: string
@@ -41,3 +41,4 @@ export type ConversationWakeProvider = {
   reconcile?(): Promise<void>
   dispose?(): void | Promise<void>
 }
+import type { ConversationWakeMessageType } from './conversation-wake-identifiers'

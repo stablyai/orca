@@ -439,6 +439,50 @@ describe('OrchestrationDb legacy contract storage', () => {
     ).toThrow(/different input/)
   })
 
+  it('commits stale legacy mail without recording wake provenance for a newer dispatch', () => {
+    const state = openAdoptedFixture()
+    db!.bindRun({
+      runId: state.adoptedRunId,
+      coordinatorHandle: 'term_current_coord',
+      coordinatorPaneKey: 'tab_current:11111111-1111-4111-8111-111111111111',
+      takeoverLegacy: true
+    })
+    const legacyDispatch = db!.getDispatchContextById(state.fixture.legacyDispatchId)!
+    const sqlite = (db as unknown as { db: Database.Database }).db
+    sqlite
+      .prepare(
+        `INSERT INTO dispatch_contexts (
+           id, run_id, task_id, contract_version, assignee_handle, status, dispatched_at
+         ) VALUES (?, ?, ?, ?, ?, 'dispatched', datetime('now'))`
+      )
+      .run(
+        'ctx_newer_dispatch',
+        state.adoptedRunId,
+        legacyDispatch.task_id,
+        CURRENT_CONTRACT_VERSION,
+        'term_new_worker'
+      )
+
+    const committed = db!.commitLegacyLifecycleOperation({
+      principalId: state.workerPrincipalId,
+      operationKey: 'stale_legacy_escalation',
+      method: 'orchestration.send',
+      payloadHash: 'stale_legacy_escalation_payload',
+      message: {
+        to: 'term_legacy_coord',
+        subject: 'Legacy escalation',
+        type: 'escalation'
+      },
+      lifecycle: { kind: 'message_only' }
+    })
+
+    expect(committed.message).toMatchObject({
+      to_handle: `run:${state.adoptedRunId}`,
+      delivery_contract: 'current_delivery'
+    })
+    expect(db!.getConversationWakeProvenance(committed.message.id)).toBeUndefined()
+  })
+
   it('reconstructs a matching pre-receipt settlement without changing its persisted outcome', () => {
     const state = openAdoptedFixture()
     const accepted = db!.insertMessage({
