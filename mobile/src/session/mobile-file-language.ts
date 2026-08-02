@@ -60,7 +60,23 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.lua': 'lua',
   '.r': 'r',
   '.R': 'r',
-  '.make': 'makefile'
+  '.make': 'makefile',
+  // HDL. Ids match the renderer's language-detect.ts; mobile-file-syntax.ts
+  // folds systemverilog onto highlight.js's single `verilog` grammar.
+  '.sv': 'systemverilog',
+  '.svh': 'systemverilog',
+  '.v': 'verilog',
+  '.vh': 'verilog',
+  '.vl': 'verilog',
+  '.veo': 'verilog',
+  '.vhd': 'vhdl',
+  '.vhdl': 'vhdl',
+  '.vhf': 'vhdl',
+  '.vhi': 'vhdl',
+  '.vho': 'vhdl',
+  '.vhs': 'vhdl',
+  '.vht': 'vhdl',
+  '.vhw': 'vhdl'
 }
 
 const FILENAME_TO_LANGUAGE: Record<string, string> = {

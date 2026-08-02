@@ -95,6 +95,9 @@ importers:
       expo-status-bar:
         specifier: ^55.0.6
         version: 55.0.6(react-native@0.83.9(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.6))(react@19.2.6)
+      highlight.js:
+        specifier: ^11.11.1
+        version: 11.11.1
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
