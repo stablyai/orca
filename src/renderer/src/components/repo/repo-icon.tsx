@@ -166,7 +166,9 @@ export function RepoIconGlyph({
         className={cn('inline-flex items-center justify-center leading-none', className)}
         aria-hidden="true"
       >
-        <span className={cn('text-[0.9em]', iconClassName)}>{repoIcon.emoji}</span>
+        <span className={cn('inline-flex items-center justify-center text-[0.9em]', iconClassName)}>
+          {repoIcon.emoji}
+        </span>
       </span>
     )
   }
