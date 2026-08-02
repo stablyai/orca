@@ -75,6 +75,7 @@ import type {
   GitUpstreamStatus,
   GhosttyImportPreview,
   ListWorkItemsResult,
+  ListWorkItemsAcrossReposResult,
   LinearProjectDetail,
   MemorySnapshot,
   NotificationDismissResult,
@@ -1395,6 +1396,15 @@ const api = {
       noCache?: boolean
     }): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> =>
       ipcRenderer.invoke('gh:listWorkItems', args),
+
+    listWorkItemsAcrossRepos: (args: {
+      repos: { repoPath: string; repoId: string }[]
+      limit?: number
+      query?: string
+      page?: number
+      noCache?: boolean
+    }): Promise<ListWorkItemsAcrossReposResult> =>
+      ipcRenderer.invoke('gh:listWorkItemsAcrossRepos', args),
 
     prChecks: (args: {
       repoPath: string

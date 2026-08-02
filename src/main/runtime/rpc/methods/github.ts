@@ -14,6 +14,21 @@ const WorkItemsList = RepoSelector.extend({
   noCache: z.boolean().optional()
 })
 
+const WorkItemsBatch = z.object({
+  repos: z
+    .array(
+      z.object({
+        repo: requiredString('Missing repo selector'),
+        repoId: requiredString('Missing repo id')
+      })
+    )
+    .min(1),
+  limit: OptionalFiniteNumber,
+  query: OptionalString,
+  page: z.number().int().positive().optional(),
+  noCache: z.boolean().optional()
+})
+
 const IssuesList = RepoSelector.extend({
   limit: OptionalFiniteNumber
 })
@@ -350,6 +365,18 @@ export const GITHUB_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.listRepoWorkItems(
         params.repo,
+        params.limit,
+        params.query,
+        params.page,
+        params.noCache
+      )
+  }),
+  defineMethod({
+    name: 'github.listWorkItemsAcrossRepos',
+    params: WorkItemsBatch,
+    handler: async (params, { runtime }) =>
+      runtime.listRepoWorkItemsAcrossRepos(
+        params.repos,
         params.limit,
         params.query,
         params.page,

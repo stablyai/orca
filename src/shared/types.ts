@@ -1576,6 +1576,8 @@ export type GitHubWorkItem = {
   state: 'open' | 'closed' | 'merged' | 'draft'
   url: string
   labels: string[]
+  /** Search API creation timestamp used only for stable cross-repository merge order. */
+  createdAt?: string
   updatedAt: string
   author: string | null
   // Why: GHE user logins don't exist on github.com, so the github.com/{login}.png
@@ -2075,6 +2077,16 @@ export type ListWorkItemsResult<T> = {
    *  iff fell-back" — an explicit `false` write would be a bug, so make it a
    *  compile error. */
   issueSourceFellBack?: true
+}
+
+export type ListWorkItemsAcrossReposResult = {
+  items: GitHubWorkItem[]
+  totalCount: number
+  /** Number of source groups that could not contribute rows. */
+  failedCount: number
+  /** True only when every eligible source group failed for availability reasons. */
+  githubUnavailable: boolean
+  errorTypes?: ClassifiedError['type'][]
 }
 
 export type LinearWorkflowState = {

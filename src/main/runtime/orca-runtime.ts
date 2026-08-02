@@ -559,6 +559,7 @@ import {
   getWorkItem,
   listIssues as listGitHubIssues,
   listWorkItems,
+  listWorkItemsAcrossRepos,
   countWorkItems,
   getPRChecks,
   getPRCheckDetails,
@@ -18514,6 +18515,29 @@ export class OrcaRuntimeService {
       noCache,
       ...this.getLocalGitExecutionOptionArgs(repo)
     )
+  }
+
+  async listRepoWorkItemsAcrossRepos(
+    selectors: { repo: string; repoId: string }[],
+    limit?: number,
+    query?: string,
+    page?: number,
+    noCache?: boolean
+  ) {
+    const inputs = await Promise.all(
+      selectors.map(async (selector) => {
+        const repo = await this.resolveRepoSelector(selector.repo)
+        const localGitOptions = this.getLocalGitExecutionOptionArgs(repo)[0]
+        return {
+          repoId: selector.repoId,
+          repoPath: repo.path,
+          preference: repo.issueSourcePreference,
+          connectionId: repo.connectionId ?? null,
+          ...(localGitOptions ? { localGitOptions } : {})
+        }
+      })
+    )
+    return listWorkItemsAcrossRepos(inputs, limit, query, page, noCache)
   }
 
   async listRepoIssues(

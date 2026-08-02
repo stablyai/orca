@@ -280,6 +280,7 @@ type WebGitHubRouteKey =
   | 'createIssue'
   | 'countWorkItems'
   | 'listWorkItems'
+  | 'listWorkItemsAcrossRepos'
   | 'prChecks'
   | 'prCheckDetails'
   | 'rerunPRChecks'
@@ -328,6 +329,7 @@ type WebGitHubRuntimeMethod =
   | 'github.createIssue'
   | 'github.countWorkItems'
   | 'github.listWorkItems'
+  | 'github.listWorkItemsAcrossRepos'
   | 'github.prChecks'
   | 'github.prCheckDetails'
   | 'github.rerunPRChecks'
@@ -429,6 +431,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   createIssue: 'github.createIssue',
   countWorkItems: 'github.countWorkItems',
   listWorkItems: 'github.listWorkItems',
+  listWorkItemsAcrossRepos: 'github.listWorkItemsAcrossRepos',
   prChecks: 'github.prChecks',
   prCheckDetails: 'github.prCheckDetails',
   rerunPRChecks: 'github.rerunPRChecks',
@@ -2337,6 +2340,11 @@ function createGitHubApi(): WebGitHubApi {
       route<WebGitHubResult<'countWorkItems'>>(GITHUB_WEB_RPC_METHODS.countWorkItems, args),
     listWorkItems: (args) =>
       route<WebGitHubResult<'listWorkItems'>>(GITHUB_WEB_RPC_METHODS.listWorkItems, args),
+    listWorkItemsAcrossRepos: (args) =>
+      route<WebGitHubResult<'listWorkItemsAcrossRepos'>>(
+        GITHUB_WEB_RPC_METHODS.listWorkItemsAcrossRepos,
+        mapRepoBatchArg(args)
+      ),
     prChecks: (args) => route<WebGitHubResult<'prChecks'>>(GITHUB_WEB_RPC_METHODS.prChecks, args),
     prCheckDetails: (args) =>
       route<WebGitHubResult<'prCheckDetails'>>(GITHUB_WEB_RPC_METHODS.prCheckDetails, args),
@@ -4170,6 +4178,38 @@ function mapRepoPathArg(args: unknown): unknown {
     ...record,
     // Why: duplicate checked-out repos make path/name selectors ambiguous; prefer the explicit repo id the renderer passes.
     repo: repoId ? `id:${repoId}` : record.repoPath
+  }
+}
+
+function mapRepoBatchArg(args: unknown): unknown {
+  if (!args || typeof args !== 'object' || !('repos' in args)) {
+    return args
+  }
+  const record = args as {
+    repos?: unknown
+    limit?: number
+    query?: string
+    page?: number
+    noCache?: boolean
+  }
+  if (!Array.isArray(record.repos)) {
+    return args
+  }
+  return {
+    ...record,
+    repos: record.repos.map((entry) => {
+      if (typeof entry !== 'object' || entry === null) {
+        return entry
+      }
+      const repo = entry as { repoPath?: unknown; repoId?: unknown }
+      return {
+        repo:
+          typeof repo.repoId === 'string' && repo.repoId.trim()
+            ? `id:${repo.repoId}`
+            : repo.repoPath,
+        repoId: repo.repoId
+      }
+    })
   }
 }
 

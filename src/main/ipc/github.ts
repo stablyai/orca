@@ -27,6 +27,7 @@ import {
   getRepoUpstream,
   listIssues,
   listWorkItems,
+  listWorkItemsAcrossRepos,
   countWorkItems,
   getWorkItem,
   getWorkItemByOwnerRepo,
@@ -449,6 +450,33 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.noCache,
         ...localGitOptionArgs(store, repo)
       )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:listWorkItemsAcrossRepos',
+    (
+      _event,
+      args: {
+        repos: { repoPath: string; repoId: string }[]
+        limit?: number
+        query?: string
+        page?: number
+        noCache?: boolean
+      }
+    ) => {
+      const inputs = args.repos.map((selector) => {
+        const repo = assertRegisteredRepo(selector, store)
+        const localGitOptions = localGitOptionArgs(store, repo)[0]
+        return {
+          repoId: repo.id,
+          repoPath: repo.path,
+          preference: repo.issueSourcePreference,
+          connectionId: repoConnectionId(repo),
+          ...(localGitOptions ? { localGitOptions } : {})
+        }
+      })
+      return listWorkItemsAcrossRepos(inputs, args.limit, args.query, args.page, args.noCache)
     }
   )
 

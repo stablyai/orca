@@ -4,6 +4,7 @@ import type {
   GitPushTarget,
   IssueSourcePreference,
   ListWorkItemsResult,
+  ListWorkItemsAcrossReposResult,
   PRInfo,
   PRConflictSummary,
   PRRefreshOutcome,
@@ -90,6 +91,12 @@ import {
   type GitHubApiRepository
 } from './github-api-repository'
 import { githubRepoIdentityKey } from '../../shared/github-repository-identity-key'
+import {
+  buildWorkItemSearchQuery,
+  splitWorkItemSearchRepositories,
+  type WorkItemSearchRepository,
+  type WorkItemSearchScope
+} from './work-item-search-query'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -502,12 +509,12 @@ export type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 const WORK_ITEM_NUMBER_SORT_QUALIFIER = 'sort:created-desc'
 
 const WORK_ITEM_PR_LIST_JSON_FIELDS =
-  'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
+  'number,title,state,url,labels,createdAt,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
 
 // Why: kept out of `gh pr list` — statusCheckRollup/reviewDecision/merge metadata fan out into expensive per-row GraphQL.
 // Requested reviewers stay in the list payload because Tasks renders that column on first paint.
 const WORK_ITEM_PR_DETAIL_JSON_FIELDS =
-  'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,additions,deletions,changedFiles,reviewDecision,reviewRequests,latestReviews,assignees,statusCheckRollup,mergeable,mergeStateStatus,autoMergeRequest,maintainerCanModify'
+  'number,title,state,url,labels,createdAt,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,additions,deletions,changedFiles,reviewDecision,reviewRequests,latestReviews,assignees,statusCheckRollup,mergeable,mergeStateStatus,autoMergeRequest,maintainerCanModify'
 
 function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
   return {
@@ -526,6 +533,11 @@ function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
           )
           .filter(Boolean)
       : [],
+    ...(typeof item.created_at === 'string'
+      ? { createdAt: item.created_at }
+      : typeof item.createdAt === 'string'
+        ? { createdAt: item.createdAt }
+        : {}),
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
     ...authorFieldsFromUnknown(item),
     ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {})
@@ -770,6 +782,11 @@ function mapPullRequestWorkItem(
           )
           .filter(Boolean)
       : [],
+    ...(typeof item.created_at === 'string'
+      ? { createdAt: item.created_at }
+      : typeof item.createdAt === 'string'
+        ? { createdAt: item.createdAt }
+        : {}),
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
     ...authorFieldsFromUnknown(item),
     branchName:
@@ -1449,6 +1466,448 @@ export async function listWorkItems(
     }
   } finally {
     release()
+  }
+}
+
+export type GitHubWorkItemsBatchInput = {
+  repoId: string
+  repoPath: string
+  connectionId?: string | null
+  preference?: IssueSourcePreference
+  localGitOptions?: LocalGitExecOptions
+}
+
+type ResolvedBatchRepo = GitHubWorkItemsBatchInput & {
+  issueSource: GitHubApiRepository | null
+  prSource: GitHubApiRepository | null
+}
+
+type BatchSourceMember = {
+  source: GitHubApiRepository
+  repo: ResolvedBatchRepo
+}
+
+type BatchSearchGroup = {
+  key: string
+  anchor: ResolvedBatchRepo
+  issueSources: Map<string, BatchSourceMember>
+  prSources: Map<string, BatchSourceMember>
+}
+
+type BatchSearchPlan = {
+  group: BatchSearchGroup
+  scope: WorkItemSearchScope
+  sources: Map<string, BatchSourceMember>
+}
+
+type BatchSearchOutcome = {
+  items: GitHubWorkItem[]
+  totalCount: number
+  failedCount: number
+  unavailableCount: number
+  errorTypes: ClassifiedError['type'][]
+}
+
+function batchExecutionKey(input: GitHubWorkItemsBatchInput, source: GitHubApiRepository): string {
+  return [
+    input.connectionId ?? 'local',
+    input.localGitOptions?.wslDistro ?? '',
+    source.host?.trim().toLowerCase() || 'github.com'
+  ].join('\0')
+}
+
+function addBatchSource(
+  group: BatchSearchGroup,
+  kind: 'issue' | 'pr',
+  source: GitHubApiRepository,
+  repo: ResolvedBatchRepo
+): void {
+  const target = kind === 'issue' ? group.issueSources : group.prSources
+  const key = githubRepoIdentityKey(source)
+  // Why: selecting the same GitHub remote twice cannot be represented by one
+  // Search API total_count. Keep first source mapping so page/count remain an
+  // exact set rather than inventing a multiplied count.
+  if (!target.has(key)) {
+    target.set(key, { source, repo })
+  }
+}
+
+function searchRepositoryKeyFromItem(
+  item: Record<string, unknown>,
+  sourceHost?: string
+): string | null {
+  let fullName: string | null = null
+  const repository = item.repository
+  if (typeof repository === 'object' && repository !== null) {
+    const candidate = (repository as { full_name?: unknown }).full_name
+    if (typeof candidate === 'string') {
+      fullName = candidate
+    }
+  }
+  if (!fullName && typeof item.repository_url === 'string') {
+    fullName = repositoryFullNameFromUrl(item.repository_url)
+  }
+  if (!fullName && typeof item.html_url === 'string') {
+    fullName = repositoryFullNameFromUrl(item.html_url)
+  }
+  if (!fullName) {
+    return null
+  }
+  const [owner, repo] = fullName.split('/')
+  if (!owner || !repo) {
+    return null
+  }
+  return githubRepoIdentityKey({ owner, repo, host: sourceHost })
+}
+
+function repositoryFullNameFromUrl(value: string): string | null {
+  try {
+    const pathname = new URL(value).pathname
+    const parts = pathname
+      .split('/')
+      .filter(Boolean)
+      .map((part) => decodeURIComponent(part))
+    const reposIndex = parts.lastIndexOf('repos')
+    const start = reposIndex >= 0 ? reposIndex + 1 : 0
+    return parts[start] && parts[start + 1] ? `${parts[start]}/${parts[start + 1]}` : null
+  } catch {
+    return null
+  }
+}
+
+function batchItemComparator(left: GitHubWorkItem, right: GitHubWorkItem): number {
+  const leftTime = Date.parse(left.createdAt ?? left.updatedAt)
+  const rightTime = Date.parse(right.createdAt ?? right.updatedAt)
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+    return rightTime - leftTime
+  }
+  if (Number.isFinite(leftTime) !== Number.isFinite(rightTime)) {
+    return Number.isFinite(rightTime) ? 1 : -1
+  }
+  const leftKey = `${left.repoId}\0${left.type}\0${left.number}`
+  const rightKey = `${right.repoId}\0${right.type}\0${right.number}`
+  return leftKey.localeCompare(rightKey)
+}
+
+function batchHasPrOnlyFilter(query: ParsedTaskQuery): boolean {
+  return (
+    query.state === 'merged' ||
+    query.draft ||
+    query.reviewRequested !== null ||
+    query.reviewedBy !== null
+  )
+}
+
+function sameSourceKeys(
+  left: Map<string, BatchSourceMember>,
+  right: Map<string, BatchSourceMember>
+): boolean {
+  if (left.size !== right.size) {
+    return false
+  }
+  for (const key of left.keys()) {
+    if (!right.has(key)) {
+      return false
+    }
+  }
+  return true
+}
+
+function batchSearchPlans(
+  groups: readonly BatchSearchGroup[],
+  query: ParsedTaskQuery
+): BatchSearchPlan[] {
+  const plans: BatchSearchPlan[] = []
+  const issueAllowed =
+    query.scope !== 'pr' && query.state !== 'merged' && !batchHasPrOnlyFilter(query)
+  const prAllowed = query.scope !== 'issue'
+  for (const group of groups) {
+    if (issueAllowed && prAllowed && sameSourceKeys(group.issueSources, group.prSources)) {
+      plans.push({ group, scope: 'all', sources: group.issueSources })
+      continue
+    }
+    if (issueAllowed && group.issueSources.size > 0) {
+      plans.push({ group, scope: 'issue', sources: group.issueSources })
+    }
+    if (prAllowed && group.prSources.size > 0) {
+      plans.push({ group, scope: 'pr', sources: group.prSources })
+    }
+  }
+  return plans
+}
+
+async function fetchSearchResponse(
+  group: BatchSearchGroup,
+  query: string,
+  page: number,
+  perPage: number,
+  noCache: boolean
+): Promise<{ items: Record<string, unknown>[]; totalCount: number }> {
+  const source = [...group.issueSources.values(), ...group.prSources.values()][0]?.source
+  if (!source) {
+    return { items: [], totalCount: 0 }
+  }
+  const args = [
+    'api',
+    ...(noCache ? [] : ['--cache', '120s']),
+    `search/issues?q=${encodeURIComponent(query)}&sort=created&order=desc&per_page=${perPage}&page=${page}`,
+    '--jq',
+    '{items: .items, totalCount: .total_count}'
+  ]
+  const ghOptions = {
+    ...ghRepoExecOptions(
+      githubRepoContext(
+        group.anchor.repoPath,
+        group.anchor.connectionId,
+        group.anchor.localGitOptions
+      )
+    ),
+    ...githubHostExecOptions(source)
+  }
+  const { stdout } = await ghExecFileAsync(args, ghOptions)
+  // Why: grouped requests still consume Search API budget; count cached hits
+  // conservatively so the shared guard does not let a multi-repo selection
+  // stampede the 30/minute quota.
+  noteRepositoryRateLimitSpend(source, 'search', 1, ghOptions)
+  const parsed = JSON.parse(stdout) as {
+    items?: unknown
+    totalCount?: unknown
+  }
+  return {
+    items: Array.isArray(parsed.items)
+      ? parsed.items.filter(
+          (item): item is Record<string, unknown> => typeof item === 'object' && item !== null
+        )
+      : [],
+    totalCount: typeof parsed.totalCount === 'number' ? parsed.totalCount : 0
+  }
+}
+
+async function executeBatchSearchPlan(
+  plan: BatchSearchPlan,
+  query: ParsedTaskQuery,
+  page: number,
+  limit: number,
+  noCache: boolean,
+  usePrefix: boolean
+): Promise<BatchSearchOutcome> {
+  const repositories = [...plan.sources.values()].map(({ source }) => source)
+  let chunks: WorkItemSearchRepository[][]
+  try {
+    chunks = splitWorkItemSearchRepositories(repositories, query, plan.scope, {
+      page: 1,
+      perPage: 100
+    })
+  } catch (err) {
+    console.warn('[workItems] grouped Search API planning failed:', err)
+    return {
+      items: [],
+      totalCount: 0,
+      failedCount: 1,
+      unavailableCount: 0,
+      errorTypes: ['unknown']
+    }
+  }
+
+  const prefixSize = Math.min(1000, Math.max(1, page * limit))
+  const chunkResults = await Promise.allSettled(
+    chunks.map(async (chunk) => {
+      const chunkQuery = buildWorkItemSearchQuery(chunk, query, plan.scope)
+      if (!usePrefix && chunks.length === 1) {
+        return await fetchSearchResponse(plan.group, chunkQuery, page, limit, noCache)
+      }
+      const pageCount = Math.ceil(prefixSize / 100)
+      const pages = await Promise.all(
+        Array.from({ length: pageCount }, (_, index) =>
+          fetchSearchResponse(plan.group, chunkQuery, index + 1, 100, noCache)
+        )
+      )
+      return {
+        items: pages.flatMap((result) => result.items).slice(0, prefixSize),
+        totalCount: pages[0]?.totalCount ?? 0
+      }
+    })
+  )
+
+  let totalCount = 0
+  let failedCount = 0
+  let unavailableCount = 0
+  const errorTypes: ClassifiedError['type'][] = []
+  const items: GitHubWorkItem[] = []
+  for (let index = 0; index < chunkResults.length; index += 1) {
+    const result = chunkResults[index]
+    if (result.status === 'rejected') {
+      failedCount += 1
+      const message = result.reason instanceof Error ? result.reason.message : String(result.reason)
+      const classified = classifyListIssuesError(message)
+      errorTypes.push(classified.type)
+      if (classifyGitHubUnavailable(message)) {
+        unavailableCount += 1
+      }
+      continue
+    }
+    totalCount += result.value.totalCount
+    const sourceMap = new Map(
+      chunks[index].map((source) => [
+        githubRepoIdentityKey(source),
+        plan.sources.get(githubRepoIdentityKey(source))!
+      ])
+    )
+    for (const raw of result.value.items) {
+      const isPR = 'pull_request' in raw
+      if ((plan.scope === 'issue' && isPR) || (plan.scope === 'pr' && !isPR)) {
+        continue
+      }
+      const sourceKey = searchRepositoryKeyFromItem(raw, chunks[index][0]?.host)
+      const member = sourceKey ? sourceMap.get(sourceKey) : undefined
+      if (!member) {
+        continue
+      }
+      const mapped = isPR ? mapPullRequestWorkItem(raw, member.source) : mapIssueWorkItem(raw)
+      items.push({ ...mapped, repoId: member.repo.repoId })
+    }
+  }
+
+  const ordered = items.sort(batchItemComparator)
+  return {
+    // Multi-stream callers need the prefix so the caller can perform one
+    // global merge. A single Search API stream is already globally ordered.
+    items: usePrefix ? ordered : ordered.slice(0, limit),
+    totalCount,
+    failedCount,
+    unavailableCount,
+    errorTypes
+  }
+}
+
+async function hydrateBatchPullRequests(
+  items: GitHubWorkItem[],
+  resolvedRepos: ReadonlyMap<string, ResolvedBatchRepo>
+): Promise<GitHubWorkItem[]> {
+  const hydrated = [...items]
+  const pending = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item.type === 'pr')
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < pending.length) {
+      const current = pending[next]
+      next += 1
+      const resolved = resolvedRepos.get(current.item.repoId)
+      if (!resolved?.prSource) {
+        continue
+      }
+      try {
+        const detail = await fetchPullRequestWorkItem(
+          resolved.repoPath,
+          resolved.prSource,
+          current.item.number,
+          resolved.connectionId,
+          resolved.localGitOptions
+        )
+        if (detail) {
+          hydrated[current.index] = { ...detail, repoId: current.item.repoId }
+        }
+      } catch {
+        // Why: list rows remain useful when optional visible-row hydration hits
+        // a rate limit, deleted fork, or provider-specific field failure.
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(4, pending.length) }, () => worker()))
+  return hydrated
+}
+
+export async function listWorkItemsAcrossRepos(
+  inputs: readonly GitHubWorkItemsBatchInput[],
+  limit = 24,
+  query?: string,
+  page?: number,
+  noCache = false
+): Promise<ListWorkItemsAcrossReposResult> {
+  const normalizedLimit = Math.max(1, Math.min(100, Math.floor(limit)))
+  const requestedPage = normalizeWorkItemPage(page)
+  const trimmedQuery = query?.trim() ?? ''
+  if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
+    return { items: [], totalCount: 0, failedCount: 0, githubUnavailable: false }
+  }
+  const parsedQuery = parseTaskQuery(trimmedQuery || 'is:open')
+  const resolvedRepos = await Promise.all(
+    inputs.map(async (input): Promise<ResolvedBatchRepo> => {
+      const [issueResolved, prResolved] = await Promise.all([
+        resolveIssueGitHubApiRepositorySource(
+          input.repoPath,
+          input.preference,
+          input.connectionId,
+          input.localGitOptions
+        ),
+        resolvePrWorkItemSource(
+          input.repoPath,
+          input.preference,
+          input.connectionId,
+          input.localGitOptions
+        )
+      ])
+      return {
+        ...input,
+        issueSource: issueResolved.source,
+        prSource: prResolved.source
+      }
+    })
+  )
+  const resolvedById = new Map(resolvedRepos.map((repo) => [repo.repoId, repo]))
+  const groups = new Map<string, BatchSearchGroup>()
+  for (const repo of resolvedRepos) {
+    for (const [kind, source] of [
+      ['issue', repo.issueSource],
+      ['pr', repo.prSource]
+    ] as const) {
+      if (!source) {
+        continue
+      }
+      const key = batchExecutionKey(repo, source)
+      const group = groups.get(key) ?? {
+        key,
+        anchor: repo,
+        issueSources: new Map(),
+        prSources: new Map()
+      }
+      addBatchSource(group, kind, source, repo)
+      groups.set(key, group)
+    }
+  }
+  const plans = batchSearchPlans([...groups.values()], parsedQuery)
+  if (plans.length === 0) {
+    return {
+      items: [],
+      totalCount: 0,
+      failedCount: 0,
+      githubUnavailable: false
+    }
+  }
+  // A page after the first may need a prefix when chunking is introduced; the
+  // conservative prefix keeps page jumps correct until query-plan metadata is
+  // cached across calls.
+  const usePrefix = plans.length > 1 || requestedPage > 1
+  const outcomes = await Promise.all(
+    plans.map((plan) =>
+      executeBatchSearchPlan(plan, parsedQuery, requestedPage, normalizedLimit, noCache, usePrefix)
+    )
+  )
+  const items = outcomes.flatMap((outcome) => outcome.items).sort(batchItemComparator)
+  const totalCount = outcomes.reduce((sum, outcome) => sum + outcome.totalCount, 0)
+  const failedCount = outcomes.reduce((sum, outcome) => sum + outcome.failedCount, 0)
+  const unavailableCount = outcomes.reduce((sum, outcome) => sum + outcome.unavailableCount, 0)
+  const errorTypes = outcomes.flatMap((outcome) => outcome.errorTypes)
+  const visible = usePrefix
+    ? items.slice((requestedPage - 1) * normalizedLimit, requestedPage * normalizedLimit)
+    : items.slice(0, normalizedLimit)
+  return {
+    items: await hydrateBatchPullRequests(visible, resolvedById),
+    totalCount,
+    failedCount,
+    githubUnavailable: failedCount > 0 && unavailableCount === failedCount,
+    ...(errorTypes.length > 0 ? { errorTypes } : {})
   }
 }
 

@@ -115,6 +115,7 @@ vi.mock('./github-api-repository', async (importOriginal) => {
 import {
   countWorkItems,
   listWorkItems,
+  listWorkItemsAcrossRepos,
   _resetMergeQueueCacheForTests,
   _resetOwnerRepoCache
 } from './client'
@@ -313,5 +314,118 @@ describe('listWorkItems query paging', () => {
     const { items } = await listWorkItems('/repo-root', 10, 'is:issue is:open')
 
     expect(items.map((item) => item.id)).toEqual(['issue:1'])
+  })
+
+  it('merges selected repositories by Search API creation order in one request', async () => {
+    const repositories = new Map([
+      ['/repo-alpha', { owner: 'acme', repo: 'alpha' }],
+      ['/repo-beta', { owner: 'acme', repo: 'beta' }]
+    ])
+    resolveIssueSourceMock.mockImplementation(async (repoPath: string) => ({
+      source: repositories.get(repoPath),
+      fellBack: false
+    }))
+    getIssueOwnerRepoMock.mockImplementation(async (repoPath: string) => repositories.get(repoPath))
+    getOwnerRepoMock.mockImplementation(async (repoPath: string) => repositories.get(repoPath))
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        totalCount: 2,
+        items: [
+          {
+            number: 1,
+            title: 'New beta issue',
+            state: 'open',
+            html_url: 'https://github.com/acme/beta/issues/1',
+            repository: { full_name: 'acme/beta' },
+            labels: [],
+            created_at: '2026-08-02T12:00:00Z',
+            updated_at: '2026-08-02T12:00:00Z',
+            user: { login: 'octocat' }
+          },
+          {
+            number: 99,
+            title: 'Old alpha issue',
+            state: 'open',
+            html_url: 'https://github.com/acme/alpha/issues/99',
+            repository: { full_name: 'acme/alpha' },
+            labels: [],
+            created_at: '2026-08-01T12:00:00Z',
+            updated_at: '2026-08-01T12:00:00Z',
+            user: { login: 'octocat' }
+          }
+        ]
+      })
+    })
+
+    const result = await listWorkItemsAcrossRepos(
+      [
+        { repoId: 'repo-alpha-id', repoPath: '/repo-alpha' },
+        { repoId: 'repo-beta-id', repoPath: '/repo-beta' }
+      ],
+      2,
+      'is:issue is:open'
+    )
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock.mock.calls[0][0]).toEqual(
+      expect.arrayContaining([
+        `search/issues?q=${encodeURIComponent('repo:acme/alpha repo:acme/beta is:issue is:open')}&sort=created&order=desc&per_page=2&page=1`
+      ])
+    )
+    expect(result.items.map((item) => [item.repoId, item.number])).toEqual([
+      ['repo-beta-id', 1],
+      ['repo-alpha-id', 99]
+    ])
+    expect(result.totalCount).toBe(2)
+  })
+
+  it('fetches a prefix when requesting a later globally merged page', async () => {
+    const repository = { owner: 'acme', repo: 'widgets' }
+    resolveIssueSourceMock.mockResolvedValue({ source: repository, fellBack: false })
+    getIssueOwnerRepoMock.mockResolvedValue(repository)
+    getOwnerRepoMock.mockResolvedValue(repository)
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        totalCount: 3,
+        items: [
+          {
+            number: 3,
+            title: 'Newest',
+            state: 'open',
+            html_url: 'https://github.com/acme/widgets/issues/3',
+            repository: { full_name: 'acme/widgets' },
+            labels: [],
+            created_at: '2026-08-03T00:00:00Z',
+            updated_at: '2026-08-03T00:00:00Z',
+            user: { login: 'octocat' }
+          },
+          {
+            number: 2,
+            title: 'Second',
+            state: 'open',
+            html_url: 'https://github.com/acme/widgets/issues/2',
+            repository: { full_name: 'acme/widgets' },
+            labels: [],
+            created_at: '2026-08-02T00:00:00Z',
+            updated_at: '2026-08-02T00:00:00Z',
+            user: { login: 'octocat' }
+          }
+        ]
+      })
+    })
+
+    const result = await listWorkItemsAcrossRepos(
+      [{ repoId: 'repo-id', repoPath: '/repo-root' }],
+      1,
+      'is:issue is:open',
+      2
+    )
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock.mock.calls[0][0]).toEqual(
+      expect.arrayContaining(['--cache', '120s', expect.stringContaining('per_page=100&page=1')])
+    )
+    expect(result.items.map((item) => item.number)).toEqual([2])
+    expect(result.totalCount).toBe(3)
   })
 })

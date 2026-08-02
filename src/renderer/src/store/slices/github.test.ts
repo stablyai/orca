@@ -47,6 +47,7 @@ const mockApi = {
     addPRReviewCommentReply: vi.fn(),
     resolveReviewThread: vi.fn(),
     listWorkItems: vi.fn(),
+    listWorkItemsAcrossRepos: vi.fn(),
     countWorkItems: vi.fn().mockResolvedValue(0),
     getProjectViewTable: vi.fn(),
     updateProjectItemField: vi.fn(),
@@ -6343,6 +6344,50 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       consoleWarn.mockRestore()
       consoleError.mockRestore()
     }
+  })
+
+  it('uses grouped Search API pagination for a multi-repo fetch', async () => {
+    const item = {
+      type: 'issue',
+      number: 4,
+      title: 'Newest issue',
+      url: 'https://github.com/acme/repo/issues/4',
+      updatedAt: '2026-08-02T00:00:00Z',
+      repoId: 'repo-2'
+    } as GitHubWorkItem
+    mockApi.gh.listWorkItemsAcrossRepos.mockResolvedValueOnce({
+      items: [item],
+      totalCount: 4,
+      failedCount: 0,
+      githubUnavailable: false
+    })
+    const store = createTestStore()
+
+    const result = await store.getState().fetchWorkItemsAcrossRepos(
+      [
+        { repoId: 'repo-1', path: '/repo/one' },
+        { repoId: 'repo-2', path: '/repo/two' }
+      ],
+      24,
+      48,
+      'is:open'
+    )
+
+    expect(result).toEqual({
+      items: [item],
+      failedCount: 0,
+      githubUnavailable: false,
+      totalCount: 4
+    })
+    expect(mockApi.gh.listWorkItemsAcrossRepos).toHaveBeenCalledWith({
+      repos: [
+        { repoPath: '/repo/one', repoId: 'repo-1' },
+        { repoPath: '/repo/two', repoId: 'repo-2' }
+      ],
+      limit: 48,
+      query: 'is:open'
+    })
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
   })
 
   it('flags githubUnavailable when a GitHub repo fails with a 5xx outage and no cache', async () => {

@@ -156,6 +156,7 @@ import type {
   GitHubOwnerRepo,
   GitHubWorkItem,
   GitHubWorkItemDetails,
+  ListWorkItemsAcrossReposResult,
   GitHubViewer,
   GitLabAssignableUser,
   GitLabAuthDiagnostic,
@@ -1788,6 +1789,13 @@ export type PreloadApi = {
       page?: number
       noCache?: boolean
     }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
+    listWorkItemsAcrossRepos: (args: {
+      repos: { repoPath: string; repoId: string }[]
+      limit?: number
+      query?: string
+      page?: number
+      noCache?: boolean
+    }) => Promise<ListWorkItemsAcrossReposResult>
     prChecks: (
       args: GitHubRepoSelectorArgs & {
         prNumber: number
