@@ -133,11 +133,12 @@ function DescriptorMenuRows(props: {
   const { descriptor, pending, setValue, invokeAction } = props
   // Why: flip-only without a baseline is an action — never claim On/Off.
   if (descriptor.action?.type === 'toggle-command') {
+    const label = translate('components.native-chat.composer.toggleOption', 'Toggle {{value0}}', {
+      value0: nativeChatSessionOptionLabel(descriptor)
+    })
     return (
       <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={() => invokeAction()}>
-        {translate('components.native-chat.composer.toggleOption', 'Toggle {{value0}}', {
-          value0: nativeChatSessionOptionLabel(descriptor).toLowerCase()
-        })}
+        <ChoiceBody label={label} description={descriptor.description} />
       </DropdownMenuItem>
     )
   }

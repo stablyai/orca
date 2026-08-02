@@ -1,4 +1,9 @@
-import type { AgentSessionOptionCatalog, CatalogOption } from './agent-session-option-catalog-types'
+import type {
+  AgentSessionOptionCatalog,
+  CatalogModel,
+  CatalogOption
+} from './agent-session-option-catalog-types'
+import { parseCodexModels, type CommitMessageModelCapability } from './commit-message-agent-spec'
 
 function hasFlag(tokens: readonly string[], flags: readonly string[]): boolean {
   return tokens.some((token) =>
@@ -111,6 +116,14 @@ const CODEX_EFFORT_CHOICES = [
   { value: 'xhigh', label: 'Extra high' }
 ]
 
+const CODEX_FAST_SERVICE_TIER_IDS = new Set(['priority', 'fast'])
+
+const CODEX_EFFORT_APPLY: CatalogOption['apply'] = {
+  launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
+  agentArgsOverride: hasCodexEffortOverride,
+  midSession: { kind: 'agent-picker', command: '/model' }
+}
+
 function codexEffort(includeExtraHigh: boolean): CatalogOption {
   return {
     id: 'effort',
@@ -123,12 +136,68 @@ function codexEffort(includeExtraHigh: boolean): CatalogOption {
         : CODEX_EFFORT_CHOICES.filter((choice) => choice.value !== 'xhigh'),
       defaultValue: 'medium'
     },
-    apply: {
-      launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
-      agentArgsOverride: hasCodexEffortOverride,
-      midSession: { kind: 'agent-picker', command: '/model' }
-    }
+    apply: CODEX_EFFORT_APPLY
   }
+}
+
+function codexDiscoveredEffort(model: CommitMessageModelCapability): CatalogOption | null {
+  const levels = model.thinkingLevels ?? []
+  if (levels.length === 0) {
+    return null
+  }
+  const defaultValue =
+    levels.find((level) => level.id === model.defaultThinkingLevel)?.id ?? levels[0].id
+  return {
+    id: 'effort',
+    label: 'Reasoning effort',
+    category: 'thought_level',
+    kind: {
+      type: 'select',
+      choices: levels.map((level) => ({ value: level.id, label: level.label })),
+      defaultValue
+    },
+    apply: CODEX_EFFORT_APPLY
+  }
+}
+
+function codexDiscoveredFastMode(model: CommitMessageModelCapability): CatalogOption | null {
+  const fastTier = model.serviceTiers?.find((tier) =>
+    CODEX_FAST_SERVICE_TIER_IDS.has(tier.id.trim().toLocaleLowerCase('en-US'))
+  )
+  if (!fastTier) {
+    return null
+  }
+  return {
+    id: 'fastMode',
+    label: 'Fast mode',
+    ...(fastTier.description ? { description: fastTier.description } : {}),
+    category: 'mode',
+    kind: { type: 'boolean', defaultValue: false },
+    // Why: Codex exposes Fast as a flip-only live command. Until Orca has a
+    // reported baseline, the UI presents an honest "Toggle fast mode" action.
+    apply: { midSession: { kind: 'toggle-command', command: '/fast' } }
+  }
+}
+
+export function codexCatalogModelFromCapability(model: CommitMessageModelCapability): CatalogModel {
+  const discoveredEffort = codexDiscoveredEffort(model)
+  const discoveredFastMode = codexDiscoveredFastMode(model)
+  const options = [discoveredEffort, discoveredFastMode].filter(
+    (option): option is CatalogOption => option !== null
+  )
+  return {
+    id: model.id,
+    label: model.label,
+    // Why: only mark authoritative when discovery produced an effort picker —
+    // a Fast-only result augments the seed options rather than replacing them,
+    // so the static effort picker is not silently dropped.
+    optionsAuthoritative: discoveredEffort !== null,
+    options
+  }
+}
+
+function parseCodexCatalogModels(stdout: string) {
+  return parseCodexModels(stdout).map(codexCatalogModelFromCapability)
 }
 
 export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
@@ -149,5 +218,6 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     launchArgs: (value) => ['-m', String(value)],
     agentArgsOverride: (tokens) => hasFlag(tokens, ['-m', '--model']),
     midSession: { kind: 'agent-picker', command: '/model' }
-  }
+  },
+  listModels: { command: 'codex debug models', parse: parseCodexCatalogModels }
 }

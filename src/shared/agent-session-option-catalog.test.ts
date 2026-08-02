@@ -43,6 +43,99 @@ describe('agent session option catalog', () => {
     expect(parsed.map(({ id }) => id)).toEqual(['auto', 'gpt-5.3-codex'])
   })
 
+  it('uses Codex-discovered reasoning and Fast capabilities as the authoritative options', () => {
+    const catalog = getAgentSessionOptionCatalog('codex')!
+    const parsed = catalog.listModels!.parse(
+      JSON.stringify({
+        models: [
+          {
+            slug: 'gpt-5.5',
+            display_name: 'GPT-5.5 live',
+            default_reasoning_level: 'high',
+            supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }],
+            service_tiers: [
+              {
+                id: 'priority',
+                name: 'Priority',
+                description: '1.5x speed, increased usage'
+              }
+            ]
+          },
+          {
+            slug: 'gpt-5.4-mini',
+            display_name: 'GPT-5.4 Mini',
+            supported_reasoning_levels: [{ effort: 'medium' }],
+            service_tiers: [{ id: 'flex', name: 'Fast' }]
+          }
+        ]
+      })
+    )
+    const merged = mergeCatalogModels(catalog.models, parsed)
+    const live = merged.find((model) => model.id === 'gpt-5.5')
+    const mini = merged.find((model) => model.id === 'gpt-5.4-mini')
+
+    expect(live).toMatchObject({
+      label: 'GPT-5.5 live',
+      optionsAuthoritative: true,
+      options: [
+        {
+          id: 'effort',
+          kind: {
+            defaultValue: 'high',
+            choices: [
+              { value: 'low', label: 'Low' },
+              { value: 'high', label: 'High' }
+            ]
+          }
+        },
+        {
+          id: 'fastMode',
+          description: '1.5x speed, increased usage',
+          apply: { midSession: { kind: 'toggle-command', command: '/fast' } }
+        }
+      ]
+    })
+    expect(mini?.options.map((option) => option.id)).toEqual(['effort'])
+  })
+
+  it('preserves static Codex options when discovery returns no capabilities', () => {
+    const catalog = getAgentSessionOptionCatalog('codex')!
+    const parsed = catalog.listModels!.parse(
+      JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5 live' }] })
+    )
+    const merged = mergeCatalogModels(catalog.models, parsed)
+
+    expect(merged.find((model) => model.id === 'gpt-5.5')).toMatchObject({
+      label: 'GPT-5.5 live',
+      optionsAuthoritative: false,
+      options: [expect.objectContaining({ id: 'effort' })]
+    })
+  })
+
+  it('preserves seed effort when Codex discovery returns only a Fast tier', () => {
+    const catalog = getAgentSessionOptionCatalog('codex')!
+    const parsed = catalog.listModels!.parse(
+      JSON.stringify({
+        models: [
+          {
+            slug: 'gpt-5.5',
+            display_name: 'GPT-5.5 live',
+            service_tiers: [{ id: 'priority', name: 'Fast', description: '1.5x speed' }]
+          }
+        ]
+      })
+    )
+    const merged = mergeCatalogModels(catalog.models, parsed)
+    const model = merged.find((m) => m.id === 'gpt-5.5')!
+
+    // Why: Fast-only discovery augments the seed rather than replacing it,
+    // so the static effort picker must survive alongside the new fastMode.
+    expect(model.optionsAuthoritative).toBe(false)
+    const optionIds = model.options.map(({ id }) => id)
+    expect(optionIds).toContain('effort')
+    expect(optionIds).toContain('fastMode')
+  })
+
   it('composes Cursor effort and fast mode into the supported slug form', () => {
     const resolved = resolveAgentSessionOptionLaunch('cursor', {
       model: 'gpt-5.3-codex',

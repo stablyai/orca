@@ -1,5 +1,8 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
+import {
+  catalogModelFromDiscoveredCapability,
+  type CatalogModel
+} from '../../../../shared/agent-session-option-catalog'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { getConnectionIdFromState } from '@/lib/connection-context'
@@ -49,9 +52,5 @@ export async function discoverNativeChatCatalogModels(
   if (!result.success || result.models.length === 0) {
     return null
   }
-  return result.models.map((model) => ({
-    id: model.id,
-    label: model.label,
-    options: []
-  }))
+  return result.models.map((model) => catalogModelFromDiscoveredCapability(agent, model))
 }

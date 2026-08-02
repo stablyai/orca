@@ -47,6 +47,8 @@ export type CatalogModel = {
   label: string
   description?: string
   isDefault?: boolean
+  /** Live discovery supplied the complete option set, including an intentional empty set. */
+  optionsAuthoritative?: boolean
   options: CatalogOption[]
 }
 

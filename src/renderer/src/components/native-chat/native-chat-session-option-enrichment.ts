@@ -9,6 +9,8 @@ type CatalogEnrichmentEntry = {
   state: 'idle' | 'pending' | 'settled'
   models: CatalogModel[] | null
   listeners: Set<(models: CatalogModel[]) => void>
+  consecutiveFailures: number
+  retryAfter: number
 }
 
 const enrichmentByAgentHost = new Map<string, CatalogEnrichmentEntry>()
@@ -34,7 +36,9 @@ export function subscribeNativeChatEnrichedModels(
   const entry = enrichmentByAgentHost.get(key) ?? {
     state: 'idle' as const,
     models: null,
-    listeners: new Set<(models: CatalogModel[]) => void>()
+    listeners: new Set<(models: CatalogModel[]) => void>(),
+    consecutiveFailures: 0,
+    retryAfter: 0
   }
   entry.listeners.add(listener)
   enrichmentByAgentHost.set(key, entry)
@@ -55,10 +59,17 @@ export function ensureNativeChatModelEnrichment(args: {
   if (existing?.state === 'pending' || existing?.state === 'settled') {
     return
   }
+  // Why: a transiently-failing or empty discovery must not spin in a tight
+  // loop — back off exponentially so later surfaces retry after a delay.
+  if (existing?.retryAfter && Date.now() < existing.retryAfter) {
+    return
+  }
   const entry: CatalogEnrichmentEntry = existing ?? {
     state: 'idle',
     models: null,
-    listeners: new Set()
+    listeners: new Set(),
+    consecutiveFailures: 0,
+    retryAfter: 0
   }
   entry.state = 'pending'
   enrichmentByAgentHost.set(key, entry)
@@ -68,18 +79,36 @@ export function ensureNativeChatModelEnrichment(args: {
   void args
     .discover()
     .then((discovered) => {
-      entry.state = 'settled'
       if (!discovered || discovered.length === 0) {
+        // Why: PATH, auth, and remote hosts can recover without an app
+        // restart. A later surface retries after a backoff delay while
+        // concurrent callers remain deduplicated.
+        entry.consecutiveFailures += 1
+        entry.retryAfter = Date.now() + backoffDelay(entry.consecutiveFailures)
+        entry.state = 'idle'
         return
       }
+      entry.consecutiveFailures = 0
+      entry.retryAfter = 0
+      entry.state = 'settled'
       entry.models = mergeCatalogModels(catalog.models, discovered)
       for (const listener of entry.listeners) {
         listener([...entry.models])
       }
     })
     .catch(() => {
-      entry.state = 'settled'
+      entry.consecutiveFailures += 1
+      entry.retryAfter = Date.now() + backoffDelay(entry.consecutiveFailures)
+      entry.state = 'idle'
     })
+}
+
+function backoffDelay(consecutiveFailures: number): number {
+  // Why: start small enough that a transient blip recovers quickly, but grow
+  // exponentially so a persistently broken host does not hammer discovery.
+  const base = 200
+  const max = 30_000
+  return Math.min(base * 2 ** (consecutiveFailures - 1), max)
 }
 
 export function clearNativeChatModelEnrichmentForTests(): void {
