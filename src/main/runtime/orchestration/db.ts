@@ -246,6 +246,39 @@ export const LEGACY_RUN_ID = ORCHESTRATION_LEGACY_RUN_ID
 export const LEGACY_CONTRACT_VERSION = 0
 export const CURRENT_CONTRACT_VERSION = ORCHESTRATION_CONTRACT_VERSION
 
+export type OrchestrationReportTaskRow = Pick<
+  TaskRow,
+  'id' | 'run_id' | 'parent_id' | 'status' | 'created_at' | 'completed_at'
+>
+
+export type OrchestrationReportDispatchRow = Pick<
+  DispatchContextRow,
+  | 'id'
+  | 'run_id'
+  | 'task_id'
+  | 'status'
+  | 'assignee_handle'
+  | 'created_at'
+  | 'dispatched_at'
+  | 'completed_at'
+> & {
+  worker_state: WorkerDispatchRow['state'] | null
+  worktree_id: string | null
+  agent_terminal_handle: string | null
+  environment_id: string | null
+  environment_name: string | null
+  remote_worktree_id: string | null
+  remote_terminal_handle: string | null
+}
+
+export type OrchestrationReportRecords = {
+  run: RunRow
+  tasks: OrchestrationReportTaskRow[]
+  dispatches: OrchestrationReportDispatchRow[]
+  taskCount: number
+  dispatchCount: number
+}
+
 const MUTATION_RECEIPT_MAX_ROWS = 10_000
 const MUTATION_RECEIPT_MAX_AGE_DAYS = 30
 
@@ -3752,6 +3785,59 @@ export class OrchestrationDb {
         .all(filter.runId) as TaskRow[]
     }
     return this.db.prepare('SELECT * FROM tasks ORDER BY created_at').all() as TaskRow[]
+  }
+
+  getRunReportRecords(
+    runId: string,
+    limits: { tasks: number; dispatches: number }
+  ): OrchestrationReportRecords | undefined {
+    const run = this.getRun(runId)
+    if (!run) {
+      return undefined
+    }
+    const taskCount = (
+      this.db.prepare('SELECT COUNT(*) AS count FROM tasks WHERE run_id = ?').get(runId) as {
+        count: number
+      }
+    ).count
+    const dispatchCount = (
+      this.db
+        .prepare('SELECT COUNT(*) AS count FROM dispatch_contexts WHERE run_id = ?')
+        .get(runId) as { count: number }
+    ).count
+    const tasks = (
+      this.db
+        .prepare(
+          `SELECT id, run_id, parent_id, status, created_at, completed_at
+         FROM tasks WHERE run_id = ? ORDER BY created_at, id LIMIT ?`
+        )
+        .all(runId, limits.tasks) as OrchestrationReportTaskRow[]
+    ).map((task) => ({
+      ...task,
+      created_at: exposeUtcTimestamp(task.created_at) ?? task.created_at,
+      completed_at: exposeUtcTimestamp(task.completed_at)
+    }))
+    const dispatches = (
+      this.db
+        .prepare(
+          `SELECT dc.id, dc.run_id, dc.task_id, dc.status, dc.assignee_handle,
+                dc.created_at, dc.dispatched_at, dc.completed_at,
+                wd.state AS worker_state, wd.worktree_id, wd.agent_terminal_handle,
+                fd.environment_id, fd.environment_name, fd.remote_worktree_id,
+                fd.remote_terminal_handle
+         FROM dispatch_contexts dc
+         LEFT JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
+         LEFT JOIN federated_dispatches fd ON fd.dispatch_id = dc.id
+         WHERE dc.run_id = ? ORDER BY dc.created_at, dc.id LIMIT ?`
+        )
+        .all(runId, limits.dispatches) as OrchestrationReportDispatchRow[]
+    ).map((dispatch) => ({
+      ...dispatch,
+      created_at: exposeUtcTimestamp(dispatch.created_at) ?? dispatch.created_at,
+      dispatched_at: exposeUtcTimestamp(dispatch.dispatched_at),
+      completed_at: exposeUtcTimestamp(dispatch.completed_at)
+    }))
+    return { run, tasks, dispatches, taskCount, dispatchCount }
   }
 
   // Why: LEFT JOIN keeps non-dispatched tasks (NULL assignee); the MAX(rowid) subquery matches getDispatchContext's most-recent-active-dispatch semantics.

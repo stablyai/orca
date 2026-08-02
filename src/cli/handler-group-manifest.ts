@@ -97,6 +97,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration run-current',
       'orchestration run-list',
       'orchestration run-show',
+      'orchestration report',
       'orchestration send',
       'orchestration check',
       'orchestration reply',

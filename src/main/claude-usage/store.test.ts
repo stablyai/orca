@@ -106,6 +106,58 @@ describe('ClaudeUsageStore', () => {
     rmSync(tempUserData, { recursive: true, force: true })
   })
 
+  it('preserves tokens but does not price aggregate sessions as their last model', () => {
+    const store = createStoreWithState({
+      sessions: [
+        {
+          sessionId: 'mixed-model-session',
+          firstTimestamp: '2026-04-09T10:00:00.000Z',
+          lastTimestamp: '2026-04-09T10:10:00.000Z',
+          model: 'claude-sonnet-4-6',
+          lastCwd: '/workspace/repo',
+          lastGitBranch: null,
+          primaryWorktreeId: 'repo-1::/workspace/repo',
+          primaryRepoId: 'repo-1',
+          turnCount: 2,
+          totalInputTokens: 100,
+          totalOutputTokens: 20,
+          totalCacheReadTokens: 10,
+          totalCacheWriteTokens: 5,
+          locationBreakdown: [
+            {
+              locationKey: 'worktree:repo-1::/workspace/repo',
+              projectLabel: 'Repo',
+              repoId: 'repo-1',
+              worktreeId: 'repo-1::/workspace/repo',
+              turnCount: 2,
+              inputTokens: 100,
+              outputTokens: 20,
+              cacheReadTokens: 10,
+              cacheWriteTokens: 5
+            }
+          ]
+        }
+      ],
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: Date.now(),
+        lastScanCompletedAt: Date.now(),
+        lastScanError: null
+      }
+    })
+
+    const snapshot = store.getOrchestrationReportUsage(10)
+
+    expect(snapshot.sessions[0].metrics).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 20,
+      totalTokens: 135,
+      estimatedCostUsd: null,
+      costStatus: 'unavailable'
+    })
+    expect(snapshot.limitations[0]).toContain('per-model token buckets')
+  })
+
   it('reports no data for Orca scope when only non-Orca usage exists', async () => {
     const store = createStoreWithState({
       sessions: [

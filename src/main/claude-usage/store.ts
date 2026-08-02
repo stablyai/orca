@@ -20,6 +20,10 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { ClaudeUsagePersistedState } from './types'
 import { createWorktreeRefs } from '../usage/usage-worktree-refs'
 import { getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
+import type {
+  OrchestrationReportUsageSession,
+  OrchestrationReportUsageSnapshot
+} from '../../shared/orchestration-cost-report'
 
 // Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
 // caches either lack ownership or used narrower keys and can under/over-count
@@ -401,6 +405,74 @@ export class ClaudeUsageStore {
       ...this.state.scanState,
       isScanning: this.scanPromise !== null,
       hasAnyClaudeData: this.state.sessions.length > 0 || this.state.dailyAggregates.length > 0
+    }
+  }
+
+  getOrchestrationReportUsage(limit: number): OrchestrationReportUsageSnapshot {
+    const status = this.state.scanState.enabled
+      ? this.state.scanState.lastScanError
+        ? 'error'
+        : this.scanPromise
+          ? 'scanning'
+          : this.state.scanState.lastScanCompletedAt === null
+            ? 'uninitialized'
+            : Date.now() - this.state.scanState.lastScanCompletedAt >= STALE_MS
+              ? 'stale'
+              : 'available'
+      : 'disabled'
+    const sourceSessions = status === 'available' ? this.state.sessions : []
+    const sessions = sourceSessions.slice(0, limit).map((session) => {
+      const worktreeIds = new Set(session.locationBreakdown.map((row) => row.worktreeId))
+      const worktreeId =
+        worktreeIds.size === 1 && !worktreeIds.has(null) ? ([...worktreeIds][0] as string) : null
+      const record: OrchestrationReportUsageSession = {
+        provider: 'claude',
+        sessionId: session.sessionId,
+        firstTimestamp: session.firstTimestamp,
+        lastTimestamp: session.lastTimestamp,
+        worktreeId,
+        locationStatus: worktreeId ? 'exact' : worktreeIds.size > 1 ? 'mixed' : 'unavailable',
+        model: session.model,
+        metrics: {
+          inputTokens: session.totalInputTokens,
+          cachedInputTokens: null,
+          outputTokens: session.totalOutputTokens,
+          reasoningOutputTokens: null,
+          cacheReadTokens: session.totalCacheReadTokens,
+          cacheWriteTokens: session.totalCacheWriteTokens,
+          totalTokens:
+            session.totalInputTokens +
+            session.totalOutputTokens +
+            session.totalCacheReadTokens +
+            session.totalCacheWriteTokens,
+          estimatedCostUsd: null,
+          costStatus: 'unavailable'
+        }
+      }
+      return record
+    })
+    return {
+      provider: 'claude',
+      status,
+      lastScanCompletedAt: this.state.scanState.lastScanCompletedAt,
+      message:
+        status === 'disabled'
+          ? 'Claude usage tracking is disabled.'
+          : status === 'error'
+            ? 'Claude usage scan failed.'
+            : status === 'uninitialized'
+              ? 'Claude usage has not completed an initial scan.'
+              : status === 'stale'
+                ? 'Claude usage snapshot is stale.'
+                : status === 'scanning'
+                  ? 'Claude usage scan is incomplete.'
+                  : null,
+      limitations:
+        sessions.length > 0
+          ? ['Claude sessions do not persist per-model token buckets; session cost is unavailable.']
+          : [],
+      sessions,
+      truncated: sourceSessions.length > limit
     }
   }
 
