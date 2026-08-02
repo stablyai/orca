@@ -59,6 +59,10 @@ export class DispatcherClientWriter {
     return this.sink.producerFrameCapacity
   }
 
+  canEnqueueControl(bytes: number): boolean {
+    return !this.closed && this.admission.canAdmitControl(bytes)
+  }
+
   get fixedFrameCapacity(): number {
     return this.sink.frameCapacity('fixed-bulk', this.saturated)
   }

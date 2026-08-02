@@ -2614,6 +2614,20 @@ function deleteScannedSessionFieldsForOwners(
   )
 }
 
+// Remote (ssh:/runtime:) workspace state can exist in both the renderer's local blob and main's host
+// partition, because the renderer falls back to 'local' whenever worktree ownership is unresolved.
+function workspaceSessionPartitionIdsForHost(hostId: string | null | undefined): ExecutionHostId[] {
+  const parsed = parseExecutionHostId(hostId)
+  return parsed && parsed.id !== LOCAL_EXECUTION_HOST_ID
+    ? [LOCAL_EXECUTION_HOST_ID, parsed.id]
+    : [LOCAL_EXECUTION_HOST_ID]
+}
+
+/** The partition the host actually owns; the others are only spill surfaces for it. */
+function workspaceSessionOwnerPartitionForHost(hostId: string | null | undefined): ExecutionHostId {
+  return parseExecutionHostId(hostId)?.id ?? LOCAL_EXECUTION_HOST_ID
+}
+
 function removeWorkspaceSessionOwner(
   session: WorkspaceSessionState | undefined,
   ownerKey: string,
@@ -4044,6 +4058,7 @@ export class Store {
         }
       }
     }
+    // Why: later async flushes must remain serialized behind the invalidated writer.
     this.writeToDiskSync({
       force: asyncWriteWasInFlight,
       skipBackupRotation: this.backupRotationInFlight
@@ -5331,15 +5346,34 @@ export class Store {
     return updated
   }
 
-  removeWorktreeMeta(worktreeId: string): void {
+  removeWorktreeMeta(worktreeId: string, hostId?: ExecutionHostId | null): void {
+    // Persisted ownership beats stale live routing; hostId is only an ownerless fallback.
+    const owner = this.state.worktreeMeta[worktreeId]?.hostId ?? hostId
+    // Skip partitions main never wrote: materializing one fences every sibling worktree of the repo.
+    const partitions = new Set<ExecutionHostId>(
+      workspaceSessionPartitionIdsForHost(owner).filter((partition) =>
+        this.hasPersistedWorkspaceSession(partition)
+      )
+    )
+    // A repo-wide fence must not rebase a sibling's unpersisted tabs onto main's copy, and a spill
+    // partition that never held this worktree has no claim on the repo at all.
+    const ownerPartition = workspaceSessionOwnerPartitionForHost(owner)
+    const fencedPartitions = new Set(
+      [...partitions].filter(
+        (partition) =>
+          this.partitionOwnsWorktreeTabs(worktreeId, partition) ||
+          (partition === ownerPartition &&
+            !this.partitionHasOtherRepoWorktreeTabs(worktreeId, partition))
+      )
+    )
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
     delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
-    this.state.workspaceSession = removeWorkspaceSessionOwner(
-      this.state.workspaceSession,
-      worktreeId,
-      { advanceTerminalTopologyRevision: true }
-    )!
+    for (const partition of partitions) {
+      this.removeWorkspaceSessionOwnerInPartition(worktreeId, partition, {
+        advanceTerminalTopologyRevision: fencedPartitions.has(partition)
+      })
+    }
     this.scheduleSave()
   }
 
@@ -6106,6 +6140,14 @@ export class Store {
     return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
   }
 
+  /** Whether a partition was ever written; `getWorkspaceSession` defaults absent ones and cannot tell them apart. */
+  private hasPersistedWorkspaceSession(hostId: ExecutionHostId): boolean {
+    return (
+      hostId === LOCAL_EXECUTION_HOST_ID ||
+      this.state.workspaceSessionsByHostId?.[hostId] !== undefined
+    )
+  }
+
   getWorkspaceSessionHostIds(): ExecutionHostId[] {
     const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
     for (const key of Object.keys(this.state.workspaceSessionsByHostId ?? {})) {
@@ -6133,6 +6175,58 @@ export class Store {
       return
     }
     this.setHostWorkspaceSession(resolved, session)
+  }
+
+  removeWorkspaceSessionStateForWorktree(
+    worktreeId: string,
+    hostId?: ExecutionHostId | null,
+    options: { advanceTerminalTopologyRevision?: boolean } = {}
+  ): void {
+    for (const resolved of workspaceSessionPartitionIdsForHost(hostId)) {
+      this.removeWorkspaceSessionOwnerInPartition(worktreeId, resolved, options)
+    }
+  }
+
+  private removeWorkspaceSessionOwnerInPartition(
+    worktreeId: string,
+    resolved: ExecutionHostId,
+    options: { advanceTerminalTopologyRevision?: boolean }
+  ): void {
+    if (!this.hasPersistedWorkspaceSession(resolved)) {
+      return
+    }
+    const current = this.getWorkspaceSession(resolved)
+    const session = removeWorkspaceSessionOwner(current, worktreeId, {
+      advanceTerminalTopologyRevision: options.advanceTerminalTopologyRevision ?? true
+    })
+    if (!session) {
+      return
+    }
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSession = session
+    } else {
+      // Host scoping matters because identical repo/path ids may exist on two servers.
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [resolved]: session
+      }
+    }
+    this.scheduleSave()
+  }
+
+  /** Whether a partition still holds terminal membership for `worktreeId`. */
+  private partitionOwnsWorktreeTabs(worktreeId: string, hostId: ExecutionHostId): boolean {
+    return this.getWorkspaceSession(hostId).tabsByWorktree?.[worktreeId] !== undefined
+  }
+
+  /** Whether fencing this partition would rebase a sibling worktree of the same repo. */
+  private partitionHasOtherRepoWorktreeTabs(worktreeId: string, hostId: ExecutionHostId): boolean {
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    const tabsByWorktree = this.getWorkspaceSession(hostId).tabsByWorktree ?? {}
+    return Object.entries(tabsByWorktree).some(
+      ([id, tabs]) =>
+        id !== worktreeId && getRepoIdFromWorktreeId(id) === repoId && (tabs?.length ?? 0) > 0
+    )
   }
 
   stageWorkspaceSessionBeforeUnload(
@@ -6888,7 +6982,7 @@ export class Store {
     return record ? structuredClone(record) : null
   }
 
-  upsertSshPtyConsumerRecovery(record: SshPtyConsumerRecovery): void {
+  async upsertSshPtyConsumerRecovery(record: SshPtyConsumerRecovery): Promise<void> {
     const normalized = normalizeSshPtyConsumerRecovery(record)
     if (!normalized) {
       throw new Error('Invalid SSH PTY consumer recovery record')
@@ -6898,26 +6992,24 @@ export class Store {
       ...recoveries.filter((candidate) => candidate.targetId !== normalized.targetId),
       normalized
     ]
-    this.flushSshPtyConsumerRecovery()
+    await this.flushSshPtyConsumerRecovery()
   }
 
-  removeSshPtyConsumerRecovery(targetId: string): void {
+  async removeSshPtyConsumerRecovery(targetId: string): Promise<void> {
     const recoveries = this.state.sshPtyConsumerRecoveries ?? []
     const next = recoveries.filter((record) => record.targetId !== targetId)
     if (next.length === recoveries.length) {
       return
     }
     this.state.sshPtyConsumerRecoveries = next
-    this.flushSshPtyConsumerRecovery()
+    await this.flushSshPtyConsumerRecovery()
   }
 
-  private flushSshPtyConsumerRecovery(): void {
-    try {
-      // Why: ownership must be durable before relay setup continues, but active-view and GitHub sidecars are unrelated startup work.
-      this.flushOrThrow()
-    } catch (err) {
-      console.error('[persistence] Failed to flush SSH PTY consumer recovery:', err)
-    }
+  private async flushSshPtyConsumerRecovery(): Promise<void> {
+    // Why: ownership must be durable before relay setup continues, but this runs on the live
+    // establish/reconnect path — a sync flush would park the main thread on a stalled profile mount.
+    // Why not caught here: the failure must reach the awaiting caller.
+    await this.flushDurableStateOrThrowAsync()
   }
 
   // ── SSH Remote PTY Leases ──────────────────────────────────────────
@@ -6962,13 +7054,47 @@ export class Store {
   }
 
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
+    if (this.updateSshRemotePtyLeaseStates(targetId, state)) {
+      this.flush()
+    }
+  }
+
+  async markSshRemotePtyLeasesAsync(
+    targetId: string,
+    state: SshRemotePtyLease['state']
+  ): Promise<void> {
+    if (this.updateSshRemotePtyLeaseStates(targetId, state)) {
+      await this.flushDurableStateOrThrowAsync()
+    }
+  }
+
+  async markSshRemotePtyLeasesAttachedAsync(
+    targetId: string,
+    ptyIds: readonly string[]
+  ): Promise<void> {
+    const relayPtyIds = new Set(
+      ptyIds.map((ptyId) => this.getRelayPtyIdForSshLeaseStorage(targetId, ptyId))
+    )
+    if (this.updateSshRemotePtyLeaseStates(targetId, 'attached', relayPtyIds)) {
+      await this.flushDurableStateOrThrowAsync()
+    }
+  }
+
+  private updateSshRemotePtyLeaseStates(
+    targetId: string,
+    state: SshRemotePtyLease['state'],
+    ptyIds?: ReadonlySet<string>
+  ): boolean {
     const now = Date.now()
     let changed = false
     const shouldClearBindings = state === 'terminated' || state === 'expired'
     const leasesToClear: SshRemotePtyLease[] = []
     this.state.sshRemotePtyLeases ??= []
     for (const lease of this.state.sshRemotePtyLeases) {
-      if (lease.targetId !== targetId) {
+      if (lease.targetId !== targetId || (ptyIds && !ptyIds.has(lease.ptyId))) {
+        continue
+      }
+      if (state === 'attached' && (lease.state === 'terminated' || lease.state === 'expired')) {
         continue
       }
       if (state === 'detached' && lease.state !== 'attached') {
@@ -6991,9 +7117,7 @@ export class Store {
     const bindingsChanged = shouldClearBindings
       ? this.clearSshRemotePtyBindingsForLeases(targetId, leasesToClear)
       : false
-    if (changed || bindingsChanged) {
-      this.flush()
-    }
+    return changed || bindingsChanged
   }
 
   markSshRemotePtyLease(targetId: string, ptyId: string, state: SshRemotePtyLease['state']): void {
@@ -7172,6 +7296,26 @@ export class Store {
       return Promise.reject(new Error('Cannot flush while persistence is finalized'))
     }
     return this.flushCurrentStateAsync(false, options.signal)
+  }
+
+  // Async twin of flushOrThrow: durable state only. Active-view and GitHub sidecars are
+  // quit/startup work and must not be snapshotted on the live SSH establish/reconnect path.
+  private async flushDurableStateOrThrowAsync(): Promise<void> {
+    if (this.writesFrozen || this.quitFlushStarted) {
+      throw new Error('Cannot flush while persistence is finalized')
+    }
+    for (;;) {
+      if (this.writeTimer) {
+        clearTimeout(this.writeTimer)
+        this.writeTimer = null
+      }
+      this.firstPendingSaveAt = null
+      const generation = this.writeGeneration
+      await this.enqueueWrite()
+      if (generation === this.writeGeneration) {
+        break
+      }
+    }
   }
 
   private async flushCurrentStateAsync(

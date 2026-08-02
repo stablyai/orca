@@ -1,3 +1,4 @@
+import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { glabExecFileAsync } from '../git/runner'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from './project-ref-parser'
@@ -8,7 +9,7 @@ export type LocalGitExecOptions = {
 
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
 const knownHostsCacheByExecutionContext = new Map<string, readonly string[]>()
-const knownHostsInFlightByExecutionContext = new Map<string, Promise<readonly string[]>>()
+const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
 
 function knownHostsExecutionKey(
   connectionId?: string | null,
@@ -67,19 +68,11 @@ export async function getGlabKnownHosts(
   if (cached) {
     return cached
   }
-  const inFlight = knownHostsInFlightByExecutionContext.get(key)
-  if (inFlight) {
-    return inFlight
-  }
-  const probe = probeGlabKnownHosts(key, connectionId, localGitOptions)
-  knownHostsInFlightByExecutionContext.set(key, probe)
-  try {
-    return await probe
-  } finally {
-    if (knownHostsInFlightByExecutionContext.get(key) === probe) {
-      knownHostsInFlightByExecutionContext.delete(key)
-    }
-  }
+  // Why: only join a probe still young enough to answer, so a wedged one cannot
+  // pin every later retry for the life of the process (P1-D).
+  return runCoalescedProbe(knownHostsInFlightByExecutionContext, key, () =>
+    probeGlabKnownHosts(key, connectionId, localGitOptions)
+  )
 }
 
 async function probeGlabKnownHosts(

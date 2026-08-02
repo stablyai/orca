@@ -104,6 +104,7 @@ export class RelayDispatcher {
   private clientDetachListeners = new Set<(clientId: number) => void>()
   private disposeListeners = new Set<() => void>()
   private legacyCapacityListeners = new Set<() => void>()
+  private clientCapacityListeners = new Map<number, Set<() => void>>()
   private publicationTransactionDepth = 0
   private deferredLegacyCapacity = false
   private deferredForcedLegacyCapacity = false
@@ -131,6 +132,8 @@ export class RelayDispatcher {
     this.primaryClient.writer.close(new Error('Relay primary sink replaced'))
     this.resetClient(this.primaryClient)
     this.primaryClient.writer = this.createWriter(this.primaryClient, write, sinkOptions)
+    // Why: a frame retained against the replaced sink would otherwise wait for traffic that may never come.
+    this.notifyClientCapacity(this.primaryClient.id)
   }
 
   // Why: mark in-flight requests stale on disconnect so a late pty.spawn/fs.watch can't create unowned remote state.
@@ -187,6 +190,48 @@ export class RelayDispatcher {
   onLegacyPtyCapacity(listener: () => void): () => void {
     this.legacyCapacityListeners.add(listener)
     return () => this.legacyCapacityListeners.delete(listener)
+  }
+
+  /**
+   * Ungated per-client writer capacity, for a frame that lost control-lane admission and must retry.
+   * onLegacyPtyCapacity cannot serve that: it is gated on producer retention, so it stays silent
+   * exactly under the dual-queue pressure that rejected the frame. Registered on the dispatcher, not
+   * the writer, so a retry survives setWrite() replacing the primary sink.
+   * Returns null only when the client is gone for good. A merely closed client still counts: setWrite
+   * marks the primary closed before replacing its sink, and that replacement is exactly when a frame
+   * stranded by the old writer must be armed to retry.
+   */
+  onClientCapacity(clientId: number, listener: () => void): (() => void) | null {
+    const client = this.clients.get(clientId)
+    if (this.disposed || !client) {
+      return null
+    }
+    const listeners = this.clientCapacityListeners.get(clientId) ?? new Set<() => void>()
+    listeners.add(listener)
+    this.clientCapacityListeners.set(clientId, listeners)
+    return () => {
+      const current = this.clientCapacityListeners.get(clientId)
+      if (!current?.delete(listener) || current.size > 0) {
+        return
+      }
+      this.clientCapacityListeners.delete(clientId)
+    }
+  }
+
+  /**
+   * Whether the id still names a client. A detach notification does not always mean it stopped:
+   * invalidateClient() detaches the primary without removing it, and setWrite() revives that same id.
+   */
+  isClientAttached(clientId: number): boolean {
+    return !this.disposed && this.clients.has(clientId)
+  }
+
+  canAdmitControlFrame(clientId: number, estimatedBytes: number): boolean {
+    const client = this.clients.get(clientId)
+    if (this.disposed || !client || client.closed) {
+      return false
+    }
+    return client.writer.canEnqueueControl(estimatedBytes)
   }
 
   get legacyRetentionBelowLowWater(): boolean {
@@ -563,7 +608,10 @@ export class RelayDispatcher {
     method: string,
     params?: Record<string, unknown>,
     onSettled: (result: SinkWriteSettlement) => void = () => {},
-    options: { controlOverflow?: 'close-client' | 'reject' } = {}
+    options: {
+      controlOverflow?: 'close-client' | 'reject'
+      estimatedBytes?: number
+    } = {}
   ): boolean {
     if (this.disposed) {
       onSettled({ ok: false, error: new Error('Relay dispatcher is disposed') })
@@ -583,7 +631,7 @@ export class RelayDispatcher {
       },
       'control',
       onSettled,
-      undefined,
+      options.estimatedBytes,
       options.controlOverflow
     )
   }
@@ -727,6 +775,7 @@ export class RelayDispatcher {
       listener()
     }
     this.legacyCapacityListeners.clear()
+    this.clientCapacityListeners.clear()
     for (const listener of Array.from(this.disposeListeners)) {
       listener()
     }
@@ -1187,8 +1236,27 @@ export class RelayDispatcher {
     const writer = new DispatcherClientWriter(write, sinkOptions, (error) => {
       this.closeClient(client, error, client !== this.primaryClient)
     })
-    writer.onCapacity(() => this.notifyLegacyCapacityIfLow())
+    writer.onCapacity(() => {
+      this.notifyLegacyCapacityIfLow()
+      this.notifyClientCapacity(client.id)
+    })
     return writer
+  }
+
+  private notifyClientCapacity(clientId: number): void {
+    const listeners = this.clientCapacityListeners.get(clientId)
+    if (!listeners?.size) {
+      return
+    }
+    for (const listener of Array.from(listeners)) {
+      try {
+        listener()
+      } catch (err) {
+        process.stderr.write(
+          `[relay] Client capacity listener failed: ${err instanceof Error ? err.message : String(err)}\n`
+        )
+      }
+    }
   }
 
   private closeClient(client: RelayClient, error: Error, remove: boolean): void {
@@ -1203,6 +1271,12 @@ export class RelayDispatcher {
       this.clients.delete(client.id)
     }
     this.notifyClientDetached(client.id)
+    if (remove) {
+      // Only for a client that is gone for good: an invalidated primary is revived by setWrite, and a
+      // frame stranded by its retired sink must stay armed to retry. After the detach fan-out, so a
+      // listener that unsubscribes on detach is not left holding a stale slot.
+      this.clientCapacityListeners.delete(client.id)
+    }
     this.notifyLegacyCapacity(true)
     if (!/^Relay (?:primary client invalidated|client detached)$/.test(error.message)) {
       process.stderr.write(`[relay] Client write closed: ${error.message}\n`)

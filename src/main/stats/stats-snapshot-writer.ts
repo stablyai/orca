@@ -65,7 +65,10 @@ export class StatsSnapshotWriter {
     return this.pendingWrite ?? Promise.resolve()
   }
 
-  private preparePayload(finalPath: string, serialize: () => string): {
+  private preparePayload(
+    finalPath: string,
+    serialize: () => string
+  ): {
     tmpFile: string
     json: string
     generation: number

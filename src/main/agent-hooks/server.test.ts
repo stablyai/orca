@@ -56,6 +56,7 @@ const GOOD_PANE = makePaneKey('tab-good', LEAF_2)
 const OLD_PANE = makePaneKey('tab-old', LEAF_3)
 const FRESH_PANE = makePaneKey('tab-fresh', LEAF_4)
 const TAB_A_PANE = makePaneKey('tab-A', LEAF_5)
+const RUNNING_SHELL = { id: 'shell-1', type: 'shell', status: 'running' }
 
 type Body = {
   paneKey: string
@@ -233,6 +234,46 @@ describe('AgentHookServer listener replay', () => {
     expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
   })
 
+  it('does not carry Claude background work across connection cleanup', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          claudeRunningNonAgentTask: true,
+          payload: { state: 'working', prompt: 'old host', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      server.clearStatusEntriesForConnection('conn-1')
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          payload: { state: 'working', prompt: 'new host', agentType: 'claude' }
+        },
+        'conn-2'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+      vi.setSystemTime(1_500)
+
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'new host',
+          baselineAgentType: 'claude',
+          intent: 'plain-escape'
+        })
+      ).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('retains root Codex identity when relay child events omit it', () => {
     const server = new AgentHookServer()
     const providerSession = { key: 'session_id' as const, id: 'root-session' }
@@ -395,6 +436,232 @@ describe('AgentHookServer listener replay', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('does not infer an interrupt while Claude reports a background shell', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          claudeRunningNonAgentTask: true,
+          payload: { state: 'working', prompt: 'run in background', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      let baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'plain-escape'
+        })
+      ).toBe(false)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+
+      vi.setSystemTime(2_000)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          claudeRunningNonAgentTask: false,
+          payload: { state: 'working', prompt: 'run in background', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(2_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'plain-escape'
+        })
+      ).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('blocks local HTTP interrupt inference for provider-owned work without exposing transport metadata', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+
+      await expect(
+        postHook({ hook_event_name: 'UserPromptSubmit', prompt: 'run in background' })
+      ).resolves.toMatchObject({ status: 204 })
+      await expect(
+        postHook({ hook_event_name: 'Stop', background_tasks: [RUNNING_SHELL] })
+      ).resolves.toMatchObject({ status: 204 })
+      const baseline = server.getStatusSnapshot()[0]
+
+      expect(baseline).not.toHaveProperty('claudeRunningNonAgentTask')
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'plain-escape'
+        })
+      ).toBe(false)
+
+      await expect(
+        postHook({
+          hook_event_name: 'Stop',
+          background_tasks: [],
+          session_crons: [{ id: 'cron-1' }]
+        })
+      ).resolves.toMatchObject({ status: 204 })
+      const cronBaseline = server.getStatusSnapshot()[0]
+      expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: cronBaseline.receivedAt,
+          baselineStateStartedAt: cronBaseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
+        })
+      ).toBe(false)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('uses replayed Claude background metadata only before a live observation', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          isReplay: true,
+          claudeRunningNonAgentTask: true,
+          payload: { state: 'working', prompt: 'stale replay', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'stale replay',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
+        })
+      ).toBe(false)
+
+      vi.setSystemTime(1_500)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          claudeRunningNonAgentTask: false,
+          payload: { state: 'working', prompt: 'stale replay', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      vi.setSystemTime(2_000)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          isReplay: true,
+          claudeRunningNonAgentTask: true,
+          payload: { state: 'working', prompt: 'stale replay', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      const liveBaseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(2_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: liveBaseline.receivedAt,
+          baselineStateStartedAt: liveBaseline.stateStartedAt,
+          baselinePrompt: 'stale replay',
+          baselineAgentType: 'claude',
+          intent: 'ctrl-c'
+        })
+      ).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not apply Claude background metadata from a rejected remote status', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'PermissionRequest',
+        claudeRunningNonAgentTask: true,
+        payload: {
+          state: 'waiting',
+          prompt: 'approve shell',
+          agentType: 'claude',
+          toolName: 'Bash'
+        }
+      },
+      'conn-1'
+    )
+    const waiting = server.getStatusSnapshot()[0]
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'PreToolUse',
+        claudeRunningNonAgentTask: false,
+        payload: {
+          state: 'working',
+          prompt: 'approve shell',
+          agentType: 'claude',
+          toolName: 'OtherTool'
+        }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]).toEqual(waiting)
+    expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
   })
 
   it('carries idle subagent rows through an inferred interrupt', () => {
@@ -2734,6 +3001,48 @@ describe('AgentHookServer listener replay', () => {
           })
         })
       )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not apply Claude background evidence from a rejected local status', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postClaudeHook = async (payload: Record<string, unknown>): Promise<void> => {
+        const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload))
+        })
+        expect(response.status).toBe(204)
+      }
+
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        prompt: 'approve shell',
+        tool_name: 'Bash',
+        background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }],
+        session_crons: [{ id: 'cron-1', status: 'running' }]
+      })
+      const waiting = server.getStatusSnapshot()[0]
+
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        prompt: 'approve shell',
+        tool_name: 'OtherTool',
+        background_tasks: [],
+        session_crons: []
+      })
+
+      expect(server.getStatusSnapshot()[0]).toEqual(waiting)
+      expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
+      expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
     } finally {
       server.stop()
     }
@@ -6307,6 +6616,13 @@ describe('Last-status persistence', () => {
           { launchToken: 'launch-bearer-must-not-persist' }
         )
       )
+      await postHookEvent(
+        server,
+        buildBody(
+          { hook_event_name: 'Stop', background_tasks: [RUNNING_SHELL] },
+          { launchToken: 'launch-bearer-must-not-persist' }
+        )
+      )
       // Synchronous flush via stop() captures the trailing-debounced write.
       server.flushStatusPersistSync()
       expect(existsSync(lastStatusPath())).toBe(true)
@@ -6324,6 +6640,8 @@ describe('Last-status persistence', () => {
       expect(file.entries[PANE].launchTokenHash).toBe(
         createHash('sha256').update('launch-bearer-must-not-persist').digest('hex')
       )
+      expect(file.entries[PANE].claudeRunningNonAgentTask).toBeUndefined()
+      expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('claudeRunningNonAgentTask')
       expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('launch-bearer-must-not-persist')
     } finally {
       server.stop()

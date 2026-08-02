@@ -6250,16 +6250,20 @@ export function connectPanePty(
       const renderRefreshDecision = foregroundOutput
         ? shouldForceForegroundRenderRefresh(data)
         : { refresh: false, inPlaceRewrite: false, recoverWebglAtlasAfterParse: false }
-      const recoverHiddenWebglAtlasAfterParse =
-        !foregroundOutput && hiddenOutputNeedsAtlasRecoveryAfterParse(data)
+      if (!foregroundOutput) {
+        // Advance hidden rewrite state; reveal owns atlas recovery.
+        void hiddenOutputNeedsAtlasRecoveryAfterParse(data)
+      }
       const recoverWebglAtlasAfterParse =
-        renderRefreshDecision.recoverWebglAtlasAfterParse || recoverHiddenWebglAtlasAfterParse
+        foreground && renderRefreshDecision.recoverWebglAtlasAfterParse
       // Why: atlas recovery must repaint from the parsed xterm buffer, not a pre-write snapshot a late TUI redraw can stale.
-      const onParsedAtlasRecovery = recoverWebglAtlasAfterParse
-        ? scheduleTerminalWebglAtlasRecovery
-        : renderRefreshDecision.inPlaceRewrite
-          ? alternateScreenRewriteAtlasRecoveryOnParsed()
-          : undefined
+      const onParsedAtlasRecovery = foreground
+        ? recoverWebglAtlasAfterParse
+          ? scheduleTerminalWebglAtlasRecovery
+          : renderRefreshDecision.inPlaceRewrite
+            ? alternateScreenRewriteAtlasRecoveryOnParsed()
+            : undefined
+        : undefined
       const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
       // Why: Claude Code's in-place prompt redraws on Windows ConPTY can paint one frame late; a follow-up repaint fixes the column desync without a resize.
       const nativeWindowsInPlaceRewriteFollowup = nativeWindowsRewriteNeedsFollowupRenderRefresh({

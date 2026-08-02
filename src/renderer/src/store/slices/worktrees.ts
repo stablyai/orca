@@ -47,6 +47,7 @@ import {
   callRuntimeRpc,
   assertRuntimeEnvironmentCapability,
   getActiveRuntimeTarget,
+  hasRuntimeRpcErrorCode,
   isRuntimeScopeForbiddenError,
   RuntimeRpcCallError
 } from '../../runtime/runtime-rpc-client'
@@ -87,6 +88,7 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   resolveWorktreeOperationRoute,
+  resolveWorktreeOperationRouteResult,
   settingsForWorktreeOperationRoute
 } from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
@@ -971,46 +973,11 @@ function getFolderWorkspaceMetaUpdates(
 }
 
 function isRuntimeSelectorNotFoundError(error: unknown): boolean {
-  if (
-    error &&
-    typeof error === 'object' &&
-    'cause' in error &&
-    isRuntimeSelectorNotFoundError((error as { cause?: unknown }).cause)
-  ) {
-    return true
-  }
-  const code =
-    error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    typeof (error as { code: unknown }).code === 'string'
-      ? (error as { code: string }).code
-      : null
-  const responseCode =
-    error &&
-    typeof error === 'object' &&
-    'response' in error &&
-    typeof (error as { response?: { error?: { code?: unknown } } }).response?.error?.code ===
-      'string'
-      ? (error as { response: { error: { code: string } } }).response.error.code
-      : null
-  const responseMessage =
-    error &&
-    typeof error === 'object' &&
-    'response' in error &&
-    typeof (error as { response?: { error?: { message?: unknown } } }).response?.error?.message ===
-      'string'
-      ? (error as { response: { error: { message: string } } }).response.error.message
-      : null
-  const message = error instanceof Error ? error.message : String(error)
-  return (
-    message === 'selector_not_found' ||
-    message.includes('selector_not_found') ||
-    code === 'selector_not_found' ||
-    responseCode === 'selector_not_found' ||
-    responseMessage === 'selector_not_found' ||
-    String(error).includes('selector_not_found')
-  )
+  return hasRuntimeRpcErrorCode(error, 'selector_not_found')
+}
+
+function isRuntimeRepoNotFoundError(error: unknown): boolean {
+  return hasRuntimeRpcErrorCode(error, 'repo_not_found')
 }
 
 function replaceWorktreeInRepoLists(
@@ -4060,22 +4027,51 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ? { ...get().settings, activeRuntimeEnvironmentId: null }
             : { activeRuntimeEnvironmentId: null }
       )
-      const removalResult = await (forgetLocalOnly
-        ? window.api.worktrees.forgetLocal({ worktreeId, hostId })
-        : target.kind === 'local'
-          ? (removalGenerationGuard?.assertCurrent(),
-            window.api.worktrees.remove({ worktreeId, hostId, force, skipArchive }))
-          : (removalGenerationGuard?.assertCurrent(),
-            callRuntimeRpc<RemoveWorktreeResult>(
-              target,
-              'worktree.rm',
-              {
-                worktree: toRuntimeWorktreeSelector(worktreeId),
-                force,
-                runHooks: !skipArchive
-              },
-              { timeoutMs: 60_000 }
-            )))
+      let removalResult: RemoveWorktreeResult
+      try {
+        removalResult = await (forgetLocalOnly
+          ? window.api.worktrees.forgetLocal({ worktreeId, hostId })
+          : target.kind === 'local'
+            ? (removalGenerationGuard?.assertCurrent(),
+              window.api.worktrees.remove({ worktreeId, hostId, force, skipArchive }))
+            : (removalGenerationGuard?.assertCurrent(),
+              callRuntimeRpc<RemoveWorktreeResult>(
+                target,
+                'worktree.rm',
+                {
+                  worktree: toRuntimeWorktreeSelector(worktreeId),
+                  force,
+                  runHooks: !skipArchive
+                },
+                { timeoutMs: 60_000 }
+              )))
+      } catch (error) {
+        if (
+          !forgetLocalOnly &&
+          target.kind !== 'local' &&
+          (isRuntimeRepoNotFoundError(error) || isRuntimeSelectorNotFoundError(error))
+        ) {
+          // Missing means stale mirror; ambiguous or changed ownership must fail closed.
+          const currentResolution = resolveWorktreeOperationRouteResult(get(), worktreeId)
+          if (currentResolution.kind === 'ambiguous') {
+            throw error
+          }
+          if (currentResolution.kind === 'resolved') {
+            removalGenerationGuard?.assertCurrent()
+          }
+          try {
+            removalResult = await window.api.worktrees.forgetLocal({ worktreeId, hostId })
+          } catch (fallbackError) {
+            // Preserve the remote verdict as fallback failure context.
+            throw new Error(
+              fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+              { cause: error }
+            )
+          }
+        } else {
+          throw error
+        }
+      }
 
       // Why: invalidate stale probes once deletion is authoritative, so an old toast can't mutate a same-path replacement.
       forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
@@ -4096,7 +4092,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // Why: renderer state follows the successful backend result, so blocked dirty deletes keep their terminals intact.
       // Why browsers first: unregister Chromium guests before other teardown can intercept them (avoids a browser-state race).
       await get().shutdownWorktreeBrowsers(worktreeId)
-      await get().shutdownWorktreeTerminals(worktreeId)
+      await get().shutdownWorktreeTerminals(worktreeId, {
+        shutdownReason: 'remove-worktree',
+        // The backend removal above already killed the workspace's PTYs.
+        backendOwnsPtyTeardown: true
+      })
       // Why: dispose the SSH relay AFTER terminal teardown so a still-mounted pane can't hit a gone relay and toast "SSH not active".
       const destroyedRuntimeSshTargetIds = await cleanupEphemeralVmRuntimesForDeleted({
         workspaceIds: [worktreeId]

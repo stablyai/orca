@@ -154,7 +154,9 @@ function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
     removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
-    markSshRemotePtyLeases: vi.fn()
+    markSshRemotePtyLeases: vi.fn(),
+    markSshRemotePtyLeasesAsync: vi.fn(),
+    markSshRemotePtyLeasesAttachedAsync: vi.fn()
   } as unknown as Store
   const portForwardManager = {
     removeAllForwards: vi.fn().mockResolvedValue(undefined)
@@ -481,6 +483,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         toolUseId: 'toolu-1',
         toolAgentId: 'agent-subagent-a',
         toolAgentType: 'Review',
+        claudeRunningNonAgentTask: true,
         providerSessionOnly: true,
         providerSession: {
           key: 'session_id',
@@ -503,6 +506,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
           toolUseId: 'toolu-1',
           toolAgentId: 'agent-subagent-a',
           toolAgentType: 'Review',
+          claudeRunningNonAgentTask: true,
           providerSessionOnly: true,
           providerSession: {
             key: 'session_id',

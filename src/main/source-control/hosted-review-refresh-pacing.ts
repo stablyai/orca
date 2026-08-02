@@ -29,6 +29,40 @@ export const ACTIVE_CLAIM_TTL_MS = NO_REVIEW_REFRESH_INTERVAL_MS
 export const LOOKUP_BACKOFF_BASE_MS = 60_000
 export const LOOKUP_BACKOFF_MAX_MS = 15 * 60_000
 
+/**
+ * Hard deadline for a single lookup. The steps underneath are individually
+ * bounded (30s `gh` exec, HTTP timeouts) but they chain, so this is a hang
+ * detector rather than a latency budget: a lookup that outlives it is wedged on
+ * something that has no timeout of its own, not merely slow.
+ */
+export const HOSTED_REVIEW_LOOKUP_DEADLINE_MS = 2 * 60_000
+
+/**
+ * Single bound for every branch-keyed map in this subsystem — cached answers,
+ * scope generations and failure backoff. One knob, so tuning one map cannot
+ * silently leave the others behind.
+ */
+export const MAX_BRANCH_MAP_ENTRIES = 500
+
+/**
+ * Why: a memory backstop, not a concurrency limit. Evicting a live lookup costs
+ * a duplicate provider call — the quota problem this cache exists to prevent —
+ * so the cap must stay far above the branch count any client polls at once.
+ */
+export const MAX_INFLIGHT_LOOKUPS = MAX_BRANCH_MAP_ENTRIES
+
+/**
+ * A lookup cannot be cancelled, so one that never settles is stranded for the
+ * life of the process. Two per branch — counted from the moment a lookup starts,
+ * not from the deadline — leaves room for the retry that proves a host
+ * recovered; past that the branch is wedged, not slow, and asking again only
+ * strands another provider call.
+ */
+export const MAX_UNSETTLED_LOOKUPS_PER_KEY = 2
+
+/** Process-wide backstop for the same leak when many branches wedge at once. */
+export const MAX_DETACHED_LOOKUPS = 64
+
 // Why: capped so a long-lived failure settles at LOOKUP_BACKOFF_MAX_MS rather
 // than overflowing the exponent.
 const MAX_BACKOFF_DOUBLINGS = 4

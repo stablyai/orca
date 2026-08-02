@@ -275,6 +275,15 @@ function createFailingSystemCommandChannel(
   return channel
 }
 
+// A probe that never answers — the shape a FIDO2/system-transport host takes when the network drops.
+function createHangingSystemCommandChannel(): ReturnType<typeof createSystemCommandChannel> {
+  const channel = new EventEmitter() as ReturnType<typeof createSystemCommandChannel>
+  channel.stdin = { end: vi.fn(), write: vi.fn() }
+  channel.stderr = new EventEmitter()
+  channel.close = vi.fn()
+  return channel
+}
+
 function createPendingSystemSshProcess() {
   const stdout = new EventEmitter()
   return {
@@ -650,6 +659,92 @@ describe('SshConnection', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('keeps a system-transport target on the ladder after a probe timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+      const statuses: string[] = []
+      const conn = new SshConnection(
+        createTarget(),
+        createCallbacks({
+          onStateChange: vi.fn((_id, state) => statuses.push(state.status))
+        })
+      )
+      await conn.connect()
+      expect(conn.usesSystemSshTransport()).toBe(true)
+
+      // The probe times out with OpenSSH prose, not an errno the transient code table matches.
+      spawnSystemSshCommandMock.mockImplementation(() => createHangingSystemCommandChannel())
+      statuses.length = 0
+      const reconnected = conn.reconnect()
+      await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS)
+      await reconnected
+
+      // Shipped published 'error' here, stranding FIDO2 hosts with no path back short of a restart.
+      expect(statuses).not.toContain('error')
+      expect(conn.getState().status).toBe('reconnecting')
+
+      const probesBefore = spawnSystemSshCommandMock.mock.calls.length
+      await vi.advanceTimersByTimeAsync(RECONNECT_BACKOFF_MS[0])
+      expect(spawnSystemSshCommandMock.mock.calls.length).toBeGreaterThan(probesBefore)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('publishes no cancellation error when a connect supersedes a parked ladder attempt', async () => {
+    const published: { status: string; error?: string }[] = []
+    let releaseParked: (() => void) | null = null
+    vi.mocked(resolveWithSshG).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseParked = () => resolve(null)
+        })
+    )
+    const conn = new SshConnection(
+      createTarget(),
+      createCallbacks({
+        onStateChange: vi.fn((_id, state) => published.push({ status: state.status, ...state }))
+      })
+    )
+
+    // The ladder attempt parks inside ssh -G while the user presses Connect.
+    const parked = conn.reconnect()
+    await conn.connect()
+    releaseParked!()
+    await parked
+
+    expect(conn.getState().status).toBe('connected')
+    // Shipped published error:'SSH connection attempt was cancelled' over a live connection.
+    expect(published.filter((entry) => entry.status === 'error')).toEqual([])
+    expect(published.map((entry) => entry.error).filter(Boolean)).toEqual([])
+  })
+
+  it('rejects a superseded connect without publishing a permanent error', async () => {
+    const published: string[] = []
+    let releaseParked: (() => void) | null = null
+    vi.mocked(resolveWithSshG).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseParked = () => resolve(null)
+        })
+    )
+    const conn = new SshConnection(
+      createTarget(),
+      createCallbacks({
+        onStateChange: vi.fn((_id, state) => published.push(state.status))
+      })
+    )
+
+    const superseded = conn.connect()
+    await conn.connect()
+    releaseParked!()
+
+    await expect(superseded).rejects.toThrow('SSH connection attempt was cancelled')
+    expect(conn.getState().status).toBe('connected')
+    expect(published).not.toContain('error')
   })
 
   it('transitions through connecting → connected states', async () => {
@@ -1686,6 +1781,94 @@ describe('SshConnection', () => {
     expect(conn.canRunConcurrentExecCommands()).toBe(false)
   })
 
+  it('retries a generic system SSH probe timeout without ControlMaster', async () => {
+    vi.useFakeTimers()
+    try {
+      getOrcaControlSocketPathMock.mockImplementation(
+        (_target: SshTarget, options?: { disableControlMaster?: boolean }) =>
+          options?.disableControlMaster ? null : '/tmp/orca-ssh-501/stale-socket'
+      )
+      spawnSystemSshCommandMock
+        .mockImplementationOnce(() => createHangingSystemCommandChannel())
+        .mockImplementation(() => createSystemCommandChannel())
+      vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+      const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+      const settled = conn.connect()
+      await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS)
+
+      await expect(settled).resolves.toBeUndefined()
+      expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(2)
+      expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+      expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        'echo ORCA-SYSTEM-SSH-OK',
+        expect.objectContaining({ disableControlMaster: true })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips a second probe for a definite host failure', async () => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, 'ssh: connect to host box port 22: No route to host')
+    )
+    vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await expect(conn.connect()).rejects.toThrow('No route to host')
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
+    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+  })
+
+  it.each([
+    'Permission denied (publickey,password).',
+    'Encrypted private key detected, but no passphrase given'
+  ])('skips a second probe for terminal credential failures: %s', async (stderr) => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, stderr)
+    )
+    vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await expect(conn.connect()).rejects.toThrow(stderr)
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
+    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+  })
+
+  it('retries a generic direct system SSH timeout without ControlMaster', async () => {
+    vi.useFakeTimers()
+    try {
+      getOrcaControlSocketPathMock.mockImplementation(
+        (_target: SshTarget, options?: { disableControlMaster?: boolean }) =>
+          options?.disableControlMaster ? null : '/tmp/orca-ssh-501/stale-socket'
+      )
+      spawnSystemSshMock
+        .mockImplementationOnce(() => createPendingSystemSshProcess())
+        .mockImplementation(() => createSystemSshProcess())
+      vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+      const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+      const settled = conn.connectViaSystemSsh()
+      await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS)
+
+      await expect(settled).resolves.toBeDefined()
+      expect(spawnSystemSshMock).toHaveBeenCalledTimes(2)
+      expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+      expect(spawnSystemSshMock).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        expect.objectContaining({ disableControlMaster: true })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses system SSH transport for ProxyCommand targets before ssh2 auth', async () => {
     const conn = new SshConnection(
       createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
@@ -1985,6 +2168,19 @@ describe('SshConnection', () => {
     expect(spawnSystemSshCommandMock).not.toHaveBeenCalled()
   })
 
+  it('publishes auth-failed when OpenSSH denies reconnect credentials', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+    await conn.connect()
+
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, 'Permission denied (publickey,password).')
+    )
+    await conn.reconnect()
+
+    expect(conn.getState().status).toBe('auth-failed')
+  })
+
   it('clears system SSH transport when the GSSAPI-first probe throws synchronously', async () => {
     // Why: no system ssh binary makes spawnSystemSshCommand throw before the
     // probe's try/catch, so the ssh2 fall-through must still reset the flag —
@@ -2273,6 +2469,22 @@ describe('SshConnection', () => {
       }
     )
     expect(conn.canRunConcurrentExecCommands()).toBe(false)
+  })
+
+  it.each([
+    'Permission denied (publickey,password).',
+    'Encrypted private key detected, but no passphrase given'
+  ])('skips a direct retry for terminal credential failures: %s', async (message) => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    spawnSystemSshMock.mockImplementation(() => {
+      throw new Error(message)
+    })
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await expect(conn.connectViaSystemSsh()).rejects.toThrow(message)
+    expect(spawnSystemSshMock).toHaveBeenCalledTimes(1)
+    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
   })
 
   it('kills delayed direct system SSH startup on disconnect and ignores late stdout', async () => {

@@ -7477,6 +7477,129 @@
       "demotionRule": "Disable the probe if it exceeds its per-reveal budget or produces false-positive anomaly noise."
     },
     {
+      "id": "terminal-render.atlas-recovery-fanout",
+      "title": "Terminal atlas recovery stays bounded to visible renderers",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit-and-electron",
+      "surfaces": [
+        "WebGL rendering",
+        "document visibility",
+        "hidden terminal output",
+        "paired terminal traffic"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "A deterministic renderer contract models one visible manager plus 64 mounted hidden managers and hidden synchronized/TUI output. A macOS Electron run verifies that a document visibility cycle preserves real WebGL atlases and terminal pixels. Production v1.4.163 evidence linked the same 49-manager fanout to paired traffic, but the candidate has not been rerun against an isolated live paired server.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7054",
+        "https://github.com/stablyai/orca/pull/7604"
+      ],
+      "invariant": "Ordinary document visibility transitions and hidden terminal output must not clear the shared WebGL glyph atlas. Heavy reset-and-refresh recovery may touch only managers with visible terminal surfaces; hidden managers recover when revealed. Genuine OS resume remains a heavy recovery trigger.",
+      "oracle": "Dispatch a visible document visibilitychange and require atlas-preserving wake recovery; register one visible manager and 64 hidden managers and require exactly one reset and one refresh; parse hidden synchronized and high-confidence TUI output and require zero global atlas-recovery schedules. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+        "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+          "assertions": ["preserves the glyph atlas when a fullscreen Space becomes visible"]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts",
+          "assertions": [
+            "preserves WebGL texture atlases when the active terminal document becomes visible"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
+          "assertions": ["bounds atlas recovery to visible managers"]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "defers hidden synchronized-output atlas recovery until reveal",
+            "defers hidden high-confidence TUI redraw recovery until reveal",
+            "advances hidden rewrite state without scheduling atlas recovery"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts",
+          "assertions": [
+            "preserves the WebGL atlas and keeps terminal text painted after document visibility resumes"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "result": "passed",
+          "durationSeconds": 26,
+          "summary": "All 577 focused renderer contracts passed, including atlas-preserving visibility, visible-only recovery fanout, and hidden-output rewrite-state coverage."
+        },
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 18,
+          "summary": "The changed-spec CI topology retained both real WebGL terminal panes with zero atlas clears after a deterministic document visibility cycle."
+        },
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 23,
+          "summary": "Two real WebGL terminal panes retained painted glyphs with zero atlas clears after a deterministic document visibility cycle. BrowserWindow.hide did not change document visibility in the harness, so the test used its explicit visibility-event fallback."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "focused renderer contracts plus one prebuilt Electron visibility test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The focused unit oracle and one local Electron run passed; CI soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "With the fix disabled, the byte-identical unit oracle observed clearGlyphAtlases=true, reset/refreshed all 65 managers, and scheduled hidden synchronized/TUI recovery one to three times. Restoring the fix made every assertion pass."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "A recovery with one visible and 64 hidden managers performs one reset and one refresh instead of 65 of each. Hidden synchronized/TUI output schedules zero global recovery work; no polling, cooldown, provider call, or parking change is added."
+      },
+      "promotionCriteria": [
+        "Accumulate stable macOS Electron runs with real BrowserWindow visibility transitions.",
+        "Run an isolated headed paired-server terminal flood and verify bounded renderer CPU and atlas diagnostics.",
+        "Add Linux and Windows WebGL visibility evidence before claiming cross-platform visual coverage."
+      ],
+      "knownGaps": [
+        "The Electron harness used a deterministic visibility-event fallback because BrowserWindow.hide did not change document.visibilityState.",
+        "No isolated live paired-server candidate run is recorded; remote-runtime coverage is a provider-agnostic renderer contract plus production incident evidence.",
+        "The gate counts recovery fanout and pixel retention but does not impose an end-to-end renderer frame-latency threshold."
+      ],
+      "demotionRule": "Demote if hidden managers re-enter reset/refresh recovery, ordinary visibility clears the atlas, real WebGL pixels regress, or the focused Electron test cannot remain deterministic."
+    },
+    {
       "id": "terminal-render.atlas-identity-invalidation",
       "title": "A WebGL atlas identity change rebuilds cached glyph vertices",
       "maturity": "experimental",

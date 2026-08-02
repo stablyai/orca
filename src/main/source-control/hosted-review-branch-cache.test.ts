@@ -5,8 +5,57 @@ import {
   invalidateHostedReviewBranchCache,
   withHostedReviewBranchCache
 } from './hosted-review-branch-cache'
+import {
+  HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
+  LOOKUP_BACKOFF_MAX_MS,
+  MAX_BRANCH_MAP_ENTRIES,
+  MAX_INFLIGHT_LOOKUPS,
+  MAX_UNSETTLED_LOOKUPS_PER_KEY
+} from './hosted-review-refresh-pacing'
 
 const identity = { repoPath: '/repo', connectionId: null, branch: 'feature/x' }
+const START = 1_000_000
+
+/** A lookup that never settles — the wedged provider this file's deadline exists for. */
+function stuckLookup() {
+  let resolve: (review: HostedReviewInfo | null) => void = () => {}
+  let reject: (error: unknown) => void = () => {}
+  const lookup = vi.fn(
+    () =>
+      new Promise<HostedReviewInfo | null>((settle, fail) => {
+        resolve = settle
+        reject = fail
+      })
+  )
+  return { lookup, resolve: (review) => resolve(review), reject: (error) => reject(error) }
+}
+
+/**
+ * Runs `evictedLookup` for the shared identity, drops its in-flight record via
+ * the size cap alone — no deadline, so it is a straggler that never timed out —
+ * and leaves a fresh lookup owning the key.
+ */
+function evictInflightRecord(evictedLookup: () => Promise<HostedReviewInfo | null>) {
+  const swallow = (promise: Promise<unknown>): void => {
+    void promise.catch(() => {})
+  }
+  swallow(withHostedReviewBranchCache(identity, { headOid: null }, evictedLookup))
+
+  const filler = stuckLookup()
+  for (let index = 0; index < MAX_INFLIGHT_LOOKUPS; index += 1) {
+    swallow(
+      withHostedReviewBranchCache(
+        { ...identity, branch: `feature/${index}` },
+        { headOid: null },
+        filler.lookup
+      )
+    )
+  }
+
+  const successor = stuckLookup()
+  const request = withHostedReviewBranchCache(identity, { headOid: null }, successor.lookup)
+  return { request, resolve: successor.resolve, reject: successor.reject }
+}
 
 const openReview: HostedReviewInfo = {
   provider: 'github',
@@ -369,6 +418,425 @@ describe('hosted review branch cache (#11532)', () => {
       vi.setSystemTime(1_000_000 + 15 * 60_000 + 1 + 60_001)
       await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
       expect(lookup).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('in-flight deadline (P1-D)', () => {
+    it('releases a stuck lookup at the deadline instead of pinning the branch', async () => {
+      const { lookup } = stuckLookup()
+
+      const request = withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      const rejects = expect(request).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await rejects
+
+      // The dead lookup is no longer joinable, so the branch can recover in
+      // session rather than staying pinned for the life of the process.
+      await expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      ).rejects.toThrow(/backing off/)
+      expect(lookup).toHaveBeenCalledTimes(1)
+    })
+
+    it('lets a later poll succeed after a lookup times out', async () => {
+      const { lookup } = stuckLookup()
+
+      const rejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await rejects
+
+      await vi.advanceTimersByTimeAsync(60_001)
+      const recovered = vi.fn(async () => openReview)
+      await expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, recovered)
+      ).resolves.toEqual(openReview)
+      expect(recovered).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps the last known review when a refresh times out', async () => {
+      await withHostedReviewBranchCache(identity, { headOid: null }, async () => openReview)
+      vi.setSystemTime(START + 60_001)
+
+      const { lookup } = stuckLookup()
+      const request = withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+
+      // A wedged refresh must not blank the card any more than a failing one does.
+      await expect(request).resolves.toEqual(openReview)
+    })
+
+    it('adopts a lookup that lands after its deadline', async () => {
+      const { lookup, resolve } = stuckLookup()
+
+      const rejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await rejects
+
+      resolve(openReview)
+      await vi.advanceTimersByTimeAsync(0)
+
+      // The detached call still cost the quota, so its answer is worth keeping:
+      // a slow-but-alive host converges instead of failing on every poll.
+      const next = vi.fn(async () => null)
+      await expect(withHostedReviewBranchCache(identity, { headOid: null }, next)).resolves.toEqual(
+        openReview
+      )
+      expect(next).not.toHaveBeenCalled()
+    })
+
+    it('keeps escalating when a lookup only ever answers past its deadline', async () => {
+      const first = stuckLookup()
+      const firstRejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, first.lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await firstRejects
+
+      // A second timeout doubles the window to 120s, so the backoff outlives the
+      // found-review TTL — that is what makes the escalation observable.
+      await vi.advanceTimersByTimeAsync(60_001)
+      const second = stuckLookup()
+      const secondRejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, second.lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await secondRejects
+
+      second.resolve(openReview)
+      await vi.advanceTimersByTimeAsync(0)
+
+      // The answer is still adopted — the call cost the quota either way — but a
+      // host that only ever answers after the deadline is not healthy, so it must
+      // not restart its escalation and be re-asked at the base window forever.
+      await vi.advanceTimersByTimeAsync(60_001)
+      const recovered = vi.fn(async () => mergedReview)
+      await expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, recovered)
+      ).resolves.toEqual(openReview)
+      expect(recovered).not.toHaveBeenCalled()
+    })
+
+    it('does not let a timed-out null wipe the open review it was refreshing', async () => {
+      await withHostedReviewBranchCache(identity, { headOid: null }, async () => openReview)
+      await vi.advanceTimersByTimeAsync(60_001)
+
+      const stale = stuckLookup()
+      const request = withHostedReviewBranchCache(identity, { headOid: null }, stale.lookup)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await expect(request).resolves.toEqual(openReview)
+
+      stale.resolve(null)
+      await vi.advanceTimersByTimeAsync(0)
+
+      // The refresh never outranked the answer its own callers were served, so a
+      // null from a wedged host must not blank the card for a no-review interval.
+      const next = vi.fn(async () => openReview)
+      await expect(withHostedReviewBranchCache(identity, { headOid: null }, next)).resolves.toEqual(
+        openReview
+      )
+      expect(next).not.toHaveBeenCalled()
+    })
+
+    it('does not let a timed-out null short-circuit the lookup replacing it', async () => {
+      const stale = stuckLookup()
+      const rejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, stale.lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await rejects
+
+      await vi.advanceTimersByTimeAsync(60_001)
+      const replacement = stuckLookup()
+      const pending = withHostedReviewBranchCache(identity, { headOid: null }, replacement.lookup)
+
+      stale.resolve(null)
+      await vi.advanceTimersByTimeAsync(0)
+
+      // A stored null reads as a fresh "no review" for the whole no-review
+      // interval, so it would answer callers ahead of the running lookup.
+      const joiner = vi.fn(async () => null)
+      const joined = withHostedReviewBranchCache(identity, { headOid: null }, joiner)
+
+      replacement.resolve(openReview)
+      await expect(pending).resolves.toEqual(openReview)
+      await expect(joined).resolves.toEqual(openReview)
+      expect(joiner).not.toHaveBeenCalled()
+    })
+
+    it('lets a newer straggler supersede an older one that landed first', async () => {
+      const first = stuckLookup()
+      const firstRejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, first.lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await firstRejects
+
+      await vi.advanceTimersByTimeAsync(60_001)
+      const second = stuckLookup()
+      const secondRejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, second.lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await secondRejects
+
+      // The older attempt answers first, so landing order says nothing about which
+      // answer is current — only which lookup started later does.
+      first.resolve(null)
+      await vi.advanceTimersByTimeAsync(0)
+      second.resolve(openReview)
+      await vi.advanceTimersByTimeAsync(0)
+
+      const next = vi.fn(async () => null)
+      await expect(withHostedReviewBranchCache(identity, { headOid: null }, next)).resolves.toEqual(
+        openReview
+      )
+      expect(next).not.toHaveBeenCalled()
+    })
+
+    it('does not let an older straggler overwrite a newer one that landed first', async () => {
+      const first = stuckLookup()
+      const firstRejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, first.lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await firstRejects
+
+      await vi.advanceTimersByTimeAsync(60_001)
+      const second = stuckLookup()
+      const secondRejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, second.lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await secondRejects
+
+      // Both are detached, so the one that stores last is whichever host unwedged
+      // last — the answer that has to survive is the one asked most recently.
+      second.resolve(openReview)
+      await vi.advanceTimersByTimeAsync(0)
+      first.resolve(null)
+      await vi.advanceTimersByTimeAsync(0)
+
+      const next = vi.fn(async () => null)
+      await expect(withHostedReviewBranchCache(identity, { headOid: null }, next)).resolves.toEqual(
+        openReview
+      )
+      expect(next).not.toHaveBeenCalled()
+    })
+
+    it('does not let a straggler overwrite an answer newer than itself', async () => {
+      const stale = stuckLookup()
+      const rejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, stale.lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await rejects
+
+      await vi.advanceTimersByTimeAsync(60_001)
+      await withHostedReviewBranchCache(identity, { headOid: null }, async () => mergedReview)
+
+      stale.resolve(openReview)
+      await vi.advanceTimersByTimeAsync(0)
+
+      const next = vi.fn(async () => null)
+      await expect(withHostedReviewBranchCache(identity, { headOid: null }, next)).resolves.toEqual(
+        mergedReview
+      )
+      expect(next).not.toHaveBeenCalled()
+    })
+
+    it('does not let a straggler evict the lookup that replaced it', async () => {
+      const stale = stuckLookup()
+      const rejects = expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, stale.lookup)
+      ).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      await rejects
+
+      await vi.advanceTimersByTimeAsync(60_001)
+      const replacement = stuckLookup()
+      const first = withHostedReviewBranchCache(identity, { headOid: null }, replacement.lookup)
+
+      // The straggler settling must clear its own record, not the replacement's —
+      // otherwise the next caller starts a duplicate provider call.
+      stale.reject(new Error('late failure'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      const second = withHostedReviewBranchCache(identity, { headOid: null }, replacement.lookup)
+      replacement.resolve(openReview)
+
+      await expect(first).resolves.toEqual(openReview)
+      await expect(second).resolves.toEqual(openReview)
+      expect(replacement.lookup).toHaveBeenCalledTimes(1)
+    })
+
+    it('releases a caller by wall clock when the deadline timer never fires', async () => {
+      const { lookup } = stuckLookup()
+
+      const request = withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      const rejects = expect(request).rejects.toThrow(/timed out/)
+      // Why: main-process timers are suspended across a system sleep, so age —
+      // not setTimeout — is what has to bound the pin.
+      vi.setSystemTime(START + HOSTED_REVIEW_LOOKUP_DEADLINE_MS + 1)
+
+      await expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      ).rejects.toThrow(/backing off/)
+      await rejects
+      expect(lookup).toHaveBeenCalledTimes(1)
+    })
+
+    it('bounds the in-flight map independently of the completed cache', async () => {
+      const { lookup } = stuckLookup()
+      const branchAt = (index: number) => ({ ...identity, branch: `feature/${index}` })
+      const swallow = (promise: Promise<unknown>): void => {
+        void promise.catch(() => {})
+      }
+
+      for (let index = 0; index <= MAX_INFLIGHT_LOOKUPS; index += 1) {
+        swallow(withHostedReviewBranchCache(branchAt(index), { headOid: null }, lookup))
+      }
+      expect(lookup).toHaveBeenCalledTimes(MAX_INFLIGHT_LOOKUPS + 1)
+
+      // The oldest stuck record was evicted, so its branch is no longer joinable.
+      swallow(withHostedReviewBranchCache(branchAt(0), { headOid: null }, lookup))
+      expect(lookup).toHaveBeenCalledTimes(MAX_INFLIGHT_LOOKUPS + 2)
+
+      // The newest is still tracked, so concurrent callers still collapse onto it.
+      swallow(
+        withHostedReviewBranchCache(branchAt(MAX_INFLIGHT_LOOKUPS), { headOid: null }, lookup)
+      )
+      expect(lookup).toHaveBeenCalledTimes(MAX_INFLIGHT_LOOKUPS + 2)
+    })
+
+    it('does not let a cap-evicted straggler clobber the answer that replaced it', async () => {
+      const evicted = stuckLookup()
+      const successor = evictInflightRecord(evicted.lookup)
+
+      // The evicted lookup never timed out, so it is a straggler on the strength
+      // of the eviction alone — the successor still owns the key.
+      evicted.resolve(mergedReview)
+      await vi.advanceTimersByTimeAsync(0)
+
+      // Stored, its stale answer would read as fresh and be served ahead of the
+      // lookup that actually owns the branch.
+      const joiner = vi.fn(async () => null)
+      const joined = withHostedReviewBranchCache(identity, { headOid: null }, joiner)
+
+      successor.resolve(openReview)
+      await expect(successor.request).resolves.toEqual(openReview)
+      await expect(joined).resolves.toEqual(openReview)
+      expect(joiner).not.toHaveBeenCalled()
+    })
+
+    it('does not let a cap-evicted straggler double-count its successor failure', async () => {
+      const evicted = stuckLookup()
+      const successor = evictInflightRecord(evicted.lookup)
+
+      evicted.reject(new Error('late failure'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      successor.reject(new Error('successor failure'))
+      await expect(successor.request).rejects.toThrow('successor failure')
+
+      // One failure is one backoff doubling: the straggler's rejection must not
+      // stretch the window the live retry is waiting on.
+      await vi.advanceTimersByTimeAsync(60_001)
+      const recovered = vi.fn(async () => openReview)
+      await expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, recovered)
+      ).resolves.toEqual(openReview)
+      expect(recovered).toHaveBeenCalledTimes(1)
+    })
+
+    it('stops asking once a branch has stranded its cap of unsettled lookups', async () => {
+      const wedged = stuckLookup()
+      for (let attempt = 0; attempt < MAX_UNSETTLED_LOOKUPS_PER_KEY; attempt += 1) {
+        const rejects = expect(
+          withHostedReviewBranchCache(identity, { headOid: null }, wedged.lookup)
+        ).rejects.toThrow(/timed out/)
+        await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+        await rejects
+        // Past the longest backoff, so only the detached cap can hold the branch.
+        await vi.advanceTimersByTimeAsync(LOOKUP_BACKOFF_MAX_MS + 1)
+      }
+      expect(wedged.lookup).toHaveBeenCalledTimes(MAX_UNSETTLED_LOOKUPS_PER_KEY)
+
+      // Nothing can cancel the stranded calls, so a third would leak another one
+      // for the life of the process rather than recover anything.
+      await expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, wedged.lookup)
+      ).rejects.toThrow(/never answered/)
+      expect(wedged.lookup).toHaveBeenCalledTimes(MAX_UNSETTLED_LOOKUPS_PER_KEY)
+
+      // A settling lookup frees its slot, so a host that recovers is asked again.
+      wedged.resolve(openReview)
+      await vi.advanceTimersByTimeAsync(60_001)
+      const recovered = vi.fn(async () => mergedReview)
+      await expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, recovered)
+      ).resolves.toEqual(mergedReview)
+      expect(recovered).toHaveBeenCalledTimes(1)
+    })
+
+    it('counts a lookup that is still running against the branch cap', async () => {
+      const swallow = (promise: Promise<unknown>): void => {
+        void promise.catch(() => {})
+      }
+      const filler = stuckLookup()
+      const wedged = stuckLookup()
+      /** Drops the branch's in-flight record without expiring it, so it runs on untracked. */
+      const evictInflightRecords = (round: number): void => {
+        for (let index = 0; index < MAX_INFLIGHT_LOOKUPS; index += 1) {
+          swallow(
+            withHostedReviewBranchCache(
+              { ...identity, branch: `filler/${round}/${index}` },
+              { headOid: null },
+              filler.lookup
+            )
+          )
+        }
+      }
+
+      for (let attempt = 0; attempt < MAX_UNSETTLED_LOOKUPS_PER_KEY; attempt += 1) {
+        swallow(withHostedReviewBranchCache(identity, { headOid: null }, wedged.lookup))
+        evictInflightRecords(attempt)
+      }
+      expect(wedged.lookup).toHaveBeenCalledTimes(MAX_UNSETTLED_LOOKUPS_PER_KEY)
+
+      // Neither has reached its deadline, so nothing is counted as detached yet —
+      // but both are running with nothing able to stop them, and a third would
+      // strand another provider call the same way.
+      await expect(
+        withHostedReviewBranchCache(identity, { headOid: null }, wedged.lookup)
+      ).rejects.toThrow(/never answered/)
+      expect(wedged.lookup).toHaveBeenCalledTimes(MAX_UNSETTLED_LOOKUPS_PER_KEY)
+    })
+
+    it('does not adopt a straggler whose invalidated scope was evicted', async () => {
+      const stale = stuckLookup()
+      const inflight = withHostedReviewBranchCache(identity, { headOid: null }, stale.lookup)
+
+      invalidateHostedReviewBranchCache('/repo', null)
+      // Fill the generation map so the repo's own generation is evicted: read back
+      // as zero it would match what this lookup captured before the invalidation.
+      for (let index = 0; index < MAX_BRANCH_MAP_ENTRIES; index += 1) {
+        invalidateHostedReviewBranchCache(`/filler/${index}`, null)
+      }
+
+      stale.resolve(null)
+      await expect(inflight).resolves.toBeNull()
+
+      // Stored, that "no review" would hide the review Orca had just opened for
+      // the whole no-review interval.
+      const next = vi.fn(async () => openReview)
+      await expect(withHostedReviewBranchCache(identity, { headOid: null }, next)).resolves.toEqual(
+        openReview
+      )
+      expect(next).toHaveBeenCalledTimes(1)
     })
   })
 })

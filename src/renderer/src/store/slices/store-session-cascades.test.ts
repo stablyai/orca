@@ -1,7 +1,12 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { BrowserTab, DetectedWorktreeListResult, Worktree } from '../../../../shared/types'
+import type {
+  BrowserPage,
+  BrowserTab,
+  DetectedWorktreeListResult,
+  Worktree
+} from '../../../../shared/types'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
@@ -717,6 +722,52 @@ describe('hydrateBrowserSession', () => {
     expect(s.browserTabsByWorktree[validWt]).toHaveLength(2)
     expect(s.activeBrowserTabIdByWorktree[validWt]).toBe('browser-1')
     expect(s.activeBrowserTabId).toBe('browser-1')
+  })
+
+  it('drops legacy window close bypass state during hydration', () => {
+    const store = createTestStore()
+    const validWt = 'repo1::/path/wt1'
+    const legacyPage: BrowserPage & { allowWindowClose: boolean } = {
+      id: 'page-1',
+      workspaceId: 'browser-1',
+      worktreeId: validWt,
+      url: 'https://example.com',
+      title: 'Example',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 1,
+      allowWindowClose: true
+    }
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: validWt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: validWt
+    })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: validWt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [validWt]: [makeBrowserTab({ id: 'browser-1', worktreeId: validWt, url: legacyPage.url })]
+      },
+      browserPagesByWorkspace: { 'browser-1': [legacyPage] },
+      activeBrowserTabIdByWorktree: { [validWt]: 'browser-1' }
+    })
+
+    expect(store.getState().browserPagesByWorkspace['browser-1']?.[0]).not.toHaveProperty(
+      'allowWindowClose'
+    )
   })
 
   it('restores floating workspace browser tabs without a repo worktree', () => {
