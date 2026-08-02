@@ -6,10 +6,13 @@ function nextEventLoop(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, 0))
 }
 
-function openTerminal(): { emitted: string[]; terminal: Terminal; textarea: HTMLTextAreaElement } {
+const openTerminals: Terminal[] = []
+
+function openTerminal(): { emitted: string[]; textarea: HTMLTextAreaElement } {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const terminal = new Terminal()
+  openTerminals.push(terminal)
   terminal.open(container)
   const textarea = terminal.textarea
   if (!textarea) {
@@ -17,7 +20,7 @@ function openTerminal(): { emitted: string[]; terminal: Terminal; textarea: HTML
   }
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
-  return { emitted, terminal, textarea }
+  return { emitted, textarea }
 }
 
 function dispatchCompositionEvent(
@@ -71,12 +74,15 @@ describe('xterm IME continuous Hangul run', () => {
   })
 
   afterEach(() => {
+    while (openTerminals.length > 0) {
+      openTerminals.pop()?.dispose()
+    }
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })
 
   it('commits each syllable before the next one starts composing', async () => {
-    const { emitted, terminal, textarea } = openTerminal()
+    const { emitted, textarea } = openTerminal()
 
     // The shell echoes what it receives; a syllable held back leaves the cursor parked,
     // so the next syllable's overlay paints over the cell the previous one should own.
@@ -98,12 +104,10 @@ describe('xterm IME continuous Hangul run', () => {
     composeSyllable(textarea, '그리', ['ㄱ', '고'], '고')
     await nextEventLoop()
     expect(emitted).toEqual(['그', '리', '고'])
-
-    terminal.dispose()
   })
 
   it('sends only the committed syllable when the next one already reached the textarea', async () => {
-    const { emitted, terminal, textarea } = openTerminal()
+    const { emitted, textarea } = openTerminal()
 
     startSyllable(textarea)
     composeSyllable(textarea, '', ['ㄱ', '그', '글', '그'], '그')
@@ -120,7 +124,5 @@ describe('xterm IME continuous Hangul run', () => {
     composeSyllable(textarea, '그', ['리'], '리')
     await nextEventLoop()
     expect(emitted).toEqual(['그', '리'])
-
-    terminal.dispose()
   })
 })

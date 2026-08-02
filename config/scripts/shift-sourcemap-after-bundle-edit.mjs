@@ -150,6 +150,10 @@ const marker = fs.readFileSync(markerPath, 'utf8')
 const bundle = fs.readFileSync(bundlePath, 'utf8')
 const rawMap = fs.readFileSync(mapPath, 'utf8')
 
+// A multi-line deletion would move later generated lines, whose mappings this leaves alone.
+if (/[\r\n]/u.test(removed)) {
+  throw new Error('removed text must not contain a line terminator')
+}
 if (bundle.split(marker).length - 1 !== 1) {
   throw new Error('preceding marker is not unique in the bundle')
 }
@@ -178,6 +182,9 @@ const shifted = lines[generatedLine]
 
 const outgoingBefore = lines[generatedLine].at(-1)
 const outgoingAfter = shifted.at(-1)
+if (!outgoingBefore || !outgoingAfter) {
+  throw new Error(`generated line ${generatedLine} has no segment left to carry running state`)
+}
 for (const field of ['source', 'sourceLine', 'sourceColumn', 'name']) {
   if (outgoingBefore[field] !== outgoingAfter[field]) {
     throw new Error(`running ${field} changed; later generated lines would shift`)
