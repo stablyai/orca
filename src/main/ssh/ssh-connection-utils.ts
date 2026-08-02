@@ -68,16 +68,7 @@ export function isTransientError(err: Error): boolean {
   if (code && TRANSIENT_ERROR_CODES.has(code)) {
     return true
   }
-  if (err.message.includes('ETIMEDOUT')) {
-    return true
-  }
-  if (err.message.includes('ECONNREFUSED')) {
-    return true
-  }
-  if (err.message.includes('ECONNRESET')) {
-    return true
-  }
-  return false
+  return ['ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET'].some((text) => err.message.includes(text))
 }
 
 const SYSTEM_SSH_FALLBACK_ERROR_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH'])
@@ -90,11 +81,8 @@ export function isSystemSshFallbackError(err: Error): boolean {
   return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
 }
 
-// Why: ssh2 has no gssapi-with-mic support. When the effective OpenSSH config
-// enables GSSAPIAuthentication (often a distro-wide /etc/ssh default), a
-// Kerberos ticket can still authenticate through the system ssh binary after
-// key/agent auth fails — but only auth-shaped failures qualify, so network
-// errors keep their existing retry semantics.
+// Why: ssh2 lacks gssapi-with-mic, but effective OpenSSH config may enable it.
+// Kerberos can use system ssh; only auth failures qualify so network retries remain unchanged.
 export function isGssapiSystemSshFallbackCandidate(
   err: Error,
   target: Pick<SshTarget, 'gssapiAuthentication'>,
