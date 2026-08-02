@@ -2,9 +2,12 @@ import type { MessageRow } from './types'
 import type { OrchestrationDb } from './db'
 import type { ConversationWakeProvider } from './conversation-wake-provider'
 import { ConversationWakeJobProcessor } from './conversation-wake-job-processor'
+import {
+  CONVERSATION_WAKE_MESSAGE_TYPES,
+  isBoundedConversationWakeId
+} from './conversation-wake-identifiers'
 
-const ELIGIBLE_TYPES = new Set(['worker_done', 'escalation', 'decision_gate', 'question'])
-const MAX_ID_LENGTH = 512
+const ELIGIBLE_TYPES = new Set<string>(CONVERSATION_WAKE_MESSAGE_TYPES)
 
 export type ConversationWakeServiceOptions = {
   db: OrchestrationDb
@@ -26,6 +29,7 @@ export class ConversationWakeService {
   private readonly queues = new Map<string, Promise<void>>()
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private disposed = false
+  private disposePromise: Promise<void> | null = null
 
   constructor(private readonly options: ConversationWakeServiceOptions) {
     this.providers = new Map(options.providers.map((provider) => [provider.id, provider]))
@@ -48,6 +52,9 @@ export class ConversationWakeService {
         )
       })
       if (typeof unsubscribe !== 'function') {
+        for (const registered of this.unsubscribers.splice(0)) {
+          registered()
+        }
         throw new Error(`Conversation wake provider ${provider.id} lacks a terminal subscription`)
       }
       this.unsubscribers.push(unsubscribe)
@@ -63,7 +70,7 @@ export class ConversationWakeService {
     if (!this.providers.has(params.provider)) {
       throw new Error(`Unsupported conversation wake provider: ${params.provider}`)
     }
-    if (!isBoundedId(params.conversationId)) {
+    if (!isBoundedConversationWakeId(params.conversationId)) {
       throw new Error('Invalid conversation wake conversation ID')
     }
     const result = this.options.db.bindConversationWakeTarget(params)
@@ -98,23 +105,29 @@ export class ConversationWakeService {
     }
     this.backfill()
     const now = this.now()
-    for (const job of this.options.db.listProcessableConversationWakeJobs(now)) {
-      await this.enqueueConversation(job.provider, job.conversation_id, () =>
-        this.jobProcessor.process(job.wake_id)
-      )
-    }
+    await Promise.all(
+      this.options.db
+        .listProcessableConversationWakeJobs(now)
+        .map((job) =>
+          this.enqueueConversation(job.provider, job.conversation_id, () =>
+            this.jobProcessor.process(job.wake_id)
+          )
+        )
+    )
     this.scheduleNextRetry()
   }
 
-  async dispose(): Promise<void> {
+  dispose(): Promise<void> {
+    if (this.disposePromise) {
+      return this.disposePromise
+    }
     this.disposed = true
     this.clearRetryTimer()
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe()
     }
-    await Promise.all(
-      [...this.providers.values()].map((provider) => Promise.resolve(provider.dispose?.()))
-    )
+    this.disposePromise = this.finishDisposal()
+    return this.disposePromise
   }
 
   private backfill(runId?: string): void {
@@ -127,7 +140,6 @@ export class ConversationWakeService {
     if (!this.isEnabled()) {
       return
     }
-    this.backfill()
     const jobs = this.options.db
       .listProcessableConversationWakeJobs(this.now())
       .filter((job) => job.provider === provider && job.conversation_id === conversationId)
@@ -179,6 +191,19 @@ export class ConversationWakeService {
     })
   }
 
+  private async finishDisposal(): Promise<void> {
+    const queueResults = await Promise.allSettled(this.queues.values())
+    const providerResults = await Promise.allSettled(
+      [...this.providers.values()].map((provider) => Promise.resolve(provider.dispose?.()))
+    )
+    const failures = [...queueResults, ...providerResults]
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map((result) => result.reason)
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'conversation wake disposal failed')
+    }
+  }
+
   private isEnabled(): boolean {
     return (
       !this.disposed &&
@@ -218,8 +243,4 @@ function hasLifecycleRejection(payload: string | null): boolean {
   } catch {
     return false
   }
-}
-
-function isBoundedId(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH
 }

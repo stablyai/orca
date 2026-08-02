@@ -241,7 +241,7 @@ describe('agent-session create operation ledger', () => {
   it.each([
     'controlled Codex launch is disabled',
     'controlled Codex launch is unsupported on this platform'
-  ])('does not fall back or relaunch after controlled admission fails: %s', async (message) => {
+  ])('allows a controlled retry after admission fails before spawn: %s', async (message) => {
     const failure = new Error(message)
     const manager = {
       id: 'codex-controlled',
@@ -256,8 +256,26 @@ describe('agent-session create operation ledger', () => {
     await expect(runtime.createAgentSession(controlledRequest)).rejects.toBe(failure)
     await expect(runtime.createAgentSession(controlledRequest)).rejects.toBe(failure)
 
-    expect(manager.launchNew).toHaveBeenCalledOnce()
+    expect(manager.launchNew).toHaveBeenCalledTimes(2)
     expect(createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('retains the controlled replay fence when launch outcome is unknown', async () => {
+    const failure = Object.assign(new Error('controlled launch outcome unknown'), {
+      agentSessionOperationOutcome: 'unknown' as const
+    })
+    const manager = {
+      id: 'codex-controlled',
+      launchNew: vi.fn().mockRejectedValue(failure),
+      onTurnTerminal: vi.fn(() => () => {})
+    }
+    const runtime = createRuntime(undefined, { manager })
+    const controlledRequest = request(operationId(), { controlledCoordinator: true })
+
+    await expect(runtime.createAgentSession(controlledRequest)).rejects.toBe(failure)
+    await expect(runtime.createAgentSession(controlledRequest)).rejects.toBe(failure)
+
+    expect(manager.launchNew).toHaveBeenCalledOnce()
   })
 
   it('selects legacy before trust, spawn, or ledger state for an old daemon', async () => {

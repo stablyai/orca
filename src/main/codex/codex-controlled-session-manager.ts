@@ -81,6 +81,8 @@ type ThreadShape = {
   canAcceptDirectInput?: unknown
 }
 
+const CODEX_THREAD_NOT_FOUND_RPC_CODE = -32600
+
 export class CodexControlledSessionManager implements ConversationWakeProvider {
   readonly id = 'codex-controlled'
   private readonly terminalListeners = new Set<(conversationId: string) => void>()
@@ -180,22 +182,20 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
     if (!this.isProviderAvailable()) {
       return
     }
-    for (const session of this.registry.values()) {
-      if (session.missing) {
-        continue
-      }
-      if (!this.isAccountCurrent(session)) {
-        continue
-      }
-      try {
-        session.terminal = await this.registry.refresh(session)
-        await this.readThread(session, false)
-      } catch (error) {
-        if (isMissingThreadError(error)) {
-          session.missing = true
-        }
-      }
-    }
+    await Promise.allSettled(
+      [...this.registry.values()]
+        .filter((session) => !session.missing && this.isAccountCurrent(session))
+        .map(async (session) => {
+          try {
+            session.terminal = await this.registry.refresh(session)
+            await this.readThread(session, false)
+          } catch (error) {
+            if (isMissingThreadError(error)) {
+              session.missing = true
+            }
+          }
+        })
+    )
   }
 
   disposeConversation(conversationId: string): Promise<void> {
@@ -240,7 +240,11 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
 
   private emitTerminal(conversationId: string): void {
     for (const listener of this.terminalListeners) {
-      listener(conversationId)
+      try {
+        listener(conversationId)
+      } catch {
+        // One observer must not prevent delivery to the remaining observers.
+      }
     }
   }
 
@@ -281,7 +285,8 @@ export class CodexControlledSessionManager implements ConversationWakeProvider {
 function isMissingThreadError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    /thread.*(?:not found|missing)|rollout.*not found/i.test(error.message)
+    ((error as Error & { rpcCode?: unknown }).rpcCode === CODEX_THREAD_NOT_FOUND_RPC_CODE ||
+      /thread.*(?:not found|missing)|rollout.*not found/i.test(error.message))
   )
 }
 

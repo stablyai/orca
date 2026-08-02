@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import type { AppIdentity } from '../../shared/app-identity'
+import { WAKE_DEV_APP_ID, WAKE_DEV_APP_NAME } from './wake-dev-build-flavor'
 
 const BASE_APP_NAME = 'Orca'
 const BASE_APP_USER_MODEL_ID = 'com.stablyai.orca'
@@ -50,8 +51,22 @@ function createDevAppUserModelId(identityKey: string | null): string {
 
 export function getDevInstanceIdentity(
   isDev: boolean,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  isWakeDevBuild = false
 ): DevInstanceIdentity {
+  if (isWakeDevBuild) {
+    return {
+      name: WAKE_DEV_APP_NAME,
+      appName: WAKE_DEV_APP_NAME,
+      isDev: false,
+      devLabel: null,
+      devBranch: null,
+      devWorktreeName: null,
+      devRepoRoot: null,
+      dockBadgeLabel: null,
+      appUserModelId: WAKE_DEV_APP_ID
+    }
+  }
   if (!isDev) {
     return {
       name: BASE_APP_NAME,

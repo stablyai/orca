@@ -50,6 +50,10 @@ import { OrchestrationError } from './orchestration-error'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import {
+  CONVERSATION_WAKE_ID_MAX_LENGTH,
+  CONVERSATION_WAKE_MESSAGE_TYPES
+} from './conversation-wake-identifiers'
 
 // Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
 function isEquivalentPaneKey(a: string, b: string): boolean {
@@ -150,13 +154,6 @@ function hasLifecycleRejectionMarker(payload: string | null): boolean {
     return false
   }
 }
-
-const CONVERSATION_WAKE_MESSAGE_TYPES = [
-  'worker_done',
-  'escalation',
-  'decision_gate',
-  'question'
-] as const
 
 function conversationWakeId(runId: string, consumerGeneration: number, messageId: string): string {
   return `wake_${createHash('sha256')
@@ -285,7 +282,7 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 conversation wake ownership and jobs.
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 conversation wake ownership and jobs, v24 durable provider finalization proof.
 const SCHEMA_VERSION = 24
 
 function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
@@ -1046,6 +1043,7 @@ export class OrchestrationDb {
             ON conversation_wake_bindings(provider, conversation_id) WHERE status = 'active';
         `)
       }
+      // Only a real v23 DB can contain submitted rows without v24 finalization proof.
       if (current === 23) {
         this.db.exec(`
           CREATE TABLE conversation_wake_jobs_v24 (
@@ -3160,6 +3158,17 @@ export class OrchestrationDb {
     }
   }
 
+  private recordConversationWakeProvenanceIfCurrentInTransaction(params: {
+    messageId: string
+    taskId: string
+    dispatchId: string
+    source: ConversationWakeProvenanceSource
+  }): void {
+    if (this.getDispatchContext(params.taskId)?.id === params.dispatchId) {
+      this.recordConversationWakeProvenanceInTransaction(params)
+    }
+  }
+
   listConversationWakeBackfillMessages(runId?: string): MessageRow[] {
     const runFilter = runId ? 'AND messages.run_id = ?' : ''
     const args = runId ? [runId] : []
@@ -3399,7 +3408,7 @@ export class OrchestrationDb {
              updated_at = datetime('now')
          WHERE wake_id = ? AND status = 'submitting'
            AND acceptance_lease = ? AND lease_expires_at >= ?
-           AND length(?) BETWEEN 1 AND 512
+           AND length(?) BETWEEN 1 AND ${CONVERSATION_WAKE_ID_MAX_LENGTH}
            AND EXISTS(
              SELECT 1 FROM runs
              JOIN conversation_wake_bindings binding ON binding.run_id = runs.id
@@ -3817,7 +3826,7 @@ export class OrchestrationDb {
         message.delivery_contract === 'current_delivery' &&
         ['worker_done', 'escalation'].includes(message.type)
       ) {
-        this.recordConversationWakeProvenanceInTransaction({
+        this.recordConversationWakeProvenanceIfCurrentInTransaction({
           messageId: message.id,
           taskId: dispatch.task_id,
           dispatchId,
@@ -3958,7 +3967,7 @@ export class OrchestrationDb {
       }
 
       if (message.delivery_contract === 'current_delivery') {
-        this.recordConversationWakeProvenanceInTransaction({
+        this.recordConversationWakeProvenanceIfCurrentInTransaction({
           messageId: message.id,
           taskId: dispatch.task_id,
           dispatchId,
@@ -5969,7 +5978,7 @@ export class OrchestrationDb {
         ) &&
         !hasLifecycleRejectionMarker(message.payload)
       ) {
-        this.recordConversationWakeProvenanceInTransaction({
+        this.recordConversationWakeProvenanceIfCurrentInTransaction({
           messageId: message.id,
           taskId: dispatch.task_id,
           dispatchId: params.dispatchId,

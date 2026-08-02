@@ -27,28 +27,42 @@ export class CodexUnixAppServerClient {
       perMessageDeflate: false,
       createConnection: () => createConnection(socketPath)
     })
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error('controlled Codex socket connect timed out')),
-        timeoutMs
-      )
-      socket.once('open', () => {
-        clearTimeout(timer)
-        resolve()
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onOpen = (): void => {
+          cleanup()
+          resolve()
+        }
+        const onError = (error: Error): void => {
+          cleanup()
+          reject(error)
+        }
+        const timer = setTimeout(() => {
+          cleanup()
+          reject(new Error('controlled Codex socket connect timed out'))
+        }, timeoutMs)
+        timer.unref?.()
+        const cleanup = (): void => {
+          clearTimeout(timer)
+          socket.removeListener('open', onOpen)
+          socket.removeListener('error', onError)
+        }
+        socket.once('open', onOpen)
+        socket.once('error', onError)
       })
-      socket.once('error', (error) => {
-        clearTimeout(timer)
-        reject(error)
+      const client = new CodexUnixAppServerClient(socket)
+      const initializeResult = await client.request('initialize', {
+        clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' },
+        capabilities: { experimentalApi: true, requestAttestation: false }
       })
-    })
-    const client = new CodexUnixAppServerClient(socket)
-    const initializeResult = await client.request('initialize', {
-      clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' },
-      capabilities: { experimentalApi: true, requestAttestation: false }
-    })
-    client.initializeResult = initializeResult
-    client.notify('initialized')
-    return client
+      client.initializeResult = initializeResult
+      client.notify('initialized')
+      return client
+    } catch (error) {
+      socket.once('error', () => {})
+      socket.terminate()
+      throw error
+    }
   }
 
   initializeResult: unknown = null
@@ -100,9 +114,14 @@ export class CodexUnixAppServerClient {
       }
       clearTimeout(pending.timer)
       this.pending.delete(message.id)
-      const error = message.error as { message?: string } | undefined
+      const error = message.error as { message?: string; code?: number; data?: unknown } | undefined
       if (error) {
-        pending.reject(new Error(error.message ?? 'controlled Codex RPC failed'))
+        pending.reject(
+          Object.assign(new Error(error.message ?? 'controlled Codex RPC failed'), {
+            rpcCode: error.code ?? null,
+            rpcData: error.data ?? null
+          })
+        )
       } else {
         pending.resolve(message.result)
       }
@@ -113,7 +132,11 @@ export class CodexUnixAppServerClient {
     }
     const params = isRecord(message.params) ? message.params : {}
     for (const listener of this.notificationListeners) {
-      listener(message.method, params)
+      try {
+        listener(message.method, params)
+      } catch {
+        // One observer must not prevent delivery to the remaining observers.
+      }
     }
   }
 

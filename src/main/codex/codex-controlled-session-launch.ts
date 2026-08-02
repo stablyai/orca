@@ -1,12 +1,16 @@
 import { createHash } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { chmodSync, existsSync, lstatSync, mkdirSync, rmSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+export {
+  getControlledSocketPath,
+  getControlledSocketRoot,
+  getControlledStatePath
+} from './codex-controlled-socket-paths'
 
 const SOCKET_READY_TIMEOUT_MS = 10_000
-const SOCKET_PATH_LIMIT = 100
 const PROCESS_STOP_TIMEOUT_MS = 5_000
 
 export type CodexControlledSessionLaunch = {
@@ -91,24 +95,6 @@ export function buildControlledVisibleResumeCommand(
   return [command.executable, ...command.prefixArgs, ...args].map(quotePosixShell).join(' ')
 }
 
-export function getControlledSocketRoot(configured?: string): string {
-  return configured ?? join('/tmp', `ocw-${process.getuid?.() ?? 'local'}`)
-}
-
-export function getControlledSocketPath(root: string, conversationId: string): string {
-  const digest = createHash('sha256').update(conversationId).digest('hex').slice(0, 16)
-  const path = join(root, `${digest}.sock`)
-  if (Buffer.byteLength(path) > SOCKET_PATH_LIMIT) {
-    throw new Error('controlled Codex Unix socket path exceeds the local platform limit')
-  }
-  return path
-}
-
-export function getControlledStatePath(root: string, conversationId: string): string {
-  const digest = createHash('sha256').update(conversationId).digest('hex')
-  return join(root, `${digest}.json`)
-}
-
 export function isSameControlledLaunch(
   first: CodexControlledSessionLaunch,
   second: CodexControlledSessionLaunch
@@ -156,10 +142,21 @@ export async function startControlledCodexServer(
   input: CodexControlledSessionLaunch,
   socketPath: string,
   spawnProcess: typeof spawn = spawn,
-  command: ControlledCodexCommand = resolveControlledCodexCommand(input.command)
+  command: ControlledCodexCommand = resolveControlledCodexCommand(input.command),
+  hardenSocket: typeof chmodSync = chmodSync
 ): Promise<ControlledCodexServer> {
   const root = dirname(socketPath)
+  const rootExisted = existsSync(root)
   mkdirSync(root, { recursive: true, mode: 0o700 })
+  const rootStat = lstatSync(root)
+  if (
+    !rootStat.isDirectory() ||
+    rootStat.isSymbolicLink() ||
+    (process.getuid && rootStat.uid !== process.getuid()) ||
+    (rootExisted && (rootStat.mode & 0o077) !== 0)
+  ) {
+    throw new Error('controlled Codex socket root is not a private owned directory')
+  }
   chmodSync(root, 0o700)
   if (existsSync(socketPath)) {
     throw new Error('controlled Codex socket path is already owned')
@@ -178,15 +175,17 @@ export async function startControlledCodexServer(
   child.on('error', (error) => {
     spawnError = error
   })
+  let socketIdentity: ControlledCodexServer['socketIdentity'] | null = null
   try {
     await waitForSocket(child, socketPath, () => spawnError)
-    chmodSync(socketPath, 0o600)
     const stat = lstatSync(socketPath)
-    const socketIdentity = { dev: stat.dev, ino: stat.ino }
-    child.once('exit', () => removeOwnedSocket(socketPath, socketIdentity))
+    socketIdentity = { dev: stat.dev, ino: stat.ino }
+    const ownedSocketIdentity = socketIdentity
+    child.once('exit', () => removeOwnedSocket(socketPath, ownedSocketIdentity))
+    hardenSocket(socketPath, 0o600)
     return { process: child, socketIdentity }
   } catch (error) {
-    await stopControlledCodexServer({ process: child, socketIdentity: null }, socketPath)
+    await stopControlledCodexServer({ process: child, socketIdentity }, socketPath)
     throw error
   }
 }
@@ -196,7 +195,7 @@ export async function stopControlledCodexServer(
   socketPath: string
 ): Promise<void> {
   const child = server.process
-  if (child.exitCode === null) {
+  if (!hasChildExited(child)) {
     child.kill('SIGTERM')
     if (!(await waitForExit(child, PROCESS_STOP_TIMEOUT_MS))) {
       child.kill('SIGKILL')
@@ -258,7 +257,7 @@ async function waitForSocket(
     if (spawnError) {
       throw spawnError
     }
-    if (child.exitCode !== null) {
+    if (hasChildExited(child)) {
       throw new Error('controlled Codex app-server exited before ready')
     }
     if (existsSync(socketPath) && lstatSync(socketPath).isSocket()) {
@@ -270,7 +269,7 @@ async function waitForSocket(
 }
 
 function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
-  if (child.exitCode !== null) {
+  if (hasChildExited(child)) {
     return Promise.resolve(true)
   }
   return new Promise((resolveExit) => {
@@ -285,6 +284,10 @@ function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
     }
     child.once('exit', onExit)
   })
+}
+
+function hasChildExited(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode != null
 }
 
 function removeOwnedSocket(

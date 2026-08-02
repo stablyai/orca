@@ -20,3 +20,7 @@ declare const ORCA_POSTHOG_WRITE_KEY: string | null
 // point a packaged build at a staging server without re-running the
 // release pipeline.
 declare const ORCA_DIAGNOSTICS_TOKEN_URL: string | null
+
+// Baked only by `build:mac:wake-dev`; runtime environment cannot turn an
+// official bundle into the side-by-side test flavor.
+declare const ORCA_WAKE_DEV_BUILD: boolean

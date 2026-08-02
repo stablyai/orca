@@ -1,7 +1,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { chmod, mkdtemp, rm, stat } from 'node:fs/promises'
 import { createConnection } from 'node:net'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -27,7 +27,7 @@ if (threadId === '--fresh') {
   process.exit(0)
 }
 
-const socketRoot = await mkdtemp('/tmp/ocw-smoke-')
+const socketRoot = await mkdtemp(join(tmpdir(), 'ocw-smoke-'))
 const socketPath = join(socketRoot, 'app.sock')
 await chmod(socketRoot, 0o700)
 
@@ -41,6 +41,7 @@ child.on('error', (error) => {
 })
 
 let socket
+let smokeError
 try {
   await waitForSocket(socketPath, child, () => childError)
   await chmod(socketPath, 0o600)
@@ -63,10 +64,31 @@ try {
   console.log(
     'PASS: private Unix transport initialized and read the requested thread; no turn started'
   )
-} finally {
-  socket?.terminate()
+} catch (error) {
+  smokeError = error
+}
+const cleanupErrors = []
+socket?.terminate()
+let serverStopped = false
+try {
   await stopChild(child)
-  await rm(socketRoot, { recursive: true, force: true })
+  serverStopped = true
+} catch (error) {
+  cleanupErrors.push(error)
+}
+if (serverStopped) {
+  try {
+    await rm(socketRoot, { recursive: true, force: true })
+  } catch (error) {
+    cleanupErrors.push(error)
+  }
+}
+const errors = [...(smokeError ? [smokeError] : []), ...cleanupErrors]
+if (errors.length === 1) {
+  throw errors[0]
+}
+if (errors.length > 1) {
+  throw new AggregateError(errors, 'smoke and cleanup failed')
 }
 
 async function waitForSocket(path, server, getSpawnError) {
@@ -76,7 +98,7 @@ async function waitForSocket(path, server, getSpawnError) {
     if (spawnError) {
       throw spawnError
     }
-    if (server.exitCode !== null) {
+    if (hasExited(server)) {
       throw new Error('Codex app-server exited before smoke readiness')
     }
     try {
@@ -84,7 +106,7 @@ async function waitForSocket(path, server, getSpawnError) {
         return
       }
     } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 20))
   }
   throw new Error('Codex app-server smoke socket timed out')
 }
@@ -160,7 +182,7 @@ async function runFreshSmoke() {
   }
   const cwd = process.cwd()
   const expectedHome = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'))
-  const socketRoot = await mkdtemp('/tmp/ocw-smoke-')
+  const socketRoot = await mkdtemp(join(tmpdir(), 'ocw-smoke-'))
   const socketPath = join(socketRoot, 'app.sock')
   await chmod(socketRoot, 0o700)
   const child = spawn('codex', ['app-server', '--listen', `unix://${socketPath}`], {
@@ -363,7 +385,7 @@ function quotePosixShell(value) {
 }
 
 async function stopChild(child) {
-  if (child.exitCode !== null) {
+  if (hasExited(child)) {
     return
   }
   child.kill('SIGTERM')
@@ -376,7 +398,7 @@ async function stopChild(child) {
 }
 
 function waitForExit(child, timeoutMs) {
-  if (child.exitCode !== null) {
+  if (hasExited(child)) {
     return Promise.resolve(true)
   }
   return new Promise((resolveExit) => {
@@ -386,4 +408,8 @@ function waitForExit(child, timeoutMs) {
       resolveExit(true)
     })
   })
+}
+
+function hasExited(child) {
+  return child.exitCode !== null || child.signalCode != null
 }

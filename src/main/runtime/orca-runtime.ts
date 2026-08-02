@@ -3764,7 +3764,11 @@ export class OrcaRuntimeService {
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
-    this.orchestrationConversationWake?.dispose()
+    void this.orchestrationConversationWake
+      ?.dispose()
+      .catch((error) =>
+        console.warn('[orchestration-wake] database replacement cleanup failed', error)
+      )
     this.orchestrationConversationWake = null
     this._orchestrationDb = db
     this.ensureOrchestrationConversationWake()
@@ -3800,7 +3804,13 @@ export class OrcaRuntimeService {
       return result
     } catch (error) {
       if (result.disposition === 'created') {
-        await this.codexControlledSessionManager.disposeConversation(params.conversationId)
+        try {
+          await this.codexControlledSessionManager.disposeConversation(params.conversationId)
+        } catch (cleanupError) {
+          if (error instanceof Error) {
+            Object.assign(error, { cleanupError })
+          }
+        }
       }
       throw error
     }
@@ -3825,6 +3835,7 @@ export class OrcaRuntimeService {
   }
 
   onOrchestrationMessageCommitted(message: MessageRow): void {
+    this.getOrchestrationDb()
     void this.ensureOrchestrationConversationWake()
       .onMessageCommitted(message)
       .catch((error) => console.warn('[orchestration-wake] post-commit processing failed', error))
@@ -3844,8 +3855,12 @@ export class OrcaRuntimeService {
 
   private ensureOrchestrationConversationWake(): ConversationWakeService {
     if (!this.orchestrationConversationWake) {
+      const db = this._orchestrationDb
+      if (!db) {
+        throw new Error('orchestration database is unavailable for conversation wake')
+      }
       this.orchestrationConversationWake = new ConversationWakeService({
-        db: this._orchestrationDb as OrchestrationDb,
+        db,
         providers: this.orchestrationConversationWakeProviders,
         isFeatureEnabled: this.isOrchestrationConversationWakeEnabledFn,
         isKillSwitchOpen: this.isOrchestrationConversationWakeKillSwitchOpenFn,
@@ -24419,21 +24434,28 @@ export class OrcaRuntimeService {
         request.placement?.leafId ?? deterministicAgentSessionUuid(`${executionOperationId}:leaf`)
       const operationHandle = `term_${deterministicAgentSessionUuid(`${executionOperationId}:handle`)}`
       if (request.controlledCoordinator === true) {
-        retainReplayFence = true
-        const controlled = await this.codexControlledSessionManager!.launchPreparedNew(
-          preparedControlledLaunch!
-        )
-        return {
-          disposition: 'created',
-          terminal: {
-            handle: controlled.identity.terminalHandle,
-            ptyId: controlled.identity.terminalPtyId,
-            tabId: controlled.identity.terminalTabId,
-            paneKey: controlled.identity.terminalPaneKey,
-            worktreeId: controlled.identity.worktreeId,
-            title: 'Codex',
-            surface: controlled.surface
+        try {
+          const controlled = await this.codexControlledSessionManager!.launchPreparedNew(
+            preparedControlledLaunch!
+          )
+          retainReplayFence = true
+          return {
+            disposition: 'created',
+            terminal: {
+              handle: controlled.identity.terminalHandle,
+              ptyId: controlled.identity.terminalPtyId,
+              tabId: controlled.identity.terminalTabId,
+              paneKey: controlled.identity.terminalPaneKey,
+              worktreeId: controlled.identity.worktreeId,
+              title: 'Codex',
+              surface: controlled.surface
+            }
           }
+        } catch (error) {
+          if (isAgentSessionOperationOutcomeUnknown(error)) {
+            retainReplayFence = true
+          }
+          throw error
         }
       }
       try {

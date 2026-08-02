@@ -13,6 +13,9 @@ import {
 } from './codex-controlled-session-manager'
 import { resolveControlledCodexLaunchAuthority } from './codex-controlled-launch-authority'
 import {
+  getControlledSocketPath,
+  getControlledSocketRoot,
+  resolveControlledCodexCommand,
   startControlledCodexServer,
   stopControlledCodexServer
 } from './codex-controlled-session-launch'
@@ -23,6 +26,7 @@ type StubState = {
   turnStarts: number
   rejectNextStart: boolean
   rejectNextRead: boolean
+  missingNextRead: boolean
   leaveNextStartAmbiguous: boolean
   servers: Server[]
   sockets: WebSocketServer[]
@@ -32,18 +36,58 @@ const roots: string[] = []
 const managers: CodexControlledSessionManager[] = []
 
 afterEach(async () => {
-  for (const manager of managers) {
-    await manager.dispose()
-  }
-  for (const root of roots) {
+  const cleanup = await Promise.allSettled(managers.splice(0).map((manager) => manager.dispose()))
+  for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
-  managers.length = 0
-  roots.length = 0
   vi.restoreAllMocks()
+  const failures = cleanup.filter(
+    (result): result is PromiseRejectedResult => result.status === 'rejected'
+  )
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((failure) => failure.reason),
+      'controlled Codex test cleanup failed'
+    )
+  }
 })
 
-describe('CodexControlledSessionManager', () => {
+describe.skipIf(process.platform === 'win32')('CodexControlledSessionManager', () => {
+  it('uses a validated environment socket root unless explicitly configured', () => {
+    const prior = process.env.ORCA_CONTROLLED_CODEX_SOCKET_ROOT
+    process.env.ORCA_CONTROLLED_CODEX_SOCKET_ROOT = join(tmpdir(), 'ocw-wake-env')
+    try {
+      expect(getControlledSocketRoot()).toBe(join(tmpdir(), 'ocw-wake-env'))
+      expect(getControlledSocketRoot(join(tmpdir(), 'ocw-explicit'))).toBe(
+        join(tmpdir(), 'ocw-explicit')
+      )
+      process.env.ORCA_CONTROLLED_CODEX_SOCKET_ROOT = 'relative/socket-root'
+      expect(() => getControlledSocketRoot()).toThrow('absolute private directory')
+    } finally {
+      if (prior === undefined) {
+        delete process.env.ORCA_CONTROLLED_CODEX_SOCKET_ROOT
+      } else {
+        process.env.ORCA_CONTROLLED_CODEX_SOCKET_ROOT = prior
+      }
+    }
+  })
+
+  it('rejects a socket root that is not already private', async () => {
+    const fixture = createFixture()
+    const spawnProcess = vi.fn() as unknown as typeof spawn
+    const unsafeRoot = mkdtempSync(join(tmpdir(), 'ocw-unsafe-'))
+    roots.push(unsafeRoot)
+    chmodSync(unsafeRoot, 0o755)
+
+    await expect(
+      startControlledCodexServer(
+        fixture.input,
+        join(unsafeRoot, 'controlled-codex.sock'),
+        spawnProcess
+      )
+    ).rejects.toThrow('private owned directory')
+    expect(spawnProcess).not.toHaveBeenCalled()
+  })
   it('fails closed until every controlled-session flag is enabled', async () => {
     const fixture = createFixture({ launch: false })
     await expect(fixture.manager.launch(fixture.input)).rejects.toThrow(
@@ -183,6 +227,30 @@ describe('CodexControlledSessionManager', () => {
     expect(fixture.processes[0]?.exitCode).toBe(0)
   })
 
+  it.each([
+    { terminalSurface: 'background' as const, label: 'background surface' },
+    { omitTerminalIdentity: 'pane' as const, label: 'missing pane identity' }
+  ])('closes a created terminal rejected for $label', async (options) => {
+    const fixture = createFixture(options)
+
+    await expect(fixture.manager.launch(fixture.input)).rejects.toThrow(/controlled Codex/)
+
+    expect(fixture.closedTerminals).toHaveLength(1)
+    expect(fixture.processes[0]?.exitCode).toBe(0)
+  })
+
+  it('serializes concurrent launches for one conversation', async () => {
+    const fixture = createFixture()
+
+    const launched = await Promise.all([
+      fixture.manager.launch(fixture.input),
+      fixture.manager.launch(fixture.input)
+    ])
+
+    expect(fixture.spawnProcess).toHaveBeenCalledOnce()
+    expect(launched.map((result) => result.disposition).sort()).toEqual(['created', 'reused'])
+  })
+
   it.each(['initialize', 'thread/start', 'thread/read'] as const)(
     'fails closed when launch authority drifts after %s',
     async (driftAfter) => {
@@ -248,6 +316,9 @@ describe('CodexControlledSessionManager', () => {
 
     await expect(fixture.manager.launch(fixture.input)).rejects.toThrow('timeout')
     expect(fixture.processes[0]?.exitCode).toBeNull()
+    await expect(fixture.manager.launch(fixture.input)).rejects.toThrow(
+      'requires cleanup before relaunch'
+    )
 
     await expect(
       fixture.manager.disposeConversation(fixture.input.conversationId)
@@ -258,7 +329,7 @@ describe('CodexControlledSessionManager', () => {
 
   it('preserves the owned socket when SIGKILL does not terminate the controller', async () => {
     vi.useFakeTimers()
-    const root = mkdtempSync('/tmp/ocw-stop-test-')
+    const root = mkdtempSync(join(tmpdir(), 'ocw-stop-test-'))
     roots.push(root)
     const socketPath = join(root, 'controller.sock')
     const server = createServer()
@@ -268,22 +339,36 @@ describe('CodexControlledSessionManager', () => {
     Object.defineProperty(process, 'exitCode', { value: null, writable: true })
     process.kill = vi.fn(() => true) as ChildProcess['kill']
 
-    const stopping = stopControlledCodexServer(
-      { process, socketIdentity: { dev: identity.dev, ino: identity.ino } },
-      socketPath
-    )
-    const stopError = stopping.then(
-      () => null,
-      (error: unknown) => error
-    )
-    await vi.advanceTimersByTimeAsync(10_000)
+    try {
+      const stopping = stopControlledCodexServer(
+        { process, socketIdentity: { dev: identity.dev, ino: identity.ino } },
+        socketPath
+      )
+      const stopError = stopping.then(
+        () => null,
+        (error: unknown) => error
+      )
+      await vi.advanceTimersByTimeAsync(10_000)
 
-    const error = await stopError
-    expect(error).toBeInstanceOf(Error)
-    expect((error as Error).message).toContain('did not exit after SIGKILL')
-    expect(existsSync(socketPath)).toBe(true)
-    await new Promise<void>((resolve) => server.close(() => resolve()))
-    vi.useRealTimers()
+      const error = await stopError
+      expect(error).toBeInstanceOf(Error)
+      expect((error as Error).message).toContain('did not exit after SIGKILL')
+      expect(existsSync(socketPath)).toBe(true)
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not signal a child that already exited by signal', async () => {
+    const child = new EventEmitter() as ChildProcess
+    Object.defineProperty(child, 'exitCode', { value: null })
+    Object.defineProperty(child, 'signalCode', { value: 'SIGKILL' })
+    child.kill = vi.fn(() => true) as ChildProcess['kill']
+
+    await stopControlledCodexServer({ process: child, socketIdentity: null }, '/unused/socket')
+
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
   it('does not unlink or compete with an existing controller socket', async () => {
@@ -314,6 +399,39 @@ describe('CodexControlledSessionManager', () => {
       startControlledCodexServer(fixture.input, fixture.socketPath(), spawnProcess)
     ).rejects.toThrow('ENOENT')
     expect(child.exitCode).toBe(1)
+  })
+
+  it('reports signal termination during socket readiness without waiting for timeout', async () => {
+    const fixture = createFixture()
+    const child = new EventEmitter() as ChildProcess
+    Object.defineProperty(child, 'exitCode', { value: null })
+    Object.defineProperty(child, 'signalCode', { value: 'SIGKILL' })
+    child.kill = vi.fn(() => true) as ChildProcess['kill']
+    const spawnProcess = vi.fn(() => child) as unknown as typeof spawn
+
+    await expect(
+      startControlledCodexServer(fixture.input, fixture.socketPath(), spawnProcess)
+    ).rejects.toThrow('exited before ready')
+    expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('removes the owned socket when post-readiness hardening fails', async () => {
+    const fixture = createFixture()
+
+    await expect(
+      startControlledCodexServer(
+        fixture.input,
+        fixture.socketPath(),
+        fixture.spawnProcess,
+        resolveControlledCodexCommand(fixture.input.command),
+        () => {
+          throw new Error('chmod failed')
+        }
+      )
+    ).rejects.toThrow('chmod failed')
+
+    expect(existsSync(fixture.socketPath())).toBe(false)
+    expect(fixture.processes[0]?.exitCode).toBe(0)
   })
 
   it('durably commits before starting and deduplicates the accepted wake', async () => {
@@ -392,6 +510,20 @@ describe('CodexControlledSessionManager', () => {
     await vi.waitFor(() => expect(listener).toHaveBeenCalledWith(fixture.input.conversationId))
   })
 
+  it('isolates terminal observer failures', async () => {
+    const fixture = createFixture()
+    await fixture.manager.launch(fixture.input)
+    const delivered = vi.fn()
+    fixture.manager.onTurnTerminal(() => {
+      throw new Error('observer failed')
+    })
+    fixture.manager.onTurnTerminal(delivered)
+
+    fixture.notify('turn/completed', { threadId: fixture.input.threadId })
+
+    await vi.waitFor(() => expect(delivered).toHaveBeenCalledWith(fixture.input.conversationId))
+  })
+
   it('re-resolves a reminted handle from the stable pane identity', async () => {
     const fixture = createFixture()
     const launched = await fixture.manager.launch(fixture.input)
@@ -441,6 +573,16 @@ describe('CodexControlledSessionManager', () => {
     )
   })
 
+  it('classifies a missing thread by its Codex JSON-RPC code', async () => {
+    const fixture = createFixture()
+    await fixture.manager.launch(fixture.input)
+    fixture.stub.missingNextRead = true
+
+    await expect(fixture.manager.getState(target(fixture.input.conversationId))).resolves.toBe(
+      'missing'
+    )
+  })
+
   it('re-checks kill switches during reconciliation and state inspection', async () => {
     const fixture = createFixture()
     await fixture.manager.launch(fixture.input)
@@ -485,10 +627,12 @@ function createFixture(
     readinessError?: Error
     driftAfter?: 'initialize' | 'thread/start' | 'thread/resume' | 'thread/read'
     closeVisibleTerminalFailures?: number
+    terminalSurface?: 'background' | 'visible'
+    omitTerminalIdentity?: 'tab' | 'pane' | 'workspace'
   } = {}
 ) {
   const root = mkdtempSync(join(tmpdir(), 'orca-controlled-codex-test-'))
-  const socketRoot = mkdtempSync('/tmp/ocw-test-')
+  const socketRoot = mkdtempSync(join(tmpdir(), 'ocw-test-'))
   roots.push(root)
   roots.push(socketRoot)
   const stub: StubState = {
@@ -497,6 +641,7 @@ function createFixture(
     turnStarts: 0,
     rejectNextStart: false,
     rejectNextRead: false,
+    missingNextRead: false,
     leaveNextStartAmbiguous: false,
     servers: [],
     sockets: []
@@ -543,7 +688,15 @@ function createFixture(
             currentAccount.value = 'account-b'
           }
         } else if (message.method === 'thread/read') {
-          if (stub.rejectNextRead) {
+          if (stub.missingNextRead) {
+            stub.missingNextRead = false
+            socket.send(
+              JSON.stringify({
+                id: message.id,
+                error: { code: -32600, message: 'localized missing-thread response' }
+              })
+            )
+          } else if (stub.rejectNextRead) {
             stub.rejectNextRead = false
             socket.send(JSON.stringify({ id: message.id, error: { message: 'temporary read' } }))
           } else {
@@ -626,10 +779,13 @@ function createFixture(
       return {
         handle: 'handle-1',
         ptyId: 'pty-1',
-        tabId: 'tab-1',
-        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-        worktreeId: 'worktree-1',
-        surface: 'visible'
+        tabId: options.omitTerminalIdentity === 'tab' ? undefined : 'tab-1',
+        paneKey:
+          options.omitTerminalIdentity === 'pane'
+            ? undefined
+            : 'tab-1:11111111-1111-4111-8111-111111111111',
+        worktreeId: options.omitTerminalIdentity === 'workspace' ? undefined : 'worktree-1',
+        surface: options.terminalSurface ?? 'visible'
       }
     },
     waitForVisibleTerminal: async (terminal) => {
@@ -669,7 +825,7 @@ function createFixture(
     closedTerminals,
     processes,
     flags,
-    socketPath: () => join(socketRoot, '413055e0cb3a7c6d.sock'),
+    socketPath: () => getControlledSocketPath(socketRoot, fixtureInput.conversationId),
     notify: (method: string, params: Record<string, unknown>) => {
       for (const server of stub.sockets) {
         for (const socket of server.clients) {

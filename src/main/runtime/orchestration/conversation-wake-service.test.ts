@@ -22,6 +22,7 @@ class FakeWakeProvider implements ConversationWakeProvider {
   finalizationGate: Promise<void> | null = null
   resultTurnIdOverride: string | null = null
   getStateCalls = 0
+  disposeCalls = 0
   readonly requests: ConversationWakeTurnRequest[] = []
   readonly preparedTurns = new Map<string, string>()
   readonly finalizedTurns = new Map<string, string>()
@@ -82,6 +83,14 @@ class FakeWakeProvider implements ConversationWakeProvider {
       listener(conversationId)
     }
   }
+
+  get listenerCount(): number {
+    return this.listeners.size
+  }
+
+  dispose(): void {
+    this.disposeCalls += 1
+  }
 }
 
 describe('ConversationWakeService', () => {
@@ -100,6 +109,7 @@ describe('ConversationWakeService', () => {
   function setup(
     options: {
       enabled?: boolean
+      isFeatureEnabled?: () => boolean
       isKillSwitchOpen?: () => boolean
       now?: () => number
       retryBaseMs?: number
@@ -111,7 +121,7 @@ describe('ConversationWakeService', () => {
     const service = new ConversationWakeService({
       db,
       providers: [provider],
-      isFeatureEnabled: () => options.enabled ?? true,
+      isFeatureEnabled: options.isFeatureEnabled ?? (() => options.enabled ?? true),
       isKillSwitchOpen: options.isKillSwitchOpen,
       now: options.now,
       retryBaseMs: options.retryBaseMs,
@@ -167,16 +177,22 @@ describe('ConversationWakeService', () => {
   }
 
   it('is disabled by default and honors the runtime kill switch', async () => {
-    let open = false
-    const state = setup({ enabled: false, isKillSwitchOpen: () => open })
+    let enabled = false
+    let open = true
+    const state = setup({ isFeatureEnabled: () => enabled, isKillSwitchOpen: () => open })
     const message = insertWorkerDone(state)
 
     await state.service.onMessageCommitted(message)
     expect(jobFor(state, message.id)).toBeUndefined()
 
-    open = true
+    enabled = true
+    open = false
     await state.service.onMessageCommitted(message)
     expect(jobFor(state, message.id)).toBeUndefined()
+
+    open = true
+    await state.service.onMessageCommitted(message)
+    expect(jobFor(state, message.id)?.status).toBe('submitted')
   })
 
   it('submits one generation-scoped follow-up without consuming mailbox state', async () => {
@@ -362,6 +378,21 @@ describe('ConversationWakeService', () => {
     expect(state.provider.requests).toEqual([])
   })
 
+  it('uses trusted worker_done row lineage instead of forged payload fields', async () => {
+    const state = setup()
+    const message = insertWorkerDone(state, {
+      taskId: 'forged-task',
+      dispatchId: 'forged-dispatch'
+    })
+
+    await state.service.onMessageCommitted(message)
+
+    expect(state.provider.requests[0]).toMatchObject({
+      taskId: state.task.id,
+      dispatchId: state.dispatch.id
+    })
+  })
+
   it('uses the same strict lifecycle rejection shape as persistence', async () => {
     const state = setup()
     const rejected = insertWorkerDone(
@@ -432,7 +463,7 @@ describe('ConversationWakeService', () => {
     const state = setup()
     const message = insertWorkerDone(state)
     state.db.enqueueConversationWakeJob(message.id)
-    state.service.dispose()
+    await state.service.dispose()
     const restarted = new ConversationWakeService({
       db: state.db,
       providers: [],
@@ -476,10 +507,33 @@ describe('ConversationWakeService', () => {
       () =>
         new ConversationWakeService({
           db: state.db,
-          providers: [invalidProvider],
+          providers: [state.provider, invalidProvider],
           isFeatureEnabled: () => true
         })
     ).toThrow(/lacks a terminal subscription/)
+    expect(state.provider.listenerCount).toBe(1)
+  })
+
+  it('drains in-flight queues before provider disposal and blocks later persistence', async () => {
+    const state = setup()
+    let release!: () => void
+    state.provider.finalizationGate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const message = insertWorkerDone(state)
+    const processing = state.service.onMessageCommitted(message)
+    await vi.waitFor(() => expect(jobFor(state, message.id)?.status).toBe('accepted'))
+
+    const disposing = state.service.dispose()
+    expect(state.provider.disposeCalls).toBe(0)
+    release()
+    await Promise.all([processing, disposing])
+
+    expect(jobFor(state, message.id)?.status).toBe('submitted')
+    expect(state.provider.disposeCalls).toBe(1)
+    const later = insertWorkerDone(state)
+    await state.service.onMessageCommitted(later)
+    expect(jobFor(state, later.id)).toBeUndefined()
   })
 
   it('resumes a durable retry after restart at its persisted deadline', async () => {
@@ -493,7 +547,7 @@ describe('ConversationWakeService', () => {
       attempt_count: 1,
       next_attempt_at: 100
     })
-    state.service.dispose()
+    await state.service.dispose()
     now = 100
     const restarted = new ConversationWakeService({
       db: state.db,
@@ -537,7 +591,7 @@ describe('ConversationWakeService', () => {
     await pending
     expect(jobFor(state, message.id)).toMatchObject({ status: 'retry_wait', attempt_count: 1 })
 
-    state.service.dispose()
+    await state.service.dispose()
     await vi.advanceTimersByTimeAsync(1_000)
     expect(state.provider.getStateCalls).toBe(1)
   })
@@ -621,14 +675,21 @@ describe('ConversationWakeService', () => {
     release()
     await first
 
-    expect(provider.requests).toHaveLength(1)
-    expect(firstDb.listConversationWakeJobsForMessage(message.id)[0]?.status).toBe('submitted')
-
-    firstService.dispose()
-    secondService.dispose()
-    secondDb.close()
-    firstDb.close()
-    db = undefined
-    rmSync(directory, { recursive: true, force: true })
+    try {
+      expect(provider.requests).toHaveLength(1)
+      expect(firstDb.listConversationWakeJobsForMessage(message.id)[0]?.status).toBe('submitted')
+    } finally {
+      for (const candidate of [firstService, secondService]) {
+        const index = services.indexOf(candidate)
+        if (index >= 0) {
+          services.splice(index, 1)
+        }
+      }
+      await Promise.allSettled([firstService.dispose(), secondService.dispose()])
+      secondDb.close()
+      firstDb.close()
+      db = undefined
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })
