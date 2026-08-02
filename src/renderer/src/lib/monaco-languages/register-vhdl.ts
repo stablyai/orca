@@ -59,6 +59,8 @@ export const vhdlMonarchLanguage: Monaco.languages.IMonarchLanguage = {
         /[a-z_]\w*/,
         {
           cases: {
+            // Only names enter @afterName: a reserved word is never the prefix
+            // of an attribute tick, so `keyword` deliberately stays in root.
             '@keywords': 'keyword',
             '@typeKeywords': { token: 'type', next: '@afterName' },
             '@default': { token: 'identifier', next: '@afterName' }

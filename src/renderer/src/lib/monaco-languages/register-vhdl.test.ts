@@ -17,6 +17,9 @@ const wordLists = vhdlMonarchLanguage as unknown as Record<string, string[]>
 // A miniature Monarch interpreter covering exactly the features this grammar
 // uses (includes, cases, push/pop). Asserting on rule shape would not catch the
 // ordering bugs that actually matter here — see the apostrophe cases below.
+// One deliberate difference from the editor: Monaco merges adjacent same-type
+// tokens before painting, so a run like `"` `valid` `"` arrives here as three
+// entries and renders as one span. Assert per rule, not per painted span.
 function rulesFor(state: string): [RegExp, MonarchAction, string?][] {
   return tokenizer[state].flatMap((rule) =>
     'include' in rule ? rulesFor(rule.include.slice(1)) : [rule]
@@ -277,6 +280,23 @@ describe('vhdl tokenizer', () => {
       text: '""',
       token: 'string.escape'
     })
+  })
+
+  it('treats a doubled quote as an escape, not as two adjacent strings', () => {
+    // `"valid""unclosed` is ONE unterminated literal containing `valid"unclosed`
+    // — VHDL has no implicit concatenation, so it cannot be a closed string
+    // followed by an open one. Splitting it would be the bug.
+    expect(tokenize('report "valid""unclosed')).toContainEqual({
+      text: '"valid""unclosed',
+      token: 'string.invalid'
+    })
+
+    // The properly separated form is two complete strings and stays valid.
+    const separated = tokenize('report "valid" & "ok";')
+    expect(separated.some((entry) => entry.token === 'string.invalid')).toBe(false)
+    expect(separated.filter((entry) => entry.token === 'delimiter').map((e) => e.text)).toContain(
+      '&'
+    )
   })
 
   it('flags an unterminated string instead of bleeding into the next line', () => {
