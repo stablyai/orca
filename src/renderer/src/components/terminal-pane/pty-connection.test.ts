@@ -123,7 +123,7 @@ async function renderHeadlessTerminalState(
   }
 }
 
-const toastInfo = vi.fn()
+const { toastInfo } = vi.hoisted(() => ({ toastInfo: vi.fn() }))
 const notifyCodexPaneBoundForStaleSweep = vi.fn()
 const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
 const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
@@ -6636,7 +6636,7 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.('\x1b[?2004hWaiting for setup to finish...')
     expect(transport.sendInputAccepted).not.toHaveBeenCalled()
 
-    capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
+    capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› Ask Codex')
     await flushAsyncTicks()
 
     expect(transport.sendInputAccepted).toHaveBeenCalledTimes(1)
@@ -6645,7 +6645,6 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('releases startup draft delivery when disposed before deferred connect starts', async () => {
   it('retries the same startup draft after an explicit no-write result', async () => {
     const draftPaste = await import('@/lib/agent-draft-paste-content')
     const sendDraft = vi
@@ -6923,7 +6922,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('does not consume startup draft delivery before deferred connect starts', async () => {
+  it('releases startup draft delivery when disposed before deferred connect starts', async () => {
     const { connectPanePty } = await import('./pty-connection')
     globalThis.requestAnimationFrame = vi.fn(() => 1)
     const transport = createMockTransport('pty-codex')
