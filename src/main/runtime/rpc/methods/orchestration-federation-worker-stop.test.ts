@@ -78,6 +78,9 @@ describe('orchestration federation worker stop', () => {
     const taskBefore = homeDb.getTask(task.id)
     const replacementBefore = homeDb.getDispatchContextById(replacement.dispatch.id)
     const dependentBefore = homeDb.getTask(dependent.id)
+    expect(taskBefore).toMatchObject({ status: 'completed' })
+    expect(replacementBefore).toBeDefined()
+    expect(dependentBefore).toBeDefined()
     const rawDb = (
       homeDb as unknown as {
         db: { prepare(sql: string): { run(...args: unknown[]): void } }
