@@ -881,6 +881,26 @@ function getLegacyDaemonAdapters(provider: DaemonProvider): DaemonPtyAdapter[] {
   return []
 }
 
+function getKnownDaemonSessionRoutes(
+  provider: DaemonProvider
+): Map<string, DaemonPtyAdapter> {
+  const routes =
+    provider instanceof DaemonPtyRouter
+      ? new Map(provider.getKnownSessionAdapterEntries())
+      : new Map<string, DaemonPtyAdapter>()
+  for (const daemonAdapter of [
+    getCurrentDaemonAdapter(provider),
+    ...getLegacyDaemonAdapters(provider)
+  ]) {
+    for (const sessionId of daemonAdapter.getActiveSessionIds()) {
+      if (!routes.has(sessionId)) {
+        routes.set(sessionId, daemonAdapter)
+      }
+    }
+  }
+  return routes
+}
+
 function disposeProviderSubscriptionsOnly(provider: DaemonProvider): void {
   if (provider instanceof DaemonPtyRouter) {
     provider.disposeRouterOnly()
@@ -919,13 +939,9 @@ function transitionToInputFallback(current: DaemonPtyAdapter): Promise<void> {
     const degraded = new DegradedDaemonPtyProvider({
       current,
       legacy: getLegacyDaemonAdapters(previousProvider),
-      fallback
+      fallback,
+      knownDaemonSessionRoutes: getKnownDaemonSessionRoutes(previousProvider)
     })
-    await degraded.discoverDaemonSessions()
-    if (adapter !== previousProvider) {
-      degraded.disposeProviderOnly()
-      return
-    }
 
     unbindLocalProviderListeners()
     disposeProviderSubscriptionsOnly(previousProvider)
@@ -934,6 +950,11 @@ function transitionToInputFallback(current: DaemonPtyAdapter): Promise<void> {
     console.warn(
       '[daemon] PTY input unavailable — preserving existing sessions and routing fresh terminals locally'
     )
+
+    await degraded.discoverDaemonSessions()
+    if (adapter !== degraded) {
+      degraded.disposeProviderOnly()
+    }
   })().finally(() => {
     if (inputFallbackTransition === transition) {
       inputFallbackTransition = null

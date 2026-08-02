@@ -305,6 +305,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.allAdapters()
   }
 
+  getKnownSessionAdapterEntries(): [string, DaemonPtyAdapter][] {
+    return [...this.sessionAdapters.entries()]
+  }
+
   private adapterFor(sessionId: string): DaemonPtyAdapter {
     return this.sessionAdapters.get(sessionId) ?? this.current
   }

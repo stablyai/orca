@@ -31,10 +31,14 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     current: DaemonPtyAdapter
     legacy: DaemonPtyAdapter[]
     fallback: IPtyProvider
+    knownDaemonSessionRoutes?: Iterable<readonly [string, DaemonPtyAdapter]>
   }) {
     this.current = opts.current
     this.legacy = opts.legacy
     this.fallback = opts.fallback
+    for (const [sessionId, provider] of opts.knownDaemonSessionRoutes ?? []) {
+      this.sessionProviders.set(sessionId, provider)
+    }
 
     for (const provider of this.allProviders()) {
       this.unsubscribers.push(

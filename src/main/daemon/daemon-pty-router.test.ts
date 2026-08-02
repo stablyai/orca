@@ -389,6 +389,21 @@ describe('DaemonPtyRouter', () => {
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
   })
 
+  it('exposes known routes for a provider handoff without losing legacy ownership', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+    const created = await router.spawn({ cols: 80, rows: 24 })
+
+    expect(new Map(router.getKnownSessionAdapterEntries())).toEqual(
+      new Map([
+        ['legacy-session', legacy],
+        [created.id, current]
+      ])
+    )
+  })
+
   it('routes background hints and authoritative snapshots to the session owner', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])

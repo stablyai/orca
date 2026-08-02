@@ -228,6 +228,38 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.write).toHaveBeenCalledWith(fresh.id, 'new\n')
   })
 
+  it('keeps known daemon routes usable while discovery is pending', async () => {
+    const current = createDaemonAdapter('current')
+    const legacy = createDaemonAdapter('legacy')
+    const fallback = createProvider('fallback')
+    let finishDiscovery!: () => void
+    vi.mocked(current.listProcesses).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishDiscovery = () => resolve([])
+        })
+    )
+    const provider = new DegradedDaemonPtyProvider({
+      current,
+      legacy: [legacy],
+      fallback,
+      knownDaemonSessionRoutes: [['legacy-session', legacy]]
+    })
+
+    const discovering = provider.discoverDaemonSessions()
+    await provider.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
+
+    expect(legacy.spawn).toHaveBeenCalledWith({
+      sessionId: 'legacy-session',
+      cols: 80,
+      rows: 24
+    })
+    expect(fallback.spawn).not.toHaveBeenCalled()
+
+    finishDiscovery()
+    await discovering
+  })
+
   it('routes a previously daemon-backed id to fallback after daemon exit removes the mapping', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')

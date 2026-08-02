@@ -116,7 +116,7 @@ const {
   // Why: adapters are built inside initDaemonPtyProvider, so tests set this before init to make listSessions report live sessions.
   const defaultListSessionsSessions: { sessionId: string }[] = []
   const listProcessesControl: {
-    current: null | (() => Promise<{ sessionId: string }[]>)
+    current: null | (() => Promise<{ id: string; cwd: string; title: string }[]>)
   } = { current: null }
 
   const localFallbackProvider = {
@@ -212,6 +212,7 @@ type MockAdapter = {
   }
   getActiveSessionIds: ReturnType<typeof vi.fn>
   fanoutSyntheticExits: ReturnType<typeof vi.fn>
+  spawn: ReturnType<typeof vi.fn>
   listProcesses: ReturnType<typeof vi.fn>
   listSessions: ReturnType<typeof vi.fn>
   establishLifecycleLease: ReturnType<typeof vi.fn>
@@ -334,6 +335,7 @@ vi.mock('./daemon-pty-adapter', () => ({
     readonly options: MockAdapter['options']
     readonly getActiveSessionIds: ReturnType<typeof vi.fn>
     readonly fanoutSyntheticExits: ReturnType<typeof vi.fn>
+    readonly spawn: ReturnType<typeof vi.fn>
     readonly listProcesses: ReturnType<typeof vi.fn>
     readonly listSessions: ReturnType<typeof vi.fn>
     readonly establishLifecycleLease: ReturnType<typeof vi.fn>
@@ -353,6 +355,9 @@ vi.mock('./daemon-pty-adapter', () => ({
       this.fanoutSyntheticExits = vi.fn(() => {
         this.callOrder.push('fanoutSyntheticExits')
       })
+      this.spawn = vi.fn(async (opts: { sessionId?: string }) => ({
+        id: opts.sessionId ?? 'daemon-pty'
+      }))
       this.listProcesses = vi.fn(async () =>
         listProcessesControl.current ? listProcessesControl.current() : []
       )
@@ -570,6 +575,46 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(rebindLocalProviderListenersMock).toHaveBeenCalledTimes(2)
   })
 
+  it('routes fresh terminals locally while daemon session discovery is still pending', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const current = adapterInstances[0]
+    let resolveDiscovery!: (sessions: { id: string; cwd: string; title: string }[]) => void
+    const discovery = new Promise<{ id: string; cwd: string; title: string }[]>((resolve) => {
+      resolveDiscovery = resolve
+    })
+    listProcessesControl.current = () => discovery
+    current.getActiveSessionIds.mockReturnValue(['preserved-daemon-session'])
+
+    current.triggerInputUnavailable()
+    await vi.waitFor(() => expect(current.listProcesses).toHaveBeenCalledOnce())
+
+    expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(2)
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+
+    await provider!.spawn({ cols: 80, rows: 24 })
+    expect(localFallbackProvider.spawn).toHaveBeenCalledOnce()
+    expect(current.spawn).not.toHaveBeenCalled()
+
+    await provider!.spawn({ sessionId: 'preserved-daemon-session', cols: 80, rows: 24 })
+    expect(current.spawn).toHaveBeenCalledWith({
+      sessionId: 'preserved-daemon-session',
+      cols: 80,
+      rows: 24
+    })
+
+    resolveDiscovery([{ id: 'preserved-daemon-session', cwd: '/repo', title: 'shell' }])
+    await vi.waitFor(() =>
+      expect(
+        (provider as InstanceType<typeof DegradedDaemonPtyProvider>).getCurrentDaemonSessionIds()
+      ).toEqual(['preserved-daemon-session'])
+    )
+
+    expect(current.dispose).not.toHaveBeenCalled()
+  })
+
   it('uses daemon-owned idle retirement when a fresh launch fails permanent adoption', async () => {
     const mod = await importFresh()
     ensureRunningOverrides.push(async () => ({
@@ -659,8 +704,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const mod = await importFresh()
     probeSocketExistsMock.mockImplementation((p?: string) => p?.endsWith('daemon-v9.sock') ?? false)
     mockOnlyDaemonSocketAlive('daemon-v9.sock')
-    let resolveDiscovery!: (sessions: { sessionId: string }[]) => void
-    const discovery = new Promise<{ sessionId: string }[]>((resolve) => {
+    let resolveDiscovery!: (sessions: { id: string; cwd: string; title: string }[]) => void
+    const discovery = new Promise<{ id: string; cwd: string; title: string }[]>((resolve) => {
       resolveDiscovery = resolve
     })
     listProcessesControl.current = () => discovery
