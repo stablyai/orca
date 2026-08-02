@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { formatReleaseTitleTimestamp } from './release-title-timestamp.mjs'
 
 /** `1.4.160-hourly.202607281400` — UTC to the minute, so tags sort chronologically
  *  by semver and every build is uniquely versioned. */
@@ -28,41 +29,18 @@ export function createHourlyBuildVersion(baseVersion, date) {
   return `${match[1]}-hourly.${stamp}`
 }
 
-const RELEASE_NAME_TIME_ZONE = 'America/Los_Angeles'
-
 /**
  * `1.4.163 • 01 • 07-31 13:54 • e698241` — the human-facing release title, shown
  * verbatim in both the GitHub releases list and the in-app build picker.
- *
- * Why Pacific while the tag's stamp stays UTC: the stamp is a sort key, and a
- * local one would repeat an hour at every DST fall-back, making two distinct
- * builds compare equal. The title is only ever read, so it uses the timezone the
- * people reading it are in. The two therefore disagree by the current offset.
  */
 export function formatHourlyReleaseName(version, buildNumber, commit, date) {
   if (!Number.isInteger(buildNumber) || buildNumber < 1) {
     throw new Error(`Hourly build number must be a positive integer: ${buildNumber}`)
   }
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    throw new Error('Hourly build timestamp is invalid.')
-  }
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: RELEASE_NAME_TIME_ZONE,
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      // Why h23 rather than hour12: false: some ICU builds render midnight as 24.
-      hourCycle: 'h23'
-    })
-      .formatToParts(date)
-      .map((part) => [part.type, part.value])
-  )
   return [
     version.split('-')[0],
     String(buildNumber).padStart(2, '0'),
-    `${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`,
+    formatReleaseTitleTimestamp(date),
     commit.slice(0, 7)
   ].join(' • ')
 }
