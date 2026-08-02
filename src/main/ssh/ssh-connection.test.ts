@@ -1799,9 +1799,7 @@ describe('SshConnection', () => {
 
       await expect(settled).resolves.toBeUndefined()
       expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(2)
-      expect(removeControlSocketPathMock).toHaveBeenCalledWith(
-        '/tmp/orca-ssh-501/stale-socket'
-      )
+      expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
       expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
         2,
         expect.anything(),
@@ -1816,10 +1814,7 @@ describe('SshConnection', () => {
   it('skips a second probe for a definite host failure', async () => {
     getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
     spawnSystemSshCommandMock.mockImplementation(() =>
-      createFailingSystemCommandChannel(
-        255,
-        'ssh: connect to host box port 22: No route to host'
-      )
+      createFailingSystemCommandChannel(255, 'ssh: connect to host box port 22: No route to host')
     )
     vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
@@ -1863,9 +1858,7 @@ describe('SshConnection', () => {
 
       await expect(settled).resolves.toBeDefined()
       expect(spawnSystemSshMock).toHaveBeenCalledTimes(2)
-      expect(removeControlSocketPathMock).toHaveBeenCalledWith(
-        '/tmp/orca-ssh-501/stale-socket'
-      )
+      expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
       expect(spawnSystemSshMock).toHaveBeenNthCalledWith(
         2,
         expect.anything(),

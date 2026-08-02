@@ -92,6 +92,9 @@ export async function syncFederatedDispatch(
     })
     cursor = item.sequence
     runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
+    if (!stored.duplicate) {
+      runtime.onOrchestrationMessageCommitted(stored.message)
+    }
     imported += stored.duplicate ? 0 : 1
   }
 

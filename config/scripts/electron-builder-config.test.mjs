@@ -25,7 +25,8 @@ const MUTABLE_BUILD_ENV = [
   'ORCA_MAC_RELEASE',
   'ORCA_HOURLY_BUILD_VERSION',
   'ORCA_ADHOC_BUILD_VERSION',
-  'ORCA_LOCAL_BUILD_VERSION'
+  'ORCA_LOCAL_BUILD_VERSION',
+  'ORCA_WAKE_DEV_BUILD'
 ]
 
 /** Re-requires the config under a temporary env, then restores env and module cache. */
@@ -59,6 +60,33 @@ describe('electron-builder config', () => {
   it('keeps the packaged app identity aligned with local-build validation', () => {
     expect(electronBuilderConfig.appId).toBe(
       require('../../src/shared/local-build-compatibility-contract.json').appId
+    )
+  })
+
+  it('gives wake-dev packaging a side-by-side identity without publishing', () => {
+    withEnv({ ORCA_WAKE_DEV_BUILD: '1' }, (config) => {
+      expect(config).toMatchObject({
+        appId: 'com.ram4dev.orca-wake-dev',
+        productName: 'Orca Wake Dev',
+        directories: { output: 'dist/wake-dev' },
+        forceCodeSigning: false,
+        publish: null,
+        dmg: { artifactName: 'orca-wake-dev-macos-${arch}.${ext}' }
+      })
+      expect(config.mac).toMatchObject({ identity: '-', hardenedRuntime: false })
+      expect(config.mac.extraResources).toContainEqual({
+        from: 'resources/darwin/bin/orca-wake',
+        to: 'bin/orca-wake'
+      })
+    })
+    expect(electronBuilderConfig.appId).toBe('com.stablyai.orca')
+    expect(electronBuilderConfig.productName).toBe('Orca')
+    expect(electronBuilderConfig.directories.output).toBeUndefined()
+  })
+
+  it('rejects combining wake-dev with an official signing channel', () => {
+    expect(() => withEnv({ ORCA_WAKE_DEV_BUILD: '1', ORCA_MAC_RELEASE: '1' }, () => {})).toThrow(
+      'cannot use an official macOS release or dev-channel profile'
     )
   })
 

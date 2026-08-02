@@ -179,7 +179,8 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
-    viewMode: z.enum(['terminal', 'chat']).optional()
+    viewMode: z.enum(['terminal', 'chat']).optional(),
+    controlledCoordinator: z.boolean().optional()
   })
   .strict()
   .superRefine((value, context) => {

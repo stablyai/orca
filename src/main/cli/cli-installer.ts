@@ -28,6 +28,7 @@ import {
 const execFileAsync = promisify(execFile)
 const DEFAULT_MAC_COMMAND_PATH = '/usr/local/bin/orca'
 const DEV_COMMAND_NAME = 'orca-dev'
+const WAKE_DEV_COMMAND_NAME = 'orca-wake'
 const LINUX_COMMAND_NAME = 'orca-ide'
 const LEGACY_LINUX_COMMAND_NAME = 'orca'
 const DEV_LAUNCHER_DIR = ['cli', 'bin']
@@ -54,6 +55,7 @@ type CliInstallerOptions = {
   windowsEnvironment?: NodeJS.ProcessEnv
   /** Why: AppImage reports a stable outer file path via $APPIMAGE while bundled resources live in an ephemeral FUSE mount. */
   appImagePath?: string | null
+  packagedCommandName?: string
 }
 
 type InstallSpec = {
@@ -80,11 +82,15 @@ export class CliInstaller {
   private readonly userPathCacheInvalidator: () => void
   private readonly windowsEnvironment: NodeJS.ProcessEnv
   private readonly appImagePath: string | null
+  private readonly packagedCommandName: string
 
   private get commandName(): string {
     if (!this.isPackaged && !this.commandPathOverride) {
       // Why: development builds must not claim the production shell command.
       return DEV_COMMAND_NAME
+    }
+    if (this.platform === 'darwin') {
+      return this.packagedCommandName
     }
     // Why: packaged Linux uses `orca-ide` to avoid shadowing GNOME Orca's /usr/bin/orca.
     return this.platform === 'linux' ? LINUX_COMMAND_NAME : 'orca'
@@ -105,11 +111,20 @@ export class CliInstaller {
     this.processPathEnv = options.processPathEnv ?? process.env.PATH ?? process.env.Path ?? null
     this.commandPathOverride =
       options.commandPathOverride ?? process.env.ORCA_CLI_INSTALL_PATH ?? null
+    this.packagedCommandName =
+      options.packagedCommandName ??
+      (process.env.ORCA_PACKAGED_COMMAND_NAME === WAKE_DEV_COMMAND_NAME
+        ? WAKE_DEV_COMMAND_NAME
+        : 'orca')
     // Why: resolved once here (getStatus is hot); /usr/local/bin is absent on Apple Silicon, so fall back to user-writable ~/.local/bin.
-    const candidateMacPath = options.defaultMacCommandPath ?? DEFAULT_MAC_COMMAND_PATH
+    const candidateMacPath =
+      options.defaultMacCommandPath ??
+      (this.packagedCommandName === 'orca'
+        ? DEFAULT_MAC_COMMAND_PATH
+        : `/usr/local/bin/${this.packagedCommandName}`)
     this.macCommandPath = existsSync(dirname(candidateMacPath))
       ? candidateMacPath
-      : join(this.homePath, '.local', 'bin', 'orca')
+      : join(this.homePath, '.local', 'bin', this.packagedCommandName)
     this.privilegedRunner = options.privilegedRunner ?? runMacPrivilegedCommand
     this.userPathReader = options.userPathReader ?? readWindowsUserPathRegistry
     this.userPathMutationReader =
@@ -355,7 +370,7 @@ export class CliInstaller {
 
     if (this.platform === 'win32') {
       // Why: NSIS /D installs can live outside LOCALAPPDATA, so use the packaged resources dir as authoritative.
-      return getBundledLauncherPath(this.platform, this.resourcesPath)
+      return getBundledLauncherPath(this.platform, this.resourcesPath, this.packagedCommandName)
     }
 
     return null
@@ -371,7 +386,11 @@ export class CliInstaller {
     }
 
     if (this.isPackaged) {
-      const bundledPath = getBundledLauncherPath(this.platform, this.resourcesPath)
+      const bundledPath = getBundledLauncherPath(
+        this.platform,
+        this.resourcesPath,
+        this.packagedCommandName
+      )
       return bundledPath && existsSync(bundledPath) ? bundledPath : null
     }
 
@@ -1208,10 +1227,11 @@ function quotePowerShell(value: string): string {
 
 export function getBundledLauncherPath(
   platform: NodeJS.Platform,
-  resourcesPath: string
+  resourcesPath: string,
+  packagedCommandName = 'orca'
 ): string | null {
   if (platform === 'darwin') {
-    return join(resourcesPath, 'bin', 'orca')
+    return join(resourcesPath, 'bin', packagedCommandName)
   }
   if (platform === 'linux') {
     return join(resourcesPath, 'bin', LINUX_COMMAND_NAME)

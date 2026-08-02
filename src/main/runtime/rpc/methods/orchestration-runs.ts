@@ -39,7 +39,7 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runCreate',
     params: RunCreateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
+    handler: async (params, { orchestrationCompatibilityEvidence, runtime }) => {
       assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
       const paneKey = requireCallerPane(runtime, params.from)
       const db = runtime.getOrchestrationDb()
@@ -52,13 +52,14 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
       if (priorRun) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
       }
+      await runtime.bindControlledCodexCoordinator(run.id, run.consumer_generation, paneKey)
       return { run, binding: { consumerGeneration: run.consumer_generation } }
     }
   }),
   defineMethod({
     name: 'orchestration.runUse',
     params: RunUseParams,
-    handler: (
+    handler: async (
       params,
       {
         runtime,
@@ -98,6 +99,7 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
       if (priorRun && priorRun.id !== params.id) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
       }
+      await runtime.bindControlledCodexCoordinator(run.id, run.consumer_generation, paneKey)
       return { run, binding: { consumerGeneration: run.consumer_generation } }
     }
   }),

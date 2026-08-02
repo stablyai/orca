@@ -98,6 +98,7 @@ describe('runRemoteOrcaCli', () => {
       getTerminalPaneKey: () => null,
       deliverPendingMessagesForHandle: vi.fn(),
       notifyMessageArrived: vi.fn(),
+      onOrchestrationMessageCommitted: vi.fn(),
       linearIssueContext: vi.fn(async (request: unknown) => ({
         request,
         issue: {

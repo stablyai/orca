@@ -309,6 +309,36 @@ describe('agent session RPC methods', () => {
     )
   })
 
+  it('passes explicit controlled coordinator intent through RPC unchanged', async () => {
+    const runtime = runtimeStub()
+    const dispatcher = new RpcDispatcher({
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_SESSION_METHODS
+    })
+
+    const response = await dispatcher.dispatch(
+      request('terminal.createAgentSession', {
+        clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        presentation: 'background',
+        controlledCoordinator: true
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.createAgentSession).toHaveBeenCalledWith(
+      {
+        clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        presentation: 'background',
+        controlledCoordinator: true
+      },
+      {}
+    )
+  })
+
   it('rejects draft delivery without a non-empty prompt', async () => {
     const runtime = runtimeStub()
     const dispatcher = new RpcDispatcher({

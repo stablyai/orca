@@ -978,11 +978,7 @@ export class SshConnection {
     try {
       await this.doSystemSshProbe(connectGeneration)
     } catch (err) {
-      if (
-        !controlPath ||
-        this.disposed ||
-        connectGeneration !== this.connectGeneration
-      ) {
+      if (!controlPath || this.disposed || connectGeneration !== this.connectGeneration) {
         throw err
       }
       removeControlSocketPath(controlPath)

@@ -105,8 +105,12 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb, type MessageRow } from './orchestration/db'
 import { OrchestrationError } from './orchestration/orchestration-error'
+import { ConversationWakeService } from './orchestration/conversation-wake-service'
+import type { ConversationWakeProvider } from './orchestration/conversation-wake-provider'
+import type { CodexControlledSessionManager } from '../codex/codex-controlled-session-manager'
+import type { ControlledCodexLaunchAuthority } from '../codex/codex-controlled-launch-authority'
 import {
   planLegacyWorkerTerminalRecovery,
   type LegacyWorkerTerminalRecoveryPlan
@@ -2768,6 +2772,14 @@ export class OrcaRuntimeService {
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
+  private orchestrationConversationWake: ConversationWakeService | null = null
+  private readonly orchestrationConversationWakeProviders: readonly ConversationWakeProvider[]
+  private readonly codexControlledSessionManager: CodexControlledSessionManager | null
+  private readonly resolveControlledCodexLaunchAuthorityFn:
+    | ((workspacePath: string) => ControlledCodexLaunchAuthority)
+    | null
+  private readonly isOrchestrationConversationWakeEnabledFn: () => boolean
+  private readonly isOrchestrationConversationWakeKillSwitchOpenFn: () => boolean
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
   // These listeners fire on every onPtyData call, enabling real-time streaming
@@ -3232,6 +3244,13 @@ export class OrcaRuntimeService {
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
+      orchestrationConversationWakeProviders?: readonly ConversationWakeProvider[]
+      codexControlledSessionManager?: CodexControlledSessionManager
+      resolveControlledCodexLaunchAuthority?: (
+        workspacePath: string
+      ) => ControlledCodexLaunchAuthority
+      isOrchestrationConversationWakeEnabled?: () => boolean
+      isOrchestrationConversationWakeKillSwitchOpen?: () => boolean
     }
   ) {
     this.store = store
@@ -3244,6 +3263,19 @@ export class OrcaRuntimeService {
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
+    this.codexControlledSessionManager = deps?.codexControlledSessionManager ?? null
+    this.resolveControlledCodexLaunchAuthorityFn =
+      deps?.resolveControlledCodexLaunchAuthority ?? null
+    this.orchestrationConversationWakeProviders = [
+      ...(deps?.orchestrationConversationWakeProviders ?? []),
+      ...(this.codexControlledSessionManager ? [this.codexControlledSessionManager] : [])
+    ]
+    this.isOrchestrationConversationWakeEnabledFn =
+      deps?.isOrchestrationConversationWakeEnabled ??
+      (() => process.env.ORCA_FEATURE_ORCHESTRATION_CONVERSATION_WAKE === '1')
+    this.isOrchestrationConversationWakeKillSwitchOpenFn =
+      deps?.isOrchestrationConversationWakeKillSwitchOpen ??
+      (() => process.env.ORCA_DISABLE_ORCHESTRATION_CONVERSATION_WAKE !== '1')
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -3726,12 +3758,119 @@ export class OrcaRuntimeService {
       const { app } = require('electron')
       const dbPath = join(app.getPath('userData'), 'orchestration.db')
       this._orchestrationDb = new OrchestrationDb(dbPath)
+      this.ensureOrchestrationConversationWake()
     }
     return this._orchestrationDb
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
+    void this.orchestrationConversationWake
+      ?.dispose()
+      .catch((error) =>
+        console.warn('[orchestration-wake] database replacement cleanup failed', error)
+      )
+    this.orchestrationConversationWake = null
     this._orchestrationDb = db
+    this.ensureOrchestrationConversationWake()
+  }
+
+  bindOrchestrationConversationWake(params: {
+    runId: string
+    consumerGeneration: number
+    provider: string
+    conversationId: string
+  }): ReturnType<ConversationWakeService['bindTarget']> {
+    this.getOrchestrationDb()
+    return this.ensureOrchestrationConversationWake().bindTarget(params)
+  }
+
+  async launchControlledCodexConversation(
+    params: Parameters<CodexControlledSessionManager['launch']>[0] & {
+      runId: string
+      consumerGeneration: number
+    }
+  ): Promise<Awaited<ReturnType<CodexControlledSessionManager['launch']>>> {
+    if (!this.codexControlledSessionManager) {
+      throw new Error('controlled Codex session manager is unavailable')
+    }
+    const result = await this.codexControlledSessionManager.launch(params)
+    try {
+      await this.bindOrchestrationConversationWake({
+        runId: params.runId,
+        consumerGeneration: params.consumerGeneration,
+        provider: this.codexControlledSessionManager.id,
+        conversationId: params.conversationId
+      })
+      return result
+    } catch (error) {
+      if (result.disposition === 'created') {
+        try {
+          await this.codexControlledSessionManager.disposeConversation(params.conversationId)
+        } catch (cleanupError) {
+          if (error instanceof Error) {
+            Object.assign(error, { cleanupError })
+          }
+        }
+      }
+      throw error
+    }
+  }
+
+  async bindControlledCodexCoordinator(
+    runId: string,
+    consumerGeneration: number,
+    coordinatorPaneKey: string
+  ): Promise<void> {
+    const manager = this.codexControlledSessionManager
+    const conversationId = manager?.getConversationForPane(coordinatorPaneKey)
+    if (!manager || !conversationId) {
+      return
+    }
+    await this.bindOrchestrationConversationWake({
+      runId,
+      consumerGeneration,
+      provider: manager.id,
+      conversationId
+    })
+  }
+
+  onOrchestrationMessageCommitted(message: MessageRow): void {
+    this.getOrchestrationDb()
+    void this.ensureOrchestrationConversationWake()
+      .onMessageCommitted(message)
+      .catch((error) => console.warn('[orchestration-wake] post-commit processing failed', error))
+  }
+
+  reconcileOrchestrationConversationWake(): Promise<void> {
+    this.getOrchestrationDb()
+    return this.ensureOrchestrationConversationWake().reconcile()
+  }
+
+  async disposeOrchestrationConversationWake(): Promise<void> {
+    await (this.orchestrationConversationWake?.dispose() ??
+      this.codexControlledSessionManager?.dispose() ??
+      Promise.resolve())
+    this.orchestrationConversationWake = null
+  }
+
+  private ensureOrchestrationConversationWake(): ConversationWakeService {
+    if (!this.orchestrationConversationWake) {
+      const db = this._orchestrationDb
+      if (!db) {
+        throw new Error('orchestration database is unavailable for conversation wake')
+      }
+      this.orchestrationConversationWake = new ConversationWakeService({
+        db,
+        providers: this.orchestrationConversationWakeProviders,
+        isFeatureEnabled: this.isOrchestrationConversationWakeEnabledFn,
+        isKillSwitchOpen: this.isOrchestrationConversationWakeKillSwitchOpenFn,
+        onError: (error) => console.warn('[orchestration-wake] provider operation failed', error)
+      })
+      void this.orchestrationConversationWake
+        .reconcile()
+        .catch((error) => console.warn('[orchestration-wake] reconciliation failed', error))
+    }
+    return this.orchestrationConversationWake
   }
 
   private getLegacyWorkerTerminalRecoveryPlan(): LegacyWorkerTerminalRecoveryPlan {
@@ -24119,7 +24258,8 @@ export class OrcaRuntimeService {
           request.presentation ?? null,
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
-          request.viewMode ?? null
+          request.viewMode ?? null,
+          request.controlledCoordinator ?? false
         ])
       )
       .digest('base64url')
@@ -24157,6 +24297,20 @@ export class OrcaRuntimeService {
       // both observe an empty ledger and reach the execution owner independently.
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
       if (
+        request.controlledCoordinator === true &&
+        (request.agent !== 'codex' ||
+          request.promptDelivery === 'draft' ||
+          request.agentArgs !== undefined ||
+          request.startupCwd !== undefined ||
+          request.placement !== undefined ||
+          workspace.connectionId !== null ||
+          Boolean(workspace.folderWorkspace) ||
+          parseWslUncPath(workspace.path) !== null ||
+          process.platform === 'win32')
+      ) {
+        throw new Error('controlled_codex_coordinator_unsupported')
+      }
+      if (
         !(await this.executionOwnerSupportsAgentSessionOperation(
           workspace,
           'create',
@@ -24185,9 +24339,17 @@ export class OrcaRuntimeService {
             request.presentation ?? null,
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
-            request.viewMode ?? null
+            request.viewMode ?? null,
+            request.controlledCoordinator ?? false
           ])
         )
+        .digest('base64url')
+      const executionOperationId = createHash('sha256')
+        .update(this.runtimeId)
+        .update('\0')
+        .update(operationKey)
+        .update('\0')
+        .update(resolvedFingerprint)
         .digest('base64url')
       const settings = this.store!.getSettings()
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
@@ -24226,6 +24388,33 @@ export class OrcaRuntimeService {
       if (!startup) {
         throw new Error('agent_session_identity_required')
       }
+      let preparedControlledLaunch: ReturnType<
+        CodexControlledSessionManager['prepareNewLaunch']
+      > | null = null
+      if (request.controlledCoordinator === true) {
+        const manager = this.codexControlledSessionManager
+        const authority = this.resolveControlledCodexLaunchAuthorityFn?.(workspace.path)
+        if (!manager || !authority?.codexHome || !authority.commandOverride) {
+          throw new Error('controlled_codex_coordinator_unavailable')
+        }
+        preparedControlledLaunch = manager.prepareNewLaunch(
+          {
+            conversationId: `codex-controlled:${executionOperationId}`,
+            operationId: executionOperationId,
+            worktreeSelector: `id:${workspace.id}`,
+            workspaceKind: 'worktree',
+            hostKind: 'local',
+            cwd: workspace.path,
+            codexHome: authority.codexHome,
+            accountId: authority.accountId,
+            presentation: 'focused',
+            command: authority.commandOverride,
+            model: request.launchPreferences?.model,
+            prompt: request.prompt
+          },
+          authority.command
+        )
+      }
       if (workspace.connectionId) {
         await this.markRemoteWorkspaceTrustedForAgent(
           request.agent,
@@ -24239,18 +24428,36 @@ export class OrcaRuntimeService {
         throw new Error('client_disconnected')
       }
       let terminal: RuntimeTerminalCreate
-      const executionOperationId = createHash('sha256')
-        .update(this.runtimeId)
-        .update('\0')
-        .update(operationKey)
-        .update('\0')
-        .update(resolvedFingerprint)
-        .digest('base64url')
       const operationTabId =
         request.placement?.tabId ?? deterministicAgentSessionUuid(`${executionOperationId}:tab`)
       const operationLeafId =
         request.placement?.leafId ?? deterministicAgentSessionUuid(`${executionOperationId}:leaf`)
       const operationHandle = `term_${deterministicAgentSessionUuid(`${executionOperationId}:handle`)}`
+      if (request.controlledCoordinator === true) {
+        try {
+          const controlled = await this.codexControlledSessionManager!.launchPreparedNew(
+            preparedControlledLaunch!
+          )
+          retainReplayFence = true
+          return {
+            disposition: 'created',
+            terminal: {
+              handle: controlled.identity.terminalHandle,
+              ptyId: controlled.identity.terminalPtyId,
+              tabId: controlled.identity.terminalTabId,
+              paneKey: controlled.identity.terminalPaneKey,
+              worktreeId: controlled.identity.worktreeId,
+              title: 'Codex',
+              surface: controlled.surface
+            }
+          }
+        } catch (error) {
+          if (isAgentSessionOperationOutcomeUnknown(error)) {
+            retainReplayFence = true
+          }
+          throw error
+        }
+      }
       try {
         terminal = await this.createTerminal(`id:${workspace.id}`, {
           command: startup.launchCommand,
@@ -24664,12 +24871,20 @@ export class OrcaRuntimeService {
     // populates this.leaves may not have arrived yet. Wait for the leaf to
     // appear so we can return a valid handle the caller can use right away.
     const handle = await this.waitForTerminalHandle(reply.tabId)
+    const record = this.handles.get(handle)
+    const leaf = record ? this.leaves.get(this.getLeafKey(record.tabId, record.leafId)) : null
+    if (!leaf?.ptyId) {
+      this.notifier?.closeTerminal(reply.tabId)
+      throw new Error('renderer-backed terminal did not register a PTY identity')
+    }
     return {
       handle,
       tabId: reply.tabId,
-      worktreeId: worktreeId ?? '',
+      paneKey: this.makeRuntimePaneKey(leaf),
+      ptyId: leaf.ptyId,
+      worktreeId: leaf.worktreeId,
       title: reply.title,
-      ...this.getPtyExecutionHostMetadata(this.handles.get(handle)?.ptyId ?? null),
+      ...this.getPtyExecutionHostMetadata(leaf.ptyId),
       surface: 'visible'
     }
   }

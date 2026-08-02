@@ -63,6 +63,7 @@ import {
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
+import { isWakeDevRuntime } from '../startup/wake-dev-build-flavor'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -146,47 +147,51 @@ export function attachMainWindowServices(
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
   registerTccPromptNoticeHandlers(mainWindow)
-  // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
-  let updaterSetupDone = false
-  const setupAutoUpdaterDeferred = (): void => {
-    if (updaterSetupDone || mainWindow.isDestroyed()) {
-      return
+  if (isWakeDevRuntime()) {
+    pendingAutoUpdaterSetup = null
+  } else {
+    // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
+    let updaterSetupDone = false
+    const setupAutoUpdaterDeferred = (): void => {
+      if (updaterSetupDone || mainWindow.isDestroyed()) {
+        return
+      }
+      updaterSetupDone = true
+      setupAutoUpdater(mainWindow, {
+        getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+        onBeforeQuit: async () => {
+          try {
+            await options?.onBeforeUpdateQuit?.()
+          } finally {
+            await store.flushPendingAsync()
+          }
+        },
+        setLastUpdateCheckAt: (timestamp) => {
+          store.updateUI({ lastUpdateCheckAt: timestamp })
+        },
+        getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
+        getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
+        setPendingUpdateNudgeId: (id) => {
+          // Why: only the apply branch also nulls dismissedUpdateVersion so relaunch can't resurrect the old hidden card; clearing must not, or it un-dismisses.
+          if (id) {
+            store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+          } else {
+            store.updateUI({ pendingUpdateNudgeId: null })
+          }
+        },
+        setDismissedUpdateNudgeId: (id) => {
+          store.updateUI({ dismissedUpdateNudgeId: id })
+        },
+        getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
+        installMode: options?.updateInstallMode
+      })
+      logStartupMilestone('updater-setup-done')
     }
-    updaterSetupDone = true
-    setupAutoUpdater(mainWindow, {
-      getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-      onBeforeQuit: async () => {
-        try {
-          await options?.onBeforeUpdateQuit?.()
-        } finally {
-          await store.flushPendingAsync()
-        }
-      },
-      setLastUpdateCheckAt: (timestamp) => {
-        store.updateUI({ lastUpdateCheckAt: timestamp })
-      },
-      getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-      getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
-      setPendingUpdateNudgeId: (id) => {
-        // Why: only the apply branch also nulls dismissedUpdateVersion so relaunch can't resurrect the old hidden card; clearing must not, or it un-dismisses.
-        if (id) {
-          store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
-        } else {
-          store.updateUI({ pendingUpdateNudgeId: null })
-        }
-      },
-      setDismissedUpdateNudgeId: (id) => {
-        store.updateUI({ dismissedUpdateNudgeId: id })
-      },
-      getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
-      installMode: options?.updateInstallMode
-    })
-    logStartupMilestone('updater-setup-done')
+    pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
+    mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
+    const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
+    updaterSetupFallback.unref?.()
   }
-  pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
-  mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
-  const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
-  updaterSetupFallback.unref?.()
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
@@ -532,21 +537,32 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:dismissAvailableUpdate')
   ipcMain.removeHandler('updater:listBuilds')
 
-  ipcMain.handle('updater:getStatus', () => getUpdateStatus())
+  const disabled = isWakeDevRuntime()
+  ipcMain.handle('updater:getStatus', () =>
+    disabled ? { state: 'not-available' as const } : getUpdateStatus()
+  )
   ipcMain.handle('updater:getVersion', () => app.getVersion())
   ipcMain.handle('updater:check', (_event, options?: UpdateCheckOptions) => {
+    if (disabled) {
+      return
+    }
     ensureAutoUpdaterConfigured()
     return checkForUpdatesFromMenu(options)
   })
-  ipcMain.handle('updater:download', () => downloadUpdate())
-  ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
-  ipcMain.handle('updater:dismissNudge', () => dismissNudge())
-  ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
+  ipcMain.handle('updater:download', () => (disabled ? undefined : downloadUpdate()))
+  ipcMain.handle('updater:quitAndInstall', () => (disabled ? undefined : quitAndInstall()))
+  ipcMain.handle('updater:dismissNudge', () => (disabled ? undefined : dismissNudge()))
+  ipcMain.handle('updater:dismissAvailableUpdate', () =>
+    disabled ? undefined : dismissAvailableUpdate()
+  )
   ipcMain.handle(
     'updater:listBuilds',
     async (_event, channel: ReleaseChannel): Promise<ReleaseBuildListResult> => {
       if (!RELEASE_CHANNELS.includes(channel)) {
         return { ok: false, channel, message: `Unknown release channel "${channel}".` }
+      }
+      if (disabled) {
+        return { ok: false, channel, message: 'Updates are disabled in Orca Wake Dev.' }
       }
       try {
         return { ok: true, channel, builds: await listAvailableReleaseBuilds(channel) }

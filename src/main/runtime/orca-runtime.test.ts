@@ -13466,6 +13466,8 @@ describe('OrcaRuntimeService', () => {
     ).resolves.toMatchObject({
       handle: expect.stringMatching(/^term_/),
       tabId: 'tab-renderer',
+      paneKey: 'tab-renderer:1',
+      ptyId: 'pty-renderer',
       title: 'Renderer Terminal',
       worktreeId: TEST_WORKTREE_ID,
       surface: 'visible'
@@ -13483,6 +13485,91 @@ describe('OrcaRuntimeService', () => {
       'terminal:tabCreateReply',
       expect.any(Function)
     )
+  })
+
+  it('closes a renderer-created tab when its registered leaf has no PTY identity', async () => {
+    const closeTerminal = vi.fn()
+    const webContents = { send: vi.fn() }
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal,
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: webContents },
+        { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Renderer Terminal' }
+      )
+      setTimeout(() => {
+        runtime.syncWindowGraph(1, {
+          tabs: [
+            {
+              tabId: 'tab-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Renderer Terminal',
+              activeLeafId: 'pane:1',
+              layout: null
+            }
+          ],
+          leaves: [
+            {
+              tabId: 'tab-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: 'pane:1',
+              paneRuntimeId: 1,
+              ptyId: 'pty-renderer'
+            }
+          ]
+        })
+        runtime.syncWindowGraph(1, {
+          tabs: [
+            {
+              tabId: 'tab-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Renderer Terminal',
+              activeLeafId: 'pane:1',
+              layout: null
+            }
+          ],
+          leaves: [
+            {
+              tabId: 'tab-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: 'pane:1',
+              paneRuntimeId: 1,
+              ptyId: null
+            }
+          ]
+        })
+      }, 0)
+    })
+    webContents.send = send
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        command: 'codex',
+        rendererBacked: true,
+        title: 'Renderer Terminal'
+      })
+    ).rejects.toThrow('renderer-backed terminal did not register a PTY identity')
+    expect(closeTerminal).toHaveBeenCalledWith('tab-renderer')
   })
 
   it('splits visible pty-backed terminal sessions through the parent renderer tab', async () => {

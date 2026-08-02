@@ -557,7 +557,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         // Point-to-point — existing single-recipient behavior
         revalidateLegacyCoordinator?.()
-        const msg = db.insertMessage({
+        const messageInput = {
           from,
           to,
           subject: params.subject,
@@ -567,55 +567,79 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           threadId: params.threadId,
           payload: params.payload,
           senderPaneKey,
-          runId: routing.run?.id,
+          runId: routing.run?.id ?? legacyCoordinatorRunId,
           deliveryContract: legacyWorkerDeliveryContract(
             runtime,
             routing.run?.id ?? legacyCoordinatorRunId,
             to
           )
-        })
+        }
         const dispatch = routing.dispatchId
           ? db.getDispatchContextById(routing.dispatchId)
           : undefined
-        if ((msg.type === 'worker_done' || msg.type === 'heartbeat') && dispatch?.capability_hash) {
-          const authority = db.verifyDispatchCapability({
-            dispatchId: dispatch.id,
-            capability: orchestrationCapability,
-            paneKey: senderPaneKey,
-            processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined
-          })
-          if (!authority.valid) {
-            const rejection =
-              db.convertLifecycleMessageToRejection(
-                msg.id,
-                'dispatch_capability_invalid',
-                authority.reason
-              ) ?? msg
-            runtime.notifyMessageArrived(to, rejection.type)
-            return {
-              message: rejection,
-              lifecycle: {
-                action: 'rejected',
-                code: 'dispatch_capability_invalid',
-                reason: authority.reason
+        const activeSenderDispatch = senderPaneKey
+          ? db.getActiveDispatchForIdentity(from, senderPaneKey)
+          : undefined
+        const capabilityAuthority = dispatch?.capability_hash
+          ? db.verifyDispatchCapability({
+              dispatchId: dispatch.id,
+              capability: orchestrationCapability,
+              paneKey: senderPaneKey,
+              processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined
+            })
+          : undefined
+        const trustedWakeAuthority = Boolean(
+          dispatch &&
+          activeSenderDispatch?.id === dispatch.id &&
+          (capabilityAuthority?.valid ?? true)
+        )
+        const messageType = messageInput.type
+        const isLifecycle = messageType === 'worker_done' || messageType === 'heartbeat'
+        const trustedLineage =
+          trustedWakeAuthority &&
+          dispatch &&
+          ['worker_done', 'escalation', 'decision_gate'].includes(messageType)
+            ? { taskId: dispatch.task_id, dispatchId: dispatch.id }
+            : undefined
+        let msg
+        let reconciled: ReturnType<typeof reconcileLifecycleMessage> | undefined
+        if (isLifecycle || trustedLineage) {
+          const committed = db.commitCurrentDispatchMessage<
+            ReturnType<typeof reconcileLifecycleMessage>
+          >({
+            message: messageInput,
+            trustedLineage,
+            reconcile: (inserted) => {
+              if (isLifecycle && capabilityAuthority && !capabilityAuthority.valid) {
+                db.convertLifecycleMessageToRejection(
+                  inserted.id,
+                  'dispatch_capability_invalid',
+                  capabilityAuthority.reason
+                )
+                return {
+                  action: 'rejected' as const,
+                  code: 'dispatch_capability_invalid' as const,
+                  reason: capabilityAuthority.reason
+                }
               }
+              return reconcileLifecycleMessage(db, inserted)
             }
-          }
+          })
+          msg = committed.message
+          reconciled = committed.reconciliation
+        } else {
+          msg = db.insertMessage(messageInput)
         }
-        // Why: reconcile releases the dispatch lock before waking recipients, else a woken coordinator re-dispatches while the lock is still held.
-        if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
-          const reconciled = reconcileLifecycleMessage(db, msg)
-          // Why: a suppressed message is already read, so skip the notify that would wake a check --wait waiter to an empty result.
-          if (reconciled.action === 'suppressed') {
-            return { message: msg }
-          }
-          if (reconciled.action === 'rejected') {
-            const rejection = db.getMessageById(msg.id) ?? msg
-            runtime.notifyMessageArrived(to, rejection.type)
-            return { message: rejection, lifecycle: reconciled }
-          }
+        // Why: the transaction releases the dispatch lock before waking recipients.
+        if (reconciled?.action === 'suppressed') {
+          return { message: msg }
+        }
+        if (reconciled?.action === 'rejected') {
+          runtime.notifyMessageArrived(to, msg.type)
+          return { message: msg, lifecycle: reconciled }
         }
         runtime.notifyMessageArrived(to, msg.type)
+        runtime.onOrchestrationMessageCommitted(msg)
         return { message: msg }
       }
 
@@ -652,6 +676,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       )
       for (const message of messages) {
         runtime.notifyMessageArrived(message.to_handle, message.type)
+        runtime.onOrchestrationMessageCommitted(message)
       }
 
       return { messages, recipients: handles.length }
@@ -1426,6 +1451,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         })
         question = created.question
         runtime.notifyMessageArrived(`run:${run.id}`, created.message.type)
+        runtime.onOrchestrationMessageCommitted(created.message)
       }
 
       const questionId = question.message_id

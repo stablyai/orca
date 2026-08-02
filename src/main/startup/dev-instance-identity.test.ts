@@ -13,6 +13,16 @@ describe('dev-instance-identity', () => {
     })
   })
 
+  it('uses a distinct packaged identity for the wake-dev build', () => {
+    expect(getDevInstanceIdentity(false, {}, true)).toMatchObject({
+      name: 'Orca Wake Dev',
+      appName: 'Orca Wake Dev',
+      isDev: false,
+      devLabel: null,
+      appUserModelId: 'com.ram4dev.orca-wake-dev'
+    })
+  })
+
   it('pins a stable dev appName across branches so the safeStorage key does not churn', () => {
     const a = getDevInstanceIdentity(true, { ORCA_DEV_BRANCH: 'feature/a' })
     const b = getDevInstanceIdentity(true, { ORCA_DEV_BRANCH: 'feature/b' })

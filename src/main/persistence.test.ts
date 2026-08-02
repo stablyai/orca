@@ -335,6 +335,21 @@ describe('Store', () => {
     expect(store.getRepos()).toEqual([])
   }, 15_000)
 
+  it('increments the Codex account selection revision for every selection write', async () => {
+    const store = await createStore()
+    const originalSelection = store.getSettings().activeCodexManagedAccountIdsByRuntime
+
+    expect(store.getCodexAccountSelectionRevision()).toBe(0)
+    store.updateSettings({
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-a', wsl: {} }
+    })
+    expect(store.getCodexAccountSelectionRevision()).toBe(1)
+    store.updateSettings({ activeCodexManagedAccountIdsByRuntime: originalSelection })
+    expect(store.getCodexAccountSelectionRevision()).toBe(2)
+    store.updateSettings({ theme: 'dark' })
+    expect(store.getCodexAccountSelectionRevision()).toBe(2)
+  })
+
   it('clone-reads and synchronously persists the main-owned Codex reset ledger', async () => {
     const store = await createStore()
     const ledger = {

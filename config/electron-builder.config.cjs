@@ -22,6 +22,10 @@ const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
 const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacAdhoc
+const isWakeDevBuild = process.env.ORCA_WAKE_DEV_BUILD === '1'
+if (isWakeDevBuild && isMacRelease) {
+  throw new Error('Orca Wake Dev cannot use an official macOS release or dev-channel profile')
+}
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
 const localBuildVersion = isMacRelease ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
 const devChannelBuildVersion = isMacHourly
@@ -35,7 +39,8 @@ const devChannelBuildVersion = isMacHourly
 // to install. Keeping adhoc separate from hourly too means a branch build cannot
 // be picked up by someone who only meant to ride main.
 const devChannelRepo = isMacHourly ? 'orca-hourly' : isMacAdhoc ? 'orca-adhoc' : null
-const appId = 'com.stablyai.orca'
+const appId = isWakeDevBuild ? 'com.ram4dev.orca-wake-dev' : 'com.stablyai.orca'
+const productName = isWakeDevBuild ? 'Orca Wake Dev' : 'Orca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -80,14 +85,15 @@ const winSpeechNativeResource = {
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
-  productName: 'Orca',
+  productName,
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
     : localBuildVersion
       ? { extraMetadata: { version: localBuildVersion } }
       : {}),
   directories: {
-    buildResources: 'resources/build'
+    buildResources: 'resources/build',
+    ...(isWakeDevBuild ? { output: 'dist/wake-dev' } : {})
   },
   files: [
     '!**/.vscode/*',
@@ -312,6 +318,7 @@ module.exports = {
     include: resolve(__dirname, 'nsis', 'daemon-host-uninstall.nsh')
   },
   mac: {
+    ...(isWakeDevBuild ? { identity: '-' } : {}),
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
@@ -340,7 +347,7 @@ module.exports = {
     // credentials. Hardened runtime + notarization stay enabled only on the
     // explicit release path so production artifacts remain strict while dev
     // artifacts do not fail with broken ad-hoc launch behavior.
-    hardenedRuntime: isMacRelease,
+    hardenedRuntime: isWakeDevBuild ? false : isMacRelease,
     // Why dev builds notarize too, despite the ~10min notary round trip: TCC
     // anchors a notarized Developer ID app's permission grants on identifier +
     // team, which is cdhash-independent and so survives an update. Without a
@@ -354,8 +361,8 @@ module.exports = {
       ...createPackagedRuntimeNodeModuleResources('darwin'),
       macSpeechNativeResource,
       {
-        from: 'resources/darwin/bin/orca',
-        to: 'bin/orca'
+        from: isWakeDevBuild ? 'resources/darwin/bin/orca-wake' : 'resources/darwin/bin/orca',
+        to: isWakeDevBuild ? 'bin/orca-wake' : 'bin/orca'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
@@ -397,7 +404,9 @@ module.exports = {
   // silently downgrading to ad-hoc artifacts that look shippable in CI logs.
   forceCodeSigning: isMacRelease,
   dmg: {
-    artifactName: 'orca-macos-${arch}.${ext}'
+    artifactName: isWakeDevBuild
+      ? 'orca-wake-dev-macos-${arch}.${ext}'
+      : 'orca-macos-${arch}.${ext}'
   },
   linux: {
     // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
@@ -485,19 +494,21 @@ module.exports = {
   // on Intel Macs. The beforeBuild hook performs Orca's targeted rebuild and
   // returns false so electron-builder does not rebuild optional cpu-features.
   npmRebuild: true,
-  publish: {
-    provider: 'github',
-    owner: 'stablyai',
-    repo: devChannelRepo ?? 'orca',
-    releaseType: devChannelRepo ? 'prerelease' : 'release'
-  }
+  publish: isWakeDevBuild
+    ? null
+    : {
+        provider: 'github',
+        owner: 'stablyai',
+        repo: devChannelRepo ?? 'orca',
+        releaseType: devChannelRepo ? 'prerelease' : 'release'
+      }
 }
 
 function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
   if (electronPlatformName === 'win32') {
     return
   }
-  for (const launcherName of ['orca', 'orca-ide']) {
+  for (const launcherName of ['orca', 'orca-wake', 'orca-ide']) {
     const launcherPath = join(resourcesDir, 'bin', launcherName)
     if (!existsSync(launcherPath)) {
       continue
@@ -564,6 +575,7 @@ async function signMacNotificationStatusHelper(helperPath, packager) {
       ? await packager.codeSigningInfo.value
       : null
   const identity =
+    process.env.ORCA_NOTIFICATION_STATUS_SIGN_IDENTITY ??
     process.env.CSC_NAME ??
     findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
     (isMacRelease ? null : '-')

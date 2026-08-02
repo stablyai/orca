@@ -122,6 +122,7 @@ import {
   patchPackagedProcessPath,
   shouldInstallManagedHooks
 } from './startup/configure-process'
+import { configureWakeDevBuildFlavor, isWakeDevRuntime } from './startup/wake-dev-build-flavor'
 import {
   installUncaughtPipeErrorGuard,
   installUnhandledRejectionLogging
@@ -212,6 +213,8 @@ import { startCodexSessionBackfillInBackground } from './codex/codex-session-bac
 import { startCodexSessionIndexHealInBackground } from './codex/codex-session-index-heal'
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
 import { prepareLegacySharedCodexSessionResume } from './codex/codex-legacy-session-resume'
+import { CodexControlledSessionManager } from './codex/codex-controlled-session-manager'
+import { resolveControlledCodexLaunchAuthority } from './codex/codex-controlled-launch-authority'
 import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
 import type { CodexSessionResumePreparation } from './codex/codex-session-resume-home'
 import { prepareCodexSessionResume } from './codex/codex-session-resume-preparation'
@@ -550,7 +553,9 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
   )
 }
 
-const devInstanceIdentity = getDevInstanceIdentity(is.dev)
+const isWakeDevBuild = ORCA_WAKE_DEV_BUILD
+configureWakeDevBuildFlavor(app, isWakeDevBuild)
+const devInstanceIdentity = getDevInstanceIdentity(is.dev, process.env, isWakeDevBuild)
 const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
   ? devInstanceIdentity.appUserModelId
   : undefined
@@ -1116,6 +1121,9 @@ function quitFromSystemTray(): void {
 
 // Why: menu/tray are clickable before anything else configures the updater.
 function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
+  if (isWakeDevRuntime()) {
+    return
+  }
   ensureAutoUpdaterConfigured()
   checkForUpdatesFromMenu(options)
 }
@@ -2294,7 +2302,85 @@ void app.whenReady().then(async () => {
         envelope
       )
   }
-  const runtimeService = new OrcaRuntimeService(store, stats, {
+  let runtimeService!: OrcaRuntimeService
+  const codexControlledSessionManager = new CodexControlledSessionManager({
+    stateRoot: join(app.getPath('userData'), 'codex-controlled-sessions'),
+    createVisibleTerminal: async (launch) =>
+      runtimeService.createTerminal(launch.worktreeSelector, {
+        command: launch.command,
+        cwd: launch.cwd,
+        env: launch.env,
+        title: 'Codex',
+        presentation: launch.presentation ?? 'focused',
+        launchAgent: 'codex',
+        resumeProviderSession: { key: 'session_id', id: launch.threadId }
+      }),
+    waitForVisibleTerminal: async (terminal) => {
+      const current = runtimeService.resolveTerminalPane(
+        terminal.terminalPaneKey,
+        terminal.worktreeId
+      )
+      if (current.ptyId !== terminal.terminalPtyId) {
+        throw new Error('controlled Codex terminal PTY identity changed')
+      }
+      const ready = await runtimeService.waitForTerminal(current.handle, {
+        condition: 'tui-idle',
+        timeoutMs: 15_000
+      })
+      if (!ready.satisfied || ready.status !== 'running' || ready.blockedReason) {
+        throw new Error('controlled Codex visible terminal did not become ready')
+      }
+      const refreshed = runtimeService.resolveTerminalPane(
+        terminal.terminalPaneKey,
+        terminal.worktreeId
+      )
+      return {
+        ...terminal,
+        terminalHandle: refreshed.handle,
+        terminalPtyId: refreshed.ptyId
+      }
+    },
+    closeVisibleTerminal: async (terminal) => {
+      let terminalHandle = terminal.terminalHandle
+      try {
+        terminalHandle = runtimeService.resolveTerminalPane(
+          terminal.terminalPaneKey,
+          terminal.worktreeId
+        ).handle
+      } catch {
+        // The original handle remains the only cleanup target before pane registration completes.
+      }
+      const closed = await runtimeService.closeTerminal(terminalHandle)
+      if (!closed.ptyKilled) {
+        throw new Error('controlled Codex terminal did not stop')
+      }
+    },
+    resolveCurrentAccountId: () => normalizeCodexRuntimeSelection(store!.getSettings()).host,
+    // Why: monotonic selection writes detect A-to-B-to-A changes when rollback restores prior state.
+    resolveCurrentAccountRevision: () => store!.getCodexAccountSelectionRevision(),
+    isControlledLaunchEnabled: () => process.env.ORCA_FEATURE_CODEX_CONTROLLED_LAUNCH === '1',
+    isProviderEnabled: () => process.env.ORCA_FEATURE_CODEX_CONTROLLED_PROVIDER === '1',
+    isWakeEnabled: () => process.env.ORCA_FEATURE_ORCHESTRATION_CONVERSATION_WAKE === '1',
+    isKillSwitchOpen: () =>
+      process.env.ORCA_DISABLE_CODEX_CONTROLLED_SESSION !== '1' &&
+      process.env.ORCA_DISABLE_ORCHESTRATION_CONVERSATION_WAKE !== '1'
+  })
+  runtimeService = new OrcaRuntimeService(store, stats, {
+    codexControlledSessionManager,
+    resolveControlledCodexLaunchAuthority: (workspacePath) => {
+      const settings = store!.getSettings()
+      return resolveControlledCodexLaunchAuthority({
+        workspacePath,
+        commandOverride: settings.agentCmdOverrides?.codex,
+        prepareCodexHome: (path) =>
+          prepareCodexRuntimeHomeForLaunch(undefined, undefined, {
+            launchAgent: 'codex',
+            workspacePath: path
+          }),
+        getSystemCodexHome: getSystemCodexHomePath,
+        resolveAccountId: () => normalizeCodexRuntimeSelection(settings).host
+      })
+    },
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
       getProfileUserDataPath()
@@ -2989,6 +3075,8 @@ app.on('will-quit', (e) => {
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
   browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
+  const controlledSessionShutdown =
+    runtime?.disposeOrchestrationConversationWake() ?? Promise.resolve()
   killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
   const storeFlush = store?.flushAsync() ?? Promise.resolve()
@@ -3000,56 +3088,59 @@ app.on('will-quit', (e) => {
     openCodeUsage?.flush()
   ]).then(() => {})
 
-  // Why: capture pid/runtimeId synchronously (before any await) so a later teardown path can't null them out mid-chain.
-  const ownedPid = process.pid
-  const ownedRuntimeId = runtime?.getRuntimeId()
-  const rpcStopAndClear = runtimeRpc
-    ? runtimeRpc
-        .stop()
-        .then(() => awaitRuntimeFileWatcherUnsubscribes())
-        .then(() => {
-          if (ownedRuntimeId) {
-            // Why: must match the path the runtime server wrote metadata to (getCanonicalUserDataPath), not late app.getPath('userData').
-            clearRuntimeMetadataIfOwned(getCanonicalUserDataPath(), ownedPid, ownedRuntimeId)
-          }
-        })
-        .catch((error) => {
-          console.error('[runtime] Failed to stop local RPC transport:', error)
-        })
-    : Promise.resolve()
-  // Why: allSettled (not all) keeps fail-open — a daemon-disconnect rejection still quits instead of hanging.
-  // Why: telemetry flush folds in before app.quit() (bounded 2s); catch defensively so a flush failure can't cancel the quit chain.
-  // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the temp/dev profile ownerless.
-  const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
-  // Why: a wedged transport (half-open post-sleep socket) can leave one
-  // member unsettled forever and block app.quit() until Force Quit (#9447).
-  // Why stats/state join here: their writes are durable but not worth hanging the app for.
-  // Losing at most the last debounce interval beats a quit that never completes, and the
-  // temp+rename swap means a write cut short by the deadline leaves the old file intact.
-  settleTeardownWithinDeadline([
-    { name: 'daemon', promise: daemonTeardown },
-    { name: 'runtime-rpc', promise: rpcStopAndClear },
-    { name: 'watchers', promise: watcherShutdown },
-    { name: 'emulator', promise: emulatorShutdown },
-    { name: 'plugin-hosts', promise: pluginHostShutdown },
-    { name: 'usage-cache', promise: usageCacheFlush },
-    { name: 'stats', promise: statsFlush },
-    { name: 'state', promise: storeFlush }
-  ])
-    .then((pendingTeardowns) => {
-      if (pendingTeardowns.length > 0) {
-        console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
-      }
-    })
-    .then(() => shutdownTelemetry())
-    .then(() => shutdownObservability())
-    .catch(() => {
-      /* swallow — telemetry must never prevent app.quit() */
-    })
-    .then(() => {
-      daemonDisconnectDone = true
-      app.quit()
-    })
+  // Why: preventDefault to await disconnectDaemon's async checkpoint writes (else data lost); guard prevents an infinite quit loop on the re-fired will-quit.
+  if (!daemonDisconnectDone) {
+    e.preventDefault()
+    // Why: capture pid/runtimeId synchronously (before any await) so a later teardown path can't null them out mid-chain.
+    const ownedPid = process.pid
+    const ownedRuntimeId = runtime?.getRuntimeId()
+    // Why: keep inside the !daemonDisconnectDone guard so the re-fired will-quit doesn't re-run RPC.stop()/metadata-clear against the updater's replacement process.
+    const rpcStopAndClear = runtimeRpc
+      ? runtimeRpc
+          .stop()
+          .then(() => awaitRuntimeFileWatcherUnsubscribes())
+          .then(() => {
+            if (ownedRuntimeId) {
+              // Why: must match the path the runtime server wrote metadata to (getCanonicalUserDataPath), not late app.getPath('userData').
+              clearRuntimeMetadataIfOwned(getCanonicalUserDataPath(), ownedPid, ownedRuntimeId)
+            }
+          })
+          .catch((error) => {
+            console.error('[runtime] Failed to stop local RPC transport:', error)
+          })
+      : Promise.resolve()
+    // Why: allSettled (not all) keeps fail-open — a daemon-disconnect rejection still quits instead of hanging.
+    // Why: telemetry flush folds in before app.quit() (bounded 2s); catch defensively so a flush failure can't cancel the quit chain.
+    // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the temp/dev profile ownerless.
+    const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+    // Why: a wedged transport (half-open post-sleep socket) can leave one
+    // member unsettled forever and block app.quit() until Force Quit (#9447).
+    settleTeardownWithinDeadline([
+      { name: 'daemon', promise: daemonTeardown },
+      { name: 'runtime-rpc', promise: rpcStopAndClear },
+      { name: 'watchers', promise: watcherShutdown },
+      { name: 'emulator', promise: emulatorShutdown },
+      { name: 'plugin-hosts', promise: pluginHostShutdown },
+      { name: 'codex-controlled-sessions', promise: controlledSessionShutdown },
+      { name: 'usage-cache', promise: usageCacheFlush },
+      { name: 'stats', promise: statsFlush },
+      { name: 'state', promise: storeFlush }
+    ])
+      .then((pendingTeardowns) => {
+        if (pendingTeardowns.length > 0) {
+          console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
+        }
+      })
+      .then(() => shutdownTelemetry())
+      .then(() => shutdownObservability())
+      .catch(() => {
+        /* swallow — telemetry must never prevent app.quit() */
+      })
+      .then(() => {
+        daemonDisconnectDone = true
+        app.quit()
+      })
+  }
 })
 
 app.on('window-all-closed', () => {
