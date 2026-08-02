@@ -5,6 +5,7 @@ export { glabExecFileAsync, gitExecFileAsync }
 export { classifyGlabError, classifyListIssuesError } from './glab-error-classification'
 export {
   DEFAULT_GITLAB_HOSTS,
+  GITLAB_NEGATIVE_CACHE_TTL_MS,
   _getProjectRefCacheSize,
   _resetKnownHostsCache,
   _resetProjectRefCache,

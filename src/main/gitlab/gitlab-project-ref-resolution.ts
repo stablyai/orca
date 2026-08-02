@@ -1,5 +1,6 @@
 import { glabExecFileAsync } from '../git/runner'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
+import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import type { IssueSourcePreference } from '../../shared/types'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 import {
@@ -25,7 +26,16 @@ export {
 export type { LocalGitExecOptions } from './gitlab-known-host-probe'
 
 const PROJECT_REF_CACHE_MAX_ENTRIES = 512
-const projectRefCache = new Map<string, ProjectRef | null>()
+
+// Why: a repo first probed with no GitLab remote answers "not mine" for the whole
+// process otherwise, so a remote added mid-session is invisible until restart.
+// Negatives expire instead; positives stay, as they did before. Mirrors the shared
+// remote-ref-probe-cache every other forge uses (Azure/Bitbucket/Gitea/GitHub).
+export const GITLAB_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
+
+type CachedProjectRef = { value: ProjectRef | null; expiresAt: number }
+
+const projectRefCache = new Map<string, CachedProjectRef>()
 
 /** @internal - exposed for tests only */
 export function _resetProjectRefCache(): void {
@@ -39,7 +49,10 @@ export function _getProjectRefCacheSize(): number {
 }
 
 function rememberProjectRefCacheEntry(cacheKey: string, value: ProjectRef | null): void {
-  projectRefCache.set(cacheKey, value)
+  projectRefCache.set(cacheKey, {
+    value,
+    expiresAt: value === null ? Date.now() + GITLAB_NEGATIVE_CACHE_TTL_MS : Number.POSITIVE_INFINITY
+  })
   while (projectRefCache.size > PROJECT_REF_CACHE_MAX_ENTRIES) {
     const oldestKey = projectRefCache.keys().next().value
     if (oldestKey === undefined) {
@@ -56,10 +69,18 @@ export async function getProjectRefForRemote(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
+  // Why: a reconnect retires the connection an answer came from — stamping the
+  // generation stops a caller on the new connection adopting a stale probe.
+  const runtimeKey = connectionId
+    ? `${connectionId}:${getSshGitProviderGeneration(connectionId)}`
+    : `local:${localGitOptions.wslDistro ?? 'host'}`
   const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}\0${knownHosts.join(',')}`
-  if (projectRefCache.has(cacheKey)) {
-    return projectRefCache.get(cacheKey)!
+  const cached = projectRefCache.get(cacheKey)
+  if (cached) {
+    if (cached.expiresAt > Date.now()) {
+      return cached.value
+    }
+    projectRefCache.delete(cacheKey)
   }
 
   return runProjectRefProbeOnce(cacheKey, () =>

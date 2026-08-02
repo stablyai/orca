@@ -12,6 +12,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import {
+  GITLAB_NEGATIVE_CACHE_TTL_MS,
   _getProjectRefCacheSize,
   _resetKnownHostsCache,
   _resetProjectRefCache,
@@ -690,5 +691,93 @@ describe('getGlabKnownHosts', () => {
     ])
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
     unregisterSshGitProvider(connectionId)
+  })
+})
+
+describe('project ref cache negative TTL + SSH generation', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    sshExecMock.mockReset()
+    _resetProjectRefCache()
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    unregisterSshGitProvider('conn-1')
+  })
+
+  it('re-probes a repo whose null result has aged past the negative TTL', async () => {
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:team/repo.git\n' })
+
+    await expect(getProjectRefForRemote('/repo', 'origin')).resolves.toBeNull()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    // Within the TTL the negative is served from cache — no re-probe.
+    await expect(getProjectRefForRemote('/repo', 'origin')).resolves.toBeNull()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+
+    // Past the TTL the negative has expired; the now-present remote is picked up.
+    vi.setSystemTime(1_000_000 + GITLAB_NEGATIVE_CACHE_TTL_MS + 1)
+    await expect(getProjectRefForRemote('/repo', 'origin')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'team/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a resolved ref past the TTL without re-probing', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.com:team/repo.git\n' })
+
+    await expect(getProjectRefForRemote('/repo', 'origin')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'team/repo'
+    })
+    vi.setSystemTime(1_000_000 + GITLAB_NEGATIVE_CACHE_TTL_MS * 10)
+    await expect(getProjectRefForRemote('/repo', 'origin')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'team/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-probes after an SSH provider reconnect bumps the generation', async () => {
+    sshExecMock.mockResolvedValue({ stdout: 'git@gitlab.com:remote/orca.git\n', stderr: '' })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'remote/orca'
+    })
+    expect(sshExecMock).toHaveBeenCalledTimes(1)
+
+    // A reconnect under the same id bumps the generation; the cached value for the
+    // old connection must not serve a caller on the new one.
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'remote/orca'
+    })
+    expect(sshExecMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-caches a still-null result for another full negative TTL after expiry', async () => {
+    gitExecFileAsyncMock.mockRejectedValue(new Error("error: No such remote 'origin'"))
+
+    await getProjectRefForRemote('/repo', 'origin')
+    await getProjectRefForRemote('/repo', 'origin')
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+
+    // Past the TTL the negative expired; the second probe is still "not GitLab",
+    // and that answer must be re-cached for a fresh interval — not probed every call.
+    vi.setSystemTime(1_000_000 + GITLAB_NEGATIVE_CACHE_TTL_MS + 1)
+    await getProjectRefForRemote('/repo', 'origin')
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+
+    vi.setSystemTime(1_000_000 + GITLAB_NEGATIVE_CACHE_TTL_MS + 2)
+    await getProjectRefForRemote('/repo', 'origin')
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 })
