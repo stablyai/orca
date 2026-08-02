@@ -1923,10 +1923,14 @@ describe('registerFilesystemHandlers', () => {
     ).resolves.toEqual({ success: true, message: 'Update README' })
 
     expect(getStagedCommitContextMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {})
-    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(context, params, {
-      kind: 'local',
-      cwd: WORKTREE_FEATURE_PATH
-    })
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      context,
+      params,
+      expect.objectContaining({
+        kind: 'local',
+        cwd: WORKTREE_FEATURE_PATH
+      })
+    )
   })
 
   it('uses one-shot resolved params for local commit message generation', async () => {
@@ -1960,10 +1964,10 @@ describe('registerFilesystemHandlers', () => {
     expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
       context,
       sourceControlAiResolvedParams,
-      {
+      expect.objectContaining({
         kind: 'local',
         cwd: WORKTREE_FEATURE_PATH
-      }
+      })
     )
   })
 
@@ -2646,6 +2650,96 @@ describe('registerFilesystemHandlers', () => {
       })
     ).resolves.toEqual({ success: false, error: 'Failed to read staged changes.' })
 
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
+  })
+
+  it('cancels local commit-message generation while staged context is still loading', async () => {
+    resolveCommitMessageSettingsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'codex', model: 'gpt-5.4-mini' }
+    })
+    let resolveContext:
+      | ((context: { branch: string; stagedSummary: string; stagedPatch: string }) => void)
+      | undefined
+    getStagedCommitContextMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveContext = resolve
+        })
+    )
+
+    registerFilesystemHandlers(store as never)
+
+    const pending = handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH
+    })
+    await vi.waitFor(() => expect(resolveContext).toBeTypeOf('function'))
+
+    await handlers.get('git:cancelGenerateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH
+    })
+
+    await expect(pending).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true
+    })
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
+
+    resolveContext?.({
+      branch: 'main',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    })
+    await vi.waitFor(() => expect(getStagedCommitContextMock).toHaveResolved())
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
+  })
+
+  it('cancels SSH commit-message generation while staged context is still loading', async () => {
+    resolveCommitMessageSettingsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'codex', model: 'gpt-5.4-mini' }
+    })
+    let resolveContext:
+      | ((context: { branch: string; stagedSummary: string; stagedPatch: string }) => void)
+      | undefined
+    const cancelGenerateCommitMessage = vi.fn().mockResolvedValue(undefined)
+    getSshGitProviderMock.mockReturnValue({
+      cancelGenerateCommitMessage,
+      getStagedCommitContext: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveContext = resolve
+          })
+      )
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    const pending = handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'connection-1'
+    })
+    await vi.waitFor(() => expect(resolveContext).toBeTypeOf('function'))
+
+    await handlers.get('git:cancelGenerateCommitMessage')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'connection-1'
+    })
+
+    await expect(pending).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true
+    })
+    expect(cancelGenerateCommitMessage).toHaveBeenCalledWith('/remote/repo', 'commit-message')
+
+    resolveContext?.({
+      branch: 'main',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    })
+    await Promise.resolve()
     expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
   })
 

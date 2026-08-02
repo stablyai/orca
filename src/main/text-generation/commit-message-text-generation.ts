@@ -40,6 +40,14 @@ import {
 } from '../../shared/commit-message-plan'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
 import {
+  beginTextGenerationCancellation,
+  cancelTextGeneration,
+  localTextGenerationLane,
+  TEXT_GENERATION_CANCELED_RESULT,
+  type TextGenerationCancellation,
+  type TextGenerationOperation
+} from './text-generation-cancellation'
+import {
   resolveSourceControlAiForOperation,
   type ResolvedSourceControlAiGenerationParams
 } from '../../shared/source-control-ai'
@@ -91,10 +99,14 @@ export type RemoteCommitMessageExecResult = {
   spawnError?: string
 }
 
-export type TextGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
-
 export type CommitMessageGenerationTarget =
-  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
+  | {
+      kind: 'local'
+      cwd: string
+      env?: NodeJS.ProcessEnv
+      wslDistro?: string
+      cancellation?: TextGenerationCancellation
+    }
   | {
       kind: 'remote'
       cwd: string
@@ -105,6 +117,7 @@ export type CommitMessageGenerationTarget =
         operation: TextGenerationOperation
       ) => Promise<RemoteCommitMessageExecResult>
       missingBinaryLocation: string
+      cancellation?: TextGenerationCancellation
     }
 
 type ResolveCommitMessageSettingsResult =
@@ -512,9 +525,6 @@ function killProcessTree(child: ChildProcess): void {
   }
 }
 
-// Keying by operation plus `local:${cwd}` keeps local cancellation independent
-// from SSH worktrees and from other generation features in the same worktree.
-const cancelTokensByLane = new Map<string, () => void>()
 const WSL_LAUNCHER_ENV_KEYS = [
   'ComSpec',
   'COMSPEC',
@@ -527,12 +537,8 @@ const WSL_LAUNCHER_ENV_KEYS = [
   'WINDIR'
 ] as const
 
-function localLaneKey(operation: TextGenerationOperation, cwd: string): string {
-  return `${operation}:local:${cwd}`
-}
-
 export function cancelGenerateCommitMessageLocal(cwd: string): void {
-  cancelTokensByLane.get(localLaneKey('commit-message', cwd))?.()
+  cancelTextGeneration('commit-message', localTextGenerationLane(cwd))
 }
 
 function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
@@ -557,10 +563,21 @@ async function runLocalPlan(
   env: NodeJS.ProcessEnv | undefined,
   emptyResultName = 'message',
   operation: TextGenerationOperation = 'commit-message',
-  wslDistro?: string
+  wslDistro?: string,
+  requestCancellation?: TextGenerationCancellation
 ): Promise<InternalTextGenerationResult> {
   const { binary, args, stdinPayload, label } = plan
   return new Promise((resolve) => {
+    const ownedCancellation = requestCancellation
+      ? null
+      : beginTextGenerationCancellation(operation, localTextGenerationLane(cwd))
+    const cancellation = requestCancellation ?? ownedCancellation!
+    const finishOwnedCancellation = (): void => ownedCancellation?.finish()
+    if (cancellation.isCanceled()) {
+      finishOwnedCancellation()
+      resolve(TEXT_GENERATION_CANCELED_RESULT)
+      return
+    }
     let child: ChildProcess
     try {
       const spawnEnv = env ?? process.env
@@ -587,6 +604,7 @@ async function runLocalPlan(
         })
       }
     } catch (error) {
+      finishOwnedCancellation()
       if (error instanceof UnsafeWindowsBatchArgumentsError) {
         resolve({
           success: false,
@@ -609,8 +627,7 @@ async function runLocalPlan(
     let outputLimitExceeded = false
     let settled = false
     let canceledByUser = false
-    const laneKey = localLaneKey(operation, cwd)
-    let cancelToken: (() => void) | null = null
+    let detachCancellation = (): void => {}
     let timer: ReturnType<typeof setTimeout> | null = null
     let detachChildListeners = (): void => {}
     const finalize = (result: InternalTextGenerationResult): void => {
@@ -623,20 +640,19 @@ async function runLocalPlan(
         timer = null
       }
       detachChildListeners()
-      if (cancelToken && cancelTokensByLane.get(laneKey) === cancelToken) {
-        cancelTokensByLane.delete(laneKey)
-      }
+      detachCancellation()
+      finishOwnedCancellation()
       resolve(result)
     }
 
-    cancelToken = () => {
+    const cancelToken = () => {
       canceledByUser = true
       killProcessTree(child)
       // Why: cancellation is a user-visible UI command; do not wait for a
       // wedged agent CLI to emit `close` before the request leaves loading.
-      finalize({ success: false, error: 'Generation canceled.', canceled: true })
+      finalize(TEXT_GENERATION_CANCELED_RESULT)
     }
-    cancelTokensByLane.set(laneKey, cancelToken)
+    detachCancellation = cancellation.attach(cancelToken)
 
     timer = setTimeout(() => {
       killProcessTree(child)
@@ -681,7 +697,7 @@ async function runLocalPlan(
     }
     const onClose = (code: number | null): void => {
       if (canceledByUser) {
-        finalize({ success: false, error: 'Generation canceled.', canceled: true })
+        finalize(TEXT_GENERATION_CANCELED_RESULT)
         return
       }
       if (outputLimitExceeded) {
@@ -790,15 +806,24 @@ async function runRemotePlan(
   operation: TextGenerationOperation = 'commit-message'
 ): Promise<InternalTextGenerationResult> {
   const { binary, label } = plan
+  if (target.cancellation?.isCanceled()) {
+    return TEXT_GENERATION_CANCELED_RESULT
+  }
   let result: RemoteCommitMessageExecResult
   try {
     result = await target.execute(plan, target.cwd, GENERATION_TIMEOUT_MS, operation)
   } catch (error) {
+    if (target.cancellation?.isCanceled()) {
+      return TEXT_GENERATION_CANCELED_RESULT
+    }
     console.error('[commit-message] Remote generator request failed:', error)
     return {
       success: false,
       error: `${label} could not be reached on the ${target.missingBinaryLocation}. Try again after the SSH connection recovers.`
     }
+  }
+  if (target.cancellation?.isCanceled()) {
+    return TEXT_GENERATION_CANCELED_RESULT
   }
   if (result.spawnError) {
     if (result.spawnError === WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR) {
@@ -820,7 +845,7 @@ async function runRemotePlan(
     }
   }
   if (result.canceled) {
-    return { success: false, error: 'Generation canceled.', canceled: true }
+    return TEXT_GENERATION_CANCELED_RESULT
   }
   if (result.timedOut) {
     return {
@@ -896,13 +921,14 @@ export async function generateCommitMessageFromContext(
           target.env,
           'message',
           'commit-message',
-          target.wslDistro
+          target.wslDistro,
+          target.cancellation
         )
   return formatCommitMessageGenerationResult(internalResult)
 }
 
 export function cancelGeneratePullRequestFieldsLocal(cwd: string): void {
-  cancelTokensByLane.get(localLaneKey('pull-request-fields', cwd))?.()
+  cancelTextGeneration('pull-request-fields', localTextGenerationLane(cwd))
 }
 
 function formatPullRequestFieldsGenerationResult(
