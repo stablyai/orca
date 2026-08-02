@@ -243,7 +243,7 @@ export function shouldApplyWebSessionTabsSnapshot(
     snapshot.publicationEpoch === replayable.publicationEpoch &&
     snapshot.snapshotVersion === replayable.snapshotVersion
   )
-  // Why: snapshotVersion is monotonic only within one publicationEpoch (resets on host restart); reject as stale only within the same epoch, since a different epoch is a new generation and must apply.
+  // Why: reject stale snapshots only within an epoch; host restarts create a new epoch.
   if (
     current &&
     current.publicationEpoch === snapshot.publicationEpoch &&

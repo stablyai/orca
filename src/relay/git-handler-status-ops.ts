@@ -133,7 +133,7 @@ export async function getStatusOp(
         const branchName = getShortBranchName(branch)
         if (branchName) {
           try {
-            // Why: this probe coalesces across concurrent status reads, so one request's abort must not reject the shared in-flight promise.
+            // Why: one request's abort must not reject this shared status probe.
             upstreamStatus = await readOrProbeNoEffectiveUpstreamStatus(
               { worktreePath, branchName, upstreamName: upstreamStatus?.upstreamName },
               (args) => git(args, worktreePath),
@@ -171,7 +171,7 @@ export async function getStatusOp(
     // not a git repo or git not available
   }
 
-  // Why: skip line-stats when the limit was hit — numstat over a huge change set would reintroduce the cost the limit avoids.
+  // Why: skip numstat after the limit to avoid reintroducing its cost.
   if (!didHitLimit) {
     await reuseOrRecomputeGitStatusLineStats({
       cacheKey: lineStatsCacheKey,

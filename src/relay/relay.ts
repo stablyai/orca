@@ -36,9 +36,9 @@ import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-se
 import { PluginOverlayManager } from './plugin-overlay'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
-  AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
+import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
@@ -51,7 +51,11 @@ import {
 } from '../shared/pi-agent-kind'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import { pickRemoteCliEnv } from './remote-cli-env'
-import { decideRelayGrace, type RelayGraceBranch } from './relay-grace-branch'
+import {
+  applyRelayGraceTimeConfiguration,
+  decideRelayGrace,
+  type RelayGraceBranch
+} from './relay-grace-branch'
 import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
@@ -681,25 +685,14 @@ async function main(): Promise<void> {
   })
 
   function configureRelayGraceTime(params: Record<string, unknown>): { graceTimeMs: number } {
-    const seconds = Number(params.graceTimeSeconds)
-    if (Number.isFinite(seconds) && seconds >= 0) {
-      const previousGraceMs = ptyHandler.configuredGraceTimeMs
-      // Why: the host sends 0 before system sleep so live remote PTYs survive longer than the ordinary grace window.
-      ptyHandler.setGraceTimeMs(Math.floor(seconds) * 1000)
-      // Why: startGrace samples the configured value at arm time, so a raise that lands while the idle
-      // timer is already running would still fire at the old deadline. Re-arm only on an actual change
-      // — the host re-asserts the same value on every establish, and restarting the window on those
-      // would keep a grace alive indefinitely.
-      if (
-        ptyHandler.configuredGraceTimeMs !== previousGraceMs &&
-        graceDeadlineAt !== null &&
-        graceReason !== null &&
-        !shutdownInFlight
-      ) {
-        startGrace('grace reconfigured')
-      }
-    }
-    return { graceTimeMs: ptyHandler.configuredGraceTimeMs }
+    return applyRelayGraceTimeConfiguration(params.graceTimeSeconds, {
+      readConfiguredGraceMs: () => ptyHandler.configuredGraceTimeMs,
+      writeConfiguredGraceMs: (graceMs) => ptyHandler.setGraceTimeMs(graceMs),
+      isGraceTimerArmed: () => graceDeadlineAt !== null && graceReason !== null,
+      isShutdownInFlight: () => shutdownInFlight,
+      readGraceBranch: () => graceBranch,
+      startGrace
+    })
   }
 
   dispatcher.onNotification(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, (params) => {
@@ -714,13 +707,8 @@ async function main(): Promise<void> {
   const hookServer = new RelayAgentHookServer({
     // Why: scope endpoint.env/cmd by socket path so multiple relay daemons on one account can't overwrite each other's hook tokens.
     endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
-    forward: (envelope) => {
-      // Why: notify is fire-and-forget and drops during reconnect; the per-paneKey cache lets us replay last status after --connect.
-      dispatcher.notify(
-        AGENT_HOOK_NOTIFICATION_METHOD,
-        envelope as unknown as Record<string, unknown>
-      )
-    }
+    // Why: publication is fire-and-forget and drops during reconnect; the per-paneKey cache lets us replay last status after --connect.
+    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
   })
   // Why: await the bind before announcing readiness so the first PTY spawn already sees ORCA_AGENT_HOOK_* env; bind failure is soft (log and continue).
   try {

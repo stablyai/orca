@@ -61,16 +61,47 @@ class FakeWatcherPool {
 
 function createDispatcher() {
   const detached = new Set<(clientId: number) => void>()
+  // Batches ride the producer lane and markers the control lane, so record both in one ordered log.
+  const fsChanged: Record<string, unknown>[] = []
+  const record = (_clientId: number, method: string, params?: Record<string, unknown>): void => {
+    if (method === 'fs.changed' && params) {
+      fsChanged.push(params)
+    }
+  }
   return {
+    fsChanged,
     notify: vi.fn(),
-    notifyClient: vi.fn(),
-    broadcastProducerFrameCapacity: vi.fn(() => Number.MAX_SAFE_INTEGER),
-    notificationFrameBytes: vi.fn(() => 64),
+    notifyClient: vi.fn(record),
+    tryNotifyClient: vi.fn(
+      (
+        clientId: number,
+        method: string,
+        params?: Record<string, unknown>,
+        onSettled?: (result: { ok: true } | { ok: false; error: Error }) => void
+      ) => {
+        record(clientId, method, params)
+        // A healthy sink settles as the frame is written, which releases the emitter's outstanding-marker slot.
+        onSettled?.({ ok: true })
+        return true
+      }
+    ),
+    activeClientIds: vi.fn(() => [1]),
+    producerEnvelopeBudget: vi.fn(() => Number.MAX_SAFE_INTEGER),
+    publishProducerNotification: vi.fn(
+      (clientId: number, method: string, params?: Record<string, unknown>) => {
+        record(clientId, method, params)
+        return true
+      }
+    ),
     onClientDetached: vi.fn((listener: (clientId: number) => void) => {
       detached.add(listener)
       return () => detached.delete(listener)
     })
   }
+}
+
+function watchFailedCalls(dispatcher: ReturnType<typeof createDispatcher>): unknown[][] {
+  return dispatcher.notifyClient.mock.calls.filter(([, method]) => method === 'fs.watchFailed')
 }
 
 function context(clientId: number): RequestContext {
@@ -96,10 +127,10 @@ describe('RelayFilesystemWatchRegistry', () => {
     first.hooks.onInterruption?.()
     first.callback(null, [{ type: 'update', path: '/repo/after-resubscribe.txt' }])
 
-    expect(dispatcher.notify.mock.calls).toEqual([
-      ['fs.changed', { events: [{ kind: 'create', absolutePath: '/repo/before.txt' }] }],
-      ['fs.changed', { events: [{ kind: 'overflow', absolutePath: '/repo' }] }],
-      ['fs.changed', { events: [{ kind: 'update', absolutePath: '/repo/after-resubscribe.txt' }] }]
+    expect(dispatcher.fsChanged).toEqual([
+      { events: [{ kind: 'create', absolutePath: '/repo/before.txt' }] },
+      { events: [{ kind: 'overflow', absolutePath: '/repo' }] },
+      { events: [{ kind: 'update', absolutePath: '/repo/after-resubscribe.txt' }] }
     ])
   })
 
@@ -118,12 +149,10 @@ describe('RelayFilesystemWatchRegistry', () => {
 
     expect(pool.installed).toHaveLength(2)
     pool.installed[1].callback(null, [{ type: 'create', path: '/repo/recovered.txt' }])
-    expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'fs.changed', {
-      events: [{ kind: 'overflow', absolutePath: '/repo' }]
-    })
-    expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'fs.changed', {
-      events: [{ kind: 'create', absolutePath: '/repo/recovered.txt' }]
-    })
+    expect(dispatcher.fsChanged).toEqual([
+      { events: [{ kind: 'overflow', absolutePath: '/repo' }] },
+      { events: [{ kind: 'create', absolutePath: '/repo/recovered.txt' }] }
+    ])
 
     registry.unwatch('/repo', context(1))
     expect(pool.installed[1].unsubscribe).not.toHaveBeenCalled()
@@ -145,17 +174,19 @@ describe('RelayFilesystemWatchRegistry', () => {
       )
     )
 
-    await vi.waitFor(() => expect(dispatcher.notifyClient).toHaveBeenCalledTimes(2))
-    expect(dispatcher.notifyClient).toHaveBeenNthCalledWith(1, 1, 'fs.watchFailed', {
-      rootPath: '/repo',
-      watchId: 101,
-      message: 'quarantine recovery failed'
-    })
-    expect(dispatcher.notifyClient).toHaveBeenNthCalledWith(2, 2, 'fs.watchFailed', {
-      rootPath: '/repo',
-      watchId: 202,
-      message: 'quarantine recovery failed'
-    })
+    await vi.waitFor(() => expect(watchFailedCalls(dispatcher)).toHaveLength(2))
+    expect(watchFailedCalls(dispatcher)).toEqual([
+      [
+        1,
+        'fs.watchFailed',
+        { rootPath: '/repo', watchId: 101, message: 'quarantine recovery failed' }
+      ],
+      [
+        2,
+        'fs.watchFailed',
+        { rootPath: '/repo', watchId: 202, message: 'quarantine recovery failed' }
+      ]
+    ])
   })
 
   it('aborts a pending crawl only after the last same-root client leaves', async () => {
@@ -400,21 +431,18 @@ describe('createRelayWatcherProcessPool', () => {
       expect(recoveredWatches.map((watches) => watches.map(({ dir }) => dir))).toEqual(
         roots.map((root) => [root])
       )
-      expect(dispatcher.notify.mock.calls.slice(0, roots.length)).toEqual(
-        roots.map((root) => ['fs.changed', { events: [{ kind: 'overflow', absolutePath: root }] }])
+      expect(dispatcher.fsChanged.slice(0, roots.length)).toEqual(
+        roots.map((root) => ({ events: [{ kind: 'overflow', absolutePath: root }] }))
       )
 
       for (const watches of recoveredWatches) {
         const [{ callback, dir }] = watches
         callback(null, [{ type: 'update', path: join(dir, 'recovered.txt') }])
       }
-      expect(dispatcher.notify.mock.calls.slice(roots.length)).toEqual(
-        roots.map((root) => [
-          'fs.changed',
-          {
-            events: [{ kind: 'update', absolutePath: join(root, 'recovered.txt') }]
-          }
-        ])
+      expect(dispatcher.fsChanged.slice(roots.length)).toEqual(
+        roots.map((root) => ({
+          events: [{ kind: 'update', absolutePath: join(root, 'recovered.txt') }]
+        }))
       )
     } finally {
       registry.dispose()

@@ -246,6 +246,7 @@ import { RelayVersionMismatchError } from '../ssh/ssh-relay-version-mismatch-err
 import {
   SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD,
   type SshConnectionState,
+  type SshConnectionStatus,
   type SshTarget
 } from '../../shared/ssh-types'
 import { PTY_CONSUMER_SESSION_PROTOCOL_VERSION } from '../../shared/pty-consumer-session'
@@ -1060,6 +1061,152 @@ describe('SSH IPC handlers', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('relay loss while the SSH transport is down', () => {
+    const relayLostTarget: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const transportState = (status: SshConnectionStatus): SshConnectionState => ({
+      targetId: 'ssh-1',
+      status,
+      error: null,
+      reconnectAttempt: 0
+    })
+    const setTransportStatus = (status: SshConnectionStatus): void => {
+      mockConnectionManager.getState.mockReturnValue(transportState(status))
+    }
+    const maxRelayDelayMs = relayReconnectDelaysMs.at(-1)!
+    const connectWithLiveTransport = async (): Promise<void> => {
+      mockSshStore.getTarget.mockReturnValue(relayLostTarget)
+      mockConnectionManager.connect.mockResolvedValue({})
+      mockConnectionManager.getConnection.mockReturnValue({})
+      setTransportStatus('connected')
+      await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+      mockDeployAndLaunchRelay.mockClear()
+    }
+
+    it('does not consume attempts or publish the manual-reconnect banner', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(0)
+      try {
+        await connectWithLiveTransport()
+        setTransportStatus('reconnecting')
+        getLatestRelayDisposeCallback()('connection_lost')
+
+        // Well past the whole 6-step ladder: a redeploy cannot ride a dead transport, so nothing is spent.
+        const fullLadderMs = relayReconnectDelaysMs.reduce((sum, delay) => sum + delay, 0)
+        await vi.advanceTimersByTimeAsync(fullLadderMs + relayLostStabilizedMs)
+
+        expect(mockDeployAndLaunchRelay).not.toHaveBeenCalled()
+        expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toEqual({
+          targetId: 'ssh-1',
+          status: 'reconnecting',
+          error: 'Relay channel lost. Reconnecting...',
+          reconnectAttempt: 0,
+          providerEpoch: expect.any(String),
+          connectionGeneration: 2
+        })
+
+        setTransportStatus('connected')
+        await vi.advanceTimersByTimeAsync(maxRelayDelayMs)
+        expect(mockDeployAndLaunchRelay).toHaveBeenCalledTimes(1)
+        expect(
+          (handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' }) as SshConnectionState).status
+        ).toBe('connected')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('stops retrying once the transport reaches a terminal state', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(0)
+      try {
+        await connectWithLiveTransport()
+        setTransportStatus('reconnecting')
+        getLatestRelayDisposeCallback()('connection_lost')
+        await vi.advanceTimersByTimeAsync(maxRelayDelayMs)
+
+        setTransportStatus('reconnection-failed')
+        await vi.advanceTimersByTimeAsync(maxRelayDelayMs)
+
+        // The wait loop is gone: only onStateChange's redeploy may revive the relay after this.
+        setTransportStatus('connected')
+        await vi.advanceTimersByTimeAsync(maxRelayDelayMs * 4)
+        expect(mockDeployAndLaunchRelay).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('resets the relay budget when the connection disappears before retry', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(0)
+      try {
+        await connectWithLiveTransport()
+        getLatestRelayDisposeCallback()('connection_lost')
+
+        mockConnectionManager.getConnection.mockReturnValue(undefined)
+        await vi.advanceTimersByTimeAsync(relayReconnectDelaysMs[0])
+
+        mockConnectionManager.getConnection.mockReturnValue({})
+        getLatestRelayDisposeCallback()('connection_lost')
+        expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toEqual(
+          expect.objectContaining({ reconnectAttempt: 1 })
+        )
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('still reaches the manual-reconnect banner when the transport is healthy', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(0)
+      try {
+        await connectWithLiveTransport()
+        mockDeployAndLaunchRelay.mockRejectedValue(new Error('relay refused'))
+        getLatestRelayDisposeCallback()('connection_lost')
+        for (const delayMs of relayReconnectDelaysMs) {
+          await vi.advanceTimersByTimeAsync(delayMs)
+        }
+
+        expect(
+          (handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' }) as SshConnectionState).error
+        ).toBe('Relay channel kept dropping. Click Reconnect on the SSH target before retrying.')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('restores the full relay budget once the transport reconnects', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(0)
+      try {
+        await connectWithLiveTransport()
+        mockDeployAndLaunchRelay.mockRejectedValue(new Error('relay refused'))
+        getLatestRelayDisposeCallback()('connection_lost')
+        await vi.advanceTimersByTimeAsync(relayReconnectDelaysMs[0])
+
+        const callbacks = mockConnectionManager.callbacksRef.current as {
+          onStateChange: (targetId: string, state: SshConnectionState) => void
+        }
+        callbacks.onStateChange('ssh-1', transportState('reconnecting'))
+        callbacks.onStateChange('ssh-1', transportState('connected'))
+        await vi.advanceTimersByTimeAsync(0)
+
+        // Budget reset: the next loss waits the base delay again instead of the third ladder step.
+        mockDeployAndLaunchRelay.mockClear()
+        await vi.advanceTimersByTimeAsync(relayReconnectDelaysMs[0])
+        expect(mockDeployAndLaunchRelay).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   it('reuses a fast relay reconnect after the post-ready stabilization window', async () => {

@@ -83,7 +83,8 @@ export class DispatcherClientWriter {
     lane: DispatcherWriterLane,
     encode: () => Buffer,
     estimatedBytes: number,
-    onSettled: (result: SinkWriteSettlement) => void = () => {}
+    onSettled: (result: SinkWriteSettlement) => void = () => {},
+    overflowIsNonFatal = false
   ): boolean {
     if (this.closed) {
       onSettled({ ok: false, error: new Error('Relay writer is closed') })
@@ -94,7 +95,8 @@ export class DispatcherClientWriter {
       encode,
       estimatedBytes,
       onSettled: onceDispatcherWriterSettlement(onSettled),
-      settled: false
+      settled: false,
+      overflowIsNonFatal
     }
     const admission = this.admission.admit(entry, this.sink.frameCapacity(lane, this.saturated))
     if (!admission.accepted) {
@@ -176,29 +178,18 @@ export class DispatcherClientWriter {
     }
     return this.laneScheduler.select(
       this.admission,
-      (entry) => this.canWriteControl(entry),
-      (entry) => this.canWriteProducer(entry)
+      (entry) => this.canWrite(entry, this.sink.highWaterMark),
+      (entry) => this.canWrite(entry, this.sink.producerFrameCapacity)
     )
   }
 
-  private canWriteControl(entry: DispatcherWriterEntry): boolean {
-    const highWaterMark = this.sink.highWaterMark
-    if (!Number.isFinite(highWaterMark)) {
+  // Why: a zero-length writable always takes one frame, else a single oversized frame could never drain.
+  private canWrite(entry: DispatcherWriterEntry, capacity: number): boolean {
+    if (!Number.isFinite(this.sink.highWaterMark)) {
       return true
     }
     const writableLength = this.sink.writableLength
-    return writableLength + entry.estimatedBytes <= highWaterMark || writableLength === 0
-  }
-
-  private canWriteProducer(entry: DispatcherWriterEntry): boolean {
-    const highWaterMark = this.sink.highWaterMark
-    if (!Number.isFinite(highWaterMark)) {
-      return true
-    }
-    return (
-      this.sink.writableLength + entry.estimatedBytes <= this.sink.producerFrameCapacity ||
-      this.sink.writableLength === 0
-    )
+    return writableLength + entry.estimatedBytes <= capacity || writableLength === 0
   }
 
   private writeEntry(entry: DispatcherWriterEntry): void {

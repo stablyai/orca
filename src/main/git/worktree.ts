@@ -683,10 +683,10 @@ export async function listWorktreeGraph(
   }
 }
 
-// Why: cold start triggers many concurrent `git worktree list` spawns per repo (expensive on Windows, #7225); share the in-flight promise to collapse duplicates.
+// Why: share concurrent `git worktree list` scans, which are expensive on Windows.
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
-// Why: a listing after a mutation must not join a scan that predates it; bumping the generation on mutation retires older in-flight scans from sharing.
+// Why: mutation generations prevent listings from joining stale scans.
 const worktreeScanGenerations = new Map<string, number>()
 
 function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {

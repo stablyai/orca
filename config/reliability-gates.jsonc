@@ -1272,6 +1272,128 @@
       "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
     },
     {
+      "id": "terminal-session.layout-pty-ownership",
+      "title": "Restored terminal layouts retain one renderer owner per PTY",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-electron-restore",
+      "surfaces": [
+        "persisted terminal layout restore",
+        "daemon PTY reattach",
+        "terminal tab hide and reveal",
+        "xterm renderer ownership",
+        "remote terminal layout mirroring"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "local-daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Provider-independent unit tests cover persisted replay, state-boundary authority transfer, remote-runtime mirroring, rootless layouts, repeated leaf ids, metadata repair, and 12,000 nested duplicate leaves. A two-launch macOS Electron journey covers a real surviving local-daemon PTY, persisted duplicate ownership, synchronized streaming output, and tab hide/reveal. Live Linux, Windows, SSH, WSL, and remote-runtime restore journeys remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/11757",
+        "https://github.com/stablyai/orca/pull/11726"
+      ],
+      "invariant": "Within one terminal tab, each PTY has at most one layout leaf, pane manager surface, and xterm renderer owner. Restore and remote mirroring must normalize duplicate ownership before replay while retaining active-leaf focus, scrollback, pane authority, agent metadata, and distinct sibling PTYs.",
+      "oracle": "Launch Orca with a real daemon PTY running a synchronized full-screen stream, close the desktop client without killing the daemon process, seed the persisted tab layout with two leaves bound to that PTY, and relaunch. Hide the restored tab behind a sibling and reveal it, then require the stream to remain visible with exactly one manager pane, one xterm DOM node, one root leaf, one PTY binding, and one unique PTY. Unit contracts require the same one-owner result through persisted replay, store hydration, remote mirroring, rootless and repeated-leaf layouts, and deeply nested input.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --reporter=dot",
+        "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts",
+        "src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts",
+        "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
+        "tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts",
+          "assertions": [
+            "replays one surface when restored leaves point to the same PTY",
+            "reattaches one PTY when the split repeats its bound leaf id"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts",
+          "assertions": ["prunes deeply nested duplicate ownership without recursive stack growth"]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts",
+          "assertions": [
+            "keeps the active leaf and prunes the stale surface plus its metadata",
+            "is idempotent and preserves one owner across PTY and focus permutations"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts",
+          "assertions": [
+            "normalizes duplicate PTY surfaces at the renderer state boundary",
+            "moves hydrated pane authority onto the retained PTY leaf"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
+          "assertions": ["deduplicates mirrored leaves that claim the same remote PTY"]
+        },
+        {
+          "file": "tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts",
+          "assertions": ["repairs duplicate persisted PTY renderers before streaming tab reveal"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 1.33,
+          "summary": "Five focused files passed 92 ownership, replay, hydration, depth, and remote-mirroring tests."
+        },
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 8.7,
+          "summary": "The two-launch Electron journey preserved one real daemon PTY and one renderer through duplicate-layout repair and post-relaunch tab reveal."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused ownership unit suite plus one prebuilt two-launch Electron journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic unit and Electron gates pass locally on macOS; focused CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Orca 1.4.161 visibly strands and fragments the synchronized stream after restoring duplicate PTY renderers (https://github.com/user-attachments/assets/6917ac6f-9ba3-4f6f-a082-fb62932d511f). The post-resize capture remains corrupted, with duplicated lower rows and the terminal still stranded on the right; it is not recovery evidence (https://github.com/user-attachments/assets/32f7be79-0919-48c2-bcad-e4b7f1e14f2d). After the #11726 ownership repair, the equivalent stream remains continuous in one full-width renderer (https://github.com/user-attachments/assets/8c9cc5a2-dbe3-4348-b05c-f8268b98c476), and the final automated journey reports one owner at every layer after relaunch and tab reveal (https://github.com/user-attachments/assets/f19b46aa-e56f-476c-9e2c-e4c3a784c805)."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Ownership normalization is bounded by layout size, uses iterative traversal, and passes a 12,000-leaf duplicate layout without recursive stack growth. The follow-up adds no production polling, renderer work, listeners, persistence scans, or retained payloads."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Run the live two-launch journey on Linux and Windows.",
+        "Add live SSH or remote-runtime duplicate-restore evidence before claiming provider-complete coverage."
+      ],
+      "knownGaps": [
+        "Live Electron evidence currently covers macOS with a local daemon PTY only.",
+        "The live journey uses a git-backed test workspace; folder-workspace restoration currently relies on the same provider-independent normalization contracts rather than a separate Electron run.",
+        "The gate deterministically seeds the historical persisted-state shape; it does not depend on reproducing the unknown UI sequence that originally wrote duplicate ownership.",
+        "The visual old-release evidence and the structural current-version oracle are separate runs because the current test harness did not exist in Orca 1.4.161."
+      ],
+      "demotionRule": "Keep experimental or demote if ownership cardinality flakes, duplicate replay reaches a second renderer, active metadata or authority moves to the wrong leaf, deep normalization regresses, or a supported provider bypasses normalization."
+    },
+    {
       "id": "terminal-session.kill-all-surface-cleanup",
       "title": "Kill all sessions removes only the confirmed terminal surfaces and current bindings",
       "maturity": "experimental",

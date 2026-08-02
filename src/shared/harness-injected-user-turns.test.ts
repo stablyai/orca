@@ -73,6 +73,12 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
     expect(isKnownHarnessInjectedUserTurnText('   ')).toBe(false)
   })
 
+  it('classifies from a bounded head so multi-KB pastes stay cheap', () => {
+    const largePrompt = `<task-notification>done</task-notification>\n${'x'.repeat(20_000)}`
+    expect(isKnownHarnessInjectedUserTurnText(largePrompt)).toBe(true)
+    expect(isKnownHarnessInjectedUserTurnText(`fix login ${'y'.repeat(20_000)}`)).toBe(false)
+  })
+
   it('keeps single-word tag pastes, custom elements, and underscore wrappers', () => {
     // Grok wraps REAL typed prompts in <user_query> — never classify as noise.
     expect(isKnownHarnessInjectedUserTurnText('<user_query>fix the bug</user_query>')).toBe(false)

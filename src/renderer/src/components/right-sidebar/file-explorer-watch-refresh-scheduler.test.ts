@@ -226,11 +226,32 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
 
     scheduler.requestFullRefresh()
     scheduler.requestDirRefresh('/repo/src')
-    scheduler.cancel()
+    expect(scheduler.cancel()).toBe(true)
     await vi.advanceTimersByTimeAsync(MAX_WAIT_MS)
 
     expect(refreshTree).not.toHaveBeenCalled()
     expect(refreshDir).not.toHaveBeenCalled()
+  })
+
+  it('reports no discarded work when an idle scheduler is cancelled', () => {
+    const { scheduler } = setup()
+
+    expect(scheduler.cancel()).toBe(false)
+  })
+
+  it('reports discarded work when cancelled with a refresh in flight and nothing queued', async () => {
+    const gate = createDeferred()
+    const { refreshTree, scheduler } = setup({ refreshTree: () => gate.promise })
+
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+
+    // Nothing pending and no timer armed: the in-flight run is the only discarded work.
+    expect(scheduler.cancel()).toBe(true)
+
+    gate.resolve()
+    await vi.advanceTimersByTimeAsync(MAX_WAIT_MS)
   })
 
   it('stops refreshing queued dirs when cancelled mid-run', async () => {

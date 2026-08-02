@@ -180,7 +180,7 @@ type ManagedStartupCommand = {
   timer: ReturnType<typeof setTimeout> | null
 }
 
-// Why: node-pty's Windows agent throws on any signal arg (ConPTY has no signal semantics); drop it there, forward on POSIX.
+// Why: Windows ConPTY rejects signals; forward them only on POSIX.
 function killPtyProcess(pty: IPty, signal: string): void {
   if (process.platform === 'win32') {
     pty.kill()
@@ -374,7 +374,7 @@ export class PtyHandler {
   private exitListener: PtyExitListener | null = null
   private ptyPoolEmptyListener: (() => void) | null = null
   private ptyPoolActiveListener: (() => void) | null = null
-  // Why: env augmenters run on every spawn so each PTY sees live hook coords without the dispatcher knowing about agent hooks.
+  // Why: augment environment on every spawn so PTYs receive current hook coordinates.
   private envAugmenters: PtyEnvAugmenter[] = []
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
   private readonly agentSessionCreateOperations = new Map<
@@ -1590,7 +1590,7 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found`)
     }
 
-    // Why: a shell can die without node-pty firing onExit (reaped out-of-band); prove liveness so attach doesn't strand a dead, lingering lease.
+    // Why: verify liveness because shells can exit without node-pty onExit.
     if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
       managed.physicalExit?.markExited()
       this.releaseRelayIngress(managed)
@@ -1603,7 +1603,7 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found`)
     }
 
-    // Why: a relay generation reset can reuse pty-N for a different pane; reject on identity disagreement (absent identity permissive).
+    // Why: generation resets can reuse PTY IDs; reject conflicting identities.
     const mismatch = attachIdentityMismatches(
       {
         paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
@@ -1646,8 +1646,8 @@ export class PtyHandler {
       }
     }
 
-    // Why: renderer hasn't registered replay handlers yet during spawn, so return to the caller instead of notifying too early.
-    // Why: buffer intentionally NOT cleared after replay (client clears xterm first) so later restarts still replay full history.
+    // Why: return replay during spawn before renderer handlers register.
+    // Why: retain replay buffers so later restarts receive full history.
     const replay = managed.buffered.read()
     if (replay) {
       // Why: drop pending batched bytes already in the replay buffer so attach doesn't render them twice.
@@ -1715,7 +1715,7 @@ export class PtyHandler {
       this.releaseStartupCommand(managed)
       this.flushPtyOutput(id)
       this.requestForceKill(managed)
-      // Why: remote Git deletion must not race the child's native handles; on timeout keep the map entry so onExit/retry still owns it.
+      // Why: preserve timed-out entries so onExit/retry owns native handles.
       await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
     } else {
       this.releaseStartupCommand(managed)

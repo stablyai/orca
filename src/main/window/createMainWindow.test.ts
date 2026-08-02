@@ -147,6 +147,12 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
   })
 
+  it('keeps the browser close-policy marker absolute under Windows URL rules', () => {
+    expect(fileURLToPath(BROWSER_WINDOW_CLOSE_ALLOWED_PRELOAD, { windows: true })).toBe(
+      'C:\\__orca_window_close_allowed__'
+    )
+  })
+
   it('enables renderer sandboxing and opens external links safely', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {

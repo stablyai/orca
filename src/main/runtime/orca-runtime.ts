@@ -18623,6 +18623,7 @@ export class OrcaRuntimeService {
     repoSelector: string
     branch: string
     currentHeadOid?: string | null
+    active?: boolean
     linkedGitHubPR?: number | null
     fallbackGitHubPR?: number | null
     linkedGitLabMR?: number | null
@@ -18637,6 +18638,7 @@ export class OrcaRuntimeService {
       connectionId: repo.connectionId ?? null,
       branch: args.branch,
       currentHeadOid: args.currentHeadOid ?? null,
+      ...(args.active === true ? { active: true } : {}),
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,

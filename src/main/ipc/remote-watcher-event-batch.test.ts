@@ -80,19 +80,20 @@ describe('createRemoteWatcherEventBatch', () => {
     expect(deliver).not.toHaveBeenCalled()
   })
 
-  it('clears a stale delete when a later update is known to be a file', () => {
+  it('keeps a replacement delete when a directory is recreated as a file', () => {
     const deliver = vi.fn()
     const batch = makeBatch(deliver)
 
     batch.push([
-      { kind: 'delete', absolutePath: `${ROOT}/a.ts` },
-      { kind: 'create', absolutePath: `${ROOT}/a.ts` },
-      { kind: 'update', absolutePath: `${ROOT}/a.ts`, isDirectory: false }
+      { kind: 'delete', absolutePath: `${ROOT}/dist` },
+      { kind: 'create', absolutePath: `${ROOT}/dist` },
+      { kind: 'update', absolutePath: `${ROOT}/dist`, isDirectory: false }
     ])
     vi.advanceTimersByTime(150)
 
     expect(deliver.mock.calls[0][0]).toEqual([
-      { kind: 'update', absolutePath: `${ROOT}/a.ts`, isDirectory: false }
+      { kind: 'delete', absolutePath: `${ROOT}/dist` },
+      { kind: 'update', absolutePath: `${ROOT}/dist`, isDirectory: false }
     ])
   })
 
@@ -266,5 +267,40 @@ describe('createRemoteWatcherEventBatch', () => {
       expect(event.absolutePath).not.toContain('\\')
       expect(event.absolutePath).not.toMatch(/^[a-zA-Z]:/)
     }
+  })
+
+  it('keeps NFC- and NFD-distinct remote POSIX names separate', () => {
+    const deliver = vi.fn()
+    const batch = makeBatch(deliver)
+    const nfcPath = `${ROOT}/caf\u00e9.txt`
+    const nfdPath = `${ROOT}/cafe\u0301.txt`
+
+    batch.push([{ kind: 'update', absolutePath: nfcPath }])
+    batch.push([{ kind: 'update', absolutePath: nfdPath }])
+    vi.advanceTimersByTime(150)
+
+    expect(deliver.mock.calls[0][0]).toEqual([
+      { kind: 'update', absolutePath: nfcPath },
+      { kind: 'update', absolutePath: nfdPath }
+    ])
+  })
+
+  it('still coalesces equivalent Windows path spellings', () => {
+    const deliver = vi.fn()
+    const batch = createRemoteWatcherEventBatch({
+      rootPath: 'C:\\Repo',
+      deliver,
+      trailingMs: 150,
+      maxWaitMs: 500,
+      maxEvents: 5_000
+    })
+
+    batch.push([{ kind: 'update', absolutePath: 'C:\\Repo\\CAF\u00c9.txt' }])
+    batch.push([{ kind: 'update', absolutePath: 'c:/repo/cafe\u0301.txt' }])
+    vi.advanceTimersByTime(150)
+
+    expect(deliver.mock.calls[0][0]).toEqual([
+      { kind: 'update', absolutePath: 'c:/repo/cafe\u0301.txt' }
+    ])
   })
 })

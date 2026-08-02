@@ -244,7 +244,7 @@ async function runRuntimeGraphSync(): Promise<void> {
 }
 
 export type RuntimeMobileSessionSyncKey = {
-  // Why: compared by reference; reallocation signals a real layout/title change, avoiding stringifying thousands of tabs. See docs/agent-working-pane-typing-lag.md.
+  // Why: reference changes signal layout/title updates without stringifying thousands of tabs.
   terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   nativeChatLaunchDraftByTabId: AppState['nativeChatLaunchDraftByTabId']

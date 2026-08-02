@@ -40,6 +40,7 @@ import {
   type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import { SshReconnectLadder } from './ssh-reconnect-ladder'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import {
   requiresSystemSshForSecurityKey,
@@ -126,6 +127,7 @@ export class SshConnection {
   private callbacks: SshConnectionCallbacks
   private target: SshTarget
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly reconnectLadder = new SshReconnectLadder()
   private disposed = false
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
@@ -601,6 +603,8 @@ export class SshConnection {
     for (let attempt = 0; attempt < INITIAL_RETRY_ATTEMPTS; attempt++) {
       try {
         await this.attemptConnect()
+        this.reconnectLadder.reset()
+        this.reconnectLadder.markConnected(Date.now())
         return
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
@@ -852,8 +856,9 @@ export class SshConnection {
     // Why: OS sleep/wake can leave ssh2 thinking a dead TCP socket is still connected; tear down and reconnect so the relay can reattach remote PTYs.
     this.closeTransportsForReconnect()
     this.state.reconnectAttempt = 0
+    this.reconnectLadder.reset()
     this.setState('reconnecting')
-    await this.runReconnectAttempt(0)
+    await this.runReconnectAttempt()
   }
 
   private async doSystemSshProbe(connectGeneration: number): Promise<void> {
@@ -1239,26 +1244,32 @@ export class SshConnection {
     if (this.disposed || this.reconnectTimer) {
       return
     }
-    const attempt = this.state.reconnectAttempt
-    if (attempt >= RECONNECT_BACKOFF_MS.length) {
+    const decision = this.reconnectLadder.next(Date.now())
+    if (decision.kind === 'give-up') {
       this.setState('reconnection-failed', 'Max reconnection attempts reached')
       return
     }
+    this.state.reconnectAttempt = decision.attemptIndex
     this.setState('reconnecting')
+    console.warn(
+      `[ssh] Reconnecting to ${this.target.label} in ${decision.delayMs}ms (delay step ${decision.attemptIndex + 1}/${RECONNECT_BACKOFF_MS.length}, failed handshakes ${this.reconnectLadder.failedAttemptStreak}/${RECONNECT_BACKOFF_MS.length})`
+    )
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null
       if (this.disposed) {
         return
       }
-      await this.runReconnectAttempt(attempt)
-    }, RECONNECT_BACKOFF_MS[attempt])
+      await this.runReconnectAttempt()
+    }, decision.delayMs)
   }
 
-  private async runReconnectAttempt(attempt: number): Promise<void> {
+  private async runReconnectAttempt(): Promise<void> {
     try {
       // Why: reset before connecting so the 'connected' broadcast carries reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
       this.state.reconnectAttempt = 0
       await this.attemptConnect()
+      // Why: attemptConnect resolves only after a real handshake on either transport; the system-ssh probe's 'connected' must not clear the failure streak.
+      this.reconnectLadder.markConnected(Date.now())
     } catch (err) {
       if (this.disposed) {
         return
@@ -1272,7 +1283,7 @@ export class SshConnection {
         this.setState('error', error.message)
         return
       }
-      this.state.reconnectAttempt = attempt + 1
+      this.reconnectLadder.markAttemptFailed()
       this.scheduleReconnect()
     }
   }
@@ -1383,6 +1394,7 @@ export class SshConnection {
     this.systemSshControlMasterDisabledForSession = false
     this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
+    this.reconnectLadder.reset()
     this.setState('disconnected')
   }
 

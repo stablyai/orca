@@ -31,6 +31,7 @@ import {
   type HookListenerState
 } from '../../shared/agent-hook-listener'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { createShedSubagentsField } from '../../shared/agent-hook-relay'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -185,6 +186,51 @@ describe('AgentHookServer listener replay', () => {
     )
 
     expect(server.getStatusSnapshot()[0]?.subagents).toEqual([child('new-child')])
+  })
+
+  it('restores a subagent roster the relay shed to fit the frame', () => {
+    const server = new AgentHookServer()
+    const roster = [
+      { id: 'reviewer-1', agentType: 'reviewer', state: 'working' as const, startedAt: 1 }
+    ]
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        payload: { state: 'working', prompt: 'review', agentType: 'claude', subagents: roster }
+      },
+      'conn-1'
+    )
+    // The relay dropped the roster to fit an oversized frame and said so on the wire.
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        shedFields: ['lastAssistantMessage', createShedSubagentsField(roster)],
+        payload: { state: 'done', prompt: 'review', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', subagents: roster })
+  })
+
+  it('lets an unmarked absent roster clear, so a finished team still retires', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        payload: {
+          state: 'working',
+          prompt: 'review',
+          agentType: 'claude',
+          subagents: [{ id: 'reviewer-1', agentType: 'reviewer', state: 'working', startedAt: 1 }]
+        }
+      },
+      'conn-1'
+    )
+    server.ingestRemote(
+      { paneKey: PANE, payload: { state: 'done', prompt: 'review', agentType: 'claude' } },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
   })
 
   it('retains root Codex identity when relay child events omit it', () => {

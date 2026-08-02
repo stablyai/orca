@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { join } from 'node:path'
@@ -130,8 +138,11 @@ const ROTATION_INTERLEAVE_CASES = [
 
 type TestStore = {
   updateUI(updates: { sidebarWidth: number }): void
+  setGitHubCache(cache: { pr: Record<string, never>; issue: Record<string, never> }): void
   waitForPendingWrite(): Promise<void>
   flushOrThrow(): void
+  flushPendingAsync(): Promise<void>
+  flushPendingOrThrowAsync(): Promise<void>
 }
 
 async function createStore(dir: string): Promise<TestStore> {
@@ -309,7 +320,173 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     expect(ring['orca-data.json.bak.2']).toBeUndefined()
   })
 
-  it('keeps the due check inside ownership when a second writer starts', async () => {
+  it('a sync checkpoint vetoes an async write already parked on rename', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    let releaseRename!: () => void
+    const renameRelease = new Promise<void>((resolve) => {
+      releaseRename = resolve
+    })
+    let signalRename!: () => void
+    const renameStarted = new Promise<void>((resolve) => {
+      signalRename = resolve
+    })
+    fsCalls.waitAsync = (fn, target) => {
+      if (fn !== 'rename' || target === dataFile(dir) || !target.startsWith(dataFile(dir))) {
+        return null
+      }
+      signalRename()
+      return renameRelease
+    }
+
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+    store.updateUI({ sidebarWidth: 501 })
+    vi.advanceTimersByTime(SAVE_DEBOUNCE_MS)
+    const pending = store.waitForPendingWrite()
+    await renameStarted
+
+    store.updateUI({ sidebarWidth: 502 })
+    store.flushOrThrow()
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(502)
+
+    releaseRename()
+    await pending
+    fsCalls.recording = false
+    fsCalls.waitAsync = null
+
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(502)
+    expect(readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toHaveLength(0)
+  })
+
+  it('retries a genuine ENOENT instead of marking the state persisted', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+    fsCalls.failAsync = (fn, target) =>
+      fn === 'rename' && target.startsWith(dataFile(dir)) && !target.includes('.bak.')
+        ? Object.assign(new Error('mount disappeared'), { code: 'ENOENT' })
+        : null
+
+    store.updateUI({ sidebarWidth: 511 })
+    await store.flushPendingAsync()
+    expect(existsSync(dataFile(dir))).toBe(false)
+
+    fsCalls.failAsync = null
+    await store.flushPendingAsync()
+    fsCalls.recording = false
+    errors.mockRestore()
+
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(511)
+  })
+
+  it('the throwing async barrier drains mutations made during its write', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    let releaseRename!: () => void
+    const renameRelease = new Promise<void>((resolve) => {
+      releaseRename = resolve
+    })
+    let signalRename!: () => void
+    const renameStarted = new Promise<void>((resolve) => {
+      signalRename = resolve
+    })
+    let held = false
+    fsCalls.waitAsync = (fn, target) => {
+      if (held || fn !== 'rename' || !target.startsWith(dataFile(dir))) {
+        return null
+      }
+      held = true
+      signalRename()
+      return renameRelease
+    }
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+
+    store.updateUI({ sidebarWidth: 601 })
+    const barrier = store.flushPendingOrThrowAsync()
+    await renameStarted
+    store.updateUI({ sidebarWidth: 602 })
+    releaseRename()
+    await barrier
+    fsCalls.recording = false
+
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(602)
+  })
+
+  it('bounds a best-effort flush to one state generation', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    let releaseRename!: () => void
+    const renameRelease = new Promise<void>((resolve) => {
+      releaseRename = resolve
+    })
+    let signalRename!: () => void
+    const renameStarted = new Promise<void>((resolve) => {
+      signalRename = resolve
+    })
+    let held = false
+    fsCalls.waitAsync = (fn, target) => {
+      if (held || fn !== 'rename' || !target.startsWith(dataFile(dir))) {
+        return null
+      }
+      held = true
+      signalRename()
+      return renameRelease
+    }
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+
+    store.updateUI({ sidebarWidth: 621 })
+    const flush = store.flushPendingAsync()
+    await renameStarted
+    store.updateUI({ sidebarWidth: 622 })
+    releaseRename()
+    await flush
+    fsCalls.recording = false
+
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(621)
+
+    await store.flushPendingOrThrowAsync()
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(622)
+  })
+
+  it('the throwing async barrier drains mutations made during sidecar I/O', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    let releaseRename!: () => void
+    const renameRelease = new Promise<void>((resolve) => {
+      releaseRename = resolve
+    })
+    let signalRename!: () => void
+    const renameStarted = new Promise<void>((resolve) => {
+      signalRename = resolve
+    })
+    fsCalls.waitAsync = (fn, target) => {
+      if (fn !== 'rename' || !target.includes('orca-github-cache.json.')) {
+        return null
+      }
+      signalRename()
+      return renameRelease
+    }
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+
+    store.updateUI({ sidebarWidth: 611 })
+    store.setGitHubCache({ pr: {}, issue: {} })
+    const barrier = store.flushPendingOrThrowAsync()
+    await renameStarted
+    store.updateUI({ sidebarWidth: 612 })
+    releaseRename()
+    await barrier
+    fsCalls.recording = false
+
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(612)
+  })
+
+  it('serializes a second writer behind the owned rotation', async () => {
     const dir = makeDir()
     const store = await createStore(dir)
     seedStaleBackup(dir)
@@ -340,22 +517,24 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     store.updateUI({ sidebarWidth: 371 })
     vi.advanceTimersByTime(SAVE_DEBOUNCE_MS)
     const firstWrite = store.waitForPendingWrite()
+    let allWrites = firstWrite
     try {
       await rotationStarted
       store.updateUI({ sidebarWidth: 372 })
       store.flushOrThrow()
       store.updateUI({ sidebarWidth: 373 })
       vi.advanceTimersByTime(SAVE_DEBOUNCE_MS)
-      await store.waitForPendingWrite()
+      allWrites = store.waitForPendingWrite()
       expect(fsCalls.asyncCalls.filter((call) => call === statCall)).toHaveLength(1)
     } finally {
       releaseRotation()
-      await firstWrite
+      await allWrites
       fsCalls.recording = false
       fsCalls.waitAsync = null
     }
     const ring = ringSnapshot(dir)
-    expect(ring['orca-data.json.bak.0']).toBe(ring['orca-data.json'])
+    expect(JSON.parse(ring['orca-data.json']).ui.sidebarWidth).toBe(373)
+    expect(JSON.parse(ring['orca-data.json.bak.0']).ui.sidebarWidth).toBe(372)
     expect(ring['orca-data.json.bak.1']).toBe(staleBackup)
     expect(ring['orca-data.json.bak.2']).toBeUndefined()
   })

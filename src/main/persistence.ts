@@ -11,8 +11,13 @@ import {
   statSync,
   realpathSync
 } from 'node:fs'
-import { rename, mkdir, rm, copyFile, open, stat, access } from 'node:fs/promises'
-import { renameDurable, writeFileDurableSync } from './durable-file-write'
+import { rename, mkdir, rm, copyFile, open, stat, access, writeFile } from 'node:fs/promises'
+import {
+  durableWriteTempPath,
+  removeStaleDurableWriteTempFiles,
+  renameDurable,
+  writeFileDurableSync
+} from './durable-file-write'
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
@@ -267,6 +272,10 @@ import {
   readTerminalScrollbackSnapshotSync,
   type TerminalScrollbackSnapshotStorage
 } from './terminal-scrollback-snapshots'
+import {
+  deleteRemovedTerminalScrollbackSnapshotsAsync,
+  migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync
+} from './terminal-scrollback-snapshot-async-migration'
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
@@ -372,6 +381,7 @@ function getGithubCacheFile(dataFile = getDataFile()): string {
 // Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
 // GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
 const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000
+const STALE_DURABLE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 function gcStaleWorktreeMeta(state: PersistedState): number {
   // Why: a hand-corrupted "worktreeMeta": null overrides the defaults merge; normalize here instead of throwing.
@@ -2749,15 +2759,24 @@ export class Store {
   private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
+  private pendingSnapshotFileWork: Promise<void> | null = null
+  private readonly staleTempCleanup: Promise<void>
   private writeGeneration = 0
+  private inFlightAsyncTmpFile: string | null = null
   // Prevent a sync flush from interleaving a second rotation with awaited ring mutations.
   private backupRotationInFlight = false
   // Why: after a profile transfer rewrites this file on disk, a late flush of stale in-memory state would resurrect the moved project.
   private writesFrozen = false
+  /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
+  private quitFlushStarted = false
+  private quitFlushPromise: Promise<void> | null = null
   // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
   private lastWrittenStateHash: string | null = null
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
+  private githubCacheGeneration = 0
+  private pendingGithubCacheWrite: Promise<void> | null = null
+  private readonly staleGithubCacheTempCleanup: Promise<void>
   private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
@@ -2772,6 +2791,13 @@ export class Store {
   constructor(options: StoreOptions = {}) {
     // Why: profile switching yields multiple state paths; capture per Store so late async writes can't follow a global path.
     this.dataFile = options.dataFile ?? getDataFile()
+    this.staleTempCleanup = removeStaleDurableWriteTempFiles(this.dataFile, {
+      minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS
+    })
+    this.staleGithubCacheTempCleanup = removeStaleDurableWriteTempFiles(
+      getGithubCacheFile(this.dataFile),
+      { minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS }
+    )
     const profileSnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(this.dataFile)
     const legacySnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(getDataFile())
     this.terminalScrollbackSnapshotStorage = {
@@ -3780,6 +3806,13 @@ export class Store {
   private static SAVE_MAX_WAIT_MS = 5_000
 
   private scheduleSave(): void {
+    // Why: once the quit flush has snapshotted, a newly debounced write would fire during
+    // teardown with nothing awaiting it, and the process can exit mid-rename. The quit
+    // flush is the last write by construction.
+    if (this.quitFlushStarted) {
+      return
+    }
+    this.writeGeneration += 1
     const now = Date.now()
     this.firstPendingSaveAt ??= now
     if (this.writeTimer) {
@@ -3790,20 +3823,27 @@ export class Store {
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
       this.firstPendingSaveAt = null
-      // Why (issue #1158): serialize async writes so backup rotation can't race two callers over the same paths.
-      const prev = this.pendingWrite ?? Promise.resolve()
-      const next = prev
-        .then(() => this.writeToDiskAsync())
-        .catch((err) => {
-          console.error('[persistence] Failed to write state:', err)
-        })
-        .finally(() => {
-          if (this.pendingWrite === next) {
-            this.pendingWrite = null
-          }
-        })
-      this.pendingWrite = next
+      void this.enqueueWrite()
     }, delay)
+  }
+
+  private enqueueWrite(): Promise<void> {
+    const previousWrite = Promise.all([
+      this.pendingWrite ?? this.staleTempCleanup,
+      this.pendingSnapshotFileWork ?? Promise.resolve()
+    ]).then(() => {})
+    const write = previousWrite.then(() => this.writeToDiskAsync())
+    const trackedWrite = write
+      .catch((err) => {
+        console.error('[persistence] Failed to write state:', err)
+      })
+      .finally(() => {
+        if (this.pendingWrite === trackedWrite) {
+          this.pendingWrite = null
+        }
+      })
+    this.pendingWrite = trackedWrite
+    return write
   }
 
   /** Wait for any in-flight async disk write to complete. Used in tests. */
@@ -3892,7 +3932,7 @@ export class Store {
     const dataFile = this.dataFile
     const dir = dirname(dataFile)
     await mkdir(dir, { recursive: true }).catch(() => {})
-    const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+    const tmpFile = durableWriteTempPath(dataFile)
 
     // Why: on any write/rename failure, remove the tmp file so it doesn't leave a multi-MB orphan.
     let renamed = false
@@ -3909,16 +3949,30 @@ export class Store {
       if (this.writeGeneration !== gen) {
         return
       }
-      await renameDurable(tmpFile, dataFile)
-      renamed = true
+      this.inFlightAsyncTmpFile = tmpFile
+      try {
+        await renameDurable(tmpFile, dataFile)
+        renamed = true
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || this.writeGeneration === gen) {
+          throw error
+        }
+      } finally {
+        if (this.inFlightAsyncTmpFile === tmpFile) {
+          this.inFlightAsyncTmpFile = null
+        }
+      }
       // Why re-check gen: a sync flush during the rename await may have written fresher state; don't record a stale hash over it.
-      if (this.writeGeneration === gen) {
+      if (renamed && this.writeGeneration === gen) {
         this.lastWrittenStateHash = stateHash
       }
     } finally {
       if (!renamed) {
         await rm(tmpFile).catch(() => {})
       }
+    }
+    if (!renamed) {
+      return
     }
     // Why (#1158): rotate only after the primary rename while this write still owns its generation.
     if (this.writeGeneration !== gen) {
@@ -3968,6 +4022,9 @@ export class Store {
   }
 
   flushOrThrow(): void {
+    if (this.quitFlushStarted) {
+      throw new Error('Cannot synchronously flush after final persistence has started')
+    }
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
@@ -3976,7 +4033,17 @@ export class Store {
     const asyncWriteWasInFlight = this.pendingWrite !== null
     // Why: bump writeGeneration so an in-flight async write skips its rename and can't overwrite this sync write.
     this.writeGeneration++
-    this.pendingWrite = null
+    if (this.inFlightAsyncTmpFile) {
+      try {
+        unlinkSync(this.inFlightAsyncTmpFile)
+        this.inFlightAsyncTmpFile = null
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          void this.enqueueWrite().catch(() => {})
+          throw error
+        }
+      }
+    }
     this.writeToDiskSync({
       force: asyncWriteWasInFlight,
       skipBackupRotation: this.backupRotationInFlight
@@ -6021,6 +6088,7 @@ export class Store {
     // Why no scheduleSave: cache is memory-only and snapshotted to a sidecar at flush; persisting here rewrote the whole state file every poll cycle.
     this.state.githubCache = cache
     this.githubCacheDirty = true
+    this.githubCacheGeneration += 1
   }
 
   // ── Workspace Session ─────────────────────────────────────────────
@@ -6067,6 +6135,18 @@ export class Store {
     this.setHostWorkspaceSession(resolved, session)
   }
 
+  stageWorkspaceSessionBeforeUnload(
+    session: PersistedState['workspaceSession'],
+    hostId?: string | null
+  ): void {
+    const resolved = this.resolveHostId(hostId)
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.setLocalWorkspaceSession(session, true)
+      return
+    }
+    this.setHostWorkspaceSession(resolved, session)
+  }
+
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */
   private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
     // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
@@ -6084,7 +6164,10 @@ export class Store {
     this.scheduleSave()
   }
 
-  private setLocalWorkspaceSession(session: PersistedState['workspaceSession']): void {
+  private setLocalWorkspaceSession(
+    session: PersistedState['workspaceSession'],
+    deferSnapshotFiles = false
+  ): void {
     const prior = this.state.workspaceSession
     session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
     session = pruneWorkspaceSessionBrowserHistory(
@@ -6213,14 +6296,74 @@ export class Store {
       }
     }
     session = pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
-    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
-      session,
-      this.terminalScrollbackSnapshotStorage
-    )
-    session = migratedScrollback.session
-    deleteRemovedTerminalScrollbackSnapshots(prior, session, this.terminalScrollbackSnapshotStorage)
+    if (!deferSnapshotFiles) {
+      const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
+        session,
+        this.terminalScrollbackSnapshotStorage
+      )
+      session = migratedScrollback.session
+      deleteRemovedTerminalScrollbackSnapshots(
+        prior,
+        session,
+        this.terminalScrollbackSnapshotStorage
+      )
+    }
     this.state.workspaceSession = session
+    if (deferSnapshotFiles) {
+      this.enqueueTerminalScrollbackSnapshotWork(prior, session)
+    }
     this.scheduleSave()
+  }
+
+  private enqueueTerminalScrollbackSnapshotWork(
+    prior: WorkspaceSessionState | undefined,
+    staged: WorkspaceSessionState
+  ): void {
+    const previous = this.pendingSnapshotFileWork ?? Promise.resolve()
+    const work = previous
+      .then(async () => {
+        if (this.state.workspaceSession !== staged) {
+          if (this.state.workspaceSession) {
+            await deleteRemovedTerminalScrollbackSnapshotsAsync(
+              prior,
+              this.state.workspaceSession,
+              this.terminalScrollbackSnapshotStorage
+            )
+          }
+          return
+        }
+        const migrated = await migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync(
+          staged,
+          this.terminalScrollbackSnapshotStorage
+        )
+        const current =
+          this.state.workspaceSession === staged ? migrated : this.state.workspaceSession
+        if (this.state.workspaceSession === staged) {
+          this.state.workspaceSession = migrated
+        } else if (current) {
+          await deleteRemovedTerminalScrollbackSnapshotsAsync(
+            migrated,
+            current,
+            this.terminalScrollbackSnapshotStorage
+          )
+        }
+        if (current) {
+          await deleteRemovedTerminalScrollbackSnapshotsAsync(
+            prior,
+            current,
+            this.terminalScrollbackSnapshotStorage
+          )
+        }
+      })
+      .catch((error) => {
+        console.error('[terminal-scrollback] Failed to prepare unload snapshots:', error)
+      })
+      .finally(() => {
+        if (this.pendingSnapshotFileWork === work) {
+          this.pendingSnapshotFileWork = null
+        }
+      })
+    this.pendingSnapshotFileWork = work
   }
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
@@ -6984,6 +7127,9 @@ export class Store {
   // ── Flush (for shutdown) ───────────────────────────────────────────
 
   flush(): void {
+    if (this.quitFlushStarted) {
+      return
+    }
     try {
       this.flushOrThrow()
     } catch (err) {
@@ -6995,6 +7141,127 @@ export class Store {
       console.error('[active-view] Failed to flush preference:', err)
     }
     this.writeGithubCacheSnapshotSync()
+  }
+
+  /**
+   * Async twin of flush() for the quit path.
+   *
+   * Why the quit path needs one: writeToDiskSync fsyncs a multi-MB file from the Electron
+   * main thread. On a stalled network profile mount that syscall is uninterruptible, so the
+   * app stops repainting and Force Quit stops working — and no main-thread deadline can
+   * bound it, because the deadline's own timer is stuck behind the same block.
+   *
+   * Never throws — it joins the quit teardown barrier, where a rejection is noise.
+   */
+  flushAsync(): Promise<void> {
+    if (this.quitFlushPromise) {
+      return this.quitFlushPromise
+    }
+    this.quitFlushStarted = true
+    this.quitFlushPromise = this.flushCurrentStateAsync(true).catch(() => {})
+    return this.quitFlushPromise
+  }
+
+  flushPendingAsync(): Promise<void> {
+    // Best-effort callers must not livelock while the live app keeps mutating state.
+    return this.flushCurrentStateAsync(false, undefined, false).catch(() => {})
+  }
+
+  flushPendingOrThrowAsync(options: { signal?: AbortSignal } = {}): Promise<void> {
+    if (this.writesFrozen || this.quitFlushStarted) {
+      return Promise.reject(new Error('Cannot flush while persistence is finalized'))
+    }
+    return this.flushCurrentStateAsync(false, options.signal)
+  }
+
+  private async flushCurrentStateAsync(
+    final: boolean,
+    signal?: AbortSignal,
+    drainToStableGeneration = true
+  ): Promise<void> {
+    for (;;) {
+      if (signal?.aborted) {
+        throw new Error('Persistence flush aborted')
+      }
+      if (this.writeTimer) {
+        clearTimeout(this.writeTimer)
+        this.writeTimer = null
+      }
+      this.firstPendingSaveAt = null
+      const generation = this.writeGeneration
+      try {
+        await this.enqueueWrite()
+      } catch (error) {
+        await (final
+          ? this.activeViewPreference.flushAsync()
+          : this.activeViewPreference.flushPendingAsync(signal))
+        await this.writeGithubCacheSnapshotAsync(final, signal)
+        throw error
+      }
+      await (final
+        ? this.activeViewPreference.flushAsync()
+        : this.activeViewPreference.flushPendingAsync(signal))
+      await this.writeGithubCacheSnapshotAsync(final, signal)
+      if (signal?.aborted) {
+        throw new Error('Persistence flush aborted')
+      }
+      if (!drainToStableGeneration || generation === this.writeGeneration) {
+        break
+      }
+    }
+  }
+
+  // Why best-effort: the sidecar is a refetchable cache; a failed write only costs a cold badge paint next launch, never data.
+  private async writeGithubCacheSnapshotAsync(
+    drainToStableGeneration = true,
+    signal?: AbortSignal
+  ): Promise<void> {
+    if (!this.githubCacheDirty) {
+      return
+    }
+    const previousWrite = this.pendingGithubCacheWrite ?? this.staleGithubCacheTempCleanup
+    const nextWrite = previousWrite
+      .then(async () => {
+        while (this.githubCacheDirty) {
+          if (signal?.aborted) {
+            throw new Error('GitHub cache flush aborted')
+          }
+          const generation = this.githubCacheGeneration
+          const cacheFile = getGithubCacheFile(this.dataFile)
+          const tmpFile = durableWriteTempPath(cacheFile)
+          let renamed = false
+          try {
+            await writeFile(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')
+            if (generation === this.githubCacheGeneration) {
+              await rename(tmpFile, cacheFile)
+              renamed = true
+              if (generation === this.githubCacheGeneration) {
+                this.githubCacheDirty = false
+              }
+            }
+          } finally {
+            if (!renamed) {
+              await rm(tmpFile).catch(() => {})
+            }
+          }
+          if (signal?.aborted) {
+            throw new Error('GitHub cache flush aborted')
+          }
+          if (!drainToStableGeneration) {
+            break
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('[persistence] Failed to write github cache snapshot:', err)
+      })
+      .finally(() => {
+        if (this.pendingGithubCacheWrite === nextWrite) {
+          this.pendingGithubCacheWrite = null
+        }
+      })
+    this.pendingGithubCacheWrite = nextWrite
+    await nextWrite
   }
 
   // Why: a project move rewrote the data file directly; in-memory state is now stale and any write would undo the transfer.
@@ -7011,12 +7278,19 @@ export class Store {
     if (!this.githubCacheDirty) {
       return
     }
+    if (this.pendingGithubCacheWrite) {
+      void this.writeGithubCacheSnapshotAsync()
+      return
+    }
     const cacheFile = getGithubCacheFile(this.dataFile)
-    const tmpFile = `${cacheFile}.${process.pid}.tmp`
+    const generation = this.githubCacheGeneration
+    const tmpFile = durableWriteTempPath(cacheFile)
     try {
       writeFileSync(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')
       renameSync(tmpFile, cacheFile)
-      this.githubCacheDirty = false
+      if (generation === this.githubCacheGeneration) {
+        this.githubCacheDirty = false
+      }
     } catch (err) {
       try {
         unlinkSync(tmpFile)

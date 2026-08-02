@@ -11,7 +11,8 @@ type SchedulerTimer = ReturnType<typeof setTimeout>
 export type FileExplorerWatchRefreshScheduler = {
   requestFullRefresh: () => void
   requestDirRefresh: (dirPath: string) => void
-  cancel: () => void
+  /** True when cancellation discarded a received refresh or interrupted one in flight. */
+  cancel: () => boolean
 }
 
 export type CreateFileExplorerWatchRefreshSchedulerParams = {
@@ -142,11 +143,14 @@ export function createFileExplorerWatchRefreshScheduler({
       armForRequest()
     },
     cancel: () => {
+      const discardedWork =
+        pendingFull || pendingDirs.size > 0 || timer !== null || inFlight !== null
       disposed = true
       clearTimer()
       pendingFull = false
       pendingDirs.clear()
       firstRequestAt = null
+      return discardedWork
     }
   }
 }

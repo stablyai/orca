@@ -5,6 +5,7 @@ import {
   fileExplorerEntriesToTreeNodes,
   type FileExplorerDirectoryListing
 } from './file-explorer-directory-listing'
+import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
 
 export type RefreshFileExplorerTreeDir = {
   dirPath: string
@@ -37,17 +38,26 @@ export async function refreshFileExplorerExpandedDirs({
 
   const uniqueDirs = Array.from(new Map(dirs.map((dir) => [dir.dirPath, dir])).values())
   // Why: begin every token before the first read so a concurrent refreshDir or
-  // worktree reset supersedes dirs still queued in a later wave, exactly as the
-  // single-batch version did.
+  // worktree reset supersedes dirs still waiting for a concurrency slot.
   const loadTokens = new Map(
     uniqueDirs.map((dir) => [dir.dirPath, dirLoadTracker.begin(dir.dirPath)])
   )
-  const waveSize = Math.max(1, Math.floor(maxConcurrentReads))
+  const commitBatchSize =
+    maxConcurrentReads === Number.POSITIVE_INFINITY
+      ? Math.max(1, uniqueDirs.length)
+      : Number.isFinite(maxConcurrentReads)
+        ? Math.max(1, Math.floor(maxConcurrentReads))
+        : 1
+  const pendingResults: { dirPath: string; cache: DirCache }[] = []
+  let settledSinceCommit = 0
   let committedDirs = 0
+  // Why: forEachWithConcurrency has no cancel hook, so a failed commit must stop the surviving
+  // workers itself — otherwise a later batch commits after the caller already saw this reject.
+  let stopped = false
 
-  // Why: mark every dir loading up front, not per wave — FileExplorer's auto-load
+  // Why: mark every dir loading up front — FileExplorer's auto-load
   // effect re-runs on any `expanded` change and fans out an unbounded loadDir per
-  // dir that is neither cached nor loading, which would defeat the wave cap.
+  // dir that is neither cached nor loading, which would defeat the concurrency cap.
   setDirCache((prev) => {
     const next = { ...prev }
     for (const { dirPath } of uniqueDirs) {
@@ -59,65 +69,16 @@ export async function refreshFileExplorerExpandedDirs({
     return next
   })
 
-  for (let start = 0; start < uniqueDirs.length; start += waveSize) {
-    // Why: a dir superseded while an earlier wave was reading is left to its
-    // newer load — reading it here would only burn a round trip for a result
-    // that is dropped at commit time.
-    const wave = uniqueDirs
-      .slice(start, start + waveSize)
-      .filter(({ dirPath }) => dirLoadTracker.isCurrent(loadTokens.get(dirPath)!))
-    if (wave.length === 0) {
-      continue
+  const commitPendingResults = (): void => {
+    if (stopped) {
+      return
     }
-
-    // Why: batch each wave's results into one setDirCache write, so the whole
-    // refresh costs 1 + ceil(N / waveSize) cache spreads rather than one per dir.
-    const results = await Promise.all(
-      wave.map(async ({ dirPath, depth }) => {
-        const loadToken = loadTokens.get(dirPath)!
-        try {
-          const listing = await readDirectory(dirPath)
-          if (!dirLoadTracker.isCurrent(loadToken)) {
-            return { current: false as const }
-          }
-          return {
-            current: true as const,
-            dirPath,
-            cache: {
-              children: fileExplorerEntriesToTreeNodes(
-                listing.entries,
-                dirPath,
-                depth,
-                worktreePath,
-                listing.operationOwner
-              ),
-              loading: false,
-              operationOwner: listing.operationOwner
-            }
-          }
-        } catch {
-          if (!dirLoadTracker.isCurrent(loadToken)) {
-            return { current: false as const }
-          }
-          return {
-            current: true as const,
-            dirPath,
-            cache: { children: [], loading: false }
-          }
-        }
-      })
-    )
-
-    // Why: the batch commits only after the slowest read in the wave, so a dir
-    // can be superseded (watcher refreshDir, worktree reset) after its own read
-    // resolved. Re-check tokens at commit time so the batched write never
-    // clobbers a newer load — preserving the old per-dir commit ordering.
-    const currentResults = results.filter(
-      (result): result is Extract<typeof result, { current: true }> =>
-        result.current && dirLoadTracker.isCurrent(loadTokens.get(result.dirPath)!)
-    )
+    settledSinceCommit = 0
+    const currentResults = pendingResults
+      .splice(0)
+      .filter((result) => dirLoadTracker.isCurrent(loadTokens.get(result.dirPath)!))
     if (currentResults.length === 0) {
-      continue
+      return
     }
 
     setDirCache((prev) => {
@@ -127,10 +88,72 @@ export async function refreshFileExplorerExpandedDirs({
       }
       return next
     })
-    for (const result of currentResults) {
-      onDirCommitted?.(result.dirPath)
-    }
     committedDirs += currentResults.length
+    // Why: the cache write above already landed for every result, so a throwing callback must not
+    // strand the rest of the batch with a staleness mark no later commit will clear.
+    let firstCommitError: unknown
+    let commitFailed = false
+    for (const result of currentResults) {
+      try {
+        onDirCommitted?.(result.dirPath)
+      } catch (error) {
+        if (!commitFailed) {
+          commitFailed = true
+          firstCommitError = error
+        }
+      }
+    }
+    if (commitFailed) {
+      stopped = true
+      throw firstCommitError
+    }
+  }
+
+  const settleRead = (result?: { dirPath: string; cache: DirCache }): void => {
+    if (result) {
+      pendingResults.push(result)
+    }
+    settledSinceCommit++
+    if (settledSinceCommit >= commitBatchSize) {
+      commitPendingResults()
+    }
+  }
+
+  await forEachWithConcurrency(uniqueDirs, maxConcurrentReads, async ({ dirPath, depth }) => {
+    if (stopped) {
+      return
+    }
+    const loadToken = loadTokens.get(dirPath)!
+    // A superseding load owns this dir now; do not spend a round trip on a result we must drop.
+    if (!dirLoadTracker.isCurrent(loadToken)) {
+      settleRead()
+      return
+    }
+    let cache: DirCache | undefined
+    try {
+      const listing = await readDirectory(dirPath)
+      if (dirLoadTracker.isCurrent(loadToken)) {
+        cache = {
+          children: fileExplorerEntriesToTreeNodes(
+            listing.entries,
+            dirPath,
+            depth,
+            worktreePath,
+            listing.operationOwner
+          ),
+          loading: false,
+          operationOwner: listing.operationOwner
+        }
+      }
+    } catch {
+      if (dirLoadTracker.isCurrent(loadToken)) {
+        cache = { children: [], loading: false }
+      }
+    }
+    settleRead(cache ? { dirPath, cache } : undefined)
+  })
+  if (settledSinceCommit > 0) {
+    commitPendingResults()
   }
 
   return committedDirs === uniqueDirs.length

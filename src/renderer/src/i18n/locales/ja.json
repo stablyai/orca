@@ -8186,8 +8186,8 @@
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
             "e61157e926": "エディターのワードラップ",
             "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
-            "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamily": "エディターフォント",
+            "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合は端末フォントに従います。"
           }
         },
         "git": {
@@ -9610,9 +9610,9 @@
           "notice": "Orca Relay is in beta."
         },
         "EditorFontFamilySetting": {
-          "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
-          "placeholder": "Same as terminal font"
+          "title": "エディターフォント",
+          "description": "ファイルエディターと差分ビューで使用されるフォント。空の場合は端末フォントに従います。",
+          "placeholder": "端末フォントと同じ"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -11189,7 +11189,14 @@
             "recoverableEmptyOpenLogHint": "ログを開いて復元できます。",
             "emptyConversationDetail": "このセッションには保存された会話がなく、再開できません。",
             "queuedMessages": "キュー内のメッセージ {{value0}} 件",
-            "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件"
+            "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件",
+            "firstPrompt": "最初のプロンプト",
+            "firstPromptCopied": "最初のプロンプトをコピーしました",
+            "copyFirstPrompt": "最初のプロンプトをコピー",
+            "copied": "コピーしました",
+            "copy": "コピー",
+            "noFirstPromptAvailable": "最初のプロンプトはありません",
+            "loadingFirstPrompt": "最初のプロンプトを読み込み中…"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} セッションを再開",

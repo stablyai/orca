@@ -7,9 +7,11 @@ name: Hourly macOS Dev Build
 #   - macOS only. Other platforms keep using RC/stable.
 #   - No tests, no lint, no e2e. This channel trades safety for latency; PR CI
 #     and release-cut remain the gates that matter.
-#   - Signed but NOT notarized. Squirrel.Mac validates the replacement bundle's
-#     signature, not its notarization, so in-place updates still work while the
-#     ~10min notary round trip is skipped 24x a day.
+#   - Signed AND notarized, exactly like a release. The notary round trip is the
+#     one slow step kept: macOS anchors a notarized app's TCC grants on identifier
+#     + team rather than on its cdhash, so those grants survive an update. Without
+#     a ticket every hourly reads as a new client and silently loses file access
+#     under Documents/Desktop/Downloads — 24 times a day.
 #
 # Artifacts publish to stablyai/orca-hourly, never to stablyai/orca: the main
 # repo's releases atom feed exposes only its 10 newest entries, so 24 hourly
@@ -24,10 +26,14 @@ name: Hourly macOS Dev Build
 #   HOURLY_RELEASE_APP_ID           the App's numeric id
 #   HOURLY_RELEASE_APP_PRIVATE_KEY  the App's .pem private key
 #
-# Installation tokens live one hour, which is ample here: this job skips tests,
-# notarization, and Windows signing entirely, so a run is pack + upload and lands
-# well inside that. If one ever did overrun, the release is still an unpublished
-# draft at that point, so nothing user-visible breaks.
+# Installation tokens live one hour, which is why this mints twice. Install and
+# build need no token at all, and notarization can hold the publish step for tens
+# of minutes; minting again once the build is done starts the clock at the first
+# call that actually uses it rather than burning a third of it on `pnpm install`.
+# A pathological retry can still outrun the second token, but the release is an
+# unpublished draft until the manifest check passes, so the damage is a stranded
+# invisible draft — and the build-number query counts drafts, so it holds its
+# number and the next run does not reuse it.
 
 on:
   schedule:
@@ -57,11 +63,11 @@ jobs:
   build-hourly-mac:
     if: github.repository == 'stablyai/orca'
     runs-on: blacksmith-6vcpu-macos-15
-    # Why 120: it must exceed the worst case the retry budgets below can produce
-    # (install 3x10 + publish 2x25 = 80, plus ~30 for checkout/build/verify), or
+    # Why 150: it must exceed the worst case the retry budgets below can produce
+    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
     # the job is killed mid-retry and no cleanup step runs at all. A typical run
-    # is far shorter — there is no notarization, Windows signing, or test phase.
-    timeout-minutes: 120
+    # is far shorter — this is the notary queue's tail, not its median.
+    timeout-minutes: 150
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
@@ -212,12 +218,27 @@ jobs:
           # silent, which is correct for unvetted dev artifacts.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
 
+      # Why a second mint: everything from here on writes to the hourly repo, and
+      # the notary round trip inside the publish step can be tens of minutes. The
+      # token minted at the top has already spent install + build of its one hour
+      # on steps that never touched it; restarting the clock here gives the slow
+      # part the full budget.
+      - name: Re-mint hourly repo token for publish
+        id: app_token_publish
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-hourly
+
       - name: Create hourly release
         id: release
         if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           TAG: v${{ steps.hourly.outputs.version }}
           NAME: ${{ steps.hourly.outputs.name }}
           SHA: ${{ steps.freshness.outputs.head_sha }}
@@ -244,30 +265,37 @@ jobs:
 
           Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
 
-          **Unvetted.** No tests ran. Signed but not notarized — installable
-          through Orca's in-app updater, but a manual download will be
-          Gatekeeper-quarantined."
+          **Unvetted.** No tests ran. Signed and notarized like a release, so it
+          installs through Orca's in-app updater and opens from a manual download
+          without a Gatekeeper prompt — but nothing here has been reviewed."
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
 
       - name: Publish hourly macOS artifacts
         if: steps.freshness.outputs.should_build == 'true'
         uses: nick-fields/retry@v4
         with:
-          # Why lower than the release pipeline's 3x45: that budget is sized for
-          # notarization and Windows signing, neither of which runs here. An attempt
-          # is pack + upload only.
-          timeout_minutes: 25
+          # Why 45 like the release pipeline: an attempt is pack + notarize +
+          # upload, and the notary queue is the unbounded part. Why 2 attempts and
+          # not 3: a missed hourly costs an hour, and the next cron picks the same
+          # commit up, so a third attempt buys less than it costs in runner time.
+          timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
           command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
           # Why: electron-builder's github publisher targets the repo named in the
           # config; the token must therefore carry write access to orca-hourly.
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           ORCA_HOURLY_BUILD_VERSION: ${{ steps.hourly.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ steps.hourly.outputs.commit }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          # Why all three: electron-builder's notarize step authenticates to the
+          # Apple notary service with the app-specific password, not with the
+          # signing cert. Omitting them fails the build rather than skipping it,
+          # since `notarize` is now on for this path.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       # Why: the updater resolves a tag, then fetches latest-mac.yml from it. A
@@ -277,7 +305,7 @@ jobs:
         if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
@@ -307,7 +335,7 @@ jobs:
         if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           TAG: ${{ steps.release.outputs.tag }}
           NAME: ${{ steps.hourly.outputs.name }}
         run: |
@@ -333,7 +361,7 @@ jobs:
           steps.publish_live.outcome != 'success'
         shell: bash
         env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -uo pipefail
@@ -346,7 +374,7 @@ jobs:
         if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
         run: |
           set -euo pipefail
           # Why: --cleanup-tag so pruning does not leave orphan tags behind that

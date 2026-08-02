@@ -1,5 +1,8 @@
 import type { FsChangeEvent } from '../../shared/types'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import {
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison
+} from '../../shared/cross-platform-path'
 
 export type RemoteWatcherEventBatchOptions = {
   rootPath: string
@@ -14,13 +17,18 @@ export type RemoteWatcherEventBatch = {
   close: () => void
 }
 
-// Mirrors coalesceEvents in filesystem-watcher.ts, with two deliberate divergences: a hoisted delete
-// survives a later event of unknown isDirectory, so delete→create→update over-emits a delete; and
-// delete→create→delete emits that delete, which local drops — the path is gone, so the renderer needs it.
-function coalesceRemoteEvents(raw: FsChangeEvent[]): FsChangeEvent[] {
+// Unlike local coalescing, a recreate keeps its delete through live updates so cached dirs are purged;
+// delete→create→delete also remains a net delete because the path predated the batch.
+function posixEventIdentity(absolutePath: string): string {
+  const normalized = absolutePath.replace(/\/+/g, '/')
+  return normalized === '/' ? normalized : normalized.replace(/\/+$/, '')
+}
+
+function coalesceRemoteEvents(raw: FsChangeEvent[], rootPath: string): FsChangeEvent[] {
   const lastByKey = new Map<string, FsChangeEvent>()
   const deleteBeforeCreate = new Map<string, FsChangeEvent>()
   const passthrough: FsChangeEvent[] = []
+  const windowsPaths = isWindowsAbsolutePathLike(rootPath)
 
   for (const event of raw) {
     if (event.kind !== 'create' && event.kind !== 'update' && event.kind !== 'delete') {
@@ -28,10 +36,10 @@ function coalesceRemoteEvents(raw: FsChangeEvent[]): FsChangeEvent[] {
       passthrough.push(event)
       continue
     }
-    // Why: key on the comparison form, never node path.resolve — resolving a remote POSIX path on a
-    // Windows host mints C:\home\u\f, which the renderer's watch canonicalizer then rejects outright.
-    // Residual cost: its NFC fold merges canonically equivalent byte-distinct names on a POSIX host.
-    const key = normalizeRuntimePathForComparison(event.absolutePath)
+    // POSIX event identity keeps byte-distinct names; Windows still folds separators and casing.
+    const key = windowsPaths
+      ? normalizeRuntimePathForComparison(event.absolutePath)
+      : posixEventIdentity(event.absolutePath)
     const prev = lastByKey.get(key)
 
     if (prev) {
@@ -51,9 +59,8 @@ function coalesceRemoteEvents(raw: FsChangeEvent[]): FsChangeEvent[] {
 
     lastByKey.set(key, event)
 
-    // Why: drop the hoisted delete only when the later event proves the path is a live file, or repeats the
-    // delete. Remote events carry no isDirectory, and discarding it there strands a dead dir's cached subtree.
-    if (event.kind === 'delete' || (event.kind === 'update' && event.isDirectory === false)) {
+    // A final delete subsumes the transition; a live update cannot prove the old entry was not a directory.
+    if (event.kind === 'delete') {
       deleteBeforeCreate.delete(key)
     }
   }
@@ -89,7 +96,7 @@ export function createRemoteWatcherEventBatch({
       deliver([{ kind: 'overflow', absolutePath: rootPath }])
       return
     }
-    const coalesced = coalesceRemoteEvents(pending)
+    const coalesced = coalesceRemoteEvents(pending, rootPath)
     if (coalesced.length > 0) {
       deliver(coalesced)
     }

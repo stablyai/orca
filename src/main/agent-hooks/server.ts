@@ -41,7 +41,7 @@ import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots
 } from '../../shared/claude-subagent-roster'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import { restoreShedStatusFields, type AgentHookSource } from '../../shared/agent-hook-relay'
 import {
   CLAUDE_STATUSLINE_PATHNAME,
   parseClaudeStatusLineBody,
@@ -1718,6 +1718,8 @@ export class AgentHookServer {
       providerSession?: unknown
       providerSessionOnly?: unknown
       isReplay?: boolean
+      /** Payload fields the relay dropped to fit an oversized frame; validated below. */
+      shedFields?: unknown
       payload: unknown
     },
     connectionId: string
@@ -1796,10 +1798,16 @@ export class AgentHookServer {
         : undefined
     const providerSession = normalizeAgentProviderSession(envelope.providerSession) ?? undefined
     // Why: relay crosses a trust boundary — re-run the canonical normalizer to enforce caps/invariants (returns null on malformed).
-    const normalizedPayload = normalizeAgentStatusPayload(envelope.payload)
-    if (!normalizedPayload) {
+    const validatedPayload = normalizeAgentStatusPayload(envelope.payload)
+    if (!validatedPayload) {
       return
     }
+    // Why: restore a shed roster only when its digest and turn identity still match the cache.
+    const normalizedPayload = restoreShedStatusFields(
+      validatedPayload,
+      envelope.shedFields,
+      this.state.lastStatusByPaneKey.get(paneKey)?.payload
+    )
     if (
       envelope.providerSessionOnly === true &&
       !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)

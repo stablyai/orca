@@ -1317,9 +1317,7 @@ function App(): React.JSX.Element {
       const sessionSnapshots = shouldCaptureSession
         ? buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)
         : []
-      // Why: one blocking checkpoint closes the immediate-quit race for both
-      // the narrow view preference and the larger session recovery snapshots.
-      window.api.app.persistBeforeUnloadSync({
+      window.api.app.stageBeforeUnloadSync({
         sessions: sessionSnapshots,
         ui: buildActiveViewUnloadPatch(freshState)
       })

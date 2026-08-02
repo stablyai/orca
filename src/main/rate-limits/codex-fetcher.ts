@@ -168,7 +168,7 @@ function buildWslCodexCommand(
   const execSuffix = `${args.map(shellQuote).join(' ')}${
     options?.isolateRpcStdio ? ' <&3 >&4 3<&- 4>&-' : ''
   }`
-  // Why: npm/nvm launchers use `#!/usr/bin/env node`; exec'ing them from plain sh loses Node's PATH and pins stale installs.
+  // Why: npm/nvm launchers need Node's PATH; plain sh can select stale installs.
   const loginShellCommand = buildWslLoginShellCommand(
     [setupCommands, `exec codex ${execSuffix}`].join(' && ')
   )
@@ -313,7 +313,7 @@ function getBackendAuthRead(
   if (existing) {
     return existing
   }
-  // Why: Node can't cancel an in-flight UNC read; keep one read per auth path so repeated refreshes don't stack them.
+  // Why: dedupe UNC reads because Node cannot cancel an in-flight read.
   const read = createAuthFilesystemOperation(authPath, () =>
     readFile(authPath, 'utf8').then(
       (content) => ({ content }),
@@ -528,7 +528,7 @@ async function fetchViaBackend(
   if (!auth || signal.aborted) {
     return null
   }
-  // Why: reuse Codex's own get_rate_limit_status endpoint, avoiding a hidden app-server (and WSL login shell) per refresh.
+  // Why: reuse Codex's endpoint to avoid an app server and WSL login shell per refresh.
   const response = await fetch('https://chatgpt.com/backend-api/wham/usage', {
     ...auth,
     signal
@@ -538,7 +538,7 @@ async function fetchViaBackend(
     return null
   }
   const payload = (await response.json()) as BackendUsageResponse
-  // Why: plan_type is required by Codex's RateLimitStatusPayload; reject malformed JSON so the app-server fallback still runs.
+  // Why: reject missing plan_type so the app-server fallback runs.
   if (typeof payload.plan_type !== 'string') {
     return null
   }
@@ -619,10 +619,10 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     const wslCodex = options?.codexHomePath
       ? buildWslCodexCommand(options.codexHomePath, codexArgs, { isolateRpcStdio: true })
       : null
-    // Why: cold WSL startup + app-server init can exceed the host RPC budget, causing a false "unavailable" on launch.
+    // Why: cold WSL startup can exceed the host RPC budget.
     const rpcTimeoutMs = wslCodex ? WSL_RPC_TIMEOUT_MS : RPC_TIMEOUT_MS
     const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
-    // Why: .cmd/.bat launchers can't be spawned directly and shell:true triggers DEP0190 — route them through cmd.exe /c.
+    // Why: launch .cmd/.bat files through cmd.exe /c; shell:true triggers DEP0190.
     const { spawnCmd, spawnArgs } = wslCodex
       ? { spawnCmd: wslCodex.command, spawnArgs: wslCodex.args }
       : getSpawnArgsForWindows(codexCommand, codexArgs)
@@ -696,7 +696,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       return id
     }
 
-    // Why: JSON-RPC/LSP handshake — send `initialized` after initialize or the server rejects methods as "Not initialized".
+    // Why: send initialized after initialize or the server rejects methods.
     let rateLimitsId: number | null = null
 
     const initId = sendRpc('initialize', {
@@ -909,7 +909,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
   const wslCodex = options?.codexHomePath ? buildWslCodexCommand(options.codexHomePath, []) : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
 
-  // Why: on win32 route through cmd.exe (even bare 'codex') so PATHEXT resolves codex.cmd under a minimal Electron PATH.
+  // Why: use cmd.exe on Windows so PATHEXT resolves codex.cmd under Electron's minimal PATH.
   const isWin32 = process.platform === 'win32'
   const spawnFile = wslCodex ? wslCodex.command : isWin32 ? getCmdExePath() : codexCommand
   const spawnArgs = wslCodex ? wslCodex.args : isWin32 ? ['/d', '/c', codexCommand] : []
@@ -1148,7 +1148,7 @@ export async function fetchCodexRateLimits(
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }
-  // Why: don't spawn `codex` unless signed in — otherwise non-Codex users see an unexpected background process that can only error.
+  // Why: spawn Codex only when signed in to avoid an unexpected failing process.
   const authPresence = await probeCodexAuthPresence(options?.codexHomePath, {
     signal: options?.signal
   })
@@ -1194,7 +1194,7 @@ export async function fetchCodexRateLimits(
       if (options?.signal?.aborted) {
         return abortedCodexRateLimitResult()
       }
-      // Why: token refresh, network routing, and custom-CA behavior can differ from the host fetch stack; keep CLI paths as fallbacks.
+      // Why: token, routing, and CA behavior can differ; retain CLI fallbacks.
     }
   }
 

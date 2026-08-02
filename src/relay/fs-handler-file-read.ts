@@ -1,8 +1,14 @@
 import { open, readFile, stat } from 'node:fs/promises'
+import type { FileHandle } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
-import { STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE, RelayErrorCode } from './protocol'
-import type { RelayStreamRegistry, TooManyStreamsError } from './fs-stream-registry'
+import {
+  MAX_CONCURRENT_STREAMS,
+  STREAM_ACK_WINDOW_CHUNKS,
+  STREAM_CHUNK_SIZE,
+  RelayErrorCode
+} from './protocol'
+import { TooManyStreamsError, type RelayStreamRegistry } from './fs-stream-registry'
 import {
   BINARY_PROBE_BYTES,
   IMAGE_MIME_TYPES,
@@ -102,12 +108,17 @@ export async function readRelayFileStreamMetadata(
     return { totalSize: 0, isBinary: true, empty: true }
   }
 
-  const handle = await open(filePath, 'r')
+  // Why: reserved before the fd opens so a refusal costs nothing, and released only
+  // once the terminal frame settles — see reserveTerminalFrameSlot.
+  const releaseTerminalFrameSlot = reserveTerminalFrameSlot(registry, context.clientId)
+  let handle: FileHandle | undefined
   let streamId: number
   try {
+    handle = await open(filePath, 'r')
     streamId = registry.register(handle)
   } catch (err) {
-    await handle.close()
+    await handle?.close()
+    releaseTerminalFrameSlot()
     throw err
   }
 
@@ -118,7 +129,15 @@ export async function readRelayFileStreamMetadata(
   // sees the response before the first chunk frame.
   const resolvedPumpOptions = pumpOptions ?? { paceWithAcks: false }
   setImmediate(() => {
-    void pumpChunks(streamId, stats.size, dispatcher, registry, context, resolvedPumpOptions)
+    void pumpChunks(
+      streamId,
+      stats.size,
+      dispatcher,
+      registry,
+      context,
+      resolvedPumpOptions,
+      releaseTerminalFrameSlot
+    )
   })
 
   return {
@@ -132,16 +151,60 @@ export async function readRelayFileStreamMetadata(
   }
 }
 
+/**
+ * Terminal frames (fs.streamEnd/fs.streamError) ride the control lane, which does not
+ * drop on overflow — it destroys the link at 256 queued frames / 1 MB. A stream's
+ * registry slot is gone the moment its last chunk is read, so on a socket that is not
+ * draining, back-to-back reads could stack one undelivered terminal frame each until
+ * that budget blew. Holding the slot until the frame settles keeps the number of queued
+ * terminal frames at MAX_CONCURRENT_STREAMS, far below the killing threshold; the
+ * overflow now costs one refused read (TooManyStreams, which clients already handle)
+ * instead of the whole connection.
+ *
+ * Counted per client, because the control queue this protects is per client: one peer whose
+ * socket stopped draining must not refuse reads for every other peer on the same relay.
+ */
+const pendingTerminalFramesByClient = new WeakMap<RelayStreamRegistry, Map<number, number>>()
+
+function reserveTerminalFrameSlot(registry: RelayStreamRegistry, clientId: number): () => void {
+  let byClient = pendingTerminalFramesByClient.get(registry)
+  if (!byClient) {
+    byClient = new Map()
+    pendingTerminalFramesByClient.set(registry, byClient)
+  }
+  const pending = byClient.get(clientId) ?? 0
+  if (pending >= MAX_CONCURRENT_STREAMS) {
+    throw new TooManyStreamsError()
+  }
+  byClient.set(clientId, pending + 1)
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    const remaining = (byClient.get(clientId) ?? 1) - 1
+    // Drop the entry at zero so a long-lived registry cannot accumulate one per detached client.
+    if (remaining <= 0) {
+      byClient.delete(clientId)
+      return
+    }
+    byClient.set(clientId, remaining)
+  }
+}
+
 async function pumpChunks(
   streamId: number,
   totalSize: number,
   dispatcher: RelayDispatcher,
   registry: RelayStreamRegistry,
   context: RequestContext,
-  pumpOptions: StreamPumpOptions
+  pumpOptions: StreamPumpOptions,
+  releaseTerminalFrameSlot: () => void
 ): Promise<void> {
   const entry = registry.get(streamId)
   if (!entry) {
+    releaseTerminalFrameSlot()
     return
   }
   const buffer = Buffer.allocUnsafe(STREAM_CHUNK_SIZE)
@@ -150,6 +213,7 @@ async function pumpChunks(
   let endReason: 'end' | 'aborted' | 'stale' | 'error' = 'end'
   let errorCode: string | null = null
   let errorMessage: string | null = null
+  let slotReleaseDeferred = false
 
   try {
     try {
@@ -226,11 +290,28 @@ async function pumpChunks(
     }
 
     try {
+      // Why: a dropped terminal frame hangs the reader forever, so it takes the control lane, which
+      // never drops — but that lane KILLS the link when it overflows, hence the reserved slot held
+      // until this frame settles. The per-chunk await already settled every chunk, so the control
+      // frame cannot overtake stream data.
+      const publishTerminal = (method: string, params: Record<string, unknown>): void => {
+        if (pumpOptions.clientId === undefined) {
+          // Legacy broadcast path (direct calls/tests): no per-frame settlement to hold the slot on.
+          dispatcher.notifyControl(method, params)
+          return
+        }
+        slotReleaseDeferred = dispatcher.tryNotifyClient(
+          pumpOptions.clientId,
+          method,
+          params,
+          releaseTerminalFrameSlot
+        )
+      }
       if (endReason === 'end') {
-        dispatcher.notify('fs.streamEnd', { streamId })
+        publishTerminal('fs.streamEnd', { streamId })
         process.stderr.write(`[relay] stream end id=${streamId}\n`)
       } else if (endReason === 'error') {
-        dispatcher.notify('fs.streamError', {
+        publishTerminal('fs.streamError', {
           streamId,
           code: errorCode ?? 'ESTREAMERROR',
           message: errorMessage ?? 'stream error'
@@ -247,7 +328,12 @@ async function pumpChunks(
       )
     }
   } finally {
+    // Why: the fd goes back first — a terminal frame that can never be delivered must not
+    // strand it. Cancelled/stale streams publish nothing, so nothing else frees their slot.
     await registry.release(streamId)
+    if (!slotReleaseDeferred) {
+      releaseTerminalFrameSlot()
+    }
   }
 }
 

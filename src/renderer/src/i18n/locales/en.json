@@ -10090,7 +10090,7 @@
           "description": "Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.",
           "devOnly": "Dev only",
           "channelAriaLabel": "Update channel",
-          "hourlyWarning": "Hourly builds are macOS-only, ship straight from main with no test gate, and are signed but not notarized. Keep a stable build handy.",
+          "hourlyWarning": "Hourly builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.",
           "loadingBuilds": "Loading builds…",
           "noBuilds": "No builds found",
           "refresh": "Refresh build list",
@@ -11265,7 +11265,14 @@
             "sessionRole": "Session",
             "jumpToOriginalPane": "Jump to Original Pane",
             "worktree": "Worktree",
-            "jumpToWorktree": "Jump to Worktree"
+            "jumpToWorktree": "Jump to Worktree",
+            "firstPrompt": "First prompt",
+            "firstPromptCopied": "First prompt copied",
+            "copyFirstPrompt": "Copy first prompt",
+            "copied": "Copied",
+            "copy": "Copy",
+            "noFirstPromptAvailable": "No first prompt available",
+            "loadingFirstPrompt": "Loading first prompt…"
           },
           "AiVaultSessionRow": {
             "noPreviewAvailable": "No conversation preview available",

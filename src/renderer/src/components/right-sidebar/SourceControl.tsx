@@ -1731,7 +1731,10 @@ function SourceControlInner(): React.JSX.Element {
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
       linkedGiteaPR,
-      staleWhileRevalidate: true
+      staleWhileRevalidate: true,
+      // Why: scoped to the active worktree, so it earns the host's fast
+      // re-check tier instead of the O(N) card pacing (#11532).
+      active: true
     })
     // Why: keep the GitHub cache refresh behind the coordinator so Source Control doesn't bypass pacing.
     enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
