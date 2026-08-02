@@ -123,7 +123,7 @@ describe('Codex usage cached snapshot benchmark', () => {
     // warm local disk) trips on scheduling contention. Match the same-domain sibling
     // store-snapshot.benchmark.test.ts (1s) and the terminal-history-async-delete CI
     // idiom — 1s still flags accidental scan-like fan-out, which is all this guards;
-    // the structural totalTokens assertion below is the real correctness proof.
+    // the structural totalTokens assertion above is the real correctness proof.
     expect(cachedRenderMs).toBeLessThan(process.env.CI ? 1_000 : 10)
     expect(refresh).toHaveBeenCalledTimes(1)
     expect(getSnapshot).toHaveBeenCalledTimes(1)
