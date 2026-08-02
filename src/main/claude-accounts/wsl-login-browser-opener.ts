@@ -131,8 +131,18 @@ export function createWslLoginOpenerHandoff(args: {
       raw = readWslLoginOpenerHandoff(claimedPath)
     } catch {
       args.onReadError()
-    } finally {
+    }
+    let cleanupFailed = false
+    try {
       rmSync(claimedPath, { force: true })
+    } catch {
+      cleanupFailed = true
+    }
+    if (cleanupFailed) {
+      if (raw !== null) {
+        args.onReadError()
+      }
+      return
     }
     if (raw === null) {
       return

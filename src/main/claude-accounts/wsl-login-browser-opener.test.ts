@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import type * as fsTypes from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +11,11 @@ import {
   parseWslLoginConfigDirOutput,
   parseWslLoginOpenerHandoff
 } from './wsl-login-browser-opener'
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof fsTypes>()
+  return { ...actual, rmSync: vi.fn(actual.rmSync) }
+})
 
 describe('WSL Claude login browser opener', () => {
   afterEach(() => {
@@ -122,5 +128,40 @@ describe('WSL Claude login browser opener', () => {
     expect(onUrl).toHaveBeenCalledTimes(1)
     watcher.stop()
     rmSync(root, { recursive: true, force: true })
+  })
+
+  it('reports cleanup failures instead of dispatching a read URL', async () => {
+    vi.useFakeTimers()
+    const root = mkdtempSync(join(tmpdir(), 'orca-wsl-opener-cleanup-'))
+    mkdirSync(join(root, 'orca-opener'))
+    const onUrl = vi.fn()
+    const onInvalid = vi.fn()
+    const onReadError = vi.fn()
+    const actual = await vi.importActual<typeof fsTypes>('node:fs')
+    const remove = vi.mocked(rmSync)
+    remove.mockImplementation((path, options) => {
+      if (String(path).endsWith('.consumed')) {
+        throw new Error('cleanup failed')
+      }
+      return actual.rmSync(path, options)
+    })
+    const watcher = createWslLoginOpenerHandoff({
+      windowsConfigDir: root,
+      onUrl,
+      onInvalid,
+      onReadError
+    })
+    writeFileSync(
+      join(root, 'open-url.request'),
+      'https://platform.claude.com/callback?code=cleanup'
+    )
+    vi.advanceTimersByTime(200)
+    expect(onUrl).not.toHaveBeenCalled()
+    expect(onInvalid).not.toHaveBeenCalled()
+    expect(onReadError).toHaveBeenCalledTimes(1)
+    expect(() => readFileSync(join(root, 'open-url.request.consumed'), 'utf8')).not.toThrow()
+    watcher.stop()
+    remove.mockImplementation(actual.rmSync)
+    actual.rmSync(root, { recursive: true, force: true })
   })
 })
