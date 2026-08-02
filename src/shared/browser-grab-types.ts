@@ -54,6 +54,24 @@ export type BrowserGrabRect = {
   height: number
 }
 
+/** Where the picker was clicked, plus where that sits inside the hit element. */
+export type BrowserGrabPoint = {
+  viewportX: number
+  viewportY: number
+  pageX: number
+  pageY: number
+  /** Offset from the hit element's border box. */
+  offsetX: number
+  offsetY: number
+  /** 0..1 across and down that box — how a placement is actually described. */
+  ratioX: number
+  ratioY: number
+  hostWidth: number
+  hostHeight: number
+  /** True when the click fell in the element's own gap, not over a child. */
+  inEmptySpace: boolean
+}
+
 /** The selected element's extracted data. */
 export type BrowserGrabTarget = {
   tagName: string
@@ -90,6 +108,8 @@ export type BrowserGrabPayload = {
   nearbyText: string[]
   ancestorPath: string[]
   screenshot: BrowserGrabScreenshot | null
+  /** Optional: older guests and non-click extraction paths report no click. */
+  clickPoint?: BrowserGrabPoint | null
 }
 
 /** Persisted annotation payloads keep DOM context but drop transient screenshots. */
@@ -159,6 +179,21 @@ export type BrowserAnnotationIntent = 'fix' | 'change' | 'question' | 'approve'
 
 export type BrowserAnnotationPriority = 'blocking' | 'important' | 'suggestion'
 
+/** Why trimmed, not a full payload: references are prompt landmarks, so a second HTML snippet each would blow the budget. */
+export type BrowserAnnotationReference = {
+  /** 1-based; renders as the `@ref<index>` token inside the comment. */
+  index: number
+  label: string
+  tagName: string
+  selector: string
+  elementPath?: string
+  isFixed?: boolean
+  rectViewport: BrowserGrabRect
+  rectPage: BrowserGrabRect
+  /** Present whenever the guest reported a click; `inEmptySpace` makes it a spot. */
+  point?: BrowserGrabPoint
+}
+
 export type BrowserPageAnnotation = {
   id: string
   browserPageId: string
@@ -167,6 +202,8 @@ export type BrowserPageAnnotation = {
   priority: BrowserAnnotationPriority
   createdAt: string
   payload: BrowserAnnotationPayload
+  /** Optional so annotations persisted before references shipped still load. */
+  references?: BrowserAnnotationReference[]
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +226,8 @@ export const GRAB_BUDGET = {
   reactComponentsMaxLength: 500,
   annotationCommentMaxLength: 2000,
   annotationsMaxPerPage: 20,
+  annotationReferencesMax: 4,
+  annotationReferenceLabelMaxLength: 120,
   /** Hard byte budget for screenshot PNG data URL before we omit the screenshot. */
   screenshotMaxBytes: 2 * 1024 * 1024
 } as const

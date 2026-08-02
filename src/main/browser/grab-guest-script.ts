@@ -840,9 +840,59 @@ const AWAIT_CLICK_SCRIPT = `(async function() {
       return;
     }
 
-    function extractSelectedPayload(el) {
+    var CHILD_HIT_SCAN_LIMIT = 200;
+
+    // Why: a click in a container's own gap is a position, not that container.
+    // A leaf (no element children) is always the element itself, so clicking
+    // text inside a <p> still references the <p>.
+    function isPointInOwnEmptySpace(el, clientX, clientY) {
+      var children = el.children;
+      if (!children || children.length === 0) {
+        return false;
+      }
+      var limit = Math.min(children.length, CHILD_HIT_SCAN_LIMIT);
+      for (var i = 0; i < limit; i++) {
+        var r = children[i].getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) continue;
+        if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // Why: a spot only means something relative to the box it sits in, so carry
+    // the offset, the ratio, and that box's size for placement instructions.
+    function describeClickPoint(el, e) {
+      var rect = el.getBoundingClientRect();
+      var offsetX = e.clientX - rect.left;
+      var offsetY = e.clientY - rect.top;
+      return {
+        viewportX: e.clientX,
+        viewportY: e.clientY,
+        pageX: e.clientX + window.scrollX,
+        pageY: e.clientY + window.scrollY,
+        offsetX: offsetX,
+        offsetY: offsetY,
+        ratioX: rect.width > 0 ? offsetX / rect.width : 0,
+        ratioY: rect.height > 0 ? offsetY / rect.height : 0,
+        hostWidth: rect.width,
+        hostHeight: rect.height,
+        inEmptySpace: isPointInOwnEmptySpace(el, e.clientX, e.clientY)
+      };
+    }
+
+    function extractSelectedPayload(el, e) {
       try {
-        return grab.extractPayload(el);
+        var payload = grab.extractPayload(el);
+        if (payload && e) {
+          // Why: the click point is an enhancement — an element that cannot be
+          // measured must still yield a normal pick, not fail the whole grab.
+          try {
+            payload.clickPoint = describeClickPoint(el, e);
+          } catch (pointError) {}
+        }
+        return payload;
       } catch (error) {
         grab.cleanup();
         reject(error instanceof Error ? error : new Error('Failed to extract element context'));
@@ -862,7 +912,7 @@ const AWAIT_CLICK_SCRIPT = `(async function() {
         reject(new Error('cancelled'));
         return;
       }
-      var payload = extractSelectedPayload(el);
+      var payload = extractSelectedPayload(el, e);
       if (!payload) return;
       // Why: freeze the highlight instead of removing it so the user sees
       // which element was selected while the copy menu is shown. Teardown
@@ -887,7 +937,7 @@ const AWAIT_CLICK_SCRIPT = `(async function() {
         reject(new Error('cancelled'));
         return;
       }
-      var payload = extractSelectedPayload(el);
+      var payload = extractSelectedPayload(el, e);
       if (!payload) return;
       grab.freezeHighlight();
       resolve({ __orcaContextMenu: true, payload: payload });

@@ -1,4 +1,8 @@
-import type { BrowserGrabPayload, BrowserGrabRect } from '../../shared/browser-grab-types'
+import type {
+  BrowserGrabPayload,
+  BrowserGrabPoint,
+  BrowserGrabRect
+} from '../../shared/browser-grab-types'
 import {
   GRAB_BUDGET,
   GRAB_SAFE_ATTRIBUTE_NAMES,
@@ -133,6 +137,27 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
       .filter(Boolean)
   }
 
+  // Why: absent for hover extraction and pre-clickPoint guests, so null is normal, not a failure.
+  const safePoint = (p: unknown): BrowserGrabPoint | null => {
+    if (!p || typeof p !== 'object') {
+      return null
+    }
+    const point = p as Record<string, unknown>
+    return {
+      viewportX: safeNum(point.viewportX),
+      viewportY: safeNum(point.viewportY),
+      pageX: safeNum(point.pageX),
+      pageY: safeNum(point.pageY),
+      offsetX: safeNum(point.offsetX),
+      offsetY: safeNum(point.offsetY),
+      ratioX: safeNum(point.ratioX),
+      ratioY: safeNum(point.ratioY),
+      hostWidth: safeNum(point.hostWidth),
+      hostHeight: safeNum(point.hostHeight),
+      inEmptySpace: point.inEmptySpace === true
+    }
+  }
+
   const safeRect = (r: unknown): BrowserGrabRect => {
     if (!r || typeof r !== 'object') {
       return { x: 0, y: 0, width: 0, height: 0 }
@@ -216,6 +241,7 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
       GRAB_BUDGET.nearbyTextEntryMaxLength
     ),
     ancestorPath: clampArray(obj.ancestorPath, GRAB_BUDGET.ancestorPathMaxEntries, 200),
+    clickPoint: safePoint(obj.clickPoint),
     screenshot: null
   }
 }

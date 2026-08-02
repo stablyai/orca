@@ -99,6 +99,109 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     expect(formatBrowserAnnotationsAsMarkdown([])).toBe('')
   })
 
+  it('resolves reference tokens used in the feedback to selectors', () => {
+    const markdown = formatBrowserAnnotationsAsMarkdown([
+      makeAnnotation({
+        comment: 'Move this button below @ref1 and match the width of @ref2.',
+        references: [
+          {
+            index: 1,
+            label: 'section "Plan comparison"',
+            tagName: 'section',
+            selector: 'main.pricing > section.compare',
+            elementPath: 'main > .pricing > section',
+            rectViewport: { x: 120, y: 640, width: 900, height: 320 },
+            rectPage: { x: 120, y: 640, width: 900, height: 320 }
+          },
+          {
+            index: 2,
+            label: 'div "Enterprise"',
+            tagName: 'div',
+            selector: 'main.pricing > div.enterprise',
+            rectViewport: { x: 900, y: 300, width: 240, height: 400 },
+            rectPage: { x: 900, y: 300, width: 240, height: 400 }
+          }
+        ]
+      })
+    ])
+
+    expect(markdown).toContain('**References:**')
+    expect(markdown).toContain(
+      '- @ref1 — section "Plan comparison" — `main.pricing > section.compare` — `main > .pricing > section` (at 120,640 900x320)'
+    )
+    expect(markdown).toContain(
+      '- @ref2 — div "Enterprise" — `main.pricing > div.enterprise` (at 900,300 240x400)'
+    )
+    // Why: the block must precede the feedback line so the tokens are already
+    // defined when the agent reads the sentence that uses them.
+    expect(markdown.indexOf('**References:**')).toBeLessThan(markdown.indexOf('**Feedback:**'))
+  })
+
+  it('describes a point as a position inside its container, not as that container', () => {
+    const markdown = formatBrowserAnnotationsAsMarkdown([
+      makeAnnotation({
+        comment: 'Drop a testimonial block at @ref1.',
+        references: [
+          {
+            index: 1,
+            label: 'spot at 640, 1820',
+            // Why: a background pick still carries body as its hit element — the
+            // output must not hand that selector to the agent as the target.
+            tagName: 'body',
+            selector: 'body',
+            rectViewport: { x: 0, y: 0, width: 1280, height: 4000 },
+            rectPage: { x: 0, y: 0, width: 1280, height: 4000 },
+            point: {
+              viewportX: 640,
+              viewportY: 320,
+              pageX: 640,
+              pageY: 1820,
+              offsetX: 520,
+              offsetY: 256,
+              ratioX: 0.5778,
+              ratioY: 0.8,
+              hostWidth: 900,
+              hostHeight: 320,
+              inEmptySpace: true
+            }
+          }
+        ]
+      })
+    ])
+
+    // The container is named as context, but explicitly not as the target.
+    expect(markdown).toContain('empty space inside `body`, not an element')
+    expect(markdown).toContain('58% across and 80% down that container')
+    expect(markdown).toContain('offset x=520, y=256 within its 900x320 box')
+    expect(markdown).toContain('page x=640, y=1820')
+  })
+
+  it('omits the references block for annotations without references', () => {
+    expect(formatBrowserAnnotationsAsMarkdown([makeAnnotation()])).not.toContain('**References:**')
+    expect(formatBrowserAnnotationsAsMarkdown([makeAnnotation({ references: [] })])).not.toContain(
+      '**References:**'
+    )
+  })
+
+  it('fences reference selectors that contain backticks', () => {
+    const markdown = formatBrowserAnnotationsAsMarkdown([
+      makeAnnotation({
+        references: [
+          {
+            index: 1,
+            label: 'button',
+            tagName: 'button',
+            selector: 'button[data-label="Save `draft`"]',
+            rectViewport: { x: 0, y: 0, width: 10, height: 10 },
+            rectPage: { x: 0, y: 0, width: 10, height: 10 }
+          }
+        ]
+      })
+    ])
+
+    expect(markdown).toContain('``button[data-label="Save `draft`"]``')
+  })
+
   it('uses longer inline code fences when selector content contains backticks', () => {
     const annotation = makeAnnotation()
     const markdown = formatBrowserAnnotationsAsMarkdown([
