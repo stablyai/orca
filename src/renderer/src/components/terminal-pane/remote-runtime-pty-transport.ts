@@ -498,9 +498,7 @@ export function createRemoteRuntimePtyTransport(
     )
   }
 
-  // Why: the host only materializes a pending surface's PTY inside
-  // session.tabs.activate, so every path that must produce an attachable handle
-  // has to activate rather than only list.
+  // Why: pending host surfaces materialize only through activation.
   function activateHostSessionSurface(
     hostTabId: string,
     worktree: string,
@@ -653,15 +651,11 @@ export function createRemoteRuntimePtyTransport(
     const worktree = toRuntimeWorktreeSelector(worktreeId)
     const startedAt = Date.now()
     let pollMs = HOST_SESSION_ATTACH_POLL_MS
-    // Why: a host surface whose PTY died with the host's desktop session stays
-    // `pending-handle` forever under list-only polling, which stranded the pane
-    // behind a Reconnect button that could not work until a human reopened the
-    // workspace on the host. Activating re-materializes the PTY for this exact
-    // tab/leaf identity; it is a no-op once the surface is ready again.
-    let surfaceActivated = false
-    let lastListError: unknown = null
+    // Why: list-only polling cannot recreate a host PTY lost across desktop generations.
+    let nextRequest: 'activate' | 'list' = 'activate'
+    let retryActivationAfterInventory = false
+    let lastRequestError: unknown = null
     let lastReadyHandle: string | null = null
-    let sawSuccessfulInventory = false
     const finishBoundedWait = (): HostSessionHandleWaitResult => {
       const effectivePolicy = stricterReplacementPolicy(
         replacementPolicy,
@@ -670,16 +664,14 @@ export function createRemoteRuntimePtyTransport(
       if (effectivePolicy === 'prefer-replacement' && lastReadyHandle) {
         return { handle: lastReadyHandle, inventoryFailed: false }
       }
-      if (lastListError) {
+      if (lastRequestError) {
         console.warn(
-          sawSuccessfulInventory
-            ? '[remote-runtime-pty] final host session inventory poll failed during reconnect:'
-            : '[remote-runtime-pty] host session inventory unavailable during reconnect:',
-          runtimeTerminalErrorMessage(lastListError)
+          '[remote-runtime-pty] host session recovery request failed during reconnect:',
+          runtimeTerminalErrorMessage(lastRequestError)
         )
       }
       // Why: a bounded wait without removal evidence is unknown liveness; keep the pane for a later snapshot to reattach.
-      return { handle: undefined, inventoryFailed: lastListError !== null }
+      return { handle: undefined, inventoryFailed: lastRequestError !== null }
     }
     while (
       !destroyed &&
@@ -691,24 +683,25 @@ export function createRemoteRuntimePtyTransport(
       if (requestRemainingMs <= 0) {
         return finishBoundedWait()
       }
+      const request = nextRequest
       try {
-        const listed = surfaceActivated
-          ? await listRemoteRuntimeSessionTabsDeduped({
-              environmentId: currentRuntimeEnvironmentId,
-              worktreeId,
-              load: () =>
-                callRuntime<RuntimeMobileSessionTabsResult>(
-                  'session.tabs.list',
-                  {
-                    worktree
-                  },
-                  requestRemainingMs
-                )
-            })
-          : await activateHostSessionSurface(hostTabId, worktree, requestRemainingMs)
-        surfaceActivated = true
-        lastListError = null
-        sawSuccessfulInventory = true
+        const listed =
+          request === 'list'
+            ? await listRemoteRuntimeSessionTabsDeduped({
+                environmentId: currentRuntimeEnvironmentId,
+                worktreeId,
+                load: () =>
+                  callRuntime<RuntimeMobileSessionTabsResult>(
+                    'session.tabs.list',
+                    {
+                      worktree
+                    },
+                    requestRemainingMs
+                  )
+              })
+            : await activateHostSessionSurface(hostTabId, worktree, requestRemainingMs)
+        nextRequest = 'list'
+        lastRequestError = null
         const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
         if (nextHandle) {
           lastReadyHandle = nextHandle
@@ -723,13 +716,17 @@ export function createRemoteRuntimePtyTransport(
         if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
           return { handle: null, inventoryFailed: false }
         }
+        if (request === 'list' && retryActivationAfterInventory) {
+          nextRequest = 'activate'
+          retryActivationAfterInventory = false
+        }
       } catch (error) {
         // Why: the inventory can race the reconnect that invalidated the handle; unknown liveness must not retire the pane.
-        lastListError = error
-        // Why: a missing surface must be proven by an inventory snapshot, not by a
-        // failed activate; transient activate failures retry the materialize.
-        if (isMissingHostSessionSurfaceError(error)) {
-          surfaceActivated = true
+        lastRequestError = error
+        // Why: activation absence is provisional until inventory confirms it.
+        if (request === 'activate' && isMissingHostSessionSurfaceError(error)) {
+          nextRequest = 'list'
+          retryActivationAfterInventory = true
         }
       }
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)

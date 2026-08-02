@@ -1910,8 +1910,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           .filter((args) => args.method === 'session.tabs.activate')
       const activateCallsBeforeStale = activateCalls().length
 
-      // The host restarted: it still publishes the surface, but the PTY is gone, so
-      // only session.tabs.activate can mint an attachable handle for it again.
+      // The host still publishes the surface, but only activation can mint its replacement handle.
       let materialized = false
       const hostSnapshot = (): unknown => ({
         worktree: 'wt-1',
@@ -1962,6 +1961,106 @@ describe('createRemoteRuntimePtyTransport', () => {
         notifyClients: false,
         navigation: 'caller'
       })
+      await vi.waitFor(() =>
+        expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-after-restart' })
+      )
+      expect(onPtyRebind).toHaveBeenCalledWith(
+        'remote:env-1@@terminal-after-restart',
+        'remote:env-1@@terminal-before-restart'
+      )
+      expect(onPtyExit).not.toHaveBeenCalled()
+      expect(onError).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries activation when inventory disproves a transient missing-surface response', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const onPtyExit = vi.fn()
+      const onPtyRebind = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-tab-1',
+        leafId: 'pane:1',
+        onPtyExit,
+        onPtyRebind
+      })
+
+      resolvedPaneHandle = 'terminal-before-restart'
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-before-restart',
+        callbacks: { onError }
+      })
+      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+      runtimeCall.mockClear()
+
+      let activateCalls = 0
+      const pendingSnapshot = {
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-2',
+        snapshotVersion: 2,
+        activeGroupId: null,
+        activeTabId: 'tab-1::pane:1',
+        activeTabType: 'terminal',
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'tab-1::pane:1',
+            parentTabId: 'tab-1',
+            leafId: 'pane:1',
+            title: 'Terminal',
+            isActive: true,
+            status: 'pending-handle',
+            terminal: null
+          }
+        ]
+      }
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'session.tabs.activate') {
+          activateCalls += 1
+          if (activateCalls === 1) {
+            return { ok: false, error: { code: 'runtime_error', message: 'tab_not_found' } }
+          }
+          return {
+            ok: true,
+            result: {
+              ...pendingSnapshot,
+              snapshotVersion: 3,
+              tabs: [
+                {
+                  ...pendingSnapshot.tabs[0],
+                  status: 'ready',
+                  terminal: 'terminal-after-restart'
+                }
+              ]
+            }
+          }
+        }
+        if (args.method === 'session.tabs.list') {
+          return { ok: true, result: pendingSnapshot }
+        }
+        return { ok: true, result: {} }
+      })
+
+      subscriptionCallbacks?.onResponse({
+        ok: true,
+        result: {
+          type: 'error',
+          streamId: latestSubscribePayload().streamId,
+          message: 'terminal_handle_stale'
+        }
+      })
+      await vi.advanceTimersByTimeAsync(2_000)
+
+      expect(
+        runtimeCall.mock.calls
+          .map(([args]) => args.method)
+          .filter((method) => method === 'session.tabs.activate' || method === 'session.tabs.list')
+      ).toEqual(['session.tabs.activate', 'session.tabs.list', 'session.tabs.activate'])
       await vi.waitFor(() =>
         expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-after-restart' })
       )
@@ -2792,7 +2891,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       emitSnapshot(staleStreamId, 'before stale handle')
 
       runtimeCall.mockImplementation(async (args: { method: string }) => {
-        if (args.method !== 'session.tabs.list') {
+        if (args.method !== 'session.tabs.activate' && args.method !== 'session.tabs.list') {
           return { ok: true, result: {} }
         }
         return {
