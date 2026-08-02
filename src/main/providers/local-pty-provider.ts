@@ -360,9 +360,12 @@ function cancelAllPendingLocalPtySpawns(): void {
 /**
  * Normalizes renderer session ids that should be reused for local PTY reattach.
  */
-function normalizeLocalCallerSessionId(sessionId: string | undefined): string | null {
+function normalizeLocalCallerSessionId(
+  sessionId: string | undefined,
+  allowNumeric = false
+): string | null {
   const requested = sessionId?.trim()
-  if (!requested || /^\d+$/.test(requested)) {
+  if (!requested || (!allowNumeric && /^\d+$/.test(requested))) {
     return null
   }
   return requested
@@ -516,7 +519,7 @@ export class LocalPtyProvider implements IPtyProvider {
    * Windows launches can pre-deliver startup commands in argv, so the stdin fallback only runs when needed.
    */
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
-    const reattachId = normalizeLocalCallerSessionId(args.sessionId)
+    const reattachId = normalizeLocalCallerSessionId(args.sessionId, args.attachOnly === true)
     if (reattachId) {
       const pendingShutdown = ptyShutdownOperations.get(reattachId)
       if (pendingShutdown) {
@@ -526,6 +529,9 @@ export class LocalPtyProvider implements IPtyProvider {
       if (existing) {
         return existing
       }
+    }
+    if (args.attachOnly) {
+      throw new Error(`Session not found: ${args.sessionId ?? ''}`)
     }
     const id = allocatePtyId(reattachId ?? undefined)
     const incarnationId = randomUUID()

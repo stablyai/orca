@@ -659,6 +659,8 @@ export type RuntimeTerminalCreate = {
   warning?: string
   /** Present only for the structured host-authority resume path. */
   agentSessionDisposition?: 'created' | 'adopted'
+  /** The host attached this request to the existing stable pane owner. */
+  isReattach?: true
 }
 
 export type RuntimeTerminalSplit = {
@@ -672,6 +674,7 @@ export type RuntimeTerminalResolvePane = {
   tabId: string
   leafId: string
   ptyId: string | null
+  connected?: boolean
   worktreeId?: string
   executionHostId?: ExecutionHostId
   hostPlatform?: NodeJS.Platform

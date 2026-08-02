@@ -62,6 +62,8 @@ export type PtySpawnOptions = {
    *  Existing-session attach paths must stay false so recovery checks do not
    *  replace the daemon out from under a still-live PTY. */
   isNewSession?: boolean
+  /** Attach the named session atomically or fail without creating a process. */
+  attachOnly?: boolean
   /** Why: allows the renderer to request a specific shell for a single new
    *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
    *  changing the user's persistent default shell setting. Only consulted on

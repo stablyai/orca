@@ -2114,31 +2114,47 @@
       "maturity": "experimental",
       "protection": "partial",
       "owner": "agent-session",
-      "layer": "renderer-state",
+      "layer": "cross-boundary",
       "surfaces": [
         "agent launch",
         "workspace activation",
         "sleep and hibernate restore",
         "provider session dedupe",
-        "sidebar and mobile identity"
+        "sidebar and mobile identity",
+        "runtime-owned background PTY mount and remount"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence over the ownership/dedupe suite on main@1282f5c2d. Queued/pending resume-claim indexing, same-session and wrong-session hook proofs, and Electron repeat-activation coverage arrive with the pending stack (#7008).",
+      "coveredProviders": ["local", "daemon", "remote-runtime"],
+      "coverageNotes": "Renderer ownership/dedupe contracts cover provider-session claims. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. The Electron oracle covers a local macOS runtime and daemon with real agent, Setup, and unrelated-canary processes; SSH, WSL, paired-server, Linux, and Windows remain contract-only or unrun.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6800",
         "https://github.com/stablyai/orca/pull/5240",
         "https://github.com/stablyai/orca/pull/6411",
-        "https://github.com/stablyai/orca/pull/6833"
+        "https://github.com/stablyai/orca/pull/6833",
+        "https://github.com/stablyai/orca/pull/11789",
+        "https://github.com/stablyai/orca/pull/11819"
       ],
-      "invariant": "Workspace activation, launch, restore, sleep, hibernate, dedupe, clearing, and reconnect code must not replay or resume a provider session id already owned, queued, pending, or live in that workspace.",
-      "oracle": "The current renderer-state slice asserts provider-session claim keys are owned by preserved active tabs, inactive split leaves, visible non-focused split groups, live records, quit records, worktree-sleep records, queued startup payloads, time-bounded resume bridge claims, and same-session live hook evidence; duplicates clear without launching a second resume command. The provider list is the risk scope, not proof that every provider has a live integration gate.",
+      "invariant": "Workspace activation, launch, restore, sleep, hibernate, dedupe, clearing, mount, remount, and reconnect code must not replay or resume a provider session id already owned, queued, pending, live, or durably bound to a host PTY in that workspace. A renderer with missing projection state must adopt the exact runtime-owned PTY for the original tab and leaf rather than create a replacement.",
+      "oracle": "Renderer-state tests assert provider-session ownership across preserved and queued panes. Main/provider contracts assert atomic attach-only adoption, stable host/worktree/tab/leaf identity, no fresh spawn on adoption, and safe paired-runtime cancellation. The Electron oracle creates inactive runtime-owned Codex and Setup PTYs plus an unrelated canary, seeds an exact resumable provider session, removes only the target renderer projections, and activates the workspace. It requires byte-stable handle, PTY, incarnation, tab, leaf, process PID, renderer graph, persisted binding, runtime id, graph epoch, and daemon PID across first mount and reload; PID-specific DOM keyboard I/O must remain live with one launch, zero resume argv, zero signals, zero interruption text, and no canary mutation.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/ipc/pty.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
-      "testFiles": ["src/renderer/src/lib/resume-sleeping-agent-session.test.ts"],
+      "testFiles": [
+        "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "src/main/providers/local-pty-provider.test.ts",
+        "src/main/daemon/terminal-host.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-fit.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "tests/e2e/live-background-terminal-mount-authority.spec.ts"
+      ],
       "assertionRefs": [
         {
           "file": "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
@@ -2147,6 +2163,42 @@
             "one launch per provider session: skipped duplicates are cleared instead of relaunched",
             "active stable-pane records owned by preserved or visible panes are not resumed again",
             "hibernated stable panes with cleared live PTY bindings are skipped"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "a completed runtime-owned stable pane is adopted with its original PTY and incarnation while renderer resume intent is stripped",
+            "an exact persisted owner is attach-only adopted when the runtime projection is missing",
+            "runtime and persisted stable-pane owner conflicts fail closed before provider creation"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-fit.test.ts",
+          "assertions": [
+            "withheld hidden-window animation frames exhaust the bounded fit retry and release its continuation"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "same-generation explicit reattach drains the authoritative snapshot before immediate live bytes and ACKs their delivery credit"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+          "assertions": [
+            "paired-runtime stable-pane adoption reports reattach without fresh-spawn ownership",
+            "cancellation after a paired-runtime adoption cannot close the original owner"
+          ]
+        },
+        {
+          "file": "tests/e2e/live-background-terminal-mount-authority.spec.ts",
+          "assertions": [
+            "first mount and renderer reload preserve exact agent and Setup handle, PTY, incarnation, tab, leaf, and PID identity",
+            "PID-specific keyboard input and output remain user-visible in both mounted panes",
+            "runtime inventory, renderer graph, persisted session, runtime epoch, and daemon PID converge without replacement or resume",
+            "the unrelated canary remains writable and receives no signal across target projection repair"
           ]
         }
       ],
@@ -2162,30 +2214,32 @@
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 15,
-        "scope": "local renderer state test"
+        "p95Seconds": 180,
+        "scope": "focused renderer/main/provider contracts plus one isolated Electron mount-and-reload journey"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Registered after targeted tests were found; needs soak history before blocking promotion."
+        "evidence": "The renderer gate has prior local evidence; the stable-pane Electron oracle is new and needs CI soak before blocking promotion."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests encode provider-session dedupe and ownership claims across active/inactive/visible split records, queued pendingStartupByTabId resume payloads, time-bounded runtime automaticAgentResumeClaimsByTabId bridge claims, live same-session hook evidence, wrong-session hook rejection, and a bounded queued-claim index over many records/tabs. Needs saved red/green artifact for the class-level replay invariant."
+        "evidence": "Renderer tests encode provider-session dedupe across active, inactive, queued, and live claims. The cross-boundary Electron oracle is constructed for byte-identical latest-main, candidate, and candidate-revert runs; record those three terminal results before promoting this gate."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Current state tests are cheap and assert queued pending-startup provider-session ids are indexed once per activation. PRs adding new ownership scans must show bounded work over records and no hidden-pane wake loop before blocking promotion."
+        "evidence": "Renderer state tests assert bounded provider-session indexing. Stable-pane adoption is a targeted owner lookup and attach-only call; focused contracts require no provider listing scan, fresh spawn callback, or repeated resume probe. The Electron oracle checks exact launch counts but is not a throughput benchmark."
       },
       "promotionCriteria": [
         "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
         "Add bounded-work assertions for delayed hook/status ownership scans if those paths grow.",
-        "Attach red/green evidence that display/replay evidence alone cannot claim ownership."
+        "Attach red/green evidence that display/replay evidence alone cannot claim ownership.",
+        "Record byte-identical latest-main, candidate, and candidate-revert Electron results."
       ],
       "knownGaps": [
-        "Providers listed on this gate are affected identity surfaces; the current executable command is renderer-state coverage, not live local/daemon/SSH/WSL/remote-runtime coverage.",
-        "Current command models live same-session and wrong-session hook evidence, but does not run the real hook timing through Electron.",
-        "Current command does not run a real workspace activation loop repeatedly through Electron."
+        "Providers listed on this gate are affected identity surfaces; live integration is limited to local macOS while daemon and remote-runtime adoption also have focused contracts.",
+        "The Electron oracle seeds the production hook-store contract instead of running an authenticated Codex hook end to end.",
+        "The live Electron topology is local macOS only; folder workspaces, SSH, WSL, paired headed/headless servers, Linux, and Windows are not exercised by that journey.",
+        "The oracle covers first activation and one renderer reload, not repeated soak activation or an installed-app update."
       ],
       "demotionRule": "Demote or quarantine if failures are non-actionable or if a duplicate resume escape occurs outside the modeled matrix."
     },
@@ -7781,8 +7835,8 @@
         "https://github.com/stablyai/orca/pull/5787",
         "https://github.com/stablyai/orca/pull/8034"
       ],
-      "invariant": "After a renderer lifecycle reset (did-start-loading / render-process-gone / destroyed), no surviving PTY remains delivery-gated by pre-reset unacked bytes: main's in-flight counters and pending backlog equal the true state of the new page (zero in-flight, zero pending). Delivery then resumes only once the reloaded page's pty:data dispatcher re-registers and signals pty:rendererDispatcherReady; during the boot window before that handshake main holds all sends (data accrues losslessly in the capped pending backlog) so bytes cannot be dropped into a listener-less page and re-pin the gate. The hold itself cannot become a permanent freeze: a one-shot ~10s watchdog armed on each reset force-opens the gate (incrementing rendererDispatcherReadyForcedCount) if the handshake is lost, and the real handshake or a re-registration cancels it. The reset fires only for a main-frame load: did-start-loading also fires for in-page subframe loads (sandboxed srcDoc iframes in notebook HTML output), which are filtered out via isLoadingMainFrame() so a subframe load never clears accounting or holds the gate on the still-alive page. If a lifecycle-reset edge is missed entirely — a main-frame reload overlapped by an in-page subframe load emits no did-start-loading at all — a backstop still recovers: because the handshake is one-shot per page load, receiving pty:rendererDispatcherReady while the gate is already open proves a reset was missed (or the watchdog force-opened the gate), so the handler reconciles by clearing the stale accounting before re-opening. The renderer sends that handshake exactly once per page load, after its pty:data listener registers.",
-      "oracle": "Ingest more than 512 KB of PTY output with no renderer ACKs and assert the per-PTY gate closes (sends stop at the 512 KB high-water, remainder accrues as pending). Fire the registered did-start-loading listener and assert rendererInFlightChars and pendingChars are zero and the new diagnostics record the reset (rendererLifecycleResetCount 1, lastLifecycleResetClearedChars 512 KB). Then, before any dispatcher-ready handshake, ingest another chunk and assert it is NOT sent and NOT counted in-flight (held for the boot window, accruing in pending). Finally fire the pty:rendererDispatcherReady handshake and assert the held chunk is delivered to the renderer. Counters-zero without proving both the boot-window hold and that delivery resumes is insufficient. Additional cases prove the boot-window hold also covers the interactive direct-send fast path (input-primed keystroke echo is held, not sent, until the handshake) and that the self-heal watchdog force-opens the gate (rendererDispatcherReadyForcedCount 1) when no handshake arrives, while a timely handshake cancels the watchdog and leaves no orphaned timer. A further case fires did-start-loading with isLoadingMainFrame() false (a subframe/iframe load) and asserts accounting is untouched (rendererLifecycleResetCount stays 0, pending preserved, ready stays true) and delivery still drains on ACK — proving an in-page iframe load cannot trigger a spurious freeze. A backstop case saturates the gate, then fires pty:rendererDispatcherReady while the gate is still open (ready true) with no preceding reset — modeling a missed lifecycle edge — and asserts the handler reconciles: in-flight and pending clear, rendererLifecycleResetCount increments, and fresh output flows immediately (a straggler ACK is clamped and cannot underflow). A renderer-side case (pty-dispatcher-pi-routing.test.ts) asserts ensurePtyDispatcher() sends pty:rendererDispatcherReady exactly once across two attach calls — proving the send fires (it is optional-chained) and the one-shot guard holds.",
+      "invariant": "After a renderer lifecycle reset (main-frame did-start-navigation / render-process-gone / destroyed), no surviving PTY remains delivery-gated by pre-reset unacked bytes: main's in-flight counters and pending backlog equal the true state of the new page (zero in-flight, zero pending). Delivery then resumes only once the reloaded page's pty:data dispatcher re-registers and signals pty:rendererDispatcherReady; during the boot window before that handshake main holds all sends (data accrues losslessly in the capped pending backlog) so bytes cannot be dropped into a listener-less page and re-pin the gate. The hold itself cannot become a permanent freeze: a one-shot ~10s watchdog armed on each reset force-opens the gate (incrementing rendererDispatcherReadyForcedCount) if the handshake is lost, and the real handshake or a re-registration cancels it. The reset fires only for a new-document main-frame navigation: did-start-navigation carries exact frame and same-document details, so overlapping subframe or in-page navigation never clears accounting or holds the gate on the still-alive page. If a renderer lifecycle edge is otherwise missed, a backstop still recovers: because the handshake is one-shot per page load, receiving pty:rendererDispatcherReady while the gate is already open proves a reset was missed (or the watchdog force-opened the gate), so the handler reconciles by clearing the stale accounting before re-opening. The renderer sends that handshake exactly once per page load, after its pty:data listener registers.",
+      "oracle": "Ingest more than 512 KB of PTY output with no renderer ACKs and assert the per-PTY gate closes (sends stop at the 512 KB high-water, remainder accrues as pending). Fire the registered main-frame did-start-navigation listener and assert rendererInFlightChars and pendingChars are zero and the new diagnostics record the reset (rendererLifecycleResetCount 1, lastLifecycleResetClearedChars 512 KB). Then, before any dispatcher-ready handshake, ingest another chunk and assert it is NOT sent and NOT counted in-flight (held for the boot window, accruing in pending). Finally fire the pty:rendererDispatcherReady handshake and assert the held chunk is delivered to the renderer. Counters-zero without proving both the boot-window hold and that delivery resumes is insufficient. Additional cases prove the boot-window hold also covers the interactive direct-send fast path (input-primed keystroke echo is held, not sent, until the handshake) and that the self-heal watchdog force-opens the gate (rendererDispatcherReadyForcedCount 1) when no handshake arrives, while a timely handshake cancels the watchdog and leaves no orphaned timer. A further case opens the new page with a main-frame navigation and dispatcher handshake, then fires an overlapping subframe navigation and asserts the gate stays ready, the reset count stays at exactly one, and fresh output delivers without the watchdog — proving an iframe cannot reclose the live page. A backstop case saturates the gate, then fires pty:rendererDispatcherReady while the gate is still open (ready true) with no preceding reset — modeling a missed lifecycle edge — and asserts the handler reconciles: in-flight and pending clear, rendererLifecycleResetCount increments, and fresh output flows immediately (a straggler ACK is clamped and cannot underflow). A renderer-side case (pty-dispatcher-pi-routing.test.ts) asserts ensurePtyDispatcher() sends pty:rendererDispatcherReady exactly once across two attach calls — proving the send fires (it is optional-chained) and the one-shot guard holds.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts"
       ],
@@ -7795,12 +7849,12 @@
           "file": "src/main/ipc/pty.test.ts",
           "assertions": [
             "a PTY saturated past the 512 KB per-PTY high-water with no ACKs stops sending and accrues pending output (gate closed)",
-            "firing the registered did-start-loading listener zeroes rendererInFlightChars and pendingData and records rendererLifecycleResetCount and lastLifecycleResetClearedChars",
+            "firing the registered main-frame did-start-navigation listener zeroes rendererInFlightChars and pendingData and records rendererLifecycleResetCount and lastLifecycleResetClearedChars",
             "after the reset, output ingested during the boot window is NOT sent and NOT counted in-flight until the pty:rendererDispatcherReady handshake fires (held in pending)",
             "firing the pty:rendererDispatcherReady handshake releases the held backlog and delivery resumes (delivery gated on the handshake, not just counters cleared)",
             "interactive input-primed keystroke echo is also held during the boot window (interactive fast path gated on the handshake) and delivered once it fires",
             "when no handshake arrives, the ~10s watchdog force-opens the gate (rendererDispatcherReadyForcedCount 1) and the held backlog drains; a timely handshake cancels the watchdog and leaves no orphaned timer",
-            "a did-start-loading with isLoadingMainFrame() false (in-page subframe/iframe load) does NOT reset accounting (rendererLifecycleResetCount stays 0, pending and in-flight preserved, rendererPtyDispatcherReady stays true) and delivery still drains on ACK",
+            "an overlapping subframe did-start-navigation after the fresh dispatcher handshake does NOT reclose delivery (rendererLifecycleResetCount stays 1, rendererPtyDispatcherReady stays true, forced count stays 0) and fresh output delivers immediately",
             "a pty:rendererDispatcherReady handshake arriving while the gate is still open (ready true, no preceding reset — a missed lifecycle edge) reconciles the stale accounting: in-flight and pending clear, rendererLifecycleResetCount increments, fresh output flows, and a straggler ACK is clamped",
             "re-registering handlers (macOS re-activate / new window) cancels the prior registration's armed dispatcher-ready watchdog via the cross-registration bridge, leaving no orphaned ~10s timer to force-open a dead window's gate"
           ]
@@ -7814,13 +7868,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-09",
+          "date": "2026-08-02",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts",
           "result": "passed",
-          "durationSeconds": 1,
-          "summary": "243 tests passed (232 main-process + 11 renderer dispatcher) including the lifecycle-reset, boot-window (dispatcher-ready handshake), interactive-gate hold, watchdog self-heal, main-frame-filter (subframe did-start-loading is ignored), missed-reset reconcile backstop (handshake-while-open), cross-registration watchdog-cancel, and renderer-side one-shot handshake-send regressions. Removing the reset call reproduces the reload freeze (rendererInFlightChars stays 524288); removing the send-hold reproduces the boot-window leak; removing the interactive-path flag check sends keystroke echo into the not-yet-ready page; removing the watchdog arm leaves the gate held forever; removing the watchdog cancel leaves an orphaned timer after the handshake; removing the isLoadingMainFrame filter lets a subframe iframe load run a spurious reset; removing the handshake-while-open reconcile leaves the survivors pinned at 524288 after a missed lifecycle edge."
+          "durationSeconds": 5,
+          "summary": "439 tests passed including the lifecycle-reset, boot-window (dispatcher-ready handshake), interactive-gate hold, watchdog self-heal, exact-navigation filter (overlapping subframe navigation is ignored), missed-reset reconcile backstop (handshake-while-open), cross-registration watchdog-cancel, and renderer-side one-shot handshake-send regressions. Removing the reset call reproduces the reload freeze (rendererInFlightChars stays 524288); removing the send-hold reproduces the boot-window leak; removing the interactive-path flag check sends keystroke echo into the not-yet-ready page; removing the watchdog arm leaves the gate held forever; removing the watchdog cancel leaves an orphaned timer after the handshake; switching back to aggregate did-start-loading state lets an overlapping iframe load reclose the gate; removing the handshake-while-open reconcile leaves the survivors pinned at 524288 after a missed lifecycle edge."
         }
       ],
       "runtimeBudget": {
@@ -7833,7 +7887,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Locally verified red/green on every load-bearing branch: (1) reset call removed -> rendererInFlightChars stays 524288 after did-start-loading; (2) boot-window send-hold removed -> post-reload output is sent into the not-yet-ready page ('NOT sent until handshake' fails); (3) interactive-path flag check removed -> input-primed keystroke echo is sent during the hold; (4) watchdog arm removed -> the gate is never force-opened and the held backlog never drains; (5) watchdog cancel removed -> an orphaned ~10s timer survives the handshake (getTimerCount 1); (6) isLoadingMainFrame filter removed -> a subframe did-start-loading runs a spurious reset (rendererLifecycleResetCount 1, pending cleared, ready dropped) — locally verified red; (7) handshake-while-open reconcile removed -> a pty:rendererDispatcherReady arriving after a missed lifecycle edge leaves the gate pinned (rendererInFlightChars stays 524288, pending 90112, rendererLifecycleResetCount 0) — locally verified red; (8) cross-registration bridge cancel removed (top-of-registerPtyHandlers clearRendererDispatcherReadyWatchdog) -> a prior registration's armed watchdog survives re-registration as an orphaned timer (getTimerCount 1 instead of 0) — locally verified red. With the full fix all eight are green. The performance budget below still holds: the watchdog is a single unref'd one-shot per reset, not per-chunk. Needs a saved CI or intentional-break artifact before blocking promotion."
+        "evidence": "Locally verified red/green on every load-bearing branch: (1) reset call removed -> rendererInFlightChars stays 524288 after main-frame did-start-navigation; (2) boot-window send-hold removed -> post-reload output is sent into the not-yet-ready page ('NOT sent until handshake' fails); (3) interactive-path flag check removed -> input-primed keystroke echo is sent during the hold; (4) watchdog arm removed -> the gate is never force-opened and the held backlog never drains; (5) watchdog cancel removed -> an orphaned ~10s timer survives the handshake (getTimerCount 1); (6) aggregate did-start-loading classification restored -> an overlapping subframe navigation recloses the gate after the handshake (ready false until watchdog) — deterministically red; (7) handshake-while-open reconcile removed -> a pty:rendererDispatcherReady arriving after a missed lifecycle edge leaves the gate pinned (rendererInFlightChars stays 524288, pending 90112, rendererLifecycleResetCount 0) — locally verified red; (8) cross-registration bridge cancel removed (top-of-registerPtyHandlers clearRendererDispatcherReadyWatchdog) -> a prior registration's armed watchdog survives re-registration as an orphaned timer (getTimerCount 1 instead of 0) — locally verified red. With the full fix all eight are green. The performance budget below still holds: the watchdog is a single unref'd one-shot per reset, not per-chunk. Needs a saved CI or intentional-break artifact before blocking promotion."
       },
       "performanceBudget": {
         "required": true,

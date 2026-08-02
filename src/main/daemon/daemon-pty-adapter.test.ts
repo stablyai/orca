@@ -1411,6 +1411,69 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.snapshot).toBeUndefined()
       expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
     })
+
+    it('forwards attach-only and never creates an absent stable session', async () => {
+      const subprocessBeforeAttach = lastSubprocess
+      await expect(
+        adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'missing-stable-pane-session',
+          attachOnly: true
+        })
+      ).rejects.toThrow('Session not found: missing-stable-pane-session')
+      expect(lastSubprocess).toBe(subprocessBeforeAttach)
+    })
+
+    it('does not inspect cold history for attach-only ownership checks', async () => {
+      const historyDir = join(dir, 'attach-only-history')
+      const historyAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
+      const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
+      const probe = vi.spyOn(reader, 'probeRestorableHistory')
+      const getAppliedSize = vi.spyOn(historyAdapter, 'getAppliedSize')
+
+      try {
+        await expect(
+          historyAdapter.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'missing-attach-only-history-session',
+            attachOnly: true
+          })
+        ).rejects.toThrow('Session not found: missing-attach-only-history-session')
+        expect(probe).not.toHaveBeenCalled()
+        expect(getAppliedSize).not.toHaveBeenCalled()
+      } finally {
+        historyAdapter.dispose()
+      }
+    })
+
+    it('fails closed before dispatching attach-only to a v30 daemon', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi.spyOn(DaemonClient.prototype, 'request')
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(
+          legacy.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'legacy-stable-pane-session',
+            attachOnly: true
+          })
+        ).rejects.toThrow('terminal_pane_owner_unknown')
+        expect(request).not.toHaveBeenCalledWith('createOrAttach', expect.anything())
+      } finally {
+        legacy.dispose()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
+    })
   })
 
   describe('attach', () => {

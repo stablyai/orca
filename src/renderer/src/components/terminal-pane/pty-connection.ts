@@ -5167,6 +5167,7 @@ export function connectPanePty(
       const trackedPromise: Promise<string | null> = Promise.resolve(spawnedRaw)
         .then(async (spawnedPtyId) => {
           if (outputCallbacks.generation !== transportStreamGeneration) {
+            finishReattachLiveDataDeferral(false, outputCallbacks.generation)
             const gen = await preSignalPromise
             if (typeof gen === 'number') {
               void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
@@ -5180,7 +5181,29 @@ export function connectPanePty(
                 ? spawnedPtyId
                 : transport.getPtyId()
           if (resolvedPtyId && !claimCapturedDirectSshRetryPty(resolvedPtyId)) {
+            finishReattachLiveDataDeferral(false, outputCallbacks.generation)
             return null
+          }
+          const connectResult =
+            spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
+              ? spawnedPtyId
+              : null
+          if (connectResult?.isReattach) {
+            pendingStartupCommand = null
+            const accepted = await handleReattachResult(
+              connectResult,
+              null,
+              coldRestoreOverride,
+              outputCallbacks.generation
+            )
+            finishReattachLiveDataDeferral(accepted, outputCallbacks.generation)
+            const gen = await preSignalPromise
+            if (accepted && resolvedPtyId && typeof gen === 'number') {
+              void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+            } else if (typeof gen === 'number') {
+              void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+            }
+            return accepted ? resolvedPtyId : null
           }
           if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
             registerEffectiveLaunchConfig(spawnedPtyId.launchConfig, {
@@ -5251,9 +5274,11 @@ export function connectPanePty(
           if (resolvedPtyId && connectionId) {
             schedulePendingStartupCommandDelivery()
           }
+          finishReattachLiveDataDeferral(Boolean(resolvedPtyId), outputCallbacks.generation)
           return resolvedPtyId
         })
         .catch(async () => {
+          finishReattachLiveDataDeferral(false, outputCallbacks.generation)
           if (paneStartup?.launchConfig || (startupOverride && 'launchConfig' in startupOverride)) {
             clearRegisteredStartupLaunchConfig()
           }
@@ -5683,6 +5708,11 @@ export function connectPanePty(
       return {
         generation,
         callbacks: {
+          onReattachDetermined: (): void => {
+            if (isCurrent()) {
+              beginReattachLiveDataDeferralIfUnowned(generation)
+            }
+          },
           onConnect: (): void => {
             if (isCurrent()) {
               reportRemoteRendererSerializerReady()
@@ -7588,6 +7618,14 @@ export function connectPanePty(
       }
       if (!deferredReattachLiveDataOwners.has(ownerGeneration)) {
         deferredReattachLiveDataOwners.set(ownerGeneration, { failed: false })
+      }
+    }
+
+    const beginReattachLiveDataDeferralIfUnowned = (
+      ownerGeneration = transportStreamGeneration
+    ): void => {
+      if (!deferredReattachLiveDataOwners.has(ownerGeneration)) {
+        beginReattachLiveDataDeferral(ownerGeneration)
       }
     }
 
