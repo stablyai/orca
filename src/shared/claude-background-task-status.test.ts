@@ -264,6 +264,39 @@ describe('Claude background task status', () => {
     expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
+  it('keeps a failed turn working while its background shell runs', () => {
+    const state = createHookListenerState()
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'StopFailure',
+        background_tasks: [RUNNING_SHELL]
+      })?.state
+    ).toBe('working')
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'StopFailure',
+        background_tasks: []
+      })?.state
+    ).toBe('done')
+  })
+
+  it('drops interrupted state on a mid-turn lead event with no prompt submit', () => {
+    const state = createHookListenerState()
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', is_interrupt: true })
+
+    // Why: a resumed turn can start at a tool event; the next Stop must not inherit the old interrupt and discard live work.
+    expect(claudeEvent(state, SOURCE_PANE, { hook_event_name: 'PreToolUse' })?.state).toBe(
+      'working'
+    )
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        background_tasks: [RUNNING_SHELL]
+      })
+    ).toMatchObject({ state: 'working', interrupted: undefined })
+  })
+
   it('resumes on task notifications and user slash commands after interruption', () => {
     const state = createHookListenerState()
     claudeEvent(state, SOURCE_PANE, {

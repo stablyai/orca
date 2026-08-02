@@ -2627,12 +2627,12 @@ function normalizeClaudeEvent(
     return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
-  const preservesInterruptedBoundary = eventName === 'Stop' || eventName === 'StopFailure'
+  // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
+  const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
   const interrupted =
-    ((eventName === 'Stop' || eventName === 'StopFailure') &&
-      eventAgentId === undefined &&
-      hookPayload['is_interrupt'] === true) ||
-    (previousLead?.interrupted === true && preservesInterruptedBoundary)
+    isTurnBoundary &&
+    ((eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
+      previousLead?.interrupted === true)
       ? true
       : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
@@ -2652,7 +2652,7 @@ function normalizeClaudeEvent(
       ? 'working'
       : eventName === 'PermissionRequest' || isAskUserQuestion
         ? 'waiting'
-        : eventName === 'Stop' || eventName === 'StopFailure'
+        : isTurnBoundary
           ? 'done'
           : null
 
@@ -2673,15 +2673,10 @@ function normalizeClaudeEvent(
     } else {
       state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     }
-  } else if (
-    eventAgentId === undefined &&
-    (eventName === 'Stop' || eventName === 'StopFailure') &&
-    backgroundTasks.present
-  ) {
+  } else if (eventAgentId === undefined && isTurnBoundary && backgroundTasks.present) {
     // Why: current Claude may omit an empty cron inventory while still emitting background_tasks.
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   }
-  const stateName = reportedStateName
 
   // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
   // Two exceptions take the full path below: waiting-inducing events (a child needs human attention on this pane) and the blocked child's own next tool event (approval granted — clear the wait as for the lead).
@@ -2722,7 +2717,7 @@ function normalizeClaudeEvent(
     return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
-  if ((eventName === 'Stop' || eventName === 'StopFailure') && eventAgentId === undefined) {
+  if (isTurnBoundary && eventAgentId === undefined) {
     // Why: background_tasks is trusted only where unambiguous (see foldClaudeBackgroundTasksIntoRoster) — teammates report "running" here even while idle.
     // Older Claude builds without the field keep the incrementally tracked roster.
     if (backgroundTasks.present) {
@@ -2745,7 +2740,7 @@ function normalizeClaudeEvent(
           }
       : undefined
   state.claudeLeadStateByPaneKey.set(paneKey, {
-    state: stateName,
+    state: reportedStateName,
     ...(interrupted ? { interrupted } : {}),
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...(stateBeforeWait ? { stateBeforeWait } : {})
@@ -2757,7 +2752,7 @@ function normalizeClaudeEvent(
   }
 
   const effectiveState = resolveClaudePaneState(state, paneKey, {
-    state: stateName,
+    state: reportedStateName,
     interrupted
   })
 
