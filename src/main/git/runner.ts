@@ -232,7 +232,7 @@ function resolveCommand(
 
   if (options.useWslLoginShell) {
     const isolateStartupStdio = command === 'git'
-    const [outerShell, outerFlag] = getWslLoginShellOuterArgs(isolateStartupStdio)
+    const [outerShell, outerFlag] = getWslLoginShellOuterArgs()
     return {
       binary: 'wsl.exe',
       args: [

@@ -68,14 +68,13 @@ describe('wsl login shell command helpers', () => {
     expect(command).toContain("printf '\\''hello'\\''")
   })
 
-  it('keeps ordinary helper output byte-identical and selects the isolated outer shell', () => {
+  it('keeps ordinary helper output byte-identical and preserves the outer login shell', () => {
     const command = "printf 'hello'"
 
     expect(buildWslLoginShellCommand(command)).toBe(
       buildWslLoginShellCommand(command, { isolateStartupStdio: false })
     )
     expect(getWslLoginShellOuterArgs()).toEqual(['sh', '-lc'])
-    expect(getWslLoginShellOuterArgs(true)).toEqual(['sh', '-c'])
   })
 
   it('parks all caller descriptors before startup and restores them for the payload', () => {

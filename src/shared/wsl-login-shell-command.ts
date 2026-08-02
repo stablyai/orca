@@ -17,10 +17,8 @@ export function escapeWslShCommandForWindows(command: string): string {
   return escaped
 }
 
-export function getWslLoginShellOuterArgs(
-  isolateStartupStdio = false
-): ['sh', '-c'] | ['sh', '-lc'] {
-  return isolateStartupStdio ? ['sh', '-c'] : ['sh', '-lc']
+export function getWslLoginShellOuterArgs(): ['sh', '-lc'] {
+  return ['sh', '-lc']
 }
 
 export function buildWslLoginShellCommand(

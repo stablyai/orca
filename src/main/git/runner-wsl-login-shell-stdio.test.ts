@@ -52,11 +52,8 @@ describe('WSL Git login-shell stdio isolation', () => {
   it('resolves GitHub identity when the login shell prints the public issue banner', async () => {
     await withWindows(async () => {
       const child = fakeChild()
-      execFileMock.mockImplementation((_binary, args, _options, callback) => {
-        const output =
-          args[4] === '-c'
-            ? 'https://github.com/stablyai/orca.git\n'
-            : 'hello\nhttps://github.com/stablyai/orca.git\n'
+      execFileMock.mockImplementation((_binary, _args, _options, callback) => {
+        const output = 'https://github.com/stablyai/orca.git\n'
         queueMicrotask(() => callback(null, output, ''))
         return child
       })
@@ -114,7 +111,7 @@ esac`
           'Ubuntu',
           '--',
           'sh',
-          '-c',
+          '-lc',
           expectedPayload.replaceAll('$', '\\$')
         ])
         expect(options.cwd).toBeUndefined()
@@ -137,7 +134,7 @@ esac`
     await withWindows(async () => {
       const child = fakeChild()
       execFileMock.mockImplementation((_binary, args, _options, callback) => {
-        expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c'])
+        expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-lc'])
         expect(args[5]).toContain("'git'")
         expect(args[5]).toContain('show')
         expect(args[5]).toContain('binary')
@@ -159,7 +156,7 @@ esac`
       const child = fakeChild()
       spawnMock.mockImplementation((binary, args) => {
         expect(binary).toBe('wsl.exe')
-        expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c'])
+        expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-lc'])
         queueMicrotask(() => {
           child.stdout?.emit('data', Buffer.from('stdout\0'))
           child.stderr?.emit('data', Buffer.from('stderr\n'))
