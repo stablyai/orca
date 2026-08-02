@@ -64,9 +64,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(args[promptIndex + 1]).toBe('Name a branch for adding login')
     expect(args).toContain('--quiet')
     expect(args).toContain('--thinking')
-    expect(args).toEqual(
-      expect.arrayContaining(['--model', 'kimi-code/kimi-for-coding'])
-    )
+    expect(args).toEqual(expect.arrayContaining(['--model', 'kimi-code/kimi-for-coding']))
   })
 
   it('uses the provider-qualified Kimi model id accepted by the CLI', () => {
@@ -74,6 +72,25 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'default',
       'kimi-code/kimi-for-coding'
     ])
+  })
+
+  it('maps Kimi thinking off and omission to distinct argv', () => {
+    const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi!
+    const offArgs = spec.buildArgs({ prompt: 'PROMPT', model: 'default', thinkingLevel: 'off' })
+    const defaultArgs = spec.buildArgs({ prompt: 'PROMPT', model: 'default' })
+
+    expect(offArgs).toContain('--no-thinking')
+    expect(offArgs).not.toContain('--thinking')
+    expect(defaultArgs).not.toContain('--thinking')
+    expect(defaultArgs).not.toContain('--no-thinking')
+  })
+
+  it('omits Kimi --model for the config default and an empty model', () => {
+    const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi!
+
+    for (const model of ['default', '']) {
+      expect(spec.buildArgs({ prompt: 'PROMPT', model })).not.toContain('--model')
+    }
   })
 
   it('lists Copilot hosted CLI models even when account policy filters the picker', () => {
