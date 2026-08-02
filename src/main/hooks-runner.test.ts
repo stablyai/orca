@@ -65,7 +65,7 @@ describe('createSetupRunnerScript', () => {
         'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd',
         [
           '@echo off',
-          'setlocal EnableExtensions',
+          'setlocal EnableExtensions DisableDelayedExpansion',
           'call pnpm install',
           'if errorlevel 1 exit /b %errorlevel%',
           'call pnpm build',
@@ -80,6 +80,110 @@ describe('createSetupRunnerScript', () => {
         value: originalPlatform
       })
     }
+  })
+
+  it('converts path env vars to MSYS form for a native Windows Git Bash runner', async () => {
+    const fs = await import('node:fs')
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      const { createSetupRunnerScript } = await import('./hooks')
+      const result = createSetupRunnerScript(
+        { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
+        'C:\\repo\\feature',
+        'pnpm install',
+        undefined,
+        { family: 'posix' }
+      )
+
+      expect(result).toEqual({
+        runnerScriptPath: 'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        envVars: expect.objectContaining({
+          ORCA_ROOT_PATH: '/c/Users/jinwo/git/orca',
+          ORCA_WORKTREE_PATH: '/c/repo/feature',
+          CONDUCTOR_ROOT_PATH: '/c/Users/jinwo/git/orca',
+          GHOSTX_ROOT_PATH: '/c/Users/jinwo/git/orca',
+          // Why: a display name, never a path — it must survive the conversion untouched.
+          ORCA_WORKSPACE_NAME: 'feature'
+        }),
+        shell: { family: 'posix' }
+      })
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        '#!/usr/bin/env bash\nset -e\npnpm install\n',
+        'utf-8'
+      )
+      // Why: chmod over a native Windows path is meaningless; only the WSL branch sets the bit.
+      expect(vi.mocked(fs.chmodSync)).not.toHaveBeenCalledWith(
+        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        0o755
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('leaves non-path setup env values alone under a Git Bash runner', async () => {
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      const { createSetupRunnerScript } = await import('./hooks')
+      const { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } =
+        await import('../shared/terminal-git-credential-guard')
+      const result = createSetupRunnerScript(
+        makeRepo(),
+        'C:\\repo\\feature',
+        'pnpm install',
+        undefined,
+        { family: 'posix' }
+      )
+
+      expect(result.envVars[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]).toBe('guard')
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('keeps native Windows env vars in Windows form for the default cmd runner', async () => {
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      const { createSetupRunnerScript } = await import('./hooks')
+      const result = createSetupRunnerScript(
+        { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
+        'C:\\repo\\feature',
+        'pnpm install'
+      )
+
+      expect(result.envVars).toEqual(
+        expect.objectContaining({
+          ORCA_ROOT_PATH: 'C:\\Users\\jinwo\\git\\orca',
+          ORCA_WORKTREE_PATH: 'C:\\repo\\feature'
+        })
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('preserves exclamation marks in Windows runner script lines', async () => {
+    const { buildWindowsRunnerScript } = await import('./hooks')
+
+    const runner = buildWindowsRunnerScript('echo hello!world!')
+
+    // Why: launchers invoke the runner under cmd /v:on, so the runner must disable delayed
+    // expansion itself or `!world!` is consumed as a variable reference.
+    expect(runner).toContain('setlocal EnableExtensions DisableDelayedExpansion')
+    expect(runner).toContain('call echo hello!world!')
   })
 
   it('derives ORCA_WORKSPACE_NAME from a POSIX worktree path', async () => {

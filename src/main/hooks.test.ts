@@ -537,7 +537,9 @@ describe('runner script builders', () => {
     try {
       const result = buildWindowsRunnerScript(script)
 
-      expect(result.startsWith('@echo off\r\nsetlocal EnableExtensions\r\n')).toBe(true)
+      expect(
+        result.startsWith('@echo off\r\nsetlocal EnableExtensions DisableDelayedExpansion\r\n')
+      ).toBe(true)
       expect(result).toContain('call pnpm install\r\nif errorlevel 1 exit /b %errorlevel%')
       expect(result).toContain('call npm run build\r\nif errorlevel 1 exit /b %errorlevel%')
       const usedLineSplit = splitSpy.mock.calls.some(
@@ -1495,16 +1497,40 @@ describe('resolveSetupRunnerShell', () => {
     const { resolveSetupRunnerShell } = await import('./hooks')
 
     expect(
-      resolveSetupRunnerShell({ terminalWindowsShell: 'C:\\cygwin64\\bin\\bash.exe' }, 'win32')
+      resolveSetupRunnerShell({ terminalWindowsShell: 'C:\\cygwin64\\bin\\bash.exe' }, 'win32', {
+        resolveGitBashShellPath: () => null
+      })
     ).toEqual({ family: 'cmd' })
   })
 
   it('keeps the cmd runner for a bare bash whose flavor cannot be resolved', async () => {
     const { resolveSetupRunnerShell } = await import('./hooks')
 
-    expect(resolveSetupRunnerShell({ terminalWindowsShell: 'bash' }, 'win32')).toEqual({
-      family: 'cmd'
-    })
+    expect(
+      resolveSetupRunnerShell({ terminalWindowsShell: 'bash' }, 'win32', {
+        resolveGitBashShellPath: () => null
+      })
+    ).toEqual({ family: 'cmd' })
+  })
+
+  it('uses the POSIX runner for a bare bash that resolves to Git Bash', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(
+      resolveSetupRunnerShell({ terminalWindowsShell: 'bash' }, 'win32', installedGitBash)
+    ).toEqual({ family: 'posix' })
+  })
+
+  it('uses the POSIX runner for an extension-less Git Bash path', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(
+      resolveSetupRunnerShell(
+        { terminalWindowsShell: 'C:\\Program Files\\Git\\bin\\bash' },
+        'win32',
+        installedGitBash
+      )
+    ).toEqual({ family: 'posix' })
   })
 
   it('preserves the existing cmd runner for PowerShell terminals', async () => {
@@ -1516,7 +1542,8 @@ describe('resolveSetupRunnerShell', () => {
           terminalWindowsShell: 'powershell.exe',
           terminalWindowsPowerShellImplementation: 'pwsh.exe'
         },
-        'win32'
+        'win32',
+        installedGitBash
       )
     ).toEqual({ family: 'cmd' })
   })
@@ -1524,9 +1551,9 @@ describe('resolveSetupRunnerShell', () => {
   it('preserves cmd setup compatibility when a Windows-host project has a WSL shell setting', async () => {
     const { resolveSetupRunnerShell } = await import('./hooks')
 
-    expect(resolveSetupRunnerShell({ terminalWindowsShell: 'wsl.exe' }, 'win32')).toEqual({
-      family: 'cmd'
-    })
+    expect(
+      resolveSetupRunnerShell({ terminalWindowsShell: 'wsl.exe' }, 'win32', installedGitBash)
+    ).toEqual({ family: 'cmd' })
   })
 
   it('classifies an installed explicit Git Bash executable as a POSIX runner', async () => {

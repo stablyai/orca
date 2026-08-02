@@ -8,6 +8,7 @@ import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-po
 import { shouldWaitForSetupBeforeAgentStartup } from '../shared/setup-agent-startup-policy'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git-credential-guard'
 import { parseOrcaYaml } from '../shared/orca-yaml'
+import { nativeWindowsPathToPosixShellPath } from '../shared/setup-runner-command'
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from './git-bash'
 import { gitExecFileSync, promptGuardShellEnv } from './git/runner'
@@ -327,6 +328,15 @@ export function getSetupCommandSource(
   return null
 }
 
+// Why: kept in sync with pty/wsl-orca-env.ts, which path-translates the same keys for WSL.
+// ORCA_WORKSPACE_NAME is a display name and the credential-guard policy is an enum — never paths.
+const SETUP_RUNNER_PATH_ENV_KEYS = [
+  'ORCA_ROOT_PATH',
+  'ORCA_WORKTREE_PATH',
+  'CONDUCTOR_ROOT_PATH',
+  'GHOSTX_ROOT_PATH'
+] as const
+
 function getSetupEnvVars(repo: Repo, worktreePath: string): Record<string, string> {
   return {
     ORCA_ROOT_PATH: repo.path,
@@ -388,7 +398,9 @@ function getHookWslContext(
 }
 
 export function buildWindowsRunnerScript(script: string): string {
-  let runnerScript = '@echo off\r\nsetlocal EnableExtensions\r\n'
+  // Why: launchers invoke this runner under `cmd /v:on`, and EnableExtensions does not reset an
+  // inherited delayed-expansion state — without this, every `!` in a user setup line is eaten.
+  let runnerScript = '@echo off\r\nsetlocal EnableExtensions DisableDelayedExpansion\r\n'
 
   for (const rawLine of iterateLfScriptLines(script)) {
     const command = rawLine.trim()
@@ -553,6 +565,16 @@ function createWorktreeRunnerScript(args: {
   if (wslWorktree) {
     for (const key of Object.keys(envVars)) {
       envVars[key] = toLinuxPath(envVars[key])
+    }
+  } else if (nativeWindowsWorktree && runnerShell.family === 'posix') {
+    // Why: a Git Bash runner already receives its own path as /c/..., and the shell exports HOME
+    // and PWD the same way, so leaving ORCA_* in C:\ form would make them the lone exception.
+    // Only path-valued keys convert; the workspace name and policy values are not paths.
+    for (const key of SETUP_RUNNER_PATH_ENV_KEYS) {
+      const value = envVars[key]
+      if (value) {
+        envVars[key] = nativeWindowsPathToPosixShellPath(value)
+      }
     }
   }
 

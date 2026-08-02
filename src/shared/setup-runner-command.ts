@@ -1,4 +1,8 @@
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
+import {
+  buildWindowsCmdRunnerDelayedLaunchCommand,
+  windowsRunnerPathNeedsCmdGuard
+} from './windows-cmd-runner-delayed-launch'
 
 export type SetupRunnerCommandPlatform = 'windows' | 'posix'
 export type SetupRunnerShellFamily = 'posix' | 'cmd'
@@ -75,7 +79,11 @@ export function resolveSetupRunnerCommand(
       }
     }
     return {
-      command: `cmd.exe /c ${quoteWindowsArg(runnerScriptPath)}`,
+      // Why: some path characters survive no amount of quoting on a cmd command line, so those
+      // paths take a delayed-expansion launcher instead. Every other path keeps the plain form.
+      command: windowsRunnerPathNeedsCmdGuard(runnerScriptPath)
+        ? buildWindowsCmdRunnerDelayedLaunchCommand(runnerScriptPath)
+        : `cmd.exe /c ${quoteWindowsArg(runnerScriptPath)}`,
       runnerScriptPathForShell: runnerScriptPath,
       shell: 'windows'
     }
@@ -111,7 +119,7 @@ function quoteWindowsArg(value: string): string {
   return `"${value.replace(/"/g, '""')}"`
 }
 
-function nativeWindowsPathToPosixShellPath(value: string): string {
+export function nativeWindowsPathToPosixShellPath(value: string): string {
   const driveMatch = value.match(/^([A-Za-z]):[\\/](.*)$/)
   if (driveMatch) {
     return `/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
