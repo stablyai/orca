@@ -12734,6 +12734,107 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
   })
 
+  it('resolves bare agent ids whose launch binary differs from the id', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { antigravity: '--dangerously-skip-permissions' },
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    // Why: orchestration worker-start passes command: <agent id>; antigravity's
+    // binary is `agy`, so matching only launchCmd left this path as a raw shell
+    // string without launchAgent / launch token.
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'antigravity',
+      title: 'worker'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; env?: Record<string, string>; launchAgent?: string }
+      | undefined
+    expect(spawnCall?.command).toBe("agy '--dangerously-skip-permissions'")
+    expect(spawnCall?.launchAgent).toBe('antigravity')
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+  })
+
+  it('resolves bare cursor agent ids to the cursor-agent launch binary', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { cursor: '--yolo' },
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'cursor',
+      title: 'worker'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; launchAgent?: string; env?: Record<string, string> }
+      | undefined
+    expect(spawnCall?.command).toBe("cursor-agent '--yolo'")
+    expect(spawnCall?.launchAgent).toBe('cursor')
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+  })
+
+  it('keeps disabled bare agent id terminal creates unchanged', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: ['antigravity' as const],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { antigravity: '--dangerously-skip-permissions' },
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'antigravity'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; env?: Record<string, string>; launchAgent?: string }
+      | undefined
+    expect(spawnCall?.command).toBe('antigravity')
+    expect(spawnCall?.launchAgent).toBeUndefined()
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
+  })
+
   it('sends Settings agent defaults through renderer-backed bare agent terminal creates', async () => {
     const runtimeStore = {
       ...store,

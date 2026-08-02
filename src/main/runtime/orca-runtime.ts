@@ -1374,6 +1374,14 @@ function resolveBareAgentLaunchCommand(args: {
     return null
   }
 
+  // Why: worker-start / federation pass the agent id (`antigravity`, `cursor`) as
+  // createTerminal `command`, while UI launches use the real binary (`agy`,
+  // `cursor-agent`). Accept the bare id so Settings defaults, launchAgent, and
+  // ORCA_AGENT_LAUNCH_TOKEN attach the same way as a picker launch.
+  if (isTuiAgent(command) && isTuiAgentEnabled(command, args.settings.disabledTuiAgents)) {
+    return command
+  }
+
   const cmdOverrides = args.settings.agentCmdOverrides ?? {}
   for (const agent of Object.keys(TUI_AGENT_CONFIG) as TuiAgent[]) {
     if (!isTuiAgentEnabled(agent, args.settings.disabledTuiAgents)) {
