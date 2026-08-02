@@ -5043,15 +5043,15 @@
     "ko": "편집기 글꼴"
   },
   "auto.components.settings.EditorFontFamilySetting.description": {
-    "ko": "파일 편집기와 diff 보기에 사용할 글꼴입니다. 비워 두면 terminal 글꼴을 따릅니다."
+    "ko": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다."
   },
   "auto.components.settings.EditorFontFamilySetting.placeholder": {
-    "ko": "terminal 글꼴과 동일"
+    "ko": "터미널 글꼴과 동일"
   },
   "auto.components.settings.general.search.editorFontFamily": {
     "ko": "편집기 글꼴"
   },
   "auto.components.settings.general.search.editorFontFamilyDesc": {
-    "ko": "파일 편집기와 diff 보기에 사용할 글꼴입니다. 비워 두면 terminal 글꼴을 따릅니다."
+    "ko": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다."
   }
 }
