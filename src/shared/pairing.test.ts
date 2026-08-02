@@ -35,6 +35,33 @@ describe('pairing offer', () => {
     expect(decoded).toEqual(offer)
   })
 
+  it('rejects malformed padding consistently across Node and browser runtimes', () => {
+    const url = encodePairingOffer(offer)
+    const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+    const malformedCode = `${code}=`
+    const nodeDecoded = parsePairingCode(malformedCode)
+    const nodeBuffer = Buffer
+    let browserDecoded: PairingOffer | null = null
+    try {
+      vi.stubGlobal('Buffer', undefined)
+      browserDecoded = parsePairingCode(malformedCode)
+    } finally {
+      vi.stubGlobal('Buffer', nodeBuffer)
+    }
+
+    expect({ nodeDecoded, browserDecoded }).toEqual({
+      nodeDecoded: null,
+      browserDecoded: null
+    })
+  })
+
+  it('accepts canonical base64 padding', () => {
+    const url = encodePairingOffer(offer)
+    const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+
+    expect(parsePairingCode(`${code}==`)).toEqual(offer)
+  })
+
   it('preserves optional device scope metadata', () => {
     const scopedOffer: PairingOffer = { ...offer, scope: 'mobile' }
     expect(decodePairingOffer(encodePairingOffer(scopedOffer))).toEqual(scopedOffer)

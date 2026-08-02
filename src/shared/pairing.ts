@@ -84,6 +84,8 @@ function decodePairingBase64(base64url: string): PairingOffer {
   if (
     base64url.length === 0 ||
     base64url.length > PAIRING_CODE_MAX_CHARACTERS ||
+    base64url.length % 4 === 1 ||
+    (base64url.includes('=') && base64url.length % 4 !== 0) ||
     !/^[A-Za-z0-9+/_-]+={0,2}$/.test(base64url)
   ) {
     throw new Error('Invalid pairing code')
