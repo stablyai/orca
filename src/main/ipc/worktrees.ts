@@ -91,6 +91,7 @@ import {
   loadHooks,
   parseOrcaYaml,
   readIssueCommand,
+  resolveSetupRunnerShell,
   runHook,
   hasHooksFile,
   hasUnrecognizedOrcaYamlKeys,
@@ -3071,7 +3072,8 @@ export function registerWorktreeHandlers(
         repo,
         args.worktreePath,
         args.command,
-        getLocalProjectWorktreeGitOptions(store, repo)
+        getLocalProjectWorktreeGitOptions(store, repo),
+        resolveSetupRunnerShell(store.getSettings())
       )
     }
   )

@@ -6680,7 +6680,9 @@ describe('registerWorktreeHandlers', () => {
       expect.objectContaining({ id: 'repo-1' }),
       '/workspace/improve-dashboard',
       'codex exec "long command"',
-      {}
+      {},
+      // Why: issue runners take the resolved setup shell; it is undefined off Windows.
+      undefined
     )
     expect(result).toMatchObject({
       runnerScriptPath: '/workspace/repo/.git/orca/issue-command-runner.sh',
@@ -7659,7 +7661,9 @@ describe('registerWorktreeHandlers', () => {
     expect(createSetupRunnerScriptMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'repo-1' }),
       '/workspace/improve-dashboard',
-      'pnpm worktree:setup'
+      'pnpm worktree:setup',
+      undefined,
+      undefined
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
@@ -7720,7 +7724,8 @@ describe('registerWorktreeHandlers', () => {
       expect.objectContaining({ id: 'repo-1' }),
       '/workspace/improve-dashboard',
       'pnpm worktree:setup',
-      { wslDistro: 'Ubuntu' }
+      { wslDistro: 'Ubuntu' },
+      undefined
     )
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -7757,7 +7762,9 @@ describe('registerWorktreeHandlers', () => {
     expect(createSetupRunnerScriptMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'repo-1' }),
       '/workspace/improve-dashboard',
-      'pnpm worktree:setup # worktree'
+      'pnpm worktree:setup # worktree',
+      undefined,
+      undefined
     )
     expect(result).toEqual(
       expect.objectContaining({

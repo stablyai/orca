@@ -2554,13 +2554,14 @@ export async function createLocalWorktree(
       try {
         // Why: main only writes the runner script and must not execute setup itself, or we reintroduce the old hidden background-hook behavior.
         // Why: worktree already exists, so a runner-gen failure degrades to "created without setup launch" rather than failing creation.
-        const setupShell = resolveSetupRunnerShell(settings)
-        const runtimeTarget = localWorktreeGitOptionArgs[0]
-        setup = setupShell
-          ? createSetupRunnerScript(repo, worktreePath, setupScript, runtimeTarget, setupShell)
-          : runtimeTarget
-            ? createSetupRunnerScript(repo, worktreePath, setupScript, runtimeTarget)
-            : createSetupRunnerScript(repo, worktreePath, setupScript)
+        // Why: both trailing args are optional — the shell is undefined off Windows.
+        setup = createSetupRunnerScript(
+          repo,
+          worktreePath,
+          setupScript,
+          localWorktreeGitOptionArgs[0],
+          resolveSetupRunnerShell(settings)
+        )
       } catch (error) {
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
       }

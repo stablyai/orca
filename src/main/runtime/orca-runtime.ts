@@ -21255,25 +21255,28 @@ export class OrcaRuntimeService {
         : undefined
     }
     const shouldRunSetup = hooks?.scripts.setup && shouldRunSetupForCreate(repo, effectiveDecision)
+    // Why: the in-process hook uses a hardcoded cmd/bash shell, so it can only run
+    // when nothing downstream is able to launch the shell-aware runner script.
+    let didStartInProcessSetupHook = false
     if (shouldRunSetup && hooks?.scripts.setup) {
-      const shouldUseSetupRunner = this.authoritativeWindowId !== null || Boolean(effectiveStartup)
+      const shouldUseSetupRunner =
+        this.authoritativeWindowId !== null ||
+        Boolean(effectiveStartup) ||
+        Boolean(this.ptyController?.spawn)
       if (shouldUseSetupRunner) {
         try {
           // Why: setup+startup must share the terminal runner path even without
-          // a renderer window, so the startup shell can wait on setup completion.
+          // a renderer window, so the startup shell can wait on setup completion
+          // and windowless creates resolve the same Windows setup shell.
           const runtimeTarget = this.getLocalGitExecutionOptionArgs(repo)[0]
-          const setupShell = resolveSetupRunnerShell(settings)
-          setup = setupShell
-            ? createSetupRunnerScript(
-                repo,
-                worktreePath,
-                hooks.scripts.setup,
-                runtimeTarget,
-                setupShell
-              )
-            : runtimeTarget
-              ? createSetupRunnerScript(repo, worktreePath, hooks.scripts.setup, runtimeTarget)
-              : createSetupRunnerScript(repo, worktreePath, hooks.scripts.setup)
+          // Why: both trailing args are optional — the shell is undefined off Windows.
+          setup = createSetupRunnerScript(
+            repo,
+            worktreePath,
+            hooks.scripts.setup,
+            runtimeTarget,
+            resolveSetupRunnerShell(settings)
+          )
         } catch (error) {
           // Why: the git worktree is already real at this point. If runner
           // generation fails, keep creation successful and surface the problem in
@@ -21281,6 +21284,7 @@ export class OrcaRuntimeService {
           console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
         }
       } else {
+        didStartInProcessSetupHook = true
         void runHook(
           'setup',
           worktreePath,
@@ -21524,7 +21528,9 @@ export class OrcaRuntimeService {
                 ? ('not_configured' as const)
                 : effectiveDecision === 'skip' || !shouldRunSetup
                   ? ('skipped' as const)
-                  : didSpawnSetup
+                  : // Why: the in-process hook is already executing, so reporting
+                    // spawn_failed would strand callers that retry on it.
+                    didSpawnSetup || didStartInProcessSetupHook
                     ? ('running' as const)
                     : ('spawn_failed' as const),
               ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})

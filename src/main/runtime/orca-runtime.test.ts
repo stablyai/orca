@@ -36256,7 +36256,9 @@ describe('OrcaRuntimeService', () => {
     expect(createSetupRunnerScript).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'repo-1', path: '/tmp/repo' }),
       '/tmp/workspaces/runtime-hook-test',
-      'pnpm worktree:setup'
+      'pnpm worktree:setup',
+      undefined,
+      undefined
     )
     expect(runHook).not.toHaveBeenCalled()
     expect(addWorktree).toHaveBeenCalledWith(
@@ -36489,7 +36491,9 @@ describe('OrcaRuntimeService', () => {
     expect(createSetupRunnerScript).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'repo-1', path: '/tmp/repo' }),
       '/tmp/workspaces/runtime-hook-skip',
-      'pnpm worktree:setup'
+      'pnpm worktree:setup',
+      undefined,
+      undefined
     )
     expect(runHook).not.toHaveBeenCalled()
     expect(result).toEqual({
@@ -36619,6 +36623,145 @@ describe('OrcaRuntimeService', () => {
         worktreeId: result.worktree.id
       })
     )
+  })
+
+  it('uses the shell-aware setup runner for windowless creates without a startup command', async () => {
+    // Regression (C1): with no authoritative window and no startup command the
+    // create fell back to runHook, which hardcodes cmd.exe on Windows and so ran
+    // batch even when the configured terminal resolves to Git Bash.
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-windowless' })
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-primary' })
+      .mockResolvedValueOnce({ id: 'pty-setup' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    // Deliberately no attachWindow: this is the windowless/CLI create path.
+
+    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\runtime-hook-windowless')
+    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\runtime-hook-windowless')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+    vi.mocked(resolveSetupRunnerShell).mockReturnValue({ family: 'posix' })
+    vi.mocked(createSetupRunnerScript).mockReturnValue({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix' },
+      envVars: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\workspaces\\runtime-hook-windowless'
+      }
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: 'C:/workspaces/runtime-hook-windowless',
+        head: 'def',
+        branch: 'runtime-hook-windowless',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-hook-windowless',
+      awaitTerminalProvisioning: true
+    })
+
+    expect(createSetupRunnerScript).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1' }),
+      'C:\\workspaces\\runtime-hook-windowless',
+      'pnpm worktree:setup',
+      undefined,
+      { family: 'posix' }
+    )
+    expect(runHook).not.toHaveBeenCalled()
+    expect(result.setupReceipt).toMatchObject({ state: 'running' })
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        command: 'bash /c/repo/.git/orca/setup-runner.sh',
+        worktreeId: result.worktree.id
+      })
+    )
+  })
+
+  it('reports the in-process setup hook as running when nothing can launch the runner', async () => {
+    // Regression (C1): the fire-and-forget hook is the last resort when there is
+    // no PTY controller; reporting spawn_failed made callers retry a live hook.
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-hook-no-pty')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-hook-no-pty')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+    vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-hook-no-pty',
+        head: 'def',
+        branch: 'runtime-hook-no-pty',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-hook-no-pty',
+      awaitTerminalProvisioning: true
+    })
+
+    expect(createSetupRunnerScript).not.toHaveBeenCalled()
+    expect(runHook).toHaveBeenCalledWith(
+      'setup',
+      '/tmp/workspaces/runtime-hook-no-pty',
+      expect.objectContaining({ id: 'repo-1' }),
+      '/tmp/workspaces/runtime-hook-no-pty',
+      undefined
+    )
+    expect(result.setupReceipt).toMatchObject({ state: 'running' })
   })
 
   it('sequences setup before startup for opted-in local headless worktree creates', async () => {

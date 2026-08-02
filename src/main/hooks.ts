@@ -478,7 +478,8 @@ export function createIssueCommandRunnerScript(
   repo: Repo,
   worktreePath: string,
   command: string,
-  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget
+  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
+  setupShell?: SetupRunnerShell
 ): WorktreeSetupLaunch {
   // Why: writing long commands into a runner script avoids the PTY line editor wrapping/truncating them.
   return createWorktreeRunnerScript({
@@ -486,7 +487,10 @@ export function createIssueCommandRunnerScript(
     worktreePath,
     script: command,
     runnerBaseName: 'issue-command-runner',
-    runtimeTarget: getHookRuntimeTarget(projectRuntime)
+    runtimeTarget: getHookRuntimeTarget(projectRuntime),
+    // Why: issue commands run in the same terminal as setup, so a Git Bash setup
+    // runner must not be paired with a cmd issue runner in one session.
+    setupShell
   })
 }
 
@@ -557,7 +561,8 @@ function createWorktreeRunnerScript(args: {
     envVars,
     // Why: WSL git returns /mnt paths that Node converts back to C:\ for file
     // writes; retain the runtime signal so launch converts them to /mnt again.
-    // Issue-command runners launch through the same shells, so they carry it too.
+    // Issue-command runners take the same resolved shell, so one session never
+    // mixes a bash setup runner with a cmd issue runner.
     ...(launchShell ? { shell: launchShell } : {}),
     ...(waitForAgentStartup === true ? { waitForAgentStartup: true } : {})
   }
@@ -589,7 +594,8 @@ export function resolveSetupRunnerShell(
       ((shell: string) => resolveWindowsGitBashShellPath(shell, { platform }))
     if (resolveGitBashShellPath(configuredShell)) {
       // Note: Git Bash users with batch-syntax orca.yaml setup content get a bash
-      // interpreter from here on; the flip is intentional and needs a release note.
+      // interpreter from here on. The flip is intentional and documented in
+      // docs/reference/windows-setup-shell.md.
       return { family: 'posix' }
     }
   }

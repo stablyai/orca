@@ -902,6 +902,21 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
+  it('queues an issue command split through returned WSL shell metadata', () => {
+    const store = createMockStore()
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, {
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\issue-command-runner.sh',
+      shell: { family: 'posix', executable: 'wsl.exe' },
+      envVars: { ORCA_ROOT_PATH: 'C:\\repo' }
+    })
+
+    expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {
+      command: 'bash /mnt/c/repo/.git/orca/issue-command-runner.sh',
+      env: { ORCA_ROOT_PATH: 'C:\\repo' }
+    })
+  })
+
   it('queues both setup split and issue command split when both are provided', () => {
     setSetupScriptLaunchMode('split-vertical')
     const store = createMockStore()

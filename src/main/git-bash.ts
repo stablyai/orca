@@ -132,7 +132,10 @@ export function resolveWindowsGitBashShellPath(
   }
 
   if (pathWin32.isAbsolute(trimmed) || trimmed.includes('\\') || trimmed.includes('/')) {
-    return isGitForWindowsBashPath(trimmed) ? trimmed : null
+    // Why: an uninstalled/stale configured path must resolve to null like the discovery
+    // branch above, so setup does not commit to a bash the PTY will never spawn.
+    const exists = options.exists ?? existsSync
+    return isGitForWindowsBashPath(trimmed) && exists(trimmed) ? trimmed : null
   }
 
   return resolveGitBashPath(options)

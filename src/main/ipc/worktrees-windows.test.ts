@@ -496,4 +496,29 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       repoId: 'repo-1'
     })
   })
+  it('gives the issue-command runner the same setup shell as the setup runner', () => {
+    // Regression (C4): native Windows issue runners stayed .cmd even when setup
+    // resolved to Git Bash, so same-session bash issue templates broke.
+    resolveSetupRunnerShellMock.mockReturnValue({ family: 'posix' })
+    createIssueCommandRunnerScriptMock.mockReturnValue({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\issue-command-runner.sh',
+      envVars: {},
+      shell: { family: 'posix' }
+    })
+
+    handlers['hooks:createIssueCommandRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: 'C:\\workspaces\\improve-dashboard',
+      command: 'gh issue view 42'
+    })
+
+    expect(resolveSetupRunnerShellMock).toHaveBeenCalledWith(store.getSettings())
+    expect(createIssueCommandRunnerScriptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1' }),
+      'C:\\workspaces\\improve-dashboard',
+      'gh issue view 42',
+      expect.anything(),
+      { family: 'posix' }
+    )
+  })
 })

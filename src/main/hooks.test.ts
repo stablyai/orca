@@ -1396,6 +1396,76 @@ describe('createSetupRunnerScript', () => {
   })
 })
 
+describe('createIssueCommandRunnerScript', () => {
+  const makeRepo = () =>
+    ({
+      id: 'test-id',
+      path: '/test/repo',
+      displayName: 'Test Repo',
+      badgeColor: '#000',
+      addedAt: Date.now(),
+      hookSettings: { mode: 'auto', scripts: { setup: '', archive: '' } }
+    }) as unknown as Repo
+
+  it('writes a POSIX issue-command runner when setup resolves to Git Bash', async () => {
+    gitExecFileSyncMock.mockReset()
+    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\issue-command-runner.sh\n')
+    const fs = await import('node:fs')
+    const writeFileSyncMock = vi.mocked(fs.writeFileSync)
+    writeFileSyncMock.mockClear()
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const result = createIssueCommandRunnerScript(
+        makeRepo(),
+        'C:\\repo-worktree',
+        'gh issue view 42',
+        undefined,
+        { family: 'posix' }
+      )
+
+      expect(gitExecFileSyncMock).toHaveBeenCalledWith(
+        ['rev-parse', '--git-path', 'orca/issue-command-runner.sh'],
+        { cwd: 'C:\\repo-worktree' }
+      )
+      expect(writeFileSyncMock).toHaveBeenCalledWith(
+        'C:\\repo\\.git\\orca\\issue-command-runner.sh',
+        '#!/usr/bin/env bash\nset -e\ngh issue view 42\n',
+        'utf-8'
+      )
+      expect(result.shell).toEqual({ family: 'posix' })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('keeps the cmd issue-command runner when no setup shell is resolved', async () => {
+    gitExecFileSyncMock.mockReset()
+    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\issue-command-runner.cmd\n')
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const result = createIssueCommandRunnerScript(
+        makeRepo(),
+        'C:\\repo-worktree',
+        'gh issue view 42'
+      )
+
+      expect(gitExecFileSyncMock).toHaveBeenCalledWith(
+        ['rev-parse', '--git-path', 'orca/issue-command-runner.cmd'],
+        { cwd: 'C:\\repo-worktree' }
+      )
+      expect(result.shell).toEqual({ family: 'cmd' })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+})
+
 describe('resolveSetupRunnerShell', () => {
   const installedGitBash = {
     resolveGitBashShellPath: () => 'C:\\Program Files\\Git\\bin\\bash.exe'
@@ -1459,15 +1529,38 @@ describe('resolveSetupRunnerShell', () => {
     })
   })
 
-  it('classifies an explicit Git Bash executable as a POSIX runner', async () => {
+  it('classifies an installed explicit Git Bash executable as a POSIX runner', async () => {
     const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveWindowsGitBashShellPath } = await import('./git-bash')
 
     expect(
       resolveSetupRunnerShell(
         { terminalWindowsShell: 'C:\\Program Files\\Git\\bin\\bash.exe' },
-        'win32'
+        'win32',
+        {
+          resolveGitBashShellPath: (shell) =>
+            resolveWindowsGitBashShellPath(shell, { platform: 'win32', exists: () => true })
+        }
       )
     ).toEqual({ family: 'posix' })
+  })
+
+  it('falls back to the cmd runner when the explicit Git Bash path no longer exists', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+    const { resolveWindowsGitBashShellPath } = await import('./git-bash')
+
+    // Regression: a stale configured path used to commit setup to a .sh runner the
+    // PTY could never spawn, hanging wait-for-setup until the 2h timeout.
+    expect(
+      resolveSetupRunnerShell(
+        { terminalWindowsShell: 'C:\\Program Files\\Git\\bin\\bash.exe' },
+        'win32',
+        {
+          resolveGitBashShellPath: (shell) =>
+            resolveWindowsGitBashShellPath(shell, { platform: 'win32', exists: () => false })
+        }
+      )
+    ).toEqual({ family: 'cmd' })
   })
 })
 

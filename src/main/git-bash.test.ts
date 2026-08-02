@@ -54,9 +54,15 @@ describe('Git Bash path discovery', () => {
   })
 
   it('honors an explicit bash.exe path for future user-configurable launch paths', () => {
-    expect(resolveWindowsGitBashShellPath('D:\\PortableGit\\bin\\bash.exe')).toBe(
-      'D:\\PortableGit\\bin\\bash.exe'
-    )
+    expect(
+      resolveWindowsGitBashShellPath('D:\\PortableGit\\bin\\bash.exe', { exists: () => true })
+    ).toBe('D:\\PortableGit\\bin\\bash.exe')
+  })
+
+  it('rejects an explicit Git Bash path that is no longer installed', () => {
+    expect(
+      resolveWindowsGitBashShellPath('D:\\PortableGit\\bin\\bash.exe', { exists: () => false })
+    ).toBeNull()
   })
 
   it('recognizes Git Bash executable paths case-insensitively', () => {
@@ -64,7 +70,9 @@ describe('Git Bash path discovery', () => {
   })
 
   it('does not classify arbitrary bash.exe paths as Git Bash', () => {
-    expect(resolveWindowsGitBashShellPath('C:\\msys64\\usr\\bin\\bash.exe')).toBeNull()
+    expect(
+      resolveWindowsGitBashShellPath('C:\\msys64\\usr\\bin\\bash.exe', { exists: () => true })
+    ).toBeNull()
     expect(isWindowsGitBashShellPath('C:\\cygwin64\\bin\\bash.exe')).toBe(false)
   })
 
