@@ -9,18 +9,18 @@ Replace opaque control IDs as the primary mapping labels with an accessible visu
 - Original monochrome schematic; no vendor photo or third-party asset.
 - Interactive highlighting between the schematic and mapping rows.
 - Fixed positional labels; no user-defined control names.
-- Joystick/radar directions shown as context, but not configurable in this phase.
+- Joystick directions and the touch sensor shown as context, but not configurable in this phase.
 
 ## Physical layout
 
-The schematic follows the official top-view hardware layout and the observed sequential IDs in proposed row-major order. Physical acceptance must confirm each ID-to-position pairing before the draft PR is marked ready:
+The schematic follows the official top-view hardware layout and the directed Cynthion captures from 2026-07-28 and 2026-07-29. Captured device status identified profile 0, layer 1:
 
-- Dial: `ENC_CC`, `ENC_CW`, `ENC_CLK`.
+- Dial: physical counterclockwise emits `ENC_CW`, clockwise emits `ENC_CC`, and press emits `ENC_CLK`.
 - Top agent keys: `AG00`, `AG01`.
 - Four middle agent keys: `AG02`–`AG05`.
 - Four lower command keys: `ACT06`–`ACT09`.
-- Bottom controls: `ACT10` touch control, `ACT11` wide command key, `ACT12` bottom-right command key.
-- The planar joystick is shown with directional arrows and no mapping target because radar dispatch remains a Phase 1 non-goal.
+- Bottom controls: the wide microphone key emits `ACT10` and `ACT11` together; `ACT10` is the canonical mapping and paired `ACT11` is ignored. The small right key emits `ACT12`.
+- The touch sensor and joystick are shown without mapping targets because layer switching and joystick/radar dispatch remain Phase 1 non-goals.
 
 ## Interaction
 
@@ -44,8 +44,9 @@ Labels describe physical position rather than removable keycap artwork. Examples
 - `AG00`: Top-left agent key
 - `AG05`: Middle-right agent key
 - `ACT06`: Lower-left command key
-- `ACT11`: Wide command key
-- `ENC_CW`: Dial · clockwise
+- `ACT10`: Microphone key
+- `ACT12`: Small right key
+- `ENC_CW`: Dial · counterclockwise
 
 ## Verification
 

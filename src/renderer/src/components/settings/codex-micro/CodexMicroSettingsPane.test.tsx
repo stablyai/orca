@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { CodexMicroConnectionState } from '../../../../../shared/codex-micro-types'
-import { CodexMicroControlMap } from './CodexMicroControlMap'
+import { CodexMicroControlMap, codexMicroControlLabel } from './CodexMicroControlMap'
 import { CodexMicroSettingsPane, updateMapping } from './CodexMicroSettingsPane'
 
 const retry = vi.fn()
@@ -121,6 +121,10 @@ describe('CodexMicroSettingsPane layout', () => {
     expect(markup).toContain('Top-left agent key')
     expect(markup).toContain('Dial · clockwise')
     expect(markup).toContain('>AG00<')
+    expect(markup).not.toContain('data-control-id="ACT11"')
+    expect(markup).not.toContain('id="codex-control-ACT11-select"')
+    expect(codexMicroControlLabel('ENC_CW')).toBe('Dial · counterclockwise')
+    expect(codexMicroControlLabel('ENC_CC')).toBe('Dial · clockwise')
   })
 
   it('keeps the joystick clear of AG01 and styles active controls accessibly', () => {
@@ -148,29 +152,39 @@ describe('CodexMicroSettingsPane layout', () => {
       ),
       'text/html'
     )
-    const counterclockwise = container.querySelector('[data-control-id="ENC_CC"]')
-    const clockwise = container.querySelector('[data-control-id="ENC_CW"]')
+    const counterclockwise = container.querySelector('[data-control-id="ENC_CW"]')
+    const clockwise = container.querySelector('[data-control-id="ENC_CC"]')
     const press = container.querySelector('[data-control-id="ENC_CLK"]')
     const paintOrder = [...container.querySelectorAll('[data-control-id^="ENC_"]')].map((control) =>
       control.getAttribute('data-control-id')
     )
 
-    expect(paintOrder).toEqual(['ENC_CC', 'ENC_CW', 'ENC_CLK'])
+    expect(paintOrder).toEqual(['ENC_CW', 'ENC_CC', 'ENC_CLK'])
+    expect(counterclockwise?.getAttribute('aria-label')).toBe('Dial · counterclockwise')
+    expect(counterclockwise?.textContent).toContain('↶')
+    expect(clockwise?.getAttribute('aria-label')).toBe('Dial · clockwise')
+    expect(clockwise?.textContent).toContain('↷')
     expect(counterclockwise?.querySelector('path.control-surface')).not.toBeNull()
     expect(clockwise?.querySelector('path.control-surface')).not.toBeNull()
     expect(press?.querySelector('circle.control-surface')).not.toBeNull()
     expect(counterclockwise?.querySelector('circle.control-surface')).toBeNull()
     expect(clockwise?.querySelector('circle.control-surface')).toBeNull()
+
+    const microphoneKey = container.querySelector('[data-control-id="ACT10"] rect')
+    expect(microphoneKey?.getAttribute('width')).toBe('80')
+    const touchSensor = container.querySelector('[aria-label="Touch sensor"]')
+    expect(touchSensor?.getAttribute('role')).toBe('img')
+    expect(touchSensor?.hasAttribute('data-control-id')).toBe(false)
   })
 
   it('links diagram controls and mapping selectors through focus', async () => {
     const { root, container } = await renderPane()
-    const diagramControl = container.querySelector<SVGGElement>('[data-control-id="ACT11"]')
+    const diagramControl = container.querySelector<SVGGElement>('[data-control-id="ACT10"]')
 
     expect(diagramControl).not.toBeNull()
     await act(async () => diagramControl?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 
-    const trigger = container.querySelector<HTMLButtonElement>('#codex-control-ACT11-select')
+    const trigger = container.querySelector<HTMLButtonElement>('#codex-control-ACT10-select')
     expect(document.activeElement).toBe(trigger)
 
     for (const key of ['Enter', ' ']) {

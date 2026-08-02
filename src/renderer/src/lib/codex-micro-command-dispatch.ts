@@ -9,6 +9,10 @@ export function dispatchCodexMicroInput(
   if (!settings.enabled || event.kind !== 'control') {
     return false
   }
+  // The wide microphone key emits ACT10 and ACT11 together.
+  if (event.control === 'ACT11') {
+    return false
+  }
   const isEncoderStep = event.control === 'ENC_CC' || event.control === 'ENC_CW'
   if (isEncoderStep ? event.action !== 2 : event.action !== 1) {
     return false

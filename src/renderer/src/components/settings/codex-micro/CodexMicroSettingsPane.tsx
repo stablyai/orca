@@ -6,7 +6,7 @@ import {
   type CodexMicroSettings
 } from '../../../../../shared/codex-micro-settings'
 import {
-  CODEX_MICRO_CONTROL_IDS,
+  CODEX_MICRO_MAPPABLE_CONTROL_IDS,
   type CodexMicroConnectionState,
   type CodexMicroControlId
 } from '../../../../../shared/codex-micro-types'
@@ -251,7 +251,7 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
           )}
         />
         <div className="grid gap-2 md:grid-cols-2">
-          {CODEX_MICRO_CONTROL_IDS.map((control) => (
+          {CODEX_MICRO_MAPPABLE_CONTROL_IDS.map((control) => (
             <MappingSelect
               key={control}
               control={control}

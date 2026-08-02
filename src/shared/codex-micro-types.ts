@@ -45,6 +45,10 @@ export const CODEX_MICRO_CONTROL_IDS: readonly CodexMicroControlId[] = [
   'ENC_CLK'
 ]
 
+export const CODEX_MICRO_MAPPABLE_CONTROL_IDS = CODEX_MICRO_CONTROL_IDS.filter(
+  (control) => control !== 'ACT11'
+)
+
 const CONTROL_ID_SET = new Set<string>(CODEX_MICRO_CONTROL_IDS)
 const ENCODER_ROTATION_CONTROLS = new Set<string>(['ENC_CC', 'ENC_CW'])
 

@@ -27,11 +27,9 @@ const KEY_SHAPES: KeyShape[] = [
   { control: 'ACT07', x: 66, y: 112, width: 36, height: 36 },
   { control: 'ACT08', x: 110, y: 112, width: 36, height: 36 },
   { control: 'ACT09', x: 154, y: 112, width: 36, height: 36 },
-  { control: 'ACT11', x: 66, y: 154, width: 80, height: 36 },
+  { control: 'ACT10', x: 66, y: 154, width: 80, height: 36 },
   { control: 'ACT12', x: 154, y: 154, width: 36, height: 36 }
 ]
-
-const TOUCH_CONTROL: CodexMicroControlId = 'ACT10'
 
 const CONTROL_LABELS: Record<CodexMicroControlId, readonly [string, string]> = {
   AG00: ['auto.components.settings.codexMicro.controlAG00', 'Top-left agent key'],
@@ -44,11 +42,11 @@ const CONTROL_LABELS: Record<CodexMicroControlId, readonly [string, string]> = {
   ACT07: ['auto.components.settings.codexMicro.controlACT07', 'Lower-center-left command key'],
   ACT08: ['auto.components.settings.codexMicro.controlACT08', 'Lower-center-right command key'],
   ACT09: ['auto.components.settings.codexMicro.controlACT09', 'Lower-right command key'],
-  ACT10: ['auto.components.settings.codexMicro.controlACT10', 'Touch control'],
-  ACT11: ['auto.components.settings.codexMicro.controlACT11', 'Wide command key'],
-  ACT12: ['auto.components.settings.codexMicro.controlACT12', 'Bottom-right command key'],
-  ENC_CC: ['auto.components.settings.codexMicro.controlEncCc', 'Dial · counterclockwise'],
-  ENC_CW: ['auto.components.settings.codexMicro.controlEncCw', 'Dial · clockwise'],
+  ACT10: ['auto.components.settings.codexMicro.controlACT10', 'Microphone key'],
+  ACT11: ['auto.components.settings.codexMicro.controlACT11', 'Microphone key · paired signal'],
+  ACT12: ['auto.components.settings.codexMicro.controlACT12', 'Small right key'],
+  ENC_CC: ['auto.components.settings.codexMicro.controlEncCc', 'Dial · clockwise'],
+  ENC_CW: ['auto.components.settings.codexMicro.controlEncCw', 'Dial · counterclockwise'],
   ENC_CLK: ['auto.components.settings.codexMicro.controlEncClk', 'Dial · press']
 }
 
@@ -77,20 +75,20 @@ export function CodexMicroControlMap({
 
       <circle cx="40" cy="43" r="20" className="fill-card stroke-border" />
       <DialRotationControl
-        control="ENC_CC"
+        control="ENC_CW"
         path="M40 23A20 20 0 0 0 40 63L40 54A11 11 0 0 1 40 32Z"
         labelX={30}
         label="↶"
-        active={activeControl === 'ENC_CC'}
+        active={activeControl === 'ENC_CW'}
         onActivate={onActivate}
         onHover={onHover}
       />
       <DialRotationControl
-        control="ENC_CW"
+        control="ENC_CC"
         path="M40 23A20 20 0 0 1 40 63L40 54A11 11 0 0 0 40 32Z"
         labelX={50}
         label="↷"
-        active={activeControl === 'ENC_CW'}
+        active={activeControl === 'ENC_CC'}
         onActivate={onActivate}
         onHover={onHover}
       />
@@ -134,23 +132,13 @@ export function CodexMicroControlMap({
         />
       </g>
 
-      <SvgControl
-        control={TOUCH_CONTROL}
-        active={activeControl === TOUCH_CONTROL}
-        onActivate={onActivate}
-        onHover={onHover}
+      <g
+        role="img"
+        aria-label={translate('auto.components.settings.codexMicro.touchSensor', 'Touch sensor')}
       >
-        <circle cx="40" cy="172" r="12" className="control-surface fill-card stroke-border" />
+        <circle cx="40" cy="172" r="12" className="fill-card stroke-border" />
         <circle cx="40" cy="172" r="4" className="fill-muted-foreground" />
-        <text
-          x="40"
-          y="198"
-          textAnchor="middle"
-          className="pointer-events-none fill-muted-foreground text-[6px]"
-        >
-          {TOUCH_CONTROL}
-        </text>
-      </SvgControl>
+      </g>
     </svg>
   )
 }

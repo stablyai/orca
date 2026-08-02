@@ -11,6 +11,8 @@ const settings: CodexMicroSettings = {
   dialMode: 'navigate',
   mappings: {
     AG00: 'worktree.navigateUp',
+    ACT10: 'worktree.navigateUp',
+    ACT11: 'worktree.navigateDown',
     ENC_CC: 'worktree.navigateDown'
   }
 }
@@ -42,6 +44,20 @@ describe('dispatchCodexMicroInput', () => {
     expect(
       dispatchCodexMicroInput({ kind: 'control', control: 'ENC_CC', action: 1 }, settings)
     ).toBe(false)
+  })
+
+  it('ignores the microphone key paired ACT11 signal', () => {
+    const dispatch = vi.fn(() => true)
+    cleanup = registerAppCommandDispatcher(dispatch)
+
+    expect(
+      dispatchCodexMicroInput({ kind: 'control', control: 'ACT11', action: 1 }, settings)
+    ).toBe(false)
+    expect(
+      dispatchCodexMicroInput({ kind: 'control', control: 'ACT10', action: 1 }, settings)
+    ).toBe(true)
+    expect(dispatch).toHaveBeenCalledOnce()
+    expect(dispatch).toHaveBeenCalledWith('worktree.navigateUp', 'codex-micro')
   })
 
   it('ignores radar, disabled ownership, and unassigned controls', () => {
