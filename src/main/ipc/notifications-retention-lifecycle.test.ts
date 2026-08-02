@@ -29,6 +29,7 @@ vi.mock('../tray/system-tray', async () =>
 )
 
 import { registerNotificationHandlers } from './notifications'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
 describe('registerNotificationHandlers', () => {
   beforeEach(() => {
@@ -103,6 +104,52 @@ describe('registerNotificationHandlers', () => {
       flashFocusedPane: true,
       scrollToBottomIfOutputSinceLastView: true
     })
+  })
+
+  it('opens the floating terminal when a floating-workspace notification is clicked', async () => {
+    const webContentsSend = vi.fn()
+    const restore = vi.fn()
+    const show = vi.fn()
+    const focus = vi.fn()
+    const mainWindow = {
+      isDestroyed: () => false,
+      isFocused: () => false,
+      isMinimized: () => true,
+      restore,
+      show,
+      focus,
+      webContents: { send: webContentsSend }
+    }
+    getAllWindowsMock.mockReturnValue([mainWindow] as never)
+    getTrustedUIRendererWindowMock.mockReturnValue(mainWindow)
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      await handler({}, { source: 'agent-task-complete', worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    ).toEqual({ delivered: true })
+    expect(vi.getTimerCount()).toBe(1)
+
+    getNotificationEventHandler('click')()
+
+    expect(restore).toHaveBeenCalledTimes(1)
+    expect(show).toHaveBeenCalledTimes(1)
+    expect(focus).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+    // Why: release() must unregister the click handler so it can't leak; mirrors the repo-scoped sibling test.
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('click', expect.any(Function))
+    expect(webContentsSend).toHaveBeenCalledWith('ui:toggleFloatingTerminal')
+    // Why: a floating notification must not pollute the repo-scoped main view.
+    expect(webContentsSend).not.toHaveBeenCalledWith('ui:activateWorktree', expect.anything())
   })
 
   it('clears the retained notification fallback timer when the native notification closes', async () => {

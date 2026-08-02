@@ -5,6 +5,7 @@ import type {
   NotificationSettings
 } from '../../shared/notification-settings-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { buildNotificationOptions } from './notification-options'
 import { getEffectiveNotificationSoundId } from './notification-sound-selection'
@@ -103,6 +104,26 @@ export function deliverNativeNotification(
           scrollToBottomIfOutputSinceLastView: true
         })
       }
+    }
+    notification.on('click', clickHandler)
+  } else if (args.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    clickHandler = () => {
+      release()
+      const win = getTrustedUIRendererWindow()
+      if (!win || win.isDestroyed()) {
+        return
+      }
+      if (process.platform === 'darwin') {
+        app.focus({ steal: true })
+      }
+      if (win.isMinimized()) {
+        win.restore()
+      }
+      win.show()
+      win.focus()
+      // Why: open the floating terminal panel — the same `ui:toggleFloatingTerminal`
+      // channel the main window's toggleFloatingTerminal action sends.
+      win.webContents.send('ui:toggleFloatingTerminal')
     }
     notification.on('click', clickHandler)
   }
