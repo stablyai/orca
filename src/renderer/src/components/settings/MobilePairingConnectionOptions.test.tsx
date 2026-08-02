@@ -166,6 +166,27 @@ describe('MobilePairingConnectionOptions', () => {
     statusListener?.('standby')
   })
 
+  it('offers sign-in recovery when Relay is unavailable despite an active session', async () => {
+    mocks.state = {
+      ...mocks.state,
+      orcaProfileAuthStatus: {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted'
+      }
+    }
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<MobilePairingConnectionOptions value="automatic" onChange={onChange} relayMintFailed />)
+
+    expect(screen.getByTestId('anywhere-sign-in-panel')).toBeVisible()
+    expect(screen.getByText('Sign in again to refresh Orca Mobile Relay access.')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Sign in again' }))
+    expect(onChange).toHaveBeenCalledWith('automatic')
+    expect(connect).toHaveBeenCalledOnce()
+  })
+
   it('keeps LAN available while Relay is retrying', async () => {
     mocks.state = {
       ...mocks.state,

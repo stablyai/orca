@@ -9657,7 +9657,8 @@
           "signInAgain": "Sign in again",
           "localTitle": "LAN",
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No sign-in required.",
-          "retrying": "Retrying"
+          "retrying": "Retrying",
+          "signInAgainRequired": "Sign in again to refresh Orca Mobile Relay access."
         },
         "MobilePairingSetupSection": {
           "title": "Pair a phone",
