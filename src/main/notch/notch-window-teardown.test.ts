@@ -15,7 +15,7 @@ type FakeWindow = {
   destroy: () => void
   isVisible: () => boolean
   isDestroyed: () => boolean
-  once: () => void
+  once: (event: string, fn: () => void) => void
   on: () => void
   setAlwaysOnTop: () => void
   setVisibleOnAllWorkspaces: (...args: unknown[]) => void
@@ -24,7 +24,12 @@ type FakeWindow = {
   showInactive: () => void
   loadURL: () => void
   loadFile: () => void
-  webContents: { isDestroyed: () => boolean; send: () => void; once: () => void; session: unknown }
+  webContents: {
+    isDestroyed: () => boolean
+    send: () => void
+    once: (event: string, fn: () => void) => void
+    session: unknown
+  }
 }
 
 const appHandlers = new Map<string, () => void>()
@@ -55,13 +60,22 @@ function makeWindow(id: number): FakeWindow {
     },
     setIgnoreMouseEvents: () => undefined,
     setBounds: () => undefined,
-    showInactive: () => undefined,
+    showInactive: () => {
+      order.push(`show:${id}`)
+      win.visible = true
+    },
     loadURL: () => undefined,
     loadFile: () => undefined,
     webContents: {
       isDestroyed: () => false,
       send: () => undefined,
-      once: () => undefined,
+      // Fire immediately so createNotchWindow's refreshGeometry runs and populates `metrics`;
+      // without it reposition early-returns and the repaint path is never exercised.
+      once: (event: string, fn: () => void) => {
+        if (event === 'did-finish-load') {
+          fn()
+        }
+      },
       session: {
         setPermissionRequestHandler: () => undefined,
         setPermissionCheckHandler: () => undefined
@@ -102,9 +116,16 @@ vi.mock('../window/privileged-window-navigation', () => ({
   installPrivilegedWindowNavigationPolicy: () => undefined
 }))
 vi.mock('./screen-geometry', () => ({ readScreenGeometry: () => Promise.resolve(new Map()) }))
-// Keep the deferred path observable without real timers.
+// Keep the deferred path observable without real timers. `queueDeferred` switches to a real
+// FIFO queue so the reposition-then-destroy ordering can be reproduced.
+let queueDeferred = false
+const deferredQueue: (() => void)[] = []
 vi.mock('../appkit-scene-mutation', () => ({
   deferAppKitSceneMutation: (fn: () => void) => {
+    if (queueDeferred) {
+      deferredQueue.push(fn)
+      return
+    }
     order.push('deferred')
     fn()
   }
@@ -122,6 +143,8 @@ beforeEach(async () => {
   Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
   created = []
   workspaceCalls.length = 0
+  queueDeferred = false
+  deferredQueue.length = 0
   order.length = 0
   appHandlers.clear()
   vi.resetModules()
@@ -225,6 +248,46 @@ describe('notch window teardown', () => {
 
     expect(() => mod.setNotchExpanded(false)).not.toThrow()
     expect(mod.isNotchExpanded()).toBe(false)
+  })
+
+  it('re-hides before the deferred destroy, in case a repaint re-showed the window', () => {
+    // Why: reposition's deferred callback calls showInactive() on a hidden window, and
+    // setTimeout is FIFO — one queued before teardown runs first. Destroying a *visible*
+    // transparent panel kills the process outright (exit 0, no stderr), so the destroy must
+    // re-assert the hide. Simulated directly: the async repaint path is timing-dependent,
+    // but the guard it protects is not.
+    create()
+    queueDeferred = true
+
+    mod.closeNotchWindow()
+    // Stand in for the queued repaint that wins the FIFO race.
+    created[0].showInactive()
+    expect(created[0].visible).toBe(true)
+
+    for (const fn of deferredQueue.splice(0)) {
+      fn()
+    }
+
+    expect(created[0].destroyed).toBe(true)
+    expect(created[0].visible).toBe(false)
+    expect(order.indexOf('hide:1')).toBeLessThan(order.indexOf('destroy:1'))
+  })
+
+  it('detaches the status subscription synchronously, not on close', () => {
+    // Why: 'closed' fires after destroy, so relying on it leaves the subscription live across
+    // the whole teardown gap and free to schedule another repaint into a dying window.
+    let unsubscribed = false
+    mod.createNotchWindow({
+      getSummary: () => EMPTY_SUMMARY,
+      subscribe: () => () => {
+        unsubscribed = true
+      },
+      buildRows: () => []
+    })
+
+    mod.closeNotchWindow()
+
+    expect(unsubscribed).toBe(true)
   })
 
   it('is safe to tear down when no window was ever created', () => {

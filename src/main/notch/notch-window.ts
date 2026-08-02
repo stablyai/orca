@@ -64,6 +64,7 @@ export type NotchWindowOptions = {
 
 let expanded = false
 let repaint: (() => void) | null = null
+let detachListeners: (() => void) | null = null
 
 /** Expansion lives in main because the window must already be the right size to paint into. */
 export function setNotchExpanded(next: boolean): void {
@@ -246,15 +247,26 @@ export function createNotchWindow(options: NotchWindowOptions): BrowserWindow | 
 
   const unsubscribe = options.subscribe((summary) => reposition(summary))
 
-  window.on('closed', () => {
+  let detached = false
+  const detach = (): void => {
+    if (detached) {
+      return
+    }
+    detached = true
     screen.removeListener('display-metrics-changed', onDisplayChanged)
     screen.removeListener('display-added', onDisplayChanged)
     screen.removeListener('display-removed', onDisplayChanged)
     unsubscribe()
+  }
+  detachListeners = detach
+
+  window.on('closed', () => {
+    detach()
     if (notchWindow === window) {
       notchWindow = null
       repaint = null
       expanded = false
+      detachListeners = null
     }
   })
 
@@ -282,6 +294,10 @@ function teardownNotchWindow(immediate: boolean): void {
   notchWindow = null
   repaint = null
   expanded = false
+  // Why synchronously and not on 'closed': that fires after destroy, leaving the status
+  // subscription live across the whole teardown gap and free to schedule another repaint.
+  detachListeners?.()
+  detachListeners = null
   if (!window || window.isDestroyed()) {
     return
   }
@@ -293,9 +309,17 @@ function teardownNotchWindow(immediate: boolean): void {
     return
   }
   deferAppKitSceneMutation(() => {
-    if (!window.isDestroyed()) {
-      window.destroy()
+    if (window.isDestroyed()) {
+      return
     }
+    // Why hide again here: reposition's own deferred callback re-shows a hidden window, and
+    // setTimeout is FIFO — one queued before this teardown runs first and makes the panel
+    // visible again. Destroying a *visible* transparent panel kills the process outright
+    // (exit 0, no stderr), so re-assert the hide immediately before destroying.
+    if (window.isVisible()) {
+      window.hide()
+    }
+    window.destroy()
   })
 }
 
