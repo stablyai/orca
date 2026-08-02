@@ -15,6 +15,10 @@ import {
 } from './history-manager'
 import { HistoryReader, type ColdRestoreInfo } from './history-reader'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
+import {
+  DISARM_MOUSE_TRACKING_SEQUENCE,
+  restoreHasMouseTrackingArmed
+} from './terminal-mode-rehydrate-sequences'
 import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
@@ -1074,7 +1078,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
       return null
     }
     return {
-      scrollback,
+      // Why the disarm suffix: this seeds a fresh main-runtime emulator that
+      // replaces a dead session (cold restore after relaunch). Its content can
+      // carry the dead session's mouse-tracking DECSET, which would echo raw
+      // SGR motion bytes into the new shell on every pointer move (#12101).
+      scrollback: restoreHasMouseTrackingArmed(restoreInfo.modes)
+        ? scrollback + DISARM_MOUSE_TRACKING_SEQUENCE
+        : scrollback,
       cwd: restoreInfo.cwd,
       cols: restoreInfo.cols,
       rows: restoreInfo.rows,

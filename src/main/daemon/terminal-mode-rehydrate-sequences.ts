@@ -1,5 +1,23 @@
 import type { TerminalModes } from './types'
 
+// Disarms every mouse-tracking protocol + SGR encoding a snapshot can re-arm
+// (9/1000/1002/1003 + 1006/1016). Appended after content that seeds a
+// brand-new session/emulator replacing a dead one (workspace Sleep, cold
+// restore into a fresh runtime): that process never asked for mouse reports,
+// so a plain shell left armed echoes raw SGR motion bytes on every pointer
+// move (#12101). Must NOT be used on a live-session reattach, where the
+// running agent legitimately owns mouse tracking.
+export const DISARM_MOUSE_TRACKING_SEQUENCE =
+  '\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l'
+
+// True when a restored snapshot had any mouse-tracking protocol or SGR mouse
+// encoding armed — the only case where seeded content can carry an enable that
+// a fresh session would otherwise keep (#12101). Legacy scrollback restores
+// hardcode these off, so they pass through untouched.
+export function restoreHasMouseTrackingArmed(modes: TerminalModes): boolean {
+  return modes.mouseTracking || modes.sgrMouseMode === true || modes.sgrMousePixelsMode === true
+}
+
 // Why no kitty flags here: rehydrateSequences feeds renderer xterms, and
 // POST_REPLAY_REATTACH_RESET's deliberate kitty reset (stale CSI-u Ctrl+C
 // hazard) must stay authoritative. modes.kittyKeyboardFlags exists for

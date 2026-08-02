@@ -2432,6 +2432,58 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
+    it('disarms mouse tracking in the cold-restore seed so a fresh shell does not echo motion (#12101)', async () => {
+      const sessionId = 'cold-restore-mouse-disarm'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/agent',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-07-25T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      // A dead agent session that armed any-motion + SGR mouse for its TUI and
+      // was killed before it could disarm them.
+      writeFileSync(
+        join(sessionDir, 'checkpoint.json'),
+        JSON.stringify({
+          snapshotAnsi: 'user@host:~$ ',
+          scrollbackAnsi: '',
+          rehydrateSequences: '\x1b[?1003h\x1b[?1006h',
+          cwd: '/projects/agent',
+          cols: 80,
+          rows: 24,
+          modes: {
+            bracketedPaste: false,
+            mouseTracking: true,
+            mouseTrackingMode: 'any',
+            sgrMouseMode: true,
+            applicationCursor: false,
+            alternateScreen: false
+          },
+          scrollbackLines: 0,
+          generation: 0,
+          checkpointedAt: '2026-07-25T10:00:00Z'
+        })
+      )
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(result.coldRestore?.scrollback).toContain('user@host:~$')
+      // The disarm must follow the re-armed enable so the net state is off.
+      const scrollback = result.coldRestore!.scrollback
+      expect(scrollback.lastIndexOf('\x1b[?1003l')).toBeGreaterThan(
+        scrollback.lastIndexOf('\x1b[?1003h')
+      )
+      expect(scrollback).toContain('\x1b[?1006l')
+    })
+
     it('uploads a large cold-restore seed in bounded protocol chunks', async () => {
       const sessionId = 'chunked-cold-restore'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
