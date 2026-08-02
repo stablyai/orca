@@ -11,6 +11,16 @@ export function useMobileScrollPersistence(cacheKey: string) {
   const cacheKeyRef = useRef(cacheKey)
   cacheKeyRef.current = cacheKey
 
+  // Reset on key change so a leftover scrollY from the previous key is never
+  // written under the new key by the unmount flush or a pending throttle timer.
+  useEffect(() => {
+    scrollYRef.current = 0
+    if (throttleTimerRef.current !== null) {
+      clearTimeout(throttleTimerRef.current)
+      throttleTimerRef.current = null
+    }
+  }, [cacheKey])
+
   useEffect(() => {
     return () => {
       if (throttleTimerRef.current !== null) {
