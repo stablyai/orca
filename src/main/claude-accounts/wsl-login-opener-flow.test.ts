@@ -18,10 +18,12 @@ describe('WSL Claude login opener flow', () => {
     mkdirSync(join(root, 'orca-opener'))
     const onUrl = vi.fn((url: string) => openWslLoginAuthorizationUrl(url))
     const onInvalid = vi.fn()
+    const onReadError = vi.fn()
     const watcher = createWslLoginOpenerHandoff({
       windowsConfigDir: root,
       onUrl,
-      onInvalid
+      onInvalid,
+      onReadError
     })
     writeFileSync(
       join(root, 'open-url.request'),

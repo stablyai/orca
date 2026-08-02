@@ -23,6 +23,7 @@ describe('WSL Claude login browser opener', () => {
     expect(opener).toContain('mv -f')
     expect(opener).toContain('$1')
     expect(script).toContain("<<'ORCA_CLAUDE_OPENER'")
+    expect(script).toContain(`${opener}\nORCA_CLAUDE_OPENER`)
     expect(script).toContain('mktemp -d "${TMPDIR:-/tmp}/orca-claude-login.XXXXXX"')
     expect(script).toContain('chmod 700')
     expect(script).toContain('trap cleanup EXIT')
@@ -77,7 +78,13 @@ describe('WSL Claude login browser opener', () => {
     mkdirSync(join(root, 'orca-opener'))
     const onUrl = vi.fn()
     const onInvalid = vi.fn()
-    const watcher = createWslLoginOpenerHandoff({ windowsConfigDir: root, onUrl, onInvalid })
+    const onReadError = vi.fn()
+    const watcher = createWslLoginOpenerHandoff({
+      windowsConfigDir: root,
+      onUrl,
+      onInvalid,
+      onReadError
+    })
     writeFileSync(
       join(root, 'open-url.request'),
       `https://platform.claude.com/callback?value=${'a'.repeat(9000)}`
@@ -85,6 +92,7 @@ describe('WSL Claude login browser opener', () => {
     vi.advanceTimersByTime(200)
     expect(onUrl).not.toHaveBeenCalled()
     expect(onInvalid).toHaveBeenCalledTimes(1)
+    expect(onReadError).not.toHaveBeenCalled()
     watcher.stop()
     rmSync(root, { recursive: true, force: true })
   })
@@ -96,7 +104,13 @@ describe('WSL Claude login browser opener', () => {
     mkdirSync(openerDir)
     const onUrl = vi.fn()
     const onInvalid = vi.fn()
-    const watcher = createWslLoginOpenerHandoff({ windowsConfigDir: root, onUrl, onInvalid })
+    const onReadError = vi.fn()
+    const watcher = createWslLoginOpenerHandoff({
+      windowsConfigDir: root,
+      onUrl,
+      onInvalid,
+      onReadError
+    })
     const handoff = join(root, 'open-url.request')
     writeFileSync(handoff, 'https://platform.claude.com/oauth/code/callback?code=one')
     vi.advanceTimersByTime(200)

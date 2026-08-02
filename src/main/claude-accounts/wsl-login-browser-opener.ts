@@ -34,7 +34,8 @@ cleanup() { rm -rf -- "$dir"; }
 trap cleanup EXIT
 mkdir -p "$dir/${WSL_LOGIN_OPENER_DIR}"
 cat > "$dir/${WSL_LOGIN_OPENER_DIR}/xdg-open" <<'ORCA_CLAUDE_OPENER'
-${buildWslLoginOpenerShellScript()}ORCA_CLAUDE_OPENER
+${buildWslLoginOpenerShellScript()}
+ORCA_CLAUDE_OPENER
 chmod 700 "$dir/${WSL_LOGIN_OPENER_DIR}/xdg-open"
 ln -s xdg-open "$dir/${WSL_LOGIN_OPENER_DIR}/wslview" 2>/dev/null || true
 ORCA_CLAUDE_OPENER_SELFTEST=1 "$dir/${WSL_LOGIN_OPENER_DIR}/xdg-open" selftest
@@ -108,6 +109,7 @@ export function createWslLoginOpenerHandoff(args: {
   windowsConfigDir: string
   onUrl: (url: string) => void | Promise<void>
   onInvalid: () => void
+  onReadError: () => void
   pollMs?: number
 }): { stop: () => void } {
   const handoffPath = join(args.windowsConfigDir, WSL_LOGIN_OPENER_HANDOFF)
@@ -124,13 +126,16 @@ export function createWslLoginOpenerHandoff(args: {
     }
     stopped = true
     clearInterval(timer)
-    let raw: string
+    let raw: string | null = null
     try {
       raw = readWslLoginOpenerHandoff(claimedPath)
     } catch {
-      raw = ''
+      args.onReadError()
     } finally {
       rmSync(claimedPath, { force: true })
+    }
+    if (raw === null) {
+      return
     }
     const url = parseWslLoginOpenerHandoff(raw)
     if (url) {

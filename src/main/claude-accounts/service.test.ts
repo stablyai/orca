@@ -1612,6 +1612,24 @@ describe('ClaudeAccountService credential capture', () => {
         rateLimits as never,
         runtimeAuth as never
       )
+      execFileSyncMock.mockImplementationOnce(() => {
+        throw new Error('mktemp failed')
+      })
+      expect(() =>
+        (
+          service as unknown as {
+            createTemporaryClaudeConfigDir(location: {
+              managedAuthRuntime: 'wsl'
+              wslDistro: string
+            }): unknown
+          }
+        ).createTemporaryClaudeConfigDir({
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu'
+        })
+      ).toThrow(
+        'Orca could not prepare a temporary Claude sign-in folder with a browser opener in Ubuntu. Sign-in cannot open a browser from that distribution.'
+      )
 
       await service.addAccount({ runtime: 'wsl' })
       await service.addAccount({ runtime: 'wsl', wslDistro: 'Ubuntu' })

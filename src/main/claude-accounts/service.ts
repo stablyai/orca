@@ -590,6 +590,7 @@ export class ClaudeAccountService {
     const handoff = tempConfig.linuxPath
       ? createWslLoginOpenerHandoff({
           windowsConfigDir: tempConfig.windowsPath,
+          pollMs: 25,
           onUrl: async (url) => {
             try {
               await openWslLoginAuthorizationUrl(url)
@@ -603,6 +604,12 @@ export class ClaudeAccountService {
           onInvalid: () => {
             openerError = new Error(
               'Claude sign-in requested an unsupported browser address. Sign-in was stopped.'
+            )
+            loginAbortController.abort()
+          },
+          onReadError: () => {
+            openerError = new Error(
+              'Claude sign-in could not read the browser handoff. Sign-in was stopped.'
             )
             loginAbortController.abort()
           }
@@ -688,20 +695,25 @@ export class ClaudeAccountService {
     if (!location.wslDistro) {
       throw new Error('Could not resolve the active WSL distribution for Claude login.')
     }
-    const linuxPath = parseWslLoginConfigDirOutput(
-      execFileSync(
-        'wsl.exe',
-        [
-          '-d',
-          location.wslDistro,
-          '--',
-          'bash',
-          '-lc',
-          buildEncodedWslBashCommand(buildWslLoginConfigDirScript())
-        ],
-        { encoding: 'utf-8', timeout: 5000 }
+    let linuxPath: string | null = null
+    try {
+      linuxPath = parseWslLoginConfigDirOutput(
+        execFileSync(
+          'wsl.exe',
+          [
+            '-d',
+            location.wslDistro,
+            '--',
+            'bash',
+            '-lc',
+            buildEncodedWslBashCommand(buildWslLoginConfigDirScript())
+          ],
+          { encoding: 'utf-8', timeout: 5000 }
+        )
       )
-    )
+    } catch {
+      console.warn('[claude-accounts] WSL login opener preparation failed')
+    }
     if (!linuxPath) {
       throw new Error(
         `Orca could not prepare a temporary Claude sign-in folder with a browser opener in ${location.wslDistro}. Sign-in cannot open a browser from that distribution.`
