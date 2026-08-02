@@ -31,13 +31,15 @@ vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
 type MockEmojiClickHandler = (data: { emoji: string }) => void
 
 const emojiPickerMocks = vi.hoisted(() => ({
-  onEmojiClick: null as MockEmojiClickHandler | null
+  onEmojiClick: null as MockEmojiClickHandler | null,
+  searchPlaceholder: null as string | null
 }))
 
 vi.mock('emoji-picker-react', () => ({
   __esModule: true,
-  default: (props: { onEmojiClick: MockEmojiClickHandler }) => {
+  default: (props: { onEmojiClick: MockEmojiClickHandler; searchPlaceholder: string }) => {
     emojiPickerMocks.onEmojiClick = props.onEmojiClick
+    emojiPickerMocks.searchPlaceholder = props.searchPlaceholder
     return null
   },
   EmojiStyle: { NATIVE: 'native' },
@@ -62,6 +64,7 @@ describe('RepositoryIconEmojiPicker', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     emojiPickerMocks.onEmojiClick = null
+    emojiPickerMocks.searchPlaceholder = null
     toastMocks.error.mockReset()
   })
 
@@ -74,6 +77,7 @@ describe('RepositoryIconEmojiPicker', () => {
   it('renders the full native emoji picker in place of the static grid', () => {
     renderPicker()
     expect(emojiPickerMocks.onEmojiClick).not.toBeNull()
+    expect(emojiPickerMocks.searchPlaceholder).toBe('Search emoji')
     expect(container.querySelector('.repo-icon-emoji-picker')).not.toBeNull()
   })
 

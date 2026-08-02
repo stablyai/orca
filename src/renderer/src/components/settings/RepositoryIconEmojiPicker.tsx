@@ -52,7 +52,7 @@ export function RepositoryIconEmojiPicker({
           lazyLoadEmojis
           onEmojiClick={handleEmojiClick}
           previewConfig={{ showPreview: true }}
-          searchPlaceHolder={translate(
+          searchPlaceholder={translate(
             'auto.components.settings.RepositoryIconPicker.searchEmojiPlaceholder',
             'Search emoji'
           )}
