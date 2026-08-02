@@ -390,6 +390,29 @@ describe('filesystem-auth authorized external path bound', () => {
   const flood = (n: number): string =>
     resolve(`/leak-audit-ext/flood-${String(n).padStart(6, '0')}`)
 
+  it.skipIf(process.platform === 'win32')(
+    'does not transfer an external path grant through a nested symlink',
+    async () => {
+      const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-external-symlink-'))
+      try {
+        const grantedPath = join(tempRoot, 'granted')
+        const outsidePath = join(tempRoot, 'outside')
+        const outsideFile = join(outsidePath, 'secret.txt')
+        await mkdir(grantedPath)
+        await mkdir(outsidePath)
+        await writeFile(outsideFile, 'secret')
+        await symlink(outsidePath, join(grantedPath, 'linked-outside'), 'dir')
+        authorizeExternalPath(grantedPath)
+
+        await expect(
+          resolveAuthorizedPath(join(grantedPath, 'linked-outside', 'secret.txt'), emptyStore)
+        ).rejects.toThrow('Access denied')
+      } finally {
+        await rm(tempRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('bounds the authorized external path set with LRU eviction', () => {
     const keep = resolve('/leak-audit-ext/keep')
     authorizeExternalPath(keep)
