@@ -44,6 +44,10 @@ import {
   type AgentStatusEntry
 } from '../../shared/agent-status-types'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
+import {
+  authorizeNativeChatSession as authorizeNativeChatSessionFromState,
+  type AuthorizedNativeChatSession
+} from '../native-chat/session-authorization'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
   AgentSessionClaimedSpawnResult,
@@ -5564,6 +5568,20 @@ export class OrcaRuntimeService {
         clientNavigationId
       )
     )
+  }
+
+  authorizeNativeChatSession(
+    agent: string,
+    sessionId: string,
+    transcriptPath?: string
+  ): AuthorizedNativeChatSession | null {
+    return authorizeNativeChatSessionFromState({
+      agent,
+      sessionId,
+      ...(transcriptPath ? { transcriptPath } : {}),
+      statuses: this.getAgentProviderSessionSnapshotFn?.() ?? [],
+      snapshots: this.mobileSessionTabsByWorktree.values()
+    })
   }
 
   private hydrateHeadlessMobileSessionTabsFromWorkspaceSession(

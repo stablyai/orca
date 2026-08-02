@@ -1,26 +1,25 @@
 import { memo, useEffect, useRef, useState } from 'react'
-import { Image, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { ArrowUp, ChevronDown, Copy, SquareChevronRight } from 'lucide-react-native'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { MobileMarkdown } from '../components/MobileMarkdown'
 import { colors } from '../theme/mobile-theme'
 import {
-  isImageRefBlock,
   isTextBlock,
   pairToolBlocks,
   splitNativeChatBlocks,
   type ToolPair
 } from './mobile-native-chat-blocks'
 import { diffFromText, diffFromToolCall, type DiffLine } from './mobile-native-chat-diff'
-import { isRenderableImageUri } from './mobile-native-chat-image-preview'
-import { MAX_TOOL_RESULT_CHARS, styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
+import { MAX_TOOL_RESULT_CHARS, styles } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
+import { MobileNativeChatProseBlock } from './MobileNativeChatProseBlock'
 import {
   summarizeToolInput,
   summarizeToolRun,
   toolFilePath
 } from './mobile-native-chat-tool-summary'
+import type { MobileNativeChatTextExpansion } from './use-mobile-native-chat-text-expansion'
 
 const MAX_VISIBLE_TOOL_PAIRS = 6
 const MAX_TOOL_RUN_DIFF_ROWS = 240
@@ -137,52 +136,6 @@ function ToolLine({
   )
 }
 
-function Prose({
-  block,
-  invert,
-  fontScale,
-  onOpenFile
-}: {
-  block: NativeChatBlock
-  invert?: boolean
-  fontScale: number
-  onOpenFile?: (relativePath: string) => void
-}): React.JSX.Element | null {
-  if (isTextBlock(block)) {
-    // Inverted (user) bubbles use a fixed dark-on-light text rather than the
-    // markdown renderer's light-on-dark palette.
-    if (invert) {
-      return (
-        <Text style={[styles.userText, { fontSize: TEXT_SIZE * fontScale }]}>{block.text}</Text>
-      )
-    }
-    return (
-      <MobileMarkdown content={block.text} textScale={1.25 * fontScale} onOpenFile={onOpenFile} />
-    )
-  }
-  if (isImageRefBlock(block)) {
-    // A local preview (composer echo) or real URL renders as a thumbnail; a bare
-    // host path (not loadable on the device) falls back to a text placeholder.
-    const uri = block.url ?? block.path
-    if (isRenderableImageUri(uri)) {
-      return (
-        <Image
-          source={{ uri }}
-          style={styles.imageThumb}
-          resizeMode="contain"
-          accessibilityLabel={block.alt ?? 'Attached image'}
-        />
-      )
-    }
-    return (
-      <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
-        🖼 {block.alt ?? block.path ?? block.url ?? 'image'}
-      </Text>
-    )
-  }
-  return null
-}
-
 /** A run of a message's tool calls/results, collapsed to a one-line summary that
  *  expands to the individual inline tool lines. `defaultExpanded` lets the global
  *  toolbar toggle drive every run at once while still allowing per-run override. */
@@ -248,18 +201,36 @@ function ToolRun({
  *  this message's top aligns to the top of the viewport. */
 function AgentControls({
   onCopy,
+  copyState,
   onScrollToTop
 }: {
-  onCopy: () => void
+  onCopy: () => Promise<void>
+  copyState: 'idle' | 'copying' | 'failed'
   onScrollToTop?: () => void
 }): React.JSX.Element {
+  const copying = copyState === 'copying'
   return (
     <View style={styles.controls}>
+      {copyState === 'failed' ? (
+        <Text style={styles.copyError} accessibilityRole="alert">
+          Copy failed
+        </Text>
+      ) : null}
       <Pressable
         style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
-        onPress={onCopy}
+        onPress={() => void onCopy()}
+        disabled={copying}
         hitSlop={8}
-        accessibilityLabel="Copy message"
+        accessibilityLabel={
+          copying
+            ? 'Copying message'
+            : copyState === 'failed'
+              ? 'Retry copying message'
+              : 'Copy message'
+        }
+        accessibilityRole="button"
+        accessibilityLiveRegion="polite"
+        accessibilityState={{ busy: copying, disabled: copying }}
       >
         <Copy size={14} color={colors.textMuted} strokeWidth={2} />
       </Pressable>
@@ -284,7 +255,8 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   messageIndex,
   onScrollToMessage,
-  onOpenFile
+  onOpenFile,
+  textExpansion
 }: {
   message: NativeChatMessage
   queued?: boolean
@@ -296,12 +268,14 @@ function MobileNativeChatMessageImpl({
   /** Ask the list to align this message's top to the top of the viewport. */
   onScrollToMessage?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
+  textExpansion?: MobileNativeChatTextExpansion
 }): React.JSX.Element {
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isAgent = !isUser
   // Briefly tint the bubble to confirm a copy landed.
   const [copied, setCopied] = useState(false)
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'failed'>('idle')
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(
     () => () => {
@@ -315,18 +289,37 @@ function MobileNativeChatMessageImpl({
   // tool calls fold into a collapsible run beneath. The user's own messages get
   // an inverted (filled accent) bubble so they stand apart from agent prose.
   const { prose, tools } = splitNativeChatBlocks(message.blocks)
+  const firstUserTextIndex = isUser ? prose.findIndex(isTextBlock) : -1
 
-  const handleCopy = (): void => {
-    const text = nativeChatMessageText(message.blocks)
-    if (!text) {
-      return
+  const handleCopy = async (): Promise<void> => {
+    setCopyState('copying')
+    const recovered = new Map<Extract<NativeChatBlock, { type: 'text' }>, string>()
+    try {
+      for (const block of message.blocks) {
+        if (!isTextBlock(block) || !block.retrieval) {
+          continue
+        }
+        if (!textExpansion) {
+          throw new Error('Full message unavailable')
+        }
+        recovered.set(block, await textExpansion.loadForCopy(message.id, block.retrieval))
+      }
+      const text = nativeChatMessageText(message.blocks, (block) => recovered.get(block))
+      if (!text) {
+        setCopyState('idle')
+        return
+      }
+      await Clipboard.setStringAsync(text)
+      setCopyState('idle')
+      setCopied(true)
+      if (copyTimer.current) {
+        clearTimeout(copyTimer.current)
+      }
+      copyTimer.current = setTimeout(() => setCopied(false), 700)
+    } catch {
+      setCopied(false)
+      setCopyState('failed')
     }
-    void Clipboard.setStringAsync(text)
-    setCopied(true)
-    if (copyTimer.current) {
-      clearTimeout(copyTimer.current)
-    }
-    copyTimer.current = setTimeout(() => setCopied(false), 700)
   }
 
   // Copy + scroll-to-top, shown inline with the first tool call (or after the
@@ -335,6 +328,7 @@ function MobileNativeChatMessageImpl({
     isAgent && !queued ? (
       <AgentControls
         onCopy={handleCopy}
+        copyState={copyState}
         onScrollToTop={
           onScrollToMessage && messageIndex !== undefined
             ? () => onScrollToMessage(messageIndex)
@@ -356,11 +350,14 @@ function MobileNativeChatMessageImpl({
         ]}
       >
         {prose.map((block, index) => (
-          <Prose
+          <MobileNativeChatProseBlock
             key={index}
             block={block}
+            messageId={message.id}
             invert={isUser}
             fontScale={fontScale}
+            textExpansion={textExpansion}
+            normalizeImagePromptMarker={index === firstUserTextIndex}
             onOpenFile={onOpenFile}
           />
         ))}

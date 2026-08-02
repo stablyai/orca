@@ -1,6 +1,7 @@
 import { open, stat } from 'node:fs/promises'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
+import { markTranscriptRecordOffset } from './transcript-record-position'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   type NativeChatLineDecoder
@@ -102,6 +103,7 @@ export async function readIncrementalTranscriptMessages(
     if (!message) {
       return
     }
+    markTranscriptRecordOffset(message, state.pendingStart)
     messages.push(message)
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
       onBatch(messages.splice(0))

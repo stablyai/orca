@@ -11,7 +11,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type {
+  NativeChatMessage,
+  NativeChatTextRetrieval
+} from '../../../src/shared/native-chat-types'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import {
@@ -33,6 +36,11 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import { useMobileNativeChatTextExpansion } from './use-mobile-native-chat-text-expansion'
+
+const unavailableFullText = async (): Promise<string> => {
+  throw new Error('Full message unavailable')
+}
 
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
@@ -53,6 +61,7 @@ type Props = {
   hasMore?: boolean
   loadingEarlier?: boolean
   onLoadEarlier?: () => void
+  loadFullText?: (messageId: string, retrieval: NativeChatTextRetrieval) => Promise<string>
   onSend: (text: string) => Promise<boolean>
   /** Optimistic queued sends (owned by the route so they survive view switches). */
   /** Optimistic user echoes, including any ridden-along image preview URIs. */
@@ -111,6 +120,7 @@ export function MobileNativeChatView({
   hasMore,
   loadingEarlier,
   onLoadEarlier,
+  loadFullText,
   onSend,
   pending,
   composerText,
@@ -152,6 +162,11 @@ export function MobileNativeChatView({
   const [atBottom, setAtBottom] = useState(true)
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
+  const pauseTailFollow = useCallback(() => setAtBottom(false), [])
+  const textExpansion = useMobileNativeChatTextExpansion(
+    loadFullText ?? unavailableFullText,
+    pauseTailFollow
+  )
   useEffect(
     () => () => {
       if (sendScrollTimerRef.current) {
@@ -234,9 +249,10 @@ export function MobileNativeChatView({
         messageIndex={index}
         onScrollToMessage={onScrollToMessage}
         onOpenFile={onOpenFile}
+        textExpansion={textExpansion}
       />
     ),
-    [pendingIds, toolsExpanded, fontScale, onScrollToMessage, onOpenFile]
+    [pendingIds, toolsExpanded, fontScale, onScrollToMessage, onOpenFile, textExpansion]
   )
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)

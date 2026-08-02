@@ -3,10 +3,13 @@ import { isTextBlock } from './mobile-native-chat-blocks'
 
 /** Concatenate a message's text blocks into a single copyable string. Tool
  *  calls/results and image refs are skipped — Copy is for the agent's prose. */
-export function nativeChatMessageText(blocks: readonly NativeChatBlock[]): string {
+export function nativeChatMessageText(
+  blocks: readonly NativeChatBlock[],
+  textOverride?: (block: Extract<NativeChatBlock, { type: 'text' }>) => string | undefined
+): string {
   return blocks
     .filter(isTextBlock)
-    .map((b) => b.text)
+    .map((block) => textOverride?.(block) ?? block.text)
     .join('\n\n')
     .trim()
 }

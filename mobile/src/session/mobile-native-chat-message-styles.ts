@@ -43,6 +43,12 @@ export const styles = StyleSheet.create({
   controlPressed: {
     opacity: 0.5
   },
+  copyError: {
+    alignSelf: 'center',
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   copied: {
     backgroundColor: colors.diffAddedBg,
     borderRadius: radii.card
@@ -77,6 +83,29 @@ export const styles = StyleSheet.create({
   controlsRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end'
+  },
+  longTextAction: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  longTextActionText: {
+    color: colors.accentBlue,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  longTextActionTextInverted: {
+    color: colors.bgBase
+  },
+  longTextActionError: {
+    color: colors.statusRed
+  },
+  longTextPlain: {
+    color: colors.textPrimary,
+    fontSize: TEXT_SIZE,
+    lineHeight: TEXT_SIZE + 6
   },
   toolRunCount: {
     color: colors.statusGreen,

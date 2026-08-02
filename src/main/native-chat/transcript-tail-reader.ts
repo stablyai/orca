@@ -12,6 +12,7 @@ import {
   decodeGrokTranscriptLine
 } from './transcript-line-decoders'
 import { transcriptFallbackId } from './transcript-fallback-id'
+import { markTranscriptRecordOffset } from './transcript-record-position'
 import {
   nativeChatTurnLifecycleDecoderForAgent,
   type NativeChatTurnLifecycleDecoder
@@ -164,6 +165,7 @@ export async function readNativeChatTranscriptTailFile(
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
     const message = decode(line, fallbackId)
     if (message) {
+      markTranscriptRecordOffset(message, lineOffset)
       messages.push({ message, offset: lineOffset })
     }
   }

@@ -365,6 +365,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'session.tabs.unsubscribe',
   'session.tabs.unsubscribeAll',
   'nativeChat.readSession',
+  'nativeChat.readTextBlock',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
   'settings.get',

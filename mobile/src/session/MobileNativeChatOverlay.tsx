@@ -61,6 +61,7 @@ export function MobileNativeChatOverlay({
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}
+        loadFullText={session.loadFullText}
         onSend={images.sendNativeChat}
         pending={controller.chatPending}
         composerText={controller.chatComposerText}

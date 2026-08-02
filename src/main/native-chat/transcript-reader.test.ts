@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { readNativeChatTranscript } from './transcript-reader'
+import { transcriptRecordOffset } from './transcript-record-position'
 import {
   nativeChatLineDecoderForAgent,
   readNativeChatTranscriptTail,
@@ -301,6 +302,31 @@ describe('readNativeChatTranscript (errors)', () => {
 })
 
 describe('readNativeChatTranscriptTailFile', () => {
+  it('retains each decoded record position outside the serialized message', async () => {
+    const decode = nativeChatLineDecoderForAgent('claude')!
+    const records = [
+      {
+        type: 'assistant',
+        uuid: 'a-1',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'one' }] }
+      },
+      {
+        type: 'assistant',
+        uuid: 'a-2',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'two' }] }
+      }
+    ]
+    const filePath = await writeFixture('orca-native-chat-tail-position-', records)
+
+    const result = await readNativeChatTranscriptTailFile(filePath, 2, decode, true)
+
+    expect(transcriptRecordOffset(result.messages[0]!)).toBe(0)
+    expect(transcriptRecordOffset(result.messages[1]!)).toBe(
+      Buffer.byteLength(JSON.stringify(records[0]), 'utf8') + 1
+    )
+    expect(JSON.stringify(result.messages)).not.toContain('recordOffset')
+  })
+
   it('keeps a missing tail retry-worthy for the live-session seed', async () => {
     const result = await readNativeChatTranscriptTail({
       agent: 'claude',

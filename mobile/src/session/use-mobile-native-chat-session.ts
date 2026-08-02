@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type {
+  NativeChatMessage,
+  NativeChatTextRetrieval
+} from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
 import { createNativeChatMerger, replaceList } from './mobile-native-chat-merge'
@@ -26,6 +29,8 @@ export type MobileNativeChatSession = {
   loadingEarlier: boolean
   /** Grow the window to page in older history. */
   loadEarlier: () => void
+  /** Fetch one full text block represented by a bounded mobile preview. */
+  loadFullText: (messageId: string, retrieval: NativeChatTextRetrieval) => Promise<string>
 }
 
 // Stable empty reference so a not-yet-current read doesn't churn consumers.
@@ -39,6 +44,36 @@ const MAX_MESSAGES = 2000
 type ReadSessionResult =
   | { messages: NativeChatMessage[]; hasMore?: boolean; beforeOffset?: number }
   | { error: string }
+type ReadTextBlockResult = { text: string } | { error: string }
+
+function textRetrievalKey(messageId: string, retrieval: NativeChatTextRetrieval): string {
+  return `${messageId}\0${retrieval.capability}\0${retrieval.originalChars}`
+}
+
+type TextRetrievalIndex = Map<string, Set<string>>
+
+function indexTextRetrievals(messages: readonly NativeChatMessage[]): TextRetrievalIndex {
+  const index: TextRetrievalIndex = new Map()
+  for (const message of messages) {
+    updateTextRetrievalIndex(index, message)
+  }
+  return index
+}
+
+function updateTextRetrievalIndex(index: TextRetrievalIndex, message: NativeChatMessage): void {
+  const keys = new Set<string>()
+  for (const block of message.blocks) {
+    if (block.type === 'text' && block.retrieval) {
+      keys.add(textRetrievalKey(message.id, block.retrieval))
+    }
+  }
+  if (keys.size > 0) {
+    index.set(message.id, keys)
+  } else {
+    index.delete(message.id)
+  }
+}
+
 /** Subscribe to an agent's native-chat transcript over the paired connection.
  *  Reads a small recent window for a fast first paint, tails it for live turns,
  *  and pages in older history on demand. Read results replace the list (they are
@@ -90,13 +125,25 @@ export function useMobileNativeChatSession(args: {
   const limitRef = useRef(INITIAL_LIMIT)
   // Tracks the live session so a late loadEarlier resolve can detect a swap.
   const sessionIdRef = useRef<string | null>(sessionId)
-  sessionIdRef.current = sessionId
+  const identityRef = useRef(identity)
+  const clientRef = useRef(client)
   const streamGenerationRef = useRef(0)
+  const textSourceRevisionRef = useRef(0)
+  const [textSourceRevision, setTextSourceRevision] = useState(0)
+  const textRetrievalIndexRef = useRef<TextRetrievalIndex>(new Map())
+
+  useLayoutEffect(() => {
+    // Async completions must only observe inputs from a committed render.
+    sessionIdRef.current = sessionId
+    identityRef.current = identity
+    clientRef.current = client
+  }, [client, identity, sessionId])
 
   // Replace the base list (read results are an ordered tail). Resets the merger
   // cache so the index is rebuilt once over the new base.
   const setList = useCallback((next: readonly NativeChatMessage[]) => {
     replaceList(mergerRef.current, next)
+    textRetrievalIndexRef.current = indexTextRetrievals(mergerRef.current.list)
     setMessages(mergerRef.current.list)
   }, [])
 
@@ -137,6 +184,8 @@ export function useMobileNativeChatSession(args: {
           // Why: replacement and reconnect snapshots are authoritative windows;
           // stale page limits/results must not constrain the fresh generation.
           streamGenerationRef.current += 1
+          textSourceRevisionRef.current += 1
+          setTextSourceRevision(textSourceRevisionRef.current)
           limitRef.current = INITIAL_LIMIT
           loadingEarlierRef.current = false
           setLoadingEarlier(false)
@@ -155,6 +204,21 @@ export function useMobileNativeChatSession(args: {
           setRead({ client, identity, status: 'error' })
           setError(applied.error)
           return
+        }
+        if (
+          frame.type !== 'appended' ||
+          applied.cursorInvalidated ||
+          !Array.isArray(frame.messages)
+        ) {
+          textRetrievalIndexRef.current = indexTextRetrievals(applied.messages)
+        } else {
+          for (const incoming of frame.messages) {
+            const index = mergerRef.current.indexById.get(incoming.id)
+            const currentMessage = index === undefined ? undefined : applied.messages[index]
+            if (currentMessage) {
+              updateTextRetrievalIndex(textRetrievalIndexRef.current, currentMessage)
+            }
+          }
         }
         setMessages(applied.messages)
         if (applied.hasMore != null) {
@@ -246,6 +310,43 @@ export function useMobileNativeChatSession(args: {
     })()
   }, [client, agent, sessionId, transcriptPath, hasMore, setList])
 
+  const loadFullText = useCallback(
+    async (messageId: string, retrieval: NativeChatTextRetrieval): Promise<string> => {
+      if (!client || !agent || !sessionId) {
+        throw new Error('Full message unavailable')
+      }
+      const requestIdentity = identity
+      const requestGeneration = streamGenerationRef.current
+      const requestTextSourceRevision = textSourceRevision
+      const requestRetrievalKey = textRetrievalKey(messageId, retrieval)
+      if (!textRetrievalIndexRef.current.get(messageId)?.has(requestRetrievalKey)) {
+        throw new Error('Chat transcript changed')
+      }
+      const response = await client.sendRequest('nativeChat.readTextBlock', {
+        capability: retrieval.capability
+      })
+      if (identityRef.current !== requestIdentity || clientRef.current !== client) {
+        throw new Error('Chat session changed')
+      }
+      if (
+        streamGenerationRef.current !== requestGeneration ||
+        textSourceRevisionRef.current !== requestTextSourceRevision ||
+        !textRetrievalIndexRef.current.get(messageId)?.has(requestRetrievalKey)
+      ) {
+        throw new Error('Chat transcript changed')
+      }
+      if (!response.ok) {
+        throw new Error('Full message unavailable')
+      }
+      const result = response.result as ReadTextBlockResult
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      return result.text
+    },
+    [client, agent, sessionId, identity, textSourceRevision]
+  )
+
   return {
     // Withheld until the settled read belongs to this identity: the effect that
     // clears the previous tab's list is passive, so `messages` lags a commit.
@@ -255,6 +356,7 @@ export function useMobileNativeChatSession(args: {
     error,
     hasMore,
     loadingEarlier,
-    loadEarlier
+    loadEarlier,
+    loadFullText
   }
 }

@@ -18,6 +18,15 @@ function message(id: string): NativeChatMessage {
   }
 }
 
+const currentRetrieval = { capability: 'capability-current', originalChars: 9000 }
+
+function messageWithRetrieval(id: string): NativeChatMessage {
+  return {
+    ...message(id),
+    blocks: [{ type: 'text', text: `${id} preview`, retrieval: currentRetrieval }]
+  }
+}
+
 describe('useMobileNativeChatSession', () => {
   let renderer: ReactTestRenderer | null = null
   let state: MobileNativeChatSession | null = null
@@ -33,17 +42,23 @@ describe('useMobileNativeChatSession', () => {
     renderer = null
   })
 
-  function Harness({ client }: { client: RpcClient | null }): null {
+  function Harness({
+    client,
+    transcriptPath = null
+  }: {
+    client: RpcClient | null
+    transcriptPath?: string | null
+  }): null {
     state = useMobileNativeChatSession({
       client,
       agent: 'claude',
       sessionId: 'session',
-      transcriptPath: null
+      transcriptPath
     })
     return null
   }
 
-  async function mount(client: RpcClient): Promise<void> {
+  async function mount(client: RpcClient, transcriptPath?: string): Promise<void> {
     const original = console.error
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
       if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
@@ -53,7 +68,7 @@ describe('useMobileNativeChatSession', () => {
     })
     try {
       await act(async () => {
-        renderer = create(createElement(Harness, { client }))
+        renderer = create(createElement(Harness, { client, transcriptPath }))
       })
     } finally {
       consoleSpy.mockRestore()
@@ -216,6 +231,113 @@ describe('useMobileNativeChatSession', () => {
       limit: 100
     })
     expect(state?.messages.map((entry) => entry.id)).toEqual(['fresh-growing-tail'])
+  })
+
+  it('retrieves a full text block through the active session identity', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({ ok: true, result: { text: 'complete text' } })
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      onData({ type: 'snapshot', messages: [messageWithRetrieval('current')], hasMore: false })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient, '/remote/chat.jsonl')
+
+    let text = ''
+    await act(async () => {
+      text = await state!.loadFullText('current', currentRetrieval)
+    })
+
+    expect(text).toBe('complete text')
+    expect(sendRequest).toHaveBeenCalledWith('nativeChat.readTextBlock', {
+      capability: 'capability-current'
+    })
+  })
+
+  it('rejects a full-text response after the client source changes', async () => {
+    let resolveRead: (response: unknown) => void = () => {}
+    const sendRequest = vi.fn(() => new Promise((resolve) => (resolveRead = resolve)))
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      onData({ type: 'snapshot', messages: [messageWithRetrieval('current')], hasMore: false })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+
+    const outcome = state!
+      .loadFullText('current', currentRetrieval)
+      .catch((error: unknown) => error)
+    await act(async () => renderer?.update(createElement(Harness, { client: null })))
+    await act(async () => {
+      resolveRead({ ok: true, result: { text: 'stale text' } })
+      await Promise.resolve()
+    })
+
+    await expect(outcome).resolves.toMatchObject({ message: 'Chat session changed' })
+  })
+
+  it.each(['replacement', 'snapshot'] as const)(
+    'invalidates pending and cached full text after an authoritative %s',
+    async (frameType) => {
+      let resolveRead: (response: unknown) => void = () => {}
+      const sendRequest = vi.fn(() => new Promise((resolve) => (resolveRead = resolve)))
+      const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+        emit = onData
+        onData({
+          type: 'snapshot',
+          messages: [messageWithRetrieval('current')],
+          hasMore: false
+        })
+        return () => {}
+      })
+      await mount({ sendRequest, subscribe } as unknown as RpcClient)
+      const loaderBeforeReplacement = state!.loadFullText
+      const outcome = loaderBeforeReplacement('current', currentRetrieval).catch(
+        (error: unknown) => error
+      )
+
+      await act(async () => {
+        emit({ type: frameType, messages: [message('current')], hasMore: false })
+      })
+      expect(state!.loadFullText).not.toBe(loaderBeforeReplacement)
+      await act(async () => {
+        resolveRead({ ok: true, result: { text: 'stale text' } })
+        await Promise.resolve()
+      })
+
+      await expect(outcome).resolves.toMatchObject({ message: 'Chat transcript changed' })
+    }
+  )
+
+  it('rejects a full-text response after a same-id live append replaces its preview', async () => {
+    let resolveRead: (response: unknown) => void = () => {}
+    const oldRetrieval = { capability: 'capability-old', originalChars: 9000 }
+    const newRetrieval = { capability: 'capability-new', originalChars: 10_000 }
+    const current = {
+      ...message('current'),
+      blocks: [{ type: 'text' as const, text: 'old preview', retrieval: oldRetrieval }]
+    }
+    const sendRequest = vi.fn(() => new Promise((resolve) => (resolveRead = resolve)))
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({ type: 'snapshot', messages: [current], hasMore: false })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    const outcome = state!.loadFullText('current', oldRetrieval).catch((error: unknown) => error)
+
+    await act(async () => {
+      emit({
+        type: 'appended',
+        messages: [
+          {
+            ...current,
+            blocks: [{ type: 'text', text: 'new preview', retrieval: newRetrieval }]
+          }
+        ]
+      })
+      resolveRead({ ok: true, result: { text: 'stale full text' } })
+      await Promise.resolve()
+    })
+
+    await expect(outcome).resolves.toMatchObject({ message: 'Chat transcript changed' })
   })
 })
 

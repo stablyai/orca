@@ -1,7 +1,9 @@
-import { createElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
+import type { MobileNativeChatTextExpansion } from './use-mobile-native-chat-text-expansion'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -58,10 +60,12 @@ vi.mock('./MobileNativeChatComposer', async () => {
 })
 
 type Overrides = {
+  messages?: NativeChatMessage[]
   sendErrorMessage?: string | null
   onClearSendError?: () => void
   inputLockReason?: 'disconnected' | 'waiting' | null
   onSend?: (text: string) => Promise<boolean>
+  loadFullText?: () => Promise<string>
 }
 
 function suppressRendererWarning(): () => void {
@@ -160,5 +164,29 @@ describe('MobileNativeChatView send-error banner', () => {
     await pressSend()
 
     expect(onClearSendError).toHaveBeenCalledOnce()
+  })
+
+  it('pauses tail-follow before expanding a clipped response', async () => {
+    const retrieval = { capability: 'capability-preview', originalChars: 9000 }
+    const message: NativeChatMessage = {
+      id: 'assistant-1',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'preview', retrieval }],
+      timestamp: 1,
+      source: 'transcript'
+    }
+    await render({
+      messages: [message],
+      loadFullText: () => new Promise<string>(() => {})
+    })
+    const list = renderer!.root.findByType('FlatList' as never)
+    const item = list.props.data[0] as NativeChatMessage
+    const row = list.props.renderItem({ item, index: 0 }) as ReactElement<{
+      textExpansion: MobileNativeChatTextExpansion
+    }>
+
+    act(() => row.props.textExpansion.toggle(message.id, retrieval))
+
+    expect(renderer!.root.findByProps({ accessibilityLabel: 'Scroll to latest' })).toBeTruthy()
   })
 })

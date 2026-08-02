@@ -1,9 +1,17 @@
 import { z } from 'zod'
-import type {
-  NativeChatBlock,
-  NativeChatMessage,
-  AgentType
-} from '../../../../shared/native-chat-types'
+import type { AgentType } from '../../../../shared/native-chat-types'
+import {
+  MOBILE_NATIVE_CHAT_DEFAULT_WINDOW,
+  MOBILE_NATIVE_CHAT_MAX_WINDOW,
+  sanitizeAppendForClient,
+  windowForClient,
+  type AuthorizedNativeChatPayloadSession
+} from '../../../native-chat/mobile-payload-bounds'
+import { readNativeChatTextBlock } from '../../../native-chat/transcript-record-reader'
+import {
+  nativeChatTextDigest,
+  nativeChatTextRetrievalCapabilities
+} from '../../../native-chat/text-retrieval-capabilities'
 import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript
@@ -52,150 +60,73 @@ const NativeChatUnsubscribe = z.object({
   subscriptionId: z.string().min(1).optional()
 })
 
-// Why: a long agent session can hold thousands of turns (with full tool I/O).
-// Shipping all of them over the paired connection and rendering them at once
-// freezes the mobile app, so the runtime RPC windows to the most recent slice —
-// the conversation tail is what the chat view shows first. The desktop IPC path
-// is unaffected (it reads locally with a virtualized list).
-// Small first page for a fast initial paint; the client raises `limit` to load
-// older history as the user scrolls back.
-const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
-const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
-// Why: a single tool result (a big file read, a long diff) can be hundreds of KB.
-// The mobile view only previews block bodies, so truncate them on the wire to
-// keep the payload small; the marker tells the user content was clipped.
-const MOBILE_BLOCK_CHAR_CAP = 4000
-const MOBILE_TOOL_INPUT_ITEMS_CAP = 20
-const MOBILE_TOOL_INPUT_NODE_CAP = 100
-const TRUNCATION_MARKER = '\n… (truncated)'
+const NativeChatTextBlockRequest = z.object({
+  capability: z.string().min(32).max(128)
+})
 
-function clip(text: string): string {
-  return text.length > MOBILE_BLOCK_CHAR_CAP
-    ? text.slice(0, MOBILE_BLOCK_CHAR_CAP) + TRUNCATION_MARKER
-    : text
+const FULL_TEXT_UNAVAILABLE = 'Full message unavailable'
+
+function capabilityOwner(context: RpcContext): string {
+  if (context.pairedDeviceId) {
+    return `paired:${context.pairedDeviceId}`
+  }
+  if (context.clientId) {
+    return `client:${context.clientId}`
+  }
+  if (context.connectionId) {
+    return `connection:${context.connectionId}`
+  }
+  return 'local'
 }
 
-function clipBlock(block: NativeChatBlock): NativeChatBlock {
-  if (block.type === 'text') {
-    return block.text.length > MOBILE_BLOCK_CHAR_CAP ? { ...block, text: clip(block.text) } : block
-  }
-  if (block.type === 'tool-result') {
-    return block.output.length > MOBILE_BLOCK_CHAR_CAP
-      ? { ...block, output: clip(block.output) }
-      : block
-  }
-  if (block.type === 'tool-call') {
-    const budget = { remaining: MOBILE_BLOCK_CHAR_CAP, nodes: MOBILE_TOOL_INPUT_NODE_CAP }
-    return { ...block, input: sanitizeToolInput(block.input, budget, 0) }
-  }
-  return block
-}
-
-function sanitizeToolInput(
-  value: unknown,
-  budget: { remaining: number; nodes: number },
-  depth: number
-): unknown {
-  budget.nodes--
-  if (budget.nodes < 0 || budget.remaining <= 0) {
-    return '… (truncated)'
-  }
-  if (typeof value === 'string') {
-    const length = Math.min(value.length, budget.remaining)
-    budget.remaining -= length
-    return length < value.length ? `${value.slice(0, length)}… (truncated)` : value
-  }
-  if (!value || typeof value !== 'object' || depth >= 5) {
-    return value && typeof value === 'object' ? '… (truncated)' : value
-  }
-  if (Array.isArray(value)) {
-    const result = value
-      .slice(0, MOBILE_TOOL_INPUT_ITEMS_CAP)
-      .map((item) => sanitizeToolInput(item, budget, depth + 1))
-    if (value.length > MOBILE_TOOL_INPUT_ITEMS_CAP) {
-      result.push('… (truncated)')
-    }
-    return result
-  }
-  const result: Record<string, unknown> = {}
-  let count = 0
-  for (const key in value) {
-    if (!Object.prototype.hasOwnProperty.call(value, key)) {
-      continue
-    }
-    if (count >= MOBILE_TOOL_INPUT_ITEMS_CAP || budget.remaining <= 0) {
-      result['…'] = 'truncated'
-      break
-    }
-    let boundedKey = key.slice(0, Math.min(key.length, budget.remaining, 128))
-    // Why: sibling keys sharing a >=128-char (or budget-truncated) prefix collapse
-    // to the same bounded key; suffix collisions so neither field is silently lost.
-    if (Object.prototype.hasOwnProperty.call(result, boundedKey)) {
-      boundedKey = `${boundedKey}~${count}`
-    }
-    budget.remaining -= boundedKey.length
-    result[boundedKey] = sanitizeToolInput(
-      (value as Record<string, unknown>)[key],
-      budget,
-      depth + 1
-    )
-    count++
-  }
-  return result
-}
-
-function sanitizeMessage(message: NativeChatMessage): NativeChatMessage {
-  return { ...message, blocks: message.blocks.map(clipBlock) }
-}
-
-function sanitizeAppendForClient(
-  messages: readonly NativeChatMessage[],
-  clientKind: RpcContext['clientKind']
-): NativeChatMessage[] {
-  return clientKind === 'mobile' ? messages.map(sanitizeMessage) : messages.slice()
-}
-
-/** Window a transcript to its most recent `limit` messages so a long session
- *  can't freeze the client. Windowing by count applies to ALL RPC clients —
- *  shipping thousands of turns over the paired link is bad for web and mobile
- *  alike. Char-clipping (the mobile-only payload diet) is applied separately. */
-function windowTranscript(
-  messages: readonly NativeChatMessage[],
-  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-): NativeChatMessage[] {
-  const window = Math.min(Math.max(limit, 1), MOBILE_NATIVE_CHAT_MAX_WINDOW)
-  return messages.length > window ? messages.slice(-window) : messages.slice()
-}
-
-/** Apply the windowed slice plus, for `mobile` clients only, oversized-block
- *  char truncation. Web/desktop (`runtime`, or undefined for in-process callers)
- *  are full-class surfaces and pass block bodies through untruncated — matching
- *  the desktop IPC path, which never clips. */
-function windowForClient(
-  messages: readonly NativeChatMessage[],
-  clientKind: RpcContext['clientKind'],
-  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-): NativeChatMessage[] {
-  const windowed = windowTranscript(messages, limit)
-  return clientKind === 'mobile' ? windowed.map(sanitizeMessage) : windowed
+function authorizeSession(
+  params: Pick<z.infer<typeof NativeChatSession>, 'agent' | 'sessionId' | 'transcriptPath'>,
+  context: RpcContext
+): AuthorizedNativeChatPayloadSession | null {
+  const remote =
+    context.clientKind !== undefined ||
+    context.pairedDeviceId !== undefined ||
+    context.clientId !== undefined ||
+    context.connectionId !== undefined
+  const authorization = remote
+    ? context.runtime.authorizeNativeChatSession(
+        params.agent,
+        params.sessionId,
+        params.transcriptPath
+      )
+    : params.transcriptPath
+      ? { transcriptPath: params.transcriptPath }
+      : {}
+  return authorization
+    ? {
+        owner: capabilityOwner(context),
+        agent: params.agent,
+        sessionId: params.sessionId,
+        ...(authorization.transcriptPath ? { transcriptPath: authorization.transcriptPath } : {})
+      }
+    : null
 }
 
 export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'nativeChat.readSession',
     params: NativeChatSession,
-    handler: async (params, { clientKind }) => {
+    handler: async (params, context) => {
+      const session = authorizeSession(params, context)
+      if (!session) {
+        return { error: 'Transcript unavailable' }
+      }
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
       const result = await readNativeChatTranscriptTail({
         agent: params.agent,
         sessionId: params.sessionId,
-        transcriptPath: params.transcriptPath,
+        transcriptPath: session.transcriptPath,
         limit,
         beforeOffset: params.beforeOffset
       })
       return 'messages' in result
         ? {
-            messages: windowForClient(result.messages, clientKind, limit),
+            messages: windowForClient(result.messages, context.clientKind, session, limit),
             hasMore: result.hasMore,
             beforeOffset: result.beforeOffset,
             ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
@@ -203,10 +134,50 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         : result
     }
   }),
+  defineMethod({
+    name: 'nativeChat.readTextBlock',
+    params: NativeChatTextBlockRequest,
+    handler: async (params, context) => {
+      const grant = nativeChatTextRetrievalCapabilities.redeem(
+        params.capability,
+        capabilityOwner(context)
+      )
+      if (!grant) {
+        return { error: FULL_TEXT_UNAVAILABLE }
+      }
+      const authorization = context.runtime.authorizeNativeChatSession(
+        grant.agent,
+        grant.sessionId,
+        grant.transcriptPath
+      )
+      if (!authorization) {
+        return { error: FULL_TEXT_UNAVAILABLE }
+      }
+      const result = await readNativeChatTextBlock({
+        agent: grant.agent,
+        sessionId: grant.sessionId,
+        transcriptPath: authorization.transcriptPath,
+        messageId: grant.messageId,
+        recordOffset: grant.recordOffset,
+        blockIndex: grant.blockIndex
+      })
+      return 'text' in result &&
+        result.text.length === grant.originalChars &&
+        nativeChatTextDigest(result.text) === grant.digest
+        ? result
+        : { error: FULL_TEXT_UNAVAILABLE }
+    }
+  }),
   defineStreamingMethod({
     name: 'nativeChat.subscribe',
     params: NativeChatSession,
-    handler: async (params, { runtime, connectionId, clientKind }, emit) => {
+    handler: async (params, context, emit) => {
+      const { runtime, connectionId, clientKind } = context
+      const session = authorizeSession(params, context)
+      if (!session) {
+        emit({ type: 'snapshot', messages: [], hasMore: false, error: 'Transcript unavailable' })
+        return
+      }
       let closed = false
       let unsubscribe = (): void => {}
       // Why: the first drain is a bounded tail snapshot; later drains emit only
@@ -234,17 +205,18 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       const subscription = await subscribeNativeChatTranscript({
         agent: params.agent,
         sessionId: params.sessionId,
-        transcriptPath: params.transcriptPath,
+        transcriptPath: session.transcriptPath,
         initialLimit: limit,
         onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
-          if (closed) {
+          const currentSession = authorizeSession(params, context)
+          if (closed || !currentSession) {
             return
           }
           // Forward an initial-drain error so a watching client's first frame carries it
           // instead of stranding the view at 'loading' when the read keeps throwing.
           emit({
             type: 'snapshot',
-            messages: windowForClient(messages, clientKind, limit),
+            messages: windowForClient(messages, clientKind, currentSession, limit),
             hasMore,
             beforeOffset,
             ...(error ? { error } : {}),
@@ -252,24 +224,26 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           })
         },
         onReplace: (messages, hasMore, beforeOffset, lifecycle) => {
-          if (closed) {
+          const currentSession = authorizeSession(params, context)
+          if (closed || !currentSession) {
             return
           }
           emit({
             type: 'replacement',
-            messages: windowForClient(messages, clientKind, limit),
+            messages: windowForClient(messages, clientKind, currentSession, limit),
             hasMore,
             beforeOffset,
             ...(lifecycle ? { lifecycle } : {})
           })
         },
         onAppend: (messages, lifecycle) => {
-          if (closed) {
+          const currentSession = authorizeSession(params, context)
+          if (closed || !currentSession) {
             return
           }
           emit({
             type: 'appended',
-            messages: sanitizeAppendForClient(messages, clientKind),
+            messages: sanitizeAppendForClient(messages, clientKind, currentSession),
             ...(lifecycle ? { lifecycle } : {})
           })
         }
