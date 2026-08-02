@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import type { UpdateCheckOptions, UpdateStatus } from '../shared/types'
+import type { UpdateCheckOptions, UpdateSource, UpdateStatus } from '../shared/types'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,
@@ -51,7 +51,6 @@ import {
   type ReleaseBuild,
   type ReleaseChannel
 } from '../shared/release-channel'
-import type { UpdateSource } from '../shared/types'
 
 type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
