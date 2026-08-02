@@ -616,16 +616,24 @@ function buildMirroredTerminalTabs(
       siblingHookAgent: surfaces.find((surface) => surface.agentStatus?.agentType)?.agentStatus
         ?.agentType
     })
-    const title = normalizeCompatibleAgentTitleForOwner(
-      activeSurface.title.trim() || surfaces[0]?.title.trim() || 'Terminal',
-      ownerAgent
-    )
     const existing =
       existingById.get(localTabId) ??
       existingById.get(parentTabId) ??
       surfaces
         .map((surface) => existingById.get(toWebTerminalSurfaceTabId(surface.id)))
         .find((tab): tab is TerminalTab => Boolean(tab))
+    // Why: a headless host has no live PTY for a pane it is not streaming, so it publishes
+    // the literal placeholder 'Terminal' rather than an empty title. Adopting it discarded
+    // the real title the client already had, relabelling every idle tab until it was
+    // clicked. Treat the placeholder as "unknown" and keep what we know.
+    const hostTitle = activeSurface.title.trim() || surfaces[0]?.title.trim() || ''
+    const hostTitleIsPlaceholder =
+      hostTitle === '' || (activeSurface.status === 'pending-handle' && hostTitle === 'Terminal')
+    const retainedTitle = existing?.title?.trim() || existing?.defaultTitle?.trim() || ''
+    const title = normalizeCompatibleAgentTitleForOwner(
+      (hostTitleIsPlaceholder ? retainedTitle || hostTitle : hostTitle) || 'Terminal',
+      ownerAgent
+    )
     const quickCommandLabel =
       activeSurface.quickCommandLabel?.trim() ||
       surfaces.find((surface) => surface.quickCommandLabel?.trim())?.quickCommandLabel?.trim() ||
