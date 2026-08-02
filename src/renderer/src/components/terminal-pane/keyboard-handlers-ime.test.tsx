@@ -518,4 +518,64 @@ describe('Windows IME keyboard ownership', () => {
       harness.dispose()
     })
   })
+
+  // Both reported symptoms in one session: a Shift-jamo consumed as Process/229
+  // must not be read as a chord or a shortcut, and the plain committing Enter
+  // that follows must not have its keyup re-read as Shift+Enter by the rollover
+  // Shift for the next doubled consonant. Each half is covered above; this
+  // guards the combination, which is how a user actually types 빨래.
+  it('sends nothing for a Shift-jamo followed by a committing Enter with rollover', () => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    harness.startComposition()
+
+    // Shift+ㅃ: the IME reports it as Process/229 with the physical code KeyQ.
+    const jamo = keyboardEvent('keydown', {
+      key: 'Process',
+      code: 'KeyQ',
+      keyCode: 229,
+      timeStamp: 10,
+      isComposing: true,
+      shiftKey: true
+    })
+    harness.terminalInput.dispatchEvent(jamo)
+
+    // Plain committing Enter, also consumed by the IME.
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Process',
+        code: 'Enter',
+        keyCode: 229,
+        timeStamp: 20,
+        isComposing: true
+      })
+    )
+    // Shift rolls over for the next doubled consonant before Enter is released.
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Shift',
+        code: 'ShiftLeft',
+        keyCode: 16,
+        timeStamp: 30,
+        shiftKey: true
+      })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        timeStamp: 40,
+        shiftKey: true
+      })
+    )
+    vi.runAllTimers()
+
+    expect(jamo.defaultPrevented).toBe(false)
+    expect(harness.sendInput).not.toHaveBeenCalled()
+    expect(harness.deps.onClearPaneScrollback).not.toHaveBeenCalled()
+    expect(harness.deps.onRequestClosePane).not.toHaveBeenCalled()
+    hook.unmount()
+    harness.dispose()
+  })
 })
