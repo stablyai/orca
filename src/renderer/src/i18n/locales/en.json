@@ -6566,7 +6566,10 @@
           "f79972271a": "No GitHub remote found for this repo.",
           "4d039317f4": "Website favicon",
           "acf31559a0": "Enter a valid website URL.",
-          "868c5c9b56": "Failed to import repo icon"
+          "868c5c9b56": "Failed to import repo icon",
+          "emojiTooLongForRepoIcon": "This emoji can't be used as a repo icon.",
+          "currentEmojiSelection": "Current: {{value0}}",
+          "searchEmojiPlaceholder": "Search emoji"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",

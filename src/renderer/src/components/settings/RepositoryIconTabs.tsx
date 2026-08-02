@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Github, Image, Link2 } from 'lucide-react'
+import EmojiPicker, { EmojiStyle, Theme, type EmojiClickData } from 'emoji-picker-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import { faviconUrlFromWebsite } from '../../../../shared/repo-icon'
+import { faviconUrlFromWebsite, sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
@@ -10,8 +11,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { getRepoLucideIconOptions } from '../repo/repo-icon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-
-const EMOJI_OPTIONS = ['🚀', '✨', '💻', '🧠', '📦', '🔧', '🎨', '🌐', '📊', '🔒', '⚡', '✅']
+import { useAppStore } from '../../store'
+import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 
 type RepositoryIconTabsProps = {
   initialTab: 'avatar' | 'icon' | 'emoji'
@@ -32,6 +33,11 @@ export function RepositoryIconTabs({
 }: RepositoryIconTabsProps): React.JSX.Element {
   const [website, setWebsite] = useState('')
   const mountedRef = useMountedRef()
+  // Minimal selector: only the theme string is needed; default to system before settings load.
+  const settingsTheme = useAppStore((state) => state.settings?.theme ?? 'system')
+  const systemPrefersDark = useSystemPrefersDark()
+  // Theme.AUTO only follows the OS setting, which can disagree with Orca's manual theme.
+  const isDarkTheme = settingsTheme === 'dark' || (settingsTheme === 'system' && systemPrefersDark)
 
   const handleUploadImage = async () => {
     try {
@@ -77,6 +83,22 @@ export function RepositoryIconTabs({
         'Website favicon'
       )
     })
+  }
+
+  /** Saves the picked emoji, rejecting anything over sanitizeRepoIcon's 16-char cap. */
+  const handleEmojiClick = (emojiData: EmojiClickData): void => {
+    // ZWJ/skin-tone sequences can exceed the 16-char cap even without skinTonesDisabled.
+    const repoIcon = sanitizeRepoIcon({ type: 'emoji', emoji: emojiData.emoji })
+    if (!repoIcon) {
+      toast.error(
+        translate(
+          'auto.components.settings.RepositoryIconPicker.emojiTooLongForRepoIcon',
+          "This emoji can't be used as a repo icon."
+        )
+      )
+      return
+    }
+    onSetIcon(repoIcon)
   }
 
   return (
@@ -180,24 +202,31 @@ export function RepositoryIconTabs({
         </div>
       </TabsContent>
 
-      <TabsContent value="emoji" className="grid grid-cols-12 gap-1.5">
-        {EMOJI_OPTIONS.map((emoji) => (
-          <Button
-            key={emoji}
-            type="button"
-            variant={selectedEmoji === emoji ? 'secondary' : 'ghost'}
-            size="icon-xs"
-            className="size-8 text-base"
-            onClick={() => onSetIcon({ type: 'emoji', emoji })}
-            aria-label={translate(
-              'auto.components.settings.RepositoryIconPicker.2b7d27b93c',
-              'Use {{value0}} repo icon',
-              { value0: emoji }
+      <TabsContent value="emoji">
+        <div className="repo-icon-emoji-picker overflow-hidden rounded-md border border-border">
+          <EmojiPicker
+            emojiStyle={EmojiStyle.NATIVE}
+            height={340}
+            width="100%"
+            lazyLoadEmojis
+            onEmojiClick={handleEmojiClick}
+            previewConfig={{ showPreview: true }}
+            searchPlaceHolder={translate(
+              'auto.components.settings.RepositoryIconPicker.searchEmojiPlaceholder',
+              'Search emoji'
             )}
-          >
-            {emoji}
-          </Button>
-        ))}
+            theme={isDarkTheme ? Theme.DARK : Theme.LIGHT}
+          />
+        </div>
+        {selectedEmoji ? (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {translate(
+              'auto.components.settings.RepositoryIconPicker.currentEmojiSelection',
+              'Current: {{value0}}',
+              { value0: selectedEmoji }
+            )}
+          </p>
+        ) : null}
       </TabsContent>
     </Tabs>
   )
