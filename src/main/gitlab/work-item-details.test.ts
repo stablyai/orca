@@ -32,7 +32,7 @@ vi.mock('./gl-utils', () => ({
   glabRepoExecOptions: glabRepoExecOptionsMock
 }))
 
-import { getWorkItemDetails } from './work-item-details'
+import { countDiffLines, getWorkItemDetails } from './work-item-details'
 
 describe('getWorkItemDetails', () => {
   beforeEach(() => {
@@ -201,5 +201,42 @@ describe('getWorkItemDetails', () => {
     expect(glabExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
       true
     )
+  })
+})
+
+describe('countDiffLines', () => {
+  it('counts added and removed lines inside a hunk', () => {
+    expect(countDiffLines('@@ -1 +1 @@\n-old\n+new')).toEqual({ additions: 1, deletions: 1 })
+  })
+
+  it('counts a removed line whose original content began with `--` (SQL/Lua comment)', () => {
+    // Why: prefix `-` + content `-- old comment` = diff line `--- old comment`,
+    // which collides with the `--- a/file` header under a plain startsWith check.
+    expect(
+      countDiffLines('--- a/db.sql\n+++ b/db.sql\n@@ -1,2 +1 @@\n keep\n--- old comment\n+new')
+    ).toEqual({ additions: 1, deletions: 1 })
+  })
+
+  it('counts an added line whose original content began with `++`', () => {
+    // Why: prefix `+` + content `++ flag` = diff line `+++ flag`, colliding with `+++ b/file`.
+    expect(countDiffLines('--- a/f.lua\n+++ b/f.lua\n@@ -1 +1,2 @@\n-old\n+++ flag')).toEqual({
+      additions: 1,
+      deletions: 1
+    })
+  })
+
+  it('skips file headers before the first hunk and yields zero for a header-only diff', () => {
+    expect(countDiffLines('--- a/x\n+++ b/x')).toEqual({ additions: 0, deletions: 0 })
+  })
+
+  it('keeps additions and deletions distinct under an asymmetric hunk', () => {
+    expect(countDiffLines('@@ -1 +1,2 @@\n-old\n+a\n+b')).toEqual({ additions: 2, deletions: 1 })
+  })
+
+  it('accumulates counts across multiple hunks', () => {
+    expect(countDiffLines('@@ -1 +1 @@\n-a\n+b\n@@ -5 +5 @@\n-c\n+d\n+e')).toEqual({
+      additions: 3,
+      deletions: 2
+    })
   })
 })
