@@ -90,6 +90,10 @@ export class ConversationWakeJobProcessor {
       this.options.db.markConversationWakeJobWaiting(wakeId, 'turn active')
       return
     }
+    if (state === 'unknown') {
+      this.recordFailure(wakeId, new Error('provider state is temporarily unknown'), false)
+      return
+    }
     if (state === 'missing' || state === 'unsupported') {
       this.options.db.markConversationWakeJobBlocked(wakeId, `provider ${state}`)
       return

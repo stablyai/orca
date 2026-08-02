@@ -134,6 +134,8 @@ export type RuntimeCreateAgentSessionRequest = {
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }
   viewMode?: 'terminal' | 'chat'
+  /** Explicit opt-in for the disabled-by-default orchestration coordinator controller. */
+  controlledCoordinator?: boolean
 }
 
 export type RuntimeCreateAgentSessionResult = {

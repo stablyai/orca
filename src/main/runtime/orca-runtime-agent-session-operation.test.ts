@@ -4,6 +4,8 @@ import type {
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { CodexControlledSessionManager } from '../codex/codex-controlled-session-manager'
+import { resolveControlledCodexLaunchAuthority } from '../codex/codex-controlled-launch-authority'
 
 function operationId(now = Date.now()): string {
   return `${now}-0123456789abcdef0123456789abcdef`
@@ -35,10 +37,24 @@ function terminal() {
   }
 }
 
-function createRuntime(provider?: {
-  supportsAgentSessionClaims?: () => boolean
-  supportsAgentSessionCreateOperations?: () => boolean
-}) {
+function createRuntime(
+  provider?: {
+    supportsAgentSessionClaims?: () => boolean
+    supportsAgentSessionCreateOperations?: () => boolean
+  },
+  controlled?: {
+    manager: Record<string, unknown>
+    command?: string
+    prepareCodexHome?: (workspacePath: string) => string | null
+    resolveAccountId?: () => string | null
+  }
+) {
+  if (controlled) {
+    controlled.manager.prepareNewLaunch ??= vi.fn((input, command) => ({ input, command }))
+    controlled.manager.launchPreparedNew ??= vi.fn((prepared) =>
+      (controlled.manager.launchNew as (input: unknown) => unknown)(prepared.input)
+    )
+  }
   const runtime = new OrcaRuntimeService(
     {
       getSettings: () => ({
@@ -49,7 +65,23 @@ function createRuntime(provider?: {
       })
     } as never,
     undefined,
-    provider ? { getLocalProvider: () => provider as never } : undefined
+    {
+      ...(provider ? { getLocalProvider: () => provider as never } : {}),
+      ...(controlled
+        ? {
+            codexControlledSessionManager:
+              controlled.manager as unknown as CodexControlledSessionManager,
+            resolveControlledCodexLaunchAuthority: (workspacePath: string) =>
+              resolveControlledCodexLaunchAuthority({
+                workspacePath,
+                commandOverride: controlled.command ?? '/trusted/bin/codex',
+                prepareCodexHome: controlled.prepareCodexHome ?? (() => '/trusted/codex-home'),
+                getSystemCodexHome: () => '/system/codex-home',
+                resolveAccountId: controlled.resolveAccountId ?? (() => 'trusted-account')
+              })
+          }
+        : {})
+    }
   )
   const internal = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
@@ -67,6 +99,167 @@ function createRuntime(provider?: {
 }
 
 describe('agent-session create operation ledger', () => {
+  it('routes explicit controlled coordinator creation through host-resolved authority', async () => {
+    const controlledTerminal = terminal()
+    const manager = {
+      id: 'codex-controlled',
+      launchNew: vi.fn().mockResolvedValue({
+        disposition: 'created',
+        surface: 'visible',
+        identity: {
+          conversationId: 'controlled-conversation',
+          threadId: 'thread-1',
+          terminalHandle: controlledTerminal.handle,
+          terminalPtyId: controlledTerminal.ptyId,
+          terminalTabId: controlledTerminal.tabId,
+          terminalPaneKey: controlledTerminal.paneKey,
+          worktreeId: controlledTerminal.worktreeId
+        }
+      }),
+      getState: vi.fn(),
+      prepareAndFinalizeTurn: vi.fn(),
+      onTurnTerminal: vi.fn(() => () => {}),
+      getConversationForPane: vi.fn((paneKey: string) =>
+        paneKey === controlledTerminal.paneKey ? 'controlled-conversation' : null
+      ),
+      dispose: vi.fn()
+    }
+    const runtime = createRuntime(undefined, { manager })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal')
+    const bind = vi
+      .spyOn(runtime, 'bindOrchestrationConversationWake')
+      .mockResolvedValue({} as never)
+
+    await expect(
+      runtime.createAgentSession(request(operationId(), { controlledCoordinator: true }))
+    ).resolves.toMatchObject({
+      terminal: { ...terminal(), surface: 'visible', title: 'Codex' },
+      disposition: 'created'
+    })
+
+    expect(createTerminal).not.toHaveBeenCalled()
+    expect(manager.launchNew).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeSelector: 'id:worktree-1',
+        cwd: '/tmp/worktree-1',
+        codexHome: '/trusted/codex-home',
+        accountId: 'trusted-account',
+        command: '/trusted/bin/codex',
+        presentation: 'focused'
+      })
+    )
+    await runtime.bindControlledCodexCoordinator('run-1', 3, controlledTerminal.paneKey)
+    expect(bind).toHaveBeenCalledWith({
+      runId: 'run-1',
+      consumerGeneration: 3,
+      provider: 'codex-controlled',
+      conversationId: 'controlled-conversation'
+    })
+  })
+
+  it.each([
+    { agentArgs: '--arbitrary' },
+    { startupCwd: '/tmp/other' },
+    { promptDelivery: 'draft' as const }
+  ])(
+    'rejects caller-controlled launch authority before controller effects: %j',
+    async (override) => {
+      const manager = {
+        id: 'codex-controlled',
+        launchNew: vi.fn(),
+        onTurnTerminal: vi.fn(() => () => {})
+      }
+      const runtime = createRuntime(undefined, { manager })
+
+      await expect(
+        runtime.createAgentSession(
+          request(operationId(), { controlledCoordinator: true, ...override })
+        )
+      ).rejects.toThrow('controlled_codex_coordinator_unsupported')
+      expect(manager.launchNew).not.toHaveBeenCalled()
+    }
+  )
+
+  it('rejects an invalid trusted override before trust or controller side effects', async () => {
+    const projectTrust = vi.fn()
+    const prepareCodexHome = vi.fn((workspacePath: string) => {
+      projectTrust(workspacePath)
+      return '/trusted/codex-home'
+    })
+    const resolveAccountId = vi.fn(() => 'trusted-account')
+    const manager = {
+      id: 'codex-controlled',
+      launchNew: vi.fn(),
+      onTurnTerminal: vi.fn(() => () => {})
+    }
+    const runtime = createRuntime(undefined, {
+      manager,
+      command: `/trusted/bin/codex --profile "unmatched`,
+      prepareCodexHome,
+      resolveAccountId
+    })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal')
+    const internal = runtime as unknown as {
+      markLocalWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
+    }
+
+    await expect(
+      runtime.createAgentSession(request(operationId(), { controlledCoordinator: true }))
+    ).rejects.toThrow('controlled Codex command is invalid')
+
+    expect(internal.markLocalWorkspaceTrustedForAgent).not.toHaveBeenCalled()
+    expect(prepareCodexHome).not.toHaveBeenCalled()
+    expect(projectTrust).not.toHaveBeenCalled()
+    expect(resolveAccountId).not.toHaveBeenCalled()
+    expect(manager.launchNew).not.toHaveBeenCalled()
+    expect(createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('fails explicit controlled coordinator intent closed on an SSH execution host', async () => {
+    const manager = {
+      id: 'codex-controlled',
+      launchNew: vi.fn(),
+      onTurnTerminal: vi.fn(() => () => {})
+    }
+    const runtime = createRuntime(undefined, { manager })
+    const internal = runtime as unknown as {
+      resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
+    }
+    internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
+      id: 'worktree-1',
+      path: '/remote/worktree-1',
+      connectionId: 'ssh-1',
+      folderWorkspace: null
+    })
+
+    await expect(
+      runtime.createAgentSession(request(operationId(), { controlledCoordinator: true }))
+    ).rejects.toThrow('controlled_codex_coordinator_unsupported')
+    expect(manager.launchNew).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    'controlled Codex launch is disabled',
+    'controlled Codex launch is unsupported on this platform'
+  ])('does not fall back or relaunch after controlled admission fails: %s', async (message) => {
+    const failure = new Error(message)
+    const manager = {
+      id: 'codex-controlled',
+      launchNew: vi.fn().mockRejectedValue(failure),
+      onTurnTerminal: vi.fn(() => () => {})
+    }
+    const runtime = createRuntime(undefined, { manager })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal')
+    const id = operationId()
+    const controlledRequest = request(id, { controlledCoordinator: true })
+
+    await expect(runtime.createAgentSession(controlledRequest)).rejects.toBe(failure)
+    await expect(runtime.createAgentSession(controlledRequest)).rejects.toBe(failure)
+
+    expect(manager.launchNew).toHaveBeenCalledOnce()
+    expect(createTerminal).not.toHaveBeenCalled()
+  })
+
   it('selects legacy before trust, spawn, or ledger state for an old daemon', async () => {
     const provider = {
       supportsAgentSessionClaims: vi.fn(() => false),

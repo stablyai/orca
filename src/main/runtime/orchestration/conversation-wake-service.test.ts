@@ -88,10 +88,10 @@ describe('ConversationWakeService', () => {
   let db: OrchestrationDb | undefined
   const services: ConversationWakeService[] = []
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.useRealTimers()
     for (const service of services.splice(0)) {
-      service.dispose()
+      await service.dispose()
     }
     db?.close()
     db = undefined
@@ -212,6 +212,17 @@ describe('ConversationWakeService', () => {
     state.provider.emitTurnTerminal('conversation-1')
     await vi.waitFor(() => expect(jobFor(state, message.id)?.status).toBe('cancelled'))
 
+    expect(state.provider.requests).toEqual([])
+  })
+
+  it('keeps an unknown provider state retryable without consuming the retry budget', async () => {
+    const state = setup()
+    state.provider.state = 'unknown'
+    const message = insertWorkerDone(state)
+
+    await state.service.onMessageCommitted(message)
+
+    expect(jobFor(state, message.id)).toMatchObject({ status: 'retry_wait', attempt_count: 0 })
     expect(state.provider.requests).toEqual([])
   })
 

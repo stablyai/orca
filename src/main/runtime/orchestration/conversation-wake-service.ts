@@ -93,6 +93,9 @@ export class ConversationWakeService {
     if (!this.isEnabled()) {
       return
     }
+    for (const provider of this.providers.values()) {
+      await provider.reconcile?.()
+    }
     this.backfill()
     const now = this.now()
     for (const job of this.options.db.listProcessableConversationWakeJobs(now)) {
@@ -103,12 +106,15 @@ export class ConversationWakeService {
     this.scheduleNextRetry()
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
     this.disposed = true
     this.clearRetryTimer()
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe()
     }
+    await Promise.all(
+      [...this.providers.values()].map((provider) => Promise.resolve(provider.dispose?.()))
+    )
   }
 
   private backfill(runId?: string): void {

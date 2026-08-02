@@ -151,6 +151,7 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(
         'tab_coord:11111111-1111-4111-8111-111111111111'
       )
+      const bindControlled = vi.spyOn(runtime, 'bindControlledCodexCoordinator')
 
       const created = (await call('orchestration.runCreate', {
         objective: 'Coordinate reviews',
@@ -162,6 +163,11 @@ describe('orchestration RPC methods', () => {
 
       expect(created.run.consumer_generation).toBe(1)
       expect(current.run?.id).toBe(created.run.id)
+      expect(bindControlled).toHaveBeenCalledWith(
+        created.run.id,
+        1,
+        'tab_coord:11111111-1111-4111-8111-111111111111'
+      )
     })
 
     it('requires runtime-observed stable pane identity for binding', async () => {
