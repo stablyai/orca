@@ -262,6 +262,24 @@ function firstWindowsPathEnvKey(
   return undefined
 }
 
+function normalizeSegmentKey(segment: string): string {
+  const trimmed = segment.replace(/[\\/]+$/, '')
+  // Why: roots keep one separator because `C:\` and drive-relative `C:` differ.
+  return (/^[a-z]:$/i.test(trimmed) && trimmed !== segment ? `${trimmed}\\` : trimmed).toLowerCase()
+}
+
+function dedupeSegments(segments: string[]): string[] {
+  const seen = new Set<string>()
+  return segments.filter((segment) => {
+    const key = normalizeSegmentKey(segment)
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
+}
+
 function mergeWindowsPathSegments(
   env: NodeJS.ProcessEnv,
   persistedSegments: string[],
@@ -274,18 +292,22 @@ function mergeWindowsPathSegments(
   const currentPath =
     env[pathKey] ?? expandWindowsEnvironmentVariables(sourceEnv[pathKey] ?? '', sourceEnv)
   const currentSegments = splitPathSegments(currentPath, pathDelimiter)
-  const existing = new Set(currentSegments.map((segment) => segment.toLowerCase()))
-  const missing = persistedSegments.filter((segment) => {
-    const normalized = segment.toLowerCase()
-    if (existing.has(normalized)) {
-      return false
-    }
-    existing.add(normalized)
-    return true
-  })
 
-  if (missing.length > 0) {
-    env[pathKey] = [...currentSegments, ...missing].join(pathDelimiter)
+  if (persistedSegments.length === 0) {
+    // Why: a blocked, timed-out, or empty registry read must not erase a working PATH.
+    return
+  }
+
+  const persisted = dedupeSegments(persistedSegments)
+  const persistedKeys = new Set(persisted.map(normalizeSegmentKey))
+  // Why: keep launch-time and Orca-injected entries that have no persisted position.
+  const injected = dedupeSegments(
+    currentSegments.filter((segment) => !persistedKeys.has(normalizeSegmentKey(segment)))
+  )
+
+  const merged = [...injected, ...persisted].join(pathDelimiter)
+  if (merged !== currentPath) {
+    env[pathKey] = merged
   }
 }
 
@@ -299,9 +321,7 @@ export function mergePersistedWindowsPath(
   }
 
   const sourceEnv = options.env ?? process.env
-  // Why: Windows broadcasts PATH changes to future processes, but a running
-  // Electron app keeps its old environment. Append the persisted additions so
-  // newly installed CLIs resolve without unexpectedly reordering existing PATH.
+  // Why: append-only merging lets stale entries shadow newly installed executables.
   mergeWindowsPathSegments(env, readPersistedWindowsPathSegments(options), platform, sourceEnv)
 }
 
