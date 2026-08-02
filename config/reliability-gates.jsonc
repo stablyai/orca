@@ -11,6 +11,92 @@
   },
   "gates": [
     {
+      "id": "renderer-session.sleep-filter-lineage-reconnect",
+      "title": "Hide sleeping preserves active lineage and conservative legacy reconnects",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "renderer-workspace-lifecycle",
+      "layer": "renderer-session-hydration",
+      "surfaces": [
+        "sidebar worktree lineage",
+        "legacy workspace-session upgrade",
+        "folder and SSH workspaces"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "folder", "ssh-relay"],
+      "coveredPlatforms": ["macos", "linux", "windows"],
+      "coveredProviders": ["local", "folder", "ssh-relay"],
+      "coverageNotes": "Platform-neutral renderer contracts cover local, folder, and SSH-owned workspace records without provider calls. A headed macOS Orca runtime confirmed the explicit parent-worktree lineage and live terminal topology; the candidate UI was not launched in a separate app instance because the visibility decision is a pure shared selector.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/4573",
+        "https://github.com/stablyai/orca/pull/4574"
+      ],
+      "invariant": "Hide sleeping may restore only active lineage ancestors, except that an explicitly forced send target retains its full structural ancestry. Legacy sessions without activeWorktreeIdsOnShutdown reconnect only the resolved active workspace when it has a local or relay wake hint; explicit shutdown lists remain authoritative.",
+      "oracle": "Use identical selector and hydration tests on latest main, the candidate, and a candidate-disabled tree. Require inactive side-map, inline, multilevel, folder, and SSH lineage parents to stay hidden; live-agent and forced-target parents to remain visible; and legacy local or relay wake hints to reconnect only the resolved active workspace.",
+      "commands": [
+        "pnpm test src/renderer/src/components/sidebar/visible-worktrees.test.ts src/renderer/src/store/slices/store-session-cascades.test.ts src/renderer/src/store/slices/terminals-hydration.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/sidebar/visible-worktrees.test.ts",
+        "src/renderer/src/store/slices/store-session-cascades.test.ts",
+        "src/renderer/src/store/slices/terminals-hydration.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/sidebar/visible-worktrees.test.ts",
+          "assertions": [
+            "does not restore inactive lineage parents when sleeping workspaces are hidden",
+            "restores a live-agent lineage parent while sleeping workspaces are hidden",
+            "keeps inactive folder and SSH lineage parents hidden"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/store-session-cascades.test.ts",
+          "assertions": [
+            "does not wake every preserved ptyId during legacy session upgrade",
+            "does not reconnect a slept SSH tab from a legacy relay wake hint"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm test src/renderer/src/components/sidebar/visible-worktrees.test.ts src/renderer/src/store/slices/store-session-cascades.test.ts src/renderer/src/store/slices/terminals-hydration.test.ts",
+          "result": "passed",
+          "durationSeconds": 16.27,
+          "summary": "The final candidate passed all 117 focused tests; the identical baseline and disabled oracles each failed the same six lineage and legacy-reconnect assertions."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused renderer selector and session-hydration suite"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic suite passed repeatedly locally; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline oracle 1a3139713b and disabled oracle 946d61d30a each failed 6 of 117 tests. Candidate 2b6a8b8f3f passed 117 of 117 with byte-identical test blobs."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Workspace activity is computed once per sidebar candidate and reused during lineage traversal. The change adds no polling, provider call, Git command, listener, timer, subprocess, or network fanout."
+      },
+      "promotionCriteria": [
+        "Pass two fresh adversarial verifier reviews and focused CI.",
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Keep folder, SSH relay, live-agent, forced-target, and legacy-upgrade assertions green."
+      ],
+      "knownGaps": [
+        "The candidate was not exercised in a separately launched headed Electron instance; repository policy routes this pure selector to unit and render-contract tests.",
+        "A legacy upgrade conservatively skips background workspaces whose persisted identifiers cannot distinguish live PTYs from sleep wake hints."
+      ],
+      "demotionRule": "Keep experimental or demote if an inactive ancestor reappears, an active agent parent disappears, forced-target ancestry breaks, or legacy hydration reconnects ambiguous background wake hints."
+    },
+    {
       "id": "terminal-provider.login-session-retirement",
       "title": "macOS login-session retirement preserves live daemons through transient rejection bursts",
       "maturity": "experimental",
