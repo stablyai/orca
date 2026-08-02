@@ -4,6 +4,7 @@ import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -30,6 +31,10 @@ vi.mock('./codex-fetcher', () => ({
 
 vi.mock('./gemini-usage-fetcher', () => ({
   fetchGeminiRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
 }))
 
 vi.mock('./kimi-fetcher', () => ({
@@ -377,6 +382,9 @@ describe('RateLimitService', () => {
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
     vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 30, Date.now()))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValueOnce(
+      okProvider('antigravity', 35, Date.now())
+    )
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
       okProvider('opencode-go', 40, Date.now())
     )
@@ -395,6 +403,8 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true)
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledWith({ signal: expect.any(AbortSignal) })
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith(
       'session=abc123',
@@ -413,6 +423,8 @@ describe('RateLimitService', () => {
     expect(state.codex?.session?.usedPercent).toBe(20)
     expect(state.gemini?.status).toBe('ok')
     expect(state.gemini?.session?.usedPercent).toBe(30)
+    expect(state.antigravity?.status).toBe('ok')
+    expect(state.antigravity?.session?.usedPercent).toBe(35)
     expect(state.opencodeGo?.status).toBe('ok')
     expect(state.opencodeGo?.session?.usedPercent).toBe(40)
   })

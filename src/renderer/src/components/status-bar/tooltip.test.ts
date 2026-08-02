@@ -326,6 +326,26 @@ describe('getWindowSections', () => {
     ])
   })
 
+  it('does not repeat a weekly bucket in the generic weekly section', () => {
+    const weekly = {
+      usedPercent: 25,
+      windowMinutes: 10080,
+      resetsAt: 1234,
+      resetDescription: null
+    }
+    const p: ProviderRateLimits = {
+      provider: 'antigravity',
+      session: null,
+      weekly,
+      buckets: [{ name: 'Antigravity weekly', ...weekly }],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    expect(getWindowSections(p)).toEqual([{ label: 'Antigravity weekly', window: p.buckets![0] }])
+  })
+
   it('returns session and weekly when buckets are absent', () => {
     const p: ProviderRateLimits = {
       provider: 'claude',
