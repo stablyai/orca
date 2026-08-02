@@ -2,7 +2,6 @@ import {
   PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
   type PtyConsumerSessionGrant
 } from '../../shared/pty-consumer-session'
-import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 
 export const SSH_PTY_OPEN_CLIENT_METHOD = 'pty.openClient'
@@ -140,5 +139,3 @@ export async function openSshPtyConsumerSession(
       : {})
   }
 }
-
-export const SSH_PTY_SOURCE_WINDOW_SU = DEFAULT_PTY_SOURCE_WINDOW_SU

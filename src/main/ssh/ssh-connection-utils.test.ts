@@ -233,8 +233,20 @@ describe('isAuthError', () => {
     )
   })
 
+  it.each([
+    'Permission denied (publickey).',
+    'Permission denied (publickey,password).',
+    'Permission denied, please try again.'
+  ])('detects OpenSSH credential rejection: %s', (message) => {
+    expect(isAuthError(new Error(message))).toBe(true)
+  })
+
   it('returns false for transient errors', () => {
     expect(isAuthError(new Error('connect ETIMEDOUT'))).toBe(false)
+  })
+
+  it('does not classify a local filesystem permission failure as authentication', () => {
+    expect(isAuthError(new Error('Permission denied (os error 13)'))).toBe(false)
   })
 })
 

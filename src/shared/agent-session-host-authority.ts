@@ -28,8 +28,6 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
   'execution_owner_unavailable'
 ] as const
 
-export type AgentSessionRpcErrorCode = (typeof AGENT_SESSION_RPC_ERROR_CODES)[number]
-
 export const AGENT_SESSION_CLAIM_DIGEST_VERSION = 1 as const
 
 export const AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION = 2 as const

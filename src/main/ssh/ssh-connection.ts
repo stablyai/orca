@@ -40,6 +40,14 @@ import {
   type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import {
+  createCancelledConnectAttemptError,
+  isCancelledConnectAttemptError
+} from './ssh-connect-attempt-cancellation'
+import {
+  isDefiniteSystemSshHostFailure,
+  isTransientReconnectError
+} from './ssh-reconnect-error-classification'
 import { SshReconnectLadder } from './ssh-reconnect-ladder'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import {
@@ -601,8 +609,9 @@ export class SshConnection {
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt < INITIAL_RETRY_ATTEMPTS; attempt++) {
+      const connectGeneration = ++this.connectGeneration
       try {
-        await this.attemptConnect()
+        await this.attemptConnect(connectGeneration)
         this.reconnectLadder.reset()
         this.reconnectLadder.markConnected(Date.now())
         return
@@ -611,6 +620,14 @@ export class SshConnection {
 
         // Why: a concurrent disconnect() already set 'disconnected'; a cancelled attempt's late error must not overwrite it with auth-failed/error.
         if (this.disposed) {
+          throw lastError
+        }
+
+        // Why: a newer attempt owns the connection now and publishes its own outcome; retrying here would fight it.
+        if (
+          !this.isCurrentConnectAttempt(connectGeneration) ||
+          isCancelledConnectAttemptError(lastError)
+        ) {
           throw lastError
         }
 
@@ -635,11 +652,11 @@ export class SshConnection {
     throw finalError
   }
 
-  private async attemptConnect(): Promise<void> {
+  // Why: callers claim the generation so their catch can tell their own failure from a superseded one.
+  private async attemptConnect(connectGeneration = ++this.connectGeneration): Promise<void> {
     this.setState('connecting')
     this.proxyProcess?.kill()
     this.proxyProcess = null
-    const connectGeneration = ++this.connectGeneration
 
     const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(
       () => null
@@ -904,7 +921,7 @@ export class SshConnection {
         const onClose = (code: number | null): void => {
           settle(() => {
             if (this.disposed || connectGeneration !== this.connectGeneration) {
-              reject(new Error('SSH connection attempt was cancelled'))
+              reject(this.createCancelledConnectAttemptError())
               return
             }
             if (
@@ -965,6 +982,13 @@ export class SshConnection {
         throw err
       }
       removeControlSocketPath(controlPath)
+      // Why: a timeout retry doubles the ladder step, but a stuck master can cause the first timeout.
+      if (
+        isDefiniteSystemSshHostFailure(err) ||
+        (err instanceof Error && (isAuthError(err) || isPassphraseError(err)))
+      ) {
+        throw err
+      }
       this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
       this.systemSshControlMasterDisabledForSession = true
       try {
@@ -990,6 +1014,12 @@ export class SshConnection {
         throw err
       }
       removeControlSocketPath(controlPath)
+      if (
+        isDefiniteSystemSshHostFailure(err) ||
+        (err instanceof Error && (isAuthError(err) || isPassphraseError(err)))
+      ) {
+        throw err
+      }
       this.systemSshControlMasterDisabledForSession = true
       if (!this.isCurrentConnectAttempt(connectGeneration)) {
         throw this.createCancelledConnectAttemptError()
@@ -1087,7 +1117,7 @@ export class SshConnection {
   }
 
   private createCancelledConnectAttemptError(): Error {
-    return new Error('SSH connection attempt was cancelled')
+    return createCancelledConnectAttemptError()
   }
 
   private spawnTrackedSystemSshCommand(command: string, options?: SshExecOptions): ClientChannel {
@@ -1182,7 +1212,7 @@ export class SshConnection {
           cleanupStartupListeners()
           client.end()
           client.destroy()
-          reject(new Error('SSH connection attempt was cancelled'))
+          reject(this.createCancelledConnectAttemptError())
           return
         }
         settled = true
@@ -1264,22 +1294,31 @@ export class SshConnection {
   }
 
   private async runReconnectAttempt(): Promise<void> {
+    const connectGeneration = ++this.connectGeneration
     try {
       // Why: reset before connecting so the 'connected' broadcast carries reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
       this.state.reconnectAttempt = 0
-      await this.attemptConnect()
+      await this.attemptConnect(connectGeneration)
+      if (!this.isCurrentConnectAttempt(connectGeneration)) {
+        return
+      }
       // Why: attemptConnect resolves only after a real handshake on either transport; the system-ssh probe's 'connected' must not clear the failure streak.
       this.reconnectLadder.markConnected(Date.now())
     } catch (err) {
-      if (this.disposed) {
+      // Why: a superseded attempt has no outcome to publish — the attempt that claimed the generation owns the state, and cancellation is that supersession.
+      if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
         return
       }
       const error = err instanceof Error ? err : new Error(String(err))
+      if (isCancelledConnectAttemptError(error)) {
+        return
+      }
       if (isAuthError(error) || isPassphraseError(error)) {
         this.setState('auth-failed', error.message)
         return
       }
-      if (!isTransientError(error)) {
+      // Why: the system-SSH transport reports timeouts as prose, so the narrow code table would strand FIDO2 targets in 'error' forever.
+      if (!isTransientReconnectError(error)) {
         this.setState('error', error.message)
         return
       }

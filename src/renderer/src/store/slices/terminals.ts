@@ -717,6 +717,8 @@ export type TerminalSlice = {
       shutdownReason?: AgentStatusWorktreeShutdownReason
       sleepingPaneKeys?: string[]
       expectedRuntimePtyIds?: string[]
+      /** Opt-in for callers that already tore the workspace down backend-side; omitting it keeps the runtime stop. */
+      backendOwnsPtyTeardown?: boolean
     }
   ) => Promise<void>
   shutdownCompletedAgentPaneForHibernation: (
@@ -3145,7 +3147,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       markShutdownPending()
       handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
       try {
-        if (runtimeEnvironmentId) {
+        // Why an opt-in, not the reason: defaulting to the stop keeps callers without backend teardown from leaking remote PTYs.
+        if (runtimeEnvironmentId && opts?.backendOwnsPtyTeardown !== true) {
           await (shutdownReason === 'manual-sleep'
             ? requestRemoteWorktreeSleep({
                 environmentId: runtimeEnvironmentId,
@@ -3173,6 +3176,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     }
 
+    // Exact-stop callers own physical teardown and must not use the remove-worktree reason.
     if (expectedRuntimePtyIds.length > 0) {
       if (!runtimeEnvironmentId) {
         throw new Error('missing_runtime_for_exact_terminal_stop')

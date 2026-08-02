@@ -220,12 +220,8 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       const reconnect = session.reconnect(mockConn)
       await vi.advanceTimersByTimeAsync(750)
 
-      expect(
-        vi
-          .mocked(mockStore.markSshRemotePtyLease)
-          .mock.calls.filter(([, , state]) => state === 'attached')
-          .map(([, id]) => id)
-      ).toHaveLength(48)
+      expect(setPtyOwnership).toHaveBeenCalledTimes(48)
+      expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
       expect(peakActive).toBeLessThanOrEqual(8)
 
       await vi.advanceTimersByTimeAsync(20_000)
@@ -235,6 +231,11 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       expect(attempts.get('pty-0')).toBe(2)
       expect(attempts.get('pty-1')).toBe(2)
       expect(session.getState()).toBe('ready')
+      expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledOnce()
+      expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith(
+        'target-1',
+        expect.arrayContaining(ptyIds.slice(2))
+      )
       expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
         'target-1',
         expect.any(String),
@@ -420,7 +421,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId
     })
     expect(vi.mocked(mockStore.persistPtyBinding).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(mockStore.markSshRemotePtyLease).mock.invocationCallOrder[0]!
+      vi.mocked(mockStore.markSshRemotePtyLeasesAttachedAsync).mock.invocationCallOrder[0]!
     )
   })
 
@@ -564,7 +565,9 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       leafId: INCARNATION_LEAF_ID,
       incarnationId
     })
-    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-live', 'attached')
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith('target-1', [
+      'pty-live'
+    ])
     expect(consoleError).toHaveBeenCalledWith(
       '[ssh-relay-session] Failed to persist reconnect incarnation:',
       expect.any(Error)

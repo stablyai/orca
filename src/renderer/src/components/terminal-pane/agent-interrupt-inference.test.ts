@@ -101,6 +101,51 @@ describe('agent interrupt inference', () => {
     }
   )
 
+  it('reports Escape while Claude is waiting on AskUserQuestion', () => {
+    vi.useFakeTimers()
+    const inferInterrupt = vi.fn()
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () =>
+        makeEntry({ state: 'waiting', agentType: 'claude', toolName: 'AskUserQuestion' }),
+      inferInterrupt,
+      now: () => 1_100
+    })
+
+    tracker.observeInputIntent('plain-escape')
+    vi.advanceTimersByTime(500)
+
+    expect(inferInterrupt).toHaveBeenCalledWith({
+      paneKey: PANE_KEY,
+      baselineUpdatedAt: 1_000,
+      baselineStateStartedAt: 900,
+      baselinePrompt: 'write tests',
+      baselineAgentType: 'claude',
+      intent: 'plain-escape'
+    })
+    tracker.dispose()
+  })
+
+  it.each([
+    ['ctrl-c', 'AskUserQuestion'],
+    ['plain-escape', 'Bash']
+  ] as const)('does not dismiss a Claude wait from %s on %s', (intent, toolName) => {
+    vi.useFakeTimers()
+    const inferInterrupt = vi.fn()
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () => makeEntry({ state: 'waiting', agentType: 'claude', toolName }),
+      inferInterrupt,
+      now: () => 1_100
+    })
+
+    tracker.observeInputIntent(intent)
+    vi.advanceTimersByTime(500)
+
+    expect(inferInterrupt).not.toHaveBeenCalled()
+    tracker.dispose()
+  })
+
   it('emits when the working row has no agent type', () => {
     vi.useFakeTimers()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType: undefined })

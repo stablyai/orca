@@ -9,7 +9,7 @@ type CapturedTerminalInputDispatch = {
 }
 
 export type TerminalReconfirmationBinding = {
-  requestDroidReconfirmation?: () => void
+  requestWindowsShiftEnterReconfirmation?: () => void
 }
 
 export function sendCapturedTerminalInput({
@@ -36,6 +36,6 @@ export function requestCapturedTerminalReconfirmation(
   capturedBinding: TerminalReconfirmationBinding | undefined
 ): void {
   if (currentBinding === capturedBinding) {
-    capturedBinding?.requestDroidReconfirmation?.()
+    capturedBinding?.requestWindowsShiftEnterReconfirmation?.()
   }
 }

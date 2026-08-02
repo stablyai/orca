@@ -819,7 +819,7 @@ describe('SshRelaySession data delivery', () => {
     )
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(targetId, 'pty-1', 'detached')
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(targetId, 'pty-1', 'expired')
-    expect(mockStore.markSshRemotePtyLeases).not.toHaveBeenCalled()
+    expect(mockStore.markSshRemotePtyLeasesAsync).not.toHaveBeenCalled()
     expect(clearProviderPtyState).not.toHaveBeenCalled()
     expect(clearPtyOwnershipForConnection).not.toHaveBeenCalled()
     expect(deletePtyOwnership).not.toHaveBeenCalled()
@@ -836,10 +836,8 @@ describe('SshRelaySession data delivery', () => {
     })
 
     expect(acceptOutputDataMock.mock.calls.map(([payload]) => payload.data)).toEqual(['live'])
-    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
-      'empty-recovery',
-      'pty-1',
-      'attached'
-    )
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith('empty-recovery', [
+      'pty-1'
+    ])
   })
 })

@@ -16,9 +16,11 @@ import path from 'node:path'
 // Why @playwright/test, not playwright: only the former is a declared devDependency; it re-exports
 // the same browser types, so the benchmark resolves without relying on a hoisted transitive install.
 import { chromium } from '@playwright/test'
+import * as branchFixture from './worktree-deletion-branch-fixture.mjs'
 
 const DEFAULT_ITERATIONS = 3
 const DEFAULT_HISTORY_FILES = 10_000
+const DEFAULT_FETCH_DELAY_MS = 1_500
 const CDP_START_PORT = 9_700
 const START_TIMEOUT_MS = 180_000
 const IPC_TIMEOUT_MS = 90_000
@@ -29,6 +31,7 @@ function parseArgs(argv) {
     instances: [],
     iterations: DEFAULT_ITERATIONS,
     historyFiles: DEFAULT_HISTORY_FILES,
+    fetchDelayMs: DEFAULT_FETCH_DELAY_MS,
     keepFixture: false
   }
   for (let index = 2; index < argv.length; index += 1) {
@@ -65,6 +68,8 @@ function parseArgs(argv) {
       options.iterations = readPositiveInteger(value, next())
     } else if (value === '--history-files') {
       options.historyFiles = readPositiveInteger(value, next())
+    } else if (value === '--fetch-delay-ms') {
+      options.fetchDelayMs = readPositiveInteger(value, next())
     } else {
       throw new Error(`Unknown argument: ${value}`)
     }
@@ -91,6 +96,7 @@ Options:
   --instance <label=path>  Dev checkout to launch; repeat for A/B comparison
   --iterations <count>     Deletions per instance (default: ${DEFAULT_ITERATIONS})
   --history-files <count>  Files seeded in each worktree history (default: ${DEFAULT_HISTORY_FILES})
+  --fetch-delay-ms <ms>    Slow-remote delay for branch cleanup (default: ${DEFAULT_FETCH_DELAY_MS})
   --keep-fixture           Keep disposable profiles and repos for inspection`)
 }
 
@@ -117,6 +123,7 @@ function createFixture(instanceLabel) {
   run('git', ['add', 'README.md'], repoPath)
   run('git', ['commit', '-m', 'Initialize benchmark fixture', '--no-gpg-sign'], repoPath)
   run('git', ['branch', '-m', 'main'], repoPath)
+  branchFixture.initializeBranchCleanupRemote(root, repoPath)
   return { root, repoPath, userDataPath }
 }
 
@@ -406,6 +413,7 @@ async function verifyDeletion(page, worktree, historyPath, measurement) {
 async function runIteration(page, fixture, repoState, iteration, historyFiles) {
   const worktree = await createMeasuredWorktree(page, repoState.repoId, iteration)
   await assertWorktreeRowVisible(page, worktree.id)
+  branchFixture.seedBranchCleanupRepro(fixture.repoPath, worktree.path)
   const historyPath = seedTerminalHistory(fixture.userDataPath, worktree.id, historyFiles)
   const measurement = await measureDeletion(page, worktree.id, repoState.rootWorktreeId)
   await verifyDeletion(page, worktree, historyPath, measurement)
@@ -467,14 +475,14 @@ async function benchmarkInstance(instanceConfig, index, options) {
     instanceConfig.repoRoot
   )
   const fixture = createFixture(instanceConfig.label)
-  const port = await findAvailablePort(CDP_START_PORT + index)
-  const instance = launchDevInstance(instanceConfig, fixture, port)
-  let browser = null
-  console.log(`[${instanceConfig.label}] launching ${instanceConfig.repoRoot}`)
+  let delayedFetchServer, instance, browser
   try {
-    const connection = await connectToOrca(instance)
-    browser = connection.browser
-    const { page } = connection
+    delayedFetchServer = await branchFixture.startDelayedFetchServer(options.fetchDelayMs)
+    run('git', ['remote', 'set-url', 'origin', delayedFetchServer.url], fixture.repoPath)
+    const port = await findAvailablePort(CDP_START_PORT + index)
+    instance = launchDevInstance(instanceConfig, fixture, port)
+    const { browser: connectedBrowser, page } = await connectToOrca(instance)
+    browser = connectedBrowser
     const repoState = await addFixtureRepo(page, fixture.repoPath)
     const iterations = []
     for (let iteration = 1; iteration <= options.iterations; iteration += 1) {
@@ -500,6 +508,7 @@ async function benchmarkInstance(instanceConfig, index, options) {
       label: instanceConfig.label,
       repoRoot: instanceConfig.repoRoot,
       historyFiles: options.historyFiles,
+      fetchDelayMs: options.fetchDelayMs,
       iterations,
       summary: summarize(iterations.map((entry) => entry.totalMs)),
       ipcSummary: summarize(iterations.flatMap((entry) => entry.ipcLatencyMs.samples)),
@@ -508,7 +517,10 @@ async function benchmarkInstance(instanceConfig, index, options) {
     }
   } finally {
     await browser?.close().catch(() => undefined)
-    await stopDevInstance(instance)
+    if (instance) {
+      await stopDevInstance(instance)
+    }
+    await delayedFetchServer?.close()
     if (!options.keepFixture) {
       await rm(fixture.root, {
         recursive: true,

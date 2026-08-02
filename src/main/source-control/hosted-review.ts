@@ -1,7 +1,11 @@
 import type { HostedReviewInfo } from '../../shared/hosted-review'
+import { assertRemoteUrlReadable } from '../git/remote-url-probe'
 import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'
 import { withHostedReviewBranchCache } from './hosted-review-branch-cache'
-import type { HostedReviewExecutionOptions } from './hosted-review-git-options'
+import {
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from './hosted-review-git-options'
 
 function reviewLinkForProvider(
   input: Parameters<typeof getHostedReviewForBranch>[0],
@@ -71,6 +75,15 @@ export async function getHostedReviewForBranch(
         ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
       })
       if (!provider) {
+        // Why: forge detection swallows probe failures, so a remote read that
+        // was killed on its deadline (or lost its relay) would otherwise be
+        // cached as a definitive "no review" for the whole no-review interval.
+        // Throwing keeps it on the cache's failure path instead (P1-D).
+        await assertRemoteUrlReadable({
+          repoPath: input.repoPath,
+          connectionId: input.connectionId,
+          ...getHostedReviewLocalGitOptions(input)
+        })
         return null
       }
       return provider.getReviewForBranch({

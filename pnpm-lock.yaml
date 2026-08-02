@@ -324,6 +324,9 @@ importers:
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.17)(react@19.2.7)
+      react-refresh:
+        specifier: ^0.18.0
+        version: 0.18.0
       rehype-highlight:
         specifier: ^7.0.2
         version: 7.0.2

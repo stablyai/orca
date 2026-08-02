@@ -545,10 +545,6 @@ export type RuntimeTerminalOrphanAdoptionResult = {
   snapshot: RuntimeMobileSessionTabsResult
 }
 
-export type RuntimeWorktreeTerminalSleepFailure =
-  | 'terminal_liveness_unavailable'
-  | 'terminal_worktree_sleep_still_live'
-
 export type RuntimeWorktreeTerminalSleepResult = {
   stopped: number
   stoppedPtyIds: string[]
@@ -1194,16 +1190,8 @@ export type BrowserCaptureStopResult = {
   stopped: boolean
 }
 
-export type BrowserExecResult = {
-  output: unknown
-}
-
 export type BrowserTabCreateResult = {
   browserPageId: string
-}
-
-export type BrowserTabCloseResult = {
-  closed: boolean
 }
 
 export type BrowserErrorCode =
@@ -1221,13 +1209,6 @@ export type BrowserErrorCode =
   | 'browser_debugger_detached'
   | 'browser_timeout'
   | 'browser_error'
-
-export type EmulatorErrorCode =
-  | 'emulator_no_active'
-  | 'emulator_device_not_found'
-  | 'emulator_helper_failed'
-  | 'emulator_not_macos'
-  | 'emulator_error'
 
 // Keep the broad runtime-types import surface stable while letting computer-use
 // CI watch a narrow contract file instead of every runtime type change.

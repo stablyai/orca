@@ -15,6 +15,7 @@ export type RelayAuthContext = {
 
 export type CoordinatedRelayBroker = {
   closeNow(): void
+  isLive?(): boolean
 }
 
 type RelayAuthCoordinatorOptions = {
@@ -143,7 +144,13 @@ export class RelayAuthCoordinator {
         return
       }
       this.cancelLinger()
-      if (this.ownership?.valid && this.ownership.identityKey === nextIdentityKey) {
+      if (
+        this.ownership?.valid &&
+        this.ownership.identityKey === nextIdentityKey &&
+        // Why: registered must be provable; a broker whose control died without
+        // recovering falls through and is replaced instead of republished.
+        (this.ownership.broker?.isLive?.() ?? true)
+      ) {
         this.retryAttempt = 0
         this.options.onStatus('registered')
         return
@@ -181,6 +188,12 @@ export class RelayAuthCoordinator {
       this.options.onStatus('registered')
     } catch (error) {
       if (this.isEpochCurrent(epoch)) {
+        // Why: silent broker-open failures made a dead relay look like standby
+        // during incident diagnosis; the message carries operation + status.
+        console.warn(
+          '[relay] broker reconcile failed:',
+          error instanceof Error ? error.message : String(error)
+        )
         this.options.onStatus('offline')
         if (shouldRetryRelayConnectionError(error)) {
           const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0

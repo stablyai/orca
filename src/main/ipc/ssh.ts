@@ -21,6 +21,7 @@ import type {
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { isAuthError } from '../ssh/ssh-connection-utils'
+import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
@@ -114,7 +115,7 @@ export function listRegisteredRemovedSshTargetLabels(): Record<string, string> {
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
   invalidateConnectAttempt(targetId)
   await runTargetLifecycle(targetId, () =>
-    teardownSshTargetTransport(targetId, (session) => session.detach())
+    teardownSshTargetTransport(targetId, (session) => session.detachAndPersist())
   )
 }
 
@@ -127,7 +128,7 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
   await runTargetLifecycle(targetId, async () => {
     try {
       // Why: removal is destructive; dispose so remote PTYs cannot reattach to a deleted target.
-      await teardownSshTargetTransport(targetId, (session) => session.dispose())
+      await teardownSshTargetTransport(targetId, (session) => session.disposeAndPersist())
     } catch (err) {
       // Why: a failed disconnect must not block metadata removal, else the target lingers in the store with uncleaned leases.
       console.warn(
@@ -190,7 +191,7 @@ async function awaitTargetLifecycle(targetId: string): Promise<void> {
 
 async function teardownSshTargetTransport(
   targetId: string,
-  teardown: (session: SshRelaySession) => void
+  teardown: (session: SshRelaySession) => void | Promise<void>
 ): Promise<void> {
   let transportDisconnect: Promise<{ ok: true } | { ok: false; error: unknown }>
   try {
@@ -219,7 +220,7 @@ async function teardownSshTargetTransport(
 
 async function teardownActiveSshSession(
   targetId: string,
-  teardown: (session: SshRelaySession) => void
+  teardown: (session: SshRelaySession) => void | Promise<void>
 ): Promise<void> {
   const session = activeSessions.get(targetId)
   if (!session) {
@@ -233,7 +234,7 @@ async function teardownActiveSshSession(
     teardownError = { error }
   }
   try {
-    teardown(session)
+    await teardown(session)
   } catch (error) {
     teardownError ??= { error }
   }
@@ -244,6 +245,27 @@ async function teardownActiveSshSession(
   }
   if (teardownError) {
     throw teardownError.error
+  }
+}
+
+// Why: a dropped session must detach, not just leave activeSessions — detach releases the SSH PTY
+// consumer identity so the next connect reclaims its owner lease instead of minting a new one.
+// Why awaited, and why the map entry outlives the await: a retry can start the moment this returns,
+// so it must either find the session (and await this same latched teardown at the existing-session
+// path) or find nothing because the 'detached' lease write is already durable. Deleting first lets a
+// fast reconnect mark leases 'attached' and then have this session's late 'detached' write clobber it.
+async function abandonFailedSshSession(targetId: string, session: SshRelaySession): Promise<void> {
+  // Why: detachAndPersist transitions recovery ownership synchronously; only durability is awaited.
+  try {
+    await session.detachAndPersist()
+  } catch (error) {
+    // Why: a teardown throw must not mask the connect error the caller is about to rethrow.
+    console.warn(
+      `[ssh] Failed to detach abandoned session for ${targetId}: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+  if (activeSessions.get(targetId) === session) {
+    activeSessions.delete(targetId)
   }
 }
 
@@ -270,10 +292,6 @@ function invalidateConnectAttempt(targetId: string): void {
 
 function isCurrentConnectAttempt(targetId: string, authority: DirectSshAuthority): boolean {
   return authority.targetId === targetId && isCurrentSshProviderAuthority(authority)
-}
-
-function connectCancelledError(): Error {
-  return new Error('SSH connection attempt was cancelled')
 }
 
 // Why: publish reset's teardown/force-stop/disconnect lifecycle so new connects and duplicate resets can't race it.
@@ -974,7 +992,7 @@ export function registerSshHandlers(
       }
     }
     if (!isCurrentConnectAttempt(targetId, admissionAuthority)) {
-      throw connectCancelledError()
+      throw createCancelledConnectAttemptError()
     }
     const observedAuthority = admissionAuthority
     if (existing) {
@@ -984,7 +1002,7 @@ export function registerSshHandlers(
       }
     }
     if (!isCurrentSshProviderAuthority(observedAuthority)) {
-      throw connectCancelledError()
+      throw createCancelledConnectAttemptError()
     }
 
     pendingTransportReconnects.delete(targetId)
@@ -1047,13 +1065,20 @@ export function registerSshHandlers(
       // Why: await port teardown before disposing, else the new session's restorePortForwards can hit EADDRINUSE on not-yet-released ports.
       await portForwardManager!.removeAllForwards(targetId)
       if (!isCurrentConnectAttempt(targetId, authority)) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
-      existingSession.detach()
-      if (activeSessions.get(targetId) === existingSession) {
-        activeSessions.delete(targetId)
-        clearRelayLostBackoff(targetId)
-        clearRelayStateOverride(targetId)
+      try {
+        await existingSession.detachAndPersist()
+      } finally {
+        // Why finally: detachAndPersist runs its in-memory half synchronously, so the session is
+        // dead even when the lease write rejects — keeping it in activeSessions would strand every
+        // later connect on the same dead session. Why still after the await, not before it: the
+        // write has settled by now, so it can no longer clobber the replacement's 'attached' write.
+        if (activeSessions.get(targetId) === existingSession) {
+          activeSessions.delete(targetId)
+          clearRelayLostBackoff(targetId)
+          clearRelayStateOverride(targetId)
+        }
       }
     }
 
@@ -1063,7 +1088,7 @@ export function registerSshHandlers(
         throw disconnectResult.error
       }
       if (!isCurrentConnectAttempt(targetId, authority)) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
     }
 
@@ -1084,18 +1109,18 @@ export function registerSshHandlers(
     try {
       conn = await connectionManager!.connect(target)
       if (!ownsSession()) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
     } catch (err) {
       // Why: connect()'s internal state may not have reached the renderer; broadcast explicitly so the UI leaves 'connecting'.
       const errObj = err instanceof Error ? err : new Error(String(err))
       const status: SshConnectionStatus = isAuthError(errObj) ? 'auth-failed' : 'error'
       if (!ownsSession()) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
       // Why: clear this failed connect's flag so a later non-prompting connect isn't deferred.
       credentialRequestedForTarget.delete(targetId)
-      activeSessions.delete(targetId)
+      await abandonFailedSshSession(targetId, session)
       clearRelayLostBackoff(targetId)
       clearRelayStateOverride(targetId)
       broadcastSshState(getCurrentMainWindow, targetId, {
@@ -1117,7 +1142,7 @@ export function registerSshHandlers(
 
       await session.establish(conn, relayGracePeriodForTarget(target))
       if (!ownsSession()) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
 
       // Why: we manually pushed `deploying-relay`, so send `connected` straight to the renderer — routing through onStateChange would trigger reconnect logic.
@@ -1131,11 +1156,18 @@ export function registerSshHandlers(
       })
     } catch (err) {
       if (!ownsSession()) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
-      activeSessions.delete(targetId)
+      await abandonFailedSshSession(targetId, session)
       clearRelayLostBackoff(targetId)
-      await connectionManager!.disconnect(targetId)
+      try {
+        await connectionManager!.disconnect(targetId)
+      } catch (disconnectError) {
+        // Why: the establish failure is the actionable error; a teardown throw must not replace it.
+        console.warn(
+          `[ssh] Failed to disconnect transport after failed establish for ${targetId}: ${disconnectError instanceof Error ? disconnectError.message : String(disconnectError)}`
+        )
+      }
       throw err
     }
 
@@ -1205,7 +1237,7 @@ export function registerSshHandlers(
         // Why: a failed relay shutdown can leave the remote process alive in the grace window; keep the lease/session so the user can retry.
         throw new Error(`Failed to terminate SSH host sessions: ${shutdownFailures.join('; ')}`)
       }
-      await teardownSshTargetTransport(args.targetId, (session) => session.dispose())
+      await teardownSshTargetTransport(args.targetId, (session) => session.disposeAndPersist())
     })
   })
 
@@ -1224,7 +1256,9 @@ export function registerSshHandlers(
     const session = activeSessions.get(targetId)
     if (session) {
       // Why: detach() not dispose() — reset has its own stale-lease semantics below that dispose()'s clean-termination recording would hide.
-      await teardownActiveSshSession(targetId, (capturedSession) => capturedSession.detach())
+      await teardownActiveSshSession(targetId, (capturedSession) =>
+        capturedSession.detachAndPersist()
+      )
     }
 
     const existingConn = connectionManager!.getConnection(targetId)
@@ -1448,9 +1482,10 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   }
   ipcMain.removeHandler('ssh:submitCredential')
 
-  for (const session of activeSessions.values()) {
-    session.dispose()
-  }
+  // Why: allSettled — a rejected disposal write must not abort the rest of the reset and leak state into the next test.
+  await Promise.allSettled(
+    [...activeSessions.values()].map((session) => session.disposeAndPersist())
+  )
   activeSessions.clear()
   for (const targetId of relayLostBackoff.keys()) {
     clearRelayLostBackoff(targetId)

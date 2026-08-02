@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WatcherProcessEvent } from '../main/ipc/parcel-watcher-process-protocol'
 import { RelayDispatcher } from './dispatcher'
 import {
+  DISPATCHER_CONTROL_QUEUE_MAX_BYTES,
   DEFAULT_PRODUCER_QUEUE_MAX_BYTES,
   DISPATCHER_CONTROL_QUEUE_MAX_FRAMES
 } from './dispatcher-writer-admission'
@@ -75,6 +76,28 @@ function createRecordingSink(highWaterMark?: number): {
     },
     write,
     options
+  }
+}
+
+// A sink that acknowledges writes on demand, so frames can be held in flight one lane at a time.
+function createCallbackSink(): {
+  frames: Buffer[]
+  settle: (index: number) => void
+  write: RelayClientWrite
+  options: RelayClientSinkOptions
+} {
+  const frames: Buffer[] = []
+  const settlements: ((result: { ok: true }) => void)[] = []
+  const write: RelayClientWrite = (frame, onSettled) => {
+    frames.push(Buffer.from(frame))
+    settlements.push(onSettled)
+    return true
+  }
+  return {
+    frames,
+    settle: (index) => settlements[index]?.({ ok: true }),
+    write,
+    options: { supportsWriteCallback: true, close: () => {} }
   }
 }
 
@@ -207,22 +230,79 @@ describe('relay watcher overflow suppression key', () => {
     }
   })
 
-  it('releases the outstanding key when notification admission rejects without settlement', () => {
-    const sink = createRecordingSink(65536)
-    const dispatcher = new RelayDispatcher(sink.write, sink.options)
-    const notify = vi.spyOn(dispatcher, 'tryNotifyClient').mockReturnValue(false)
+  it('drops the marker instead of retaining it when the client is already gone', () => {
+    const primary = createRecordingSink(65536)
+    const secondary = createRecordingSink(65536)
+    const dispatcher = new RelayDispatcher(primary.write, primary.options)
+    const secondaryId = dispatcher.attachClient(secondary.write, secondary.options)
+    dispatcher.detachClient(secondaryId)
+    // The race the emitter has to survive: the id list was sampled before the client went away.
+    const activeIds = vi.spyOn(dispatcher, 'activeClientIds').mockReturnValue([secondaryId])
+    const notify = vi.spyOn(dispatcher, 'tryNotifyClient')
 
     try {
       emitRelayWatcherOverflow(dispatcher, '/workspace', false)
+      // A second attempt proves nothing was retained: a removed client has no tree left to resync.
       emitRelayWatcherOverflow(dispatcher, '/workspace', false)
       expect(notify).toHaveBeenCalledTimes(2)
+      expect(watcherFrames(secondary.frames)).toHaveLength(0)
     } finally {
       notify.mockRestore()
+      activeIds.mockRestore()
       dispatcher.dispose()
     }
   })
 
-  it('fails soft and releases the outstanding key when the control queue is full', () => {
+  it('republishes an admitted marker the replaced sink never wrote', () => {
+    const stalled = createRecordingSink(65536)
+    const replacement = createRecordingSink(65536)
+    stalled.blockNextWrite()
+    const dispatcher = new RelayDispatcher(stalled.write, stalled.options)
+
+    try {
+      const clientId = dispatcher.activeClientIds()[0]
+      // Saturates the sink without filling the control queue, so the marker is admitted and then parked.
+      dispatcher.notifyClient(clientId, 'control.warmup')
+      emitRelayWatcherOverflow(dispatcher, '/workspace', false)
+      expect(watcherFrames(stalled.frames)).toHaveLength(0)
+
+      // setWrite fails every queued frame; an admitted-but-unwritten marker is as lost as a rejected one.
+      dispatcher.setWrite(replacement.write, replacement.options)
+
+      expect(watcherFrames(replacement.frames).flatMap(frameEvents)).toEqual([
+        { kind: 'overflow', absolutePath: '/workspace' }
+      ])
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('republishes an admitted marker when invalidateClient precedes the sink replacement', () => {
+    const stalled = createRecordingSink(65536)
+    const replacement = createRecordingSink(65536)
+    stalled.blockNextWrite()
+    const dispatcher = new RelayDispatcher(stalled.write, stalled.options)
+
+    try {
+      const clientId = dispatcher.activeClientIds()[0]
+      dispatcher.notifyClient(clientId, 'control.warmup')
+      emitRelayWatcherOverflow(dispatcher, '/workspace', false)
+      expect(watcherFrames(stalled.frames)).toHaveLength(0)
+
+      // A dropped SSH channel invalidates the primary — a detach that keeps the id, so the marker the
+      // failed settlement retains must survive it and ride out on the reconnected sink.
+      dispatcher.invalidateClient()
+      dispatcher.setWrite(replacement.write, replacement.options)
+
+      expect(watcherFrames(replacement.frames).flatMap(frameEvents)).toEqual([
+        { kind: 'overflow', absolutePath: '/workspace' }
+      ])
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('retries a marker rejected by a full control queue once capacity returns', () => {
     const sink = createRecordingSink(65536)
     sink.blockNextWrite()
     const dispatcher = new RelayDispatcher(sink.write, sink.options)
@@ -237,12 +317,181 @@ describe('relay watcher overflow suppression key', () => {
       expect(watcherFrames(sink.frames)).toHaveLength(0)
       expect(sink.closes()).toBe(0)
 
+      // No second emit: the watcher has no further trigger, so the retry must come from the retained marker.
       sink.drainWaiters.shift()?.()
-      emitRelayWatcherOverflow(dispatcher, '/workspace', false)
       expect(watcherFrames(sink.frames).flatMap(frameEvents)).toEqual([
         { kind: 'overflow', absolutePath: '/workspace' }
       ])
       expect(sink.closes()).toBe(0)
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('leaves a retained marker alone until the control lane actually frees a slot', () => {
+    const sink = createCallbackSink()
+    const dispatcher = new RelayDispatcher(sink.write, sink.options)
+
+    try {
+      const clientId = dispatcher.activeClientIds()[0]
+      dispatcher.tryNotifyPtyData({ paneId: 'pane', data: 'x' })
+      for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
+        dispatcher.notifyClient(clientId, `control.${index}`)
+      }
+      emitRelayWatcherOverflow(dispatcher, '/workspace', false)
+      expect(watcherFrames(sink.frames)).toHaveLength(0)
+
+      const notify = vi.spyOn(dispatcher, 'tryNotifyClient')
+      // Capacity fires for every lane: a producer settlement frees no control slot, so re-encoding
+      // the marker here could only be rejected again.
+      sink.settle(sink.frames.findIndex((frame) => frameMethod(frame) === 'pty.data'))
+      expect(notify).not.toHaveBeenCalled()
+
+      // A control settlement does free one, and the retained marker goes out on it.
+      sink.settle(sink.frames.findIndex((frame) => frameMethod(frame) === 'control.0'))
+      expect(watcherFrames(sink.frames).flatMap(frameEvents)).toEqual([
+        { kind: 'overflow', absolutePath: '/workspace' }
+      ])
+      notify.mockRestore()
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('waits until the control byte budget can admit the retained marker', () => {
+    const sink = createCallbackSink()
+    const dispatcher = new RelayDispatcher(sink.write, sink.options)
+
+    try {
+      const clientId = dispatcher.activeClientIds()[0]
+      const markerParams = {
+        events: [{ kind: 'overflow', absolutePath: '/workspace' }]
+      }
+      const markerBytes = dispatcher.notificationFrameBytes('fs.changed', markerParams)
+      const emptyFillBytes = dispatcher.notificationFrameBytes('control.byte-fill', { data: '' })
+      const fillDataBytes = DISPATCHER_CONTROL_QUEUE_MAX_BYTES - markerBytes + 1 - emptyFillBytes
+
+      dispatcher.tryNotifyPtyData({ paneId: 'pane', data: 'x' })
+      dispatcher.notifyClient(clientId, 'control.byte-fill', { data: 'x'.repeat(fillDataBytes) })
+      emitRelayWatcherOverflow(dispatcher, '/workspace', false)
+      expect(watcherFrames(sink.frames)).toHaveLength(0)
+
+      const notify = vi.spyOn(dispatcher, 'tryNotifyClient')
+      sink.settle(sink.frames.findIndex((frame) => frameMethod(frame) === 'pty.data'))
+      expect(notify).not.toHaveBeenCalled()
+
+      sink.settle(sink.frames.findIndex((frame) => frameMethod(frame) === 'control.byte-fill'))
+      expect(watcherFrames(sink.frames).flatMap(frameEvents)).toEqual([
+        { kind: 'overflow', absolutePath: '/workspace' }
+      ])
+      notify.mockRestore()
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('keeps a retained marker per root and sends each exactly once', () => {
+    const sink = createRecordingSink(65536)
+    sink.blockNextWrite()
+    const dispatcher = new RelayDispatcher(sink.write, sink.options)
+
+    try {
+      const clientId = dispatcher.activeClientIds()[0]
+      for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
+        dispatcher.notifyClient(clientId, `control.${index}`)
+      }
+
+      for (let index = 0; index < 3; index += 1) {
+        emitRelayWatcherOverflow(dispatcher, '/workspace', false)
+        emitRelayWatcherOverflow(dispatcher, '/other', false)
+      }
+      sink.drainWaiters.shift()?.()
+
+      // A retained root must neither duplicate nor suppress a peer root's resync.
+      expect(watcherFrames(sink.frames).flatMap(frameEvents)).toEqual([
+        { kind: 'overflow', absolutePath: '/workspace' },
+        { kind: 'overflow', absolutePath: '/other' }
+      ])
+      expect(sink.closes()).toBe(0)
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('republishes a retained marker against a replaced primary sink', () => {
+    const stalled = createRecordingSink(65536)
+    const replacement = createRecordingSink(65536)
+    stalled.blockNextWrite()
+    const dispatcher = new RelayDispatcher(stalled.write, stalled.options)
+
+    try {
+      const clientId = dispatcher.activeClientIds()[0]
+      for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
+        dispatcher.notifyClient(clientId, `control.${index}`)
+      }
+      emitRelayWatcherOverflow(dispatcher, '/workspace', false)
+      expect(watcherFrames(stalled.frames)).toHaveLength(0)
+
+      // setWrite replaces the sink without a detach, so the marker must follow the client, not the writer.
+      dispatcher.setWrite(replacement.write, replacement.options)
+
+      expect(watcherFrames(replacement.frames).flatMap(frameEvents)).toEqual([
+        { kind: 'overflow', absolutePath: '/workspace' }
+      ])
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('republishes a retained marker when invalidateClient precedes the sink replacement', () => {
+    const stalled = createRecordingSink(65536)
+    const replacement = createRecordingSink(65536)
+    stalled.blockNextWrite()
+    const dispatcher = new RelayDispatcher(stalled.write, stalled.options)
+
+    try {
+      const clientId = dispatcher.activeClientIds()[0]
+      for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
+        dispatcher.notifyClient(clientId, `control.${index}`)
+      }
+      emitRelayWatcherOverflow(dispatcher, '/workspace', false)
+      expect(watcherFrames(stalled.frames)).toHaveLength(0)
+
+      // The SSH reconnect order: invalidateClient detaches the primary without retiring the id, so the
+      // pending marker must survive that detach and ride out on the replacement sink.
+      dispatcher.invalidateClient()
+      dispatcher.setWrite(replacement.write, replacement.options)
+
+      expect(watcherFrames(replacement.frames).flatMap(frameEvents)).toEqual([
+        { kind: 'overflow', absolutePath: '/workspace' }
+      ])
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('forgets a retained marker when the client detaches', () => {
+    const primary = createRecordingSink(65536)
+    const secondary = createRecordingSink(65536)
+    secondary.blockNextWrite()
+    const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
+    try {
+      const secondaryId = dispatcher.attachClient(secondary.write, secondary.options)
+      for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
+        dispatcher.notifyClient(secondaryId, `control.${index}`)
+      }
+      emitRelayWatcherOverflow(dispatcher, '/workspace', false)
+      expect(watcherFrames(secondary.frames)).toHaveLength(0)
+
+      dispatcher.detachClient(secondaryId)
+      secondary.drainWaiters.shift()?.()
+
+      expect(watcherFrames(secondary.frames)).toHaveLength(0)
+      // The primary's own marker went out on its first attempt and stays unaffected.
+      expect(watcherFrames(primary.frames).flatMap(frameEvents)).toEqual([
+        { kind: 'overflow', absolutePath: '/workspace' }
+      ])
     } finally {
       dispatcher.dispose()
     }

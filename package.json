@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.164-rc.0",
+  "version": "1.4.164-rc.2",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -16,6 +16,7 @@
     "audit:code-quality:native": "oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings",
     "audit:code-quality:type-aware": "oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings",
     "audit:react-doctor": "pnpm dlx react-doctor@0.9.1 . --yes --no-supply-chain --no-telemetry --blocking none",
+    "audit:dead-code": "pnpm dlx knip@5 --config config/knip.json",
     "check:code-quality:changed": "node config/scripts/check-changed-code-quality.mjs",
     "check:react-doctor:changed": "node config/scripts/check-react-doctor-changed.mjs",
     "check:zustand-selector-fanout": "node config/scripts/zustand-selector-fanout-benchmark.mjs --check",
@@ -218,6 +219,7 @@
     "react-dom": "^19.2.7",
     "react-grab": "^0.1.33",
     "react-markdown": "^10.1.0",
+    "react-refresh": "^0.18.0",
     "rehype-highlight": "^7.0.2",
     "rehype-katex": "^7.0.1",
     "rehype-raw": "^7.0.0",

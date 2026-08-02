@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import type { SshRemotePtyLeaseState } from '../shared/ssh-types'
 
 const testState = { dir: '' }
 
@@ -130,8 +139,38 @@ const ROTATION_INTERLEAVE_CASES = [
 
 type TestStore = {
   updateUI(updates: { sidebarWidth: number }): void
+  setGitHubCache(cache: { pr: Record<string, never>; issue: Record<string, never> }): void
   waitForPendingWrite(): Promise<void>
   flushOrThrow(): void
+  flushPendingAsync(): Promise<void>
+  flushPendingOrThrowAsync(): Promise<void>
+  upsertSshPtyConsumerRecovery(record: {
+    targetId: string
+    clientInstanceId: string
+    serverBuildId: string
+    clientGeneration: number
+    ownerGeneration: number
+    ownerLease: string
+  }): Promise<void>
+  removeSshPtyConsumerRecovery(targetId: string): Promise<void>
+  upsertSshRemotePtyLease(lease: {
+    targetId: string
+    ptyId: string
+    state: SshRemotePtyLeaseState
+  }): void
+  markSshRemotePtyLeasesAsync(targetId: string, state: SshRemotePtyLeaseState): Promise<void>
+  markSshRemotePtyLeasesAttachedAsync(targetId: string, ptyIds: readonly string[]): Promise<void>
+}
+
+function consumerRecovery(clientInstanceId: string) {
+  return {
+    targetId: 'ssh-1',
+    clientInstanceId,
+    serverBuildId: 'relay-build-1',
+    clientGeneration: 3,
+    ownerGeneration: 5,
+    ownerLease: 'secret-owner-lease'
+  }
 }
 
 async function createStore(dir: string): Promise<TestStore> {
@@ -309,7 +348,173 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     expect(ring['orca-data.json.bak.2']).toBeUndefined()
   })
 
-  it('keeps the due check inside ownership when a second writer starts', async () => {
+  it('a sync checkpoint vetoes an async write already parked on rename', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    let releaseRename!: () => void
+    const renameRelease = new Promise<void>((resolve) => {
+      releaseRename = resolve
+    })
+    let signalRename!: () => void
+    const renameStarted = new Promise<void>((resolve) => {
+      signalRename = resolve
+    })
+    fsCalls.waitAsync = (fn, target) => {
+      if (fn !== 'rename' || target === dataFile(dir) || !target.startsWith(dataFile(dir))) {
+        return null
+      }
+      signalRename()
+      return renameRelease
+    }
+
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+    store.updateUI({ sidebarWidth: 501 })
+    vi.advanceTimersByTime(SAVE_DEBOUNCE_MS)
+    const pending = store.waitForPendingWrite()
+    await renameStarted
+
+    store.updateUI({ sidebarWidth: 502 })
+    store.flushOrThrow()
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(502)
+
+    releaseRename()
+    await pending
+    fsCalls.recording = false
+    fsCalls.waitAsync = null
+
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(502)
+    expect(readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toHaveLength(0)
+  })
+
+  it('retries a genuine ENOENT instead of marking the state persisted', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+    fsCalls.failAsync = (fn, target) =>
+      fn === 'rename' && target.startsWith(dataFile(dir)) && !target.includes('.bak.')
+        ? Object.assign(new Error('mount disappeared'), { code: 'ENOENT' })
+        : null
+
+    store.updateUI({ sidebarWidth: 511 })
+    await store.flushPendingAsync()
+    expect(existsSync(dataFile(dir))).toBe(false)
+
+    fsCalls.failAsync = null
+    await store.flushPendingAsync()
+    fsCalls.recording = false
+    errors.mockRestore()
+
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(511)
+  })
+
+  it('the throwing async barrier drains mutations made during its write', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    let releaseRename!: () => void
+    const renameRelease = new Promise<void>((resolve) => {
+      releaseRename = resolve
+    })
+    let signalRename!: () => void
+    const renameStarted = new Promise<void>((resolve) => {
+      signalRename = resolve
+    })
+    let held = false
+    fsCalls.waitAsync = (fn, target) => {
+      if (held || fn !== 'rename' || !target.startsWith(dataFile(dir))) {
+        return null
+      }
+      held = true
+      signalRename()
+      return renameRelease
+    }
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+
+    store.updateUI({ sidebarWidth: 601 })
+    const barrier = store.flushPendingOrThrowAsync()
+    await renameStarted
+    store.updateUI({ sidebarWidth: 602 })
+    releaseRename()
+    await barrier
+    fsCalls.recording = false
+
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(602)
+  })
+
+  it('bounds a best-effort flush to one state generation', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    let releaseRename!: () => void
+    const renameRelease = new Promise<void>((resolve) => {
+      releaseRename = resolve
+    })
+    let signalRename!: () => void
+    const renameStarted = new Promise<void>((resolve) => {
+      signalRename = resolve
+    })
+    let held = false
+    fsCalls.waitAsync = (fn, target) => {
+      if (held || fn !== 'rename' || !target.startsWith(dataFile(dir))) {
+        return null
+      }
+      held = true
+      signalRename()
+      return renameRelease
+    }
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+
+    store.updateUI({ sidebarWidth: 621 })
+    const flush = store.flushPendingAsync()
+    await renameStarted
+    store.updateUI({ sidebarWidth: 622 })
+    releaseRename()
+    await flush
+    fsCalls.recording = false
+
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(621)
+
+    await store.flushPendingOrThrowAsync()
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(622)
+  })
+
+  it('the throwing async barrier drains mutations made during sidecar I/O', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    let releaseRename!: () => void
+    const renameRelease = new Promise<void>((resolve) => {
+      releaseRename = resolve
+    })
+    let signalRename!: () => void
+    const renameStarted = new Promise<void>((resolve) => {
+      signalRename = resolve
+    })
+    fsCalls.waitAsync = (fn, target) => {
+      if (fn !== 'rename' || !target.includes('orca-github-cache.json.')) {
+        return null
+      }
+      signalRename()
+      return renameRelease
+    }
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+
+    store.updateUI({ sidebarWidth: 611 })
+    store.setGitHubCache({ pr: {}, issue: {} })
+    const barrier = store.flushPendingOrThrowAsync()
+    await renameStarted
+    store.updateUI({ sidebarWidth: 612 })
+    releaseRename()
+    await barrier
+    fsCalls.recording = false
+
+    expect(JSON.parse(readFileSync(dataFile(dir), 'utf-8')).ui.sidebarWidth).toBe(612)
+  })
+
+  it('serializes a second writer behind the owned rotation', async () => {
     const dir = makeDir()
     const store = await createStore(dir)
     seedStaleBackup(dir)
@@ -340,22 +545,26 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     store.updateUI({ sidebarWidth: 371 })
     vi.advanceTimersByTime(SAVE_DEBOUNCE_MS)
     const firstWrite = store.waitForPendingWrite()
+    let allWrites = firstWrite
     try {
       await rotationStarted
       store.updateUI({ sidebarWidth: 372 })
       store.flushOrThrow()
       store.updateUI({ sidebarWidth: 373 })
       vi.advanceTimersByTime(SAVE_DEBOUNCE_MS)
-      await store.waitForPendingWrite()
+      allWrites = store.waitForPendingWrite()
       expect(fsCalls.asyncCalls.filter((call) => call === statCall)).toHaveLength(1)
+      releaseRotation()
+      await Promise.all([firstWrite, allWrites])
     } finally {
       releaseRotation()
-      await firstWrite
+      await allWrites
       fsCalls.recording = false
       fsCalls.waitAsync = null
     }
     const ring = ringSnapshot(dir)
-    expect(ring['orca-data.json.bak.0']).toBe(ring['orca-data.json'])
+    expect(JSON.parse(ring['orca-data.json']).ui.sidebarWidth).toBe(373)
+    expect(JSON.parse(ring['orca-data.json.bak.0']).ui.sidebarWidth).toBe(372)
     expect(ring['orca-data.json.bak.1']).toBe(staleBackup)
     expect(ring['orca-data.json.bak.2']).toBeUndefined()
   })
@@ -474,6 +683,201 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     expect(ring).toEqual(ringSnapshot(syncDir))
     expect(Object.keys(ring)).toContain(`orca-data.json.bak.${BACKUP_COUNT - 1}`)
   })
+
+  it('persists SSH PTY consumer recovery without a sync syscall, durable once awaited', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+    try {
+      await store.upsertSshPtyConsumerRecovery(consumerRecovery('client-1'))
+    } finally {
+      fsCalls.recording = false
+    }
+
+    expect(fsCalls.syncCalls).toEqual([])
+    // Durability is awaited, not merely debounced: the record is on disk when the promise resolves.
+    const persisted = JSON.parse(readFileSync(dataFile(dir), 'utf-8')) as {
+      sshPtyConsumerRecoveries: { clientInstanceId: string }[]
+    }
+    expect(persisted.sshPtyConsumerRecoveries).toHaveLength(1)
+    expect(persisted.sshPtyConsumerRecoveries[0]?.clientInstanceId).toBe('client-1')
+  })
+
+  it('rejects the consumer-recovery durability barrier when the primary write fails', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    const writeError = Object.assign(new Error('profile mount rejected write'), { code: 'EIO' })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+    fsCalls.failAsync = (fn, target) =>
+      fn === 'open' && target.startsWith(`${dataFile(dir)}.`) ? writeError : null
+
+    try {
+      await expect(store.upsertSshPtyConsumerRecovery(consumerRecovery('client-1'))).rejects.toBe(
+        writeError
+      )
+    } finally {
+      fsCalls.recording = false
+      errors.mockRestore()
+    }
+  })
+
+  it('removes SSH PTY consumer recovery without a sync syscall, durable once awaited', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    await store.upsertSshPtyConsumerRecovery(consumerRecovery('client-1'))
+
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+    try {
+      await store.removeSshPtyConsumerRecovery('ssh-1')
+    } finally {
+      fsCalls.recording = false
+    }
+
+    expect(fsCalls.syncCalls).toEqual([])
+    const persisted = JSON.parse(readFileSync(dataFile(dir), 'utf-8')) as {
+      sshPtyConsumerRecoveries: unknown[]
+    }
+    expect(persisted.sshPtyConsumerRecoveries).toEqual([])
+  })
+
+  it('persists failed-session lease detachment without a sync syscall', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-1', state: 'attached' })
+
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+    try {
+      await store.markSshRemotePtyLeasesAsync('ssh-1', 'detached')
+    } finally {
+      fsCalls.recording = false
+    }
+
+    expect(fsCalls.syncCalls).toEqual([])
+    const persisted = JSON.parse(readFileSync(dataFile(dir), 'utf-8')) as {
+      sshRemotePtyLeases: { state: string }[]
+    }
+    expect(persisted.sshRemotePtyLeases[0]?.state).toBe('detached')
+  })
+
+  it('persists selected reattach leases in one async write', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-1', state: 'detached' })
+    store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-2', state: 'expired' })
+    store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-3', state: 'detached' })
+    // Why: a PTY that exits mid-reattach is terminated before the batch write lands; it must stay dead.
+    store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-4', state: 'terminated' })
+
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+    try {
+      await store.markSshRemotePtyLeasesAttachedAsync('ssh-1', ['pty-1', 'pty-2', 'pty-4'])
+    } finally {
+      fsCalls.recording = false
+    }
+
+    expect(fsCalls.syncCalls).toEqual([])
+    const persisted = JSON.parse(readFileSync(dataFile(dir), 'utf-8')) as {
+      sshRemotePtyLeases: { ptyId: string; state: string }[]
+    }
+    expect(persisted.sshRemotePtyLeases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ptyId: 'pty-1', state: 'attached' }),
+        expect.objectContaining({ ptyId: 'pty-2', state: 'expired' }),
+        expect.objectContaining({ ptyId: 'pty-3', state: 'detached' }),
+        expect.objectContaining({ ptyId: 'pty-4', state: 'terminated' })
+      ])
+    )
+  })
+
+  it('keeps async writers serialized across a synchronous shutdown flush', async () => {
+    const dir = makeDir()
+    const store = await createStore(dir)
+    let signalFirstOpen!: () => void
+    const firstOpen = new Promise<void>((resolve) => {
+      signalFirstOpen = resolve
+    })
+    let releaseFirstOpen!: () => void
+    const firstOpenRelease = new Promise<void>((resolve) => {
+      releaseFirstOpen = resolve
+    })
+    let held = false
+    fsCalls.waitAsync = (fn, target) => {
+      if (held || fn !== 'open' || !target.endsWith('.tmp')) {
+        return null
+      }
+      held = true
+      signalFirstOpen()
+      return firstOpenRelease
+    }
+
+    fsCalls.dirPrefix = dir
+    fsCalls.recording = true
+    try {
+      const firstWrite = store.upsertSshPtyConsumerRecovery(consumerRecovery('client-1'))
+      await firstOpen
+      store.flushOrThrow()
+      const secondWrite = store.upsertSshPtyConsumerRecovery(consumerRecovery('client-2'))
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(fsCalls.asyncCalls.filter((call) => call.startsWith('open:'))).toHaveLength(1)
+      releaseFirstOpen()
+      await Promise.all([firstWrite, secondWrite])
+    } finally {
+      releaseFirstOpen()
+      fsCalls.recording = false
+      fsCalls.waitAsync = null
+    }
+
+    const persisted = JSON.parse(readFileSync(dataFile(dir), 'utf-8')) as {
+      sshPtyConsumerRecoveries: { clientInstanceId: string }[]
+    }
+    expect(persisted.sshPtyConsumerRecoveries[0]?.clientInstanceId).toBe('client-2')
+  })
+
+  it('lets a main-thread timer keep firing while a consumer-recovery write is in flight', async () => {
+    // The P1-A freeze itself: a stalled profile mount must not park the main thread on establish.
+    vi.useRealTimers()
+    const dir = makeDir()
+    const store = await createStore(dir)
+    const stallMs = 1_000
+    // Why half: a sync write parks the loop for at least stallMs while the async path ticks every
+    // ~10ms, so this leaves room for scheduler jitter on a loaded runner without going vacuous.
+    const maxAcceptableGapMs = stallMs / 2
+
+    let lastTick = Date.now()
+    let worstGapMs = 0
+    const heartbeat = setInterval(() => {
+      const now = Date.now()
+      worstGapMs = Math.max(worstGapMs, now - lastTick)
+      lastTick = now
+    }, 10)
+
+    try {
+      fsCalls.dirPrefix = dir
+      fsCalls.stallMs = stallMs
+      fsCalls.recording = true
+      lastTick = Date.now()
+      const write = store.upsertSshPtyConsumerRecovery(consumerRecovery('client-1'))
+      // Why not await first: a fully synchronous write finishes before the interval can fire, so the
+      // heartbeat would never observe the stall it exists to detect.
+      await new Promise((resolve) => setTimeout(resolve, stallMs + 200))
+      await write
+    } finally {
+      fsCalls.recording = false
+      clearInterval(heartbeat)
+    }
+
+    expect(worstGapMs).toBeLessThan(maxAcceptableGapMs)
+    expect(readFileSync(dataFile(dir), 'utf-8')).toContain('client-1')
+  }, 20_000)
 
   it('keeps the sync quit/crash fallback on synchronous syscalls', async () => {
     const dir = makeDir()

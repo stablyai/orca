@@ -44,6 +44,30 @@ export function sessionDetailConversationTurns(
   return dedupeAdjacentConversationTurns(turns).slice(-limit)
 }
 
+/**
+ * Placeholder text for the first-prompt row while the full body loads on demand.
+ * List scans no longer store firstUserPrompt (payload/perf); this is preview-only.
+ */
+export function sessionFirstPrompt(session: AiVaultSession): string | null {
+  // Prefer a stored full body when present (on-demand re-parse / tests).
+  const stored = session.firstUserPrompt?.trim()
+  if (stored) {
+    return stored
+  }
+
+  for (const message of session.previewMessages) {
+    if (message.role !== 'user') {
+      continue
+    }
+    const text = message.text.trim()
+    if (text) {
+      return text
+    }
+  }
+
+  return null
+}
+
 function turnTextMatchesSessionTitle(title: string, turnText: string): boolean {
   const sessionText = normalizeSessionDisplayText(title)
   const candidateText = normalizeSessionDisplayText(turnText)

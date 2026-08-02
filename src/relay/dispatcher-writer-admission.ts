@@ -70,6 +70,13 @@ export class DispatcherWriterAdmission {
     return this.producerBytes
   }
 
+  canAdmitControl(bytes: number): boolean {
+    return (
+      this.controlFrames < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES &&
+      this.controlBytes + bytes <= DISPATCHER_CONTROL_QUEUE_MAX_BYTES
+    )
+  }
+
   get queuedEntries(): number {
     return Object.values(this.queues).reduce((total, queue) => total + queue.length, 0)
   }
@@ -147,10 +154,7 @@ export class DispatcherWriterAdmission {
   private admitControl(entry: DispatcherWriterEntry): AdmissionResult {
     // Why: best-effort controls may fail soft without weakening protocol-critical admission.
     const overflowIsNonFatal = entry.overflowIsNonFatal === true
-    if (
-      this.controlFrames >= DISPATCHER_CONTROL_QUEUE_MAX_FRAMES ||
-      this.controlBytes + entry.estimatedBytes > DISPATCHER_CONTROL_QUEUE_MAX_BYTES
-    ) {
+    if (!this.canAdmitControl(entry.estimatedBytes)) {
       if (overflowIsNonFatal) {
         return { accepted: false }
       }

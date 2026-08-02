@@ -202,14 +202,6 @@ export type HostedReviewQueueSummary = {
   draft?: boolean
 }
 
-export type HostedReviewQueueKey =
-  | 'mine'
-  | 'requested'
-  | 'agent'
-  | 'teammate'
-  | 'needs-response'
-  | 'ready-to-merge'
-
 export type HostedReviewQueueState = 'mine' | 'requested' | 'agent' | 'teammate'
 
 export type HostedReviewQueueClassification = {
