@@ -105,8 +105,10 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb, type MessageRow } from './orchestration/db'
 import { OrchestrationError } from './orchestration/orchestration-error'
+import { ConversationWakeService } from './orchestration/conversation-wake-service'
+import type { ConversationWakeProvider } from './orchestration/conversation-wake-provider'
 import {
   planLegacyWorkerTerminalRecovery,
   type LegacyWorkerTerminalRecoveryPlan
@@ -2764,6 +2766,10 @@ export class OrcaRuntimeService {
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
+  private orchestrationConversationWake: ConversationWakeService | null = null
+  private readonly orchestrationConversationWakeProviders: readonly ConversationWakeProvider[]
+  private readonly isOrchestrationConversationWakeEnabledFn: () => boolean
+  private readonly isOrchestrationConversationWakeKillSwitchOpenFn: () => boolean
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
   // These listeners fire on every onPtyData call, enabling real-time streaming
@@ -3228,6 +3234,9 @@ export class OrcaRuntimeService {
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
+      orchestrationConversationWakeProviders?: readonly ConversationWakeProvider[]
+      isOrchestrationConversationWakeEnabled?: () => boolean
+      isOrchestrationConversationWakeKillSwitchOpen?: () => boolean
     }
   ) {
     this.store = store
@@ -3240,6 +3249,13 @@ export class OrcaRuntimeService {
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
+    this.orchestrationConversationWakeProviders = deps?.orchestrationConversationWakeProviders ?? []
+    this.isOrchestrationConversationWakeEnabledFn =
+      deps?.isOrchestrationConversationWakeEnabled ??
+      (() => process.env.ORCA_FEATURE_ORCHESTRATION_CONVERSATION_WAKE === '1')
+    this.isOrchestrationConversationWakeKillSwitchOpenFn =
+      deps?.isOrchestrationConversationWakeKillSwitchOpen ??
+      (() => process.env.ORCA_DISABLE_ORCHESTRATION_CONVERSATION_WAKE !== '1')
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -3722,12 +3738,53 @@ export class OrcaRuntimeService {
       const { app } = require('electron')
       const dbPath = join(app.getPath('userData'), 'orchestration.db')
       this._orchestrationDb = new OrchestrationDb(dbPath)
+      this.ensureOrchestrationConversationWake()
     }
     return this._orchestrationDb
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
+    this.orchestrationConversationWake?.dispose()
+    this.orchestrationConversationWake = null
     this._orchestrationDb = db
+    this.ensureOrchestrationConversationWake()
+  }
+
+  bindOrchestrationConversationWake(params: {
+    runId: string
+    consumerGeneration: number
+    provider: string
+    conversationId: string
+  }): ReturnType<ConversationWakeService['bindTarget']> {
+    this.getOrchestrationDb()
+    return this.ensureOrchestrationConversationWake().bindTarget(params)
+  }
+
+  onOrchestrationMessageCommitted(message: MessageRow): void {
+    void this.ensureOrchestrationConversationWake()
+      .onMessageCommitted(message)
+      .catch((error) => console.warn('[orchestration-wake] post-commit processing failed', error))
+  }
+
+  reconcileOrchestrationConversationWake(): Promise<void> {
+    this.getOrchestrationDb()
+    return this.ensureOrchestrationConversationWake().reconcile()
+  }
+
+  private ensureOrchestrationConversationWake(): ConversationWakeService {
+    if (!this.orchestrationConversationWake) {
+      this.orchestrationConversationWake = new ConversationWakeService({
+        db: this._orchestrationDb as OrchestrationDb,
+        providers: this.orchestrationConversationWakeProviders,
+        isFeatureEnabled: this.isOrchestrationConversationWakeEnabledFn,
+        isKillSwitchOpen: this.isOrchestrationConversationWakeKillSwitchOpenFn,
+        onError: (error) => console.warn('[orchestration-wake] provider operation failed', error)
+      })
+      void this.orchestrationConversationWake
+        .reconcile()
+        .catch((error) => console.warn('[orchestration-wake] reconciliation failed', error))
+    }
+    return this.orchestrationConversationWake
   }
 
   private getLegacyWorkerTerminalRecoveryPlan(): LegacyWorkerTerminalRecoveryPlan {

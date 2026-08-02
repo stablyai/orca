@@ -105,6 +105,7 @@ export async function handleLegacyLifecycleSend(args: {
   })
   if (!committed.duplicate) {
     runtime.notifyMessageArrived(committed.message.to_handle, committed.message.type)
+    runtime.onOrchestrationMessageCommitted(committed.message)
   }
   return {
     message: committed.message,

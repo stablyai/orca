@@ -37,6 +37,12 @@ import type {
   FederationRelayDirection,
   FederationRelayItemRow
 } from './types'
+import type {
+  ConversationWakeBindingRow,
+  ConversationWakeJobRow,
+  ConversationWakeProvenanceRow,
+  ConversationWakeProvenanceSource
+} from './conversation-wake-state'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -95,6 +101,12 @@ export type {
   WorkerDispatchRow,
   WorkerDispatchState
 }
+export type {
+  ConversationWakeBindingRow,
+  ConversationWakeJobRow,
+  ConversationWakeProvenanceRow,
+  ConversationWakeProvenanceSource
+} from './conversation-wake-state'
 
 function generateId(prefix: string): string {
   return `${prefix}_${randomBytes(6).toString('hex')}`
@@ -137,6 +149,20 @@ function hasLifecycleRejectionMarker(payload: string | null): boolean {
   } catch {
     return false
   }
+}
+
+const CONVERSATION_WAKE_MESSAGE_TYPES = [
+  'worker_done',
+  'escalation',
+  'decision_gate',
+  'question'
+] as const
+
+function conversationWakeId(runId: string, consumerGeneration: number, messageId: string): string {
+  return `wake_${createHash('sha256')
+    .update(`${runId}\0${consumerGeneration}\0${messageId}`)
+    .digest('hex')
+    .slice(0, 32)}`
 }
 
 const SQLITE_UTC_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/
@@ -259,8 +285,8 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup.
-const SCHEMA_VERSION = 22
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 conversation wake ownership and jobs.
+const SCHEMA_VERSION = 24
 
 function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -274,8 +300,14 @@ function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
   }
 }
 
+export type CurrentDispatchMessageCommitStage =
+  | 'after_insert'
+  | 'after_reconciliation'
+  | 'after_provenance'
+
 export class OrchestrationDb {
   private db: Database.Database
+  private currentDispatchMessageCommitActive = false
 
   // Why: the orchestration DB is created lazily for ALL users, but only the
   // small minority who dispatch work ever have dispatch_contexts rows. The
@@ -353,6 +385,68 @@ export class OrchestrationDb {
         ON deliveries(run_id) WHERE status = 'outstanding';
       CREATE INDEX IF NOT EXISTS idx_deliveries_run_created
         ON deliveries(run_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS conversation_wake_bindings (
+        run_id                TEXT PRIMARY KEY,
+        consumer_generation  INTEGER NOT NULL,
+        provider              TEXT NOT NULL,
+        conversation_id      TEXT NOT NULL,
+        status                TEXT NOT NULL DEFAULT 'active'
+          CHECK(status IN ('active', 'fenced')),
+        created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS conversation_wake_provenance (
+        message_id            TEXT PRIMARY KEY,
+        run_id                TEXT NOT NULL,
+        message_type          TEXT NOT NULL
+          CHECK(message_type IN ('worker_done', 'escalation', 'decision_gate', 'question')),
+        task_id               TEXT NOT NULL,
+        dispatch_id           TEXT NOT NULL,
+        source                TEXT NOT NULL
+          CHECK(source IN (
+            'current_dispatch', 'current_question', 'federated_dispatch',
+            'legacy_dispatch', 'legacy_question'
+          )),
+        created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS conversation_wake_jobs (
+        wake_id               TEXT PRIMARY KEY,
+        message_id            TEXT NOT NULL,
+        run_id                TEXT NOT NULL,
+        consumer_generation  INTEGER NOT NULL,
+        provider              TEXT NOT NULL,
+        conversation_id      TEXT NOT NULL,
+        message_type          TEXT NOT NULL
+          CHECK(message_type IN ('worker_done', 'escalation', 'decision_gate', 'question')),
+        task_id               TEXT,
+        dispatch_id           TEXT,
+        status                TEXT NOT NULL DEFAULT 'pending'
+          CHECK(status IN (
+            'pending', 'waiting_for_idle', 'retry_wait', 'submitting', 'accepted', 'submitted',
+            'blocked', 'blocked_inconsistent', 'cancelled', 'fenced'
+          )),
+        attempt_count         INTEGER NOT NULL DEFAULT 0,
+        provider_turn_id      TEXT,
+        acceptance_lease      TEXT,
+        lease_expires_at      INTEGER,
+        next_attempt_at       INTEGER,
+        last_error            TEXT,
+        created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at            TEXT NOT NULL DEFAULT (datetime('now')),
+        submitted_at          TEXT
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_wake_job_generation
+        ON conversation_wake_jobs(message_id, consumer_generation);
+
+      CREATE INDEX IF NOT EXISTS idx_conversation_wake_jobs_actionable
+        ON conversation_wake_jobs(status, created_at);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_wake_one_active_target
+        ON conversation_wake_bindings(provider, conversation_id) WHERE status = 'active';
 
       CREATE TABLE IF NOT EXISTS mutation_receipts (
         caller_fingerprint  TEXT NOT NULL,
@@ -890,6 +984,131 @@ export class OrchestrationDb {
         this.db.exec(`
           CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_handle
             ON dispatch_contexts(assignee_handle);
+        `)
+      }
+      if (current < 23) {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS conversation_wake_bindings (
+            run_id                TEXT PRIMARY KEY,
+            consumer_generation  INTEGER NOT NULL,
+            provider              TEXT NOT NULL,
+            conversation_id      TEXT NOT NULL,
+            status                TEXT NOT NULL DEFAULT 'active'
+              CHECK(status IN ('active', 'fenced')),
+            created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          CREATE TABLE IF NOT EXISTS conversation_wake_provenance (
+            message_id            TEXT PRIMARY KEY,
+            run_id                TEXT NOT NULL,
+            message_type          TEXT NOT NULL
+              CHECK(message_type IN ('worker_done', 'escalation', 'decision_gate', 'question')),
+            task_id               TEXT NOT NULL,
+            dispatch_id           TEXT NOT NULL,
+            source                TEXT NOT NULL
+              CHECK(source IN (
+                'current_dispatch', 'current_question', 'federated_dispatch',
+                'legacy_dispatch', 'legacy_question'
+              )),
+            created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          CREATE TABLE IF NOT EXISTS conversation_wake_jobs (
+            wake_id               TEXT PRIMARY KEY,
+            message_id            TEXT NOT NULL,
+            run_id                TEXT NOT NULL,
+            consumer_generation  INTEGER NOT NULL,
+            provider              TEXT NOT NULL,
+            conversation_id      TEXT NOT NULL,
+            message_type          TEXT NOT NULL
+              CHECK(message_type IN ('worker_done', 'escalation', 'decision_gate', 'question')),
+            task_id               TEXT,
+            dispatch_id           TEXT,
+            status                TEXT NOT NULL DEFAULT 'pending'
+              CHECK(status IN (
+                'pending', 'waiting_for_idle', 'retry_wait', 'submitting', 'accepted', 'submitted',
+                'blocked', 'blocked_inconsistent', 'cancelled', 'fenced'
+              )),
+            attempt_count         INTEGER NOT NULL DEFAULT 0,
+            provider_turn_id      TEXT,
+            acceptance_lease      TEXT,
+            lease_expires_at      INTEGER,
+            next_attempt_at       INTEGER,
+            last_error            TEXT,
+            created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at            TEXT NOT NULL DEFAULT (datetime('now')),
+            submitted_at          TEXT
+          );
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_wake_job_generation
+            ON conversation_wake_jobs(message_id, consumer_generation);
+          CREATE INDEX IF NOT EXISTS idx_conversation_wake_jobs_actionable
+            ON conversation_wake_jobs(status, created_at);
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_wake_one_active_target
+            ON conversation_wake_bindings(provider, conversation_id) WHERE status = 'active';
+        `)
+      }
+      if (current === 23) {
+        this.db.exec(`
+          CREATE TABLE conversation_wake_jobs_v24 (
+            wake_id               TEXT PRIMARY KEY,
+            message_id            TEXT NOT NULL,
+            run_id                TEXT NOT NULL,
+            consumer_generation  INTEGER NOT NULL,
+            provider              TEXT NOT NULL,
+            conversation_id      TEXT NOT NULL,
+            message_type          TEXT NOT NULL
+              CHECK(message_type IN ('worker_done', 'escalation', 'decision_gate', 'question')),
+            task_id               TEXT,
+            dispatch_id           TEXT,
+            status                TEXT NOT NULL DEFAULT 'pending'
+              CHECK(status IN (
+                'pending', 'waiting_for_idle', 'retry_wait', 'submitting', 'accepted', 'submitted',
+                'blocked', 'blocked_inconsistent', 'cancelled', 'fenced'
+              )),
+            attempt_count         INTEGER NOT NULL DEFAULT 0,
+            provider_turn_id      TEXT,
+            acceptance_lease      TEXT,
+            lease_expires_at      INTEGER,
+            next_attempt_at       INTEGER,
+            last_error            TEXT,
+            created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at            TEXT NOT NULL DEFAULT (datetime('now')),
+            submitted_at          TEXT
+          );
+          INSERT INTO conversation_wake_jobs_v24 (
+            wake_id, message_id, run_id, consumer_generation, provider, conversation_id,
+            message_type, task_id, dispatch_id, status, attempt_count, provider_turn_id,
+            acceptance_lease, lease_expires_at, next_attempt_at, last_error, created_at,
+            updated_at, submitted_at
+          )
+          SELECT wake_id, message_id, run_id, consumer_generation, provider, conversation_id,
+            message_type, task_id, dispatch_id,
+            CASE WHEN status = 'submitted' THEN 'blocked_inconsistent' ELSE status END,
+            attempt_count, provider_turn_id, acceptance_lease, lease_expires_at, next_attempt_at,
+            CASE WHEN status = 'submitted'
+              THEN 'v23 acceptance lacks durable provider finalization proof'
+              ELSE last_error END,
+            created_at, updated_at, submitted_at
+          FROM conversation_wake_jobs;
+          DROP TABLE conversation_wake_jobs;
+          ALTER TABLE conversation_wake_jobs_v24 RENAME TO conversation_wake_jobs;
+          CREATE UNIQUE INDEX idx_conversation_wake_job_generation
+            ON conversation_wake_jobs(message_id, consumer_generation);
+          CREATE INDEX idx_conversation_wake_jobs_actionable
+            ON conversation_wake_jobs(status, created_at);
+          CREATE TABLE IF NOT EXISTS conversation_wake_provenance (
+            message_id            TEXT PRIMARY KEY,
+            run_id                TEXT NOT NULL,
+            message_type          TEXT NOT NULL
+              CHECK(message_type IN ('worker_done', 'escalation', 'decision_gate', 'question')),
+            task_id               TEXT NOT NULL,
+            dispatch_id           TEXT NOT NULL,
+            source                TEXT NOT NULL
+              CHECK(source IN (
+                'current_dispatch', 'current_question', 'federated_dispatch',
+                'legacy_dispatch', 'legacy_question'
+              )),
+            created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+          );
         `)
       }
       this.createUndeliveredInboxIndexIfPossible()
@@ -2302,6 +2521,7 @@ export class OrchestrationDb {
           )
           .run(params.coordinatorHandle, params.coordinatorPaneKey, params.runId)
         this.fenceOutstandingDelivery(params.runId)
+        this.fenceConversationWakeState(params.runId)
         if (params.takeoverLegacy || replacesLegacyCoordinator) {
           this.promoteLegacyCoordinatorMailForTakeover(params.runId, retainedCoordinatorHandle)
         }
@@ -2393,6 +2613,7 @@ export class OrchestrationDb {
           )
           .run(run.id)
         this.fenceOutstandingDelivery(run.id)
+        this.fenceConversationWakeState(run.id)
       }
     }
   }
@@ -2407,6 +2628,25 @@ export class OrchestrationDb {
     this.db
       .prepare(
         "UPDATE deliveries SET status = 'fenced' WHERE run_id = ? AND status = 'outstanding'"
+      )
+      .run(runId)
+  }
+
+  private fenceConversationWakeState(runId: string): void {
+    this.db
+      .prepare(
+        `UPDATE conversation_wake_bindings
+         SET status = 'fenced', updated_at = datetime('now')
+         WHERE run_id = ? AND status = 'active'`
+      )
+      .run(runId)
+    this.db
+      .prepare(
+        `UPDATE conversation_wake_jobs
+         SET status = 'fenced', updated_at = datetime('now')
+         WHERE run_id = ? AND status IN (
+           'pending', 'waiting_for_idle', 'retry_wait', 'submitting'
+         )`
       )
       .run(runId)
   }
@@ -2745,7 +2985,634 @@ export class OrchestrationDb {
     )
   }
 
+  bindConversationWakeTarget(params: {
+    runId: string
+    consumerGeneration: number
+    provider: string
+    conversationId: string
+  }): { binding: ConversationWakeBindingRow; duplicate: boolean } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const run = this.getRunRaw(params.runId)
+      if (
+        !run ||
+        run.legacy === 1 ||
+        !run.coordinator_pane_key ||
+        run.consumer_generation !== params.consumerGeneration
+      ) {
+        throw new OrchestrationError(
+          'consumer_fenced',
+          'Conversation wake ownership does not match the current Run consumer.'
+        )
+      }
+      const existing = this.getConversationWakeBinding(params.runId)
+      if (
+        existing?.status === 'active' &&
+        existing.consumer_generation === params.consumerGeneration &&
+        existing.provider === params.provider &&
+        existing.conversation_id === params.conversationId
+      ) {
+        this.db.exec('COMMIT')
+        return { binding: existing, duplicate: true }
+      }
+      const owner = this.db
+        .prepare(
+          `SELECT run_id FROM conversation_wake_bindings
+           WHERE provider = ? AND conversation_id = ? AND status = 'active' AND run_id <> ?`
+        )
+        .get(params.provider, params.conversationId, params.runId) as { run_id: string } | undefined
+      if (owner) {
+        throw new OrchestrationError(
+          'consumer_fenced',
+          `Conversation wake target is already owned by Run ${owner.run_id}.`
+        )
+      }
+      this.fenceConversationWakeState(params.runId)
+      this.db
+        .prepare(
+          `INSERT INTO conversation_wake_bindings (
+             run_id, consumer_generation, provider, conversation_id, status
+           ) VALUES (?, ?, ?, ?, 'active')
+           ON CONFLICT(run_id) DO UPDATE SET
+             consumer_generation = excluded.consumer_generation,
+             provider = excluded.provider,
+             conversation_id = excluded.conversation_id,
+             status = 'active',
+             updated_at = datetime('now')`
+        )
+        .run(params.runId, params.consumerGeneration, params.provider, params.conversationId)
+      const binding = this.getConversationWakeBinding(params.runId) as ConversationWakeBindingRow
+      this.db.exec('COMMIT')
+      return { binding, duplicate: false }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  getConversationWakeBinding(runId: string): ConversationWakeBindingRow | undefined {
+    return this.db
+      .prepare('SELECT * FROM conversation_wake_bindings WHERE run_id = ?')
+      .get(runId) as ConversationWakeBindingRow | undefined
+  }
+
+  recordConversationWakeProvenance(params: {
+    messageId: string
+    taskId: string
+    dispatchId: string
+    source: ConversationWakeProvenanceSource
+  }): { provenance: ConversationWakeProvenanceRow; duplicate: boolean } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const result = this.recordConversationWakeProvenanceInTransaction(params)
+      this.db.exec('COMMIT')
+      return result
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  getConversationWakeProvenance(messageId: string): ConversationWakeProvenanceRow | undefined {
+    return this.db
+      .prepare('SELECT * FROM conversation_wake_provenance WHERE message_id = ?')
+      .get(messageId) as ConversationWakeProvenanceRow | undefined
+  }
+
+  private recordConversationWakeProvenanceInTransaction(params: {
+    messageId: string
+    taskId: string
+    dispatchId: string
+    source: ConversationWakeProvenanceSource
+  }): { provenance: ConversationWakeProvenanceRow; duplicate: boolean } {
+    const message = this.getMessageById(params.messageId)
+    const dispatch = this.getDispatchContextById(params.dispatchId)
+    const task = dispatch ? this.getTask(dispatch.task_id) : undefined
+    const latest = task ? this.getDispatchContext(task.id) : undefined
+    const isEligible = message
+      ? CONVERSATION_WAKE_MESSAGE_TYPES.includes(
+          message.type as (typeof CONVERSATION_WAKE_MESSAGE_TYPES)[number]
+        )
+      : false
+    const sourceMatchesType =
+      params.source === 'current_question' || params.source === 'legacy_question'
+        ? message?.type === 'question'
+        : params.source === 'federated_dispatch' || message?.type !== 'question'
+    if (
+      !message ||
+      !isEligible ||
+      !sourceMatchesType ||
+      message.delivery_contract !== 'current_delivery' ||
+      message.to_handle !== `run:${message.run_id}` ||
+      hasLifecycleRejectionMarker(message.payload) ||
+      !dispatch ||
+      !task ||
+      task.id !== params.taskId ||
+      dispatch.run_id !== message.run_id ||
+      task.run_id !== message.run_id ||
+      latest?.id !== dispatch.id
+    ) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        'Conversation wake provenance does not match an authoritative committed Dispatch event.'
+      )
+    }
+    if (message.type === 'question') {
+      const question = this.getQuestionRaw(message.id)
+      if (
+        !question ||
+        question.status !== 'pending' ||
+        question.run_id !== message.run_id ||
+        question.dispatch_id !== dispatch.id
+      ) {
+        throw new OrchestrationError(
+          'request_mismatch',
+          'Conversation wake question provenance is not current.'
+        )
+      }
+    }
+    const existing = this.getConversationWakeProvenance(message.id)
+    if (existing) {
+      if (
+        existing.run_id !== message.run_id ||
+        existing.message_type !== message.type ||
+        existing.task_id !== task.id ||
+        existing.dispatch_id !== dispatch.id ||
+        existing.source !== params.source
+      ) {
+        throw new OrchestrationError(
+          'request_mismatch',
+          `Conversation wake provenance for Message ${message.id} conflicts with its commit.`
+        )
+      }
+      return { provenance: existing, duplicate: true }
+    }
+    this.db
+      .prepare(
+        `INSERT INTO conversation_wake_provenance (
+           message_id, run_id, message_type, task_id, dispatch_id, source
+         ) VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(message.id, message.run_id, message.type, params.taskId, dispatch.id, params.source)
+    return {
+      provenance: this.getConversationWakeProvenance(message.id) as ConversationWakeProvenanceRow,
+      duplicate: false
+    }
+  }
+
+  listConversationWakeBackfillMessages(runId?: string): MessageRow[] {
+    const runFilter = runId ? 'AND messages.run_id = ?' : ''
+    const args = runId ? [runId] : []
+    const placeholders = CONVERSATION_WAKE_MESSAGE_TYPES.map(() => '?').join(',')
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare(
+          `SELECT messages.* FROM messages
+           JOIN runs ON runs.id = messages.run_id
+           JOIN conversation_wake_bindings binding ON binding.run_id = messages.run_id
+           JOIN conversation_wake_provenance provenance ON provenance.message_id = messages.id
+           WHERE messages.read = 0
+             AND messages.delivery_contract = 'current_delivery'
+             AND messages.to_handle = 'run:' || messages.run_id
+             AND messages.type IN (${placeholders})
+             AND runs.legacy = 0
+             AND runs.consumer_generation = binding.consumer_generation
+             AND binding.status = 'active'
+             ${runFilter}
+           ORDER BY messages.sequence`
+        )
+        .all(...CONVERSATION_WAKE_MESSAGE_TYPES, ...args) as MessageRow[]
+    )
+  }
+
+  enqueueConversationWakeJob(
+    messageId: string
+  ): { job: ConversationWakeJobRow; duplicate: boolean } | undefined {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const message = this.getMessageById(messageId)
+      const run = message ? this.getRunRaw(message.run_id) : undefined
+      const binding = message ? this.getConversationWakeBinding(message.run_id) : undefined
+      const provenance = message ? this.getConversationWakeProvenance(message.id) : undefined
+      if (
+        !message ||
+        !run ||
+        run.legacy === 1 ||
+        message.read !== 0 ||
+        message.delivery_contract !== 'current_delivery' ||
+        message.to_handle !== `run:${message.run_id}` ||
+        !CONVERSATION_WAKE_MESSAGE_TYPES.includes(
+          message.type as (typeof CONVERSATION_WAKE_MESSAGE_TYPES)[number]
+        ) ||
+        !provenance ||
+        !binding ||
+        binding.status !== 'active' ||
+        binding.consumer_generation !== run.consumer_generation
+      ) {
+        this.db.exec('COMMIT')
+        return undefined
+      }
+      if (hasLifecycleRejectionMarker(message.payload)) {
+        this.db.exec('COMMIT')
+        return undefined
+      }
+      const wakeId = conversationWakeId(message.run_id, binding.consumer_generation, message.id)
+      const existing = this.getConversationWakeJob(wakeId)
+      if (existing) {
+        this.db.exec('COMMIT')
+        return { job: existing, duplicate: true }
+      }
+      const lineage = this.resolveConversationWakeLineage(message, provenance)
+      const blockedReason = 'error' in lineage ? lineage.error : null
+      this.db
+        .prepare(
+          `INSERT INTO conversation_wake_jobs (
+             wake_id, message_id, run_id, consumer_generation, provider, conversation_id,
+             message_type, task_id, dispatch_id, status, last_error
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          wakeId,
+          message.id,
+          message.run_id,
+          binding.consumer_generation,
+          binding.provider,
+          binding.conversation_id,
+          message.type,
+          'error' in lineage ? null : lineage.taskId,
+          'error' in lineage ? null : lineage.dispatchId,
+          blockedReason ? 'blocked' : 'pending',
+          blockedReason
+        )
+      const job = this.getConversationWakeJob(wakeId) as ConversationWakeJobRow
+      this.db.exec('COMMIT')
+      return { job, duplicate: false }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  private resolveConversationWakeLineage(
+    message: MessageRow,
+    provenance: ConversationWakeProvenanceRow
+  ): { taskId: string; dispatchId: string } | { error: string } {
+    if (provenance.run_id !== message.run_id || provenance.message_type !== message.type) {
+      return { error: 'trusted commit provenance does not match the message' }
+    }
+    const dispatch = this.getDispatchContextById(provenance.dispatch_id)
+    const task = dispatch ? this.getTask(dispatch.task_id) : undefined
+    const latest = task ? this.getDispatchContext(task.id) : undefined
+    if (
+      !dispatch ||
+      !task ||
+      provenance.task_id !== task.id ||
+      dispatch.run_id !== message.run_id ||
+      task.run_id !== message.run_id ||
+      latest?.id !== dispatch.id
+    ) {
+      return { error: 'trusted commit lineage is not the current Dispatch' }
+    }
+    if (message.type === 'question') {
+      const question = this.getQuestionRaw(message.id)
+      if (
+        !question ||
+        question.status !== 'pending' ||
+        question.run_id !== message.run_id ||
+        question.dispatch_id !== dispatch.id
+      ) {
+        return { error: 'trusted question lineage is not current' }
+      }
+    }
+    return { taskId: task.id, dispatchId: dispatch.id }
+  }
+
+  getConversationWakeJob(wakeId: string): ConversationWakeJobRow | undefined {
+    return this.db.prepare('SELECT * FROM conversation_wake_jobs WHERE wake_id = ?').get(wakeId) as
+      | ConversationWakeJobRow
+      | undefined
+  }
+
+  listConversationWakeJobsForMessage(messageId: string): ConversationWakeJobRow[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM conversation_wake_jobs
+         WHERE message_id = ? ORDER BY consumer_generation`
+      )
+      .all(messageId) as ConversationWakeJobRow[]
+  }
+
+  listProcessableConversationWakeJobs(now: number): ConversationWakeJobRow[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM conversation_wake_jobs
+         WHERE status IN ('pending', 'waiting_for_idle')
+            OR (status = 'retry_wait' AND next_attempt_at <= ?)
+            OR (status = 'submitting' AND lease_expires_at <= ?)
+            OR (status = 'accepted' AND COALESCE(next_attempt_at, 0) <= ?)
+         ORDER BY created_at, wake_id`
+      )
+      .all(now, now, now) as ConversationWakeJobRow[]
+  }
+
+  getNextConversationWakeAttemptAt(): number | null {
+    const row = this.db
+      .prepare(
+        `SELECT MIN(attempt_at) AS attempt_at FROM (
+           SELECT next_attempt_at AS attempt_at FROM conversation_wake_jobs
+             WHERE status = 'retry_wait' AND next_attempt_at IS NOT NULL
+           UNION ALL
+           SELECT lease_expires_at AS attempt_at FROM conversation_wake_jobs
+             WHERE status = 'submitting' AND lease_expires_at IS NOT NULL
+           UNION ALL
+           SELECT next_attempt_at AS attempt_at FROM conversation_wake_jobs
+             WHERE status = 'accepted' AND next_attempt_at IS NOT NULL
+         )`
+      )
+      .get() as { attempt_at: number | null }
+    return row.attempt_at
+  }
+
+  isConversationWakeJobUnread(wakeId: string): boolean {
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1 FROM conversation_wake_jobs job
+           JOIN messages ON messages.id = job.message_id
+           WHERE job.wake_id = ? AND messages.read = 0`
+        )
+        .get(wakeId)
+    )
+  }
+
+  claimConversationWakeJob(params: {
+    wakeId: string
+    acceptanceLease: string
+    leaseExpiresAt: number
+    now: number
+  }): ConversationWakeJobRow | undefined {
+    const updated = this.db
+      .prepare(
+        `UPDATE conversation_wake_jobs
+         SET status = 'submitting', attempt_count = attempt_count + 1,
+             acceptance_lease = ?, lease_expires_at = ?, next_attempt_at = NULL,
+             last_error = NULL, updated_at = datetime('now')
+         WHERE wake_id = ?
+           AND (
+             status IN ('pending', 'waiting_for_idle')
+             OR (status = 'retry_wait' AND next_attempt_at <= ?)
+             OR (status = 'submitting' AND lease_expires_at <= ?)
+           )
+           AND EXISTS(
+             SELECT 1 FROM runs
+             JOIN conversation_wake_bindings binding ON binding.run_id = runs.id
+             JOIN messages ON messages.id = conversation_wake_jobs.message_id
+             WHERE runs.id = conversation_wake_jobs.run_id
+               AND runs.consumer_generation = conversation_wake_jobs.consumer_generation
+               AND binding.consumer_generation = conversation_wake_jobs.consumer_generation
+               AND binding.provider = conversation_wake_jobs.provider
+               AND binding.conversation_id = conversation_wake_jobs.conversation_id
+               AND binding.status = 'active' AND messages.read = 0
+           )`
+      )
+      .run(params.acceptanceLease, params.leaseExpiresAt, params.wakeId, params.now, params.now)
+    if (updated.changes !== 1) {
+      return undefined
+    }
+    const job = this.getConversationWakeJob(params.wakeId)
+    return job?.status === 'submitting' && job.acceptance_lease === params.acceptanceLease
+      ? job
+      : undefined
+  }
+
+  commitConversationWakeAcceptance(params: {
+    wakeId: string
+    acceptanceLease: string
+    providerTurnId: string
+    now: number
+  }): boolean {
+    const updated = this.db
+      .prepare(
+        `UPDATE conversation_wake_jobs
+         SET status = 'accepted', provider_turn_id = ?, acceptance_lease = NULL,
+             lease_expires_at = NULL, next_attempt_at = ?, last_error = NULL,
+             updated_at = datetime('now')
+         WHERE wake_id = ? AND status = 'submitting'
+           AND acceptance_lease = ? AND lease_expires_at >= ?
+           AND length(?) BETWEEN 1 AND 512
+           AND EXISTS(
+             SELECT 1 FROM runs
+             JOIN conversation_wake_bindings binding ON binding.run_id = runs.id
+             JOIN messages ON messages.id = conversation_wake_jobs.message_id
+             WHERE runs.id = conversation_wake_jobs.run_id
+               AND runs.consumer_generation = conversation_wake_jobs.consumer_generation
+               AND binding.consumer_generation = conversation_wake_jobs.consumer_generation
+               AND binding.provider = conversation_wake_jobs.provider
+               AND binding.conversation_id = conversation_wake_jobs.conversation_id
+               AND binding.status = 'active' AND messages.read = 0
+           )`
+      )
+      .run(
+        params.providerTurnId,
+        params.now,
+        params.wakeId,
+        params.acceptanceLease,
+        params.now,
+        params.providerTurnId
+      )
+    return updated.changes === 1
+  }
+
+  confirmConversationWakeFinalized(params: { wakeId: string; providerTurnId: string }): boolean {
+    const current = this.getConversationWakeJob(params.wakeId)
+    if (current?.status === 'submitted' && current.provider_turn_id === params.providerTurnId) {
+      return true
+    }
+    const updated = this.db
+      .prepare(
+        `UPDATE conversation_wake_jobs
+         SET status = 'submitted', next_attempt_at = NULL, last_error = NULL,
+             submitted_at = COALESCE(submitted_at, datetime('now')),
+             updated_at = datetime('now')
+         WHERE wake_id = ? AND status = 'accepted' AND provider_turn_id = ?`
+      )
+      .run(params.wakeId, params.providerTurnId)
+    return updated.changes === 1
+  }
+
+  scheduleConversationWakeAcceptedRecovery(params: {
+    wakeId: string
+    reason: string
+    nextAttemptAt: number
+    maxAttempts: number
+    incrementAttempt: boolean
+  }): ConversationWakeJobRow | undefined {
+    const job = this.getConversationWakeJob(params.wakeId)
+    if (!job || job.status !== 'accepted') {
+      return job
+    }
+    const attemptCount = job.attempt_count + (params.incrementAttempt ? 1 : 0)
+    const exhausted = attemptCount >= params.maxAttempts
+    this.db
+      .prepare(
+        `UPDATE conversation_wake_jobs
+         SET status = ?, attempt_count = ?, next_attempt_at = ?, last_error = ?,
+             updated_at = datetime('now')
+         WHERE wake_id = ? AND status = 'accepted' AND provider_turn_id = ?`
+      )
+      .run(
+        exhausted ? 'blocked_inconsistent' : 'accepted',
+        attemptCount,
+        exhausted ? null : params.nextAttemptAt,
+        exhausted ? `provider finalization retry exhausted: ${params.reason}` : params.reason,
+        params.wakeId,
+        job.provider_turn_id
+      )
+    return this.getConversationWakeJob(params.wakeId)
+  }
+
+  markConversationWakeJobWaiting(wakeId: string, reason: string): void {
+    this.db
+      .prepare(
+        `UPDATE conversation_wake_jobs
+         SET status = 'waiting_for_idle', acceptance_lease = NULL,
+             lease_expires_at = NULL, next_attempt_at = NULL,
+             last_error = ?, updated_at = datetime('now')
+         WHERE wake_id = ? AND status IN ('pending', 'waiting_for_idle', 'retry_wait')`
+      )
+      .run(reason, wakeId)
+  }
+
+  scheduleConversationWakeRetry(params: {
+    wakeId: string
+    reason: string
+    nextAttemptAt: number
+    maxAttempts: number
+    incrementAttempt: boolean
+  }): ConversationWakeJobRow | undefined {
+    const job = this.getConversationWakeJob(params.wakeId)
+    if (!job || !['pending', 'waiting_for_idle', 'retry_wait', 'submitting'].includes(job.status)) {
+      return job
+    }
+    const attemptCount = job.attempt_count + (params.incrementAttempt ? 1 : 0)
+    const exhausted = attemptCount >= params.maxAttempts
+    this.db
+      .prepare(
+        `UPDATE conversation_wake_jobs
+         SET status = ?, attempt_count = ?, acceptance_lease = NULL,
+             lease_expires_at = NULL, next_attempt_at = ?, last_error = ?,
+             updated_at = datetime('now')
+         WHERE wake_id = ? AND status IN (
+           'pending', 'waiting_for_idle', 'retry_wait', 'submitting'
+         )`
+      )
+      .run(
+        exhausted ? 'blocked' : 'retry_wait',
+        attemptCount,
+        exhausted ? null : params.nextAttemptAt,
+        exhausted ? `retry exhausted: ${params.reason}` : params.reason,
+        params.wakeId
+      )
+    return this.getConversationWakeJob(params.wakeId)
+  }
+
+  markConversationWakeJobBlocked(wakeId: string, reason: string): void {
+    this.db
+      .prepare(
+        `UPDATE conversation_wake_jobs
+         SET status = 'blocked', acceptance_lease = NULL, lease_expires_at = NULL,
+             next_attempt_at = NULL, last_error = ?, updated_at = datetime('now')
+         WHERE wake_id = ? AND status IN (
+           'pending', 'waiting_for_idle', 'retry_wait', 'submitting'
+         )`
+      )
+      .run(reason, wakeId)
+  }
+
+  markConversationWakeJobInconsistent(wakeId: string, reason: string): void {
+    this.db
+      .prepare(
+        `UPDATE conversation_wake_jobs
+         SET status = 'blocked_inconsistent', acceptance_lease = NULL,
+             lease_expires_at = NULL, next_attempt_at = NULL, last_error = ?,
+             updated_at = datetime('now')
+         WHERE wake_id = ? AND status IN ('submitting', 'accepted', 'submitted')`
+      )
+      .run(reason, wakeId)
+  }
+
+  markConversationWakeJobCancelled(wakeId: string, reason: string): void {
+    this.db
+      .prepare(
+        `UPDATE conversation_wake_jobs
+         SET status = 'cancelled', acceptance_lease = NULL, lease_expires_at = NULL,
+             next_attempt_at = NULL, last_error = ?, updated_at = datetime('now')
+         WHERE wake_id = ? AND status IN (
+           'pending', 'waiting_for_idle', 'retry_wait', 'submitting'
+         )`
+      )
+      .run(reason, wakeId)
+  }
+
   // ── Messages ──
+
+  commitCurrentDispatchMessage<T>(
+    params: {
+      message: {
+        id?: string
+        from: string
+        to: string
+        subject: string
+        body?: string
+        type: MessageType
+        priority?: MessagePriority
+        threadId?: string
+        payload?: string
+        senderPaneKey?: string
+        runId?: string
+        deliveryContract?: MessageDeliveryContract
+      }
+      trustedLineage?: { taskId: string; dispatchId: string }
+      reconcile: (message: MessageRow) => T
+    },
+    faultInjector?: (stage: CurrentDispatchMessageCommitStage) => void
+  ): { message: MessageRow; reconciliation: T } {
+    if (this.currentDispatchMessageCommitActive) {
+      throw new Error('Current Dispatch message commit cannot be nested.')
+    }
+    this.db.exec('BEGIN IMMEDIATE')
+    this.currentDispatchMessageCommitActive = true
+    try {
+      const message = this.insertMessage(params.message)
+      faultInjector?.('after_insert')
+      const reconciliation = params.reconcile(message)
+      faultInjector?.('after_reconciliation')
+      const stored = this.getMessageById(message.id) as MessageRow
+      if (
+        params.trustedLineage &&
+        CONVERSATION_WAKE_MESSAGE_TYPES.includes(
+          stored.type as (typeof CONVERSATION_WAKE_MESSAGE_TYPES)[number]
+        ) &&
+        !hasLifecycleRejectionMarker(stored.payload)
+      ) {
+        this.recordConversationWakeProvenanceInTransaction({
+          messageId: stored.id,
+          taskId: params.trustedLineage.taskId,
+          dispatchId: params.trustedLineage.dispatchId,
+          source: 'current_dispatch'
+        })
+      }
+      faultInjector?.('after_provenance')
+      const committed = this.getMessageById(message.id) as MessageRow
+      this.db.exec('COMMIT')
+      return { message: committed, reconciliation }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    } finally {
+      this.currentDispatchMessageCommitActive = false
+    }
+  }
 
   insertMessage(msg: {
     id?: string
@@ -2946,6 +3813,17 @@ export class OrchestrationDb {
           )
           .run(principal.id)
       }
+      if (
+        message.delivery_contract === 'current_delivery' &&
+        ['worker_done', 'escalation'].includes(message.type)
+      ) {
+        this.recordConversationWakeProvenanceInTransaction({
+          messageId: message.id,
+          taskId: dispatch.task_id,
+          dispatchId,
+          source: 'legacy_dispatch'
+        })
+      }
       const responseJson = JSON.stringify({ messageId: message.id, settlement })
       const receipt = this.insertLegacyOperationReceipt({
         principalId: principal.id,
@@ -3077,6 +3955,15 @@ export class OrchestrationDb {
           .run(message.id, principal.run_id, dispatchId, principal.terminal_handle)
         question = this.getQuestion(message.id) as QuestionRow
         message = this.getMessageById(message.id) as MessageRow
+      }
+
+      if (message.delivery_contract === 'current_delivery') {
+        this.recordConversationWakeProvenanceInTransaction({
+          messageId: message.id,
+          taskId: dispatch.task_id,
+          dispatchId,
+          source: 'legacy_question'
+        })
       }
 
       const committedReceipt = this.insertLegacyOperationReceipt({
@@ -3570,6 +4457,12 @@ export class OrchestrationDb {
            ) VALUES (?, ?, ?, ?)`
         )
         .run(message.id, params.runId, params.dispatchId, params.askerHandle)
+      this.recordConversationWakeProvenanceInTransaction({
+        messageId: message.id,
+        taskId: dispatch.task_id,
+        dispatchId: params.dispatchId,
+        source: 'current_question'
+      })
       const question = this.getQuestionRaw(message.id) as QuestionRow
       const storedMessage = this.getMessageById(message.id) as MessageRow
       this.db.exec('COMMIT')
@@ -5002,7 +5895,8 @@ export class OrchestrationDb {
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const federated = this.getFederatedDispatch(params.dispatchId)
-      if (!federated) {
+      const dispatch = this.getDispatchContextById(params.dispatchId)
+      if (!federated || !dispatch) {
         throw new OrchestrationError(
           'dispatch_not_found',
           `Federated Dispatch ${params.dispatchId} was not found.`
@@ -5068,6 +5962,19 @@ export class OrchestrationDb {
           params.lifecycle.code,
           params.lifecycle.reason
         ) as MessageRow
+      }
+      if (
+        CONVERSATION_WAKE_MESSAGE_TYPES.includes(
+          message.type as (typeof CONVERSATION_WAKE_MESSAGE_TYPES)[number]
+        ) &&
+        !hasLifecycleRejectionMarker(message.payload)
+      ) {
+        this.recordConversationWakeProvenanceInTransaction({
+          messageId: message.id,
+          taskId: dispatch.task_id,
+          dispatchId: params.dispatchId,
+          source: 'federated_dispatch'
+        })
       }
       this.setFederatedHomeImportSequence(params.dispatchId, params.sequence)
       this.db.exec('COMMIT')
@@ -5681,6 +6588,9 @@ export class OrchestrationDb {
     outcome: WorkerReportOutcome
     result: string
   }): WorkerReportSettlement {
+    if (this.currentDispatchMessageCommitActive) {
+      return this.settleWorkerReportInTransaction(params)
+    }
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const settlement = this.settleWorkerReportInTransaction(params)
@@ -6009,6 +6919,9 @@ export class OrchestrationDb {
       DELETE FROM remote_questions;
       DELETE FROM question_threads;
       DELETE FROM deliveries;
+      DELETE FROM conversation_wake_jobs;
+      DELETE FROM conversation_wake_provenance;
+      DELETE FROM conversation_wake_bindings;
       DELETE FROM legacy_mail_receipts;
       DELETE FROM legacy_operation_receipts;
       DELETE FROM legacy_compatibility_principals;
@@ -6033,6 +6946,8 @@ export class OrchestrationDb {
       DELETE FROM decision_gates;
       DELETE FROM remote_questions;
       DELETE FROM question_threads;
+      DELETE FROM conversation_wake_jobs;
+      DELETE FROM conversation_wake_provenance;
       DELETE FROM legacy_mail_receipts;
       DELETE FROM legacy_operation_receipts;
       DELETE FROM legacy_compatibility_principals;
@@ -6053,6 +6968,8 @@ export class OrchestrationDb {
       DELETE FROM legacy_mail_receipts;
       DELETE FROM question_threads;
       DELETE FROM deliveries;
+      DELETE FROM conversation_wake_jobs;
+      DELETE FROM conversation_wake_provenance;
       DELETE FROM messages;
     `)
   }

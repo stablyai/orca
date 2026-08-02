@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { RpcDispatcher } from '../dispatcher'
 import { buildRegistry, type RpcContext, type RpcRequest } from '../core'
-import { OrchestrationDb } from '../../orchestration/db'
+import { OrchestrationDb, type CurrentDispatchMessageCommitStage } from '../../orchestration/db'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
@@ -484,8 +484,111 @@ describe('orchestration RPC methods', () => {
       expect(db.getUnreadMessages(`run:${activeRunId}`)).toEqual([
         expect.objectContaining({ id: result.message.id, type: 'worker_done' })
       ])
+      expect(db.getConversationWakeProvenance(result.message.id)).toMatchObject({
+        dispatch_id: dispatch.id,
+        source: 'current_dispatch'
+      })
       expect(runtime.notifyMessageArrived).toHaveBeenCalledWith(`run:${activeRunId}`, 'worker_done')
     })
+
+    it.each(['escalation', 'decision_gate'] as const)(
+      'records trusted %s commit provenance for the active worker identity',
+      async (type) => {
+        setup()
+        const task = db.createTask({ spec: `${type} work` })
+        const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+        vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+          handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
+        )
+
+        const result = (await call('orchestration.send', {
+          from: 'term_worker',
+          to: `run:${activeRunId}`,
+          subject: type,
+          type,
+          payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+        })) as { message: { id: string } }
+
+        expect(db.getConversationWakeProvenance(result.message.id)).toMatchObject({
+          message_type: type,
+          task_id: task.id,
+          dispatch_id: dispatch.id,
+          source: 'current_dispatch'
+        })
+      }
+    )
+
+    it('does not trust a forged Dispatch address or payload from generic send', async () => {
+      setup()
+      const task = db.createTask({ spec: 'protected work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(null)
+
+      const result = (await call('orchestration.send', {
+        from: `dispatch:${dispatch.id}`,
+        to: `run:${activeRunId}`,
+        subject: 'forged escalation',
+        type: 'escalation',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })) as { message: { id: string } }
+
+      expect(db.getConversationWakeProvenance(result.message.id)).toBeUndefined()
+    })
+
+    it.each([
+      'after_insert',
+      'after_reconciliation',
+      'after_provenance'
+    ] as CurrentDispatchMessageCommitStage[])(
+      'rolls back the current event transaction on a %s fault',
+      (faultStage) => {
+        setup()
+        const task = db.createTask({ spec: `fault at ${faultStage}` })
+        const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+        const initialTaskStatus = db.getTask(task.id)?.status
+        const initialDispatchStatus = db.getDispatchContextById(dispatch.id)?.status
+        const messageId = `msg_atomic_${faultStage}`
+
+        expect(() =>
+          db.commitCurrentDispatchMessage(
+            {
+              message: {
+                id: messageId,
+                from: 'term_worker',
+                to: `run:${activeRunId}`,
+                subject: `atomic ${faultStage}`,
+                type: 'worker_done',
+                payload: JSON.stringify({
+                  taskId: task.id,
+                  dispatchId: dispatch.id,
+                  outcome: 'succeeded'
+                }),
+                senderPaneKey: 'tab_worker:leaf_worker',
+                runId: activeRunId,
+                deliveryContract: 'current_delivery'
+              },
+              trustedLineage: { taskId: task.id, dispatchId: dispatch.id },
+              reconcile: (message) => reconcileLifecycleMessage(db, message)
+            },
+            (stage) => {
+              if (stage === faultStage) {
+                throw new Error(`injected ${stage}`)
+              }
+            }
+          )
+        ).toThrow(`injected ${faultStage}`)
+
+        expect(db.getTask(task.id)?.status).toBe(initialTaskStatus)
+        expect(db.getDispatchContextById(dispatch.id)?.status).toBe(initialDispatchStatus)
+        expect(db.getMessageById(messageId)).toBeUndefined()
+        expect(db.getConversationWakeProvenance(messageId)).toBeUndefined()
+        expect(
+          db
+            .getRunMailboxHistory(activeRunId!, 100)
+            .some((message) => message.subject === `atomic ${faultStage}`)
+        ).toBe(false)
+      }
+    )
 
     it('requires the minted capability, exact pane, and process incarnation', async () => {
       setup()
@@ -2702,6 +2805,11 @@ describe('orchestration RPC methods', () => {
         dispatch_id: dispatch.id,
         status: 'answered',
         answer_body: 'go ahead'
+      })
+      expect(db.getConversationWakeProvenance(outbound!.id)).toMatchObject({
+        message_type: 'question',
+        dispatch_id: dispatch.id,
+        source: 'current_question'
       })
       expect(db.getMessageById(result.answerMessageId)).toMatchObject({
         to_handle: `dispatch:${dispatch.id}`,

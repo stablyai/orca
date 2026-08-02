@@ -100,6 +100,7 @@ export async function handleLegacyAsk(args: {
     duplicate = committed.duplicate || Boolean(existingQuestionId)
     if (!duplicate) {
       runtime.notifyMessageArrived(committed.message.to_handle, committed.message.type)
+      runtime.onOrchestrationMessageCommitted(committed.message)
     }
   }
 
