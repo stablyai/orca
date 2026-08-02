@@ -14823,6 +14823,38 @@ describe('registerPtyHandlers', () => {
     expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
   })
 
+  it('waits for the daemon provider acknowledgement before accepting renderer input', async () => {
+    let acknowledge!: (accepted: boolean) => void
+    const writeAccepted = vi.fn(
+      () => new Promise<boolean>((resolve) => (acknowledge = resolve))
+    )
+    installDaemonTestProvider({
+      hasPty: vi.fn(() => true),
+      writeAccepted
+    })
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+
+    const accepted = handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, {
+      id: result.id,
+      data: '\x03'
+    }) as Promise<boolean>
+    let settled = false
+    accepted.finally(() => {
+      settled = true
+    })
+    await vi.waitFor(() => {
+      expect(writeAccepted).toHaveBeenCalledWith(result.id, '\x03')
+    })
+    expect(settled).toBe(false)
+    acknowledge(true)
+
+    await expect(accepted).resolves.toBe(true)
+  })
+
   it('asks the renderer to remount when the provider rejects a stale daemon write', async () => {
     const write = vi.fn(() => {
       throw new PtyWriteUnavailableError('daemon generation lost')

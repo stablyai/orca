@@ -26,12 +26,14 @@ import {
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
+  PTY_INPUT_HEALTH_PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress,
   type CreateOrAttachResult,
   type DaemonEvent,
   type GetSnapshotResult,
   type ListSessionsResult,
+  type PtySpawnHealthResult,
   type SessionInfo,
   type TakePendingOutputResult
 } from './types'
@@ -91,6 +93,8 @@ type HistoryRecoveryContext = {
   identityChanged: boolean
 }
 
+const PTY_WRITE_ACK_TIMEOUT_MS = 5_000
+
 // Why take-and-clear together: every consuming branch must reset the field, so pairing them stops one from forgetting.
 function takeRecoveryFreeze(
   historyRecovery: HistoryRecoveryContext,
@@ -120,11 +124,11 @@ export type DaemonPtyAdapterOptions = {
   protocolVersion?: number
   /** Directory for disk-based terminal history; when set, raw PTY output is written to disk for cold restore on daemon crash. */
   historyPath?: string
-  /** Forks a fresh daemon after endpoint death or a confirmed resolver-health replacement. */
+  /** Forks a fresh daemon after endpoint death or a confirmed health replacement. */
   respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
 }
 
-export type DaemonRespawnReason = 'daemon_died' | 'unhealthy_resolver'
+export type DaemonRespawnReason = 'daemon_died' | 'unhealthy_resolver' | 'input_health_failed'
 
 export type DaemonIdentityChangeEvent = {
   previous: DaemonEndpointIdentity
@@ -133,6 +137,8 @@ export type DaemonIdentityChangeEvent = {
 
 const MAX_TOMBSTONES = 1000
 const MAX_CONCURRENT_CHECKPOINTS = 4
+const PTY_INPUT_HEALTH_CACHE_MS = 60_000
+const PTY_INPUT_HEALTH_REQUEST_TIMEOUT_MS = 12_000
 
 // Why: providers take an absolute teardown deadline, but the client RPC takes a
 // relative timeout — convert only here, at the request itself, so sequential RPCs
@@ -172,6 +178,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private respawnPromise: Promise<void> | null = null
   private writeRecoveryPromise: Promise<void> | null = null
   private writeRecoveryAttempted = false
+  private inputHealthPromise: Promise<'healthy' | 'unhealthy' | 'unknown'> | null = null
+  private inputHealthValidUntil = 0
+  private inputUnavailable = false
+  private inputUnavailableListeners: (() => void)[] = []
   private dataListeners: ((payload: {
     id: string
     data: string
@@ -281,6 +291,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         // calls createOrAttach for them) never do — which would leave the fan-out
         // permanently latched off after the first death. Fires once per connection.
         this.writeRecoveryAttempted = false
+        this.inputHealthValidUntil = 0
         for (const id of this.activeSessionIds) {
           this.sessionsAwaitingDaemonRecovery.add(id)
         }
@@ -889,6 +900,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   write(id: string, data: string): void {
+    if (this.inputUnavailable) {
+      this.emitWriteUnavailable(id)
+      throw new PtyWriteUnavailableError(`Daemon PTY "${id}" input is unavailable`)
+    }
     this.markSessionDirty(id)
     // Why recoverable and not just active: rejecting a write asks the pane to remount,
     // which only helps if this endpoint can come back. A legacy adapter has no respawn,
@@ -909,6 +924,51 @@ export class DaemonPtyAdapter implements IPtyProvider {
       this.sessionsAwaitingDaemonRecovery.add(id)
       this.reconnectAfterWriteFailure()
       throw new PtyWriteUnavailableError(`Daemon PTY "${id}" is awaiting recovery`)
+    }
+    if (delivered && recoverable) {
+      void this.probeDaemonInputHealth()
+    }
+  }
+
+  async writeAccepted(id: string, data: string): Promise<boolean> {
+    if (this.inputUnavailable) {
+      this.emitWriteUnavailable(id)
+      throw new PtyWriteUnavailableError(`Daemon PTY "${id}" input is unavailable`)
+    }
+    this.markSessionDirty(id)
+    const recoverable =
+      this.activeSessionIds.has(id) && !this.respawnAdoptionClosed && Boolean(this.respawnFn)
+    if (
+      recoverable &&
+      (this.sessionsAwaitingDaemonRecovery.has(id) || !this.client.isConnected())
+    ) {
+      this.sessionsAwaitingDaemonRecovery.add(id)
+      this.reconnectAfterWriteFailure()
+      throw new PtyWriteUnavailableError(`Daemon PTY "${id}" is awaiting recovery`)
+    }
+    if (recoverable) {
+      const health = await this.probeDaemonInputHealth(true)
+      if (health !== 'healthy') {
+        throw new PtyWriteUnavailableError(
+          health === 'unhealthy'
+            ? `Daemon PTY "${id}" failed input health verification`
+            : `Daemon PTY "${id}" input health is unknown`
+        )
+      }
+    }
+    try {
+      await this.client.request('write', { sessionId: id, data }, PTY_WRITE_ACK_TIMEOUT_MS)
+      return true
+    } catch {
+      // A timeout is ambiguous: the input may have landed before its ACK was
+      // lost. Never replay it or kill sibling sessions. A real subprocess
+      // rejection also emits writeUnavailable on the stream and is verified
+      // independently by the endpoint-wide input probe.
+      if (recoverable && !this.client.isConnected()) {
+        this.sessionsAwaitingDaemonRecovery.add(id)
+        this.reconnectAfterWriteFailure()
+      }
+      throw new PtyWriteUnavailableError(`Daemon PTY "${id}" rejected input`)
     }
   }
 
@@ -1422,6 +1482,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.activeSessionIds.clear()
     this.sessionsAwaitingDaemonRecovery.clear()
     this.writeRecoveryAttempted = false
+    this.inputHealthValidUntil = 0
     this.dirtySessionVersions.clear()
     this.lastFullCheckpointAt.clear()
     this.sessionsNeedingFullCheckpoint.clear()
@@ -1517,6 +1578,26 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
   }
 
+  quarantineInput(): void {
+    if (this.inputUnavailable) {
+      return
+    }
+    this.inputUnavailable = true
+    for (const listener of this.inputUnavailableListeners.slice()) {
+      listener()
+    }
+  }
+
+  onInputUnavailable(listener: () => void): () => void {
+    this.inputUnavailableListeners.push(listener)
+    return () => {
+      const index = this.inputUnavailableListeners.indexOf(listener)
+      if (index !== -1) {
+        this.inputUnavailableListeners.splice(index, 1)
+      }
+    }
+  }
+
   private emitWriteUnavailable(id: string): void {
     // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
     for (const listener of [...this.writeUnavailableListeners]) {
@@ -1526,8 +1607,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   dispose(): void {
     this.respawnAdoptionClosed = true
+    this.inputUnavailableListeners = []
     this.sessionsAwaitingDaemonRecovery.clear()
     this.writeRecoveryAttempted = false
+    this.inputHealthValidUntil = 0
     this.releasePendingRespawnAdoptionLease()
     this.stopCheckpointTimer()
     this.dirtySessionVersions.clear()
@@ -1566,6 +1649,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       this.respawnAdoptionClosed = true
       this.sessionsAwaitingDaemonRecovery.clear()
       this.writeRecoveryAttempted = false
+      this.inputHealthValidUntil = 0
       this.releasePendingRespawnAdoptionLease()
       this.disconnectOnlyPromise = this.finishDisconnectOnly([...this.keepHistoryShutdowns])
     }
@@ -2071,6 +2155,88 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.writeRecoveryPromise = recovery
   }
 
+  private probeDaemonInputHealth(force = false): Promise<'healthy' | 'unhealthy' | 'unknown'> {
+    if (
+      this.protocolVersion < PTY_INPUT_HEALTH_PROTOCOL_VERSION ||
+      this.respawnAdoptionClosed ||
+      !this.respawnFn
+    ) {
+      return Promise.resolve('healthy')
+    }
+    if (!force && Date.now() < this.inputHealthValidUntil) {
+      return Promise.resolve('healthy')
+    }
+    if (this.inputHealthPromise) {
+      return this.inputHealthPromise
+    }
+
+    const probe = this.client
+      .request<PtySpawnHealthResult>(
+        'ptySpawnHealth',
+        undefined,
+        PTY_INPUT_HEALTH_REQUEST_TIMEOUT_MS
+      )
+      .then((result): 'healthy' | 'unhealthy' | 'unknown' => {
+        if (result.healthy) {
+          this.inputHealthValidUntil = Date.now() + PTY_INPUT_HEALTH_CACHE_MS
+          return 'healthy'
+        }
+        if (result.failure === 'input_roundtrip_failed') {
+          this.replaceAfterConfirmedInputHealthFailure()
+          return 'unhealthy'
+        }
+        return 'unknown'
+      })
+      // A request timeout or disconnect is not proof that native input failed.
+      // Keep the outcome unknown and let normal endpoint-death recovery decide.
+      .catch((): 'unknown' => 'unknown')
+      .finally(() => {
+        if (this.inputHealthPromise === probe) {
+          this.inputHealthPromise = null
+        }
+      })
+    this.inputHealthPromise = probe
+    return probe
+  }
+
+  private replaceAfterConfirmedInputHealthFailure(): void {
+    if (
+      this.writeRecoveryPromise ||
+      this.writeRecoveryAttempted ||
+      this.respawnAdoptionClosed ||
+      !this.respawnFn
+    ) {
+      return
+    }
+    this.writeRecoveryAttempted = true
+    this.inputHealthValidUntil = 0
+    const preservesLiveSessions = this.activeSessionIds.size > 0
+    if (preservesLiveSessions) {
+      this.quarantineInput()
+    }
+    this.notifyActiveSessionsWriteUnavailable()
+    // Never turn an input failure into silent loss of every live terminal.
+    // Keep the endpoint read-only until an explicit daemon restart.
+    if (preservesLiveSessions) {
+      return
+    }
+    const recovery = this.doRespawn(
+      '[daemon] Native PTY input health failed — replacing daemon',
+      'input_health_failed'
+    )
+      .then(() => this.ensureConnected())
+      .catch((error) =>
+        console.warn('[daemon] Failed to replace unhealthy PTY input endpoint:', error)
+      )
+      .finally(() => {
+        this.releasePendingRespawnAdoptionLease()
+        if (this.writeRecoveryPromise === recovery) {
+          this.writeRecoveryPromise = null
+        }
+      })
+    this.writeRecoveryPromise = recovery
+  }
+
   private notifyActiveSessionsWriteUnavailable(): void {
     // Snapshot first: a listener that kills a pane would mutate activeSessionIds
     // mid-iteration and silently skip the sibling this fan-out exists to reach.
@@ -2258,6 +2424,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
           kind: 'transientFact',
           fact: event.payload
         })
+      } else if (event.event === 'writeUnavailable') {
+        if (!this.activeSessionIds.has(event.sessionId)) {
+          return
+        }
+        this.emitWriteUnavailable(event.sessionId)
+        void this.probeDaemonInputHealth(true)
       } else if (event.event === 'exit') {
         const pendingOperations = new Set([
           ...(this.pendingSpawnOperationsBySessionId.get(event.sessionId) ?? []),

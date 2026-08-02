@@ -29,6 +29,7 @@ export class TerminalHost {
   private killedTombstones: TerminalHostTombstones
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onSessionReaped: TerminalHostOptions['onSessionReaped']
+  private onSessionWriteError: TerminalHostOptions['onSessionWriteError']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
   private maxTombstones: number
   private creationFenced = false
@@ -39,6 +40,7 @@ export class TerminalHost {
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
     this.onSessionReaped = opts.onSessionReaped
+    this.onSessionWriteError = opts.onSessionWriteError
     this.onFinalCheckpoint = opts.onFinalCheckpoint
     this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
     this.killedTombstones = new TerminalHostTombstones(this.maxTombstones)
@@ -70,14 +72,20 @@ export class TerminalHost {
             this.agentSessionOwners.release(sessionId, generation)
             this.agentSessionGenerations.forget(sessionId, generation)
             this.reapSession(sessionId)
-          }
+          },
+          onSessionWriteError: (sessionId, error) =>
+            this.onSessionWriteError?.(sessionId, error)
         })
       }
     })
   }
 
-  write(sessionId: string, data: string): void {
-    this.getAliveSession(sessionId).write(data)
+  write(
+    sessionId: string,
+    data: string,
+    options: { awaitDelivery?: boolean } = {}
+  ): void | Promise<void> {
+    return this.getAliveSession(sessionId).write(data, options)
   }
 
   closeStartupQueryAuthority(sessionId: string): number {

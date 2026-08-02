@@ -1393,6 +1393,23 @@ describe('createPtySubprocess', () => {
     expect(proc.write).toHaveBeenCalledWith('ls\n')
   })
 
+  it('propagates native write failures instead of leaving a silently dead PTY', () => {
+    const proc = mockPtyProcess()
+    proc.write.mockImplementationOnce(() => {
+      throw new Error('native PTY write failed')
+    })
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
+    expect(() => handle.write('ls\n')).toThrow('native PTY write failed')
+    expect(() => handle.write('pwd\n')).not.toThrow()
+    expect(proc.write).toHaveBeenCalledTimes(2)
+
+    handle.kill()
+    expect(proc.kill).toHaveBeenCalledTimes(1)
+  })
+
   it('forwards resize calls', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -3091,12 +3108,12 @@ describe('checkPtySpawnHealth (retry on transient failure)', () => {
       spawnMock
         .mockImplementationOnce(() => {
           const proc = mockPtyProcess()
-          queueMicrotask(() => proc._simulateExit(1))
+          proc.write.mockImplementationOnce(() => queueMicrotask(() => proc._simulateExit(1)))
           return proc
         })
         .mockImplementationOnce(() => {
           const proc = mockPtyProcess()
-          queueMicrotask(() => proc._simulateExit(0))
+          proc.write.mockImplementationOnce(() => queueMicrotask(() => proc._simulateExit(0)))
           return proc
         })
 
@@ -3111,12 +3128,36 @@ describe('checkPtySpawnHealth (retry on transient failure)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     spawnMock.mockImplementation(() => {
       const proc = mockPtyProcess()
-      queueMicrotask(() => proc._simulateExit(1))
+      proc.write.mockImplementationOnce(() => queueMicrotask(() => proc._simulateExit(1)))
       return proc
     })
 
     await expect(checkPtySpawnHealth()).rejects.toThrow(/exited with code 1/)
     expect(spawnMock).toHaveBeenCalledTimes(2)
     warn.mockRestore()
+  })
+
+  itOnPosixHost('rejects a no-throw native input blackhole after both probes', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      spawnMock.mockImplementation(() => mockPtyProcess())
+
+      const health = checkPtySpawnHealth()
+      const rejection = expect(health).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(8_000)
+      await rejection
+
+      await expect(health).rejects.toMatchObject({ failure: 'input_roundtrip_failed' })
+
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+      for (const proc of spawnMock.mock.results.map((result) => result.value)) {
+        expect(proc.write).toHaveBeenCalledWith('orca-terminal-input-health\n')
+        expect(proc.kill).toHaveBeenCalledTimes(1)
+      }
+    } finally {
+      warn.mockRestore()
+      vi.useRealTimers()
+    }
   })
 })

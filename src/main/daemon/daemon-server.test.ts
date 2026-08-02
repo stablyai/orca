@@ -459,6 +459,72 @@ describe('DaemonServer', () => {
       await new Promise((r) => setTimeout(r, 50))
     })
 
+    it('reports a fire-and-forget PTY write failure on the stream socket', async () => {
+      const subprocess = createMockSubprocess()
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: () => subprocess
+      })
+      await server.start()
+      const c = await connectClient()
+      await c.request('createOrAttach', {
+        sessionId: 'write-failure-session',
+        cols: 80,
+        rows: 24
+      })
+      vi.mocked(subprocess.write).mockImplementationOnce(() => {
+        throw new Error('native PTY write failed')
+      })
+      const writeUnavailable = new Promise<unknown>((resolve) => {
+        const unsubscribe = c.onEvent((event) => {
+          if (
+            (event as { event?: string; sessionId?: string }).event === 'writeUnavailable' &&
+            (event as { sessionId?: string }).sessionId === 'write-failure-session'
+          ) {
+            unsubscribe()
+            resolve(event)
+          }
+        })
+      })
+
+      expect(c.notify('write', { sessionId: 'write-failure-session', data: 'ls\n' })).toBe(true)
+      await expect(writeUnavailable).resolves.toMatchObject({
+        type: 'event',
+        event: 'writeUnavailable',
+        sessionId: 'write-failure-session'
+      })
+    })
+
+    it('does not acknowledge a strong queued write before its native flush succeeds', async () => {
+      const subprocess = createMockSubprocess()
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: () => subprocess
+      })
+      await server.start()
+      const c = await connectClient()
+      await c.request('createOrAttach', {
+        sessionId: 'queued-strong-write',
+        cols: 80,
+        rows: 24,
+        shellReadySupported: true
+      })
+      vi.mocked(subprocess.write).mockImplementationOnce(() => {
+        throw new Error('queued native PTY write failed')
+      })
+
+      const delivery = c.request('write', {
+        sessionId: 'queued-strong-write',
+        data: 'must-not-ack\n'
+      })
+      subprocess._simulateData('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
+
+      await expect(delivery).rejects.toThrow('queued native PTY write failed')
+      expect(subprocess.write).toHaveBeenCalledTimes(1)
+    })
+
     it('handles resize', async () => {
       await startServer()
       const c = await connectClient()

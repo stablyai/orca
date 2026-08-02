@@ -86,6 +86,7 @@ export type SessionOptions = {
   // Fired once the session reaches a terminal state so the owner (TerminalHost) can reap it; without
   // a reaper, dead sessions and their scrollback emulators accumulate for the daemon's lifetime.
   onExit?: (code: number) => void
+  onWriteError?: (error: unknown) => void
   startupIngress?: PtyStartupIngressIntent
   ownerBackend?: PtyOwnerBackend
 }
@@ -94,6 +95,12 @@ type AttachedClient = {
   token: symbol
   onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
   onExit: (code: number, incarnationId: string) => void
+}
+
+type PendingStdinWrite = {
+  data: string
+  resolve?: () => void
+  reject?: (error: unknown) => void
 }
 
 export class Session {
@@ -110,8 +117,9 @@ export class Session {
   private emulator: HeadlessEmulator
   private subprocess: SubprocessHandle
   private readonly onSessionExit?: (code: number) => void
+  private readonly onWriteError?: (error: unknown) => void
   private attachedClients: AttachedClient[] = []
-  private preReadyStdinQueue: string[] = []
+  private preReadyStdinQueue: PendingStdinWrite[] = []
   private shellReadyScanState: ShellReadyScanState | null = null
   private shellReadyTimer: ReturnType<typeof setTimeout> | null = null
   private killTimer: ReturnType<typeof setTimeout> | null = null
@@ -136,6 +144,7 @@ export class Session {
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
+    this.onWriteError = opts.onWriteError
     const size = normalizePtySize(opts.cols, opts.rows)
     this.emulator = new HeadlessEmulator({
       cols: size.cols,
@@ -167,7 +176,7 @@ export class Session {
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
-      write: (data) => this.subprocess.write(data),
+      write: (data) => this.writeSubprocessFromCallback(data),
       onEmission: (emission) => this.emitSubprocessOutput(emission)
     })
     this.subprocess.onData((data) => this.handleSubprocessData(data))
@@ -214,7 +223,7 @@ export class Session {
     return this.subprocess.pid
   }
 
-  write(data: string): void {
+  write(data: string, options: { awaitDelivery?: boolean } = {}): void | Promise<void> {
     if (this._state === 'exited' || this._disposed) {
       return
     }
@@ -222,11 +231,16 @@ export class Session {
     // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
     // direct write would race fresh input ahead of the buffered startup command.
     if (this._shellState === 'pending' || this.postReadyFlushGate.isPending) {
-      this.preReadyStdinQueue.push(data)
-      return
+      if (!options.awaitDelivery) {
+        this.preReadyStdinQueue.push({ data })
+        return
+      }
+      return new Promise<void>((resolve, reject) => {
+        this.preReadyStdinQueue.push({ data, resolve, reject })
+      })
     }
 
-    this.subprocess.write(data)
+    this.writeSubprocess(data)
   }
 
   resize(cols: number, rows: number): void {
@@ -526,7 +540,7 @@ export class Session {
     this._state = 'exited'
 
     this.attachedClients = []
-    this.preReadyStdinQueue = []
+    this.rejectPreReadyQueue(new Error(`PTY session "${this.sessionId}" was disposed`))
     this.postReadyFlushGate.clear()
     this.emulator.dispose()
 
@@ -570,7 +584,7 @@ export class Session {
       this.shellReadyTimer = null
     }
     this.shellReadyScanState = null
-    this.preReadyStdinQueue = []
+    this.rejectPreReadyQueue(new Error(`PTY session "${this.sessionId}" was disposed`))
     this.postReadyFlushGate.clear()
     this.disposeSubprocessHandle()
   }
@@ -658,6 +672,9 @@ export class Session {
     this._exitCode = code
     this._state = 'exited'
     this._isTerminating = false
+    this.rejectPreReadyQueue(
+      new Error(`PTY session "${this.sessionId}" exited before queued input was delivered`)
+    )
     // Why resume:false — the child is reaped (nothing to unblock); only the failsafe timer must not outlive the session.
     this.releaseProducerPause({ resume: false })
 
@@ -724,8 +741,52 @@ export class Session {
   private flushPreReadyQueue(): void {
     const queued = this.preReadyStdinQueue
     this.preReadyStdinQueue = []
-    for (const data of queued) {
-      this.subprocess.write(data)
+    for (let index = 0; index < queued.length; index++) {
+      const entry = queued[index]
+      try {
+        this.writeSubprocess(entry.data)
+        entry.resolve?.()
+      } catch (error) {
+        // The failed write may have reached the native layer; never replay it.
+        // Later entries were not attempted, but rejecting them keeps ordering
+        // explicit and lets each strong request report failure instead of ACK.
+        let needsAsyncReport = false
+        for (const pending of queued.slice(index)) {
+          if (pending.reject) {
+            pending.reject(error)
+          } else {
+            needsAsyncReport = true
+          }
+        }
+        if (needsAsyncReport) {
+          this.onWriteError?.(error)
+        }
+        return
+      }
+    }
+  }
+
+  private rejectPreReadyQueue(error: Error): void {
+    const queued = this.preReadyStdinQueue
+    this.preReadyStdinQueue = []
+    for (const pending of queued) {
+      pending.reject?.(error)
+    }
+  }
+
+  private writeSubprocess(data: string): void {
+    this.subprocess.write(data)
+  }
+
+  private writeSubprocessFromCallback(data: string): boolean {
+    try {
+      this.writeSubprocess(data)
+      return true
+    } catch (error) {
+      // Timer/data callbacks run outside the daemon request boundary. Surface
+      // the failure through onWriteError without crashing every PTY session.
+      this.onWriteError?.(error)
+      return false
     }
   }
 

@@ -109,6 +109,9 @@ export type IPtyProvider = {
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): void
+  /** Waits until the provider endpoint has accepted the write. It never retries
+   *  an ambiguous write because the original input may already have landed. */
+  writeAccepted?: (id: string, data: string) => Promise<boolean>
   resize(id: string, cols: number, rows: number): void
   /**
    * Producer-side flow control: stop/restart reading the underlying PTY so a

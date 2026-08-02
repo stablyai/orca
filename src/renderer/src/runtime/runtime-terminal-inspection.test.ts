@@ -479,14 +479,14 @@ describe('runtime terminal owner routing', () => {
     expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBe(123)
   })
 
-  it('reports success after fallback fire-and-forget writes when local acceptance cannot be verified', async () => {
+  it('does not replay input when local acceptance cannot be verified', async () => {
     localWriteAccepted.mockResolvedValue(false)
 
     await expect(
       sendRuntimePtyInputVerified({ activeRuntimeEnvironmentId: null }, 'local-pty', 'x')
-    ).resolves.toBe(true)
+    ).resolves.toBe(false)
 
     expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', 'x')
-    expect(localWrite).toHaveBeenCalledWith('local-pty', 'x')
+    expect(localWrite).not.toHaveBeenCalled()
   })
 })

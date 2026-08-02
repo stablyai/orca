@@ -20,6 +20,7 @@ import {
 } from './types'
 
 const HEALTH_CHECK_TIMEOUT_MS = 3_000
+const PTY_SPAWN_HEALTH_CHECK_TIMEOUT_MS = 12_000
 const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 const KILL_WAIT_MS = 3_000
 const KILL_POLL_MS = 100
@@ -167,17 +168,25 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
           // Why: a protocol-live daemon with a stale cwd or node-pty helper
           // will answer ping but cannot create terminals, so reuse must check
           // the PTY spawn prerequisites too.
+          clearTimeout(timer)
+          timer = setTimeout(
+            () => settle('unreachable'),
+            PTY_SPAWN_HEALTH_CHECK_TIMEOUT_MS
+          )
           sock?.write(encodeNdjson({ id: 'health-1', type: 'ptySpawnHealth' }))
           continue
         }
 
         if (message.id === 'health-1') {
-          settle(message.ok === true ? 'healthy' : 'pty-spawn-unhealthy')
+          const payload = message.payload as { healthy?: unknown } | undefined
+          settle(
+            message.ok === true && payload?.healthy === true ? 'healthy' : 'pty-spawn-unhealthy'
+          )
           return
         }
       }
     }
-    const timer = setTimeout(() => settle('unreachable'), HEALTH_CHECK_TIMEOUT_MS)
+    let timer = setTimeout(() => settle('unreachable'), HEALTH_CHECK_TIMEOUT_MS)
 
     sock = connect({ path: socketPath })
     sock.on('error', onError)

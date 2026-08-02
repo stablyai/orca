@@ -205,7 +205,9 @@ type MockAdapter = {
     socketPath: string
     tokenPath: string
     historyPath?: string
-    respawn?: (reason: 'daemon_died' | 'unhealthy_resolver') => Promise<void>
+    respawn?: (
+      reason: 'daemon_died' | 'unhealthy_resolver' | 'input_health_failed'
+    ) => Promise<void>
     protocolVersion?: number
   }
   getActiveSessionIds: ReturnType<typeof vi.fn>
@@ -218,6 +220,8 @@ type MockAdapter = {
   disconnectOnly: ReturnType<typeof vi.fn>
   onData: ReturnType<typeof vi.fn>
   onExit: ReturnType<typeof vi.fn>
+  onInputUnavailable: ReturnType<typeof vi.fn>
+  triggerInputUnavailable: () => void
   // Why: the router calls onData/onExit on each adapter; the stub returns a no-op unsubscribe so router subscription doesn't explode.
   callOrder: string[]
 }
@@ -338,6 +342,8 @@ vi.mock('./daemon-pty-adapter', () => ({
     readonly disconnectOnly: ReturnType<typeof vi.fn>
     readonly onData: ReturnType<typeof vi.fn>
     readonly onExit: ReturnType<typeof vi.fn>
+    readonly onInputUnavailable: ReturnType<typeof vi.fn>
+    readonly triggerInputUnavailable: () => void
     readonly callOrder: string[]
     constructor(opts: MockAdapter['options']) {
       this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
@@ -374,6 +380,21 @@ vi.mock('./daemon-pty-adapter', () => ({
         return () => {}
       })
       this.onExit = vi.fn(() => () => {})
+      const inputUnavailableListeners: (() => void)[] = []
+      this.onInputUnavailable = vi.fn((listener: () => void) => {
+        inputUnavailableListeners.push(listener)
+        return () => {
+          const index = inputUnavailableListeners.indexOf(listener)
+          if (index !== -1) {
+            inputUnavailableListeners.splice(index, 1)
+          }
+        }
+      })
+      this.triggerInputUnavailable = () => {
+        for (const listener of inputUnavailableListeners.slice()) {
+          listener()
+        }
+      }
       adapterInstances.push(this as unknown as MockAdapter)
     }
   }
@@ -525,6 +546,28 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances[0].establishLifecycleLease.mock.invocationCallOrder[0]).toBeLessThan(
       adoptionLeaseReleases[0].mock.invocationCallOrder[0]
     )
+  })
+
+  it('preserves the quarantined daemon and routes fresh terminals to the local fallback', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const current = adapterInstances[0]
+
+    current.triggerInputUnavailable()
+    await vi.waitFor(() => expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(2))
+
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+    expect((provider as InstanceType<typeof DegradedDaemonPtyProvider>).getCurrentAdapter()).toBe(
+      current
+    )
+    expect(current.dispose).not.toHaveBeenCalled()
+
+    await provider!.spawn({ cols: 80, rows: 24 })
+    expect(localFallbackProvider.spawn).toHaveBeenCalledOnce()
+    expect(unbindLocalProviderListenersMock).toHaveBeenCalledOnce()
+    expect(rebindLocalProviderListenersMock).toHaveBeenCalledTimes(2)
   })
 
   it('uses daemon-owned idle retirement when a fresh launch fails permanent adoption', async () => {

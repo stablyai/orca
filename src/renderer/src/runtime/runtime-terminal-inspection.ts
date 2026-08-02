@@ -197,11 +197,9 @@ export async function sendRuntimePtyInputVerified(
   if (target.kind !== 'environment' || !terminal) {
     const accepted = await window.api.pty.writeAccepted(ptyId, data)
     if (!accepted) {
-      window.api.pty.write(ptyId, data)
-      // Why: SSH/local fallback writes are fire-and-forget. Callers use this
-      // boolean to continue UX flow, while hook telemetry confirms real turns.
-      recordRuntimeTerminalInputForPtyId(ptyId)
-      return true
+      // The request may have reached the PTY before its ACK was lost. Replaying
+      // the same bytes here can execute a command twice.
+      return false
     }
     recordRuntimeTerminalInputForPtyId(ptyId)
     return accepted

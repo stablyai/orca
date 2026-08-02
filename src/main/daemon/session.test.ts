@@ -112,6 +112,7 @@ describe('Session', () => {
     }
     ownerBackend?: 'posix-pty' | 'windows-conpty' | 'windows-wsl'
     wslDistro?: string
+    onWriteError?: (error: unknown) => void
   }): Session {
     session = new Session({
       sessionId: 'test-session',
@@ -122,6 +123,7 @@ describe('Session', () => {
       subprocess,
       ...(opts?.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       shellReadySupported: opts?.shellReadySupported ?? false,
+      ...(opts?.onWriteError ? { onWriteError: opts.onWriteError } : {}),
       ...(opts?.startupIngress ? { startupIngress: opts.startupIngress } : {}),
       ...(opts?.shellReadyTimeoutMs !== undefined
         ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
@@ -350,6 +352,18 @@ describe('Session', () => {
       subprocess.simulateData('\r\nuser@host $ ')
       vi.advanceTimersByTime(30)
       expect(subprocess.written).toEqual(['first\n', 'second\n'])
+    })
+
+    it('rejects a deferred write failure without throwing from the flush timer', async () => {
+      createSession({ shellReadySupported: true })
+      const delivery = session.write('queued\n', { awaitDelivery: true })
+      subprocess.write = vi.fn(() => {
+        throw new Error('native PTY write failed')
+      })
+
+      subprocess.simulateData('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
+      expect(() => vi.advanceTimersByTime(30)).not.toThrow()
+      await expect(delivery).rejects.toThrow('native PTY write failed')
     })
 
     it('uses the short settle path when marker and prompt bytes arrive together', () => {

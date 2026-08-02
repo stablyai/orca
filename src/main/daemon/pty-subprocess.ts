@@ -82,7 +82,23 @@ const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
 const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 // Why: retry once so a transient slow spawn doesn't route every terminal to the local fallback, losing daemon persistence.
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
+const PTY_INPUT_HEALTH_TOKEN = 'orca-terminal-input-health'
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
+
+export type PtySpawnHealthFailure =
+  | 'input_roundtrip_failed'
+  | 'spawn_unavailable'
+  | 'unknown'
+
+export class PtySpawnHealthError extends Error {
+  constructor(
+    readonly failure: PtySpawnHealthFailure,
+    message: string
+  ) {
+    super(message)
+    this.name = 'PtySpawnHealthError'
+  }
+}
 
 function shouldInspectOuterWrapperFallback(processName: string | null): boolean {
   const recognized = recognizeAgentProcess(processName)
@@ -363,7 +379,8 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
 }
 
 /**
- * Runs one short native PTY spawn probe (spawn `/bin/sh -c 'exit 0'`).
+ * Runs one short native PTY input round-trip. The shell exits successfully only
+ * after node-pty delivers the expected line to its stdin.
  */
 function runSinglePtySpawnHealthProbe(): Promise<void> {
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
@@ -372,18 +389,30 @@ function runSinglePtySpawnHealthProbe(): Promise<void> {
 
   let proc: pty.IPty
   try {
-    proc = pty.spawn('/bin/sh', ['-c', 'exit 0'], {
-      name: 'xterm-256color',
-      cols: 2,
-      rows: 1,
-      cwd,
-      env: {
-        ...process.env,
-        TERM: 'xterm-256color'
+    proc = pty.spawn(
+      '/bin/sh',
+      [
+        '-c',
+        'IFS= read -r line && [ "$line" = "$1" ]',
+        'orca-input-health',
+        PTY_INPUT_HEALTH_TOKEN
+      ],
+      {
+        name: 'xterm-256color',
+        cols: 2,
+        rows: 1,
+        cwd,
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color'
+        }
       }
-    })
+    )
   } catch (err) {
-    throw formatPtySpawnError(err, '/bin/sh', cwd)
+    throw new PtySpawnHealthError(
+      'spawn_unavailable',
+      formatPtySpawnError(err, '/bin/sh', cwd).message
+    )
   }
 
   return new Promise<void>((resolve, reject) => {
@@ -410,9 +439,13 @@ function runSinglePtySpawnHealthProbe(): Promise<void> {
       resolve()
     }
     const timer = setTimeout(() => {
-      finish(new Error(`PTY spawn health check timed out after ${PTY_SPAWN_HEALTH_TIMEOUT_MS}ms`), {
-        kill: true
-      })
+      finish(
+        new PtySpawnHealthError(
+          'unknown',
+          `PTY spawn health check timed out after ${PTY_SPAWN_HEALTH_TIMEOUT_MS}ms`
+        ),
+        { kill: true }
+      )
     }, PTY_SPAWN_HEALTH_TIMEOUT_MS)
 
     // Why: ping only proves the protocol is alive; a real spawn catches stale node-pty helper paths.
@@ -421,8 +454,24 @@ function runSinglePtySpawnHealthProbe(): Promise<void> {
         finish()
         return
       }
-      finish(new Error(`PTY spawn health check exited with code ${exitCode}`))
+      finish(
+        new PtySpawnHealthError(
+          'input_roundtrip_failed',
+          `PTY spawn health check exited with code ${exitCode}`
+        )
+      )
     })
+    try {
+      proc.write(`${PTY_INPUT_HEALTH_TOKEN}\n`)
+    } catch (error) {
+      finish(
+        new PtySpawnHealthError(
+          'input_roundtrip_failed',
+          error instanceof Error ? error.message : String(error)
+        ),
+        { kill: true }
+      )
+    }
   })
 }
 
@@ -436,19 +485,29 @@ export async function checkPtySpawnHealth(): Promise<void> {
     return
   }
 
-  // Why: a real short-lived spawn catches a deleted cwd or stale native PTY path before panes are routed to a daemon that can't spawn.
-  if (process.platform === 'darwin') {
-    ensureNodePtySpawnHelperExecutable()
+  // Why: a real short-lived input round-trip catches both spawn failures and
+  // the field failure where proc.write returns without delivering any bytes.
+  try {
+    if (process.platform === 'darwin') {
+      ensureNodePtySpawnHelperExecutable()
+    }
+    preflightUnixPtySpawnEnvironment()
+  } catch (error) {
+    throw new PtySpawnHealthError(
+      'spawn_unavailable',
+      error instanceof Error ? error.message : String(error)
+    )
   }
-  preflightUnixPtySpawnEnvironment()
 
   let lastError: unknown
+  const failures: PtySpawnHealthFailure[] = []
   for (let attempt = 1; attempt <= PTY_SPAWN_HEALTH_RETRY_ATTEMPTS; attempt++) {
     try {
       await runSinglePtySpawnHealthProbe()
       return
     } catch (err) {
       lastError = err
+      failures.push(err instanceof PtySpawnHealthError ? err.failure : 'unknown')
       if (attempt < PTY_SPAWN_HEALTH_RETRY_ATTEMPTS) {
         console.warn(
           `[daemon] PTY spawn health probe attempt ${attempt} failed; retrying`,
@@ -457,7 +516,18 @@ export async function checkPtySpawnHealth(): Promise<void> {
       }
     }
   }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+  const failure = failures.every((value) => value === 'input_roundtrip_failed')
+    ? 'input_roundtrip_failed'
+    : failures.length === PTY_SPAWN_HEALTH_RETRY_ATTEMPTS &&
+        failures.every((value) => value === 'unknown')
+      ? 'input_roundtrip_failed'
+    : failures.every((value) => value === 'spawn_unavailable')
+      ? 'spawn_unavailable'
+      : 'unknown'
+  throw new PtySpawnHealthError(
+    failure,
+    lastError instanceof Error ? lastError.message : String(lastError)
+  )
 }
 
 /**
@@ -1092,13 +1162,12 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     },
     write: (data) => {
       if (dead) {
-        return
+        throw new Error('PTY subprocess is unavailable')
       }
-      try {
-        proc.write(data)
-      } catch {
-        dead = true
-      }
+      // A rejected write is not proof that the child exited. Propagate it so
+      // the caller can verify endpoint health, while preserving later retry,
+      // kill, and reap operations for this session.
+      proc.write(data)
     },
     resize: (cols, rows) => {
       if (dead) {

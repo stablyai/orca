@@ -32,6 +32,7 @@ export {
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
+  PTY_INPUT_HEALTH_PROTOCOL_VERSION,
   PTY_STARTUP_INGRESS_PROTOCOL_VERSION,
   MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
@@ -227,6 +228,11 @@ export type SystemResolverHealthRequest = {
 export type PtySpawnHealthRequest = {
   id: string
   type: 'ptySpawnHealth'
+}
+
+export type PtySpawnHealthResult = {
+  healthy: boolean
+  failure?: 'input_roundtrip_failed' | 'spawn_unavailable' | 'unknown'
 }
 
 export type GetSnapshotRequest = {

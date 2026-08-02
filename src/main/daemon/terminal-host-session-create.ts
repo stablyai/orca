@@ -21,6 +21,7 @@ type TerminalHostSessionCreateDependencies = {
   onDeadSessionRemoved: (sessionId: string) => void
   onSessionCreated: (sessionId: string, generation: string | undefined, isAlive: boolean) => void
   onSessionExit: (sessionId: string, generation: string | undefined) => void
+  onSessionWriteError: (sessionId: string, error: unknown) => void
 }
 
 export async function createOrAttachTerminalSession(
@@ -111,6 +112,7 @@ export async function createOrAttachTerminalSession(
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
     wslDistro,
     onExit: () => deps.onSessionExit(opts.sessionId, opts.agentSessionGeneration),
+    onWriteError: (error) => deps.onSessionWriteError(opts.sessionId, error),
     ...(opts.shellReadyTimeoutMs !== undefined
       ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
       : {})

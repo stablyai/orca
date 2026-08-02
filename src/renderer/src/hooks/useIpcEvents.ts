@@ -1508,6 +1508,8 @@ export function useIpcEvents(): void {
             }
             if (shouldSurfaceOwner) {
               store.revealWorktreeInSidebar(worktreeId)
+            }
+            if (shouldActivate && shouldSurfaceOwner) {
               focusTerminalInitiatedTab(tab.id, leafId)
             }
             // Why: only stamp the runtime title on fresh tabs; reused tabs may have a user customTitle it would overwrite on focus.
@@ -1587,7 +1589,10 @@ export function useIpcEvents(): void {
                 ...(launchAgent ? { launchAgent } : {})
               })
             }
-            if (ptyId && terminalPresentation === 'background') {
+            // Hidden command-only tabs still need a mounted pane to spawn and
+            // consume their queued startup command; a pre-created ptyId is not
+            // required for background mounting.
+            if (!shouldActivate) {
               requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
             }
             if (requestId) {

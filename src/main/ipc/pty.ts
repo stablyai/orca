@@ -4541,6 +4541,18 @@ export function registerPtyHandlers(
         return false
       }
     },
+    writeAccepted: async (ptyId, data) => {
+      try {
+        const provider = getProviderForPty(ptyId)
+        if (provider.writeAccepted) {
+          return await provider.writeAccepted(ptyId, data)
+        }
+        provider.write(ptyId, data)
+        return true
+      } catch {
+        return false
+      }
+    },
     kill: (ptyId) => {
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
@@ -5836,6 +5848,42 @@ export function registerPtyHandlers(
     }
   }
 
+  const writePtyProviderInputAccepted = (
+    provider: IPtyProvider,
+    id: string,
+    data: string
+  ): boolean | Promise<boolean> => {
+    if (!provider.writeAccepted) {
+      return writePtyProviderInput(provider, id, data)
+    }
+    return (async () => {
+      try {
+        const tooLarge = await isTerminalInputTooLargeWithDeferredMeasurement(data)
+        if (tooLarge) {
+          return false
+        }
+        const chunks = iterateTerminalInputChunks(data)
+        let chunk = chunks.next()
+        if (chunk.done) {
+          return await provider.writeAccepted!(id, data)
+        }
+        while (!chunk.done) {
+          if (!(await provider.writeAccepted!(id, chunk.value))) {
+            return false
+          }
+          chunk = chunks.next()
+          if (!chunk.done) {
+            await new Promise((resolve) => setTimeout(resolve, 0))
+          }
+        }
+        return true
+      } catch (error) {
+        reportUnavailablePtyWrite(id, error)
+        return false
+      }
+    })()
+  }
+
   type PtyWritePayload = { id: string; data: string }
   type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
@@ -5907,7 +5955,7 @@ export function registerPtyHandlers(
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writePtyProviderInputAccepted(provider, args.id, args.data)
     } catch {
       return false
     }

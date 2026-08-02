@@ -123,6 +123,24 @@ describe('daemon health', () => {
     }
   })
 
+  it('waits for the full native input-probe budget after a successful handshake', async () => {
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      ptySpawnHealthCheck: vi.fn(
+        () => new Promise<void>((resolve) => setTimeout(resolve, 3_100))
+      ),
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+
+    try {
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('healthy')
+    } finally {
+      await server.shutdown()
+    }
+  })
+
   it('fails when the token file is missing', async () => {
     await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
     await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)

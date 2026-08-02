@@ -23,6 +23,7 @@ import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
+  PTY_INPUT_HEALTH_PROTOCOL_VERSION,
   type ListSessionsResult
 } from './types'
 import {
@@ -54,6 +55,8 @@ import {
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
 import { parseDaemonReadyIdentity } from './daemon-ready-identity'
+import { probeLegacyDaemonInput } from './legacy-daemon-input-probe'
+import type { IPtyProvider } from '../providers/types'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -72,6 +75,9 @@ let spawner: DaemonSpawner | null = null
 type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
 
 let adapter: DaemonProvider | null = null
+let daemonLocalFallbackProvider: IPtyProvider | null = null
+let currentInputUnavailableUnsubscribe: (() => void) | null = null
+let inputFallbackTransition: Promise<void> | null = null
 // Why: coalesce concurrent restartDaemon() calls so two entries can't race the 7-step sequence against a half-spawned replacement.
 let restartInFlight: Promise<RestartDaemonResult> | null = null
 
@@ -697,6 +703,8 @@ export async function initDaemonPtyProvider(
     await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
   }
   const runtimeDir = getRuntimeDir()
+  const fallbackProvider = daemonLocalFallbackProvider ?? getLocalPtyProvider()
+  daemonLocalFallbackProvider = fallbackProvider
 
   const newSpawner = new DaemonSpawner({
     runtimeDir,
@@ -744,6 +752,8 @@ export async function initDaemonPtyProvider(
       } else if (reason === 'unhealthy_resolver') {
         // Must reach the launcher below without an await in between; see the consume site.
         attributedReplaceReason = 'unhealthy_resolver'
+      } else if (reason === 'input_health_failed') {
+        await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
       }
       newSpawner.resetHandle()
       await newSpawner.ensureRunning()
@@ -763,7 +773,7 @@ export async function initDaemonPtyProvider(
         ? new DegradedDaemonPtyProvider({
             current: newAdapter,
             legacy: legacyAdapters,
-            fallback: getLocalPtyProvider()
+            fallback: fallbackProvider
           })
         : legacyAdapters.length > 0
           ? new DaemonPtyRouter({
@@ -793,6 +803,7 @@ export async function initDaemonPtyProvider(
   spawner = newSpawner
   adapter = routedAdapter
   setLocalPtyProvider(routedAdapter)
+  bindCurrentInputFallback(newAdapter)
   // Why: the first window may register PTY listeners before daemon init finishes; rebind so daemon PTYs still fan out events.
   rebindLocalProviderListeners()
   logDaemonMilestone('daemon-init-done', { legacyAdapters: legacyAdapters.length })
@@ -880,6 +891,58 @@ function disposeProviderSubscriptionsOnly(provider: DaemonProvider): void {
   }
 }
 
+function bindCurrentInputFallback(current: DaemonPtyAdapter): void {
+  currentInputUnavailableUnsubscribe?.()
+  currentInputUnavailableUnsubscribe = current.onInputUnavailable(() => {
+    void transitionToInputFallback(current).catch((error) =>
+      console.warn('[daemon] Failed to route fresh terminals around unavailable input:', error)
+    )
+  })
+}
+
+function transitionToInputFallback(current: DaemonPtyAdapter): Promise<void> {
+  if (inputFallbackTransition) {
+    return inputFallbackTransition
+  }
+  const transition = (async () => {
+    const previousProvider = adapter
+    const fallback = daemonLocalFallbackProvider
+    if (
+      !previousProvider ||
+      !fallback ||
+      previousProvider instanceof DegradedDaemonPtyProvider ||
+      getCurrentDaemonAdapter(previousProvider) !== current
+    ) {
+      return
+    }
+
+    const degraded = new DegradedDaemonPtyProvider({
+      current,
+      legacy: getLegacyDaemonAdapters(previousProvider),
+      fallback
+    })
+    await degraded.discoverDaemonSessions()
+    if (adapter !== previousProvider) {
+      degraded.disposeProviderOnly()
+      return
+    }
+
+    unbindLocalProviderListeners()
+    disposeProviderSubscriptionsOnly(previousProvider)
+    replaceDaemonProvider(degraded)
+    rebindLocalProviderListeners()
+    console.warn(
+      '[daemon] PTY input unavailable — preserving existing sessions and routing fresh terminals locally'
+    )
+  })().finally(() => {
+    if (inputFallbackTransition === transition) {
+      inputFallbackTransition = null
+    }
+  })
+  inputFallbackTransition = transition
+  return transition
+}
+
 export type RestartDaemonResult = {
   killedCount: number
 }
@@ -962,6 +1025,8 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
       } else if (reason === 'unhealthy_resolver') {
         // Must reach the launcher below without an await in between; see the consume site.
         attributedReplaceReason = 'unhealthy_resolver'
+      } else if (reason === 'input_health_failed') {
+        await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
       }
       currentSpawner.resetHandle()
       await currentSpawner.ensureRunning()
@@ -1005,6 +1070,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
 
   // Step 6: swap module state (adapter + localProvider) atomically.
   replaceDaemonProvider(newProvider)
+  bindCurrentInputFallback(newCurrent)
 
   // Step 7: rebind renderer listeners against the new provider.
   rebindLocalProviderListeners()
@@ -1015,16 +1081,21 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
 // Disconnect without killing: the daemon survives app quit so sessions stay warm for reattach.
 // Leave history sessions marked "unclean" so a daemon crash while Orca is closed stays recoverable.
 export async function disconnectDaemon(): Promise<void> {
+  currentInputUnavailableUnsubscribe?.()
+  currentInputUnavailableUnsubscribe = null
   await adapter?.disconnectOnly()
   adapter = null
 }
 
 /** Kill the daemon and all its sessions. Use for full cleanup only. */
 export async function shutdownDaemon(): Promise<void> {
+  currentInputUnavailableUnsubscribe?.()
+  currentInputUnavailableUnsubscribe = null
   adapter?.dispose()
   adapter = null
   await spawner?.shutdown()
   spawner = null
+  daemonLocalFallbackProvider = null
 }
 
 export type OrphanedDaemonCleanupResult = {
@@ -1172,16 +1243,26 @@ export async function createLegacyDaemonAdapters(
     }
     // Keep old-protocol PTYs routed to their original daemon during upgrade; legacy adapters never respawn (new code would recreate stale env semantics).
     // historyPath is still needed for cleanup — without it a later v4 session reusing the same ID could false-restore stale scrollback.bin.
-    adapters.push(
-      new DaemonPtyAdapter({
-        socketPath,
-        tokenPath,
-        pidPath: getDaemonPidPath(runtimeDir, protocolVersion),
-        profileScope: runtimeDir,
-        protocolVersion,
-        historyPath
-      })
-    )
+    const legacyAdapter = new DaemonPtyAdapter({
+      socketPath,
+      tokenPath,
+      pidPath: getDaemonPidPath(runtimeDir, protocolVersion),
+      profileScope: runtimeDir,
+      protocolVersion,
+      historyPath
+    })
+    if (protocolVersion === PTY_INPUT_HEALTH_PROTOCOL_VERSION - 1) {
+      const inputHealthy = await probeLegacyDaemonInput(legacyAdapter, app.getPath('userData'))
+      if (!inputHealthy) {
+        // Preserve all old sessions and their output, but never acknowledge
+        // more input against an endpoint whose delivery could not be proven.
+        legacyAdapter.quarantineInput()
+        console.warn(
+          `[daemon] Preserving protocol v${protocolVersion} sessions with input quarantined`
+        )
+      }
+    }
+    adapters.push(legacyAdapter)
   }
   return adapters
 }

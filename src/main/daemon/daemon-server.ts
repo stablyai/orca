@@ -18,7 +18,7 @@ import {
 } from './daemon-stream-backlog-probe'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { SubprocessHandle } from './session'
-import { checkPtySpawnHealth } from './pty-subprocess'
+import { checkPtySpawnHealth, PtySpawnHealthError } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
@@ -189,6 +189,13 @@ export class DaemonServer {
     this.onAuthenticatedClientPair = opts.onAuthenticatedClientPair ?? (() => {})
     this.host = new TerminalHost({
       spawnSubprocess: opts.spawnSubprocess,
+      onSessionWriteError: (sessionId) => {
+        const clientId = this.streamClientIdBySessionId.get(sessionId)
+        this.sendWriteUnavailableEvent(
+          clientId ? this.clients.get(clientId) : undefined,
+          sessionId
+        )
+      },
       ...(opts.onPtySessionExit ? { onSessionReaped: opts.onPtySessionExit } : {})
     })
     this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
@@ -592,6 +599,12 @@ export class DaemonServer {
         })
       }
     } catch (err) {
+      if (request.type === 'write') {
+        const sessionId = request.payload?.sessionId
+        if (typeof sessionId === 'string' && sessionId.length > 0) {
+          this.sendWriteUnavailableEvent(this.clients.get(clientId), sessionId)
+        }
+      }
       if (!isNotify) {
         socket.write(
           encodeNdjson({
@@ -850,7 +863,9 @@ export class DaemonServer {
       case 'write':
         try {
           this.lastInputAtBySessionId.set(request.payload.sessionId, performance.now())
-          this.host.write(request.payload.sessionId, request.payload.data)
+          await this.host.write(request.payload.sessionId, request.payload.data, {
+            awaitDelivery: !request.id.startsWith(NOTIFY_PREFIX)
+          })
         } catch (err) {
           this.lastInputAtBySessionId.delete(request.payload.sessionId)
           if (err instanceof SessionNotFoundError) {
@@ -1041,8 +1056,18 @@ export class DaemonServer {
         return { health: await readCurrentProcessMacSystemResolverHealth() }
 
       case 'ptySpawnHealth':
-        await this.ptySpawnHealthCheck()
-        return { healthy: true }
+        try {
+          await this.ptySpawnHealthCheck()
+          return { healthy: true }
+        } catch (error) {
+          // Only a native write/read mismatch proves input delivery is broken.
+          // Spawn pressure and timeouts stay unknown so they cannot retire
+          // live terminals.
+          return {
+            healthy: false,
+            failure: error instanceof PtySpawnHealthError ? error.failure : 'unknown'
+          }
+        }
 
       case 'shutdown': {
         this.log.log('shutdown', {
@@ -1088,6 +1113,19 @@ export class DaemonServer {
       event: 'exit',
       sessionId,
       payload: { code }
+    })
+    this.streamDataBatcher.flush(client.clientId)
+  }
+
+  private sendWriteUnavailableEvent(client: ConnectedClient | undefined, sessionId: string): void {
+    if (!client?.streamSocket) {
+      return
+    }
+    this.streamDataBatcher.enqueueControlEvent(client.clientId, sessionId, {
+      type: 'event',
+      event: 'writeUnavailable',
+      sessionId,
+      payload: {}
     })
     this.streamDataBatcher.flush(client.clientId)
   }

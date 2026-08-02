@@ -10666,6 +10666,90 @@ describe('OrcaRuntimeService', () => {
     expect(writes).toEqual(['continue', '\r'])
   })
 
+  it('does not report terminal send success before the provider acknowledges the write', async () => {
+    let acknowledge!: (accepted: boolean) => void
+    const writeAccepted = vi.fn(
+      () => new Promise<boolean>((resolve) => (acknowledge = resolve))
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      writeAccepted,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-ack',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Shell',
+          activeLeafId: 'pane:ack',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-ack',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:ack',
+          paneRuntimeId: 1,
+          ptyId: 'pty-ack'
+        }
+      ]
+    })
+    const terminal = (await runtime.listTerminals()).terminals[0]!
+    let settled = false
+    const send = runtime.sendTerminal(terminal.handle, { text: 'echo ready' }).finally(() => {
+      settled = true
+    })
+
+    await vi.waitFor(() => {
+      expect(writeAccepted).toHaveBeenCalledWith('pty-ack', 'echo ready')
+    })
+    expect(settled).toBe(false)
+    acknowledge(true)
+
+    await expect(send).resolves.toMatchObject({ accepted: true })
+  })
+
+  it('rejects terminal send when the provider rejects the acknowledged write', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      writeAccepted: vi.fn().mockResolvedValue(false),
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-reject',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Shell',
+          activeLeafId: 'pane:reject',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-reject',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:reject',
+          paneRuntimeId: 1,
+          ptyId: 'pty-reject'
+        }
+      ]
+    })
+    const terminal = (await runtime.listTerminals()).terminals[0]!
+
+    await expect(runtime.sendTerminal(terminal.handle, { text: 'echo lost' })).rejects.toThrow(
+      'terminal_not_writable'
+    )
+  })
+
   it('reports permission from blocked terminal wait text', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

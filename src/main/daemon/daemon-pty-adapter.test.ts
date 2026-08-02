@@ -22,6 +22,7 @@ import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS } from './terminal-history-seed-chunks'
+import { PtySpawnHealthError } from './pty-subprocess'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
@@ -108,6 +109,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   let subprocessDataOnSubscribe: string | undefined
   let daemonLog: DaemonFileLog
   let daemonLogEvents: string[]
+  let ptySpawnHealthCheck: ReturnType<typeof vi.fn<() => Promise<void>>>
 
   beforeEach(async () => {
     subprocessDataOnSubscribe = undefined
@@ -120,10 +122,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       log: (event) => daemonLogEvents.push(event),
       close() {}
     }
+    ptySpawnHealthCheck = vi.fn(async () => {})
     server = new DaemonServer({
       socketPath,
       tokenPath,
       log: daemonLog,
+      ptySpawnHealthCheck,
       spawnSubprocess: (opts) => {
         lastSpawnOpts = opts
         lastSubprocess = createMockSubprocess(subprocessDataOnSubscribe)
@@ -431,6 +435,22 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await new Promise((r) => setTimeout(r, 50))
       expect(lastSubprocess.write).toHaveBeenCalledWith('ls\n')
     })
+
+    it('acknowledges only after the daemon session accepts the write', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      await expect(adapter.writeAccepted(id, 'ls\n')).resolves.toBe(true)
+      expect(lastSubprocess.write).toHaveBeenCalledWith('ls\n')
+    })
+
+    it('rejects an acknowledged write when the PTY subprocess rejects it', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      lastSubprocess.write.mockImplementationOnce(() => {
+        throw new Error('native PTY write failed')
+      })
+
+      await expect(adapter.writeAccepted(id, 'ls\n')).rejects.toThrow(PtyWriteUnavailableError)
+    })
   })
 
   describe('resize', () => {
@@ -517,6 +537,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         socketPath,
         tokenPath,
         log: daemonLog,
+        ptySpawnHealthCheck,
         spawnSubprocess: (opts) => {
           lastSpawnOpts = opts
           lastSubprocess = createMockSubprocess()
@@ -524,6 +545,128 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
       })
     }
+
+    it('rechecks native input health for every acknowledged write', async () => {
+      const healingAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        respawn: async () => {}
+      })
+
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        await healingAdapter.writeAccepted(id, 'first')
+        await healingAdapter.writeAccepted(id, 'second')
+
+        expect(ptySpawnHealthCheck).toHaveBeenCalledTimes(2)
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+
+    it('preserves sibling sessions when one PTY rejects an acknowledged write', async () => {
+      const respawn = vi.fn(async () => {})
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const recovered: string[] = []
+      healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const rejectedSubprocess = lastSubprocess
+        const { id: siblingId } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        rejectedSubprocess.write.mockImplementationOnce(() => {
+          throw new Error('native PTY write failed')
+        })
+
+        await expect(healingAdapter.writeAccepted(id, 'first')).rejects.toThrow(
+          PtyWriteUnavailableError
+        )
+        await waitFor(() => ptySpawnHealthCheck.mock.calls.length >= 2)
+
+        expect(recovered).toContain(id)
+        expect(recovered).not.toContain(siblingId)
+        expect(respawn).not.toHaveBeenCalled()
+
+        await expect(healingAdapter.writeAccepted(id, 'rebound')).resolves.toBe(true)
+        expect(rejectedSubprocess.write).toHaveBeenCalledWith('rebound')
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+
+    it('rejects ordinary and acknowledged writes after legacy input quarantine', async () => {
+      const legacyAdapter = adapter
+      const recovered: string[] = []
+      legacyAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+
+      const { id } = await legacyAdapter.spawn({ cols: 80, rows: 24 })
+      const subprocess = lastSubprocess
+      legacyAdapter.quarantineInput()
+
+      expect(() => legacyAdapter.write(id, 'ordinary')).toThrow(PtyWriteUnavailableError)
+      await expect(legacyAdapter.writeAccepted(id, 'strong')).rejects.toThrow(
+        PtyWriteUnavailableError
+      )
+      expect(subprocess.write).not.toHaveBeenCalled()
+      expect(recovered).toEqual([id, id])
+    })
+
+    it('preserves every live session when the endpoint-wide input probe fails', async () => {
+      ptySpawnHealthCheck.mockRejectedValueOnce(
+        new PtySpawnHealthError('input_roundtrip_failed', 'native input blackhole')
+      )
+      const respawn = vi.fn(async () => {})
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const recovered: string[] = []
+      healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const rejectedSubprocess = lastSubprocess
+        const { id: siblingId } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+
+        await expect(healingAdapter.writeAccepted(id, 'must-not-run')).rejects.toThrow(
+          PtyWriteUnavailableError
+        )
+        expect(rejectedSubprocess.write).not.toHaveBeenCalled()
+        expect(recovered).toContain(id)
+        expect(recovered).toContain(siblingId)
+        expect(respawn).not.toHaveBeenCalled()
+        expect(healingAdapter.hasPty(id)).toBe(true)
+        expect(healingAdapter.hasPty(siblingId)).toBe(true)
+
+        await healingAdapter.spawn({ sessionId: id, cols: 80, rows: 24 })
+        await expect(healingAdapter.writeAccepted(id, 'still-blocked')).rejects.toThrow(
+          PtyWriteUnavailableError
+        )
+        expect(rejectedSubprocess.write).not.toHaveBeenCalled()
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+
+    it('does not quarantine or replace sessions for an ambiguous health timeout', async () => {
+      ptySpawnHealthCheck.mockRejectedValueOnce(new Error('host temporarily busy'))
+      const respawn = vi.fn(async () => {})
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const recovered: string[] = []
+      healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const { id: siblingId } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+
+        await expect(healingAdapter.writeAccepted(id, 'must-not-run')).rejects.toThrow(
+          PtyWriteUnavailableError
+        )
+        expect(respawn).not.toHaveBeenCalled()
+        expect(recovered).toEqual([])
+        expect(healingAdapter.hasPty(id)).toBe(true)
+        expect(healingAdapter.hasPty(siblingId)).toBe(true)
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
 
     it('rejects stale input until createOrAttach remounts the pane onto the new daemon', async () => {
       let respawnServer: DaemonServer | undefined

@@ -20,6 +20,7 @@ export type TerminalHostOptions = {
   }) => SubprocessHandle
   // Why: login-session death detection (#7936) needs subprocess exits even when no client is attached.
   onSessionReaped?: (sessionId: string) => void
+  onSessionWriteError?: (sessionId: string, error: unknown) => void
   // Why: graceful shutdown checkpoints must finish in-process before teardown.
   onFinalCheckpoint?: (
     sessionId: string,

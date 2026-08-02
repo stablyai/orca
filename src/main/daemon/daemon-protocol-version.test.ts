@@ -8,20 +8,22 @@ import {
   MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
+  PTY_INPUT_HEALTH_PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact
 } from './daemon-protocol-version'
 
 describe('daemon protocol version', () => {
   it('ships bounded history transfer after the 2031-unsubscribe fact', () => {
-    expect(PROTOCOL_VERSION).toBe(30)
+    expect(PROTOCOL_VERSION).toBe(31)
     expect(HISTORY_SEED_TRANSFER_PROTOCOL_VERSION).toBe(30)
+    expect(PTY_INPUT_HEALTH_PROTOCOL_VERSION).toBe(31)
     expect(MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION).toBe(29)
     expect(COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION).toBe(27)
     expect(GET_FOREGROUND_PROCESS_PROTOCOL_VERSION).toBe(11)
     expect(AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toEqual(
-      Array.from({ length: 29 }, (_, index) => index + 1)
+      Array.from({ length: 30 }, (_, index) => index + 1)
     )
   })
 

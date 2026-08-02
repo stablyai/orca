@@ -30,6 +30,13 @@ export type TerminalErrorEvent = {
   payload: { message: string }
 }
 
+export type WriteUnavailableEvent = {
+  type: 'event'
+  event: 'writeUnavailable'
+  sessionId: string
+  payload: Record<string, never>
+}
+
 // Why these ride the stream socket (not control): each marks a POSITION in a
 // session's byte stream — scan-authority handoffs and dropped ranges are only
 // meaningful relative to the data events around them. Old mains ignore
@@ -87,6 +94,7 @@ export type DaemonEvent =
   | DataEvent
   | ExitEvent
   | TerminalErrorEvent
+  | WriteUnavailableEvent
   | SessionBackgroundMarkerEvent
   | DataGapEvent
   | TransientFactEvent

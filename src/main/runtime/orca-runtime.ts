@@ -1559,6 +1559,7 @@ type RuntimePtyController = {
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
   write(ptyId: string, data: string): boolean
+  writeAccepted?(ptyId: string, data: string): Promise<boolean>
   kill(ptyId: string): boolean
   stopAndWait?(
     ptyId: string,
@@ -16305,7 +16306,7 @@ export class OrcaRuntimeService {
         }
         throw error
       }
-      const suffixWrote = this.ptyController?.write(ptyId, suffix) ?? false
+      const suffixWrote = await this.writeTerminalChunkAccepted(ptyId, suffix)
       if (!suffixWrote) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
@@ -16318,7 +16319,7 @@ export class OrcaRuntimeService {
 
     await options.beforeWrite?.(ptyId)
     options.reserveWrite?.(ptyId)
-    const wrote = this.ptyController?.write(ptyId, payload) ?? false
+    const wrote = await this.writeTerminalChunkAccepted(ptyId, payload)
     if (!wrote) {
       throw new Error('terminal_not_writable')
     }
@@ -16339,7 +16340,7 @@ export class OrcaRuntimeService {
     while (!chunk.done) {
       await options.beforeWrite?.(ptyId)
       options.reserveWrite?.(ptyId)
-      const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
+      const wrote = await this.writeTerminalChunkAccepted(ptyId, chunk.value)
       if (!wrote) {
         throw new Error('terminal_not_writable')
       }
@@ -16349,6 +16350,16 @@ export class OrcaRuntimeService {
         await new Promise((resolve) => setTimeout(resolve, 0))
       }
     }
+  }
+
+  private async writeTerminalChunkAccepted(ptyId: string, data: string): Promise<boolean> {
+    const controller = this.ptyController
+    if (!controller) {
+      return false
+    }
+    return controller.writeAccepted
+      ? await controller.writeAccepted(ptyId, data)
+      : controller.write(ptyId, data)
   }
 
   private async writeTerminalAgentPrompt(
@@ -16366,7 +16377,7 @@ export class OrcaRuntimeService {
       let chunk = chunks.next()
       while (!chunk.done) {
         await options.beforeWrite?.(ptyId)
-        const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
+        const wrote = await this.writeTerminalChunkAccepted(ptyId, chunk.value)
         if (!wrote) {
           throw new Error('terminal_not_writable')
         }
@@ -16393,7 +16404,7 @@ export class OrcaRuntimeService {
       }
       throw error
     }
-    const suffixWrote = this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT) ?? false
+    const suffixWrote = await this.writeTerminalChunkAccepted(ptyId, AGENT_PROMPT_SUBMIT)
     if (!suffixWrote) {
       throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
     }
