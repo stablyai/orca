@@ -79,7 +79,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Baseline oracle 1a3139713b and disabled oracle 946d61d30a each failed 6 of 117 tests. Candidate 2b6a8b8f3f passed 117 of 117 with byte-identical test blobs."
+        "evidence": "Baseline oracle ece5c20fba and disabled oracle e48bb8d2d4 each failed 6 of 117 tests. Candidate oracle 887bf0d8c4 passed 117 of 117 with byte-identical test blobs."
       },
       "performanceBudget": {
         "required": true,
