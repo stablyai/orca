@@ -27,6 +27,11 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').sourceControlGroupOrder).toBe('changes-first')
   })
 
+  it('defaults mobile pairing to discovered network addresses', () => {
+    expect(getDefaultSettings('/tmp').mobilePairingCustomAddress).toBeNull()
+    expect(getDefaultSettings('/tmp').mobilePairingCustomAddresses).toEqual([])
+  })
+
   it('keeps first-work branch auto-renaming on by default for new settings', () => {
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWork).toBe(true)
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWorkDefaultedOn).toBe(true)

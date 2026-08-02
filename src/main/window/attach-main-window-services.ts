@@ -6,9 +6,11 @@ import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
 import type {
   CreateWorktreeResult,
+  ReleaseBuildListResult,
   UpdateCheckOptions,
   WorktreeStartupLaunch
 } from '../../shared/types'
+import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import {
   acknowledgePendingTccPromptNotice,
   consumePendingTccPromptNotice,
@@ -38,6 +40,7 @@ import {
   setupAutoUpdater,
   dismissAvailableUpdate,
   dismissNudge,
+  listAvailableReleaseBuilds,
   type UpdateInstallMode
 } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history-gc'
@@ -156,7 +159,7 @@ export function attachMainWindowServices(
         try {
           await options?.onBeforeUpdateQuit?.()
         } finally {
-          store.flush()
+          await store.flushPendingAsync()
         }
       },
       setLastUpdateCheckAt: (timestamp) => {
@@ -175,6 +178,7 @@ export function attachMainWindowServices(
       setDismissedUpdateNudgeId: (id) => {
         store.updateUI({ dismissedUpdateNudgeId: id })
       },
+      getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
       installMode: options?.updateInstallMode
     })
     logStartupMilestone('updater-setup-done')
@@ -526,6 +530,7 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:quitAndInstall')
   ipcMain.removeHandler('updater:dismissNudge')
   ipcMain.removeHandler('updater:dismissAvailableUpdate')
+  ipcMain.removeHandler('updater:listBuilds')
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
@@ -537,4 +542,19 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
+  ipcMain.handle(
+    'updater:listBuilds',
+    async (_event, channel: ReleaseChannel): Promise<ReleaseBuildListResult> => {
+      if (!RELEASE_CHANNELS.includes(channel)) {
+        return { ok: false, channel, message: `Unknown release channel "${channel}".` }
+      }
+      try {
+        return { ok: true, channel, builds: await listAvailableReleaseBuilds(channel) }
+      } catch (error) {
+        // Why: a network/rate-limit failure is expected here; return it as data so
+        // the picker can render the reason instead of rejecting the invoke.
+        return { ok: false, channel, message: String((error as Error)?.message ?? error) }
+      }
+    }
+  )
 }

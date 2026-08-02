@@ -56,6 +56,8 @@ import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 
 /** Telemetry threaded from the launch site to `pty:spawn`; main fires `agent_started`
  *  only after the spawn succeeds. See telemetry-plan.md§Agent launch semantics. */
@@ -195,11 +197,17 @@ export function activateAndRevealFolderWorkspace(
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
+    executionHostId?: ExecutionHostId
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
+  const folderWorkspaceOwner = findFolderWorkspaceOwner(
+    state,
+    folderWorkspaceId,
+    opts?.executionHostId
+  )
   const folderWorkspace = state.folderWorkspaces.find(
-    (workspace) => workspace.id === folderWorkspaceId
+    (workspace) => workspace === folderWorkspaceOwner
   )
   if (!folderWorkspace) {
     return false
@@ -226,7 +234,7 @@ export function activateAndRevealFolderWorkspace(
     state.setActiveView('terminal')
   }
 
-  state.setActiveFolderWorkspace(folderWorkspaceId)
+  state.setActiveFolderWorkspace(folderWorkspaceId, opts?.executionHostId)
 
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   state.markWorktreeVisited(workspaceKey)
@@ -256,10 +264,11 @@ export function activateAndRevealWorktree(
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     notifyHostRuntime?: boolean
     revealInSidebar?: boolean
+    executionHostId?: ExecutionHostId
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
-  const wt = state.getKnownWorktreeById(worktreeId)
+  const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
   if (!wt) {
     return false
   }
@@ -271,6 +280,7 @@ export function activateAndRevealWorktree(
     !hasActivationWork &&
     state.activeRepoId === wt.repoId &&
     state.activeWorktreeId === worktreeId &&
+    state.activeWorkspaceExecutionHostId === (opts?.executionHostId ?? null) &&
     state.activeView === 'terminal'
 
   // 1. Set activeRepoId if crossing repos
@@ -284,7 +294,7 @@ export function activateAndRevealWorktree(
   }
 
   // 3. Core activation: setActiveWorktree also restores per-worktree state, clears unread, bumps dead PTY generations, refreshes GitHub
-  state.setActiveWorktree(worktreeId)
+  state.setActiveWorktree(worktreeId, opts?.executionHostId)
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {

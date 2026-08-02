@@ -9,9 +9,13 @@ import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-vi.mock('./WorkspaceKanbanCard', () => ({
-  default: ({ worktree }: { worktree: Worktree }) => (
-    <div data-workspace-board-card-id={worktree.id} />
+vi.mock('./WorkspaceKanbanLaneCardList', () => ({
+  default: ({ items }: { items: readonly Worktree[] }) => (
+    <>
+      {items.map((item) => (
+        <div key={item.id} data-workspace-board-card-id={item.id} />
+      ))}
+    </>
   )
 }))
 
@@ -51,6 +55,7 @@ function renderLane(props: {
         isResizingColumn={false}
         isDragTarget={false}
         canCreateWorktree={true}
+        renderCards={true}
         selectedWorktreeIds={new Set()}
         selectedWorktrees={[]}
         onDragOver={vi.fn()}

@@ -70,8 +70,12 @@ export function MobileHeroPairingStep({
   canGeneratePairing,
   onCopyPairingCode,
   networkInterfaces,
+  customAddresses,
   selectedAddress,
+  selectedAddressIsCustom,
   onSelectedAddressChange,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
   beforeCustomAddressChange,
   onRefreshNetworkInterfaces,
   refreshingNetworkInterfaces
@@ -90,8 +94,12 @@ export function MobileHeroPairingStep({
   canGeneratePairing: boolean
   onCopyPairingCode: () => void
   networkInterfaces: readonly MobileNetworkInterface[]
+  customAddresses: readonly string[]
   selectedAddress: string | undefined
+  selectedAddressIsCustom: boolean
   onSelectedAddressChange: (address: string) => void
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
   beforeCustomAddressChange: (address: string) => Promise<boolean>
   onRefreshNetworkInterfaces: () => void
   refreshingNetworkInterfaces: boolean
@@ -218,8 +226,12 @@ export function MobileHeroPairingStep({
           </span>
           <NetworkInterfacePicker
             networkInterfaces={networkInterfaces}
+            customAddresses={customAddresses}
             selectedAddress={selectedAddress}
+            selectedAddressIsCustom={selectedAddressIsCustom}
             onSelectedAddressChange={onSelectedAddressChange}
+            onCustomAddressSelect={onCustomAddressSelect}
+            onCustomAddressRemove={onCustomAddressRemove}
             beforeCustomAddressChange={beforeCustomAddressChange}
             disabled={false}
             className="mp-network-select"

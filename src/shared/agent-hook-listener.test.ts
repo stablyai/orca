@@ -3008,6 +3008,27 @@ describe('shared agent-hook-listener', () => {
       expect(stop?.payload.subagents).toBeUndefined()
     })
 
+    it.each([
+      {
+        label: 'a running shell task',
+        eventName: 'Stop',
+        payload: { background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }] }
+      },
+      {
+        label: 'a pending session cron',
+        eventName: 'StopFailure',
+        payload: { session_crons: [{ id: 'cron-1' }] }
+      }
+    ])(
+      'reports Stop as working for $label without adding a subagent row',
+      ({ eventName, payload }) => {
+        claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'run in background' })
+        const stop = claudeEvent({ hook_event_name: eventName, ...payload })
+        expect(stop?.payload.state).toBe('working')
+        expect(stop?.payload.subagents).toBeUndefined()
+      }
+    )
+
     it('reports Stop as working while a background subagent is still running', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
       claudeEvent({

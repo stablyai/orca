@@ -4,6 +4,7 @@ import {
   latestSessionConversationTurn,
   recentSessionConversationTurns,
   sessionDetailConversationTurns,
+  sessionFirstPrompt,
   sessionModelLabel,
   sessionPreviewSearchText
 } from './ai-vault-session-display'
@@ -98,5 +99,28 @@ describe('ai vault session display', () => {
   it('labels the session model only when the transcript recorded one', () => {
     expect(sessionModelLabel(baseSession)).toBe('gpt-5.5')
     expect(sessionModelLabel({ ...baseSession, model: null })).toBeNull()
+  })
+
+  it('prefers the stored firstUserPrompt over sliding preview turns', () => {
+    expect(
+      sessionFirstPrompt({
+        ...baseSession,
+        firstUserPrompt: 'Original long first prompt that scrolled out of preview',
+        previewMessages: [
+          { role: 'user', text: 'Later user turn still in the preview window', timestamp: null },
+          { role: 'assistant', text: 'Later reply', timestamp: null }
+        ]
+      })
+    ).toBe('Original long first prompt that scrolled out of preview')
+  })
+
+  it('falls back to the earliest user preview turn when firstUserPrompt is absent', () => {
+    expect(sessionFirstPrompt(baseSession)).toBe('Please fix the flaky golden tests')
+    expect(
+      sessionFirstPrompt({
+        ...baseSession,
+        previewMessages: [{ role: 'assistant', text: 'Only agent text', timestamp: null }]
+      })
+    ).toBeNull()
   })
 })

@@ -85,7 +85,7 @@ function deliverySnapshotMatches(
   )
 }
 
-// Why: one shared frozen sentinel so selectors don't return a fresh [] (avoids re-renders); freezing stops a stray push corrupting the shared instance for every consumer.
+// Why: a frozen shared sentinel avoids selector re-renders and mutation.
 const EMPTY_COMMENTS: readonly DiffComment[] = Object.freeze([])
 
 async function persist(

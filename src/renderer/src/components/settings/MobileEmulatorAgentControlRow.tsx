@@ -177,9 +177,9 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               await ensureOrcaCliAvailableForAgentSkillTerminal()
             }}
             onRecheck={setup.refreshCliSkill}
-            // Why: this row builds its commands for the local host only, so the
-            // local-host freshness scan can vouch for the copy it points at.
-            freshnessSkillName={ORCA_CLI_SKILL_NAME}
+            freshnessSkillName={
+              activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined
+            }
           />
         </div>
 

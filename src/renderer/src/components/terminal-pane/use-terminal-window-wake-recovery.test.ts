@@ -79,6 +79,22 @@ describe('useTerminalWindowWakeRecovery', () => {
     })
   })
 
+  it('preserves the glyph atlas when a fullscreen Space becomes visible', () => {
+    renderWakeRecoveryHook()
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible'
+    })
+
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    expect(recoverVisibleTerminalWindowWakeMock).toHaveBeenLastCalledWith({
+      manager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+  })
+
   it('records a wake-recovery breadcrumb with the trigger source and atlas decision', () => {
     // Why: a post-wake garble report attributes to the trigger that ran (or its
     // absence). Pin that focus records source=focus/atlas=false and system

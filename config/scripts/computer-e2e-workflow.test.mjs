@@ -225,20 +225,15 @@ describe('computer-use e2e workflow', () => {
     )
   })
 
-  it('runs Linux computer-use e2e in the PR native-smoke job under Xvfb', () => {
+  it('does not run computer-use e2e in PR smoke jobs', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
     const nativeSmokeRuns = workflow.jobs['native-smoke'].steps
       .map((step) => step.run)
       .filter((run) => typeof run === 'string')
-    const installRun = nativeSmokeRuns.find((run) => run.includes('apt-get install'))
 
-    expect(installRun).toContain('gedit')
-    expect(installRun).toContain('xvfb')
-    expect(nativeSmokeRuns).toContain(
-      'xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts'
-    )
+    expect(nativeSmokeRuns.join('\n')).not.toContain('test:e2e:computer')
   })
 
   it('builds Electron main output before every computer-use e2e run', () => {
@@ -267,7 +262,7 @@ describe('computer-use e2e workflow', () => {
     }
   })
 
-  it('runs core Windows computer-use e2e in the PR native-smoke job', () => {
+  it('keeps computer-use e2e in scheduled jobs only', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
@@ -283,9 +278,8 @@ describe('computer-use e2e workflow', () => {
         .filter((run) => typeof run === 'string')
     ]
 
-    expect(nativeSmokeRuns).toContain(
-      'pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts'
-    )
+    expect(nativeSmokeRuns.join('\n')).not.toContain('test:e2e:computer')
+    expect(allRuns.join('\n')).toContain('test:e2e:computer')
     expect(allRuns.join('\n')).not.toContain('test:e2e:computer -- --reporter')
   })
 

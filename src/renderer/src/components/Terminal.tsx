@@ -64,7 +64,7 @@ import {
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
-import { resolveRepairedActiveTerminalTabId } from './terminal/active-terminal-repair'
+import { useActiveTerminalRepair } from './terminal/use-active-terminal-repair'
 import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
 import {
   applyBackgroundMountTabRestriction,
@@ -89,6 +89,7 @@ import { getTerminalWorktreeColdParkRecheckDelayMs } from './terminal-pane/termi
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
   canParkTerminalWorktreeRenderers,
+  isParkRestorableTerminalPty,
   selectPairedRuntimeParkingEnvironmentIds,
   selectColdParkedTerminalWorktrees,
   type TerminalWorktreeColdParkCandidate
@@ -112,7 +113,8 @@ import {
   disposeAllParkedTerminalWatchers,
   pruneParkedTerminalWatchers,
   shouldDeferParkedPtyExitTabClose,
-  syncParkedTerminalTabWatchers
+  syncParkedTerminalTabWatchers,
+  terminalWatcherLiveWorkspaceIds
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
@@ -388,7 +390,10 @@ function Terminal(): React.JSX.Element | null {
   }, [foregroundTerminalTabIds])
 
   const tabs = useMemo(
-    () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),
+    () =>
+      renderedActiveWorktreeId !== null && Object.hasOwn(tabsByWorktree, renderedActiveWorktreeId)
+        ? tabsByWorktree[renderedActiveWorktreeId]
+        : [],
     [renderedActiveWorktreeId, tabsByWorktree]
   )
   useTerminalProviderSnapshotCapability(workspaceSessionReady && hydrationSucceeded)
@@ -747,32 +752,15 @@ function Terminal(): React.JSX.Element | null {
       )
   }, [queueEditorCloseRequests])
 
-  useEffect(() => {
-    const rememberedTabId = renderedActiveWorktreeId
-      ? (activeTabIdByWorktree[renderedActiveWorktreeId] ?? null)
-      : null
-    // Why: prefer the remembered active tab so a repair on a transient switch render doesn't reset selection to Terminal 1.
-    const repairedTabId = resolveRepairedActiveTerminalTabId({
-      activeTabType,
-      activeTabId,
-      rememberedTabId,
-      tabs
-    })
-    if (!repairedTabId) {
-      return
-    }
-    // Why: run in an effect (Zustand mutation during render trips React's cross-component update warning); keep terminal-only so inactive CLI-created tabs can't steal editor/browser focus.
-    setActiveTab(repairedTabId)
-    // Why: `tabs` is the dependency so the repair reacts to tab-order/content changes, not just scalar IDs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
+  // Why: repair after render so Zustand mutation cannot trip React's cross-component update warning.
+  useActiveTerminalRepair({
     activeTabId,
     activeTabType,
     setActiveTab,
     tabs,
     activeTabIdByWorktree,
     renderedActiveWorktreeId
-  ])
+  })
 
   // Why: only mount TerminalPanes for visited worktrees, else restoring many saved tabs mass-spawns PTYs.
   const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
@@ -1204,8 +1192,15 @@ function Terminal(): React.JSX.Element | null {
       }
     }
     const activationHostSupportsDeferral = canDeferColdActivationTabsForHost({
-      executionHostId: activeWorktreeDeferralHostId
+      executionHostId: activeWorktreeDeferralHostId,
+      pairedRuntimeParkingEnvironmentIds
     })
+    const isColdActivationPtyEligible = (ptyId: string): boolean =>
+      isRemoteRuntimePtyId(ptyId)
+        ? isParkRestorableTerminalPty(ptyId, renderedActiveWorktreeId, {
+            pairedRuntimeParkingEnvironmentIds
+          })
+        : terminalProviderHasAuthoritativeSnapshot(ptyId)
     if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
       lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
       const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))
@@ -1226,7 +1221,7 @@ function Terminal(): React.JSX.Element | null {
             canWatcherCoverParkedTerminalTab(
               renderedActiveWorktreeId,
               tab,
-              terminalProviderHasAuthoritativeSnapshot
+              isColdActivationPtyEligible
             )
           )
         },
@@ -1243,7 +1238,7 @@ function Terminal(): React.JSX.Element | null {
           !canWatcherCoverParkedTerminalTab(
             renderedActiveWorktreeId,
             tab,
-            terminalProviderHasAuthoritativeSnapshot
+            isColdActivationPtyEligible
           )
         ) {
           immediateTabIds.add(tab.id)
@@ -1286,7 +1281,9 @@ function Terminal(): React.JSX.Element | null {
   )
   // Why: legacy (non-split) host owns watcher reconciliation; split mode's overlay layers own theirs, so only dispose worktrees with no overlay layer.
   useEffect(() => {
-    pruneParkedTerminalWatchers(new Set(workspaceSurfaces.map((workspace) => workspace.id)))
+    pruneParkedTerminalWatchers(
+      terminalWatcherLiveWorkspaceIds(workspaceSurfaces.map((workspace) => workspace.id))
+    )
     for (const workspace of workspaceSurfaces) {
       if (
         anyMountedWorktreeHasLayout &&

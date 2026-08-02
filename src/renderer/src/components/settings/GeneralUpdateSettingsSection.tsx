@@ -9,6 +9,8 @@ import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
+import { ReleaseChannelSection } from './ReleaseChannelSection'
+import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -39,6 +41,10 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const updateCheckHint = getUpdateCheckHint()
+  // Why: channel switching is a power-user escape hatch that can downgrade the app
+  // onto an unvetted build. Option/Alt-clicking the header reveals it, matching the
+  // Help menu's hidden admin options rather than shipping it on the default surface.
+  const [channelSwitcherRevealed, setChannelSwitcherRevealed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -62,17 +68,25 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
 
   return (
     <section key="updates" className="space-y-4">
-      <SettingsSubsectionHeader
-        title={translate(
-          'auto.components.settings.GeneralUpdateSettingsSection.f2b1ccc12a',
-          'Updates'
-        )}
-        description={translate(
-          'auto.components.settings.GeneralUpdateSettingsSection.d91ebfb87e',
-          'Current version: {{value0}}',
-          { value0: appVersion ?? '...' }
-        )}
-      />
+      <div
+        onClick={(event) => {
+          if (event.altKey) {
+            setChannelSwitcherRevealed((revealed) => !revealed)
+          }
+        }}
+      >
+        <SettingsSubsectionHeader
+          title={translate(
+            'auto.components.settings.GeneralUpdateSettingsSection.f2b1ccc12a',
+            'Updates'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralUpdateSettingsSection.d91ebfb87e',
+            'Current version: {{value0}}',
+            { value0: appVersion ?? '...' }
+          )}
+        />
+      </div>
 
       <SearchableSetting
         title={translate(
@@ -171,8 +185,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
               {updateStatus.source !== 'local' && (
                 <a
                   href={
-                    updateStatus.releaseUrl ??
-                    `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
+                    updateStatus.releaseUrl ?? getReleaseNotesUrlForVersion(updateStatus.version)
                   }
                   target="_blank"
                   rel="noopener noreferrer"
@@ -211,8 +224,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
               {updateStatus.source !== 'local' && (
                 <a
                   href={
-                    updateStatus.releaseUrl ??
-                    `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
+                    updateStatus.releaseUrl ?? getReleaseNotesUrlForVersion(updateStatus.version)
                   }
                   target="_blank"
                   rel="noopener noreferrer"
@@ -245,6 +257,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                 ))}
         </p>
       </SearchableSetting>
+      {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
     </section>
   )

@@ -17,11 +17,10 @@ import type {
 import type { Store } from '../persistence'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsagePersistedState } from './types'
-import { createWorktreeRefs, scanOpenCodeUsageDatabases } from './scanner'
+import { createWorktreeRefs } from '../usage/usage-worktree-refs'
+import { OPENCODE_USAGE_SCHEMA_VERSION, openCodeUsageProvider } from './opencode-usage-provider'
 
-// Why: v2 adds per-database session ownership (stale sibling-copy dedupe).
-// Older caches were built without it and can carry doubled sessions (#8006).
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = OPENCODE_USAGE_SCHEMA_VERSION
 const STALE_MS = 5 * 60_000
 
 let _openCodeUsageFile: string | null = null
@@ -253,7 +252,7 @@ export class OpenCodeUsageStore {
         const repos = this.store.getRepos()
         const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
         const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
-        const result = await scanOpenCodeUsageDatabases(
+        const result = await openCodeUsageProvider.scan(
           createWorktreeRefs(repos, worktreesByRepo),
           this.state.worktreeFingerprint === worktreeFingerprint
             ? this.state.processedDatabases

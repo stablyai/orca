@@ -52,6 +52,7 @@ export function isAuthError(err: Error): boolean {
     msg.includes('all configured authentication methods failed') ||
     msg.includes('authentication failed') ||
     msg.includes('too many authentication failures') ||
+    /permission denied(?:, please try again\.?| \([^)]*(?:publickey|password|keyboard-interactive|gssapi|hostbased)[^)]*\))/.test(msg) ||
     (err as { level?: string }).level === 'client-authentication'
   )
 }

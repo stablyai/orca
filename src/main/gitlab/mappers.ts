@@ -9,6 +9,7 @@ import {
   mapGitLabPipelineJobStatusToCheckStatus,
   mapGitLabPipelineJobStatusToConclusion
 } from '../../shared/gitlab-pipeline-checks'
+import { summarizeProviderChecks } from '../../shared/provider-check-summary'
 
 // ── Pipeline job mapping (GitLab REST `/pipelines/:id/jobs`) ────────
 // Why: GitLab pipeline jobs roughly map to GitHub check-runs, but use a
@@ -156,34 +157,20 @@ export function derivePipelineStatus(
   if (!Array.isArray(rollup)) {
     return classifyPipelineString(rollup.status ?? '')
   }
-  if (rollup.length === 0) {
-    return 'neutral'
-  }
-  let hasFailure = false
-  let hasPending = false
-  let hasUnknown = false
-  for (const job of rollup) {
-    const s = job.status?.toLowerCase() ?? ''
-    const conclusion = mapPipelineJobStatusToConclusion(s)
-    if (
-      conclusion === 'failure' ||
-      conclusion === 'cancelled' ||
-      conclusion === 'action_required'
-    ) {
-      hasFailure = true
-    } else if (conclusion === 'pending') {
-      hasPending = true
-    } else if (conclusion !== 'success' && conclusion !== 'skipped' && conclusion !== 'neutral') {
-      hasUnknown = true
-    }
-  }
-  if (hasFailure) {
-    return 'failure'
-  }
-  if (hasPending) {
-    return 'pending'
-  }
-  return hasUnknown ? 'neutral' : 'success'
+  // Why: a job array is just a check list, so route it through the shared classifier instead of
+  // re-deriving the rules here — a local copy drifted (manual-only read green, an unrecognized
+  // status demoted a passing pipeline to neutral).
+  const { state } = summarizeProviderChecks(
+    rollup.map((job) => {
+      const s = job.status?.toLowerCase() ?? ''
+      return {
+        status: mapPipelineJobStatusToCheckStatus(s),
+        conclusion: mapPipelineJobStatusToConclusion(s)
+      }
+    })
+  )
+  // Why: CheckStatus has no 'none'; an empty job list carries the same "nothing to report" meaning.
+  return state === 'none' ? 'neutral' : state
 }
 
 // ── Raw → GitLabWorkItem mapping ────────────────────────────────────
@@ -289,9 +276,21 @@ function classifyPipelineString(status: string): CheckStatus {
   if (s === 'success') {
     return 'success'
   }
-  if (s === 'failed' || s === 'manual' || s === 'action_required') {
+  if (s === 'failed' || s === 'action_required') {
     return 'failure'
   }
+  // Why: GitLab only reports pipeline-level `manual` when the pipeline is *blocked* on a human
+  // trigger (a manual job with allow_failure: false), so it is outstanding rather than broken or
+  // done. Red overstated it; neutral would drop the cue entirely and paint the worktree card's MR
+  // icon green (worktree-review-helpers.tsx defaults `open` to emerald), which is worse — with
+  // "Pipelines must succeed" on, GitLab rejects this merge.
+  if (s === 'manual') {
+    return 'pending'
+  }
+  // Why: `skipped` and `canceled` pipelines stay neutral (the fall-through below) even though the
+  // job rollup calls the same jobs passing/failing. GitLab's own MR widget paints both grey, and
+  // `allow_merge_on_skipped_pipeline` defaults to false, so a skipped pipeline still blocks merge —
+  // flipping either tone is a product decision that belongs in its own change, not this one.
   if (
     s === 'created' ||
     s === 'pending' ||

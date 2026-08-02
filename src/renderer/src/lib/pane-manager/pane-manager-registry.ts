@@ -8,6 +8,7 @@ type RegisteredPaneManager = {
   getRenderingDiagnostics?: () => PaneRenderingDiagnostics[]
   getPanes?: () => { id: number; terminal: unknown }[]
   getPaneCount?: () => number
+  isVisibleForAtlasRecovery?: () => boolean
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -48,9 +49,15 @@ export function resetAllTerminalWebglAtlases(): void {
 export function resetAndRefreshAllTerminalWebglAtlases(): void {
   // Why: the atlas wipe is the heavy recovery path; recording it lets a freeze
   // report show whether a post-wake repaint actually ran. Silent breadcrumb.
-  recordTerminalWebglDiagnostic('webgl-atlas-reset', { managers: liveManagers.size })
+  const recoveryManagers = Array.from(liveManagers).filter(
+    (manager) => manager.isVisibleForAtlasRecovery?.() !== false
+  )
+  recordTerminalWebglDiagnostic('webgl-atlas-reset', {
+    managers: recoveryManagers.length,
+    mountedManagers: liveManagers.size
+  })
   const resetManagers: RegisteredPaneManager[] = []
-  for (const manager of liveManagers) {
+  for (const manager of recoveryManagers) {
     try {
       manager.resetWebglTextureAtlases()
       resetManagers.push(manager)

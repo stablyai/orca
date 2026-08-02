@@ -802,8 +802,8 @@
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
       },
       "useMacosTccPromptNotice": {
-        "title": "macOSのファイルアクセス権限の確認を減らす",
-        "description": "エージェントやターミナルツールがファイルにアクセスすると、macOS はそのアクセス元を Orca として扱います。フルディスクアクセスを許可すると、これらの確認を減らせます。",
+        "title": "「Orca がアクセスしようとしています…」という確認が表示されますか？",
+        "description": "Orca で実行中のエージェントやターミナルツールが保護されたファイルにアクセスしようとすると、macOS の権限メッセージが表示されることがあります。これらの確認を減らすには、設定でフルディスクアクセスを許可してください。",
         "openSettings": "設定を開く",
         "dismiss": "今後表示しない"
       }
@@ -869,11 +869,6 @@
         "83ac703dda": "担当者",
         "00ccdf9b5a": "状態",
         "2aa9acdf34": "GitHub でラベルを編集する",
-        "d23bbb6416": "{{value0}} はスキップされました",
-        "18f80e1329": "{{value0}} 保留中",
-        "b1ac991806": "{{value0}} は失敗しました",
-        "checksNeedActionChip": "{{value0}} 件の対応が必要",
-        "311d0cee55": "{{value0}} 通過",
         "e52bed9264": "まだチェックは報告されていません",
         "90020cc1f3": "この PR にはまだチェックが報告されていません。",
         "ecffebc251": "チェックが見つかりませんでした",
@@ -1363,11 +1358,6 @@
         "bc215fea4d": "+ ラベル",
         "b936cc51a4": "クローズ",
         "7b8f6bf6d8": "オープン",
-        "e6ad0a8d06": "{{value0}} はスキップされました",
-        "88267924d5": "{{value0}} 保留中",
-        "ae2a34c7b8": "{{value0}} は失敗しました",
-        "checksNeedActionChip": "{{value0}} 件の対応が必要",
-        "7c5035931a": "{{value0}} 通過",
         "a18d01cda3": "まだチェックは報告されていません",
         "3912daf310": "この PR にはまだチェックが報告されていません。",
         "45877f5089": "チェックが見つかりませんでした",
@@ -5681,7 +5671,7 @@
           "e7bb06007c": "LAN",
           "4a73f5217a": "他のローカル アプリを制御するスクリプトの Apple Events。",
           "e119f0d66b": "オートメーション",
-          "7ca17b62c8": "Orca が実行するエージェントがほかのアプリのデータを読み取ると、ターミナルコマンドの実行元プロセスである Orca の名前が macOS に表示されます。これらの確認を減らすには、Orca と Orca Helper にこの権限を許可してください。その後、Orca を終了し、残っている Orca Helper プロセスもすべて終了してから、Orca を再度開いてください。",
+          "7ca17b62c8": "Orca が実行するエージェントがほかのアプリのデータを読み取ると、ターミナルコマンドの実行元プロセスである Orca の名前が macOS に表示されます。これらの確認を減らすには、Orca にこの権限を許可してください。その後、Orca を終了して再度開いてください。",
           "c566bca278": "フルディスクアクセス",
           "9f35980756": "キーストローク インジェクション、ウィンドウ コントロール、UI 自動化ツール。",
           "5b2f22ca2d": "アクセシビリティ",
@@ -8195,8 +8185,8 @@
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
             "e61157e926": "エディターのワードラップ",
             "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
-            "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamily": "エディターフォント",
+            "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合は端末フォントに従います。"
           }
         },
         "git": {
@@ -9211,7 +9201,8 @@
           }
         },
         "computerUseSummary": {
-          "permissionsRequired": "{{value0}} permission{{value1}} required before agents can operate app windows.",
+          "permissionsRequired_one": "1 permission required before agents can operate app windows.",
+          "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows.",
           "checkingTitle": "Checking Computer Use access.",
           "checkingDescription": "Orca is checking macOS privacy permissions for the Computer Use helper.",
           "unavailableTitle": "Computer Use is unavailable.",
@@ -9619,9 +9610,9 @@
           "notice": "Orca Relay is in beta."
         },
         "EditorFontFamilySetting": {
-          "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
-          "placeholder": "Same as terminal font"
+          "title": "エディターフォント",
+          "description": "ファイルエディターと差分ビューで使用されるフォント。空の場合は端末フォントに従います。",
+          "placeholder": "端末フォントと同じ"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -11198,7 +11189,14 @@
             "recoverableEmptyOpenLogHint": "ログを開いて復元できます。",
             "emptyConversationDetail": "このセッションには保存された会話がなく、再開できません。",
             "queuedMessages": "キュー内のメッセージ {{value0}} 件",
-            "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件"
+            "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件",
+            "firstPrompt": "最初のプロンプト",
+            "firstPromptCopied": "最初のプロンプトをコピーしました",
+            "copyFirstPrompt": "最初のプロンプトをコピー",
+            "copied": "コピーしました",
+            "copy": "コピー",
+            "noFirstPromptAvailable": "最初のプロンプトはありません",
+            "loadingFirstPrompt": "最初のプロンプトを読み込み中…"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} セッションを再開",
@@ -14267,6 +14265,12 @@
           },
           "undo": "元に戻す",
           "widthOption": "{{value0}} px"
+        },
+        "grab": {
+          "errorNotReady": "このページではまだ要素を選択できません。",
+          "errorNotAuthorized": "ブラウザーへのアクセスが拒否されました。",
+          "errorAlreadyActive": "要素の選択はすでに有効です。",
+          "errorInjectionFailed": "このページで要素の選択を開始できませんでした。"
         }
       },
       "pluginCatalog": {
@@ -14283,6 +14287,13 @@
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
         }
+      },
+      "pr-check-counts": {
+        "passingChip": "{{value0}} 通過",
+        "failingChip": "{{value0}} は失敗しました",
+        "pendingChip": "{{value0}} 保留中",
+        "needsActionChip": "{{value0}} 件の対応が必要",
+        "unresolvedChip": "{{value0}} 件未解決"
       }
     },
     "i18n": {

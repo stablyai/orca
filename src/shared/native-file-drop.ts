@@ -135,14 +135,6 @@ export function resolveNativeFileDropPath(
   return null
 }
 
-export function measureNativeFileDropPathBytes(paths: readonly string[]): number {
-  let byteLength = 0
-  for (const path of paths) {
-    byteLength += measureClipboardTextByteLength(path).byteLength
-  }
-  return byteLength
-}
-
 export function validateNativeFileDropPaths(
   paths: readonly string[],
   options: {
