@@ -38,16 +38,49 @@ describe('DeviceRegistry', () => {
     expect(writeSecureJsonFileMock).toHaveBeenCalledTimes(1)
   })
 
-  it('records the last-seen timestamp once the deferred write lands', async () => {
+  it('records the last-seen timestamp in memory before the write is scheduled', async () => {
+    // Why: only the persist is deferred. The in-memory swap stays synchronous so a
+    // concurrent mutation always sees the current list.
     const registry = new DeviceRegistry('/does-not-exist')
     const device = registry.addDevice('Phone')
     expect(device.lastSeenAt).toBe(0)
 
     registry.updateLastSeen(device.deviceId)
-    await nextMacrotask()
 
     const stored = registry.listDevices().find((d) => d.deviceId === device.deviceId)
     expect(stored?.lastSeenAt).toBeGreaterThan(0)
+  })
+
+  it('does not resurrect a device revoked before the deferred write lands', async () => {
+    // Why: removeDevice persists synchronously. If the deferred write carried a
+    // snapshot taken before it, the revoked device would come back in memory and on
+    // disk — the write must reflect whatever the registry holds at flush time.
+    const registry = new DeviceRegistry('/does-not-exist')
+    const revoked = registry.addDevice('Old phone')
+    const kept = registry.addDevice('Current phone')
+
+    registry.updateLastSeen(revoked.deviceId)
+    expect(registry.removeDevice(revoked.deviceId)).toBe(true)
+    writeSecureJsonFileMock.mockClear()
+
+    await nextMacrotask()
+
+    expect(registry.listDevices().map((d) => d.deviceId)).toEqual([kept.deviceId])
+    const persisted = writeSecureJsonFileMock.mock.calls.at(-1)?.[1] as { deviceId: string }[]
+    expect(persisted.map((d) => d.deviceId)).toEqual([kept.deviceId])
+  })
+
+  it('coalesces a burst of last-seen updates into one write', async () => {
+    const registry = new DeviceRegistry('/does-not-exist')
+    const device = registry.addDevice('Phone')
+    writeSecureJsonFileMock.mockClear()
+
+    registry.updateLastSeen(device.deviceId)
+    registry.updateLastSeen(device.deviceId)
+    registry.updateLastSeen(device.deviceId)
+    await nextMacrotask()
+
+    expect(writeSecureJsonFileMock).toHaveBeenCalledTimes(1)
   })
 
   it('ignores an unknown device without scheduling a write', async () => {
