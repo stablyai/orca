@@ -197,19 +197,21 @@
       "providers": ["ssh2", "system-ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh2", "system-ssh"],
-      "coverageNotes": "Deterministic fake-clock coverage proves inactivity cancellation, active-transfer renewal, suspend/resume rebasing, timer cleanup, and listener cleanup. A real Docker SSH relay previously proved active and stalled transfer behavior; physical sleep/wake and Windows/Linux clients remain gaps.",
+      "coverageNotes": "Deterministic fake-clock coverage proves inactivity cancellation, active-transfer renewal, sticky suspend replay before metadata, failure-isolated lifecycle fanout, committed-quit bridge disposal, timer cleanup, and listener cleanup. A real Docker SSH relay previously proved active and stalled transfer behavior; physical sleep/wake and Windows/Linux clients remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/11362",
         "https://github.com/stablyai/orca/pull/11364"
       ],
-      "invariant": "A non-empty SSH file stream that produces no valid frame for 30 seconds must cancel at its authoritative stream reader and release all local lifecycle state. System suspend pauses that evidence, and resume grants every still-live stream one fresh inactivity window without retaining a per-stream Electron listener.",
-      "oracle": "Start a stream after metadata, advance to one millisecond before timeout, publish suspend, jump wall time by one hour, publish resume, and require no cancellation for the next 29,999 milliseconds. Deliver a valid final chunk and end frame, require exact content, then publish another resume and require zero timers, multiplexer listeners, or renewed work; a separate stalled stream must cancel and reject at 30 seconds.",
+      "invariant": "A non-empty SSH file stream that produces no valid frame for 30 seconds must cancel at its authoritative stream reader and release all local lifecycle state. System suspend is sticky across metadata and subscription races, resume grants every still-live stream one fresh inactivity window, one failing consumer cannot block the others, and the sole Electron bridge survives a vetoed before-quit without retaining a per-stream Electron listener.",
+      "oracle": "Publish suspend before stream metadata resolves, jump wall time by one hour, and require the late-subscribing stream to remain pending until resume grants a fresh 30-second window. Deliver a valid final chunk and end frame, require exact content, then publish another resume and require zero timers, multiplexer listeners, or renewed work; separately require stalled cancellation at 30 seconds, atomic state replay, failure-isolated fanout, and bridge disposal only after the committed will-quit gate.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts --reporter=dot"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts src/main/startup/desktop-startup-ordering.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/main/providers/ssh-filesystem-provider-stream.test.ts",
-        "src/main/system-resume-broadcast.test.ts"
+        "src/main/system-resume-broadcast.test.ts",
+        "src/main/system-power-lifecycle.test.ts",
+        "src/main/startup/desktop-startup-ordering.test.ts"
       ],
       "assertionRefs": [
         {
@@ -217,12 +219,27 @@
           "assertions": [
             "cancels and cleans up a stream that stalls after metadata",
             "keeps a long stream alive while chunks continue arriving",
-            "grants an active stream a fresh inactivity window after system resume"
+            "grants an active stream a fresh inactivity window after system resume",
+            "keeps metadata received during suspend paused until resume"
           ]
         },
         {
           "file": "src/main/system-resume-broadcast.test.ts",
           "assertions": ["publishes suspend and resume to main-process lifecycle consumers"]
+        },
+        {
+          "file": "src/main/system-power-lifecycle.test.ts",
+          "assertions": [
+            "replays suspended state to a late subscriber",
+            "atomically replays a transition to a subscriber added during publication",
+            "isolates a failing listener from the remaining subscribers"
+          ]
+        },
+        {
+          "file": "src/main/startup/desktop-startup-ordering.test.ts",
+          "assertions": [
+            "keeps the power bridge through vetoable before-quit and disposes after commit"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -230,10 +247,10 @@
           "date": "2026-08-01",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts src/main/startup/desktop-startup-ordering.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 0.3,
-          "summary": "Two focused files and 19 tests passed, including stalled cancellation, active progress, suspend/resume renewal, post-settlement cleanup, and app-global lifecycle publication."
+          "durationSeconds": 0.8,
+          "summary": "Four focused files and 33 tests passed, including stalled cancellation, active progress, late metadata replay, failure isolation, committed-quit bridge lifetime, and post-settlement cleanup."
         }
       ],
       "runtimeBudget": {
@@ -250,7 +267,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "One app-global powerMonitor listener publishes to an in-memory set. Each active non-empty read retains one set entry and one unref'd timer, clears both on settlement, and performs constant work per valid chunk or lifecycle transition; no polling, provider scan, subprocess, renderer work, or per-stream Electron listener was added."
+        "evidence": "One app-global powerMonitor listener publishes to an in-memory set. Each active non-empty read retains one set entry and one unref'd timer, clears both on settlement, and performs constant work per valid chunk; each power transition performs O(active streams) isolated notifications with no polling, provider scan, subprocess, renderer work, or per-stream Electron listener."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",

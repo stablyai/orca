@@ -56,6 +56,7 @@ describe('registerSystemResumeBroadcast', () => {
     const { source, fireSuspend, fireResume } = createResumeSource()
     const listener = { onSuspend: vi.fn(), onResume: vi.fn() }
     const unsubscribe = subscribeSystemPowerLifecycle(listener)
+    listener.onResume.mockClear()
     const stopBroadcast = registerSystemResumeBroadcast({
       resumeSource: source,
       getWindows: () => []

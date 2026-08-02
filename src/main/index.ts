@@ -2984,8 +2984,6 @@ app.on('before-quit', () => {
   isQuitting = true
   desktopRelayService?.fenceAndCloseNow()
   runtimeRpc?.setMobileRelayPairingProvider(null)
-  unsubscribeSystemResumeBroadcast?.()
-  unsubscribeSystemResumeBroadcast = null
   unsubscribeAgentAwakeStatusChanges?.()
   unsubscribeAgentAwakeStatusChanges = null
   agentAwakeService?.dispose()
@@ -3011,6 +3009,8 @@ app.on('will-quit', (e) => {
   if (!quitTeardownStartGate.tryStart(e)) {
     return
   }
+  unsubscribeSystemResumeBroadcast?.()
+  unsubscribeSystemResumeBroadcast = null
   // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.
   stopTccPromptNotice()
   const updateQuitInProgress = isQuittingForUpdate()

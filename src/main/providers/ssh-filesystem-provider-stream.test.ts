@@ -60,6 +60,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
   let provider: SshFilesystemProvider
 
   beforeEach(() => {
+    publishSystemResume()
     mux = createMockMux()
     provider = new SshFilesystemProvider('conn-1', mux as never)
   })
@@ -254,6 +255,40 @@ describe('SshFilesystemProvider readFile streaming', () => {
     await expect(read).resolves.toEqual({ content: 'x', isBinary: false })
 
     publishSystemResume()
+    expect(mux._listenerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps metadata received during suspend paused until resume', async () => {
+    vi.useFakeTimers()
+    mux.request.mockResolvedValue({
+      streamId: 12,
+      totalSize: 1,
+      isBinary: false,
+      resultEncoding: 'utf-8'
+    })
+
+    publishSystemSuspend()
+    const read = provider.readFile('/home/x.txt')
+    const outcome = vi.fn()
+    void read.then(
+      () => outcome('resolved'),
+      () => outcome('rejected')
+    )
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+
+    expect(outcome).not.toHaveBeenCalled()
+    expect(mux.notify).not.toHaveBeenCalledWith('fs.cancelStream', expect.anything())
+    publishSystemResume()
+    await vi.advanceTimersByTimeAsync(SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS - 1)
+    mux._emitMethod('fs.streamChunk', {
+      streamId: 12,
+      seq: 0,
+      data: Buffer.from('x').toString('base64')
+    })
+    mux._emitMethod('fs.streamEnd', { streamId: 12 })
+
+    await expect(read).resolves.toEqual({ content: 'x', isBinary: false })
     expect(mux._listenerCount()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
