@@ -82,6 +82,34 @@ describe('pane manager registry', () => {
     expect(order).toEqual(['first-reset', 'second-reset', 'first-refresh', 'second-refresh'])
   })
 
+  it('bounds atlas recovery to visible managers', () => {
+    const visible = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      refreshAllPanes: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => true
+    }
+    registerLivePaneManager(visible)
+    registeredManagers.push(visible)
+    const hidden = Array.from({ length: 64 }, () => ({
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      refreshAllPanes: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => false
+    }))
+    for (const manager of hidden) {
+      registerLivePaneManager(manager)
+      registeredManagers.push(manager)
+    }
+
+    resetAndRefreshAllTerminalWebglAtlases()
+
+    expect(visible.resetWebglTextureAtlases).toHaveBeenCalledOnce()
+    expect(visible.refreshAllPanes).toHaveBeenCalledOnce()
+    expect(
+      hidden.every((manager) => manager.resetWebglTextureAtlases.mock.calls.length === 0)
+    ).toBe(true)
+    expect(hidden.every((manager) => manager.refreshAllPanes.mock.calls.length === 0)).toBe(true)
+  })
+
   it('continues reset-and-refresh recovery when one manager throws', () => {
     const broken = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => {

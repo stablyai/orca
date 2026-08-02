@@ -33,7 +33,9 @@ import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
 const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'))
-const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'))
+const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'), {
+  reloadKey: 'rich-markdown-editor'
+})
 const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 const ImageViewer = lazy(() => import('./ImageViewer'))
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))

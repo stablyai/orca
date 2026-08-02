@@ -60,6 +60,14 @@ export const MAX_INFLIGHT_LOOKUPS = MAX_BRANCH_MAP_ENTRIES
  */
 export const MAX_UNSETTLED_LOOKUPS_PER_KEY = 2
 
+/**
+ * How many branches may hold unsettled lookups at once. Deliberately above the
+ * in-flight cap: that one evicts, which costs memory but never an answer, so it
+ * has to be what fires at realistic fan-out. Refusing a branch outright is for a
+ * wave no plausible worktree list explains, and only bounds the map holding it.
+ */
+export const MAX_UNSETTLED_LOOKUP_KEYS = 2 * MAX_BRANCH_MAP_ENTRIES
+
 /** Process-wide backstop for the same leak when many branches wedge at once. */
 export const MAX_DETACHED_LOOKUPS = 64
 

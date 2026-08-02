@@ -240,10 +240,8 @@ import type { AgentType } from '../shared/native-chat-types'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_APP_RESTART_STARTED_EVENT,
-  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
-  ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
+  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
 } from '../shared/updater-renderer-events'
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../shared/renderer-shutdown-events'
 import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
@@ -282,7 +280,11 @@ import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
 import {
   createUpdaterQuitAbortRelay,
   prepareRendererForAppRestart
-} from './renderer-restart-preparation'
+} from '../shared/renderer-restart-preparation'
+import {
+  prepareAndInvokeUpdaterInstall,
+  registerRendererRestartIpcRelays
+} from './renderer-restart-wiring'
 
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
@@ -293,12 +295,7 @@ const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
 )
 
-ipcRenderer.on('updater:status', (_event, status: UpdateStatus) => {
-  updaterQuitAbortRelay.handleStatus(status)
-})
-ipcRenderer.on('window:unload-prevented', () => {
-  window.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))
-})
+registerRendererRestartIpcRelays(ipcRenderer, window, updaterQuitAbortRelay)
 
 function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
   if (process.platform !== 'linux') {
@@ -2959,19 +2956,10 @@ const api = {
     dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
     dismissAvailableUpdate: () => ipcRenderer.invoke('updater:dismissAvailableUpdate'),
     listBuilds: (channel) => ipcRenderer.invoke('updater:listBuilds', channel),
-    quitAndInstall: async (): Promise<void> => {
-      await prepareRendererForAppRestart(window, {
-        startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-        abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
-      })
-      updaterQuitAbortRelay.markPrepared()
-      try {
-        return await ipcRenderer.invoke('updater:quitAndInstall')
-      } catch (error) {
-        updaterQuitAbortRelay.abort()
-        throw error
-      }
-    },
+    quitAndInstall: (): Promise<void> =>
+      prepareAndInvokeUpdaterInstall(window, updaterQuitAbortRelay, () =>
+        ipcRenderer.invoke('updater:quitAndInstall')
+      ),
     onStatus: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status)
       ipcRenderer.on('updater:status', listener)

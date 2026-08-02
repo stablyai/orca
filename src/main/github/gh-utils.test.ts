@@ -209,7 +209,10 @@ describe('github owner/repo resolution', () => {
     expect(getSshGitProviderMock).toHaveBeenCalledWith('openclaw-2')
     expect(sshProvider.exec).toHaveBeenCalledWith(
       ['remote', 'get-url', 'origin'],
-      '/home/user/orca'
+      '/home/user/orca',
+      {
+        signal: expect.any(AbortSignal)
+      }
     )
   })
 

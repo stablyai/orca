@@ -89,7 +89,7 @@ import { normalizeGlobalWindowsRuntimeDefault } from '../../../../shared/project
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
 import { toast } from 'sonner'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { type ChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
 import { selectReviewCacheEntry } from './review-cache-entry-selection'
 import {

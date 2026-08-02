@@ -1,4 +1,8 @@
-import { MAX_DETACHED_LOOKUPS, MAX_UNSETTLED_LOOKUPS_PER_KEY } from './hosted-review-refresh-pacing'
+import {
+  MAX_DETACHED_LOOKUPS,
+  MAX_UNSETTLED_LOOKUP_KEYS,
+  MAX_UNSETTLED_LOOKUPS_PER_KEY
+} from './hosted-review-refresh-pacing'
 
 /**
  * Accounting for lookups that have not settled (P1-D).
@@ -48,12 +52,28 @@ export function settleDetachedLookup(): void {
   detachedTotal = Math.max(0, detachedTotal - 1)
 }
 
-/** False once this branch — or the process — is holding too many unsettled lookups. */
-export function hasLookupCapacity(key: string): boolean {
-  return (
-    (unsettledByKey.get(key) ?? 0) < MAX_UNSETTLED_LOOKUPS_PER_KEY &&
-    detachedTotal < MAX_DETACHED_LOOKUPS
-  )
+/**
+ * Why this branch cannot start a lookup, or null when it can. Only the per-branch
+ * cap may blame an attempt of its own: the other two hold back branches that have
+ * never asked for anything, and telling those users to wait on a lookup they
+ * never started sends them looking for a stall that is not theirs.
+ */
+export function lookupCapacityRefusal(key: string): string | null {
+  if ((unsettledByKey.get(key) ?? 0) >= MAX_UNSETTLED_LOOKUPS_PER_KEY) {
+    return 'Hosted review lookup is still running from an earlier attempt that never answered. It will be retried once that attempt settles.'
+  }
+  // Why: this map is bounded by refusing new branches, not by evicting old ones —
+  // its entries are lookups still out there, and dropping a key would re-admit
+  // one for a branch already wedged. The bound sits above the in-flight cap so a
+  // wave wide enough to reach it is pathological, not the ordinary fan-out of a
+  // client polling a long worktree list.
+  if (!unsettledByKey.has(key) && unsettledByKey.size >= MAX_UNSETTLED_LOOKUP_KEYS) {
+    return 'Too many hosted review lookups are already in progress to start another. This branch will be retried once some of them settle.'
+  }
+  if (detachedTotal >= MAX_DETACHED_LOOKUPS) {
+    return 'Too many hosted review lookups have been abandoned without answering. This branch will be retried once the host catches up.'
+  }
+  return null
 }
 
 /** @internal - exposed for tests only */

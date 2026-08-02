@@ -18,7 +18,6 @@ import { useAppStore } from '@/store'
 import type { Repo, GlobalSettings } from '../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
-  clearRepoSlugCacheValues,
   deleteRepoSlugCacheKey,
   nextRepoSlugFailureRetryDelay,
   readRepoSlugCache,
@@ -67,15 +66,6 @@ export function clearRepoSlugCacheEntry(repoId: string): void {
     deleteRepoSlugCacheKey(key)
     invalidateSlugResolution(key)
   }
-}
-
-/** Clear the entire slug cache. Useful for tests or full repo-list resets. */
-export function clearRepoSlugCache(): void {
-  clearRepoSlugCacheValues()
-  for (const key of slugResolutionInFlight.keys()) {
-    slugResolutionGeneration.set(key, (slugResolutionGeneration.get(key) ?? 0) + 1)
-  }
-  slugResolutionInFlight.clear()
 }
 
 async function resolveRepoSlug(

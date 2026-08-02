@@ -103,7 +103,7 @@ import type {
   TaskSourceAvailabilityNotice,
   TaskSourceHostAvailability
 } from './task-source-context-summary'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   getGitHubPRPrimaryReviewer,
   getGitHubPRReviewerRows,

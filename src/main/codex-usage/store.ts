@@ -18,12 +18,10 @@ import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { CodexUsagePersistedState } from './types'
-import { createWorktreeRefs, scanCodexUsageFiles } from './scanner'
+import { createWorktreeRefs } from '../usage/usage-worktree-refs'
+import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
 
-// Why: v5 keys Codex ownership on raw token_count identity without session id
-// so forks that rewrite session_meta still match. Older caches used session-
-// scoped keys and can double-count after fork/resume (#8006).
-const SCHEMA_VERSION = 5
+const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
 const STALE_MS = 5 * 60_000
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
@@ -467,7 +465,7 @@ export class CodexUsageStore {
         const repos = this.store.getRepos()
         const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
         const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
-        const result = await scanCodexUsageFiles(
+        const result = await codexUsageProvider.scan(
           createWorktreeRefs(repos, worktreesByRepo),
           this.state.worktreeFingerprint === worktreeFingerprint ? this.state.processedFiles : []
         )

@@ -9201,7 +9201,8 @@
           }
         },
         "computerUseSummary": {
-          "permissionsRequired": "agents가 앱 창을 조작하려면 먼저 {{value0}} 권한{{value1}}이 필요합니다.",
+          "permissionsRequired_one": "agents가 앱 창을 조작하려면 먼저 1 권한이 필요합니다.",
+          "permissionsRequired_other": "agents가 앱 창을 조작하려면 먼저 {{value0}} 권한이 필요합니다.",
           "checkingTitle": "Computer Use 액세스 확인 중입니다.",
           "checkingDescription": "Orca가 Computer Use 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다.",
           "unavailableTitle": "Computer Use를 사용할 수 없습니다.",

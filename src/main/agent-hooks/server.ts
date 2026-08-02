@@ -756,6 +756,14 @@ export class AgentHookServer {
     ) {
       return false
     }
+    const dismissesClaudeQuestion =
+      agentType === 'claude' &&
+      request.intent === 'plain-escape' &&
+      payload.state === 'waiting' &&
+      isAskUserQuestionTool(payload.toolName)
+    if (dismissesClaudeQuestion) {
+      return this.inferQuestionAnswered(request)
+    }
     // Why: inference is a fallback for a missing final hook; a strict baseline match keeps a delayed timer from clobbering any newer hook.
     if (
       payload.state !== 'working' ||
@@ -811,8 +819,7 @@ export class AgentHookServer {
     return true
   }
 
-  /** Guarded fallback for a hook Claude never sends: answering AskUserQuestion produces no event, so re-validate the
-   *  renderer's baseline against the cached status (a racing real hook wins) and synthesize the post-answer state. */
+  /** Guarded fallback for the hook Claude omits after answering or dismissing AskUserQuestion. */
   inferQuestionAnswered(request: AgentQuestionAnsweredInferenceRequest): boolean {
     if (!isValidPaneKey(request.paneKey)) {
       return false
@@ -857,7 +864,7 @@ export class AgentHookServer {
         ...(payload.subagents ? { subagents: payload.subagents } : {})
       }
     })
-    console.debug('[agent-hooks] inferred answered question status', {
+    console.debug('[agent-hooks] inferred resolved question status', {
       paneKey: inferred.paneKey,
       state: inferred.payload.state
     })
@@ -931,19 +938,28 @@ export class AgentHookServer {
     }
   }
 
-  private shouldSuppressClosedTabStatus(paneKey: string): boolean {
+  private getAgentStatusDisposition(
+    paneKey: string,
+    event?: { hookEventName?: string; isReplay?: boolean }
+  ): 'accept' | 'restart' | 'suppress' {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
-    if (
+    const paneRetired =
       this.closedAgentStatusPaneKeys.has(paneKey) ||
       this.closedAgentStatusPaneKeys.has(ownerPaneKey)
-    ) {
-      return true
-    }
     const tabId = parsePaneKey(ownerPaneKey)?.tabId
-    if (!tabId) {
-      return false
+    if (tabId && this.closedAgentStatusTabIds.has(tabId)) {
+      return 'suppress'
     }
-    return this.closedAgentStatusTabIds.has(tabId)
+    if (!paneRetired) {
+      return 'accept'
+    }
+    // Why: command completion retires launch authority but leaves its shell pane reusable.
+    if (event?.hookEventName === 'UserPromptSubmit' && event.isReplay !== true) {
+      this.closedAgentStatusPaneKeys.delete(paneKey)
+      this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
+      return 'restart'
+    }
+    return 'suppress'
   }
 
   /** Refuse a hook whose reported worktree is disproven by the session cwd it carries.
@@ -1760,7 +1776,7 @@ export class AgentHookServer {
       return
     }
     const tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
-    if (this.shouldSuppressClosedTabStatus(paneKey)) {
+    if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
       return
     }
     const worktreeId =
@@ -1881,16 +1897,20 @@ export class AgentHookServer {
       return
     }
     const tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
-    if (this.shouldSuppressClosedTabStatus(paneKey)) {
+    const hookEventName =
+      typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
+        ? envelope.hookEventName.trim()
+        : undefined
+    const statusDisposition = this.getAgentStatusDisposition(paneKey, {
+      hookEventName,
+      isReplay: envelope.isReplay === true
+    })
+    if (statusDisposition === 'suppress') {
       return
     }
     const worktreeId =
       envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()
-        : undefined
-    const hookEventName =
-      typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
-        ? envelope.hookEventName.trim()
         : undefined
     const promptInteractionKey =
       typeof envelope.promptInteractionKey === 'string' &&
@@ -1940,7 +1960,7 @@ export class AgentHookServer {
     })
     const event: AgentHookEventPayload = {
       paneKey,
-      launchToken: envelope.launchToken,
+      launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
       tabId,
       worktreeId,
       connectionId: trimmedConnectionId,
@@ -2056,15 +2076,25 @@ export class AgentHookServer {
           return
         }
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+        const statusDisposition = normalized.event
+          ? this.getAgentStatusDisposition(normalized.event.paneKey, {
+              hookEventName: normalized.event.hookEventName,
+              isReplay: normalized.event.isReplay
+            })
+          : 'suppress'
         if (
           normalized.event &&
-          !this.shouldSuppressClosedTabStatus(normalized.event.paneKey) &&
+          statusDisposition !== 'suppress' &&
           // Why: redundant with the pre-normalization refusal by construction; kept as drift
           // armor should the raw-body read and the normalizer ever disagree on a field.
           !this.shouldSuppressForeignCwdStatus(normalized.event, true)
         ) {
-          this.recordCurrentAuthorityObservation(normalized.event)
-          const enriched = this.applyNormalizedStatus(normalized.event, normalized.onAccepted)
+          const event =
+            statusDisposition === 'restart'
+              ? { ...normalized.event, launchToken: undefined }
+              : normalized.event
+          this.recordCurrentAuthorityObservation(event)
+          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
           this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
         }

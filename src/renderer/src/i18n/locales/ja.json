@@ -9201,7 +9201,8 @@
           }
         },
         "computerUseSummary": {
-          "permissionsRequired": "{{value0}} permission{{value1}} required before agents can operate app windows.",
+          "permissionsRequired_one": "1 permission required before agents can operate app windows.",
+          "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows.",
           "checkingTitle": "Checking Computer Use access.",
           "checkingDescription": "Orca is checking macOS privacy permissions for the Computer Use helper.",
           "unavailableTitle": "Computer Use is unavailable.",

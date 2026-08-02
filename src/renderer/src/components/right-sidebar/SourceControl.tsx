@@ -149,7 +149,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'

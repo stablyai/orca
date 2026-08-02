@@ -9201,7 +9201,8 @@
           }
         },
         "computerUseSummary": {
-          "permissionsRequired": "Requiere {{value0}} permiso{{value1}} antes de que los agentes puedan operar ventanas de apps.",
+          "permissionsRequired_one": "Se requiere 1 permiso antes de que los agentes puedan operar ventanas de apps.",
+          "permissionsRequired_other": "Se requieren {{value0}} permisos antes de que los agentes puedan operar ventanas de apps.",
           "checkingTitle": "Comprobando el acceso a Computer Use.",
           "checkingDescription": "Orca está comprobando los permisos de privacidad de macOS para el helper de Computer Use.",
           "unavailableTitle": "Computer Use no está disponible.",

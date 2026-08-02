@@ -9201,7 +9201,8 @@
           }
         },
         "computerUseSummary": {
-          "permissionsRequired": "在智能体可操作应用窗口前需要 {{value0}} 项权限{{value1}}。",
+          "permissionsRequired_one": "在智能体可操作应用窗口前需要 1 项权限。",
+          "permissionsRequired_other": "在智能体可操作应用窗口前需要 {{value0}} 项权限。",
           "checkingTitle": "正在检查计算机控制访问权限。",
           "checkingDescription": "Orca 正在检查计算机控制助手的 macOS 隐私权限。",
           "unavailableTitle": "计算机控制不可用。",

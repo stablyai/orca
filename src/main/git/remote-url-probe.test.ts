@@ -47,6 +47,42 @@ describe('remote URL probe', () => {
     expect(REMOTE_URL_PROBE_TIMEOUT_MS).toBe(30_000)
   })
 
+  it('bounds the SSH remote read with the same deadline as the local one', async () => {
+    const exec = vi.fn(
+      async (_args: string[], _cwd: string, _options?: { signal?: AbortSignal }) => ({
+        stdout: 'git@github.com:acme/orca.git\n'
+      })
+    )
+    getSshGitProviderMock.mockReturnValue({ exec })
+
+    await expect(
+      readRemoteUrl({ repoPath: '/repo', connectionId: 'ssh-1' }, 'origin')
+    ).resolves.toContain('github.com')
+
+    const [args, cwd, options] = exec.mock.calls[0]
+    expect(args).toEqual(['remote', 'get-url', 'origin'])
+    expect(cwd).toBe('/repo')
+    // The relay bounds each phase separately and resets on every frame, so only a
+    // signal spans the whole round trip.
+    expect(options?.signal).toBeInstanceOf(AbortSignal)
+    expect(options?.signal?.aborted).toBe(false)
+  })
+
+  it('reports a probe cut off by its deadline as unavailable, not as an answer', async () => {
+    const aborted = new Error('Request was cancelled')
+    aborted.name = 'AbortError'
+    getSshGitProviderMock.mockReturnValue({
+      exec: vi.fn(async () => {
+        throw aborted
+      })
+    })
+
+    expect(isTransientGitProbeError(aborted)).toBe(true)
+    await expect(
+      assertRemoteUrlReadable({ repoPath: '/repo', connectionId: 'ssh-1' })
+    ).rejects.toBe(aborted)
+  })
+
   it('rethrows a timed-out local probe so callers can report unavailable', async () => {
     const timeout = new Error('git timed out.')
     gitExecFileAsyncMock.mockRejectedValue(timeout)

@@ -124,7 +124,6 @@ export const addRepoSetupStepActionSchema = z.enum([
   'open_existing',
   'back'
 ])
-export type AddRepoSetupStepAction = z.infer<typeof addRepoSetupStepActionSchema>
 
 export const addRepoExistingWorkspaceSourceSchema = z.enum([
   'local_folder_picker',
@@ -164,7 +163,6 @@ export const addRepoDefaultCheckoutHandoffReasonSchema = z.enum([
 ])
 
 export const setupScriptImportProviderSchema = z.enum(SETUP_SCRIPT_IMPORT_PROVIDERS)
-export type SetupScriptImportProviderTelemetry = z.infer<typeof setupScriptImportProviderSchema>
 
 // Separate enum from `errorClassSchema` — different domain (git/filesystem worktree-create failures); merging would couple the two forever.
 export const workspaceCreateErrorClassSchema = z.enum([
@@ -215,7 +213,6 @@ export const featureWallTileIdSchema = z.enum([
   'tile-11',
   'tile-12'
 ])
-export type FeatureWallTileIdTelemetry = z.infer<typeof featureWallTileIdSchema>
 
 export const featureWallOpenSourceSchema = z.enum(['help_menu', 'popup', 'onboarding', 'unknown'])
 export type FeatureWallOpenSourceTelemetry = z.infer<typeof featureWallOpenSourceSchema>
@@ -227,13 +224,10 @@ export const featureWallWorkflowIdSchema = z.enum([
   'workbench',
   'review'
 ])
-export type FeatureWallWorkflowIdTelemetry = z.infer<typeof featureWallWorkflowIdSchema>
 
 export const featureWallTourDepthStepSchema = z.enum(FEATURE_WALL_TOUR_DEPTH_STEPS)
-export type FeatureWallTourDepthStepTelemetry = z.infer<typeof featureWallTourDepthStepSchema>
 
 export const featureWallExitActionSchema = z.enum(FEATURE_WALL_EXIT_ACTIONS)
-export type FeatureWallExitActionTelemetry = z.infer<typeof featureWallExitActionSchema>
 
 // `env_var` absent — env-var/CI paths override consent at runtime only, never firing an opt-in/out event.
 // `first_launch_notice` absent — the new-user cohort has no first-launch surface; those opt-outs come via `'settings'`.
@@ -1542,7 +1536,6 @@ function eventsWithShapeKey(key: string): ReadonlySet<EventName> {
 
 // Cohort injection is gated on this derived set because `.strict()` schemas drop events that don't declare `nth_repo_added`.
 const COHORT_EXTENDED_SET = eventsWithShapeKey('nth_repo_added')
-export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_SET)
 
 // Compile-time roster guarding the runtime injection set against silent schema drift.
 type _CohortExtendedRoster =

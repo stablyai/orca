@@ -21,8 +21,10 @@ const {
 
 const MUTABLE_BUILD_ENV = [
   'ORCA_MAC_HOURLY',
+  'ORCA_MAC_ADHOC',
   'ORCA_MAC_RELEASE',
   'ORCA_HOURLY_BUILD_VERSION',
+  'ORCA_ADHOC_BUILD_VERSION',
   'ORCA_LOCAL_BUILD_VERSION'
 ]
 
@@ -51,6 +53,7 @@ function withEnv(env, assert) {
 }
 
 const withHourlyEnv = (assert) => withEnv({ ORCA_MAC_HOURLY: '1' }, assert)
+const withAdhocEnv = (assert) => withEnv({ ORCA_MAC_ADHOC: '1' }, assert)
 
 describe('electron-builder config', () => {
   it('keeps the packaged app identity aligned with local-build validation', () => {
@@ -347,6 +350,40 @@ describe('electron-builder config', () => {
         expect(config.extraMetadata).toEqual({ version: '1.4.160-hourly.202607281400' })
       }
     )
+  })
+
+  // Why adhoc carries the identical mac identity to hourly: it installs over a
+  // real Orca through the same updater path, so the same signing and the same TCC
+  // argument apply. Only the destination repo differs.
+  it('builds adhoc artifacts with the release identity and its own repo', () => {
+    withAdhocEnv((config) => {
+      expect(config.appId).toBe('com.stablyai.orca')
+      expect(config.mac.hardenedRuntime).toBe(true)
+      expect(config.mac.notarize).toBe(true)
+      expect(config.forceCodeSigning).toBe(true)
+      expect(config.publish).toMatchObject({ repo: 'orca-adhoc', releaseType: 'prerelease' })
+    })
+  })
+
+  it('stamps adhoc packages with the adhoc version', () => {
+    withEnv(
+      { ORCA_MAC_ADHOC: '1', ORCA_ADHOC_BUILD_VERSION: '1.4.160-adhoc.20260728140533' },
+      (config) => {
+        expect(config.extraMetadata).toEqual({ version: '1.4.160-adhoc.20260728140533' })
+      }
+    )
+  })
+
+  // Why: the two dev channels share every packaging decision except where they
+  // publish, so a future edit that collapses them must not also collapse the
+  // repos — a branch build landing in orca-hourly would be offered to everyone
+  // riding main.
+  it('keeps the two dev channels on separate repos', () => {
+    withHourlyEnv((hourly) => {
+      withAdhocEnv((adhoc) => {
+        expect(hourly.publish.repo).not.toBe(adhoc.publish.repo)
+      })
+    })
   })
 
   it('uses Orca native rebuild hook instead of electron-builder default rebuild', () => {

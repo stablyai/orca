@@ -3,13 +3,13 @@ import {
   publishFrameDecoderError,
   type DecodedFrame,
   type FrameDecoderOptions
-} from '../../shared/relay-frame-decoder-contract'
-import { RelayFrameBuffer } from '../../shared/relay-frame-buffer'
+} from './relay-frame-decoder-contract'
+import { RelayFrameBuffer } from './relay-frame-buffer'
 export {
   FrameDecoderContinuationError,
   type DecodedFrame,
   type FrameDecoderOptions
-} from '../../shared/relay-frame-decoder-contract'
+} from './relay-frame-decoder-contract'
 
 export const HEADER_LENGTH = 13
 export const MAX_MESSAGE_SIZE = 16 * 1024 * 1024
