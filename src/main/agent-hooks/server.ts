@@ -742,6 +742,14 @@ export class AgentHookServer {
     ) {
       return false
     }
+    const dismissesClaudeQuestion =
+      agentType === 'claude' &&
+      request.intent === 'plain-escape' &&
+      payload.state === 'waiting' &&
+      isAskUserQuestionTool(payload.toolName)
+    if (dismissesClaudeQuestion) {
+      return this.inferQuestionAnswered(request)
+    }
     // Why: inference is a fallback for a missing final hook; a strict baseline match keeps a delayed timer from clobbering any newer hook.
     if (
       payload.state !== 'working' ||
@@ -797,8 +805,7 @@ export class AgentHookServer {
     return true
   }
 
-  /** Guarded fallback for a hook Claude never sends: answering AskUserQuestion produces no event, so re-validate the
-   *  renderer's baseline against the cached status (a racing real hook wins) and synthesize the post-answer state. */
+  /** Guarded fallback for the hook Claude omits after answering or dismissing AskUserQuestion. */
   inferQuestionAnswered(request: AgentQuestionAnsweredInferenceRequest): boolean {
     if (!isValidPaneKey(request.paneKey)) {
       return false
@@ -843,7 +850,7 @@ export class AgentHookServer {
         ...(payload.subagents ? { subagents: payload.subagents } : {})
       }
     })
-    console.debug('[agent-hooks] inferred answered question status', {
+    console.debug('[agent-hooks] inferred resolved question status', {
       paneKey: inferred.paneKey,
       state: inferred.payload.state
     })
