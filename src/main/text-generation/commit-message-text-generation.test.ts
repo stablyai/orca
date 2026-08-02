@@ -2504,5 +2504,4 @@ describe('trimGeneratedCommitMessage', () => {
       rmSync(tempDir, { recursive: true, force: true })
     }
   })
-
 })

@@ -148,5 +148,4 @@ describe('AgentExecHandler Windows command spawning', () => {
       rmSync(tempDir, { recursive: true, force: true })
     }
   })
-
 })
