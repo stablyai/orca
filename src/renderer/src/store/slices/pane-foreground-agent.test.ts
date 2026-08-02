@@ -91,13 +91,11 @@ describe('pane foreground agent slice', () => {
   it('stamps observedAt when evidence is published and re-stamps past the refresh quantum', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(10_000)
     const store = createTestStore()
-    store
-      .getState()
-      .setPaneForegroundAgent('tab-1:leaf-1', {
-        agent: 'claude',
-        shellForeground: false,
-        ptyId: 'pty-1'
-      })
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'claude',
+      shellForeground: false,
+      ptyId: 'pty-1'
+    })
     expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']).toEqual({
       agent: 'claude',
       shellForeground: false,
@@ -108,23 +106,19 @@ describe('pane foreground agent slice', () => {
 
     // Within the quantum: identical publish keeps the reference (no churn).
     nowSpy.mockReturnValue(11_000)
-    store
-      .getState()
-      .setPaneForegroundAgent('tab-1:leaf-1', {
-        agent: 'claude',
-        shellForeground: false,
-        ptyId: 'pty-1'
-      })
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'claude',
+      shellForeground: false,
+      ptyId: 'pty-1'
+    })
     expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']).toBe(initial)
 
     nowSpy.mockReturnValue(20_000)
-    store
-      .getState()
-      .setPaneForegroundAgent('tab-1:leaf-1', {
-        agent: 'claude',
-        shellForeground: false,
-        ptyId: 'pty-1'
-      })
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'claude',
+      shellForeground: false,
+      ptyId: 'pty-1'
+    })
     expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']?.observedAt).toBe(20_000)
   })
 
@@ -150,16 +144,35 @@ describe('pane foreground agent slice', () => {
     })
   })
 
+  it('binds matching unbound evidence to the inspected PTY inside the refresh quantum', () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(10_000)
+    const store = createTestStore()
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'claude',
+      shellForeground: false,
+      routingTrusted: true
+    })
+
+    nowSpy.mockReturnValue(10_750)
+    store.getState().refreshPaneForegroundAgentObservation('tab-1:leaf-1', 'claude', 'pty-1')
+
+    expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']).toEqual({
+      agent: 'claude',
+      shellForeground: false,
+      routingTrusted: true,
+      observedAt: 10_750,
+      ptyId: 'pty-1'
+    })
+  })
+
   it('ignores a coordinator observation whose identity differs from the tracked entry', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(10_000)
     const store = createTestStore()
-    store
-      .getState()
-      .setPaneForegroundAgent('tab-1:leaf-1', {
-        agent: null,
-        shellForeground: true,
-        ptyId: 'pty-1'
-      })
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: null,
+      shellForeground: true,
+      ptyId: 'pty-1'
+    })
     const initial = store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']
 
     nowSpy.mockReturnValue(20_000)

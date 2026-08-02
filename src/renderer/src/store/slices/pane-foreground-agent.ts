@@ -117,6 +117,14 @@ current.routingRevoked === entry.routingRevoked &&
         if (current.agent !== agent) {
           return s
         }
+        if (ptyId !== undefined && current.ptyId === undefined) {
+          return {
+            paneForegroundAgentByPaneKey: {
+              ...s.paneForegroundAgentByPaneKey,
+              [paneKey]: { ...current, observedAt: now, ptyId }
+            }
+          }
+        }
         // Why: evidence bound to a previous PTY must not be kept fresh across
         // a respawn — rebind it as identity-only evidence of the inspected PTY.
         if (ptyId !== undefined && current.ptyId !== undefined && current.ptyId !== ptyId) {

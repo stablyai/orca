@@ -309,6 +309,29 @@ describe('AgentAwakeService', () => {
     expect(blocker.start).toHaveBeenCalledTimes(1)
   })
 
+  it('does not reschedule expiry for repeated foreground evidence inside the refresh quantum', () => {
+    vi.useFakeTimers()
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    let now = 1_000
+    const blocker = createBlocker()
+    const service = createService(() => now, blocker)
+
+    service.setEnabled(true)
+    service.reportForegroundAgentEvidence('pty-1', 'claude')
+    const scheduledAfterFirstReport = setTimeoutSpy.mock.calls.length
+
+    now += 750
+    service.reportForegroundAgentEvidence('pty-1', 'claude')
+
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(scheduledAfterFirstReport)
+
+    now += 5_000
+    service.reportForegroundAgentEvidence('pty-1', 'claude')
+
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(scheduledAfterFirstReport + 1)
+    service.dispose()
+  })
+
   it('revokes wake eligibility when foreground-agent evidence is cleared', () => {
     const blocker = createBlocker()
     const service = createService(() => 1_000, blocker)

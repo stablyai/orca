@@ -1,6 +1,7 @@
 // Why: scans are event-driven, so expiry revalidates cached foreground state
 // without adding process scans.
 export const AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS = 5 * 60 * 1000
+const FOREGROUND_AGENT_REPORT_REFRESH_QUANTUM_MS = 5_000
 
 type ForegroundAgentEvidence = {
   // Last time a real scan reported this PTY's recognized foreground agent.
@@ -26,6 +27,10 @@ export class ForegroundAgentEvidenceLedger {
       return this.evidenceByPtyId.delete(ptyId)
     }
     const now = this.now()
+    const existing = this.evidenceByPtyId.get(ptyId)
+    if (existing && now - existing.reportedAt < FOREGROUND_AGENT_REPORT_REFRESH_QUANTUM_MS) {
+      return false
+    }
     this.evidenceByPtyId.set(ptyId, { reportedAt: now, observedAt: now })
     return true
   }
