@@ -19,6 +19,16 @@ describe('agent session option catalog', () => {
     expect(catalog?.models.find((model) => model.id === 'haiku')?.options).toEqual([])
   })
 
+  it('labels the opus entry without pinning a version', () => {
+    // Regression (#12084): `opus` resolves to whatever the CLI ships, so a
+    // version-pinned label goes stale — stay versionless like Haiku.
+    const label = getAgentSessionOptionCatalog('claude')?.models.find(
+      (model) => model.id === 'opus'
+    )?.label
+    expect(label).toBe('Opus')
+    expect(label).not.toMatch(/\d/)
+  })
+
   it('merges discovered labels while preserving cataloged option shapes', () => {
     const seed = getAgentSessionOptionCatalog('cursor')!.models
     const merged = mergeCatalogModels(seed, [

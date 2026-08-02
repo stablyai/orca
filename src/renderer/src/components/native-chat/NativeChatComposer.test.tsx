@@ -356,7 +356,7 @@ describe('NativeChatComposer', () => {
     expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
       ptyId: 'pty-1',
       settings: {},
-      expectedModelLabel: 'Opus 4.8'
+      expectedModelLabel: 'Opus'
     })
     expect(onSwitchToTerminal).not.toHaveBeenCalled()
   })

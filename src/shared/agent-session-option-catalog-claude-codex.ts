@@ -74,7 +74,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     },
     {
       id: 'opus',
-      label: 'Opus 4.8',
+      label: 'Opus',
       options: [claudeEffort(true), CLAUDE_FAST_MODE]
     },
     {
