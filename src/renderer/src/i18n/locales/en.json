@@ -10144,7 +10144,9 @@
           "systemDefault": "System default",
           "unavailable": "unavailable",
           "label": "Microphone",
-          "description": "Input device used for voice dictation. System default follows the OS microphone setting."
+          "description": "Input device used for voice dictation. System default follows the OS microphone setting.",
+          "accessHint": "Allow microphone access to list input devices.",
+          "allowAccess": "Allow access"
         }
       },
       "right": {
@@ -13335,7 +13337,8 @@
           "bb7f599ee7": "Open Settings",
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
           "5d2c3e7ae3": "No speech detected.",
-          "micFallback": "Selected microphone unavailable. Using system default."
+          "micFallback": "Selected microphone unavailable. Using system default.",
+          "micDisconnected": "Microphone disconnected. Dictation stopped."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Stop dictation"

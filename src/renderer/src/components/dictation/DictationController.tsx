@@ -43,6 +43,10 @@ export function DictationController() {
   const erroredSessionIdsRef = useRef(new Set<string>())
   const intentionalTargetCancellationRef = useRef(false)
   const insertedFinalTranscriptRef = useRef('')
+  // Why: push-to-talk restarts capture per utterance; toast once per preference,
+  // not once per press, while the selected mic stays gone.
+  const micFallbackNotifiedForRef = useRef<string | null>(null)
+  const stopDictationRef = useRef<(() => void) | null>(null)
 
   const drainStoppedSession = useCallback((sessionId: string) => {
     void waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
@@ -131,19 +135,38 @@ export function DictationController() {
     try {
       // Why: worker startup can take seconds after idle teardown. Capture first
       // and buffer locally so speech during "Starting..." is not discarded.
+      const preferredMicrophoneDeviceId = settings?.voice?.microphoneDeviceId ?? null
       const captureResult = await startCapture({
         bufferAudio: true,
         sessionId,
-        microphoneDeviceId: settings?.voice?.microphoneDeviceId ?? null
+        microphoneDeviceId: preferredMicrophoneDeviceId,
+        microphoneDeviceLabel: settings?.voice?.microphoneDeviceLabel ?? null,
+        onCaptureLost: () => {
+          if (dictationRunRef.current !== runId) {
+            return
+          }
+          toast.message(
+            translate(
+              'auto.components.dictation.DictationController.micDisconnected',
+              'Microphone disconnected. Dictation stopped.'
+            )
+          )
+          stopDictationRef.current?.()
+        }
       })
       captureStarted = true
       if (captureResult?.fellBackToDefaultMicrophone) {
-        toast.message(
-          translate(
-            'auto.components.dictation.DictationController.micFallback',
-            'Selected microphone unavailable. Using system default.'
+        if (micFallbackNotifiedForRef.current !== preferredMicrophoneDeviceId) {
+          micFallbackNotifiedForRef.current = preferredMicrophoneDeviceId
+          toast.message(
+            translate(
+              'auto.components.dictation.DictationController.micFallback',
+              'Selected microphone unavailable. Using system default.'
+            )
           )
-        )
+        }
+      } else {
+        micFallbackNotifiedForRef.current = null
       }
       if (stopRequestedDuringStartRef.current) {
         stopCapture({ preserveBufferedAudio: true })
@@ -244,6 +267,10 @@ export function DictationController() {
     }
     await finishDictationSession(sessionId)
   }, [finishDictationSession, setDictationState, stopCapture])
+
+  // Why: capture-loss fires from a stream opened before stopDictation exists;
+  // route through a ref so the two callbacks do not depend on each other.
+  stopDictationRef.current = () => void stopDictation()
 
   // Toggle mode: use IPC from main process (before-input-event intercepts
   // the keyDown so Cmd+E doesn't reach xterm or trigger system shortcuts).
