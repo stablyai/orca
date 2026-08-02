@@ -172,14 +172,20 @@ export class DeviceRegistry {
     if (index < 0) {
       return
     }
-    // Why: persist before memory swap so a failed write cannot leave a scanned
-    // device looking never-scanned on disk, where rotation would drop it.
     const seenAt = Date.now()
     const nextDevices = this.devices.map((device, candidateIndex) =>
       candidateIndex === index ? { ...device, lastSeenAt: seenAt } : device
     )
-    this.save(nextDevices)
-    this.devices = nextDevices
+    // Why: save() costs ~3s on Windows — writeSecureFile spawns PowerShell twice,
+    // synchronously, to apply ACLs. This runs inside the E2EE auth path, ahead of
+    // the e2ee_authenticated frame, so it blew past the mobile client's 5s budget
+    // and made pairing impossible. lastSeenAt is display/rotation metadata, not an
+    // auth gate, so it has no business on that critical path.
+    // The persist-before-memory-swap order is kept, just off the hot path.
+    setImmediate(() => {
+      this.save(nextDevices)
+      this.devices = nextDevices
+    })
   }
 
   private load(): void {
