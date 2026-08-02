@@ -281,6 +281,14 @@ export function useTerminalKeyboardShortcuts({
     const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
     const deferredNewlineSender = createTerminalImeDeferredNewlineSender()
     const modifiedEnterChordOwner = createTerminalImeModifiedEnterChordOwner()
+    // Why: the Enter-keyup synthesis below must only service presses whose
+    // keydown the IME swallowed entirely. When a keydown for the same physical
+    // key was observed, release-time modifier state is rollover noise, not a
+    // chord: a plain committing Enter followed by a rolled-over Shift for the
+    // next doubled consonant must not become Shift+Enter. The keydown's
+    // timeStamp is kept so a balancing keyup (copied from the same native
+    // event) does not consume the evidence ahead of the physical release.
+    const observedEnterKeydownTimeStamps = new Map<string, number>()
     const getHeldImeEnterModifier = () =>
       heldImeEnterModifiers.size === 1
         ? (heldImeEnterModifiers.values().next().value ?? null)
@@ -434,6 +442,16 @@ export function useTerminalKeyboardShortcuts({
       // Why: replace stale state only for this physical key so rollover cannot
       // disarm a still-held native-only chord before its Kitty keyup arrives.
       nativeOnlyShortcutTracker.prepareKeyDown(e)
+      // Why: recorded ahead of every early return so any observed Enter
+      // keydown (editable targets and re-dispatches included) disqualifies
+      // its keyup from the swallowed-keydown synthesis below.
+      if (
+        isWindows &&
+        ((e.key === 'Enter' && e.keyCode === 13) ||
+          (e.keyCode === 229 && (e.code === 'Enter' || e.code === 'NumpadEnter')))
+      ) {
+        observedEnterKeydownTimeStamps.set(e.code, e.timeStamp)
+      }
       const manager = managerRef.current
       if (!manager) {
         return
@@ -763,6 +781,12 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      const enterKeydownWasObserved = observedEnterKeydownTimeStamps.has(e.code)
+      if (enterKeydownWasObserved && observedEnterKeydownTimeStamps.get(e.code) !== e.timeStamp) {
+        // Why: a balancing keyup copies the keydown's native timeStamp; only
+        // the physical release (a different timeStamp) consumes the evidence.
+        observedEnterKeydownTimeStamps.delete(e.code)
+      }
       const modifiedEnterKind = getImeEnterModifier(e)
       if (isWindows && modifiedEnterKind && isTerminalImeEnterKeyUp(e)) {
         const chord = { kind: modifiedEnterKind, code: e.code, timeStamp: e.timeStamp }
@@ -777,6 +801,11 @@ export function useTerminalKeyboardShortcuts({
         const manager = managerRef.current
         const keyboardScope = keyboardScopeRef.current
         if (
+          // Why: synthesize only when the IME swallowed the keydown entirely.
+          // An observed keydown already chose its own path (plain commit,
+          // chord defer, or direct send); a modifier flag on this keyup is
+          // then rollover state from the next keystroke, not a chord.
+          !enterKeydownWasObserved &&
           manager &&
           !isEditableTarget(e.target) &&
           (!keyboardScope || keyboardEventBelongsToScope(e, keyboardScope))
@@ -842,6 +871,7 @@ export function useTerminalKeyboardShortcuts({
       heldImeEnterModifiers.clear()
       modifiedEnterChordOwner.clear()
       deferredNewlineSender.clearRedispatchedEnters()
+      observedEnterKeydownTimeStamps.clear()
     }
 
     window.addEventListener('keydown', onModifierDown, { capture: true })
@@ -854,6 +884,7 @@ export function useTerminalKeyboardShortcuts({
     return () => {
       modifiedEnterChordOwner.clear()
       deferredNewlineSender.clearRedispatchedEnters()
+      observedEnterKeydownTimeStamps.clear()
       window.removeEventListener('keydown', onModifierDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })
       window.removeEventListener('keydown', onKeyDown, { capture: true })
