@@ -80,6 +80,14 @@ export const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
     keychainAccount: 'Helium',
     macRoot: 'net.imput.helium'
     // winRoot/linuxRoot intentionally omitted — only the macOS install is verified
+  },
+  {
+    family: 'aside',
+    label: 'Aside',
+    keychainService: 'Aside Safe Storage',
+    keychainAccount: 'Aside',
+    macRoot: 'Aside'
+    // winRoot/linuxRoot intentionally omitted — only the macOS install is verified
   }
 ]
 

@@ -8,6 +8,7 @@ const SUPPORTED_LABELS = [
   'Brave',
   'Comet',
   'Helium',
+  'Aside',
   'Firefox',
   'Safari'
 ]
@@ -47,7 +48,7 @@ describe('formatBrowserImportSummary', () => {
         detectedBrowsersLoaded: false,
         supportedImportLabels: SUPPORTED_LABELS
       })
-    ).toBe('Import from: Google Chrome, Microsoft Edge, Arc, Brave, +4 more.')
+    ).toBe('Import from: Google Chrome, Microsoft Edge, Arc, Brave, +5 more.')
   })
 
   it('falls back to supported import sources when detection finds nothing', () => {
@@ -57,6 +58,6 @@ describe('formatBrowserImportSummary', () => {
         detectedBrowsersLoaded: true,
         supportedImportLabels: SUPPORTED_LABELS
       })
-    ).toBe('Import from: Google Chrome, Microsoft Edge, Arc, Brave, +4 more.')
+    ).toBe('Import from: Google Chrome, Microsoft Edge, Arc, Brave, +5 more.')
   })
 })
