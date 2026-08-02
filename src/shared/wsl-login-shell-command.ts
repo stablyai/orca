@@ -25,6 +25,7 @@ export function buildWslLoginShellCommand(
   command: string,
   options: { isolateStartupStdio?: boolean } = {}
 ): string {
+  // Precondition: callers reserve only stdio 0/1/2; descriptors 3/4/5 must be free for parking.
   const quotedCommand = quotePosixShell(
     options.isolateStartupStdio
       ? [

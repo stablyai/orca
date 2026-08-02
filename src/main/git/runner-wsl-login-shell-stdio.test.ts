@@ -49,15 +49,24 @@ describe('WSL Git login-shell stdio isolation', () => {
     _resetOwnerRepoCache()
   })
 
-  it('resolves GitHub identity when the login shell prints the public issue banner', async () => {
+  it('rejects banner-prefixed remote output and resolves isolated Git output', async () => {
     await withWindows(async () => {
       const child = fakeChild()
-      execFileMock.mockImplementation((_binary, _args, _options, callback) => {
-        const output = 'https://github.com/stablyai/orca.git\n'
+      let output = 'hello\nhttps://github.com/stablyai/orca.git\n'
+      execFileMock.mockImplementation((_binary, args, _options, callback) => {
+        expect(args[5]).toContain('exec 3<&0')
         queueMicrotask(() => callback(null, output, ''))
         return child
       })
 
+      await expect(
+        getOwnerRepoForRemote(String.raw`C:\orca-10917-repro`, 'origin', null, {
+          wslDistro: 'Ubuntu'
+        })
+      ).resolves.toBeNull()
+
+      output = 'https://github.com/stablyai/orca.git\n'
+      _resetOwnerRepoCache()
       await expect(
         getOwnerRepoForRemote(String.raw`C:\orca-10917-repro`, 'origin', null, {
           wslDistro: 'Ubuntu'
