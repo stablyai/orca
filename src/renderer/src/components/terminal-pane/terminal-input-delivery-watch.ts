@@ -25,11 +25,17 @@ export function createTerminalInputDeliveryWatch(args: {
   onUndeliverable: () => void
 }): {
   observeKeydown: (event: TerminalInputKeydown) => void
+  observeCompositionStart: () => void
+  observeCompositionInput: (data: string) => void
+  observeCompositionEnd: (data: string) => void
   observeDeliveredInput: () => void
   dispose: () => void
 } {
   let timeout: ReturnType<typeof setTimeout> | null = null
   let disposed = false
+  let compositionActive = false
+  let compositionHasInput = false
+  let compositionDelivered = false
 
   const clear = (): void => {
     if (timeout !== null) {
@@ -38,22 +44,59 @@ export function createTerminalInputDeliveryWatch(args: {
     }
   }
 
+  const arm = (): void => {
+    clear()
+    timeout = setTimeout(() => {
+      timeout = null
+      if (!disposed) {
+        args.onUndeliverable()
+      }
+    }, INPUT_DELIVERY_TIMEOUT_MS)
+  }
+
   return {
     observeKeydown: (event) => {
       if (disposed || !expectsTerminalInput(event)) {
         return
       }
-      clear()
-      timeout = setTimeout(() => {
-        timeout = null
-        if (!disposed) {
-          args.onUndeliverable()
-        }
-      }, INPUT_DELIVERY_TIMEOUT_MS)
+      arm()
     },
-    observeDeliveredInput: clear,
+    observeCompositionStart: () => {
+      if (disposed) {
+        return
+      }
+      clear()
+      compositionActive = true
+      compositionHasInput = false
+      compositionDelivered = false
+    },
+    observeCompositionInput: (data) => {
+      if (!disposed && compositionActive && data.length > 0) {
+        compositionHasInput = true
+      }
+    },
+    observeCompositionEnd: (data) => {
+      if (disposed || !compositionActive) {
+        return
+      }
+      compositionActive = false
+      const shouldArm = compositionHasInput && data.length > 0 && !compositionDelivered
+      compositionHasInput = false
+      compositionDelivered = false
+      clear()
+      if (shouldArm) {
+        arm()
+      }
+    },
+    observeDeliveredInput: () => {
+      if (compositionActive) {
+        compositionDelivered = true
+      }
+      clear()
+    },
     dispose: () => {
       disposed = true
+      compositionActive = false
       clear()
     }
   }

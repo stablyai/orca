@@ -736,6 +736,7 @@ function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
 
 function createKeyboardEventTarget() {
   const handlers = new Set<(event: KeyboardEvent) => void>()
+  const eventHandlers = new Map<string, Set<(event: Event) => void>>()
   return {
     handlers,
     target: {
@@ -748,6 +749,11 @@ function createKeyboardEventTarget() {
           if (type === 'keydown' && typeof handler === 'function') {
             handlers.add(handler as (event: KeyboardEvent) => void)
           }
+          if (typeof handler === 'function') {
+            const handlersForType = eventHandlers.get(type) ?? new Set()
+            handlersForType.add(handler)
+            eventHandlers.set(type, handlersForType)
+          }
         }
       ),
       removeEventListener: vi.fn(
@@ -759,11 +765,19 @@ function createKeyboardEventTarget() {
           if (type === 'keydown' && typeof handler === 'function') {
             handlers.delete(handler as (event: KeyboardEvent) => void)
           }
+          if (typeof handler === 'function') {
+            eventHandlers.get(type)?.delete(handler)
+          }
         }
       )
     },
     dispatch(event: KeyboardEvent) {
       for (const handler of handlers) {
+        handler(event)
+      }
+    },
+    dispatchType(type: string, event: Event) {
+      for (const handler of eventHandlers.get(type) ?? []) {
         handler(event)
       }
     }
@@ -6208,6 +6222,38 @@ describe('connectPanePty', () => {
 
     expect(window.api.pty.hasPty).toHaveBeenCalledWith('tab-pty')
     expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+    binding.dispose()
+    _resetTerminalPaneRecoveryForTests()
+  })
+
+  it('remounts a connected pane when a completed Korean composition produces no xterm input', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
+    _resetTerminalPaneRecoveryForTests()
+    const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+    mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+    const transport = createMockTransport('pty-ime-input-blackhole')
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const terminalTarget = createKeyboardEventTarget()
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    const binding = connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks(20)
+
+    terminalTarget.dispatchType('compositionstart', {} as Event)
+    terminalTarget.dispatchType('input', {
+      inputType: 'insertCompositionText',
+      data: '한'
+    } as InputEvent)
+    terminalTarget.dispatchType('compositionend', { data: '한' } as CompositionEvent)
+    await vi.advanceTimersByTimeAsync(500)
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.hasPty).toHaveBeenCalledWith('tab-pty')
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('한')
     binding.dispose()
     _resetTerminalPaneRecoveryForTests()
   })

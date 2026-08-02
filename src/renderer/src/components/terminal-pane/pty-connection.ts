@@ -2254,6 +2254,18 @@ export function connectPanePty(
     deps.clearTerminalPaneUnread(cacheKey)
     deps.clearWorktreeUnread(deps.worktreeId)
   }
+  const onTerminalCompositionStart = (): void => {
+    inputDeliveryWatch?.observeCompositionStart()
+  }
+  const onTerminalCompositionInput = (event: Event): void => {
+    const inputEvent = event as InputEvent
+    if (inputEvent.inputType === 'insertCompositionText') {
+      inputDeliveryWatch?.observeCompositionInput(inputEvent.data ?? '')
+    }
+  }
+  const onTerminalCompositionEnd = (event: Event): void => {
+    inputDeliveryWatch?.observeCompositionEnd((event as CompositionEvent).data ?? '')
+  }
   // Why: infer only from focused xterm key events. Raw PTY bytes cannot
   // distinguish plain Escape from Alt/meta sequences, and programmatic writes
   // should not clear agent status.
@@ -2263,6 +2275,13 @@ export function connectPanePty(
     typeof terminalKeyTarget?.removeEventListener === 'function'
   if (terminalKeyTargetSupportsEvents) {
     terminalKeyTarget.addEventListener('keydown', onTerminalKeyDown, { capture: true })
+    terminalKeyTarget.addEventListener('compositionstart', onTerminalCompositionStart, {
+      capture: true
+    })
+    terminalKeyTarget.addEventListener('input', onTerminalCompositionInput, { capture: true })
+    terminalKeyTarget.addEventListener('compositionend', onTerminalCompositionEnd, {
+      capture: true
+    })
   }
 
   let visibleRemoteViewportClaimPtyId: string | null = null
@@ -8976,6 +8995,15 @@ export function connectPanePty(
       releaseHiddenRendererPtyDelivery()
       if (terminalKeyTargetSupportsEvents) {
         terminalKeyTarget.removeEventListener('keydown', onTerminalKeyDown, { capture: true })
+        terminalKeyTarget.removeEventListener('compositionstart', onTerminalCompositionStart, {
+          capture: true
+        })
+        terminalKeyTarget.removeEventListener('input', onTerminalCompositionInput, {
+          capture: true
+        })
+        terminalKeyTarget.removeEventListener('compositionend', onTerminalCompositionEnd, {
+          capture: true
+        })
       }
       inputDeliveryWatch?.dispose()
       inputDeliveryWatch = null

@@ -47,6 +47,72 @@ describe('createTerminalInputDeliveryWatch', () => {
     expect(onUndeliverable).not.toHaveBeenCalled()
   })
 
+  it('requests recovery when a completed Korean composition produces no terminal input', () => {
+    const onUndeliverable = vi.fn()
+    const watch = createTerminalInputDeliveryWatch({ onUndeliverable })
+
+    watch.observeCompositionStart()
+    watch.observeCompositionInput('한')
+    watch.observeCompositionEnd('한')
+    vi.advanceTimersByTime(500)
+
+    expect(onUndeliverable).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels composition recovery when xterm reports delivered user input', () => {
+    const onUndeliverable = vi.fn()
+    const watch = createTerminalInputDeliveryWatch({ onUndeliverable })
+
+    watch.observeCompositionStart()
+    watch.observeCompositionInput('한')
+    watch.observeCompositionEnd('한')
+    watch.observeDeliveredInput()
+    vi.advanceTimersByTime(500)
+
+    expect(onUndeliverable).not.toHaveBeenCalled()
+  })
+
+  it('does not arm recovery when xterm delivers the composition before compositionend', () => {
+    const onUndeliverable = vi.fn()
+    const watch = createTerminalInputDeliveryWatch({ onUndeliverable })
+
+    watch.observeCompositionStart()
+    watch.observeCompositionInput('한')
+    watch.observeDeliveredInput()
+    watch.observeCompositionEnd('한')
+    vi.advanceTimersByTime(500)
+
+    expect(onUndeliverable).not.toHaveBeenCalled()
+  })
+
+  it('ignores cancelled compositions and empty composition input', () => {
+    const onUndeliverable = vi.fn()
+    const watch = createTerminalInputDeliveryWatch({ onUndeliverable })
+
+    watch.observeCompositionStart()
+    watch.observeCompositionInput('한')
+    watch.observeCompositionEnd('')
+    watch.observeCompositionStart()
+    watch.observeCompositionInput('')
+    watch.observeCompositionEnd('한')
+    vi.advanceTimersByTime(1_000)
+
+    expect(onUndeliverable).not.toHaveBeenCalled()
+  })
+
+  it('ignores duplicate compositionend after one recovery request', () => {
+    const onUndeliverable = vi.fn()
+    const watch = createTerminalInputDeliveryWatch({ onUndeliverable })
+
+    watch.observeCompositionStart()
+    watch.observeCompositionInput('한')
+    watch.observeCompositionEnd('한')
+    watch.observeCompositionEnd('한')
+    vi.advanceTimersByTime(1_000)
+
+    expect(onUndeliverable).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores IME, shortcuts, repeats, and modifier-only keys', () => {
     const onUndeliverable = vi.fn()
     const watch = createTerminalInputDeliveryWatch({ onUndeliverable })
