@@ -66,6 +66,42 @@ describe('contextual tour overlay measurement', () => {
     )
   })
 
+  // Why: localized copy used to be keyed off the step's position, so inserting
+  // a step ahead of it silently moved the copy onto the wrong step — with no
+  // type or test error. Keying off the step id has to survive that insertion.
+  it('keeps localized copy on its own step when a step is inserted before it', async () => {
+    await setRendererUiLanguage('ko')
+    const target = document.createElement('button')
+    target.setAttribute('data-contextual-tour-target', 'automations-create')
+    target.getBoundingClientRect = () => new DOMRect(0, 0, 20, 20)
+    document.body.appendChild(target)
+
+    const automations = getContextualTour('automations')
+    const result = measureContextualTourOverlayRenderState({
+      tour: {
+        ...automations,
+        steps: [
+          {
+            title: 'Inserted step',
+            body: 'Added ahead of the localized steps.',
+            targetSelector: '[data-contextual-tour-target="automations-create"]'
+          },
+          ...automations.steps
+        ]
+      },
+      activeStepIndex: 1,
+      sidebarOpen: true,
+      keybindings: undefined,
+      previousTelemetryTotalSteps: 0
+    })
+
+    expect(result.kind).toBe('render')
+    if (result.kind !== 'render') {
+      throw new Error(`Expected render result, received ${result.kind}`)
+    }
+    expect(result.renderState.title).toBe('자동화란 무엇인가요?')
+  })
+
   it('shows all defined browser steps in progress even when step 3 is hidden', () => {
     const tour = getContextualTour('browser')
 

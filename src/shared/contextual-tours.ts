@@ -30,6 +30,10 @@ export type ContextualTourStepAction = {
 export type ContextualTourStepPlacement = 'top' | 'right' | 'bottom' | 'left'
 
 export type ContextualTourStep = {
+  // Why: a stable anchor for localized copy. Keying translations off the step's
+  // position lets an inserted step silently shift copy onto the wrong step,
+  // with no type or test error to catch it.
+  id?: string
   title: string
   body: string
   targetSelector: string
@@ -146,12 +150,14 @@ export const CONTEXTUAL_TOURS = [
     id: 'automations',
     steps: [
       {
+        id: 'automations-intro',
         title: 'What is an automation?',
         body: 'Automations run agent work on a schedule. Add an automation by clicking this button.',
         targetSelector: '[data-contextual-tour-target="automations-create"]',
         requiredForStart: true
       },
       {
+        id: 'automations-results',
         title: 'Find the results',
         body: 'Runs show when automations ran, what happened, and where to inspect their output.',
         targetSelector: '[data-contextual-tour-target="automations-runs"]'

@@ -28,6 +28,36 @@ export type ContextualTourOverlayMeasurementResult =
       telemetryTotalSteps: number
     }
 
+// Why: keyed by the step's stable id, not its position — inserting a step must
+// not shift localized copy onto a neighbour. Thunks keep translate() out of
+// module scope so the lookup resolves in the language active at render time.
+const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: () => string }> = {
+  'automations-intro': {
+    title: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title',
+        'What is an automation?'
+      ),
+    body: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body',
+        'Automations run agent work on a schedule. Add an automation by clicking this button.'
+      )
+  },
+  'automations-results': {
+    title: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title',
+        'Find the results'
+      ),
+    body: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
+        'Runs show when automations ran, what happened, and where to inspect their output.'
+      )
+  }
+}
+
 export function getContextualTourDisplayProgress(args: {
   tour: ContextualTour
   visibleStepIndexes: readonly number[]
@@ -89,32 +119,13 @@ export function measureContextualTourOverlayRenderState(args: {
   )
   const activeStep = args.tour.steps[args.activeStepIndex]
   const target = activeStep ? getMeasurableContextualTourTarget(activeStep.targetSelector) : null
-  const localizedTitle =
-    args.tour.id === 'automations' && args.activeStepIndex === 0
-      ? translate(
-          'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title',
-          'What is an automation?'
-        )
-      : args.tour.id === 'automations' && args.activeStepIndex === 1
-        ? translate(
-            'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title',
-            'Find the results'
-          )
-        : activeStep?.title
-  const localizedBody =
-    args.tour.id === 'automations' && args.activeStepIndex === 0
-      ? translate(
-          'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body',
-          'Automations run agent work on a schedule. Add an automation by clicking this button.'
-        )
-      : args.tour.id === 'automations' && args.activeStepIndex === 1
-        ? translate(
-            'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
-            'Runs show when automations ran, what happened, and where to inspect their output.'
-          )
-        : activeStep
-          ? getContextualTourStepCopy(activeStep)
-          : undefined
+  const localizedCopy = activeStep?.id ? LOCALIZED_STEP_COPY[activeStep.id] : undefined
+  const localizedTitle = localizedCopy ? localizedCopy.title() : activeStep?.title
+  const localizedBody = localizedCopy
+    ? localizedCopy.body()
+    : activeStep
+      ? getContextualTourStepCopy(activeStep)
+      : undefined
   const progress = getContextualTourDisplayProgress({
     tour: args.tour,
     visibleStepIndexes,
