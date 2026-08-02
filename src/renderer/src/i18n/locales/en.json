@@ -6383,6 +6383,7 @@
           "2777ff0fdc": "Orchestration skill"
         },
         "OrchestrationSkillAgentCoverage": {
+          "retryDetection": "Retry",
           "6dec5ce2d2": "Agent coverage",
           "ffe13e36fb": "Missing",
           "1e8f8d8fae": "Ready"
