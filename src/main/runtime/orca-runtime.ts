@@ -2744,6 +2744,10 @@ export class OrcaRuntimeService {
   private terminalSideEffectExcludedClientEventListeners = new Set<
     (event: RuntimeClientEvent) => void
   >()
+  private terminalSideEffectTitleGateKeysByClientEventListener = new Map<
+    (event: RuntimeClientEvent) => void,
+    Map<string, string>
+  >()
   private nativeChatLaunchDraftResolutionByTabId = new Map<
     string,
     NativeChatLaunchDraftResolutionTombstone
@@ -4764,11 +4768,14 @@ export class OrcaRuntimeService {
     this.clientEventListeners.add(listener)
     if (options?.consumesTerminalSideEffects === false) {
       this.terminalSideEffectExcludedClientEventListeners.add(listener)
+    } else {
+      this.terminalSideEffectTitleGateKeysByClientEventListener.set(listener, new Map())
     }
     this.refreshTerminalSideEffectConsumerAvailability()
     return () => {
       this.clientEventListeners.delete(listener)
       this.terminalSideEffectExcludedClientEventListeners.delete(listener)
+      this.terminalSideEffectTitleGateKeysByClientEventListener.delete(listener)
       this.refreshTerminalSideEffectConsumerAvailability()
     }
   }
@@ -4834,25 +4841,51 @@ export class OrcaRuntimeService {
   }
 
   private emitClientEvent(event: RuntimeClientEvent): void {
-    // Why: mobile streams discard terminalSideEffects; skip excluded listeners so
-    // paired phones never receive the per-OSC batch frames over the relay. Filtered
-    // inside the delivery callback to keep live-Set iteration (a listener that
-    // unsubscribes mid-fan-out must not be delivered to) and stay allocation-free.
-    const skipExcluded =
-      event.type === 'terminalSideEffects' &&
-      this.terminalSideEffectExcludedClientEventListeners.size > 0
+    // Why: filter inside live-Set delivery so a listener removed mid-fan-out
+    // receives nothing and each paired client gets one semantic title frame.
     // Why: a throwing subscriber here once escaped acquireWorktreeTerminalSpawn after it took the
     // per-worktree terminal mutation, leaking it and wedging that worktree's sleep until restart.
     notifyRuntimeListeners(
       this.clientEventListeners,
       (listener) => {
-        if (skipExcluded && this.terminalSideEffectExcludedClientEventListeners.has(listener)) {
-          return
+        if (event.type === 'terminalSideEffects') {
+          const filtered = this.filterTerminalSideEffectEventForClient(listener, event)
+          if (filtered) {
+            listener(filtered)
+          }
+        } else {
+          listener(event)
         }
-        listener(event)
       },
       'client-event'
     )
+  }
+
+  private filterTerminalSideEffectEventForClient(
+    listener: (event: RuntimeClientEvent) => void,
+    event: Extract<RuntimeClientEvent, { type: 'terminalSideEffects' }>
+  ): Extract<RuntimeClientEvent, { type: 'terminalSideEffects' }> | null {
+    const titleGateKeys = this.terminalSideEffectTitleGateKeysByClientEventListener.get(listener)
+    if (!titleGateKeys) {
+      return null
+    }
+    const facts = event.batch.facts.filter((fact) => {
+      if (fact.kind !== 'title') {
+        return true
+      }
+      const gateKey = this.makeDecorativeTitleGateKey(fact.rawTitle, fact.normalizedTitle)
+      if (titleGateKeys.get(event.batch.ptyId) === gateKey) {
+        return false
+      }
+      titleGateKeys.set(event.batch.ptyId, gateKey)
+      return true
+    })
+    if (facts.length === 0) {
+      return null
+    }
+    return facts.length === event.batch.facts.length
+      ? event
+      : { ...event, batch: { ...event.batch, facts } }
   }
 
   notifyNativeChatLaunchDraftResolved(
@@ -9704,7 +9737,7 @@ export class OrcaRuntimeService {
   /** Decorative comparison key: spinner frame glyphs stripped, derived agent
    *  status kept so a working→idle flip with an otherwise-equal label still
    *  counts as a change. */
-  private makeMobileTitleGateKey(rawTitle: string, normalizedTitle: string): string {
+  private makeDecorativeTitleGateKey(rawTitle: string, normalizedTitle: string): string {
     return `${detectAgentStatusFromTitle(rawTitle) ?? ''}\u0000${stripBrailleSpinnerGlyphs(
       normalizedTitle
     )}`
@@ -9742,7 +9775,7 @@ export class OrcaRuntimeService {
             return
           }
           const live = this.ptyTitleTrackersByPtyId.get(ptyId)
-          const gateKey = this.makeMobileTitleGateKey(rawTitle, normalizedTitle)
+          const gateKey = this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
           const decorativeOnly = live?.lastMobileTitleGateKey === gateKey
           if (live) {
             live.lastMobileTitleGateKey = gateKey
@@ -9897,6 +9930,9 @@ export class OrcaRuntimeService {
   private disposePtyTitleTracker(ptyId: string): void {
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
+    for (const titleGateKeys of this.terminalSideEffectTitleGateKeysByClientEventListener.values()) {
+      titleGateKeys.delete(ptyId)
+    }
   }
 
   private resetTrackedTerminalStateForProviderGeneration(ptyId: string): void {

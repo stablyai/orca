@@ -14154,6 +14154,71 @@ describe('connectPanePty', () => {
     expect(deps.setRuntimePaneTitle).not.toHaveBeenCalled()
   })
 
+  it('locally gates hidden paired output when a legacy host cannot pause it', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const remotePtyId = 'remote:legacy-env@@terminal-1'
+    const transport = createMockTransport(remotePtyId)
+    let callbacks: ConnectCallbacks = {}
+    transport.connect.mockImplementation(async (options: { callbacks?: ConnectCallbacks }) => {
+      callbacks = options.callbacks ?? {}
+      return remotePtyId
+    })
+    transport.setOutputPaused = vi.fn((paused: boolean) => {
+      callbacks.onOutputPauseChanged?.(paused, false)
+      return false
+    })
+    const hidden = 'legacy hidden flood\r\n'
+    const snapshot = 'legacy snapshot with hidden flood\r\n'
+    const live = 'legacy visible marker\r\n'
+    transport.serializeBuffer = vi.fn().mockResolvedValue({
+      data: snapshot,
+      cols: 100,
+      rows: 30,
+      seq: hidden.length,
+      source: 'headless'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState.repos = [
+      {
+        id: 'repo1',
+        connectionId: null,
+        displayName: 'orca',
+        executionHostId: 'runtime:legacy-env'
+      }
+    ]
+    mockStoreState.worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'legacy-env'
+
+    const pane = createPane(1)
+    const deps = createDeps({ isVisibleRef: { current: false } })
+    const binding = connectPanePty(pane as never, createManager(1) as never, deps as never) as {
+      syncProcessTracking: () => void
+      dispose: () => void
+    }
+    await flushAsyncTicks(6)
+
+    expect(transport.setOutputPaused).toHaveBeenLastCalledWith(true)
+    callbacks.onData?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
+
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    binding.syncProcessTracking()
+    await flushAsyncTicks(20)
+
+    expect(transport.setOutputPaused).toHaveBeenLastCalledWith(false)
+    expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+    callbacks.onData?.(live, {
+      seq: hidden.length + live.length,
+      rawLength: live.length
+    })
+    await flushAsyncTicks(20)
+
+    const written = pane.terminal.write.mock.calls.map((call) => String(call[0])).join('')
+    expect(written).toContain(snapshot)
+    expect(written).toContain(live)
+    expect(written).not.toContain(hidden)
+    binding.dispose()
+  })
+
   it('restores overflowed hidden remote runtime output from its serialized snapshot', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('remote:env-1@@terminal-1')
