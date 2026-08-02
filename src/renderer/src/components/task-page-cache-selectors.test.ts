@@ -46,6 +46,32 @@ describe('task page cache selectors', () => {
     })
   })
 
+  it('reconciles a changed neutral check count', () => {
+    const current = {
+      ...workItem('pr-1', 'repo-1'),
+      checksSummary: {
+        state: 'neutral' as const,
+        total: 1,
+        passed: 1,
+        failed: 0,
+        pending: 0,
+        neutral: 0
+      }
+    }
+    const refreshed = {
+      ...current,
+      checksSummary: {
+        state: 'neutral' as const,
+        total: 2,
+        passed: 1,
+        failed: 0,
+        pending: 0,
+        neutral: 1
+      }
+    }
+    expect(reconcileTaskPageItemsAfterLandingRefresh([current], [refreshed])).toEqual([refreshed])
+  })
+
   it('keeps the selected work-item cache slice shallow-equal across unrelated cache writes', () => {
     const repo = { id: 'repo-1', path: '/repo/one' }
     const selectedEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])

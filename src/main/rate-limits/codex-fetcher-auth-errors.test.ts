@@ -177,4 +177,37 @@ describe('fetchCodexRateLimits auth errors', () => {
       error: authError
     })
   })
+
+  it('stops a PTY probe when Codex renders its sign-in screen', async () => {
+    const ptyHandlers: { onData?: (data: string) => void } = {}
+    const ptyWrite = vi.fn()
+    const ptyKill = vi.fn()
+
+    childSpawnMock.mockImplementation(() => {
+      throw new Error('rpc unavailable')
+    })
+    ptySpawnMock.mockReturnValue({
+      onData: vi.fn((callback) => {
+        ptyHandlers.onData = callback
+        return makeDisposable()
+      }),
+      onExit: vi.fn(() => makeDisposable()),
+      write: ptyWrite,
+      kill: ptyKill
+    })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(0)
+    ptyHandlers.onData?.('\u001b[2JSign in with ChatGPT\r\n')
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'error',
+      error: 'Sign in with ChatGPT'
+    })
+    expect(ptyWrite).not.toHaveBeenCalled()
+    expect(ptyKill).toHaveBeenCalledOnce()
+  })
 })

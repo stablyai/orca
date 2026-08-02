@@ -41,16 +41,20 @@ export function resolveCreateReviewIntentEligibility({
     !hasCurrentBranch ||
     !hostedReviewCreation ||
     hostedReviewCreation.canCreate ||
-    // Fail closed when the existing-review lookup could not prove there is no
-    // review: a local blocker (e.g. needs_push) returned after a failed lookup
-    // must not offer a Create PR intent that would push under a false promise —
-    // the main preflight would refuse the create anyway (invariant 8).
-    hostedReviewCreation.reviewLookupOutcome === 'unavailable' ||
     !supportsHostedReviewCreation(hostedReviewCreation.provider)
   ) {
     return { eligible: false, kind: null }
   }
 
+  if (
+    hostedReviewCreation.reviewLookupOutcome === 'unavailable' &&
+    !hostedReviewCreation.defaultBaseRef?.trim()
+  ) {
+    return { eligible: false, kind: null }
+  }
+
+  // Why: safe branch preparation can continue without lookup authority; the
+  // main create preflight still fails closed before creating a duplicate.
   if (hostedReviewCreation.blockedReason === 'dirty') {
     if (stagedCount > 0 && !hasMessage) {
       return { eligible: true, kind: 'message_required' }

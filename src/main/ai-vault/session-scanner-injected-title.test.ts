@@ -134,5 +134,7 @@ describe('scanAiVaultSessions harness-injected title seeding', () => {
 
     expect(result.issues).toEqual([])
     expect(result.sessions[0]?.lastUserPrompt).toBe('Fix the zoom behavior in a separate PR')
+    // Meta skill preamble must not become the copyable first prompt.
+    expect(result.sessions[0]?.firstUserPrompt).toBeUndefined()
   })
 })

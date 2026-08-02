@@ -5,6 +5,33 @@ import type {
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
 
+type UnavailableHostedReviewStatus = {
+  branch: string | null | undefined
+  baseRef: string | null | undefined
+  hasUncommittedChanges: boolean
+  hasUpstream: boolean | undefined
+  ahead: number | undefined
+  behind: number | undefined
+}
+
+function resolveUnavailableHostedReviewBranch(
+  provider: HostedReviewProvider,
+  status: UnavailableHostedReviewStatus
+): string | null {
+  const branch = status.branch?.trim() ?? ''
+  const baseBranch = normalizeHostedReviewBaseRef(status.baseRef ?? '').trim()
+  if (
+    branch === '' ||
+    branch === 'HEAD' ||
+    baseBranch === '' ||
+    !supportsHostedReviewCreation(provider) ||
+    branch.toLowerCase() === baseBranch.toLowerCase()
+  ) {
+    return null
+  }
+  return branch
+}
+
 export function buildLoadingHostedReviewCreationEligibility(
   provider: HostedReviewProvider
 ): HostedReviewCreationEligibility {
@@ -41,44 +68,31 @@ export function resolveHostedReviewCreationProviderForTarget(
  * times out, so the UI can show branch guidance without treating the failed
  * lookup as authority to create a review.
  *
- * Mirrors the main process's own lookup-failure fallback exactly — both its
- * `canReturnLocalBlocker` guard and its blocker ordering
- * (`src/main/source-control/hosted-review-creation.ts`). The guard is
- * load-bearing: without it a failed probe on the default branch or a detached
- * HEAD would synthesize `dirty`/`commit` and surface an *enabled* Create PR
- * that commits onto the base branch, where the real probe returns
- * `default_branch`/`detached_head` (disabled). Returns null when no local
- * blocker is determinable (unknown upstream, ahead-only, fully synced) so the
- * caller can surface the retryable state — matching main, which won't offer a
- * push it can't first auth-check.
+ * Blocker ordering matches main (`dirty` → `no_upstream` → `needs_sync`). The
+ * branch/base guard is load-bearing and intentionally stricter than main when
+ * base is unknown: without a known base, a failed probe must not synthesize
+ * `dirty`/`commit` on what might be the default branch (main would return
+ * `default_branch`/`detached_head` and keep Create disabled). Returns null
+ * when no local blocker is determinable (unknown base, unknown upstream,
+ * ahead-only, fully synced) so the caller can surface the retryable state —
+ * matching main, which won't offer a push it can't first auth-check.
  */
 export function buildLocalBlockerHostedReviewCreationEligibility(
   provider: HostedReviewProvider,
-  status: {
-    branch: string | null | undefined
-    baseRef: string | null | undefined
-    hasUncommittedChanges: boolean
-    hasUpstream: boolean | undefined
-    ahead: number | undefined
-    behind: number | undefined
-  }
+  status: UnavailableHostedReviewStatus
 ): HostedReviewCreationEligibility | null {
-  const branch = status.branch?.trim() ?? ''
-  const baseBranch = normalizeHostedReviewBaseRef(status.baseRef ?? '').trim()
-  const canReturnLocalBlocker =
-    branch !== '' &&
-    branch !== 'HEAD' &&
-    supportsHostedReviewCreation(provider) &&
-    (baseBranch === '' || branch.toLowerCase() !== baseBranch.toLowerCase()) &&
-    (status.hasUncommittedChanges || status.hasUpstream !== true || (status.behind ?? 0) > 0)
-  if (!canReturnLocalBlocker) {
+  const branch = resolveUnavailableHostedReviewBranch(provider, status)
+  if (
+    !branch ||
+    (!status.hasUncommittedChanges && status.hasUpstream === true && (status.behind ?? 0) === 0)
+  ) {
     return null
   }
   const base = {
     provider,
     review: null,
     canCreate: false as const,
-    defaultBaseRef: null,
+    defaultBaseRef: normalizeHostedReviewBaseRef(status.baseRef ?? '').trim(),
     head: branch,
     // Why: local Git blockers cannot prove that a hosted review does not exist.
     reviewLookupOutcome: 'unavailable' as const
@@ -95,4 +109,30 @@ export function buildLocalBlockerHostedReviewCreationEligibility(
     return { ...base, blockedReason: 'needs_sync', nextAction: 'sync' }
   }
   return null
+}
+
+export function buildCreatePrIntentUnavailableEligibility(
+  provider: HostedReviewProvider,
+  status: UnavailableHostedReviewStatus
+): HostedReviewCreationEligibility | null {
+  const localBlocker = buildLocalBlockerHostedReviewCreationEligibility(provider, status)
+  if (localBlocker) {
+    return localBlocker
+  }
+  const branch = resolveUnavailableHostedReviewBranch(provider, status)
+  if (!branch || status.hasUpstream !== true) {
+    return null
+  }
+  const base = {
+    provider,
+    review: null,
+    canCreate: false as const,
+    defaultBaseRef: normalizeHostedReviewBaseRef(status.baseRef ?? '').trim(),
+    head: branch,
+    reviewLookupOutcome: 'unavailable' as const
+  }
+  if ((status.ahead ?? 0) > 0) {
+    return { ...base, blockedReason: 'needs_push', nextAction: 'push' }
+  }
+  return { ...base, blockedReason: null, nextAction: null }
 }

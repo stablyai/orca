@@ -12,10 +12,12 @@ import {
 } from './remote-runtime-shared-control-ready'
 import { SharedControlReconnectScheduler } from './remote-runtime-shared-control-reconnect'
 import { requestSharedControl } from './remote-runtime-shared-control-requests'
+import { SharedControlRetiredRequestIds } from './remote-runtime-shared-control-retired-request-ids'
 import { SharedControlReadyStableResetTimer } from './remote-runtime-shared-control-stability'
 import * as sharedControlState from './remote-runtime-shared-control-state'
 import * as sharedControlSend from './remote-runtime-shared-control-send'
 import { closeSharedControlSocket } from './remote-runtime-shared-control-socket-close'
+import { closeSharedControlConnectionSubscription } from './remote-runtime-shared-control-subscription-close'
 import type { RemoteRuntimeSocketLivenessOptions } from './remote-runtime-socket-liveness'
 import * as sharedControlSubscriptions from './remote-runtime-shared-control-subscriptions'
 import { startSharedControlSubscription } from './remote-runtime-shared-control-subscription-start'
@@ -43,6 +45,7 @@ export class RemoteRuntimeSharedControlConnection {
   private lastError: string | null = null
   private readonly pendingRequests = new Map<string, SharedControlPendingRequest<unknown>>()
   private readonly subscriptions = new Map<string, SharedControlLogicalSubscription<unknown>>()
+  private readonly retiredRequestIds = new SharedControlRetiredRequestIds()
   private readonly readyWaiters: SharedControlReadyWaiter[] = []
   private everReady = false
   private readonly socketGeneration = new SharedControlSocketGeneration()
@@ -72,7 +75,8 @@ export class RemoteRuntimeSharedControlConnection {
       params,
       timeoutMs,
       ensureReady: () => this.ensureReadyWithTimeout(timeoutMs),
-      send: (requestId) => this.sendRequest(requestId)
+      send: (requestId) => this.sendRequest(requestId),
+      retireRequestId: (requestId) => this.retiredRequestIds.retire(requestId)
     })
   }
 
@@ -203,6 +207,7 @@ export class RemoteRuntimeSharedControlConnection {
       deviceToken: this.pairing.deviceToken,
       pendingRequests: this.pendingRequests,
       subscriptions: this.subscriptions,
+      retiredRequestIds: this.retiredRequestIds,
       readyWaiters: this.readyWaiters,
       setState: (state) => {
         this.state = state
@@ -256,10 +261,12 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private closeSubscription(requestId: string): void {
-    sharedControlSubscriptions.closeSharedControlLogicalSubscription({
+    closeSharedControlConnectionSubscription({
       subscriptions: this.subscriptions,
-      subscription: this.subscriptions.get(requestId),
-      request: (method, params) => this.sendSubscriptionCleanupRequest(method, params)
+      retiredRequestIds: this.retiredRequestIds,
+      requestId,
+      deviceToken: this.pairing.deviceToken,
+      send: (payload) => this.sendEncrypted(payload)
     })
     this.reconnect.clearWhenIdle(this.subscriptions.size === 0 && this.state === 'closed')
   }
@@ -270,15 +277,6 @@ export class RemoteRuntimeSharedControlConnection {
       ws: this.ws,
       sharedKey: this.sharedKey,
       payload
-    })
-  }
-
-  private sendSubscriptionCleanupRequest(method: string, params: unknown): void {
-    sharedControlSubscriptions.sendSharedControlCleanupRequest({
-      deviceToken: this.pairing.deviceToken,
-      method,
-      params,
-      send: (payload) => this.sendEncrypted(payload)
     })
   }
 

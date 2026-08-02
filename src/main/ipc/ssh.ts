@@ -21,6 +21,7 @@ import type {
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { isAuthError } from '../ssh/ssh-connection-utils'
+import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
@@ -272,10 +273,6 @@ function isCurrentConnectAttempt(targetId: string, authority: DirectSshAuthority
   return authority.targetId === targetId && isCurrentSshProviderAuthority(authority)
 }
 
-function connectCancelledError(): Error {
-  return new Error('SSH connection attempt was cancelled')
-}
-
 // Why: publish reset's teardown/force-stop/disconnect lifecycle so new connects and duplicate resets can't race it.
 const resetRelayInFlight = new Map<string, Promise<void>>()
 
@@ -295,6 +292,13 @@ const RELAY_LOST_BASE_DELAY_MS = 500
 const RELAY_LOST_MAX_DELAY_MS = 15_000
 // Why: a reconnect whose mux dies within this window was a flap, not a recovery — don't reset the attempt counter. 5s covers provider re-registration + PTY reattach.
 const RELAY_LOST_STABILIZED_MS = 5_000
+// Why: transport states the SSH ladder never leaves on its own — waiting for a relay redeploy past one of these is an unbounded loop.
+const TRANSPORT_TERMINAL_STATUSES = new Set<SshConnectionStatus>([
+  'disconnected',
+  'auth-failed',
+  'reconnection-failed',
+  'error'
+])
 
 function clearRelayLostBackoff(targetId: string): void {
   const state = relayLostBackoff.get(targetId)
@@ -615,6 +619,8 @@ function createSshConnectionCallbacks(): SshConnectionCallbacks {
         relayStateOverrides.has(targetId)
 
       if (shouldReconnectRelay) {
+        // Why: this branch redeploys the relay itself over a fresh transport, so any pending relay-lost retry is stale — dropping it also gives the new transport generation a full attempt budget.
+        clearRelayLostBackoff(targetId)
         // Why: SSH connects before the relay providers rebuild; keep renderer actions gated until SshRelaySession reaches ready again.
         publishRelayOverride(
           getCurrentMainWindow,
@@ -714,7 +720,13 @@ function configureRelaySessionCallbacks(session: SshRelaySession): void {
       return
     }
     rotateSshProviderAuthority(tid)
-    if (state.attempts >= RELAY_LOST_MAX_ATTEMPTS) {
+
+    // Why: re-deploying the relay rides the SSH transport, so while the transport is itself down no attempt
+    // can succeed. Waiting at the max delay without consuming the budget keeps a flapping host off the
+    // manual-reconnect banner, which would tell the user to act on a link that is still auto-recovering.
+    const transportStatus = connectionManager?.getState(tid)?.status
+    const transportConnected = transportStatus === 'connected'
+    if (transportConnected && state.attempts >= RELAY_LOST_MAX_ATTEMPTS) {
       console.warn(
         `[ssh] Relay channel for ${tid} kept dying across ${state.attempts} attempts; giving up. User must reconnect manually.`
       )
@@ -729,6 +741,53 @@ function configureRelaySessionCallbacks(session: SshRelaySession): void {
       )
       return
     }
+
+    const scheduleRelayRedeploy = (delay: number, attemptCharged: boolean): void => {
+      state.reconnectTimer = setTimeout(() => {
+        state.reconnectTimer = null
+        relayLostBackoff.set(tid, state)
+        const liveConn = connectionManager?.getConnection(tid)
+        if (!liveConn || !activeSessions.has(tid)) {
+          clearRelayLostBackoff(tid)
+          return
+        }
+        const status = connectionManager?.getState(tid)?.status
+        if (status === 'connected') {
+          if (!attemptCharged) {
+            // Why: waiting is free, but the deploy it defers is real — charge it here so a transport that
+            // flaps back to 'connected' can't redeploy forever on an uncharged budget.
+            state.attempts += 1
+          }
+          void s.reconnect(liveConn, relayGracePeriodForTarget(t))
+          return
+        }
+        if (status === undefined || TRANSPORT_TERMINAL_STATUSES.has(status)) {
+          // Why: the transport gave up for good; its own state is what the user acts on, so stop waiting for a redeploy that can never run.
+          clearRelayLostBackoff(tid)
+          return
+        }
+        // Why: still mid-transition — re-arm at the max delay without consuming an attempt. It ends once
+        // the transport settles: 'connected' redeploys, a terminal status or a dropped session clears above.
+        scheduleRelayRedeploy(RELAY_LOST_MAX_DELAY_MS, false)
+      }, delay)
+      relayLostBackoff.set(tid, state)
+    }
+
+    if (!transportConnected) {
+      publishRelayOverride(
+        getCurrentMainWindow,
+        tid,
+        'reconnecting',
+        'Relay channel lost. Reconnecting...',
+        state.attempts
+      )
+      scheduleRelayRedeploy(RELAY_LOST_MAX_DELAY_MS, false)
+      console.warn(
+        `[ssh] Relay channel for ${tid} lost while the SSH transport is ${transportStatus ?? 'unknown'}; waiting ${RELAY_LOST_MAX_DELAY_MS}ms without consuming an attempt`
+      )
+      return
+    }
+
     const delay = Math.min(RELAY_LOST_BASE_DELAY_MS * 2 ** state.attempts, RELAY_LOST_MAX_DELAY_MS)
     state.attempts += 1
     publishRelayOverride(
@@ -738,16 +797,7 @@ function configureRelaySessionCallbacks(session: SshRelaySession): void {
       'Relay channel lost. Reconnecting...',
       state.attempts
     )
-    state.reconnectTimer = setTimeout(() => {
-      state.reconnectTimer = null
-      relayLostBackoff.set(tid, state)
-      const liveConn = connectionManager?.getConnection(tid)
-      if (!liveConn || !activeSessions.has(tid)) {
-        return
-      }
-      void s.reconnect(liveConn, relayGracePeriodForTarget(t))
-    }, delay)
-    relayLostBackoff.set(tid, state)
+    scheduleRelayRedeploy(delay, true)
     console.warn(
       `[ssh] Relay channel for ${tid} lost; reconnect attempt ${state.attempts}/${RELAY_LOST_MAX_ATTEMPTS} in ${delay}ms`
     )
@@ -921,7 +971,7 @@ export function registerSshHandlers(
       }
     }
     if (!isCurrentConnectAttempt(targetId, admissionAuthority)) {
-      throw connectCancelledError()
+      throw createCancelledConnectAttemptError()
     }
     const observedAuthority = admissionAuthority
     if (existing) {
@@ -931,7 +981,7 @@ export function registerSshHandlers(
       }
     }
     if (!isCurrentSshProviderAuthority(observedAuthority)) {
-      throw connectCancelledError()
+      throw createCancelledConnectAttemptError()
     }
 
     pendingTransportReconnects.delete(targetId)
@@ -994,7 +1044,7 @@ export function registerSshHandlers(
       // Why: await port teardown before disposing, else the new session's restorePortForwards can hit EADDRINUSE on not-yet-released ports.
       await portForwardManager!.removeAllForwards(targetId)
       if (!isCurrentConnectAttempt(targetId, authority)) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
       existingSession.detach()
       if (activeSessions.get(targetId) === existingSession) {
@@ -1010,7 +1060,7 @@ export function registerSshHandlers(
         throw disconnectResult.error
       }
       if (!isCurrentConnectAttempt(targetId, authority)) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
     }
 
@@ -1031,14 +1081,14 @@ export function registerSshHandlers(
     try {
       conn = await connectionManager!.connect(target)
       if (!ownsSession()) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
     } catch (err) {
       // Why: connect()'s internal state may not have reached the renderer; broadcast explicitly so the UI leaves 'connecting'.
       const errObj = err instanceof Error ? err : new Error(String(err))
       const status: SshConnectionStatus = isAuthError(errObj) ? 'auth-failed' : 'error'
       if (!ownsSession()) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
       // Why: clear this failed connect's flag so a later non-prompting connect isn't deferred.
       credentialRequestedForTarget.delete(targetId)
@@ -1064,7 +1114,7 @@ export function registerSshHandlers(
 
       await session.establish(conn, relayGracePeriodForTarget(target))
       if (!ownsSession()) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
 
       // Why: we manually pushed `deploying-relay`, so send `connected` straight to the renderer — routing through onStateChange would trigger reconnect logic.
@@ -1078,7 +1128,7 @@ export function registerSshHandlers(
       })
     } catch (err) {
       if (!ownsSession()) {
-        throw connectCancelledError()
+        throw createCancelledConnectAttemptError()
       }
       activeSessions.delete(targetId)
       clearRelayLostBackoff(targetId)

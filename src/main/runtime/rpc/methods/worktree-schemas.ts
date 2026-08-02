@@ -57,7 +57,8 @@ export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams
 })
 
 export const WorktreePsParams = z.object({
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  afterSnapshotId: z.string().min(1).max(128).nullable().optional()
 })
 
 export const WorktreeSortOrder = z.object({

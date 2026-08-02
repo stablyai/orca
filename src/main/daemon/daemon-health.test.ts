@@ -198,7 +198,10 @@ describe('parseDaemonPidFile', () => {
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
   })
 
@@ -213,7 +216,25 @@ describe('parseDaemonPidFile', () => {
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
       entryPath: '/repo/out/main/daemon-entry.js',
-      appVersion: '1.2.3'
+      appVersion: '1.2.3',
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
+    })
+  })
+
+  it('preserves exact-incarnation launch and Linux process identity', () => {
+    const serialized = serializeDaemonPidFile({
+      pid: 12345,
+      startedAtMs: 1_700_000_000_000,
+      launchNonce: 'launch-a',
+      linuxStartTicks: '4242',
+      bootId: 'boot-a'
+    })
+    expect(parseDaemonPidFile(serialized)).toMatchObject({
+      launchNonce: 'launch-a',
+      linuxStartTicks: '4242',
+      bootId: 'boot-a'
     })
   })
 
@@ -224,7 +245,10 @@ describe('parseDaemonPidFile', () => {
       pid: 9999,
       startedAtMs: null,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
   })
 
@@ -236,13 +260,19 @@ describe('parseDaemonPidFile', () => {
       pid: 12345,
       startedAtMs: null,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
     expect(parseDaemonPidFile('  12345\n')).toEqual({
       pid: 12345,
       startedAtMs: null,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
   })
 

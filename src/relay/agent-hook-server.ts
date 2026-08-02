@@ -47,11 +47,11 @@ const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
 const CODEX_SUBAGENT_POLL_MS = 1_000
 
-// Why: cap env/version at 64 chars so a misbehaving agent CLI can't grow the meta cache unboundedly; canonical values are short.
+// Why: cap metadata to prevent a misbehaving CLI growing the cache unboundedly.
 const MAX_HOOK_META_LEN = 64
 const FOREIGN_CWD_WARN_PANE_CAP = 64
 
-// Why: WSL relay has no per-pane teardown (PTYs live on the Windows host), so the replay cache would grow forever without a recency cap.
+// Why: WSL lacks per-pane teardown, so cap replay-cache recency.
 const MAX_CACHED_PANES = 256
 
 function defaultEndpointDir(): string {
@@ -104,7 +104,7 @@ export class RelayAgentHookServer {
   private endpointFilePath: string
   private endpointFileWritten = false
   private state: HookListenerState = createHookListenerState()
-  // Why: shared status cache drops wire-envelope fields; this sidecar holds source/env/version so replay matches the live POST path.
+  // Why: retain envelope metadata so replays match live POSTs.
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
   private lastEnvelopeMetaByPaneKey: Map<
     string,
@@ -139,7 +139,7 @@ export class RelayAgentHookServer {
     try {
       await this.listenOn(this.preferredPort)
     } catch (err) {
-      // Why: preferred port is best-effort; on EADDRINUSE fall back to ephemeral and let clients re-coordinate via the endpoint file.
+      // Why: fall back to an ephemeral port on EADDRINUSE; clients use the endpoint file.
       if (this.preferredPort > 0 && (err as NodeJS.ErrnoException)?.code === 'EADDRINUSE') {
         this.portFallbackApplied = true
         await this.listenOn(0)
@@ -162,7 +162,7 @@ export class RelayAgentHookServer {
     return new Promise<void>((resolve, reject) => {
       const onStartupError = (err: Error): void => {
         this.server?.off('listening', onListening)
-        // Why: null the server ref on bind failure so a later start() can retry (else the early-return at top of start() wedges it).
+        // Why: clear failed server refs so later start() calls can retry.
         this.server = null
         reject(err)
       }
@@ -356,6 +356,7 @@ export class RelayAgentHookServer {
       toolUseId: event.toolUseId,
       toolAgentId: event.toolAgentId,
       toolAgentType: event.toolAgentType,
+      claudeRunningNonAgentTask: event.claudeRunningNonAgentTask,
       ...(event.providerSession ? { providerSession: event.providerSession } : {}),
       ...(event.providerSessionOnly ? { providerSessionOnly: true } : {}),
       isReplay: options.isReplay === true ? true : undefined,

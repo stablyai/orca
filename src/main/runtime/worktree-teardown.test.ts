@@ -633,6 +633,7 @@ describe('killAllProcessesForWorktree', () => {
         // DaemonClient method so the shared connect+RPC budget path is exercised.
         ensureConnectedWithin: async () => {},
         isConnected: () => true,
+        getDaemonIdentity: () => null,
         disconnect: () => {},
         notify: () => {},
         request: (

@@ -276,7 +276,9 @@ describe('all-host folder workspace startup catalogs', () => {
     expect(store.getState().projectGroups).toEqual([
       { ...localProjectGroup, executionHostId: 'local' }
     ])
-    expect(store.getState().folderWorkspaces).toEqual([localFolderWorkspace])
+    expect(store.getState().folderWorkspaces).toEqual([
+      { ...localFolderWorkspace, executionHostId: 'local' }
+    ])
   })
 
   it('does not repeat offline runtime compatibility probes across startup catalog loads', async () => {
@@ -305,7 +307,9 @@ describe('all-host folder workspace startup catalogs', () => {
       expect(store.getState().projectGroups).toEqual([
         { ...localProjectGroup, executionHostId: 'local' }
       ])
-      expect(store.getState().folderWorkspaces).toEqual([localFolderWorkspace])
+      expect(store.getState().folderWorkspaces).toEqual([
+        { ...localFolderWorkspace, executionHostId: 'local' }
+      ])
       expect(runtimeEnvironmentTransportCall.mock.calls.map((call) => call[0].method)).toEqual([
         'status.get'
       ])

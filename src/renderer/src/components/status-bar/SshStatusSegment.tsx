@@ -254,7 +254,11 @@ export function SshStatusSegment({
     async (environmentId: string): Promise<void> => {
       try {
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
-        setRuntimeEnvironmentStatus(environmentId, { status: null, checkedAt: Date.now() })
+        setRuntimeEnvironmentStatus(
+          environmentId,
+          { status: null, checkedAt: Date.now() },
+          { suppressDisconnectToast: true }
+        )
         recordFeatureInteraction('ssh')
       } catch (err) {
         toast.error(

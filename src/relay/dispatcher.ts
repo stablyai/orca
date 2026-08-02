@@ -6,6 +6,7 @@ import {
   encodeKeepAliveFrame,
   parseJsonRpcMessage,
   KEEPALIVE_SEND_MS,
+  RelayErrorCode,
   type DecodedFrame,
   type JsonRpcRequest,
   type JsonRpcNotification,
@@ -69,7 +70,19 @@ type RelayClient = {
   highestReceivedSeq: number
   generation: number
   closed: boolean
+  droppedNotificationLog: DroppedProducerNotificationLog | null
   sessionIdentity: RelayClientSessionIdentity
+}
+
+// Why: the log key set is rebuilt per generation, but a producer minting synthetic method names would still
+// grow it inside one generation — cap it well above the fixed relay method vocabulary.
+const DROPPED_NOTIFICATION_LOG_KEY_LIMIT = 64
+
+const RESPONSE_OVER_CAPACITY_MESSAGE = 'Relay response exceeded the bounded transport capacity'
+
+type DroppedProducerNotificationLog = {
+  generation: number
+  loggedKeys: Set<string>
 }
 
 type PendingRelayRequest = {
@@ -91,6 +104,7 @@ export class RelayDispatcher {
   private clientDetachListeners = new Set<(clientId: number) => void>()
   private disposeListeners = new Set<() => void>()
   private legacyCapacityListeners = new Set<() => void>()
+  private clientCapacityListeners = new Map<number, Set<() => void>>()
   private publicationTransactionDepth = 0
   private deferredLegacyCapacity = false
   private deferredForcedLegacyCapacity = false
@@ -111,13 +125,15 @@ export class RelayDispatcher {
   }
 
   // Why: redirect outgoing frames to the reconnected socket without rebuilding the dispatcher + handler tree.
-  // Why: the new client's multiplexer restarts at seq=1, so reset seq/decoder state or acks stall and fire a false connection-dead signal.
+  // Why: a new multiplexer restarts at seq=1; reset state to avoid stalled acknowledgements.
   setWrite(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions): void {
     this.requestAborts.abortClient(this.primaryClient.id)
     this.primaryClient.closed = true
     this.primaryClient.writer.close(new Error('Relay primary sink replaced'))
     this.resetClient(this.primaryClient)
     this.primaryClient.writer = this.createWriter(this.primaryClient, write, sinkOptions)
+    // Why: a frame retained against the replaced sink would otherwise wait for traffic that may never come.
+    this.notifyClientCapacity(this.primaryClient.id)
   }
 
   // Why: mark in-flight requests stale on disconnect so a late pty.spawn/fs.watch can't create unowned remote state.
@@ -176,8 +192,63 @@ export class RelayDispatcher {
     return () => this.legacyCapacityListeners.delete(listener)
   }
 
+  /**
+   * Ungated per-client writer capacity, for a frame that lost control-lane admission and must retry.
+   * onLegacyPtyCapacity cannot serve that: it is gated on producer retention, so it stays silent
+   * exactly under the dual-queue pressure that rejected the frame. Registered on the dispatcher, not
+   * the writer, so a retry survives setWrite() replacing the primary sink.
+   * Returns null only when the client is gone for good. A merely closed client still counts: setWrite
+   * marks the primary closed before replacing its sink, and that replacement is exactly when a frame
+   * stranded by the old writer must be armed to retry.
+   */
+  onClientCapacity(clientId: number, listener: () => void): (() => void) | null {
+    const client = this.clients.get(clientId)
+    if (this.disposed || !client) {
+      return null
+    }
+    const listeners = this.clientCapacityListeners.get(clientId) ?? new Set<() => void>()
+    listeners.add(listener)
+    this.clientCapacityListeners.set(clientId, listeners)
+    return () => {
+      const current = this.clientCapacityListeners.get(clientId)
+      if (!current?.delete(listener) || current.size > 0) {
+        return
+      }
+      this.clientCapacityListeners.delete(clientId)
+    }
+  }
+
+  /**
+   * Whether the id still names a client. A detach notification does not always mean it stopped:
+   * invalidateClient() detaches the primary without removing it, and setWrite() revives that same id.
+   */
+  isClientAttached(clientId: number): boolean {
+    return !this.disposed && this.clients.has(clientId)
+  }
+
+  canAdmitControlFrame(clientId: number, estimatedBytes: number): boolean {
+    const client = this.clients.get(clientId)
+    if (this.disposed || !client || client.closed) {
+      return false
+    }
+    return client.writer.canEnqueueControl(estimatedBytes)
+  }
+
   get legacyRetentionBelowLowWater(): boolean {
     return this.publicationLedger.belowLowWater(this.activeClientKeys())
+  }
+
+  /**
+   * Same reserve as legacyRetentionBelowLowWater, but scoped to one client: a paced bulk producer
+   * gated on the dispatcher-wide signal stops for a peer's stall and degrades a healthy link.
+   * The relay-wide aggregate still counts — that ceiling is shared by every client.
+   */
+  producerRetentionBelowLowWater(clientId: number): boolean {
+    const client = this.clients.get(clientId)
+    if (!client || client.closed) {
+      return false
+    }
+    return this.publicationLedger.belowLowWater([this.clientKey(client)])
   }
 
   writePrimaryBytes(data: Buffer, lane: 'control' | 'ordinary' = 'control'): boolean {
@@ -193,20 +264,34 @@ export class RelayDispatcher {
     limit = data.length
   ): number {
     const clients = this.activeClients()
+    const max = Math.min(data.length, limit)
     if (clients.length === 0) {
-      return Math.min(data.length, limit)
+      return max
     }
-    let low = 0
-    let high = Math.min(data.length, limit)
-    while (low < high) {
-      const mid = Math.ceil((low + high) / 2)
-      const msg: JsonRpcNotification = {
+    if (!(max > 0)) {
+      return 0
+    }
+    const fitsAll = (bytes: number): boolean =>
+      clients.every((client) => bytes <= client.writer.producerFrameCapacity)
+    const sizeFrame = (chunk: string): number =>
+      this.estimateFrameBytes({
         jsonrpc: '2.0',
         method: 'pty.data',
-        params: { ...params, data: data.slice(0, mid) }
-      }
-      const bytes = this.estimateFrameBytes(msg)
-      if (clients.every((client) => bytes <= client.writer.producerFrameCapacity)) {
+        params: { ...params, data: chunk }
+      })
+    // Fast path: the whole chunk usually fits — one encode instead of log2(n).
+    if (fitsAll(sizeFrame(data.slice(0, max)))) {
+      return max
+    }
+    // Exact per-step size: only the escaped data string varies; its quotes are in baseBytes.
+    const baseBytes = sizeFrame('')
+    const bytesFor = (chars: number): number =>
+      baseBytes + Buffer.byteLength(JSON.stringify(data.slice(0, chars))) - 2
+    let low = 0
+    let high = max
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2)
+      if (fitsAll(bytesFor(mid))) {
         low = mid
       } else {
         high = mid - 1
@@ -351,27 +436,65 @@ export class RelayDispatcher {
     )
   }
 
+  activeClientIds(): number[] {
+    return this.activeClients().map((client) => client.id)
+  }
+
+  // Why: signed on purpose — `budget >= 0` is an exact fits-check that a floored budget cannot express.
+  producerEnvelopeBudget(
+    method: string,
+    params: Record<string, unknown>,
+    clientId?: number
+  ): number {
+    if (clientId !== undefined) {
+      const client = this.clients.get(clientId)
+      // Why: a detached or closed target has no room at all — reporting infinite capacity passes a
+      // fits-check and the frame is then dropped by the publish seam instead.
+      if (!client || client.closed) {
+        return Number.MIN_SAFE_INTEGER
+      }
+      return (
+        client.writer.producerFrameCapacity -
+        this.estimateFrameBytes({ jsonrpc: '2.0', method, params })
+      )
+    }
+    const targets = this.activeClients()
+    if (targets.length === 0) {
+      return Number.MAX_SAFE_INTEGER
+    }
+    const frameBytes = this.estimateFrameBytes({ jsonrpc: '2.0', method, params })
+    return Math.min(...targets.map((client) => client.writer.producerFrameCapacity - frameBytes))
+  }
+
   producerDataBudget(
     method: string,
     paramsWithoutData: Record<string, unknown>,
     clientId?: number
   ): number {
-    const targets =
-      clientId === undefined
-        ? this.activeClients()
-        : [this.clients.get(clientId)].filter((client): client is RelayClient => !!client)
-    if (targets.length === 0) {
-      return Number.MAX_SAFE_INTEGER
-    }
-    const emptyFrameBytes = this.estimateFrameBytes({
-      jsonrpc: '2.0',
-      method,
-      params: { ...paramsWithoutData, data: '' }
-    })
     return Math.max(
       0,
-      Math.min(...targets.map((client) => client.writer.producerFrameCapacity - emptyFrameBytes))
+      this.producerEnvelopeBudget(method, { ...paramsWithoutData, data: '' }, clientId)
     )
+  }
+
+  // notify() broadcasts one frame, so chunks must fit the smallest attached capacity.
+  broadcastProducerFrameCapacity(): number | undefined {
+    if (this.disposed) {
+      return undefined
+    }
+    const clients = this.activeClients()
+    if (clients.length === 0) {
+      return undefined
+    }
+    return Math.min(...clients.map((client) => client.writer.producerFrameCapacity))
+  }
+
+  notificationFrameBytes(method: string, params?: Record<string, unknown>): number {
+    return this.estimateFrameBytes({
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined ? { params } : {})
+    })
   }
 
   feed(data: Buffer): void {
@@ -400,24 +523,80 @@ export class RelayDispatcher {
       method,
       ...(params !== undefined ? { params } : {})
     }
+    const frameBytes = this.estimateFrameBytes(msg)
     this.runPublicationTransaction(() => {
       for (const client of this.clients.values()) {
         if (client.closed) {
           continue
         }
         if (method === 'pty.replay') {
-          this.enqueueFrame(client, msg, 'control')
+          // Why: replay is never re-sent, so it takes the control lane where overflow is fatal — the
+          // writer closes the client and reconnect reloads history rather than stranding a short buffer.
+          this.enqueueFrame(client, msg, 'control', undefined, frameBytes)
           continue
         }
-        if (!this.publishToClient(client, msg, 'ordinary')) {
-          this.closeClient(
-            client,
-            new Error('Relay ordinary publication capacity exceeded'),
-            client !== this.primaryClient
-          )
+        // Why: closing can never make an oversized frame sendable — the producer regenerates it after
+        // reattach and re-kills the link, turning a recoverable drop into an endless reconnect loop.
+        if (!this.publishToClient(client, msg, 'ordinary', undefined, frameBytes)) {
+          this.logDroppedProducerNotification(client, method, frameBytes)
         }
       }
     })
+  }
+
+  // Why: producer-lane publication for a single client; notifyClient/tryNotifyClient use the control lane,
+  // which floods must never occupy. Rejection drops the frame and never closes the client.
+  publishProducerNotification(
+    clientId: number,
+    method: string,
+    params?: Record<string, unknown>,
+    // Why: a caller that recovers from rejection itself (the watcher emitter re-sends the batch in
+    // chunks) would otherwise log "Dropped" for a frame it goes on to deliver in full.
+    options?: { logDrop?: boolean }
+  ): boolean {
+    if (this.disposed) {
+      return false
+    }
+    const client = this.clients.get(clientId)
+    if (!client || client.closed) {
+      return false
+    }
+    const msg: JsonRpcNotification = {
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined ? { params } : {})
+    }
+    const frameBytes = this.estimateFrameBytes(msg)
+    if (this.publishToClient(client, msg, 'ordinary', undefined, frameBytes)) {
+      return true
+    }
+    // Why: same diagnostics as notify() — a producer that drops here must not do so silently.
+    if (options?.logDrop !== false) {
+      this.logDroppedProducerNotification(client, method, frameBytes)
+    }
+    return false
+  }
+
+  // Why: one line per generation, method and drop reason — a flooding producer retries every batch and would
+  // spam stderr, but a transient queue-full drop must not consume the slot a real over-capacity drop needs.
+  private logDroppedProducerNotification(client: RelayClient, method: string, bytes: number): void {
+    const capacity = client.writer.producerFrameCapacity
+    const overCapacity = bytes > capacity
+    const key = `${method}:${overCapacity ? 'over-capacity' : 'queue-full'}`
+    let log = client.droppedNotificationLog
+    if (!log || log.generation !== client.generation) {
+      log = { generation: client.generation, loggedKeys: new Set() }
+      client.droppedNotificationLog = log
+    }
+    if (log.loggedKeys.has(key) || log.loggedKeys.size >= DROPPED_NOTIFICATION_LOG_KEY_LIMIT) {
+      return
+    }
+    log.loggedKeys.add(key)
+    process.stderr.write(
+      overCapacity
+        ? `[relay] Dropped ${method} (${bytes}B > producer frame capacity ${capacity}B)\n`
+        : `[relay] Dropped ${method} (${bytes}B, producer queue full; frame capacity ${capacity}B)\n`
+    )
   }
 
   notifyClient(clientId: number, method: string, params?: Record<string, unknown>): void {
@@ -428,7 +607,11 @@ export class RelayDispatcher {
     clientId: number,
     method: string,
     params?: Record<string, unknown>,
-    onSettled: (result: SinkWriteSettlement) => void = () => {}
+    onSettled: (result: SinkWriteSettlement) => void = () => {},
+    options: {
+      controlOverflow?: 'close-client' | 'reject'
+      estimatedBytes?: number
+    } = {}
   ): boolean {
     if (this.disposed) {
       onSettled({ ok: false, error: new Error('Relay dispatcher is disposed') })
@@ -447,7 +630,9 @@ export class RelayDispatcher {
         ...(params !== undefined ? { params } : {})
       },
       'control',
-      onSettled
+      onSettled,
+      options.estimatedBytes,
+      options.controlOverflow
     )
   }
 
@@ -590,6 +775,7 @@ export class RelayDispatcher {
       listener()
     }
     this.legacyCapacityListeners.clear()
+    this.clientCapacityListeners.clear()
     for (const listener of Array.from(this.disposeListeners)) {
       listener()
     }
@@ -612,6 +798,7 @@ export class RelayDispatcher {
       highestReceivedSeq: 0,
       generation: 0,
       closed: false,
+      droppedNotificationLog: null,
       sessionIdentity: sessionIdentity ?? {
         principal: `unproved:${id}`,
         authenticated: false,
@@ -806,36 +993,56 @@ export class RelayDispatcher {
     const estimatedBytes = this.estimateFrameBytes(msg)
     const lane = estimatedBytes > DISPATCHER_CONTROL_QUEUE_MAX_BYTES ? 'legacy-response' : 'control'
     const accepted = this.enqueueFrame(client, msg, lane, onSettled)
-    if (!accepted) {
-      this.closeClient(
-        client,
-        new Error(
-          `Relay response exceeds the bounded ${DEFAULT_PRODUCER_QUEUE_MAX_BYTES}-byte legacy lane`
-        ),
-        client !== this.primaryClient
-      )
+    if (accepted) {
+      return true
     }
-    return accepted
+    // Why: an oversized response must fail its own request; closing would kill every pane on the host.
+    // A rejected first enqueue either left onSettled untouched or closed the client, so exactly one settlement happens.
+    return this.enqueueFrame(
+      client,
+      {
+        jsonrpc: '2.0',
+        id,
+        error: {
+          code: RelayErrorCode.ResponseOverCapacity,
+          message: RESPONSE_OVER_CAPACITY_MESSAGE
+        }
+      },
+      'control',
+      // Why: writing the substitute is not delivering the result — a settlement fence must never read
+      // the capacity error's successful write as "the peer received your result".
+      (settlement) =>
+        onSettled(
+          settlement.ok
+            ? { ok: false, error: new Error(RESPONSE_OVER_CAPACITY_MESSAGE) }
+            : settlement
+        )
+    )
   }
 
   private enqueueFrame(
     client: RelayClient,
     msg: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification,
     lane: DispatcherWriterLane,
-    onSettled: (result: SinkWriteSettlement) => void = () => {}
+    onSettled: (result: SinkWriteSettlement) => void = () => {},
+    // Why: publish paths already sized the frame; avoid a redundant encode.
+    estimatedBytes?: number,
+    controlOverflow: 'close-client' | 'reject' = 'close-client'
   ): boolean {
     if (this.disposed || client.closed) {
       return false
     }
-    const estimatedBytes = this.estimateFrameBytes(msg)
+    const frameBytes = estimatedBytes ?? this.estimateFrameBytes(msg)
+    const encode = (): Buffer => {
+      const seq = client.nextOutgoingSeq++
+      return encodeJsonRpcFrame(msg, seq, client.highestReceivedSeq)
+    }
     return client.writer.enqueue(
       lane,
-      () => {
-        const seq = client.nextOutgoingSeq++
-        return encodeJsonRpcFrame(msg, seq, client.highestReceivedSeq)
-      },
-      estimatedBytes,
-      onSettled
+      encode,
+      frameBytes,
+      onSettled,
+      lane === 'control' && controlOverflow === 'reject'
     )
   }
 
@@ -898,7 +1105,7 @@ export class RelayDispatcher {
         return false
       }
       for (let index = 0; index < clients.length; index++) {
-        if (!this.enqueueLeasedFrame(clients[index], msg, lane, leases[index])) {
+        if (!this.enqueueLeasedFrame(clients[index], msg, lane, leases[index], bytes)) {
           if (this.disposed || clients[index].closed) {
             continue
           }
@@ -936,9 +1143,11 @@ export class RelayDispatcher {
     client: RelayClient,
     msg: JsonRpcNotification,
     lane: 'interactive' | 'ordinary' | 'fixed-bulk' | 'bulk',
-    onSettled: (result: SinkWriteSettlement) => void = () => {}
+    onSettled: (result: SinkWriteSettlement) => void = () => {},
+    // Why: broadcast callers size the frame once for every client; avoid a redundant encode.
+    estimatedBytes?: number
   ): boolean {
-    const bytes = this.estimateFrameBytes(msg)
+    const bytes = estimatedBytes ?? this.estimateFrameBytes(msg)
     const fixedBlocked =
       lane === 'fixed-bulk' &&
       (client.writer.retainedProducerBytes > 0 || bytes > client.writer.fixedFrameCapacity)
@@ -949,7 +1158,7 @@ export class RelayDispatcher {
     if (!leases) {
       return false
     }
-    return this.enqueueLeasedFrame(client, msg, lane, leases[0], onSettled)
+    return this.enqueueLeasedFrame(client, msg, lane, leases[0], bytes, onSettled)
   }
 
   private publishBulkWhenAvailable(client: RelayClient, msg: JsonRpcNotification): Promise<void> {
@@ -998,13 +1207,20 @@ export class RelayDispatcher {
     msg: JsonRpcNotification,
     lane: 'interactive' | 'ordinary' | 'fixed-bulk' | 'bulk',
     lease: LegacyPublicationLease,
+    estimatedBytes: number,
     onSettled: (result: SinkWriteSettlement) => void = () => {}
   ): boolean {
-    const accepted = this.enqueueFrame(client, msg, lane, (result) => {
-      lease.release()
-      onSettled(result)
-      this.notifyLegacyCapacityIfLow()
-    })
+    const accepted = this.enqueueFrame(
+      client,
+      msg,
+      lane,
+      (result) => {
+        lease.release()
+        onSettled(result)
+        this.notifyLegacyCapacityIfLow()
+      },
+      estimatedBytes
+    )
     if (!accepted) {
       lease.release()
       this.notifyLegacyCapacityIfLow()
@@ -1020,8 +1236,27 @@ export class RelayDispatcher {
     const writer = new DispatcherClientWriter(write, sinkOptions, (error) => {
       this.closeClient(client, error, client !== this.primaryClient)
     })
-    writer.onCapacity(() => this.notifyLegacyCapacityIfLow())
+    writer.onCapacity(() => {
+      this.notifyLegacyCapacityIfLow()
+      this.notifyClientCapacity(client.id)
+    })
     return writer
+  }
+
+  private notifyClientCapacity(clientId: number): void {
+    const listeners = this.clientCapacityListeners.get(clientId)
+    if (!listeners?.size) {
+      return
+    }
+    for (const listener of Array.from(listeners)) {
+      try {
+        listener()
+      } catch (err) {
+        process.stderr.write(
+          `[relay] Client capacity listener failed: ${err instanceof Error ? err.message : String(err)}\n`
+        )
+      }
+    }
   }
 
   private closeClient(client: RelayClient, error: Error, remove: boolean): void {
@@ -1036,6 +1271,12 @@ export class RelayDispatcher {
       this.clients.delete(client.id)
     }
     this.notifyClientDetached(client.id)
+    if (remove) {
+      // Only for a client that is gone for good: an invalidated primary is revived by setWrite, and a
+      // frame stranded by its retired sink must stay armed to retry. After the detach fan-out, so a
+      // listener that unsubscribes on detach is not left holding a stale slot.
+      this.clientCapacityListeners.delete(client.id)
+    }
     this.notifyLegacyCapacity(true)
     if (!/^Relay (?:primary client invalidated|client detached)$/.test(error.message)) {
       process.stderr.write(`[relay] Client write closed: ${error.message}\n`)

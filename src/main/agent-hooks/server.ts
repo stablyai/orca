@@ -47,7 +47,7 @@ import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots
 } from '../../shared/claude-subagent-roster'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import { restoreShedStatusFields, type AgentHookSource } from '../../shared/agent-hook-relay'
 import {
   CLAUDE_STATUSLINE_PATHNAME,
   parseClaudeStatusLineBody,
@@ -91,9 +91,14 @@ type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   stateStartedAt: number
 }
 
+type NormalizedLocalHook = {
+  event: AgentHookEventPayload | null
+  onAccepted?: () => void
+}
+
 type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
-  'launchToken' | 'promptInteractionKey' | 'sourceCwd'
+  'claudeRunningNonAgentTask' | 'launchToken' | 'promptInteractionKey' | 'sourceCwd'
 > & {
   launchTokenHash?: string
 }
@@ -766,6 +771,14 @@ export class AgentHookServer {
     if (payload.subagents?.some((subagent) => subagent.state !== 'idle')) {
       return false
     }
+    // Why: Escape/Ctrl+C at Claude's idle prompt does not stop provider-owned shells or session crons.
+    if (
+      agentType === 'claude' &&
+      (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
+        this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey))
+    ) {
+      return false
+    }
 
     // Why: keep the Claude lead-turn record in sync, or a later child event re-emits the stale 'working' state and resurrects the cancelled pane.
     if (agentType === 'claude') {
@@ -1081,7 +1094,10 @@ export class AgentHookServer {
     }
   }
 
-  private applyNormalizedStatus(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
+  private applyNormalizedStatus(
+    payload: AgentHookEventPayload,
+    onAccepted?: () => void
+  ): EnrichedAgentHookEventPayload {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
@@ -1095,6 +1111,7 @@ export class AgentHookServer {
     }
     if (payload.providerSessionOnly) {
       // Why: Pi session_start replaces stale turn state and survives replay, but must not emit prompt telemetry or a fabricated status.
+      onAccepted?.()
       const enriched = this.attachStatusTiming(payload, now)
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
@@ -1205,6 +1222,7 @@ export class AgentHookServer {
     ) {
       this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
+    onAccepted?.()
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
@@ -1346,13 +1364,13 @@ export class AgentHookServer {
     ) {
       return
     }
-    const normalized = normalizeHookPayload(this.state, source, body, this.env)
-    if (!normalized?.payload.lastAssistantMessage) {
+    const normalized = this.normalizeLocalHookPayload(source, body)
+    if (!normalized.event?.payload.lastAssistantMessage) {
       this.scheduleAssistantMessageRetry(source, body, original, nextAttempt, requireExactOriginal)
       return
     }
     // Why: some agents POST Stop before their transcript line is flushed; discovery is event-driven, later content retries stay timed.
-    this.applyNormalizedStatus(normalized)
+    this.applyNormalizedStatus(normalized.event, normalized.onAccepted)
   }
 
   setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
@@ -1673,6 +1691,48 @@ export class AgentHookServer {
     return { ...record, paneKey: stablePaneKey, tabId: parsePaneKey(stablePaneKey)?.tabId }
   }
 
+  private normalizeLocalHookPayload(source: AgentHookSource, body: unknown): NormalizedLocalHook {
+    if (source !== 'claude' || typeof body !== 'object' || body === null) {
+      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+    }
+    const rawPaneKey = (body as Record<string, unknown>).paneKey
+    const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
+    if (!paneKey) {
+      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+    }
+    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    const event = normalizeHookPayload(this.state, source, body, this.env)
+    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
+    if (!event || event.paneKey !== paneKey) {
+      return { event }
+    }
+    // Why: nested CLIs may inherit the pane key; only accepted statuses may mutate its background-work gate.
+    return {
+      event,
+      onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
+    }
+  }
+
+  private setClaudeBackgroundEvidence(
+    paneKey: string,
+    hasRunningTask: boolean,
+    hasActiveCron: boolean
+  ): void {
+    if (hasRunningTask) {
+      this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+    } else {
+      this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    }
+    if (hasActiveCron) {
+      this.state.claudeActiveSessionCronPaneKeys.add(paneKey)
+    } else {
+      this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+    }
+  }
+
   ingestTerminalStatus(event: {
     paneKey: string
     tabId?: string
@@ -1770,6 +1830,9 @@ export class AgentHookServer {
       providerSessionOnly?: unknown
       sourceCwd?: string
       isReplay?: boolean
+      /** Payload fields the relay dropped to fit an oversized frame; validated below. */
+      shedFields?: unknown
+      claudeRunningNonAgentTask?: unknown
       payload: unknown
     },
     connectionId: string
@@ -1848,16 +1911,27 @@ export class AgentHookServer {
         : undefined
     const providerSession = normalizeAgentProviderSession(envelope.providerSession) ?? undefined
     // Why: relay crosses a trust boundary — re-run the canonical normalizer to enforce caps/invariants (returns null on malformed).
-    const normalizedPayload = normalizeAgentStatusPayload(envelope.payload)
-    if (!normalizedPayload) {
+    const validatedPayload = normalizeAgentStatusPayload(envelope.payload)
+    if (!validatedPayload) {
       return
     }
+    // Why: restore a shed roster only when its digest and turn identity still match the cache.
+    const normalizedPayload = restoreShedStatusFields(
+      validatedPayload,
+      envelope.shedFields,
+      this.state.lastStatusByPaneKey.get(paneKey)?.payload
+    )
     if (
       envelope.providerSessionOnly === true &&
       !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
     ) {
       return
     }
+    const applyClaudeBackgroundWork =
+      normalizedPayload.agentType === 'claude' &&
+      typeof envelope.claudeRunningNonAgentTask === 'boolean' &&
+      // Why: reconnect replay may seed a restarted listener, but cannot override any observation made by this runtime.
+      (envelope.isReplay !== true || !this.runtimeObservedStatusPaneKeys.has(paneKey))
     // Why: run the HTTP path's warn-once version/env-mismatch diagnostics with this.env as expected.
     warnOnHookEnvOrVersionMismatch(this.state, {
       version: envelope.version,
@@ -1883,13 +1957,28 @@ export class AgentHookServer {
         typeof envelope.sourceCwd === 'string' && envelope.sourceCwd.length <= HOOK_CWD_MAX_LENGTH
           ? envelope.sourceCwd.trim() || undefined
           : undefined,
+      claudeRunningNonAgentTask:
+        typeof envelope.claudeRunningNonAgentTask === 'boolean'
+          ? envelope.claudeRunningNonAgentTask
+          : undefined,
       payload: normalizedPayload
     }
     if (this.shouldSuppressForeignCwdStatus(event, false)) {
       return
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyNormalizedStatus(event)
+    this.applyNormalizedStatus(
+      event,
+      applyClaudeBackgroundWork
+        ? () => {
+            if (envelope.claudeRunningNonAgentTask) {
+              this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+            } else {
+              this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+            }
+          }
+        : undefined
+    )
   }
 
   async start(options?: {
@@ -1966,16 +2055,16 @@ export class AgentHookServer {
           res.end()
           return
         }
-        const normalized = normalizeHookPayload(this.state, source, aliasedBody, this.env)
+        const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
         if (
-          normalized &&
-          !this.shouldSuppressClosedTabStatus(normalized.paneKey) &&
+          normalized.event &&
+          !this.shouldSuppressClosedTabStatus(normalized.event.paneKey) &&
           // Why: redundant with the pre-normalization refusal by construction; kept as drift
           // armor should the raw-body read and the normalizer ever disagree on a field.
-          !this.shouldSuppressForeignCwdStatus(normalized, true)
+          !this.shouldSuppressForeignCwdStatus(normalized.event, true)
         ) {
-          this.recordCurrentAuthorityObservation(normalized)
-          const enriched = this.applyNormalizedStatus(normalized)
+          this.recordCurrentAuthorityObservation(normalized.event)
+          const enriched = this.applyNormalizedStatus(normalized.event, normalized.onAccepted)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
           this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
         }
@@ -2091,6 +2180,11 @@ export class AgentHookServer {
           // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
           this.state.codexSubagentRosterByPaneKey.delete(paneKey)
           this.state.codexLeadStateByPaneKey.delete(paneKey)
+        } else if (deleted.payload.agentType === 'claude') {
+          this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
+          this.state.claudeLeadStateByPaneKey.delete(paneKey)
+          this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+          this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
         }
       }
     }
@@ -2571,6 +2665,7 @@ export class AgentHookServer {
       // Why: transport-only fields the hydrate whitelist drops — persisting them would
       // make hydration lossy and defeat the lastWrittenJson write dedupe.
       const {
+        claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
         promptInteractionKey: _promptInteractionKey,
         sourceCwd: _sourceCwd,
         launchToken,

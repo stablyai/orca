@@ -209,6 +209,7 @@ import {
   taskPageToGitHubApiPage
 } from '@/components/task-page-work-item-pagination'
 import { sortWorkItemsByNumber } from '../../../shared/work-items'
+import { getChecksLabel, getChecksPillTone } from '@/components/task-page-checks-pill'
 import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
 import { resolveLinearIssueAttributeFilterPrimaryTeam } from '@/components/linear-issue-attribute-filter-primary-team'
 import {
@@ -2010,37 +2011,6 @@ function GHAssigneesCell({
       </PopoverContent>
     </Popover>
   )
-}
-
-function getChecksLabel(item: GitHubWorkItem): string {
-  const summary = item.checksSummary
-  if (!summary) {
-    return 'Checks'
-  }
-  if (summary.total === 0) {
-    return 'No checks'
-  }
-  if (summary.failed > 0) {
-    return `${summary.failed} failing`
-  }
-  if (summary.pending > 0) {
-    return `${summary.pending} pending`
-  }
-  return `${summary.passed}/${summary.total} passed`
-}
-
-function getChecksPillTone(item: GitHubWorkItem): string {
-  const state = item.checksSummary?.state
-  if (state === 'success') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  }
-  if (state === 'failure') {
-    return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
-  }
-  if (state === 'pending') {
-    return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
-  }
-  return 'border-border/60 bg-background/70 text-muted-foreground'
 }
 
 function sameOptionalGitHubOwnerRepo(

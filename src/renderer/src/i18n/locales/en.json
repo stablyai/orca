@@ -322,6 +322,14 @@
             "f518e89aa5": "Project already exists in that profile",
             "f03ae7f27b": "Failed to transfer project"
           }
+        },
+        "runtime": {
+          "status": {
+            "runtimeHostDisconnectedDescription": "Check that Orca is running on this server and that your network connection is working, then try again.",
+            "runtimeHostUnreachableNamed": "Can't reach {{hostName}}",
+            "runtimeHostUnreachable": "Can't reach Orca server",
+            "tryAgain": "Try again"
+          }
         }
       }
     },
@@ -640,7 +648,7 @@
             "readTicket": "Read the linked ticket",
             "postUpdate": "Post a progress update",
             "moveState": "Move the ticket forward",
-            "attachPr": "Attach the PR link",
+            "attachPr": "Attach the review link",
             "triageFollowups": "Triage and create follow-ups",
             "readTicketSummary": "Pull the linked Linear issue's full context before starting work.",
             "readTicketPrompt": "Use {{value0}} to read the linked Linear issue for this worktree, then summarize the goal and acceptance criteria before you start.",
@@ -648,8 +656,8 @@
             "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Linear issue with what changed and how it was verified.",
             "moveStateSummary": "Advance the Linear workflow state as the work progresses.",
             "moveStatePrompt": "Use {{value0}} to move the linked Linear issue to In Review now that the change is ready.",
-            "attachPrSummary": "Link the pull request to the Linear issue when you open it.",
-            "attachPrPrompt": "Use {{value0}} to attach this PR to the linked Linear issue with a PR link.",
+            "attachPrSummary": "Link the pull or merge request to the Linear issue when you open it.",
+            "attachPrPrompt": "Use {{value0}} to attach this pull or merge request to the linked Linear issue.",
             "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
             "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
           }
@@ -814,9 +822,10 @@
         "devSearchKeywordNotification": "notification",
         "projectHostsSummary": "{{value0}} hosts",
         "linearTitle": "Linear",
-        "linearDescription": "Give agents the skill to read and update your linked Linear tickets.",
+        "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
         "pluginsTitle": "Plugins",
-        "pluginsDescription": "Install and manage experimental Orca plugins."
+        "pluginsDescription": "Install and manage experimental Orca plugins.",
+        "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -825,8 +834,8 @@
         "pasteTooLarge": "Paste is too large."
       },
       "useMacosTccPromptNotice": {
-        "title": "Reduce repeated macOS file-access prompts",
-        "description": "macOS attributes file access by your agents and terminal tools to Orca. Granting Full Disk Access reduces these prompts.",
+        "title": "Seeing “Orca would like to access…” prompts?",
+        "description": "Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
         "openSettings": "Open Settings",
         "dismiss": "Don't show again"
       }
@@ -838,7 +847,11 @@
         "9263e75f49": "Codex is using the previous account",
         "d3e8a1f4b2": "Account switched",
         "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
-        "6133594b12": "Keep old account"
+        "6133594b12": "Keep old account",
+        "8f0d5c92a1": "Codex setup changed",
+        "3ea91b5c07": "This Codex session is using an outdated configuration",
+        "e6b7139d2a": "Restart this session to load your current Codex configuration.",
+        "7b1d20f4c8": "Keep current session"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Dismiss notice",
@@ -892,11 +905,6 @@
         "83ac703dda": "Assignees",
         "00ccdf9b5a": "Status",
         "2aa9acdf34": "Edit labels on GitHub",
-        "d23bbb6416": "{{value0}} skipped",
-        "18f80e1329": "{{value0}} pending",
-        "b1ac991806": "{{value0}} failing",
-        "checksNeedActionChip": "{{value0}} action required",
-        "311d0cee55": "{{value0}} passing",
         "e52bed9264": "No checks reported yet",
         "90020cc1f3": "This pull request has no reported checks yet.",
         "ecffebc251": "No checks found",
@@ -1390,11 +1398,6 @@
         "bc215fea4d": "+ Label",
         "b936cc51a4": "Closed",
         "7b8f6bf6d8": "Open",
-        "e6ad0a8d06": "{{value0}} skipped",
-        "88267924d5": "{{value0}} pending",
-        "ae2a34c7b8": "{{value0}} failing",
-        "checksNeedActionChip": "{{value0}} action required",
-        "7c5035931a": "{{value0}} passing",
         "a18d01cda3": "No checks reported yet",
         "3912daf310": "This pull request has no reported checks yet.",
         "45877f5089": "No checks found",
@@ -3928,7 +3931,9 @@
           "upToDate": "Up to date",
           "installed": "Installed",
           "details": "Details",
-          "needsAttention": "Review skill"
+          "needsAttention": "Review skill",
+          "checking": "Checking...",
+          "checkFailed": "Check failed"
         }
       },
       "sidebar": {
@@ -4587,7 +4592,10 @@
           "setParentWorkspace": "Set Parent Worktree...",
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
-          "deleteWorktree": "Delete Worktree"
+          "deleteWorktree": "Delete Worktree",
+          "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
+          "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
+          "deleteWithDescendants": "Delete with Descendants…"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -5316,7 +5324,12 @@
           "copyCommandAria": "Copy command",
           "runCommandDescription": "Press Enter to run the command.",
           "5f818f12ab": "Preparing...",
-          "4c05b9d7cb": "Preparing setup terminal."
+          "4c05b9d7cb": "Preparing setup terminal.",
+          "installLabel": "Install",
+          "updateLabel": "Update",
+          "setupCommandFailed": "The setup command exited with code {{value0}}. This error will clear after a successful retry.",
+          "setupFailed": "Setup failed",
+          "retrySetup": "Retry"
         },
         "AgentsPane": {
           "d83834f5e6": "Detecting installed agents…",
@@ -5721,7 +5734,7 @@
           "e7bb06007c": "LAN",
           "4a73f5217a": "Apple Events for scripts that control other local apps.",
           "e119f0d66b": "Automation",
-          "7ca17b62c8": "macOS names Orca when the agents it runs read other apps' data, because Orca is the responsible process for terminal commands. Grant this to Orca and Orca Helper to reduce those prompts. Then quit Orca, end any surviving Orca Helper process, and reopen Orca.",
+          "7ca17b62c8": "macOS names Orca when the agents it runs read other apps' data, because Orca is the responsible process for terminal commands. Grant this to Orca to reduce those prompts. Then quit and reopen Orca.",
           "c566bca278": "Full Disk Access",
           "9f35980756": "Keystroke injection, window control, and UI automation tools.",
           "5b2f22ca2d": "Accessibility",
@@ -6908,7 +6921,8 @@
           "dev": "Dev Tools",
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
-          "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
+          "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -7137,18 +7151,34 @@
           "53e9aabfc0": "Uses OpenSSH multiplexing when available. Turn off for hosts with custom SSH restrictions."
         },
         "TasksPane": {
-          "3a72b9745e": "Choose which task providers appear in the Tasks page and sidebar shortcuts.",
           "f71d8a9dd3": "Task Providers",
-          "71644aba56": "Choose which task providers appear in the Tasks page source picker and sidebar shortcuts. At least one provider must stay visible.",
-          "93e72ef659": "Task Sources",
-          "8e1305fcc6": "Show Jira in the Tasks source picker and sidebar shortcuts.",
           "6b23a34f6d": "Jira",
-          "e4170c9615": "Show Linear in the Tasks source picker and sidebar shortcuts.",
           "09ae2d7c51": "Linear",
-          "dd67a1b6e1": "Show GitLab in the Tasks source picker and sidebar shortcuts.",
           "7c5d7fdc20": "GitLab",
-          "1db47236cd": "Show GitHub in the Tasks source picker and sidebar shortcuts.",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "connectProviderTitle": "Connect {{provider}}",
+          "connectCodeHostDescription": "Install and authenticate the CLI under Integrations so Orca can load issues.",
+          "connectionCheckUnavailable": "Orca couldn't check this connection. Try again, or open Integrations for setup details.",
+          "retryConnection": "Try again",
+          "openIntegrations": "Integrations",
+          "connectInIntegrations": "Set up in Integrations",
+          "connectJiraTitle": "Connect Jira",
+          "connectJiraDescription": "Add a Jira Cloud site or self-hosted instance with an API token or PAT.",
+          "manageJira": "Manage keys",
+          "addJira": "Add Jira access",
+          "githubDescription": "Browse GitHub issues and start workspaces from them.",
+          "gitlabDescription": "Browse GitLab issues and start workspaces from them.",
+          "linearDescription": "Connect Linear, install the agent skill, and show it in Tasks.",
+          "jiraDescription": "Connect Jira Cloud or self-hosted Jira and show it in Tasks.",
+          "setupTitle": "Task management setup",
+          "setupDescription": "Finish connect + visibility for each provider in one place. Linear also needs the agent skill so coding agents can read and update tickets. At least one provider must stay visible.",
+          "incompleteBannerTitle": "Some visible providers still need setup",
+          "incompleteBannerBody": "Hide providers you do not use, or expand a card and finish its steps.",
+          "providersDescription": "Each card walks through connection (and skill, for Linear) plus whether it appears in Tasks.",
+          "integrationsHint": "Credentials for all providers also live under",
+          "integrationsLink": "Integrations",
+          "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -8794,8 +8824,12 @@
             "3d81c26d78": "source",
             "cf0e3e0c2f": "provider",
             "2ec54bee51": "tasks",
-            "765f0c544d": "Choose which task providers appear in the Tasks page and sidebar shortcuts.",
-            "5b8e4aace5": "Task Providers"
+            "5b8e4aace5": "Task Providers",
+            "providersDescription": "Connect task providers, install the Linear agent skill, and choose what appears in Tasks.",
+            "setup": "setup",
+            "apiKey": "api key",
+            "skill": "skill",
+            "connect": "connect"
           }
         },
         "terminal": {
@@ -9520,13 +9554,13 @@
                   "notInstalled": "Not installed",
                   "recheck": "Re-check",
                   "installedDescription": "Agent skill installed. To update it, run:",
-                  "description": "Let your agents read and edit Linear tasks.",
+                  "description": "Let agents read and edit Linear tasks. Full guided setup (connect + skill + visibility) is under Settings → Task Sources.",
                   "copyCommand": "Copy command"
                 }
               },
               "search": {
                 "title": "Linear",
-                "description": "Give agents the skill to read and update your linked Linear tickets."
+                "description": "Linear skill status, usage examples, and links to Task Sources setup."
               }
             }
           }
@@ -9616,15 +9650,14 @@
         },
         "LinearAgentSkillPane": {
           "title": "Linear",
-          "description": "Give agents the skill to read and update your linked Linear tickets.",
+          "description": "How Linear works in Orca: browse issues, start linked workspaces, and let agents update tickets with /orca-linear.",
           "skillTitle": "Linear skill",
-          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
-          "howToUse": "How to use it",
-          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
+          "howToUse": "Example prompts",
+          "howToUseDescription": "Click a card to copy a prompt. Use these in a Linear-linked worktree after the skill is installed.",
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal",
           "manageConnectionHint": "Review connected Linear workspaces and API keys in",
-          "manageConnectionLink": "Integrations settings"
+          "manageConnectionLink": "Integrations"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -9941,6 +9974,69 @@
             "development": "development plugins"
           }
         },
+        "LinearAgentSkillGuide": {
+          "setupConnectTitle": "1. Connect Linear",
+          "setupConnectBody": "Personal API key so Orca can list issues and open linked workspaces.",
+          "manageKeys": "Manage keys",
+          "addAccess": "Add access",
+          "setupSkillTitle": "2. Install the agent skill",
+          "setupSkillBody": "Gives coding agents /orca-linear for reading, updates, triage, and attaching pull or merge requests.",
+          "setupVisibleTitle": "3. Show Linear in Tasks",
+          "setupVisibleBody": "Keeps Linear in the Tasks source picker and sidebar shortcuts.",
+          "openTaskSources": "Task Sources",
+          "setupTitle": "Setup checklist",
+          "setupBody": "All three are required for the full Tasks + agent loop. First-time path is also under Task Sources.",
+          "setupReady": "All set",
+          "setupProgress": "{{done}} of {{total}} ready",
+          "notesTitle": "Good to know",
+          "notesIntro": "Quick reminders once Linear is connected and the skill is installed.",
+          "noteLinkedTitle": "Start from a Linear issue",
+          "noteLinkedBody": "Ticket actions work best in a worktree created from Tasks so the issue stays linked as context.",
+          "noteSlashTitle": "Mention /orca-linear",
+          "noteSlashBody": "In chat, use /orca-linear (or ask in plain language) so the agent loads the skill for that turn.",
+          "noteKeysTitle": "Keys follow the runtime",
+          "noteKeysBody": "API keys and workspaces are stored for the active runtime.",
+          "noteVisibilityTitle": "Hiding ≠ disconnect",
+          "noteVisibilityBody": "Hiding Linear in Task Sources only removes it from the picker. It does not remove your key or skill.",
+          "setupChecking": "Checking…"
+        },
+        "TaskSourceLinearSetup": {
+          "connectTitle": "Connect Linear",
+          "connectDescription": "Add a Personal API key so Orca can browse issues and open workspaces with ticket context.",
+          "manageAccess": "Manage keys",
+          "addAccess": "Add Linear access",
+          "connectedHint": "Workspaces and keys are stored for the active runtime. You can add more access any time.",
+          "recheck": "Re-check connection",
+          "skillTitle": "Install Linear agent skill",
+          "skillDescription": "Gives agents /orca-linear to read tickets, post updates, move states, and attach pull or merge requests.",
+          "skillBlocked": "Connect Linear first, then install the skill for agents.",
+          "skillPanelTitle": "Linear skill",
+          "terminalTitle": "Linear skill setup",
+          "terminalAriaLabel": "Linear skill install terminal",
+          "showDescription": "Include Linear in the Tasks page source picker and sidebar shortcuts."
+        },
+        "TaskSourceProviderCard": {
+          "statusChecking": "Checking…",
+          "statusReady": "Ready",
+          "statusConnectRequired": "Connect required",
+          "statusSkillRequired": "Skill required",
+          "statusUnavailable": "Status unavailable",
+          "statusHidden": "Hidden from Tasks",
+          "statusIncomplete": "Needs setup",
+          "collapseSetup": "Collapse {{provider}} setup steps",
+          "expandSetup": "Show {{provider}} setup steps"
+        },
+        "TaskSourceShowInTasksStep": {
+          "shown": "Shown",
+          "show": "Show",
+          "hide": "Hide",
+          "hideProviderAction": "Hide {{provider}} from Tasks",
+          "showProviderAction": "Show {{provider}} in Tasks",
+          "lastProviderAction": "{{provider}} is shown in Tasks. At least one provider must stay visible.",
+          "lastProviderHint": "At least one provider must stay visible in Tasks.",
+          "title": "Show in Tasks",
+          "description": "Include this provider in the Tasks source picker and sidebar shortcuts."
+        },
         "RuntimeHostAccessForm": {
           "getLink": "Get an access link from the other host",
           "stepOpenShare": "Open Settings → Remote Orca Servers → Share this host.",
@@ -9986,6 +10082,23 @@
           "setupRecipe": "Set up an environment recipe for your cloud provider.",
           "createWorkspace": "Create a workspace and select that recipe under Run on.",
           "openSetup": "Set up environment recipes"
+        },
+        "ReleaseChannelSection": {
+          "switchFailed": "Could not switch to that build.",
+          "title": "Release channel",
+          "description": "Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.",
+          "devOnly": "Dev only",
+          "channelAriaLabel": "Update channel",
+          "hourlyWarning": "Hourly builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.",
+          "loadingBuilds": "Loading builds…",
+          "noBuilds": "No builds found",
+          "refresh": "Refresh build list",
+          "switchTo": "Switch to build",
+          "alreadyRunning": "This is the build you are running.",
+          "willSwitch": "{{value0}} → {{value1}}",
+          "webUnavailable": "Switching builds is only available in the desktop app.",
+          "hourlyMacOnlyAria": "Hourly (macOS only)",
+          "hourlyMacOnly": "Hourly builds are produced only for macOS. Linux and Windows stay on Stable or RC."
         }
       },
       "right": {
@@ -10574,6 +10687,8 @@
                 "9ad98f2a17": "pending",
                 "5e52f4ef7f": "failing",
                 "02ca4f9074": "passing",
+                "checksUnresolvedChip": "unresolved",
+                "checksUnresolvedStripHint": "These checks finished without a pass or fail verdict.",
                 "e15a8b77ef": "No inline details are available for this check.",
                 "679bf2093c": "Copy log excerpt",
                 "d713f500b2": "Log excerpt",
@@ -11149,7 +11264,14 @@
             "sessionRole": "Session",
             "jumpToOriginalPane": "Jump to Original Pane",
             "worktree": "Worktree",
-            "jumpToWorktree": "Jump to Worktree"
+            "jumpToWorktree": "Jump to Worktree",
+            "firstPrompt": "First prompt",
+            "firstPromptCopied": "First prompt copied",
+            "copyFirstPrompt": "Copy first prompt",
+            "copied": "Copied",
+            "copy": "Copy",
+            "noFirstPromptAvailable": "No first prompt available",
+            "loadingFirstPrompt": "Loading first prompt…"
           },
           "AiVaultSessionRow": {
             "noPreviewAvailable": "No conversation preview available",
@@ -11808,7 +11930,9 @@
         "NetworkInterfacePicker": {
           "trigger-label": "Network address to advertise",
           "custom-option": "{{address}} (custom)",
-          "add-custom": "Add custom address…"
+          "add-custom": "Add custom address…",
+          "custom-section": "Custom",
+          "remove-custom": "Remove {{address}}"
         },
         "WindowsFirewallNotice": {
           "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
@@ -14241,6 +14365,12 @@
           },
           "undo": "Undo",
           "widthOption": "{{value0}} px"
+        },
+        "grab": {
+          "errorNotReady": "This page isn't ready for element selection yet.",
+          "errorNotAuthorized": "Browser access was denied.",
+          "errorAlreadyActive": "Element selection is already active.",
+          "errorInjectionFailed": "Could not start element selection on this page."
         }
       },
       "pluginCatalog": {
@@ -14257,6 +14387,18 @@
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
         }
+      },
+      "WorktreeBaseFallbackDialog": {
+        "title": "Workspace created from a local base",
+        "description": "The remote-tracking ref \"{{value0}}\" was unavailable, so Orca used local \"{{value1}}\" instead. This workspace may not include the latest remote changes.",
+        "dismiss": "Got it"
+      },
+      "pr-check-counts": {
+        "passingChip": "{{value0}} passing",
+        "failingChip": "{{value0}} failing",
+        "pendingChip": "{{value0}} pending",
+        "needsActionChip": "{{value0}} action required",
+        "unresolvedChip": "{{value0}} unresolved"
       }
     },
     "i18n": {
@@ -14554,6 +14696,20 @@
         "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
         "unknown": "Restart Orca to try again."
       }
+    }
+  },
+  "featureTips": {
+    "voice": {
+      "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
+      "startDictation": "Start dictation",
+      "agentPromptTitle": "Agent prompt",
+      "listening": "Listening...",
+      "focusPaneInstruction": "Focus a terminal, editor, or agent prompt, then press",
+      "startInstruction": "to start voice dictation. Press",
+      "stopInstruction": "again to stop.",
+      "unassignedInstruction": "Assign a dictation shortcut before starting voice dictation in a focused pane.",
+      "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
+      "settingsLink": "Settings → Voice"
     }
   }
 }

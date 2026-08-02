@@ -5,11 +5,14 @@ import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import {
+  findEncryptedPrivateKeyPath,
   resolveAgentConfigValue,
   resolveAgentSocket,
-  resolvePrivateKey,
-  resolveUnencryptedExplicitPrivateKey
+  resolvePrivateKeys,
+  resolveUnencryptedExplicitPrivateKeys
 } from './ssh-auth-resolution'
+import { configurePrivateKeyAuthentication } from './ssh-private-key-authentication'
+import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 
 export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
 
@@ -49,6 +52,9 @@ export function isAuthError(err: Error): boolean {
     msg.includes('all configured authentication methods failed') ||
     msg.includes('authentication failed') ||
     msg.includes('too many authentication failures') ||
+    /permission denied(?:, please try again\.?| \([^)]*(?:publickey|password|keyboard-interactive|gssapi|hostbased)[^)]*\))/.test(
+      msg
+    ) ||
     (err as { level?: string }).level === 'client-authentication'
   )
 }
@@ -180,7 +186,10 @@ export function buildConnectConfig(
 ): ConnectConfig {
   const effectiveHost = resolveEffectiveHost(target, resolved)
   const effectivePort = resolveEffectivePort(target, resolved)
-  const effectiveUser = target.username || resolved?.user || ''
+  const effectiveUser =
+    isOpenSshConfigBackedTarget(target) && resolved
+      ? (resolved.user ?? target.username)
+      : target.username || resolved?.user || ''
 
   const config: Record<string, unknown> = {
     host: effectiveHost,
@@ -202,18 +211,23 @@ export function buildConnectConfig(
     config.agentForward = true
   }
 
-  const key =
+  const keys =
     (options.includePrivateKey ?? !agent)
-      ? resolvePrivateKey(target, resolved)
-      : resolveUnencryptedExplicitPrivateKey(target, resolved)
-  if (key) {
-    config.privateKey = key.contents
-  }
+      ? resolvePrivateKeys(target, resolved)
+      : resolveUnencryptedExplicitPrivateKeys(target, resolved)
+  configurePrivateKeyAuthentication(
+    config as ConnectConfig,
+    keys,
+    findEncryptedPrivateKeyPath(keys)
+  )
 
   return config as ConnectConfig
 }
 
 function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {
+  if (isOpenSshConfigBackedTarget(target) && resolved?.hostname) {
+    return resolved.hostname
+  }
   if (shouldUseResolvedEndpoint(target, resolved)) {
     return resolved!.hostname
   }
@@ -221,6 +235,9 @@ function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | n
 }
 
 function resolveEffectivePort(target: SshTarget, resolved: SshResolvedConfig | null): number {
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
+    return resolved.port || target.port || 22
+  }
   // Why: imported config aliases store 22 as the schema default even when an
   // included/wildcard OpenSSH rule later resolves a different effective Port.
   if (target.configHost && target.port === 22 && resolved?.port) {
@@ -249,6 +266,12 @@ export function resolveEffectiveProxy(
   target: SshTarget,
   resolved: SshResolvedConfig | null
 ): EffectiveProxy | undefined {
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
+    if (resolved.proxyCommand) {
+      return { kind: 'proxy-command', command: resolved.proxyCommand }
+    }
+    return resolved.proxyJump ? { kind: 'jump-host', jumpHost: resolved.proxyJump } : undefined
+  }
   if (target.proxyCommand) {
     return { kind: 'proxy-command', command: target.proxyCommand }
   }

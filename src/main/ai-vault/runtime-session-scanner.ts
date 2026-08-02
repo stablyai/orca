@@ -76,6 +76,7 @@ const aiVaultListResultSchema = z.object({
       totalTokens: z.number(),
       previewMessages: z.array(aiVaultSessionPreviewMessageSchema),
       // Optional keeps paired hosts on older builds compatible.
+      firstUserPrompt: z.string().nullable().optional(),
       lastUserPrompt: z.string().nullable().optional(),
       // Default keeps remote hosts running an older build (no recoverable-signal
       // fields) parseable; they simply report no recoverable-empty sessions.

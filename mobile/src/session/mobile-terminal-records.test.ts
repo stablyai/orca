@@ -102,12 +102,14 @@ describe('mobile terminal records', () => {
     }
     const seeded: MobileTerminalSessionTab = {
       ...base,
-      launchDraft: 'https://github.com/o/r/issues/12'
+      launchDraft: 'https://github.com/o/r/issues/12',
+      launchDraftCreatedAt: 1
     }
 
     expect(mobileSessionTabsEqual([base], [seeded])).toBe(false)
     expect(mobileSessionTabsEqual([seeded], [base])).toBe(false)
     expect(mobileSessionTabsEqual([seeded], [{ ...seeded }])).toBe(true)
+    expect(mobileSessionTabsEqual([seeded], [{ ...seeded, launchDraftCreatedAt: 2 }])).toBe(false)
   })
 
   it('treats terminal agent-status changes as session-tab changes', () => {

@@ -4,6 +4,7 @@ import {
   isAzureDevOpsReviewCreationAuthenticated
 } from './pull-request-creation'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 
 const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
@@ -149,7 +150,8 @@ describe('Azure DevOps pull request creation', () => {
       code: 'auth_required'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 })

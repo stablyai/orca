@@ -186,6 +186,27 @@ describe('codex restart notices with colliding account labels', () => {
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toBeUndefined()
   })
 
+  it('does not collapse an equal-account home-route change', () => {
+    useAppStore.getState().markCodexRestartNotices([
+      {
+        ptyId: 'pty-1',
+        previousAccountLabel: 'System default',
+        nextAccountLabel: 'System default',
+        previousAccountId: null,
+        nextAccountId: null,
+        homeRouteChanged: true
+      }
+    ])
+
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
+      previousAccountLabel: 'System default',
+      nextAccountLabel: 'System default',
+      previousAccountId: null,
+      nextAccountId: null,
+      homeRouteChanged: true
+    })
+  })
+
   it('re-asks a dismissed pane when a same-labelled third account is selected', () => {
     switchAccountById('pty-1', 'account-a', 'account-b')
     useAppStore.getState().dismissCodexRestartNotices(['pty-1'])

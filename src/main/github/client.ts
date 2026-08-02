@@ -27,6 +27,7 @@ import {
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
+import { summarizeProviderChecks } from '../../shared/provider-check-summary'
 import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
 import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
@@ -192,6 +193,52 @@ async function assertRateLimitBudget(
       `GitHub ${bucket} rate limit is low; retry after ${new Date(guard.resetAt * 1000).toLocaleTimeString()}`
     )
   }
+}
+
+// Why: a branch lookup prefers REST but can fall back to `gh pr list` and
+// `gh pr view`, so both buckets are guarded and charged. Mirrors the PR refresh
+// coordinator's own estimate.
+const PR_BRANCH_LOOKUP_BUCKETS = ['core', 'graphql'] as const
+
+/**
+ * Rate-limit floor for GitHub PR lookups that do not run through the PR refresh
+ * coordinator's queue (#11532).
+ *
+ * The coordinator guards and paces its own background refreshes, but
+ * `hostedReview:forBranch` polls the same lookup straight from the renderer.
+ * Ungated, the two paths together could spend the user's entire hourly quota —
+ * which is per user and shared with their own `gh` and CLI agents.
+ * Returns the reset time when the caller must not spend, else `null`.
+ */
+export async function getGitHubPRLookupRateLimitBlock(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<{ resetAt: number } | null> {
+  const executionOptions = ghRepoExecOptions(
+    githubRepoContext(repoPath, connectionId, localGitOptions)
+  )
+  // Why: identity resolution runs local git, which can fail for reasons that
+  // have nothing to do with the budget; let the lookup itself classify those.
+  const repository = await getOriginGitHubApiRepository(
+    repoPath,
+    connectionId,
+    executionOptions
+  ).catch(() => null)
+  if (repository === null) {
+    return null
+  }
+  if (spendsSharedGitHubComQuota(repository, executionOptions)) {
+    // Why: the probe only warms the snapshot and is exempt from limits, so a
+    // failure must fail open rather than block the lookup (#7553).
+    await getRateLimit().catch(() => undefined)
+  }
+  // Why: retrying at the earlier reset would fail again on the bucket that has
+  // not reset yet, so the latest blocked reset is the only honest retry time.
+  const resets = PR_BRANCH_LOOKUP_BUCKETS.map((bucket) =>
+    repositoryRateLimitGuard(repository, bucket, executionOptions)
+  ).flatMap((guard) => (guard.blocked ? [guard.resetAt] : []))
+  return resets.length > 0 ? { resetAt: Math.max(...resets) } : null
 }
 
 function prRefreshUpstreamError(
@@ -656,42 +703,19 @@ function checkRollupEntries(value: unknown): unknown[] {
 }
 
 function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['checksSummary'] {
-  const entries = checkRollupEntries(value)
-  if (entries.length === 0) {
-    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0 }
-  }
-  let passed = 0
-  let failed = 0
-  let pending = 0
-  for (const entry of entries) {
-    if (typeof entry !== 'object' || entry === null) {
-      pending += 1
-      continue
-    }
-    const raw = entry as Record<string, unknown>
-    const conclusion = String(raw.conclusion ?? raw.state ?? '').toUpperCase()
-    const status = String(raw.status ?? '').toUpperCase()
-    if (['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(conclusion)) {
-      passed += 1
-    } else if (
-      ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(
-        conclusion
-      )
-    ) {
-      failed += 1
-    } else if (status === 'COMPLETED' && conclusion) {
-      failed += 1
-    } else {
-      pending += 1
-    }
-  }
-  return {
-    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : 'success',
-    total: entries.length,
-    passed,
-    failed,
-    pending
-  }
+  return summarizeProviderChecks(
+    checkRollupEntries(value).map((entry) => {
+      if (typeof entry !== 'object' || entry === null) {
+        return { status: '', conclusion: '' }
+      }
+      const raw = entry as Record<string, unknown>
+      // Why: StatusContext reports `state` and carries no `status`; CheckRun reports both.
+      return {
+        status: String(raw.status ?? ''),
+        conclusion: String(raw.conclusion ?? raw.state ?? '')
+      }
+    })
+  )
 }
 
 function mapPullRequestWorkItem(
@@ -2977,6 +3001,13 @@ export async function getPRForBranchOutcome(
     // here can honor process GH_REPO/GH_HOST and return an unrelated PR.
     if (connectionId && candidates.length === 0) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
+    }
+    // Why (#11532): account every lookup, not just the coordinator's queue —
+    // `hostedReview:forBranch` reaches this directly from renderer polling and
+    // was spending the shared quota invisibly. headRepo is `origin`, the same
+    // identity the coordinator guards on.
+    for (const bucket of PR_BRANCH_LOOKUP_BUCKETS) {
+      noteRepositoryRateLimitSpend(headRepo ?? candidates[0], bucket, 1, ghOptions)
     }
     let data: PullRequestLookupData | null = null
     let dataRepo: OwnerRepo | null = null

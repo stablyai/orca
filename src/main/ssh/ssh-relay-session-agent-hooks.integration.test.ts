@@ -149,6 +149,9 @@ function createFakeRelay(): FakeRelay {
 function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
   const store = {
     getRepos: vi.fn().mockReturnValue([]),
+    getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
+    upsertSshPtyConsumerRecovery: vi.fn(),
+    removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn()
@@ -480,6 +483,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         toolAgentType: 'Review',
         // Why: the cwd attribution guard is inert for every SSH event if this hop drops sourceCwd.
         sourceCwd: '/srv/remote-session',
+        claudeRunningNonAgentTask: true,
         providerSessionOnly: true,
         providerSession: {
           key: 'session_id',
@@ -503,6 +507,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
           toolAgentId: 'agent-subagent-a',
           toolAgentType: 'Review',
           sourceCwd: '/srv/remote-session',
+          claudeRunningNonAgentTask: true,
           providerSessionOnly: true,
           providerSession: {
             key: 'session_id',

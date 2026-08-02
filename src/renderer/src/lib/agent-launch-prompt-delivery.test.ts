@@ -31,17 +31,19 @@ describe('seedNativeChatLaunchDraftForAgentTab', () => {
     vi.clearAllMocks()
   })
 
-  it('rejects multi-line text at the helper, not just at the delivery caller', () => {
-    // Worktree-create and work-item launches seed through this helper directly
-    // (a Linear draft is always `Linked Linear issue: …\n<url>\n`), so the
-    // Ctrl+U kill-to-start-of-LINE constraint has to live here.
-    seedNativeChatLaunchDraftForAgentTab({
+  it('mirrors multi-line text — the majority of real drafts', () => {
+    // A Linear draft is always `Linked Linear issue: …\n<url>\n`, so rejecting
+    // newlines made every Linear launch invisible in chat. Send now clears every
+    // parked line first, so there is nothing left to glue.
+    const text = 'Linked Linear issue: STA-1234\nhttps://linear.app/o/issue/STA-1234\n'
+    seedNativeChatLaunchDraftForAgentTab({ tabId: 'linear-tab', agent: 'codex', text })
+
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
       tabId: 'linear-tab',
       agent: 'codex',
-      text: 'Linked Linear issue: STA-1234\nhttps://linear.app/o/issue/STA-1234\n'
+      text,
+      createdAt: expect.any(Number)
     })
-
-    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
   it('seeds single-line text', () => {
@@ -138,19 +140,23 @@ describe('deliverLaunchPromptToAgentTab', () => {
     expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
   })
 
-  it('does not seed a launch draft for multi-line content', async () => {
-    // The chat send pre-clears the TUI with Ctrl+U (kill-to-start-of-LINE), so a
-    // multi-line prefill (e.g. scraped session-fork context) would leave earlier
-    // lines behind to glue onto the next message.
+  it('seeds a launch draft for multi-line content', async () => {
+    // Note+URL launches join with a blank line, so this shape is common too.
+    const content = 'Forked from session\n\nhttps://example.test/context'
     await deliverLaunchPromptToAgentTab({
       tabId: 'fork-tab',
       agent: 'codex',
-      content: 'Forked from session\n\nhttps://example.test/context',
+      content,
       submit: false,
       forcePaste: false
     })
 
-    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+      tabId: 'fork-tab',
+      agent: 'codex',
+      text: content,
+      createdAt: expect.any(Number)
+    })
   })
 
   it('does not seed a launch draft for submitted, unsupported, or empty content', async () => {
