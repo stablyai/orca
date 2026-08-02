@@ -9,6 +9,7 @@ import { shouldWaitForSetupBeforeAgentStartup } from '../shared/setup-agent-star
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git-credential-guard'
 import { parseOrcaYaml } from '../shared/orca-yaml'
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
+import { resolveWindowsGitBashShellPath } from './git-bash'
 import { gitExecFileSync, promptGuardShellEnv } from './git/runner'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import { addWorktreeSetupWslInteropEnv } from './pty/wsl-orca-env'
@@ -556,14 +557,16 @@ function createWorktreeRunnerScript(args: {
     envVars,
     // Why: WSL git returns /mnt paths that Node converts back to C:\ for file
     // writes; retain the runtime signal so launch converts them to /mnt again.
-    ...(runnerBaseName === 'setup-runner' && launchShell ? { shell: launchShell } : {}),
+    // Issue-command runners launch through the same shells, so they carry it too.
+    ...(launchShell ? { shell: launchShell } : {}),
     ...(waitForAgentStartup === true ? { waitForAgentStartup: true } : {})
   }
 }
 
 export function resolveSetupRunnerShell(
   settings: SetupRunnerShellSettings,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  options: { resolveGitBashShellPath?: (shell: string) => string | null } = {}
 ): SetupRunnerShell | undefined {
   if (platform !== 'win32') {
     return undefined
@@ -577,11 +580,23 @@ export function resolveSetupRunnerShell(
   const shellBasename = configuredShell.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
   const family = resolveWindowsShellStartupFamily(configuredShell)
   if (family === 'posix' && shellBasename !== 'wsl.exe' && shellBasename !== 'wsl') {
-    return { family: 'posix' }
+    // Why: the PTY resolves Git Bash independently and falls back to PowerShell when it
+    // is missing, so gate the .sh runner on the same resolution. This also keeps
+    // non-Git bash flavors (Cygwin's /cygdrive, the System32 WSL shim's /mnt) off the
+    // MSYS-only /c/... form the posix runner emits.
+    const resolveGitBashShellPath =
+      options.resolveGitBashShellPath ??
+      ((shell: string) => resolveWindowsGitBashShellPath(shell, { platform }))
+    if (resolveGitBashShellPath(configuredShell)) {
+      // Note: Git Bash users with batch-syntax orca.yaml setup content get a bash
+      // interpreter from here on; the flip is intentional and needs a release note.
+      return { family: 'posix' }
+    }
   }
 
   // Why: existing Windows setup scripts were authored for Orca's cmd runner;
-  // PowerShell and Windows-host projects can invoke it without changing syntax.
+  // PowerShell, wsl.exe-as-terminal, and Windows-host projects can invoke it
+  // without changing syntax, so they intentionally stay on the cmd runner.
   return { family: 'cmd' }
 }
 

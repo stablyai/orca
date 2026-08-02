@@ -258,4 +258,55 @@ describe('createIssueCommandRunnerScript', () => {
       })
     }
   })
+
+  it('carries the WSL launch shell for a Windows-drive worktree routed through WSL', async () => {
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('/mnt/c/repo/.git/orca/issue-command-runner.sh')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    try {
+      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const result = createIssueCommandRunnerScript(
+        makeRepo(),
+        'C:\\repo\\feature',
+        'codex exec "long command"',
+        { wslDistro: 'Ubuntu' }
+      )
+
+      // Why: the runner path is written back in native Windows form, so the launch needs /mnt again.
+      expect(result.runnerScriptPath).toBe('C:\\repo\\.git\\orca\\issue-command-runner.sh')
+      expect(result.shell).toEqual({ family: 'posix', executable: 'wsl.exe' })
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('keeps native Windows issue runners on the cmd launch shell', async () => {
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\issue-command-runner.cmd')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    try {
+      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const result = createIssueCommandRunnerScript(makeRepo(), 'C:\\repo\\feature', 'pnpm install')
+
+      expect(result.shell).toEqual({ family: 'cmd' })
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
 })

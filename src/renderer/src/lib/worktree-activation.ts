@@ -696,7 +696,7 @@ function queueSetupAndIssueCommands(
     const queuedIssueCommand =
       'runnerScriptPath' in issueCommand
         ? {
-            command: buildSetupRunnerCommand(issueCommand.runnerScriptPath),
+            command: buildSetupRunnerCommand(issueCommand.runnerScriptPath, issueCommand.shell),
             env: issueCommand.envVars
           }
         : { command: issueCommand.command, env: issueCommand.env }

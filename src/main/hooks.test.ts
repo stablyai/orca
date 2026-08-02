@@ -1397,11 +1397,43 @@ describe('createSetupRunnerScript', () => {
 })
 
 describe('resolveSetupRunnerShell', () => {
+  const installedGitBash = {
+    resolveGitBashShellPath: () => 'C:\\Program Files\\Git\\bin\\bash.exe'
+  }
+
   it('maps git-bash to POSIX setup launch metadata on Windows', async () => {
     const { resolveSetupRunnerShell } = await import('./hooks')
 
-    expect(resolveSetupRunnerShell({ terminalWindowsShell: 'git-bash' }, 'win32')).toEqual({
+    expect(
+      resolveSetupRunnerShell({ terminalWindowsShell: 'git-bash' }, 'win32', installedGitBash)
+    ).toEqual({
       family: 'posix'
+    })
+  })
+
+  it('falls back to the cmd runner when the git-bash setting has no installed Git Bash', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(
+      resolveSetupRunnerShell({ terminalWindowsShell: 'git-bash' }, 'win32', {
+        resolveGitBashShellPath: () => null
+      })
+    ).toEqual({ family: 'cmd' })
+  })
+
+  it('keeps the cmd runner for a non-Git bash such as Cygwin', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(
+      resolveSetupRunnerShell({ terminalWindowsShell: 'C:\\cygwin64\\bin\\bash.exe' }, 'win32')
+    ).toEqual({ family: 'cmd' })
+  })
+
+  it('keeps the cmd runner for a bare bash whose flavor cannot be resolved', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(resolveSetupRunnerShell({ terminalWindowsShell: 'bash' }, 'win32')).toEqual({
+      family: 'cmd'
     })
   })
 

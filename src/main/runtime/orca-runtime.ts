@@ -20309,7 +20309,8 @@ export class OrcaRuntimeService {
           ? buildObservedSetupCommand(
               args.setup.runnerScriptPath,
               args.setupCommandPlatform,
-              completionToken
+              completionToken,
+              args.setup.shell
             )
           : null
         const setupCommand =
