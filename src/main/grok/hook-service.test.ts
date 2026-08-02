@@ -59,14 +59,16 @@ describe('GrokHookService', () => {
     () => {
       const scriptPath = join(homeDir, 'grok-hook-unset.cmd')
       writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
+      // Why: delete GROK_HOME rather than set '' so cmd sees "not defined".
+      // Keep PORT/TOKEN/PANE_KEY non-empty so we pass the env guard and actually
+      // execute the GROK_HOME block (curl may fail; script still exits 0).
+      const env = { ...process.env } as NodeJS.ProcessEnv
+      delete env.GROK_HOME
+      env.ORCA_AGENT_HOOK_PORT = '1'
+      env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
+      env.ORCA_PANE_KEY = 'pane-test'
       const result = spawnSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', scriptPath], {
-        env: {
-          ...process.env,
-          GROK_HOME: '',
-          ORCA_AGENT_HOOK_PORT: '',
-          ORCA_AGENT_HOOK_TOKEN: '',
-          ORCA_PANE_KEY: ''
-        },
+        env,
         input: '{"hook_event_name":"SessionStart"}',
         encoding: 'utf8'
       })
@@ -83,14 +85,13 @@ describe('GrokHookService', () => {
       const scriptPath = join(homeDir, 'grok-hook-slash.cmd')
       writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
       const trailing = `${join(homeDir, 'grok-home-with-slash')}\\`
+      const env = { ...process.env } as NodeJS.ProcessEnv
+      env.GROK_HOME = trailing
+      env.ORCA_AGENT_HOOK_PORT = '1'
+      env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
+      env.ORCA_PANE_KEY = 'pane-test'
       const result = spawnSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', scriptPath], {
-        env: {
-          ...process.env,
-          GROK_HOME: trailing,
-          ORCA_AGENT_HOOK_PORT: '',
-          ORCA_AGENT_HOOK_TOKEN: '',
-          ORCA_PANE_KEY: ''
-        },
+        env,
         input: '{"hook_event_name":"UserPromptSubmit"}',
         encoding: 'utf8'
       })

@@ -7,12 +7,10 @@ import {
 /** Matches the envelope length cap used by the POSIX grok-hook branch. */
 export const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
 
-const WINDOWS_HOOK_PAYLOAD_FORM_LINE = '  --data-urlencode "payload@-" >nul 2>nul'
-
-const WINDOWS_GROK_HOOK_POST_COMMAND = buildWindowsAgentHookPostCommand('grok').replace(
-  WINDOWS_HOOK_PAYLOAD_FORM_LINE,
-  `  --data-urlencode "grokHome=%ORCA_GROK_HOME%" ^\r\n${WINDOWS_HOOK_PAYLOAD_FORM_LINE}`
-)
+const WINDOWS_GROK_HOOK_POST_COMMAND = buildWindowsAgentHookPostCommand('grok', [
+  // Why: attach grokHome before payload@- without string-replacing the shared template.
+  '  --data-urlencode "grokHome=%ORCA_GROK_HOME%" ^'
+])
 
 /**
  * Windows `grok-hook.cmd` body.
