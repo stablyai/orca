@@ -47,6 +47,7 @@ import { PaneIdentityRegistry } from './pane-identity-registry'
 import {
   closeManagedPane,
   detachManagedPaneForExternalMove,
+  retireManagedPanePreservingPty,
   splitManagedPane
 } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
@@ -71,6 +72,7 @@ export class PaneManager {
   private styleOptions: PaneStyleOptions = {}
   private destroyed = false
   private renderingSuspended: boolean
+  private atlasRecoveryVisible: boolean
   private identities = new PaneIdentityRegistry()
   private pendingPaneReparentFrameIds = new Set<number>()
 
@@ -81,6 +83,7 @@ export class PaneManager {
     this.root = root
     this.options = options
     this.renderingSuspended = options.initialRenderingSuspended === true
+    this.atlasRecoveryVisible = !this.renderingSuspended
     // Why: atlas recovery must reach every live manager — see
     // resetAllTerminalWebglAtlases for the shared-atlas rationale.
     registerLivePaneManager(this)
@@ -176,6 +179,22 @@ export class PaneManager {
 
   detachPaneForExternalMove(paneId: number): boolean {
     return detachManagedPaneForExternalMove({
+      paneId,
+      activePaneId: this.activePaneId,
+      panes: this.panes,
+      root: this.root,
+      styleOptions: this.styleOptions,
+      managerOptions: this.options,
+      getDragCallbacks: () => this.getDragCallbacks(),
+      releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
+      setActivePaneId: (id) => {
+        this.activePaneId = id
+      }
+    })
+  }
+
+  retirePanePreservingPty(paneId: number): boolean {
+    return retireManagedPanePreservingPty({
       paneId,
       activePaneId: this.activePaneId,
       panes: this.panes,
@@ -339,6 +358,14 @@ export class PaneManager {
 
   resetWebglTextureAtlases(): void {
     resetPaneWebglTextureAtlases(this.panes.values())
+  }
+
+  setAtlasRecoveryVisible(visible: boolean): void {
+    this.atlasRecoveryVisible = visible
+  }
+
+  isVisibleForAtlasRecovery(): boolean {
+    return this.atlasRecoveryVisible && !this.destroyed
   }
 
   scheduleRevealRepaint(): void {

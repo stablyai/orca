@@ -31,6 +31,51 @@ export function normalizeGitUsername(value: string): string {
 }
 
 /**
+ * Hosted account logins used as branch-prefix segments must be single-path
+ * tokens. Reject multi-line / JSON error bodies from a failed `gh api user`
+ * (rate-limit 403 still prints JSON on stdout) so they never become branch names.
+ */
+export function isPlausibleHostedLogin(value: string): boolean {
+  // GitHub usernames: 1–39 chars, alphanumerics and single hyphens, no leading/trailing hyphen.
+  return (
+    /^[A-Za-z0-9]$/.test(value) ||
+    (/^[A-Za-z0-9][A-Za-z0-9-]{0,37}[A-Za-z0-9]$/.test(value) && !value.includes('--'))
+  )
+}
+
+// Not a check-ref-format rule: a login becomes one slash-free branch component,
+// which a loose ref stores as a single filename (255-byte cap on ext4/APFS/NTFS).
+// The ASCII-only charset below makes character count equal byte count.
+const MAX_BRANCH_SAFE_LOGIN_LENGTH = 255
+
+/**
+ * Provider-agnostic branch-safe token: GitLab/Bitbucket/self-hosted logins may
+ * carry `_`/`.` and run longer than GitHub's 39-char limit, so the strict
+ * GitHub rule must not gate explicitly configured usernames.
+ */
+export function isBranchSafeHostedLogin(value: string): boolean {
+  if (value.length > MAX_BRANCH_SAFE_LOGIN_LENGTH) {
+    return false
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
+    return false
+  }
+  // Dot placements git check-ref-format rejects; `.lock` is case-sensitive there too.
+  return !value.includes('..') && !value.endsWith('.') && !value.endsWith('.lock')
+}
+
+function normalizeHostedLogin(value: string): string {
+  const normalized = normalizeGitUsername(value)
+  return normalized && isPlausibleHostedLogin(normalized) ? normalized : ''
+}
+
+/** Explicit `github.user`/`user.username` config is provider-agnostic; only reject non-tokens. */
+function normalizeConfiguredLogin(value: string): string {
+  const normalized = normalizeGitUsername(value)
+  return normalized && isBranchSafeHostedLogin(normalized) ? normalized : ''
+}
+
+/**
  * A resolved username plus whether every probe on the way to it completed.
  * Non-authoritative '' (a probe timed out) must not overwrite a previously
  * persisted username; authoritative '' should clear one.
@@ -46,7 +91,7 @@ export async function getSshGitUsername(
   for (const key of EXPLICIT_USERNAME_CONFIG_KEYS) {
     try {
       const { stdout } = await provider.exec(['config', '--get', key], repoPath)
-      const username = normalizeGitUsername(stdout)
+      const username = normalizeConfiguredLogin(stdout)
       if (username) {
         return username
       }
@@ -130,7 +175,7 @@ function parseGhAuthStatusLogin(output: string): string {
 
 async function probeGhLoginOnce(): Promise<GhLoginOutcome> {
   const api = await runGhLoginProbe(['api', 'user', '-q', '.login'])
-  const apiLogin = normalizeGitUsername(api.stdout.trim())
+  const apiLogin = normalizeHostedLogin(api.stdout)
   if (apiLogin) {
     return { login: apiLogin, timedOut: false }
   }
@@ -144,7 +189,7 @@ async function probeGhLoginOnce(): Promise<GhLoginOutcome> {
     return { login: '', timedOut: true }
   }
   const output = `${status.stdout}\n${status.stderr}`
-  return { login: normalizeGitUsername(parseGhAuthStatusLogin(output)), timedOut: false }
+  return { login: normalizeHostedLogin(parseGhAuthStatusLogin(output)), timedOut: false }
 }
 
 async function getGhLoginOutcome(): Promise<GhLoginOutcome> {
@@ -172,14 +217,6 @@ async function getGhLoginOutcome(): Promise<GhLoginOutcome> {
     })
   ghLoginProbeInFlight = probe
   return probe
-}
-
-/**
- * Resolve the `gh` CLI's GitHub login without ever blocking the caller for
- * longer than the probe wall. Never rejects; unknown resolves to ''.
- */
-export async function getGhLoginAsync(): Promise<string> {
-  return (await getGhLoginOutcome()).login
 }
 
 async function readGitStdout(repoPath: string, args: string[]): Promise<string> {
@@ -270,7 +307,8 @@ export async function resolveLocalGitUsernameDetailed(
         cwd: repoPath,
         timeout: LOCAL_GIT_READ_TIMEOUT_MS
       })
-      const username = normalizeGitUsername(stdout)
+      // Why: config can hold free-form strings; only branch-safe logins become prefixes.
+      const username = normalizeConfiguredLogin(stdout)
       if (username) {
         return { username, authoritative: true }
       }

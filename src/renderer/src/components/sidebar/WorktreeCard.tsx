@@ -47,6 +47,7 @@ import {
   WorktreeCardMetaBadges,
   type WorktreeCardIssueDisplay
 } from './WorktreeCardMeta'
+import { getWorktreeCardJiraIssueDisplay } from './worktree-card-jira-issue-display'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
 import {
@@ -83,6 +84,7 @@ import { translate } from '@/i18n/i18n'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
+  getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
@@ -618,10 +620,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
           url: linearIssueUrlFallback
         }
     : null
+  const jiraIssueDisplay = getWorktreeCardJiraIssueDisplay(worktree)
   const cardTitleDisplay = getWorktreeCardTitleDisplay({
     storedDisplayName: worktree.displayName,
     branchName: branch,
     linearIssueTitle: linearIssueDisplay?.title,
+    jiraIssueTitle: jiraIssueDisplay?.title,
     issueTitle: issueDisplay?.title,
     reviewTitle: prDisplay?.title
   })
@@ -637,6 +641,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showStatus = cardProps.includes('status')
   const showIssue = cardProps.includes('issue')
   const showLinearIssue = cardProps.includes('linear-issue')
+  const showJiraIssue = cardProps.includes('jira-issue')
   const showPR = cardProps.includes('pr')
   const showAutomation = cardProps.includes('automation')
   const showCli = cardProps.includes('cli')
@@ -868,7 +873,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
         sshDisconnected: isSshDisconnected
       })
       onImmediateActivate?.(worktree.id, activationRowKey)
-      void activateWorktreeFromSidebar(worktree.id)
+      void activateWorktreeFromSidebar(
+        worktree.id,
+        worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+      )
       // Why: a deliberate card click warrants the blocking reconnect prompt; skip it when a terminal already shows the overlay.
       if (isSshDisconnected && !activeViewIsTerminal) {
         setShowDisconnectedDialog(true)
@@ -879,6 +887,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       affiliateListMode,
       worktree.id,
       worktree.repoId,
+      worktree.hostId,
+      repo,
       isActive,
       isDeleting,
       activationRowKey,
@@ -1049,11 +1059,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showUnreadEmphasis = showStatus && worktree.isUnread
   const hoverIssue = issueDisplay
   const hoverLinearIssue = linearIssueDisplay
+  const hoverJiraIssue = jiraIssueDisplay
   const hoverReview = prDisplay
   const statusLaneReview = statusPrDisplay ?? hoverReview
   const hoverComment = worktree.comment
   const metaIssue = showIssue ? hoverIssue : null
   const metaLinearIssue = showLinearIssue ? hoverLinearIssue : null
+  const metaJiraIssue = showJiraIssue ? hoverJiraIssue : null
   const metaReview = showPR ? hoverReview : null
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
@@ -1156,6 +1168,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const hasDetails = hasWorktreeCardDetails({
     issue: metaIssue,
     linearIssue: metaLinearIssue,
+    jiraIssue: metaJiraIssue,
     review: newCardStyle ? null : metaReview,
     comment: metaComment,
     automationProvenance: metaAutomationProvenance,
@@ -1229,6 +1242,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     (hasWorktreeCardDetails({
       issue: hoverIssue,
       linearIssue: hoverLinearIssue,
+      jiraIssue: hoverJiraIssue,
       review: hoverReview,
       comment: hoverComment,
       automationProvenance: metaAutomationProvenance,
@@ -1246,6 +1260,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <WorktreeCardDetailsHover
             issue={metaIssue}
             linearIssue={metaLinearIssue}
+            jiraIssue={metaJiraIssue}
             review={metaReview}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
@@ -1302,6 +1317,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <WorktreeCardMetaBadges
             issue={metaIssue}
             linearIssue={metaLinearIssue}
+            jiraIssue={metaJiraIssue}
             review={newCardStyle ? null : metaReview}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
@@ -1316,6 +1332,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       <WorktreeCardDetailsHover
         issue={metaIssue}
         linearIssue={metaLinearIssue}
+        jiraIssue={metaJiraIssue}
         review={metaReview}
         comment={metaComment}
         automationProvenance={metaAutomationProvenance}
@@ -1810,6 +1827,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       <WorktreeCardDetailsHover
         issue={hoverIssue}
         linearIssue={hoverLinearIssue}
+        jiraIssue={hoverJiraIssue}
         review={hoverReview}
         comment={hoverComment}
         automationProvenance={metaAutomationProvenance}

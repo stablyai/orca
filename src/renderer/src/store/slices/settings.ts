@@ -23,6 +23,10 @@ import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-con
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { translate } from '@/i18n/i18n'
+import {
+  normalizeMobilePairingCustomAddress,
+  normalizeMobilePairingCustomAddresses
+} from '../../../../shared/mobile-pairing-custom-address'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
@@ -105,6 +109,16 @@ function normalizeSettingsUpdates(
       updates.terminalScrollbackRows
     )
   }
+  if ('mobilePairingCustomAddress' in updates) {
+    sanitizedUpdates.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
+      updates.mobilePairingCustomAddress
+    )
+  }
+  if ('mobilePairingCustomAddresses' in updates) {
+    sanitizedUpdates.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
+      updates.mobilePairingCustomAddresses
+    )
+  }
   return sanitizedUpdates
 }
 
@@ -144,13 +158,14 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     try {
       const settings = await window.api.settings.get()
       set({ settings })
-      // Why: best-effort boot probe so sidebar host pickers show live runtime
-      // health before the settings pane is ever opened. Fire-and-forget to keep
-      // startup off the network round-trips.
-      void get().hydrateRuntimeEnvironmentStatuses()
     } catch (err) {
       console.error('Failed to fetch settings:', err)
     }
+    // Why: best-effort boot probe so sidebar host pickers show live runtime
+    // health before the settings pane is ever opened. Fire-and-forget to keep
+    // startup off the network round-trips. Runs even when settings fail to load,
+    // so surfaces waiting on the catalog settling are never stranded pending.
+    void get().hydrateRuntimeEnvironmentStatuses()
   },
 
   updateSettings: async (updates) => {

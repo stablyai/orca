@@ -67,8 +67,21 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     runtimePaneTitlesByTabId: {},
     acknowledgedAgentsByPaneKey: {},
     settings: null,
-    agentStatusEpoch: 0
-  }
+    agentStatusEpoch: 0,
+    // Why: seeded with real identities so the profile assertions below compare
+    // two distinct values — omitting them would pass against `undefined`.
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
+    paneForegroundAgentByPaneKey: {},
+    detectedWorktreesByRepo: {},
+    folderWorkspaces: [],
+    projectGroups: [],
+    restoredRuntimeHostIdByWorkspaceSessionKey: {},
+    runtimeEnvironments: [],
+    runtimeEnvironmentCatalogHydrated: false,
+    removedRuntimeEnvironmentIds: new Set()
+  } as DashboardSnapshotWatchState
 }
 
 function Harness({ enabled }: { enabled: boolean }): null {
@@ -167,6 +180,30 @@ describe('useDashboardPopoutBridge', () => {
     expect(
       dashboardSnapshotInputsChanged({ ...previousState, agentStatusEpoch: 1 }, previousState)
     ).toBe(true)
+
+    // Why: each card's preview terminal keys against a host-input profile
+    // derived from these. Not republishing leaves the pop-out encoding bytes
+    // for the host the pty used to run on.
+    const profileInputs: Partial<DashboardSnapshotWatchState>[] = [
+      { sshConnectionStates: new Map() },
+      { sshStateByEnvironment: new Map() },
+      { runtimeStatusByEnvironmentId: new Map() },
+      { paneForegroundAgentByPaneKey: {} },
+      { detectedWorktreesByRepo: {} },
+      // A folder workspace is not a git worktree; its host resolves through these.
+      { folderWorkspaces: [] },
+      { projectGroups: [] },
+      { restoredRuntimeHostIdByWorkspaceSessionKey: {} },
+      { runtimeEnvironments: [] },
+      { runtimeEnvironmentCatalogHydrated: true },
+      { removedRuntimeEnvironmentIds: new Set() }
+    ]
+    const republished = profileInputs
+      .filter((next) =>
+        dashboardSnapshotInputsChanged({ ...previousState, ...next }, previousState)
+      )
+      .map((next) => Object.keys(next)[0])
+    expect(republished).toEqual(profileInputs.map((next) => Object.keys(next)[0]))
   })
 
   it('releases every dashboard listener when the experiment is disabled', async () => {

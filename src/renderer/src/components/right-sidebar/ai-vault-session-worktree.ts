@@ -8,7 +8,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import {
-  isPathInsideOrEqual,
+  createNormalizedPathInsideOrEqualMatcher,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
@@ -41,6 +41,9 @@ type WorktreeCandidate = {
   hostId: ExecutionHostId
   status: Exclude<AiVaultSessionWorktreeStatus, 'current'>
   source: 'current-path' | 'prior-path'
+  // Precomputed so a 500-session scan doesn't re-normalize ~500 roots per session.
+  ownsNormalizedCwd: (normalizedCwd: string) => boolean
+  normalizedPathLength: number
 }
 
 export function resolveAiVaultSessionWorktreeInfo({
@@ -54,17 +57,42 @@ export function resolveAiVaultSessionWorktreeInfo({
   worktrees: readonly Worktree[]
   activeWorktreeId: string | null
 }): AiVaultSessionWorktreeInfo | null {
+  return withAiVaultCurrentWorktreeStatus(
+    resolveWorktreeInfoFromCandidates(session, buildWorktreeCandidates(worktrees, repos)),
+    activeWorktreeId
+  )
+}
+
+/**
+ * Stamps `status: 'current'` at read time so the session→worktree map itself
+ * never depends on the active worktree — switching worktrees must not rebuild it.
+ */
+export function withAiVaultCurrentWorktreeStatus(
+  worktreeInfo: AiVaultSessionWorktreeInfo | null,
+  activeWorktreeId: string | null
+): AiVaultSessionWorktreeInfo | null {
+  if (!worktreeInfo?.worktreeId || worktreeInfo.worktreeId !== activeWorktreeId) {
+    return worktreeInfo
+  }
+  return worktreeInfo.status === 'current' ? worktreeInfo : { ...worktreeInfo, status: 'current' }
+}
+
+function resolveWorktreeInfoFromCandidates(
+  session: AiVaultSession,
+  candidates: readonly WorktreeCandidate[]
+): AiVaultSessionWorktreeInfo | null {
   if (!session.cwd) {
     return null
   }
 
   const sessionHostId = normalizeExecutionHostId(session.executionHostId)
-  const candidates = buildWorktreeCandidates(worktrees, repos)
-    .filter((candidate) => isSessionInWorktreePath(candidate.path, session.cwd!))
+  const normalizedCwd = normalizeRuntimePathForComparison(session.cwd)
+  const matched = candidates
+    .filter((candidate) => candidate.ownsNormalizedCwd(normalizedCwd))
     .filter((candidate) => !sessionHostId || candidate.hostId === sessionHostId)
     .sort(compareWorktreeCandidates)
 
-  const best = candidates[0]
+  const best = matched[0]
   if (!best) {
     return {
       status: 'unavailable',
@@ -73,15 +101,8 @@ export function resolveAiVaultSessionWorktreeInfo({
     }
   }
 
-  const status =
-    best.worktree.id === activeWorktreeId
-      ? 'current'
-      : best.worktree.isArchived
-        ? 'archived'
-        : best.status
-
   return {
-    status,
+    status: best.status,
     label: best.worktree.displayName || compactPathLabel(best.path),
     path: best.path,
     worktreeId: best.worktree.id
@@ -109,22 +130,35 @@ export function resolveAiVaultSessionWorktreeDisplay(args: {
   worktrees: readonly Worktree[]
   activeWorktreeId: string | null
 }): AiVaultSessionWorktreeInfo | null {
-  const resolved = resolveAiVaultSessionWorktreeInfo(args)
+  return withAiVaultCurrentWorktreeStatus(
+    resolveWorktreeDisplayFromCandidates(
+      args.session,
+      buildWorktreeCandidates(args.worktrees, args.repos ?? [])
+    ),
+    args.activeWorktreeId
+  )
+}
+
+function resolveWorktreeDisplayFromCandidates(
+  session: AiVaultSession,
+  candidates: readonly WorktreeCandidate[]
+): AiVaultSessionWorktreeInfo | null {
+  const resolved = resolveWorktreeInfoFromCandidates(session, candidates)
   if (resolved) {
     return resolved
   }
 
-  const cwd = args.session.cwd?.trim()
+  const cwd = session.cwd?.trim()
   if (cwd) {
     return unavailableWorktreeInfo(cwd)
   }
 
-  const titlePath = extractWorktreePathFromSessionTitle(args.session.title)
+  const titlePath = extractWorktreePathFromSessionTitle(session.title)
   if (titlePath) {
     return unavailableWorktreeInfo(titlePath)
   }
 
-  const branch = args.session.branch?.trim()
+  const branch = session.branch?.trim()
   if (branch) {
     return {
       status: 'unavailable',
@@ -136,32 +170,31 @@ export function resolveAiVaultSessionWorktreeDisplay(args: {
   return null
 }
 
+/**
+ * Deliberately unaware of the active worktree: stamping `current` here would
+ * rebuild the whole map (candidates × sessions) on every worktree switch.
+ * Callers derive it per row via `withAiVaultCurrentWorktreeStatus`.
+ */
 export function useAiVaultSessionWorktreeMap({
   sessions,
   repos = [],
-  worktrees,
-  activeWorktreeId
+  worktrees
 }: {
   sessions: readonly AiVaultSession[]
   repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   worktrees: readonly Worktree[]
-  activeWorktreeId: string | null
 }): ReadonlyMap<string, AiVaultSessionWorktreeInfo> {
-  return useMemo(
-    () =>
-      new Map(
-        sessions.flatMap((session) => {
-          const worktreeInfo = resolveAiVaultSessionWorktreeDisplay({
-            session,
-            repos,
-            worktrees,
-            activeWorktreeId
-          })
-          return worktreeInfo ? [[session.id, worktreeInfo] as const] : []
-        })
-      ),
-    [activeWorktreeId, repos, sessions, worktrees]
-  )
+  return useMemo(() => {
+    // Hoisted out of the per-session loop: candidates and their normalized
+    // roots are session-independent.
+    const candidates = buildWorktreeCandidates(worktrees, repos)
+    return new Map(
+      sessions.flatMap((session) => {
+        const worktreeInfo = resolveWorktreeDisplayFromCandidates(session, candidates)
+        return worktreeInfo ? [[session.id, worktreeInfo] as const] : []
+      })
+    )
+  }, [repos, sessions, worktrees])
 }
 
 function buildWorktreeCandidates(
@@ -176,29 +209,41 @@ function buildWorktreeCandidates(
       normalizeExecutionHostId(worktree.hostId) ??
       (repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID)
     if (hasUsablePath(worktree.path)) {
-      candidates.push({
-        worktree,
-        path: worktree.path,
-        hostId,
-        status: worktree.isArchived ? 'archived' : 'active',
-        source: 'current-path'
-      })
+      candidates.push(makeWorktreeCandidate(worktree, worktree.path, hostId, 'current-path'))
     }
     for (const priorWorktreeId of worktree.priorWorktreeIds ?? []) {
       const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
       if (!parsed || parsed.repoId !== worktree.repoId || !hasUsablePath(parsed.worktreePath)) {
         continue
       }
-      candidates.push({
-        worktree,
-        path: parsed.worktreePath,
-        hostId,
-        status: worktree.isArchived ? 'archived' : 'active',
-        source: 'prior-path'
-      })
+      candidates.push(makeWorktreeCandidate(worktree, parsed.worktreePath, hostId, 'prior-path'))
     }
   }
   return candidates
+}
+
+function makeWorktreeCandidate(
+  worktree: Worktree,
+  path: string,
+  hostId: ExecutionHostId,
+  source: WorktreeCandidate['source']
+): WorktreeCandidate {
+  const ownsCwd = createNormalizedPathInsideOrEqualMatcher(path)
+  // A WSL UNC root also owns sessions recorded under its Linux-native cwd.
+  const wslPath = parseWslUncPath(path)
+  const ownsCwdViaWslAlias = wslPath
+    ? createNormalizedPathInsideOrEqualMatcher(wslPath.linuxPath)
+    : null
+  return {
+    worktree,
+    path,
+    hostId,
+    status: worktree.isArchived ? 'archived' : 'active',
+    source,
+    ownsNormalizedCwd: (normalizedCwd) =>
+      ownsCwd(normalizedCwd) || (ownsCwdViaWslAlias?.(normalizedCwd) ?? false),
+    normalizedPathLength: normalizeRuntimePathForComparison(path).length
+  }
 }
 
 function hasUsablePath(pathValue: string): boolean {
@@ -206,18 +251,8 @@ function hasUsablePath(pathValue: string): boolean {
   return Boolean(trimmed && isRuntimePathAbsolute(trimmed))
 }
 
-function isSessionInWorktreePath(worktreePath: string, sessionCwd: string): boolean {
-  if (isPathInsideOrEqual(worktreePath, sessionCwd)) {
-    return true
-  }
-  const wslPath = parseWslUncPath(worktreePath)
-  return wslPath ? isPathInsideOrEqual(wslPath.linuxPath, sessionCwd) : false
-}
-
 function compareWorktreeCandidates(left: WorktreeCandidate, right: WorktreeCandidate): number {
-  const lengthDifference =
-    normalizeRuntimePathForComparison(right.path).length -
-    normalizeRuntimePathForComparison(left.path).length
+  const lengthDifference = right.normalizedPathLength - left.normalizedPathLength
   if (lengthDifference !== 0) {
     return lengthDifference
   }

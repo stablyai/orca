@@ -209,16 +209,58 @@ export async function markLiveCodexSessionsForRestart(args: {
     return
   }
 
+  const currentState = useAppStore.getState()
+  const restoredRouteNoticePtyIds = liveCodexSessionPtyIds.filter(
+    (ptyId) => currentState.codexRestartNoticeByPtyId[ptyId]?.homeRouteChanged === true
+  )
+  const restoredRouteNoticePtyIdSet = new Set(restoredRouteNoticePtyIds)
+  const authoritativeStalePanes =
+    restoredRouteNoticePtyIds.length === 0
+      ? null
+      : await window.api.codexAccounts
+          .listStalePanes({ ptyIds: restoredRouteNoticePtyIds })
+          .catch(() => null)
+  const authoritativeStaleByPtyId = authoritativeStalePanes
+    ? new Map(authoritativeStalePanes.map((pane) => [pane.ptyId, pane]))
+    : null
+  if (authoritativeStaleByPtyId) {
+    for (const ptyId of restoredRouteNoticePtyIds) {
+      if (!authoritativeStaleByPtyId.has(ptyId)) {
+        useAppStore.getState().clearCodexRestartNotice(ptyId)
+      }
+    }
+  }
+
   useAppStore.getState().markCodexRestartNotices(
-    liveCodexSessionPtyIds.map((ptyId) => ({
-      ptyId,
-      previousAccountLabel: args.previousAccountLabel,
-      nextAccountLabel: args.nextAccountLabel,
-      ...(args.previousAccountId === undefined
-        ? {}
-        : { previousAccountId: args.previousAccountId }),
-      ...(args.nextAccountId === undefined ? {} : { nextAccountId: args.nextAccountId })
-    }))
+    liveCodexSessionPtyIds.flatMap((ptyId) => {
+      if (authoritativeStaleByPtyId && restoredRouteNoticePtyIdSet.has(ptyId)) {
+        const stalePane = authoritativeStaleByPtyId.get(ptyId)
+        if (!stalePane) {
+          return []
+        }
+        return [
+          {
+            ptyId,
+            previousAccountLabel: args.previousAccountLabel,
+            nextAccountLabel: args.nextAccountLabel,
+            previousAccountId: stalePane.launchAccountId,
+            nextAccountId: stalePane.activeAccountId,
+            homeRouteChanged: stalePane.reason === 'home-route-change'
+          }
+        ]
+      }
+      return [
+        {
+          ptyId,
+          previousAccountLabel: args.previousAccountLabel,
+          nextAccountLabel: args.nextAccountLabel,
+          ...(args.previousAccountId === undefined
+            ? {}
+            : { previousAccountId: args.previousAccountId }),
+          ...(args.nextAccountId === undefined ? {} : { nextAccountId: args.nextAccountId })
+        }
+      ]
+    })
   )
 }
 
@@ -266,7 +308,8 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
       // Why the ids: main decided staleness by id, and the labels can collide.
       // Passing only labels hands the store a question it cannot answer.
       previousAccountId: pane.launchAccountId,
-      nextAccountId: pane.activeAccountId
+      nextAccountId: pane.activeAccountId,
+      ...(pane.reason === 'home-route-change' ? { homeRouteChanged: true as const } : {})
     }))
   )
   // Why not every stale pane: the bind sweep suppresses a "notified" pane for the

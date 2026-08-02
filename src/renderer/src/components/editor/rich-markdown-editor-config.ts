@@ -204,6 +204,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     onBlur: () => {
       window.api.ui.setMarkdownEditorFocused(false)
       clearAnnotationTarget()
+      params.flushPendingSerialization()
     },
     onCreate: ({ editor: nextEditor }) => {
       // Why: normalizeEmptyListItems (not normalizeSoftBreaks) so hard-wrapped

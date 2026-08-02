@@ -191,3 +191,5 @@ export function LinearAgentSkillSetupDialog({
     </Dialog>
   )
 }
+
+export default LinearAgentSkillSetupDialog

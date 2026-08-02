@@ -123,12 +123,15 @@ export function waitForWslRelaySentinel(
         pendingChunks.push(trailing)
       }
       const transport: MultiplexerTransport = {
-        write: (data) => {
-          try {
-            child.stdin.write(data)
-          } catch {
-            // Channel already closing — mux close handling takes over.
-          }
+        write: (data, onSettled) => {
+          return child.stdin.write(data, (error?: Error | null) => {
+            onSettled?.(error ? { ok: false, error } : { ok: true })
+          })
+        },
+        supportsWriteSettlement: true,
+        onDrain: (cb) => {
+          child.stdin.on('drain', cb)
+          return () => child.stdin.off('drain', cb)
         },
         onData: (cb) => {
           dataCallbacks.push(cb)
@@ -143,6 +146,8 @@ export function waitForWslRelaySentinel(
           }
         },
         onClose: (cb) => closeCallbacks.push(cb),
+        pauseReads: () => child.stdout.pause(),
+        resumeReads: () => child.stdout.resume(),
         close: () => child.kill()
       }
       resolve(transport)

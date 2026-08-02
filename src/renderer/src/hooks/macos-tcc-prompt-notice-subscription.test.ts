@@ -8,6 +8,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+function acknowledgeDisplayedNotice(onNotice: ReturnType<typeof vi.fn>, callIndex = 0): void {
+  const acknowledge = onNotice.mock.calls[callIndex]?.[1] as (() => void) | undefined
+  acknowledge?.()
+}
+
 describe('subscribeToMacosTccPromptNotice', () => {
   it('contains synchronous and rejected dismissal failures', async () => {
     const synchronousFailure = vi.fn(() => {
@@ -35,11 +40,15 @@ describe('subscribeToMacosTccPromptNotice', () => {
 
     await Promise.resolve()
 
-    expect(onNotice).toHaveBeenCalledWith({ promptCount: 3 })
+    expect(onNotice).toHaveBeenCalledWith({ promptCount: 3 }, expect.any(Function))
+    expect(acknowledgePending).not.toHaveBeenCalled()
+    acknowledgeDisplayedNotice(onNotice)
     expect(acknowledgePending).toHaveBeenCalledWith(7)
     expect(onNotice.mock.invocationCallOrder[0]).toBeLessThan(
       acknowledgePending.mock.invocationCallOrder[0]
     )
+    acknowledgeDisplayedNotice(onNotice)
+    expect(acknowledgePending).toHaveBeenCalledOnce()
     unsubscribe()
   })
 
@@ -68,6 +77,8 @@ describe('subscribeToMacosTccPromptNotice', () => {
 
     expect(consumePending).toHaveBeenCalledTimes(2)
     expect(onNotice).toHaveBeenCalledOnce()
+    expect(acknowledgePending).not.toHaveBeenCalled()
+    acknowledgeDisplayedNotice(onNotice)
     expect(acknowledgePending).toHaveBeenCalledOnce()
     unsubscribe()
   })
@@ -94,6 +105,8 @@ describe('subscribeToMacosTccPromptNotice', () => {
     await Promise.resolve()
 
     expect(onNotice).toHaveBeenCalledOnce()
+    expect(acknowledgePending).not.toHaveBeenCalled()
+    acknowledgeDisplayedNotice(onNotice)
     expect(acknowledgePending).toHaveBeenCalledWith(9)
   })
 
@@ -106,9 +119,12 @@ describe('subscribeToMacosTccPromptNotice', () => {
       .mockResolvedValueOnce({ claimId: 11, promptCount: 3 })
     const releasePending = vi.fn().mockResolvedValue(undefined)
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const onNotice = vi.fn().mockImplementationOnce(() => {
-      throw error
-    })
+    const onNotice = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw error
+      })
+      .mockImplementationOnce((_, acknowledge: () => void) => acknowledge())
 
     subscribeToMacosTccPromptNotice(
       {
@@ -180,7 +196,7 @@ describe('subscribeToMacosTccPromptNotice', () => {
         consumePending: vi.fn().mockResolvedValue({ claimId: 11, promptCount: 3 }),
         releasePending: failedRelease
       },
-      vi.fn()
+      (_, acknowledge) => acknowledge()
     )
     await Promise.resolve()
     await Promise.resolve()
@@ -192,7 +208,7 @@ describe('subscribeToMacosTccPromptNotice', () => {
         consumePending: vi.fn().mockResolvedValue({ claimId: 12, promptCount: 3 }),
         releasePending: unavailableRelease
       },
-      vi.fn()
+      (_, acknowledge) => acknowledge()
     )
     await Promise.resolve()
     expect(unavailableRelease).toHaveBeenCalledWith(12)
@@ -222,7 +238,7 @@ describe('subscribeToMacosTccPromptNotice', () => {
     await Promise.resolve()
 
     expect(consumePending).toHaveBeenCalledTimes(2)
-    expect(onNotice).toHaveBeenCalledWith({ promptCount: 3 })
+    expect(onNotice).toHaveBeenCalledWith({ promptCount: 3 }, expect.any(Function))
   })
 
   it('releases the claim when acknowledgement throws synchronously', async () => {
@@ -237,7 +253,10 @@ describe('subscribeToMacosTccPromptNotice', () => {
         consumePending: vi.fn().mockResolvedValue({ claimId: 13, promptCount: 3 }),
         releasePending
       },
-      onNotice
+      (payload, acknowledge) => {
+        onNotice(payload)
+        acknowledge()
+      }
     )
     await new Promise((resolve) => {
       setImmediate(resolve)
@@ -262,7 +281,7 @@ describe('subscribeToMacosTccPromptNotice', () => {
 
     listenerState.listener?.({ promptCount: 3 })
 
-    expect(onNotice).toHaveBeenCalledWith({ promptCount: 3 })
+    expect(onNotice).toHaveBeenCalledWith({ promptCount: 3 }, expect.any(Function))
     unsubscribe()
   })
 })

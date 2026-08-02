@@ -86,11 +86,15 @@ describe('orchestration timeout flag validation', () => {
 
     expect(callMock).toHaveBeenCalledWith('orchestration.check', {
       terminal: 'term_worker',
+      terminalPaneKey: undefined,
       unread: false,
       peek: true,
       all: undefined,
       types: undefined,
-      inject: undefined,
+      format: undefined,
+      compatibilityCliCommand: expect.stringMatching(/^orca(?:-ide)?$/),
+      run: undefined,
+      ack: undefined,
       wait: true,
       timeoutMs: 250
     })
@@ -273,12 +277,16 @@ describe('orchestration timeout flag validation', () => {
       'orchestration.ask',
       {
         to: 'term_coord',
+        run: undefined,
         question: 'Proceed?',
+        resume: undefined,
         options: undefined,
         timeoutMs: 123,
-        from: 'term_worker'
+        from: 'term_worker',
+        compatibilityCliCommand: expect.stringMatching(/^orca(?:-ide)?$/),
+        compatibilityWindowsCommand: undefined
       },
-      { timeoutMs: 5_123 }
+      { timeoutMs: 5_123, orchestrationCapability: undefined }
     )
   })
 })

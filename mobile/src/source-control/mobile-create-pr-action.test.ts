@@ -4,7 +4,10 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider
 } from '../../../src/shared/hosted-review'
-import { buildMobileCreatePrAction } from './mobile-create-pr-action'
+import {
+  buildMobileCreatePrAction,
+  type MobileCreatePrEligibilityState
+} from './mobile-create-pr-action'
 
 function eligibility(
   overrides: Partial<HostedReviewCreationEligibility> = {}
@@ -108,26 +111,21 @@ describe('buildMobileCreatePrAction', () => {
     'unsupported_provider',
     'detached_head',
     null
-  ])('hides %s', (blockedReason) => {
+  ])('keeps a disabled status row for %s', (blockedReason) => {
     const { descriptor } = action({
       eligibility: eligibility({ canCreate: false, blockedReason })
     })
 
-    expect(descriptor.visible).toBe(false)
+    expect(descriptor).toMatchObject({ visible: true, disabled: true })
+    expect(descriptor.hint).toBeTruthy()
   })
 
-  it('hides cold loading, errors, and missing branches', () => {
-    const onCreatePr = vi.fn()
-
-    expect(
-      buildMobileCreatePrAction({
-        branch: 'feature',
-        eligibilityState: { kind: 'loading', eligibility: null },
-        busyAction: null,
-        onCreatePr
-      }).visible
-    ).toBe(false)
-    expect(action({ eligibility: null }).descriptor.visible).toBe(false)
+  it('keeps an unavailable row after errors but hides missing branches', () => {
+    expect(action({ eligibility: null }).descriptor).toMatchObject({
+      visible: true,
+      disabled: true,
+      label: 'Review status unavailable'
+    })
     expect(action({ branch: null }).descriptor.visible).toBe(false)
   })
 
@@ -146,12 +144,16 @@ describe('buildMobileCreatePrAction', () => {
     expect(onCreatePr).not.toHaveBeenCalled()
   })
 
-  it('hides any provider that does not support hosted-review creation', () => {
+  it('keeps a disabled status row for providers without review creation', () => {
     const { descriptor } = action({
       eligibility: eligibility({ provider: 'bitbucket' as HostedReviewProvider })
     })
 
-    expect(descriptor.visible).toBe(false)
+    expect(descriptor).toMatchObject({
+      visible: true,
+      disabled: true,
+      label: 'Review creation unavailable for this provider'
+    })
   })
 
   it('keeps a creatable button visible but disabled while a newer eligibility loads', () => {
@@ -165,5 +167,78 @@ describe('buildMobileCreatePrAction', () => {
     })
 
     expect(descriptor).toMatchObject({ visible: true, disabled: true, loading: false })
+  })
+})
+
+// Issue #8411: the Create PR entry renders directly above the Stage All row and
+// the changed-files list, so appearing late shifts the list down by
+// createPrBlock marginTop (12) + createPrButton height (42) = 54pt while the
+// user is already reading it. The row must keep its footprint across the cold
+// eligibility fetch.
+describe('cold-mount layout stability (issue #8411)', () => {
+  // useMobileHostedReviewEligibility's real cold-mount sequence for a creatable
+  // branch: no prior snapshot exists, so `loading` carries eligibility: null.
+  const coldMount: MobileCreatePrEligibilityState[] = [
+    { kind: 'loading', eligibility: null },
+    { kind: 'ready', eligibility: eligibility({ canCreate: true }) }
+  ]
+
+  it('reserves the button row while the first eligibility request is in flight', () => {
+    const descriptors = coldMount.map((eligibilityState) =>
+      buildMobileCreatePrAction({
+        branch: 'feature',
+        eligibilityState,
+        busyAction: null,
+        onCreatePr: vi.fn()
+      })
+    )
+
+    const footprint = descriptors.map(({ visible }) => visible)
+
+    // On the buggy parent this was [false, true] -- the false -> true step is the jump.
+    expect(footprint).toEqual([true, true])
+  })
+
+  it.each([
+    [
+      'existing review',
+      {
+        kind: 'ready',
+        eligibility: eligibility({ canCreate: false, blockedReason: 'existing_review' })
+      } satisfies MobileCreatePrEligibilityState
+    ],
+    [
+      'unsupported provider',
+      {
+        kind: 'ready',
+        eligibility: eligibility({ provider: 'bitbucket' as HostedReviewProvider })
+      } satisfies MobileCreatePrEligibilityState
+    ],
+    ['eligibility error', { kind: 'error' } satisfies MobileCreatePrEligibilityState]
+  ])('keeps the cold-load footprint when %s resolves', (_label, resolvedState) => {
+    const footprint = [coldMount[0], resolvedState].map((eligibilityState) => {
+      const descriptor = buildMobileCreatePrAction({
+        branch: 'feature',
+        eligibilityState,
+        busyAction: null,
+        onCreatePr: vi.fn()
+      })
+      return descriptor.visible
+    })
+
+    expect(footprint).toEqual([true, true])
+  })
+
+  it('does not offer a tappable action against unresolved eligibility', () => {
+    const descriptor = buildMobileCreatePrAction({
+      branch: 'feature',
+      eligibilityState: { kind: 'loading', eligibility: null },
+      busyAction: null,
+      onCreatePr: vi.fn()
+    })
+
+    // Reserving space must not make the placeholder actionable: there is no
+    // canCreate/pushFirst answer yet, so a tap has nothing correct to do.
+    expect(descriptor.disabled).toBe(true)
   })
 })

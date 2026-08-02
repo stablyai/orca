@@ -103,20 +103,40 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     await new Promise<void>((resolve) => server.listen(endpoint, resolve))
     writeMetadata(userDataPath, endpoint)
 
+    const priorLaunchToken = process.env.ORCA_AGENT_LAUNCH_TOKEN
+    process.env.ORCA_AGENT_LAUNCH_TOKEN = 'launch-secret'
     const client = new RuntimeClient(userDataPath, 500)
-    await client.call(
-      'orchestration.send',
-      { subject: 'hello' },
-      {
-        orchestrationRequestId: 'mutation_explicit'
+    try {
+      await client.call(
+        'orchestration.send',
+        { subject: 'hello' },
+        {
+          orchestrationRequestId: 'mutation_explicit'
+        }
+      )
+      await client.call('orchestration.taskList', {})
+      const secondClient = new RuntimeClient(userDataPath, 500)
+      await secondClient.call('orchestration.taskList', {})
+    } finally {
+      if (priorLaunchToken === undefined) {
+        delete process.env.ORCA_AGENT_LAUNCH_TOKEN
+      } else {
+        process.env.ORCA_AGENT_LAUNCH_TOKEN = priorLaunchToken
       }
-    )
-    await client.call('orchestration.taskList', {})
+    }
 
     expect(requests[0]?.method).toBe('status.get')
+    expect(requests[0]?.compatibilityInvocationId).toBeUndefined()
     expect(requests[1]?.orchestrationRequestId).toBe('mutation_explicit')
     expect(requests[1]?.orchestrationContractVersion).toBe(1)
+    expect(requests[1]?.compatibilityInvocationId).toBe('mutation_explicit')
+    expect(requests[1]?.orchestrationCompatibilityEvidence).toMatchObject({
+      launchToken: 'launch-secret'
+    })
     expect(requests[2]?.orchestrationRequestId).toBeUndefined()
+    expect(requests[2]?.compatibilityInvocationId).not.toBe(requests[1]?.compatibilityInvocationId)
+    expect(requests[3]?.method).toBe('orchestration.taskList')
+    expect(requests[3]?.compatibilityInvocationId).not.toBe(requests[1]?.compatibilityInvocationId)
   })
 
   it('rejects an old local runtime before sending an orchestration mutation', async () => {

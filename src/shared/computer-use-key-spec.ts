@@ -17,6 +17,8 @@ const HOTKEY_HINT =
   'Hotkey requires a modifier and one key, e.g. CmdOrCtrl+A. Use press-key for a single key.'
 const PRESS_KEY_HINT =
   'Press-key accepts one key only, e.g. Return, Escape, Tab, or +. Use hotkey for modifier combinations.'
+const CLICK_MODIFIERS_HINT =
+  'Click modifiers accept modifier keys only, e.g. CmdOrCtrl or CmdOrCtrl+Shift.'
 
 export function computerUseHotkeyValidationMessage(key: string): string | null {
   const parts = key.split('+').map((part) => part.trim())
@@ -45,6 +47,18 @@ export function computerUsePressKeyValidationMessage(key: string): string | null
   }
   if (trimmed !== '+' && trimmed.includes('+')) {
     return PRESS_KEY_HINT
+  }
+  return null
+}
+
+export function computerUseClickModifiersValidationMessage(modifiers: string): string | null {
+  const parts = modifiers.split('+').map((part) => part.trim())
+  if (
+    parts.length === 0 ||
+    parts.length > 4 ||
+    parts.some((part) => part.length === 0 || !HOTKEY_MODIFIERS.has(part.toLowerCase()))
+  ) {
+    return CLICK_MODIFIERS_HINT
   }
   return null
 }

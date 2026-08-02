@@ -56,6 +56,8 @@ import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 
 /** Telemetry threaded from the launch site to `pty:spawn`; main fires `agent_started`
  *  only after the spawn succeeds. See telemetry-plan.md§Agent launch semantics. */
@@ -70,10 +72,39 @@ export type WorktreeStartupPayload = {
   launchToken?: string
   launchAgent?: TuiAgent
   draftPrompt?: string
+  /**
+   * The unsent launch context, for the initial view-mode decision ONLY.
+   *
+   * Deliberately separate from `draftPrompt`, which drives the bracketed paste
+   * in pty-connection: an argv-prefill launch already carries the draft inside
+   * `command`, so reusing `draftPrompt` here would paste it a second time.
+   * Set this on every draft launch; set `draftPrompt` only for paste delivery.
+   */
+  launchDraftText?: string
   startupCommandDelivery?: StartupCommandDelivery
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
   sessionOptions?: Record<string, SessionOptionValue>
   telemetry?: AgentStartedTelemetry
+}
+
+/**
+ * The unsent launch context a startup payload carries, whichever way the agent
+ * receives it: argv prefill sets only `launchDraftText`, post-ready paste sets
+ * `draftPrompt`. Gating on `draftPrompt` alone silently misses every
+ * argv-prefill launch.
+ */
+export function resolveStartupLaunchDraftText(
+  startup: Pick<WorktreeStartupPayload, 'draftPrompt' | 'launchDraftText'> | undefined
+): string | undefined {
+  return startup?.draftPrompt ?? startup?.launchDraftText
+}
+
+/** Shared by both tab-creation sites so the draft gate can't drift between them. */
+function draftViewModeProps(draftText: string | undefined): {
+  promptDelivery?: 'draft'
+  launchDraftText?: string
+} {
+  return draftText == null ? {} : { promptDelivery: 'draft', launchDraftText: draftText }
 }
 
 // Why: accept either a main-generated runner script or a plain TaskPage command string, so callers needn't synthesize a runner file.
@@ -166,11 +197,17 @@ export function activateAndRevealFolderWorkspace(
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
+    executionHostId?: ExecutionHostId
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
+  const folderWorkspaceOwner = findFolderWorkspaceOwner(
+    state,
+    folderWorkspaceId,
+    opts?.executionHostId
+  )
   const folderWorkspace = state.folderWorkspaces.find(
-    (workspace) => workspace.id === folderWorkspaceId
+    (workspace) => workspace === folderWorkspaceOwner
   )
   if (!folderWorkspace) {
     return false
@@ -197,7 +234,7 @@ export function activateAndRevealFolderWorkspace(
     state.setActiveView('terminal')
   }
 
-  state.setActiveFolderWorkspace(folderWorkspaceId)
+  state.setActiveFolderWorkspace(folderWorkspaceId, opts?.executionHostId)
 
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   state.markWorktreeVisited(workspaceKey)
@@ -227,10 +264,11 @@ export function activateAndRevealWorktree(
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     notifyHostRuntime?: boolean
     revealInSidebar?: boolean
+    executionHostId?: ExecutionHostId
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
-  const wt = state.getKnownWorktreeById(worktreeId)
+  const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
   if (!wt) {
     return false
   }
@@ -242,6 +280,7 @@ export function activateAndRevealWorktree(
     !hasActivationWork &&
     state.activeRepoId === wt.repoId &&
     state.activeWorktreeId === worktreeId &&
+    state.activeWorkspaceExecutionHostId === (opts?.executionHostId ?? null) &&
     state.activeView === 'terminal'
 
   // 1. Set activeRepoId if crossing repos
@@ -255,7 +294,7 @@ export function activateAndRevealWorktree(
   }
 
   // 3. Core activation: setActiveWorktree also restores per-worktree state, clears unread, bumps dead PTY generations, refreshes GitHub
-  state.setActiveWorktree(worktreeId)
+  state.setActiveWorktree(worktreeId, opts?.executionHostId)
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
@@ -488,7 +527,9 @@ export function ensureWorktreeHasInitialTerminal(
           launchAgent,
           ...initialAgentTabViewModeProps(store.settings ?? null, {
             agent: launchAgent,
-            promptDelivery: sequencedStartup?.draftPrompt != null ? 'draft' : undefined,
+            // Why: argv-prefill launches carry the draft in `command` and set no
+            // draftPrompt, so gating on draftPrompt alone misses them entirely.
+            ...draftViewModeProps(resolveStartupLaunchDraftText(sequencedStartup)),
             nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
               getConnectionId(worktreeId)
             )
@@ -560,7 +601,9 @@ function applyDefaultTerminalTabs(
             launchAgent,
             ...initialAgentTabViewModeProps(store.settings ?? null, {
               agent: launchAgent,
-              promptDelivery: isStartupTab && startup?.draftPrompt != null ? 'draft' : undefined,
+              ...draftViewModeProps(
+                isStartupTab ? resolveStartupLaunchDraftText(startup) : undefined
+              ),
               nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
                 getConnectionId(worktreeId)
               )

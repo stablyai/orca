@@ -18,13 +18,13 @@ import {
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { extractFullFirstUserPromptText } from './session-scanner-first-user-prompt'
 import {
   arrayValue,
   asRecord,
   copilotModelMetricsTotal,
   extractContentText,
   extractMessageText,
-  extractPreviewContentText,
   extractString,
   extractTrustedFolder,
   findOpenCodeStorageRoot,
@@ -253,10 +253,12 @@ export async function consumeOpenCodeMessages(
         accumulator.title ??= extractString(asRecord(message.summary)?.title)
         accumulator.title ??= extractString(asRecord(message.summary)?.body)
       }
+      // Why: pass raw body text so full first-prompt capture is not stuck on the
+      // 220-char preview fold (addPreviewMessage preview-caps for display).
       addPreviewMessage(accumulator, {
         role,
         text:
-          extractPreviewContentText(message.content) ??
+          extractFullFirstUserPromptText(message.content) ??
           extractString(asRecord(message.summary)?.body) ??
           extractString(asRecord(message.summary)?.title),
         timestamp: timeObjectValue(message.time, 'created')

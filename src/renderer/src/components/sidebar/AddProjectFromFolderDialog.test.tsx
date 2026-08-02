@@ -152,12 +152,14 @@ describe('AddProjectFromFolderDialog', () => {
 
     expect(mocks.state.addRepoPath).toHaveBeenCalledWith('/projects/child')
     expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'local'
     })
     expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
       repoId: repo.id,
       source: 'local_folder_picker',
       selectedPath: '/projects/child',
+      executionHostId: 'local',
       closeModal: mocks.state.closeModal,
       setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
     })
@@ -200,14 +202,16 @@ describe('AddProjectFromFolderDialog', () => {
       connectionId: 'ssh-target-1',
       remotePath: '/srv/projects/child'
     })
-    expect(mocks.state.repos).toEqual([repo])
+    expect(mocks.state.repos).toEqual([{ ...repo, executionHostId: 'ssh:ssh-target-1' }])
     expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'ssh:ssh-target-1'
     })
     expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
       repoId: repo.id,
       source: 'ssh_remote_path',
       selectedPath: '/srv/projects/child',
+      executionHostId: 'ssh:ssh-target-1',
       closeModal: mocks.state.closeModal,
       setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
     })
@@ -226,12 +230,14 @@ describe('AddProjectFromFolderDialog', () => {
     await clickAddProject()
 
     expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'local'
     })
     expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
       repoId: repo.id,
       source: 'local_folder_picker',
       selectedPath: '/projects/child',
+      executionHostId: 'local',
       closeModal: mocks.state.closeModal,
       setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
     })
@@ -252,7 +258,8 @@ describe('AddProjectFromFolderDialog', () => {
     const addPromise = getButton('Add Project').onClick?.()
     await Promise.resolve()
     expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'local'
     })
     getButton('Cancel').onClick?.()
     resolveRefresh(true)

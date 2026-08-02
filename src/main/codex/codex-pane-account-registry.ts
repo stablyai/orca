@@ -1,6 +1,10 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { getOrcaUserDataPath } from './codex-home-paths'
+import type {
+  CodexEnvironmentHomeOverride,
+  CodexShellStartupHomeOverride
+} from './codex-real-home-path'
 
 /**
  * Remembers which Codex account each live PTY was launched under.
@@ -12,15 +16,28 @@ import { getOrcaUserDataPath } from './codex-home-paths'
  * the old account and the user is stuck there with no prompt to escape it.
  */
 
+export type CodexPaneHomeRoute =
+  | 'real-home'
+  | 'shared-home'
+  | 'account-home'
+  | 'custom-home'
+  | 'wsl-home'
+
 export type CodexPaneAccountRecord = {
   /** 'host' or 'wsl:<distro>' — the selection lane this pane launched from. */
   selectionKey: string
   /** Managed account id, or null for the system-default account. */
   accountId: string | null
+  /** Absent only on records written before route provenance was introduced. */
+  homeRoute?: CodexPaneHomeRoute
+  /** Rechecked when CODEX_HOME came from process-global shell startup. */
+  shellStartupHomeOverride?: CodexShellStartupHomeOverride
+  /** Rechecked after restart when CODEX_HOME came from the process environment. */
+  environmentHomeOverride?: CodexEnvironmentHomeOverride
 }
 
 type RegistryFile = {
-  version: 1
+  version: 2
   panes: Record<string, CodexPaneAccountRecord>
 }
 
@@ -51,7 +68,7 @@ function readRegistryFile(): unknown {
 }
 
 function parseRegistry(parsed: unknown): RegistryFile {
-  const empty: RegistryFile = { version: 1, panes: {} }
+  const empty: RegistryFile = { version: 2, panes: {} }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return empty
   }
@@ -61,10 +78,42 @@ function parseRegistry(parsed: unknown): RegistryFile {
   }
   for (const [ptyId, record] of Object.entries(panes)) {
     if (isPaneAccountRecord(record)) {
-      empty.panes[ptyId] = { selectionKey: record.selectionKey, accountId: record.accountId }
+      empty.panes[ptyId] = {
+        selectionKey: record.selectionKey,
+        accountId: record.accountId,
+        ...(isPaneHomeRoute(record.homeRoute) ? { homeRoute: record.homeRoute } : {}),
+        ...(isShellStartupHomeOverride(record.shellStartupHomeOverride)
+          ? { shellStartupHomeOverride: record.shellStartupHomeOverride }
+          : {}),
+        ...(isEnvironmentHomeOverride(record.environmentHomeOverride)
+          ? { environmentHomeOverride: record.environmentHomeOverride }
+          : {})
+      }
     }
   }
   return empty
+}
+
+function isEnvironmentHomeOverride(value: unknown): value is CodexEnvironmentHomeOverride {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const context = value as Partial<CodexEnvironmentHomeOverride>
+  return typeof context.codexHome === 'string' && context.codexHome.length > 0
+}
+
+function isShellStartupHomeOverride(value: unknown): value is CodexShellStartupHomeOverride {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const context = value as Partial<CodexShellStartupHomeOverride>
+  return (
+    typeof context.home === 'string' &&
+    context.home.length > 0 &&
+    (context.shell === undefined || typeof context.shell === 'string') &&
+    typeof context.codexHome === 'string' &&
+    context.codexHome.length > 0
+  )
 }
 
 function isPaneAccountRecord(value: unknown): value is CodexPaneAccountRecord {
@@ -75,6 +124,16 @@ function isPaneAccountRecord(value: unknown): value is CodexPaneAccountRecord {
   return (
     typeof record.selectionKey === 'string' &&
     (record.accountId === null || typeof record.accountId === 'string')
+  )
+}
+
+function isPaneHomeRoute(value: unknown): value is CodexPaneHomeRoute {
+  return (
+    value === 'real-home' ||
+    value === 'shared-home' ||
+    value === 'account-home' ||
+    value === 'custom-home' ||
+    value === 'wsl-home'
   )
 }
 
@@ -112,7 +171,16 @@ export function recordCodexPaneAccount(ptyId: string, record: CodexPaneAccountRe
     return
   }
   const existing = registry.panes[ptyId]
-  if (existing?.selectionKey === record.selectionKey && existing.accountId === record.accountId) {
+  if (
+    existing?.selectionKey === record.selectionKey &&
+    existing.accountId === record.accountId &&
+    existing.homeRoute === record.homeRoute &&
+    shellStartupHomeOverridesEqual(
+      existing.shellStartupHomeOverride,
+      record.shellStartupHomeOverride
+    ) &&
+    environmentHomeOverridesEqual(existing.environmentHomeOverride, record.environmentHomeOverride)
+  ) {
     return
   }
   registry.panes[ptyId] = record
@@ -123,6 +191,24 @@ export function recordCodexPaneAccount(ptyId: string, record: CodexPaneAccountRe
     }
   }
   writeRegistry(registry)
+}
+
+function environmentHomeOverridesEqual(
+  left: CodexEnvironmentHomeOverride | undefined,
+  right: CodexEnvironmentHomeOverride | undefined
+): boolean {
+  return left?.codexHome === right?.codexHome
+}
+
+function shellStartupHomeOverridesEqual(
+  left: CodexShellStartupHomeOverride | undefined,
+  right: CodexShellStartupHomeOverride | undefined
+): boolean {
+  return (
+    left?.home === right?.home &&
+    left?.shell === right?.shell &&
+    left?.codexHome === right?.codexHome
+  )
 }
 
 /**
@@ -157,6 +243,33 @@ export function listRecordedCodexPaneLanes(ptyIds: readonly string[]): Record<st
     }
   }
   return lanesByPtyId
+}
+
+/** True when a retained host pane may still read the retired shared CODEX_HOME. */
+export function hasRecordedLegacySharedCodexPane(): boolean {
+  return Object.values(readRegistry().panes).some(
+    (record) =>
+      record.selectionKey === 'host' &&
+      (record.homeRoute === undefined ||
+        record.homeRoute === 'shared-home' ||
+        record.homeRoute === 'custom-home')
+  )
+}
+
+/** Drops records whose daemon PTYs are authoritatively absent. */
+export function reconcileCodexPaneAccountsWithLivePtys(livePtyIds: readonly string[]): void {
+  const registry = readRegistry()
+  const livePtyIdSet = new Set(livePtyIds)
+  let changed = false
+  for (const ptyId of Object.keys(registry.panes)) {
+    if (!livePtyIdSet.has(ptyId)) {
+      delete registry.panes[ptyId]
+      changed = true
+    }
+  }
+  if (changed) {
+    writeRegistry(registry)
+  }
 }
 
 export const _internals = {

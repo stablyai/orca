@@ -16,6 +16,8 @@ import type { Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 import { translate } from '@/i18n/i18n'
+import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
+import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 
 const NON_GIT_REPO_ERROR = 'Not a valid git repository'
 
@@ -74,16 +76,12 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         if ('error' in result) {
           throw new Error(result.error)
         }
-        repo = result.repo
-        const state = useAppStore.getState()
-        const existingIdx = state.repos.findIndex((r) => r.id === repo?.id)
-        if (existingIdx !== -1) {
-          state.clearOrcaHookTrustForRepo(repo.id)
-          const updated = [...state.repos]
-          updated[existingIdx] = repo
-          useAppStore.setState({ repos: updated })
-        } else {
-          useAppStore.setState({ repos: [...state.repos, repo] })
+        const upserted = upsertAddedRepoWithProjectHostSetup(result.repo, {
+          sshConnectionId: connectionId
+        })
+        repo = upserted.repo
+        if (upserted.alreadyPresent) {
+          useAppStore.getState().clearOrcaHookTrustForRepo(repo.id)
         }
         if (!mountedRef.current || gen !== addGenRef.current) {
           return
@@ -111,7 +109,8 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
       }
       // Why: after the repo is already added, a non-authoritative refresh
       // should still close onto the project row instead of trapping the user.
-      await fetchWorktrees(repo.id, { requireAuthoritative: true })
+      const ownerOptions = worktreeRefreshOptions(null, connectionId)
+      await fetchWorktrees(repo.id, ownerOptions)
       if (!mountedRef.current || gen !== addGenRef.current) {
         return
       }
@@ -119,6 +118,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         repoId: repo.id,
         source: connectionId ? 'ssh_remote_path' : 'local_folder_picker',
         selectedPath: folderPath,
+        executionHostId: ownerOptions.executionHostId,
         closeModal,
         setHideDefaultBranchWorkspace
       })

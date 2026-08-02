@@ -15,6 +15,7 @@ import {
   MAXIMUM_REPOSITORY_SKILL_ROOTS
 } from './skill-freshness-inventory'
 import { describeObservedSkillFile, skillPackageDigest } from './skill-package-identity'
+import { MAXIMUM_PLUGIN_SCAN_ENTRIES } from './skill-plugin-cache-scan'
 import { getSkillFreshnessDisplayStatus } from '../../renderer/src/lib/skill-freshness-display-status'
 
 const temporaryDirectories: string[] = []
@@ -245,6 +246,32 @@ describe('read-only skill freshness inventory', () => {
     // The user-visible verdict, across both halves of the fix: the row must read
     // up to date, not amber "may be modified… remove it" over the CLI's own install.
     expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('reads up to date after the OS drops a sidecar into an untouched install', async () => {
+    const test = await fixture()
+    const directory = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      test.currentMarkdown
+    )
+    // What one Finder visit leaves behind. Sorts before SKILL.md, which is what made the
+    // index-aligned snapshot comparison miss and report the copy as modified.
+    await writeFile(join(directory, '.DS_Store'), Buffer.from([0, 1, 2, 3]))
+    // No lock trust available here: the recorded hash is a different tree, so this proves
+    // the identity fix alone carries it rather than falling through to newer-known.
+    await writeSkillLockHash(test.homeDir, 'a'.repeat(40))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations.map((entry) => entry.status)).toEqual(['current'])
+    // The whole point: no amber, and nothing offered to "fix" a copy that is already right.
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+    expect(inventory.eligibleUpdateNames).toEqual([])
   })
 
   it('still flags canonical bytes that do not match what the lock says was installed', async () => {
@@ -704,6 +731,44 @@ describe('read-only skill freshness inventory', () => {
         reason: 'depth-limit',
         errorCode: null
       })
+    ])
+  })
+
+  it('invents no installations when the plugin cache trips the entry budget (#10918)', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const pluginCache = join(test.homeDir, '.codex', 'plugins', 'cache')
+    await mkdir(pluginCache, { recursive: true })
+    // Why: the production bound, not an injected one — #10918 is the real constant
+    // collapsing the scan to the cache root, and only a real cache proves that path.
+    const entries = Array.from({ length: MAXIMUM_PLUGIN_SCAN_ENTRIES + 1 }, (_, index) =>
+      join(pluginCache, `entry-${index}`)
+    )
+    for (let index = 0; index < entries.length; index += 512) {
+      await Promise.all(entries.slice(index, index + 512).map((path) => writeFile(path, '')))
+    }
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    // Why: assert the bound actually tripped first — if the fixture stopped reaching it,
+    // the placement assertion below would still pass and cover nothing.
+    expect(inventory.scanIssues).toEqual([
+      expect.objectContaining({
+        rootId: 'codex-plugin-cache',
+        path: pluginCache,
+        reason: 'entry-limit',
+        errorCode: null
+      })
+    ])
+    // Why: the truncated root is not evidence of a copy. Fabricating one per manifest name
+    // is what pinned an unclearable "Needs attention" on every card in #10918.
+    expect(inventory.installations).toEqual([
+      expect.objectContaining({ name: 'orca-cli', status: 'current', topology: 'canonical-copy' })
     ])
   })
 })

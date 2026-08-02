@@ -8,10 +8,11 @@ import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mous
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
 import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
+import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 
 type UrlLinkHitTestDeps = {
   worktreeId: string
-  forceSystemBrowser?: boolean
+  modifierHeld?: boolean
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
 }
 
@@ -210,6 +211,9 @@ export function installHttpLinkClickFallback(
   deps: UrlLinkClickFallbackDeps
 ): IDisposable {
   const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(terminal, (event) => {
+    if (isTerminalLinkifierHoverActive(terminal)) {
+      return true
+    }
     const position = getTerminalBufferPositionForMouseEvent(terminal, event)
     return Boolean(
       position && findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
@@ -225,7 +229,7 @@ export function installHttpLinkClickFallback(
     // never established, while defaultPrevented avoids duplicate opens.
     const opened = openHttpLinkAtTerminalMouseEvent(terminal, event, {
       worktreeId: deps.worktreeId,
-      forceSystemBrowser: event.shiftKey,
+      modifierHeld: event.shiftKey,
       requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
     })
     if (opened) {
@@ -303,8 +307,10 @@ function rangeContainsBufferPosition(
 }
 
 export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): void {
-  if (deps.forceSystemBrowser) {
-    openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true })
+  if (deps.modifierHeld) {
+    // Why: the modifier states a destination outright, so it also skips the
+    // one-time routing prompt; openHttpLink resolves which destination it means.
+    openHttpLink(url, { worktreeId: deps.worktreeId, modifierHeld: true })
     return
   }
 

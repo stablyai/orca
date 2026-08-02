@@ -26,6 +26,8 @@ type StoreState = {
   settings: {
     mobileAutoRestoreFitMs: number | null
     mobilePairingConnectionMode?: MobilePairingConnectionMode
+    mobilePairingCustomAddress?: string | null
+    mobilePairingCustomAddresses?: string[]
   }
   updateSettings: (patch: Record<string, unknown>) => Promise<void>
   recordFeatureInteraction: (feature: string) => void
@@ -71,12 +73,25 @@ vi.mock('./MobilePairingSetupSection', () => ({
     canGenerate?: boolean
     loading: boolean
     connectionPathControl: React.ReactNode
+    networkInterfaces: { name: string; address: string }[]
+    customAddresses: readonly string[]
+    selectedAddress: string | undefined
+    selectedAddressIsCustom: boolean
+    onSelectedAddressChange: (address: string) => void
+    onCustomAddressSelect: (address: string) => void
+    onCustomAddressRemove: (address: string) => void
+    refreshingNetworkInterfaces: boolean
+    onRefreshNetworkInterfaces: () => void
     onGenerateQr: () => void
   }) => (
     <div>
       <span data-testid="mode">{props.connectionMode}</span>
       <span data-testid="can-generate">{String(props.canGenerate)}</span>
       <span data-testid="loading">{String(props.loading)}</span>
+      <span data-testid="selected-address">{props.selectedAddress ?? 'none'}</span>
+      <span data-testid="selected-address-is-custom">{String(props.selectedAddressIsCustom)}</span>
+      <span data-testid="custom-addresses">{props.customAddresses.join(',')}</span>
+      <span data-testid="refreshing-addresses">{String(props.refreshingNetworkInterfaces)}</span>
       {props.connectionPathControl}
       {/* Mirror the real Generate gate (loading/canGenerate) so a stuck
           loading flag surfaces as a disabled control the tests can catch. */}
@@ -86,6 +101,22 @@ vi.mock('./MobilePairingSetupSection', () => ({
         disabled={props.loading || props.canGenerate === false}
       >
         Generate
+      </button>
+      <button type="button" onClick={() => props.onCustomAddressSelect('100.126.117.25:6768')}>
+        choose-custom-address
+      </button>
+      <button type="button" onClick={() => props.onCustomAddressRemove('100.126.117.25:6768')}>
+        remove-custom-address
+      </button>
+      <button
+        type="button"
+        disabled={props.networkInterfaces.length === 0}
+        onClick={() => props.onSelectedAddressChange(props.networkInterfaces[0]!.address)}
+      >
+        choose-discovered-address
+      </button>
+      <button type="button" onClick={props.onRefreshNetworkInterfaces}>
+        refresh-addresses
       </button>
     </div>
   )
@@ -105,8 +136,16 @@ vi.mock('./MobilePairingConnectionOptions', () => ({
   )
 }))
 vi.mock('./MobilePairingQrSection', () => ({
-  MobilePairingQrSection: (props: { qrDataUrl: string | null }) => (
-    <span data-testid="qr">{props.qrDataUrl ?? 'none'}</span>
+  MobilePairingQrSection: (props: {
+    qrDataUrl: string | null
+    pairingUrl: string | null
+    qrError: boolean
+  }) => (
+    <div>
+      <span data-testid="qr">{props.qrDataUrl ?? 'none'}</span>
+      <span data-testid="pairing-url">{props.pairingUrl ?? 'none'}</span>
+      <span data-testid="qr-error">{String(props.qrError)}</span>
+    </div>
   )
 }))
 vi.mock('./MobilePairedDevicesSection', () => ({
@@ -153,7 +192,8 @@ describe('MobilePane pairing connection mode', () => {
           listDevices: mocks.listDevices,
           listNetworkInterfaces: mocks.listNetworkInterfaces,
           revokeDevice: mocks.revokeDevice
-        }
+        },
+        ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) }
       }
     })
   })
@@ -189,39 +229,68 @@ describe('MobilePane pairing connection mode', () => {
     expect(getPairingQR).not.toHaveBeenCalled()
   })
 
-  it('flags an Anywhere mint that degraded to a local-only code', async () => {
+  it('surfaces Relay mint failure without a QR and offers Use LAN', async () => {
     getPairingQR.mockResolvedValue({
-      available: true,
-      qrDataUrl: 'data:image/png;base64,qr',
-      pairingUrl: 'orca://pair#degraded',
-      endpoint: 'ws://host',
-      // Relay provisioning failed server-side; the offer encodes local-only.
-      connectionMode: 'local-only'
+      available: false,
+      reason: 'relay_mint_failed',
+      guidance: 'Use LAN or retry',
+      relayFailure: {
+        code: 'relay offline',
+        stage: 'create_pairing_relay',
+        message: 'relay offline'
+      }
     })
     const user = userEvent.setup()
     render(<MobilePane />)
 
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() =>
-      expect(screen.getByTestId('relay-degraded-notice')).toHaveTextContent(
-        'only works on your LAN or Tailscale'
+      expect(screen.getByTestId('relay-mint-failure-notice')).toHaveTextContent(
+        'Couldn’t create a Relay pairing code'
       )
     )
+    expect(screen.getByTestId('qr')).toHaveTextContent('none')
 
-    // Switching to LAN clears the mismatch along with the QR.
-    await user.click(screen.getByRole('button', { name: 'choose-local' }))
+    getPairingQR.mockResolvedValue({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,local',
+      pairingUrl: 'orca://pair#local',
+      endpoint: 'ws://host',
+      connectionMode: 'local-only'
+    })
+    await user.click(screen.getByRole('button', { name: 'Use LAN' }))
+    await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('local-only'))
     await waitFor(() =>
-      expect(screen.queryByTestId('relay-degraded-notice')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('relay-mint-failure-notice')).not.toBeInTheDocument()
     )
   })
 
-  it('does not flag an honest Relay mint', async () => {
+  it('does not show mint failure after an honest Relay mint', async () => {
     const user = userEvent.setup()
     render(<MobilePane />)
 
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,qr'))
-    expect(screen.queryByTestId('relay-degraded-notice')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('relay-mint-failure-notice')).not.toBeInTheDocument()
+  })
+
+  it('keeps the copy fallback when QR encoding fails', async () => {
+    getPairingQR.mockResolvedValue({
+      available: true,
+      qrDataUrl: null,
+      qrError: 'encoding_failed',
+      pairingUrl: 'orca://pair?code=copy-fallback',
+      endpoint: 'wss://host.example/large',
+      connectionMode: 'automatic'
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+
+    await waitFor(() => expect(screen.getByTestId('qr-error')).toHaveTextContent('true'))
+    expect(screen.getByTestId('qr')).toHaveTextContent('none')
+    expect(screen.getByTestId('pairing-url')).toHaveTextContent('copy-fallback')
   })
 
   it('persists the chosen path when the mode changes', async () => {
@@ -229,6 +298,103 @@ describe('MobilePane pairing connection mode', () => {
     render(<MobilePane />)
     await user.click(screen.getByRole('button', { name: 'choose-local' }))
     expect(updateSettings).toHaveBeenCalledWith({ mobilePairingConnectionMode: 'local-only' })
+    expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+    expect(getPairingQR).not.toHaveBeenCalled()
+  })
+
+  it('disables Relay recovery while a retry is in flight', async () => {
+    getPairingQR.mockResolvedValueOnce({
+      available: false,
+      reason: 'relay_mint_failed',
+      relayFailure: {
+        code: 'relay_mint_failed',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await screen.findByTestId('relay-mint-failure-notice')
+
+    let resolveRetry: ((value: Record<string, unknown>) => void) | undefined
+    getPairingQR.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRetry = resolve
+        })
+    )
+    await user.click(screen.getByRole('button', { name: 'Retry Relay' }))
+    expect(screen.getByRole('button', { name: 'Retry Relay' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Use LAN' })).toBeEnabled()
+    await user.dblClick(screen.getByRole('button', { name: 'Retry Relay' }))
+    expect(getPairingQR).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(screen.getByRole('button', { name: /Retrying/ })).toBeDisabled())
+
+    resolveRetry?.({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,relay',
+      pairingUrl: 'orca://relay',
+      endpoint: 'ws://relay',
+      connectionMode: 'automatic'
+    })
+    await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,relay'))
+    expect(screen.getByRole('status')).toHaveTextContent('Pairing code ready')
+  })
+
+  it('lets LAN recover immediately while a Relay retry is unresolved', async () => {
+    mocks.listNetworkInterfaces.mockResolvedValue({
+      interfaces: [{ name: 'Ethernet', address: '10.0.0.2' }]
+    })
+    getPairingQR.mockResolvedValueOnce({
+      available: false,
+      reason: 'relay_mint_failed',
+      relayFailure: {
+        code: 'relay_mint_failed',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await waitFor(() => expect(mocks.listNetworkInterfaces).toHaveBeenCalledOnce())
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await screen.findByTestId('relay-mint-failure-notice')
+
+    let resolveRetry: ((value: Record<string, unknown>) => void) | undefined
+    getPairingQR.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRetry = resolve
+        })
+    )
+    getPairingQR.mockResolvedValueOnce({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,local',
+      pairingUrl: 'orca://local',
+      endpoint: 'ws://10.0.0.2',
+      connectionMode: 'local-only'
+    })
+    await user.click(screen.getByRole('button', { name: 'Retry Relay' }))
+    await user.click(screen.getByRole('button', { name: 'Use LAN' }))
+
+    await waitFor(() =>
+      expect(getPairingQR).toHaveBeenLastCalledWith({
+        address: '10.0.0.2',
+        connectionMode: 'local-only'
+      })
+    )
+    await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,local'))
+    act(() => {
+      resolveRetry?.({
+        available: true,
+        qrDataUrl: 'data:image/png;base64,stale-relay',
+        pairingUrl: 'orca://stale-relay',
+        endpoint: 'ws://relay',
+        connectionMode: 'automatic'
+      })
+    })
+    await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,local'))
     expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
   })
 
@@ -239,6 +405,195 @@ describe('MobilePane pairing connection mode', () => {
     }
     render(<MobilePane />)
     expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+  })
+
+  it('restores a saved custom address for future pairing codes', async () => {
+    mocks.holder.state.settings = {
+      mobileAutoRestoreFitMs: null,
+      mobilePairingCustomAddress: '100.126.117.25:6768'
+    }
+    mocks.listNetworkInterfaces.mockResolvedValue({
+      interfaces: [{ name: 'Ethernet', address: '10.0.0.2' }]
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+
+    await waitFor(() =>
+      expect(screen.getByTestId('selected-address')).toHaveTextContent('100.126.117.25:6768')
+    )
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await waitFor(() =>
+      expect(getPairingQR).toHaveBeenCalledWith({
+        address: '100.126.117.25:6768',
+        connectionMode: 'automatic'
+      })
+    )
+  })
+
+  it('persists a custom address and clears it when a discovered address is selected', async () => {
+    mocks.listNetworkInterfaces.mockResolvedValue({
+      interfaces: [{ name: 'Ethernet', address: '10.0.0.2' }]
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await waitFor(() => expect(mocks.listNetworkInterfaces).toHaveBeenCalledOnce())
+
+    await user.click(screen.getByRole('button', { name: 'choose-custom-address' }))
+    expect(updateSettings).toHaveBeenCalledWith({
+      mobilePairingCustomAddress: '100.126.117.25:6768',
+      mobilePairingCustomAddresses: ['100.126.117.25:6768']
+    })
+    expect(screen.getByTestId('selected-address')).toHaveTextContent('100.126.117.25:6768')
+    expect(screen.getByTestId('selected-address-is-custom')).toHaveTextContent('true')
+    expect(screen.getByTestId('custom-addresses')).toHaveTextContent('100.126.117.25:6768')
+
+    await user.click(screen.getByRole('button', { name: 'choose-discovered-address' }))
+    expect(updateSettings).toHaveBeenCalledWith({ mobilePairingCustomAddress: null })
+    expect(screen.getByTestId('selected-address')).toHaveTextContent('10.0.0.2')
+    expect(screen.getByTestId('custom-addresses')).toHaveTextContent('100.126.117.25:6768')
+  })
+
+  it('keeps the current pairing code when the active custom address is reselected', async () => {
+    const customAddress = '100.126.117.25:6768'
+    mocks.holder.state.settings = {
+      mobileAutoRestoreFitMs: null,
+      mobilePairingCustomAddress: customAddress,
+      mobilePairingCustomAddresses: [customAddress]
+    }
+    const user = userEvent.setup()
+    render(<MobilePane />)
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,qr'))
+    getPairingQR.mockClear()
+    updateSettings.mockClear()
+
+    await user.click(screen.getByRole('button', { name: 'choose-custom-address' }))
+
+    expect(updateSettings).not.toHaveBeenCalled()
+    expect(getPairingQR).not.toHaveBeenCalled()
+    expect(screen.getByTestId('qr')).toHaveTextContent('base64,qr')
+  })
+
+  it('keeps the current pairing code when only custom address intent changes', async () => {
+    const address = '100.126.117.25:6768'
+    mocks.holder.state.settings = {
+      mobileAutoRestoreFitMs: null,
+      mobilePairingCustomAddress: address,
+      mobilePairingCustomAddresses: [address]
+    }
+    mocks.listNetworkInterfaces.mockResolvedValue({
+      interfaces: [{ name: 'Tailscale', address }]
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await waitFor(() => expect(mocks.listNetworkInterfaces).toHaveBeenCalledOnce())
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,qr'))
+    getPairingQR.mockClear()
+    updateSettings.mockClear()
+
+    await user.click(screen.getByRole('button', { name: 'choose-discovered-address' }))
+
+    expect(updateSettings).toHaveBeenCalledWith({ mobilePairingCustomAddress: null })
+    expect(getPairingQR).not.toHaveBeenCalled()
+    expect(screen.getByTestId('qr')).toHaveTextContent('base64,qr')
+    expect(screen.getByTestId('selected-address-is-custom')).toHaveTextContent('false')
+
+    updateSettings.mockClear()
+    await user.click(screen.getByRole('button', { name: 'choose-custom-address' }))
+    expect(updateSettings).toHaveBeenCalledWith({
+      mobilePairingCustomAddress: address,
+      mobilePairingCustomAddresses: [address]
+    })
+    updateSettings.mockClear()
+    await user.click(screen.getByRole('button', { name: 'remove-custom-address' }))
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      mobilePairingCustomAddress: null,
+      mobilePairingCustomAddresses: []
+    })
+    expect(getPairingQR).not.toHaveBeenCalled()
+    expect(screen.getByTestId('qr')).toHaveTextContent('base64,qr')
+    expect(screen.getByTestId('selected-address-is-custom')).toHaveTextContent('false')
+  })
+
+  it('removes the selected custom address and falls back to discovery', async () => {
+    const customAddress = '100.126.117.25:6768'
+    mocks.holder.state.settings = {
+      mobileAutoRestoreFitMs: null,
+      mobilePairingCustomAddress: customAddress,
+      mobilePairingCustomAddresses: [customAddress, 'second.example:6768']
+    }
+    mocks.listNetworkInterfaces.mockResolvedValue({
+      interfaces: [{ name: 'Ethernet', address: '10.0.0.2' }]
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await waitFor(() =>
+      expect(screen.getByTestId('selected-address')).toHaveTextContent(customAddress)
+    )
+
+    await user.click(screen.getByRole('button', { name: 'remove-custom-address' }))
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      mobilePairingCustomAddress: null,
+      mobilePairingCustomAddresses: ['second.example:6768']
+    })
+    expect(screen.getByTestId('selected-address')).toHaveTextContent('10.0.0.2')
+    expect(screen.getByTestId('selected-address-is-custom')).toHaveTextContent('false')
+  })
+
+  it('removes an inactive custom address without changing the selection', async () => {
+    mocks.holder.state.settings = {
+      mobileAutoRestoreFitMs: null,
+      mobilePairingCustomAddress: 'second.example:6768',
+      mobilePairingCustomAddresses: ['100.126.117.25:6768', 'second.example:6768']
+    }
+    const user = userEvent.setup()
+    render(<MobilePane />)
+
+    await user.click(screen.getByRole('button', { name: 'remove-custom-address' }))
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      mobilePairingCustomAddresses: ['second.example:6768']
+    })
+    expect(screen.getByTestId('selected-address')).toHaveTextContent('second.example:6768')
+    expect(screen.getByTestId('selected-address-is-custom')).toHaveTextContent('true')
+  })
+
+  it('keeps a saved custom override when discovery later stops listing it', async () => {
+    const customAddress = '100.126.117.25:6768'
+    mocks.holder.state.settings = {
+      mobileAutoRestoreFitMs: null,
+      mobilePairingCustomAddress: customAddress
+    }
+    mocks.listNetworkInterfaces.mockResolvedValueOnce({
+      interfaces: [{ name: 'Tailscale', address: customAddress }]
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await waitFor(() =>
+      expect(screen.getByTestId('selected-address')).toHaveTextContent(customAddress)
+    )
+
+    let resolveRefresh: ((value: Record<string, unknown>) => void) | undefined
+    mocks.listNetworkInterfaces.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve
+        })
+    )
+    await user.click(screen.getByRole('button', { name: 'refresh-addresses' }))
+    expect(screen.getByTestId('refreshing-addresses')).toHaveTextContent('true')
+
+    resolveRefresh?.({ interfaces: [{ name: 'Ethernet', address: '10.0.0.2' }] })
+    await waitFor(() =>
+      expect(screen.getByTestId('refreshing-addresses')).toHaveTextContent('false')
+    )
+
+    expect(screen.getByTestId('selected-address')).toHaveTextContent(customAddress)
+    expect(updateSettings).not.toHaveBeenCalled()
   })
 
   it('discards a Relay QR that resolves after signing out mid-generate', async () => {
@@ -339,7 +694,7 @@ describe('MobilePane pairing connection mode', () => {
     expect(screen.getByTestId('qr')).toHaveTextContent('none')
   })
 
-  it('discards a QR that resolves after switching path mid-generate', async () => {
+  it('discards a Relay QR that resolves after switching path mid-generate', async () => {
     const user = userEvent.setup()
     let resolveQr: ((value: Record<string, unknown>) => void) | undefined
     getPairingQR.mockImplementationOnce(
@@ -352,18 +707,27 @@ describe('MobilePane pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
 
-    // Switch to LAN before the Relay mint resolves.
+    // Switch to LAN before the Relay mint resolves — LAN may auto-mint a new code.
+    getPairingQR.mockResolvedValue({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,local',
+      pairingUrl: 'orca://pair#local',
+      endpoint: 'ws://host',
+      connectionMode: 'local-only'
+    })
     await user.click(screen.getByRole('button', { name: 'choose-local' }))
 
     resolveQr?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
       pairingUrl: 'orca://relay',
-      endpoint: 'ws://relay'
+      endpoint: 'ws://relay',
+      connectionMode: 'automatic'
     })
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(screen.getByTestId('qr')).toHaveTextContent('none')
-    expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+    await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('local-only'))
+    await waitFor(() =>
+      expect(screen.getByTestId('pairing-url')).not.toHaveTextContent('orca://relay')
+    )
   })
 })
 

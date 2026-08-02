@@ -13,6 +13,7 @@ import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
+import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
@@ -21,6 +22,8 @@ import type {
 } from '../shared/agent-session-resume'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
 import type {
   SshMutationExpectation,
   SshConnectionState,
@@ -54,6 +57,7 @@ import type {
   BrowserViewportOverride,
   CustomPet,
   FsChangedPayload,
+  FilesystemPathFlavor,
   GetRateLimitResult,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
@@ -207,6 +211,7 @@ import type {
   PreloadApi
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import type { AppStarSource } from '../shared/gh-star-source'
 import type { ExecutionHostId } from '../shared/execution-host'
 import type {
@@ -225,16 +230,18 @@ import type {
   AutomationUpdateInput
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
-import type { AiVaultListArgs, AiVaultSubagentListArgs } from '../shared/ai-vault-types'
+import type {
+  AiVaultFirstUserPromptArgs,
+  AiVaultListArgs,
+  AiVaultSubagentListArgs
+} from '../shared/ai-vault-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../shared/ai-vault-resume-preparation'
 import type { AgentType } from '../shared/native-chat-types'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_APP_RESTART_STARTED_EVENT,
-  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
-  ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
+  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
 } from '../shared/updater-renderer-events'
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../shared/renderer-shutdown-events'
 import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
@@ -273,7 +280,11 @@ import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
 import {
   createUpdaterQuitAbortRelay,
   prepareRendererForAppRestart
-} from './renderer-restart-preparation'
+} from '../shared/renderer-restart-preparation'
+import {
+  prepareAndInvokeUpdaterInstall,
+  registerRendererRestartIpcRelays
+} from './renderer-restart-wiring'
 
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
@@ -284,12 +295,7 @@ const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
 )
 
-ipcRenderer.on('updater:status', (_event, status: UpdateStatus) => {
-  updaterQuitAbortRelay.handleStatus(status)
-})
-ipcRenderer.on('window:unload-prevented', () => {
-  window.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))
-})
+registerRendererRestartIpcRelays(ipcRenderer, window, updaterQuitAbortRelay)
 
 function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
   if (process.platform !== 'linux') {
@@ -453,6 +459,11 @@ document.addEventListener(
 )
 
 const startupDiagnosticsEnabled = process.env.ORCA_STARTUP_DIAGNOSTICS === '1'
+const browserFindSubscriptions = createBrowserFindSubscriptions()
+
+ipcRenderer.on('ui:findInBrowserPage', (_event, source: unknown) => {
+  browserFindSubscriptions.dispatch(source)
+})
 
 // Custom APIs for renderer
 const api = {
@@ -474,18 +485,18 @@ const api = {
       }
     },
     reload: (): Promise<void> => ipcRenderer.invoke('app:reload'),
-    persistBeforeUnloadSync: (
-      args: Parameters<PreloadApi['app']['persistBeforeUnloadSync']>[0]
-    ) => {
-      const result = ipcRenderer.sendSync('app:persist-before-unload-sync', args) as {
+    stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
+      const result = ipcRenderer.sendSync('app:stage-before-unload-sync', args) as {
         ok?: unknown
       }
       if (result?.ok !== true) {
-        throw new Error('Failed to persist renderer state before unload.')
+        throw new Error('Failed to stage renderer state before unload.')
       }
     },
     awaitFirstWindowStartupServices: (): Promise<void> =>
       ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
+    recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
+      ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
     startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
       startupDiagnosticsEnabled
         ? ipcRenderer.invoke('app:startupDiagnostic', event, details)
@@ -1019,8 +1030,8 @@ const api = {
     listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
     getAuthoritativeBufferSnapshotCapabilities: (
       ids: string[]
-    ): { id: string; authoritative: boolean | null }[] =>
-      ipcRenderer.sendSync('pty:getAuthoritativeBufferSnapshotCapabilitiesSync', { ids }),
+    ): Promise<{ id: string; authoritative: boolean | null }[]> =>
+      ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
     hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
 
     getMainBufferSnapshot: (
@@ -1204,8 +1215,7 @@ const api = {
       ipcRenderer.send('pty:serializeBuffer:response', { requestId, snapshot })
     },
 
-    // Why: renderer declares serializer ownership for `paneKey` BEFORE pty:spawn so main suppresses the daemon-snapshot seed.
-    // The returned gen token must be echoed on settle/clear so paneKey reuse during teardown can't defeat the pre-signal. See docs/mobile-prefer-renderer-scrollback.md.
+    // Claim serializer ownership before spawn; echo the generation token on settle/clear to prevent pane-key reuse races.
     declarePendingPaneSerializer: (paneKey: string): Promise<number> =>
       ipcRenderer.invoke('pty:declarePendingPaneSerializer', { paneKey }),
 
@@ -1232,8 +1242,10 @@ const api = {
       submitAnonymously?: boolean
       githubLogin: string | null
       githubEmail: string | null
-    }): Promise<{ ok: true } | { ok: false; status: number | null; error: string }> =>
-      ipcRenderer.invoke('feedback:submit', args)
+      images?: { contentType: string; data: Uint8Array }[]
+    }): Promise<
+      { ok: true; imagesDelivered?: boolean } | { ok: false; status: number | null; error: string }
+    > => ipcRenderer.invoke('feedback:submit', args)
   },
 
   crashReports: {
@@ -1811,13 +1823,21 @@ const api = {
 
     status: (): Promise<unknown> => ipcRenderer.invoke('jira:status'),
 
+    readStatus: (): Promise<unknown> => ipcRenderer.invoke('jira:readStatus'),
+
     testConnection: (args?: {
       siteId?: string
     }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
       ipcRenderer.invoke('jira:testConnection', args),
 
-    searchIssues: (args: { jql: string; limit?: number; siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:searchIssues', args),
+    searchIssues: (args: {
+      jql: string
+      limit?: number
+      siteId?: string
+      requestId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('jira:searchIssues', args),
+    cancelSearchIssues: (args: { requestId: string }): Promise<void> =>
+      ipcRenderer.invoke('jira:cancelSearchIssues', args),
 
     listIssues: (args?: {
       filter?: 'assigned' | 'reported' | 'all' | 'done'
@@ -1827,6 +1847,14 @@ const api = {
 
     getIssue: (args: { key: string; siteId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('jira:getIssue', args),
+
+    lookupIssueSummary: (args: {
+      key: string
+      siteId: string
+      requestId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('jira:lookupIssueSummary', args),
+    cancelIssueSummary: (args: { requestId: string }): Promise<void> =>
+      ipcRenderer.invoke('jira:cancelIssueSummary', args),
 
     createIssue: (args: {
       siteId?: string
@@ -1915,7 +1943,7 @@ const api = {
     onboardingCompleted: (): Promise<void> => ipcRenderer.invoke('star-nag:onboardingCompleted')
   },
 
-  // Why: deliberately loose — main's validator (src/main/telemetry/validator.ts) is the single enforcement point; call sites use the typed wrappers in src/renderer/src/lib/telemetry.ts.
+  // Why: main validates telemetry; renderer call sites use typed wrappers.
   telemetryTrack: (name: string, props: Record<string, unknown>): Promise<void> =>
     ipcRenderer.invoke('telemetry:track', name, props),
   telemetrySetOptIn: (optedIn: boolean): Promise<void> =>
@@ -2016,7 +2044,12 @@ const api = {
     listStalePanes: (args: {
       ptyIds: string[]
     }): Promise<
-      { ptyId: string; launchAccountId: string | null; activeAccountId: string | null }[]
+      {
+        ptyId: string
+        launchAccountId: string | null
+        activeAccountId: string | null
+        reason?: 'account-change' | 'home-route-change'
+      }[]
     > => ipcRenderer.invoke('codexAccounts:listStalePanes', args),
     listRecordedPaneLanes: (args: { ptyIds: string[] }): Promise<Record<string, string>> =>
       ipcRenderer.invoke('codexAccounts:listRecordedPaneLanes', args),
@@ -2826,8 +2859,10 @@ const api = {
       mayNeedUpdate: boolean
     }> => ipcRenderer.invoke('hooks:check', args),
 
-    inspectSetupScriptImports: (args: { repoId: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
+    inspectSetupScriptImports: (args: {
+      repoId: string
+      hostId?: ExecutionHostId
+    }): Promise<unknown[]> => ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
 
     createIssueCommandRunner: (args: {
       repoId: string
@@ -2920,19 +2955,11 @@ const api = {
     download: () => ipcRenderer.invoke('updater:download'),
     dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
     dismissAvailableUpdate: () => ipcRenderer.invoke('updater:dismissAvailableUpdate'),
-    quitAndInstall: async (): Promise<void> => {
-      await prepareRendererForAppRestart(window, {
-        startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-        abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
-      })
-      updaterQuitAbortRelay.markPrepared()
-      try {
-        return await ipcRenderer.invoke('updater:quitAndInstall')
-      } catch (error) {
-        updaterQuitAbortRelay.abort()
-        throw error
-      }
-    },
+    listBuilds: (channel) => ipcRenderer.invoke('updater:listBuilds', channel),
+    quitAndInstall: (): Promise<void> =>
+      prepareAndInvokeUpdaterInstall(window, updaterQuitAbortRelay, () =>
+        ipcRenderer.invoke('updater:quitAndInstall')
+      ),
     onStatus: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status)
       ipcRenderer.on('updater:status', listener)
@@ -3553,11 +3580,7 @@ const api = {
       ipcRenderer.on('ui:focusBrowserAddressBar', listener)
       return () => ipcRenderer.removeListener('ui:focusBrowserAddressBar', listener)
     },
-    onFindInBrowserPage: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent) => callback()
-      ipcRenderer.on('ui:findInBrowserPage', listener)
-      return () => ipcRenderer.removeListener('ui:findInBrowserPage', listener)
-    },
+    onFindInBrowserPage: browserFindSubscriptions.subscribe,
     onReloadBrowserPage: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:reloadBrowserPage', listener)
@@ -3695,7 +3718,9 @@ const api = {
         title?: string
         ptyId?: string
         activate?: boolean
+        focus?: boolean
         presentation?: RuntimeTerminalPresentation
+        surfaceOwner?: false
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -3719,7 +3744,9 @@ const api = {
           title?: string
           ptyId?: string
           activate?: boolean
+          focus?: boolean
           presentation?: RuntimeTerminalPresentation
+          surfaceOwner?: false
           tabId?: string
           leafId?: string
           splitFromLeafId?: string
@@ -3750,12 +3777,7 @@ const api = {
       ipcRenderer.on('terminal:requestTabMount', listener)
       return () => ipcRenderer.removeListener('terminal:requestTabMount', listener)
     },
-    replyTerminalCreate: (reply: {
-      requestId: string
-      tabId?: string
-      title?: string
-      error?: string
-    }): void => {
+    replyTerminalCreate: (reply: TerminalTabCreateReply): void => {
       ipcRenderer.send('terminal:tabCreateReply', reply)
     },
     onSplitTerminal: (
@@ -3946,6 +3968,8 @@ const api = {
     }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
     writeClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeText', text),
+    writeTerminalClipboardText: (text: string): Promise<void> =>
+      ipcRenderer.invoke('clipboard:writeTerminalText', text),
     writeSelectionClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeSelectionText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>
@@ -4129,6 +4153,8 @@ const api = {
       ipcRenderer.invoke('aiVault:prepareSessionResume', args),
     listSubagentSessions: (args: AiVaultSubagentListArgs): Promise<unknown> =>
       ipcRenderer.invoke('aiVault:listSubagentSessions', args),
+    getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs): Promise<unknown> =>
+      ipcRenderer.invoke('aiVault:getFirstUserPrompt', args),
     onWindowFocused: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('aiVault:windowFocused', listener)
@@ -4227,6 +4253,16 @@ const api = {
       ipcRenderer.on('runtime:terminalDriverChanged', listener)
       return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
     },
+    onNativeChatLaunchDraftResolved: (
+      callback: (event: { tabId: string; text: string; createdAt: number }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { tabId: string; text: string; createdAt: number }
+      ) => callback(data)
+      ipcRenderer.on('runtime:nativeChatLaunchDraftResolved', listener)
+      return () => ipcRenderer.removeListener('runtime:nativeChatLaunchDraftResolved', listener)
+    },
     onBrowserDriverChanged: (
       callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ): (() => void) => {
@@ -4250,6 +4286,12 @@ const api = {
       pairingCode: string
     }): Promise<{ environment: PublicKnownRuntimeEnvironment }> =>
       ipcRenderer.invoke('runtimeEnvironments:addFromPairingCode', args),
+    verifyAndAddFromPairingCode: (args: {
+      name: string
+      pairingCode: string
+      allowLoopback?: boolean
+    }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
+      ipcRenderer.invoke('runtimeEnvironments:verifyAndAddFromPairingCode', args),
     resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
       ipcRenderer.invoke('runtimeEnvironments:resolve', args),
     remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>
@@ -4258,6 +4300,11 @@ const api = {
       selector: string
     }): Promise<{ disconnected: PublicKnownRuntimeEnvironment }> =>
       ipcRenderer.invoke('runtimeEnvironments:disconnect', args),
+    connect: (args: {
+      selector: string
+      timeoutMs?: number
+    }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
+      ipcRenderer.invoke('runtimeEnvironments:connect', args),
     getStatus: (args: {
       selector: string
       timeoutMs?: number
@@ -4451,6 +4498,7 @@ const api = {
     }): Promise<{
       entries: { name: string; isDirectory: boolean }[]
       resolvedPath: string
+      pathFlavor: FilesystemPathFlavor
     }> => ipcRenderer.invoke('ssh:browseDir', args),
 
     onCredentialRequest: (
@@ -4538,10 +4586,16 @@ const api = {
       connectionMode?: MobilePairingConnectionMode
       rotate?: boolean
     }): Promise<
-      | { available: false }
+      | {
+          available: false
+          reason?: string
+          guidance?: string
+          relayFailure?: MobileRelayMintFailure
+        }
       | {
           available: true
-          qrDataUrl: string
+          qrDataUrl: string | null
+          qrError?: 'encoding_failed'
           pairingUrl: string
           endpoint: string
           deviceId: string
@@ -4640,6 +4694,24 @@ const api = {
         callback(data)
       ipcRenderer.on('agentStatus:migrationUnsupportedClear', listener)
       return () => ipcRenderer.removeListener('agentStatus:migrationUnsupportedClear', listener)
+    },
+    onLegacyWorkerTerminalRecovery: (
+      callback: (data: {
+        paneKey: string
+        resolution: 'adopted' | 'exited' | 'rolled_back'
+        ptyId?: string
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          paneKey: string
+          resolution: 'adopted' | 'exited' | 'rolled_back'
+          ptyId?: string
+        }
+      ) => callback(data)
+      ipcRenderer.on('agentStatus:legacyWorkerTerminalRecovery', listener)
+      return () => ipcRenderer.removeListener('agentStatus:legacyWorkerTerminalRecovery', listener)
     },
     getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>
       ipcRenderer.invoke('agentStatus:getMigrationUnsupportedSnapshot'),

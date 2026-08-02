@@ -95,9 +95,11 @@ import {
   type PinnedWorktreeDisplayPolicy
 } from './worktree-list-groups'
 import {
+  buildLineageRowRekeyMap,
   estimateRenderRowSize,
   extractWorktreeVirtualRowIndexes,
   getActiveStickyIndexesForScroll,
+  getRenderRowKey,
   getStickyHeaderIndexes,
   getVirtualRowTransform,
   pruneStaleVirtualRowElementCache,
@@ -170,6 +172,7 @@ import {
   getWorkspaceKanbanSidebarDropTarget,
   hasWorkspaceKanbanSidebarDropBoard,
   isWorkspaceKanbanSidebarDropPointInBoard,
+  resolveWorkspaceKanbanSidebarFullLaneDropIndex,
   updateWorkspaceKanbanSidebarDropTargetVisual
 } from './workspace-kanban-sidebar-drop'
 import {
@@ -1209,30 +1212,9 @@ function buildRenderableRows(rows: HostSectionRow[]): RenderRow[] {
   return renderRows
 }
 
-export function getRenderRowKey(row: RenderRow): string {
-  if (row.type === 'host-header') {
-    return `host:${row.hostId}`
-  }
-  if (row.type === 'header') {
-    return `hdr:${row.key}`
-  }
-  if (row.type === 'lineage-group') {
-    return `lineage-group:${row.key}`
-  }
-  if (row.type === 'imported-worktrees-card') {
-    return `imported:${row.key}`
-  }
-  if (row.type === 'new-external-worktrees-inbox') {
-    return `inbox:${row.key}`
-  }
-  if (row.type === 'pending-creation') {
-    return `pending:${row.creationId}`
-  }
-  if (row.type === 'folder-workspace') {
-    return `folder-workspace:${row.folderWorkspace.id}`
-  }
-  return `wt:${row.rowKey}`
-}
+// Why: getRenderRowKey lives with the other virtual-row helpers now; keep the
+// long-standing import path working for callers that reach for it here.
+export { getRenderRowKey }
 
 export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup[] {
   const groups: WorktreeDragGroup[] = []
@@ -2431,6 +2413,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [renderRows]
   )
   const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
+  const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
@@ -2488,6 +2471,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     getItemElementKey: getVirtualRowKey,
     getRowKey: getRenderRowKey,
     itemElementSelector: '[data-worktree-virtual-row]',
+    rekeyedRowKeys: lineageRowRekeys,
     rows: renderRows,
     scrollElementRef: scrollRef,
     scrollOffsetRef,
@@ -3220,7 +3204,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         onDropWorktreesOnWorkspaceBoard({
           worktreeIds: drag.reorderDraggedIds,
           status: boardDropTarget.status,
-          dropIndex: boardDropTarget.dropIndex,
+          // Why: the target counts rendered cards, but the groups are the full
+          // lane. Board search can make those two differ.
+          dropIndex: resolveWorkspaceKanbanSidebarFullLaneDropIndex(
+            boardDropTarget.status,
+            boardDropTarget.dropIndex
+          ),
           groups: getWorkspaceKanbanSidebarDropGroups()
         })
       } else {
@@ -4254,6 +4243,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ? repoHeaderSectionEndByRepoId.get(projectIdForHeader)
                         : undefined
                     }
+                    // Why: row keeps handle attrs so indent/padding still arms drag; grab
+                    // cursor lives only on the title surface so … / + never inherit it.
                     data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
                     data-project-group-header-id={projectGroupIdForHeader}
                     data-project-group-header-index={projectGroupHeaderIndex}
@@ -4270,10 +4261,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     data-workspace-status={headerWorkspaceStatus ?? undefined}
                     data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
                     className={cn(
+                      // Why: no row-level grab — only the title surface below shows the hand;
+                      // actions use cursor-pointer so … / + never look reorderable.
                       'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
-                      isDraggableRepoHeader || isDraggableProjectGroupHeader
-                        ? 'cursor-grab active:cursor-grabbing'
-                        : 'cursor-pointer',
+                      !(isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'cursor-pointer',
                       highlightedRevealRowKey === row.key &&
                         'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
                       (isDraggingThis || isDraggingThisProjectGroup) &&
@@ -4330,39 +4321,48 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       }
                     }}
                   >
-                    {row.icon ? (
-                      <div
-                        data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
-                        data-project-group-header-drag-handle={
-                          isDraggableProjectGroupHeader ? '' : undefined
-                        }
-                        className={cn(
-                          'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                          repoHeaderColor ? 'text-muted-foreground' : row.tone,
-                          (isDraggableRepoHeader || isDraggableProjectGroupHeader) &&
-                            'hover:cursor-grab active:cursor-grabbing'
-                        )}
-                      >
-                        {row.repo ? (
-                          <RepoIconGlyph
-                            repoIcon={row.repo.repoIcon}
-                            color={repoHeaderColor}
-                            className="size-4"
-                            iconClassName="size-3.5"
-                          />
-                        ) : (
-                          <row.icon className="size-3" />
-                        )}
-                      </div>
-                    ) : null}
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
-                          {row.label}
+                    {/* Why: grab cursor on icon+title only. Row still has handle attrs so
+                        indent/padding can arm drag; actions are excluded via data-repo-header-actions.
+                        self-stretch fills h-7 so grab matches the full title column height. */}
+                    <div
+                      data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
+                      data-project-group-header-drag-handle={
+                        isDraggableProjectGroupHeader ? '' : undefined
+                      }
+                      className={cn(
+                        'flex min-w-0 flex-1 items-center gap-1.5 self-stretch',
+                        (isDraggableRepoHeader || isDraggableProjectGroupHeader) &&
+                          'cursor-grab active:cursor-grabbing'
+                      )}
+                    >
+                      {row.icon ? (
+                        <div
+                          className={cn(
+                            'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
+                            repoHeaderColor ? 'text-muted-foreground' : row.tone
+                          )}
+                        >
+                          {row.repo ? (
+                            <RepoIconGlyph
+                              repoIcon={row.repo.repoIcon}
+                              color={repoHeaderColor}
+                              className="size-4"
+                              iconClassName="size-3.5"
+                            />
+                          ) : (
+                            <row.icon className="size-3" />
+                          )}
                         </div>
-                        <RepoForkIndicator upstream={row.repo?.upstream} />
-                        <FolderPathStatusIndicator status={projectGroupPathStatus} />
+                      ) : null}
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
+                            {row.label}
+                          </div>
+                          <RepoForkIndicator upstream={row.repo?.upstream} />
+                          <FolderPathStatusIndicator status={projectGroupPathStatus} />
+                        </div>
                       </div>
                     </div>
 
@@ -4705,6 +4705,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                   )
                                 }
                                 onKeyDown={stopRepoHeaderKeyboardToggle}
+                                onPointerDown={handleRepoHeaderActionPointerDown}
                                 onClick={(event) => {
                                   event.preventDefault()
                                   event.stopPropagation()

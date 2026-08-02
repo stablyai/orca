@@ -33,7 +33,7 @@ export async function replaceRuntimePairingInPlace(args: {
     if (!(await store.getState().refreshRuntimeEnvironmentStatus(selector))) {
       throw new Error('Same-ID re-paired desktop could not reach the HUB runtime')
     }
-    if (!(await store.getState().switchRuntimeEnvironment(selector))) {
+    if (!(await store.getState().setActiveRuntimeEnvironmentPreference(selector))) {
       throw new Error('Same-ID re-paired desktop could not select the HUB runtime')
     }
     // Why: same-ID selection is a no-op, so explicitly rehydrate the graph from the replacement transport.

@@ -9,17 +9,44 @@ import {
   TERMINAL_WORKTREE_PARK_DELAY_MS,
   canParkTerminalTabRenderer,
   canParkTerminalWorktreeRenderers,
-  getTerminalTabColdParkRecheckDelayMs,
-  getTerminalWorktreeColdParkRecheckDelayMs,
+  isParkRestorableTerminalPty,
   isSnapshotBackedTerminalPty,
+  selectPairedRuntimeParkingEnvironmentIds,
   selectColdParkedTerminalTabs,
   selectColdParkedTerminalWorktrees
 } from './terminal-hidden-view-parking'
+
+describe('selectPairedRuntimeParkingEnvironmentIds', () => {
+  it('selects only reachable hosts advertising the paired parking contract', () => {
+    const statuses = new Map([
+      [
+        'capable',
+        { status: { capabilities: ['terminal.paired-parking.v1'] }, checkedAt: Date.now() }
+      ],
+      ['legacy', { status: { capabilities: ['terminal.multiplex.v1'] }, checkedAt: Date.now() }],
+      ['offline', { status: null, checkedAt: Date.now() }]
+    ])
+
+    expect(selectPairedRuntimeParkingEnvironmentIds(statuses)).toEqual(new Set(['capable']))
+  })
+})
 
 describe('isSnapshotBackedTerminalPty', () => {
   it('allows local daemon sessions owned by the worktree', () => {
     expect(isSnapshotBackedTerminalPty('repo::/worktree@@session-1', 'repo::/worktree')).toBe(true)
     expect(isSnapshotBackedTerminalPty('wt-1@@session-1', 'wt-1')).toBe(true)
+  })
+
+  // Why: folder workspaces mint worktree-shaped ids; parking must treat them identically (project rule).
+  it('allows folder-workspace sessions owned by the workspace', () => {
+    const folderWorkspaceId =
+      'repo-1::/Users/dev/proj::workspace:6f9619ff-8b86-4d01-b42d-00cf4fc964ff'
+    expect(isSnapshotBackedTerminalPty(`${folderWorkspaceId}@@session-1`, folderWorkspaceId)).toBe(
+      true
+    )
+    expect(isSnapshotBackedTerminalPty(`${folderWorkspaceId}@@session-1`, 'repo-1::/other')).toBe(
+      false
+    )
   })
 
   // Why: separator-less ids ('1', '2', 'pty-local-detached') come from the
@@ -46,6 +73,47 @@ describe('isSnapshotBackedTerminalPty', () => {
   })
 })
 
+describe('isParkRestorableTerminalPty', () => {
+  const worktreeId = 'repo::/worktree'
+  const sshPolicy = { sshParkingEnabled: true }
+
+  it('accepts every snapshot-backed pty regardless of policy', () => {
+    expect(isParkRestorableTerminalPty(`${worktreeId}@@session-1`, worktreeId)).toBe(true)
+    expect(isParkRestorableTerminalPty(`${worktreeId}@@session-1`, worktreeId, sshPolicy)).toBe(
+      true
+    )
+  })
+
+  it('accepts SSH ptys only when the SSH-parking policy is enabled', () => {
+    expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, sshPolicy)).toBe(true)
+    expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId)).toBe(false)
+    expect(
+      isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, { sshParkingEnabled: false })
+    ).toBe(false)
+  })
+
+  it('accepts paired ptys only for the exact snapshot-capable owner', () => {
+    const pairedPolicy = {
+      ...sshPolicy,
+      pairedRuntimeParkingEnvironmentIds: new Set(['env-1'])
+    }
+
+    expect(isParkRestorableTerminalPty('remote:env-1@@terminal-1', worktreeId, pairedPolicy)).toBe(
+      true
+    )
+    expect(isParkRestorableTerminalPty('remote:env-2@@terminal-1', worktreeId, pairedPolicy)).toBe(
+      false
+    )
+    expect(isParkRestorableTerminalPty('remote:terminal-1', worktreeId, pairedPolicy)).toBe(false)
+  })
+
+  it('rejects paired, fail-open, foreign, and null ptys without capability evidence', () => {
+    for (const ptyId of ['remote:env-1@@terminal-1', 'pty-local-detached', 'other@@s-1', null]) {
+      expect(isParkRestorableTerminalPty(ptyId, worktreeId, sshPolicy)).toBe(false)
+    }
+  })
+})
+
 describe('canParkTerminalWorktreeRenderers', () => {
   const hiddenSinceMs = 1_000
   const nowMs = hiddenSinceMs + TERMINAL_WORKTREE_PARK_DELAY_MS
@@ -65,10 +133,28 @@ describe('canParkTerminalWorktreeRenderers', () => {
     expect(canParkTerminalWorktreeRenderers(base)).toBe(true)
   })
 
-  it('keeps a previously mounted v19 terminal eligible for ordinary parking', () => {
+  it('parks a hidden SSH worktree only under the SSH restore policy', () => {
+    const sshArgs = {
+      ...base,
+      terminalTabs: [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-1' }]
+    }
+    expect(canParkTerminalWorktreeRenderers(sshArgs)).toBe(false)
+    expect(
+      canParkTerminalWorktreeRenderers({ ...sshArgs, restorePolicy: { sshParkingEnabled: true } })
+    ).toBe(true)
+    expect(
+      canParkTerminalWorktreeRenderers({
+        ...sshArgs,
+        terminalTabs: [...sshArgs.terminalTabs, { id: 'tab-2', ptyId: 'remote:env-1@@t-1' }],
+        restorePolicy: { sshParkingEnabled: true }
+      })
+    ).toBe(false)
+  })
+
+  it('keeps a previously mounted v19 terminal eligible for ordinary parking', async () => {
     const legacyPtyId = 'repo::/worktree@@session-1'
     clearTerminalProviderSnapshotCapabilities()
-    synchronizeTerminalProviderSnapshotCapabilities([legacyPtyId], (ids) =>
+    await synchronizeTerminalProviderSnapshotCapabilities([legacyPtyId], async (ids) =>
       ids.map((id) => ({ id, authoritative: false }))
     )
 
@@ -112,6 +198,17 @@ describe('canParkTerminalWorktreeRenderers', () => {
     ).toBe(true)
   })
 
+  // Why: hiddenSince survives a background-measure window, so a past-deadline
+  // worktree would otherwise re-park the instant the measure lease ends —
+  // remount/reattach thrash on every ~3s periodic probe.
+  it('holds an otherwise past-deadline candidate out of park until the measure cool-down ends', () => {
+    expect(canParkTerminalWorktreeRenderers({ ...base, parkCooldownUntilMs: nowMs + 1 })).toBe(
+      false
+    )
+    expect(canParkTerminalWorktreeRenderers({ ...base, parkCooldownUntilMs: nowMs })).toBe(true)
+    expect(canParkTerminalWorktreeRenderers({ ...base, parkCooldownUntilMs: null })).toBe(true)
+  })
+
   it('keeps the renderer mounted when any terminal lacks snapshot-backed restore', () => {
     expect(
       canParkTerminalWorktreeRenderers({
@@ -148,6 +245,22 @@ describe('canParkTerminalWorktreeRenderers', () => {
       })
     ).toBe(false)
   })
+
+  it('ignores mirrored activation residue after a capable paired PTY exists', () => {
+    expect(
+      canParkTerminalWorktreeRenderers({
+        ...base,
+        terminalTabs: [
+          {
+            id: 'tab-1',
+            ptyId: 'remote:env-1@@terminal-1',
+            pendingActivationSpawn: true
+          }
+        ],
+        restorePolicy: { pairedRuntimeParkingEnvironmentIds: new Set(['env-1']) }
+      })
+    ).toBe(true)
+  })
 })
 
 describe('canParkTerminalTabRenderer', () => {
@@ -171,6 +284,20 @@ describe('canParkTerminalTabRenderer', () => {
     expect(canParkTerminalTabRenderer({ ...base, parkingEnabled: false })).toBe(false)
   })
 
+  it('ignores mirrored activation residue after a capable paired PTY exists', () => {
+    expect(
+      canParkTerminalTabRenderer({
+        ...base,
+        terminalTab: {
+          ...base.terminalTab,
+          ptyId: 'remote:env-1@@terminal-1',
+          pendingActivationSpawn: true
+        },
+        restorePolicy: { pairedRuntimeParkingEnvironmentIds: new Set(['env-1']) }
+      })
+    ).toBe(true)
+  })
+
   it('honors a per-call cold-park delay override', () => {
     expect(
       canParkTerminalTabRenderer({ ...base, coldParkDelayMs: 100, nowMs: hiddenSinceMs + 99 })
@@ -178,6 +305,11 @@ describe('canParkTerminalTabRenderer', () => {
     expect(
       canParkTerminalTabRenderer({ ...base, coldParkDelayMs: 100, nowMs: hiddenSinceMs + 100 })
     ).toBe(true)
+  })
+
+  it('holds an otherwise past-deadline tab out of park until the measure cool-down ends', () => {
+    expect(canParkTerminalTabRenderer({ ...base, parkCooldownUntilMs: base.nowMs + 1 })).toBe(false)
+    expect(canParkTerminalTabRenderer({ ...base, parkCooldownUntilMs: base.nowMs })).toBe(true)
   })
 })
 
@@ -399,6 +531,29 @@ describe('selectColdParkedTerminalTabs', () => {
     expect(selected).toEqual(new Set(['tab-3']))
   })
 
+  // Why worktree-scoped: measure windows mount every tab of the worktree, so
+  // one cool-down (not per-tab clocks) delays re-park after the lease ends.
+  it('selects nothing while the post-measure cool-down is active', () => {
+    const args = {
+      worktreeId: 'wt-1',
+      terminalTabs: [
+        localTab('tab-1', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
+        localTab('tab-2', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 1),
+        localTab('tab-3', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 2)
+      ],
+      pendingStartupByTabId: {},
+      parkingEnabled: true,
+      nowMs,
+      hotRetainLimit: 2
+    }
+    expect(selectColdParkedTerminalTabs({ ...args, parkCooldownUntilMs: nowMs + 1 })).toEqual(
+      new Set()
+    )
+    expect(selectColdParkedTerminalTabs({ ...args, parkCooldownUntilMs: nowMs })).toEqual(
+      new Set(['tab-3'])
+    )
+  })
+
   it('cold-parks aged inactive local tabs even when under the retain limit', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
@@ -493,111 +648,5 @@ describe('selectColdParkedTerminalTabs', () => {
     })
 
     expect(selected).toEqual(new Set())
-  })
-})
-
-describe('getTerminalWorktreeColdParkRecheckDelayMs', () => {
-  it('returns the next cold-park policy deadline', () => {
-    expect(
-      getTerminalWorktreeColdParkRecheckDelayMs({
-        parkingEnabled: true,
-        hiddenSinceMs: null,
-        nowMs: 1_000,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000
-      })
-    ).toBeNull()
-    expect(
-      getTerminalWorktreeColdParkRecheckDelayMs({
-        parkingEnabled: true,
-        hiddenSinceMs: 1_000,
-        nowMs: 1_050,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000
-      })
-    ).toBe(50)
-    expect(
-      getTerminalWorktreeColdParkRecheckDelayMs({
-        parkingEnabled: true,
-        hiddenSinceMs: 1_000,
-        nowMs: 1_100,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000
-      })
-    ).toBe(900)
-    expect(
-      getTerminalWorktreeColdParkRecheckDelayMs({
-        parkingEnabled: true,
-        hiddenSinceMs: 1_000,
-        nowMs: 2_000,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000
-      })
-    ).toBeNull()
-  })
-
-  it('schedules no recheck when the settings kill switch disables parking', () => {
-    expect(
-      getTerminalWorktreeColdParkRecheckDelayMs({
-        parkingEnabled: false,
-        hiddenSinceMs: 1_000,
-        nowMs: 1_050,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000
-      })
-    ).toBeNull()
-  })
-})
-
-describe('getTerminalTabColdParkRecheckDelayMs', () => {
-  it('returns the next terminal-tab cold-park policy deadline', () => {
-    expect(
-      getTerminalTabColdParkRecheckDelayMs({
-        parkingEnabled: true,
-        hiddenSinceMs: null,
-        nowMs: 1_000,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000
-      })
-    ).toBeNull()
-    expect(
-      getTerminalTabColdParkRecheckDelayMs({
-        parkingEnabled: true,
-        hiddenSinceMs: 1_000,
-        nowMs: 1_050,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000
-      })
-    ).toBe(50)
-    expect(
-      getTerminalTabColdParkRecheckDelayMs({
-        parkingEnabled: true,
-        hiddenSinceMs: 1_000,
-        nowMs: 1_100,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000
-      })
-    ).toBe(900)
-    expect(
-      getTerminalTabColdParkRecheckDelayMs({
-        parkingEnabled: true,
-        hiddenSinceMs: 1_000,
-        nowMs: 2_000,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000
-      })
-    ).toBeNull()
-  })
-
-  it('schedules no recheck when the settings kill switch disables parking', () => {
-    expect(
-      getTerminalTabColdParkRecheckDelayMs({
-        parkingEnabled: false,
-        hiddenSinceMs: 1_000,
-        nowMs: 1_050,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000
-      })
-    ).toBeNull()
   })
 })

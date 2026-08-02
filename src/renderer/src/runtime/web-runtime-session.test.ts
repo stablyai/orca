@@ -9,6 +9,7 @@ import {
   consumePendingWebRuntimeSplitMirrorTelemetry,
   createWebRuntimeSessionBrowserTab,
   createWebRuntimeAgentSessionTerminal,
+  createWebRuntimeAgentSessionTerminalWithLaunchDraft,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive,
   moveWebRuntimeSessionTab,
@@ -32,6 +33,7 @@ import {
   recordWebAgentSessionHandoff,
   resetWebAgentSessionHandoffsForTests
 } from './web-agent-session-handoff'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -45,6 +47,7 @@ const mocks = vi.hoisted(() => ({
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
+  seedNativeChatLaunchDraftForAgentTab: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn()
 }))
 
@@ -72,10 +75,12 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
-  deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab
+  deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
 
 const ENVIRONMENT_ID = 'web-env-1'
+const RUNTIME_EXECUTION_HOST_ID = toRuntimeExecutionHostId(ENVIRONMENT_ID)
 const WORKTREE_ID = 'repo::/worktree'
 const FOCUS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -389,7 +394,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
     await vi.waitFor(() => expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
 
-    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(WORKTREE_ID)
+    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(WORKTREE_ID, RUNTIME_EXECUTION_HOST_ID)
     expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before-stage', activeWorktreeId: 'other-worktree' },
       snapshot,
@@ -486,7 +491,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     ).resolves.toBe(true)
 
     expect(mocks.focusBrowserTabInWorktree).not.toHaveBeenCalled()
-    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(WORKTREE_ID)
+    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(WORKTREE_ID, RUNTIME_EXECUTION_HOST_ID)
     await vi.waitFor(() => expect(mocks.setState).toHaveBeenCalledTimes(1))
   })
 
@@ -558,6 +563,33 @@ describe('createWebRuntimeSessionTerminal', () => {
     clearRuntimeCompatibilityCacheForTests()
     resetWebSessionFocusIntentForTests()
     vi.clearAllMocks()
+  })
+
+  it('keeps same-ID local and runtime worktrees on the selected runtime owner', async () => {
+    const selectedHosts: (string | undefined)[] = []
+    mocks.setActiveWorktree.mockImplementation((_worktreeId: string, executionHostId?: string) => {
+      selectedHosts.push(executionHostId)
+    })
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { tab: { id: 'host-tab-1', leafId: 'host-leaf-1' } }
+      })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    await expect(
+      createWebRuntimeSessionTerminal({
+        worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID
+      })
+    ).resolves.toEqual({ status: 'created' })
+
+    expect(selectedHosts).toEqual([RUNTIME_EXECUTION_HOST_ID])
   })
 
   it.each([
@@ -1248,6 +1280,62 @@ describe('createWebRuntimeSessionTerminal', () => {
       agent: 'claude',
       submit: true,
       forcePaste: true
+    })
+  })
+
+  it('seeds the chat composer for a draft that rode in on the launch command', async () => {
+    const runtimeCall = vi.fn(async (request: { method: string; params?: unknown }) => {
+      if (request.method === 'status.get') {
+        return {
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeId: 'runtime-1',
+            graphStatus: 'ready',
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: ['agent-session.host-authority.v1']
+          }
+        }
+      }
+      if (request.method === 'terminal.createAgentSession') {
+        return {
+          id: 'create',
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'term_created',
+              worktreeId: WORKTREE_ID,
+              tabId: 'host-tab-2',
+              paneKey: `host-tab-2:${FOCUS_LEAF_ID}`
+            },
+            disposition: 'created'
+          }
+        }
+      }
+      return { id: 'list', ok: true, result: makeSnapshot() }
+    })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    await expect(
+      createWebRuntimeAgentSessionTerminalWithLaunchDraft({
+        worktreeId: WORKTREE_ID,
+        agentSessionKind: 'fresh',
+        agent: 'claude',
+        command: "claude --prefill 'https://github.com/o/r/issues/12'",
+        launchDraft: 'https://github.com/o/r/issues/12'
+      })
+    ).resolves.toEqual({ status: 'created' })
+
+    // No paste runs for an argv-prefill draft, so this is the only thing that
+    // fills the mirrored tab's composer on this host class.
+    expect(mocks.deliverLaunchPromptToAgentTab).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchDraftForAgentTab).toHaveBeenCalledWith({
+      tabId: 'web-terminal-host-tab-2',
+      agent: 'claude',
+      text: 'https://github.com/o/r/issues/12'
     })
   })
 })

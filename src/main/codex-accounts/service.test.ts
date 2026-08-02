@@ -804,6 +804,11 @@ describe('CodexAccountService config sync', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
+    // Why: the desktop add path must pass the new account's selection target, as
+    // reauthenticate and select already do. Called with no argument, a WSL add
+    // syncs the host home that did not change and never materializes the WSL
+    // slot that did.
+    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({ runtime: 'host' })
   })
 
   it('does not seed source-home hook trust when adding a self-contained account', async () => {
@@ -1371,6 +1376,12 @@ describe('CodexAccountService config sync', () => {
         managedHomePath: wslManagedHomePath,
         wslLinuxHomePath,
         managedHomeRuntime: 'wsl'
+      })
+      // Why: a WSL add must sync the WSL runtime home, not the default host lane,
+      // or the account it just selected stays unmaterialized until the next switch.
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({
+        runtime: 'wsl',
+        wslDistro: 'Debian'
       })
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -3858,5 +3869,126 @@ describe('CodexAccountService config sync', () => {
       await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled())
       errorSpy.mockRestore()
     })
+  })
+})
+
+describe('CodexAccountService.addAccountFromHome', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-accounts-'))
+    testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))
+    testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    process.env.ORCA_USER_DATA_PATH = testState.userDataDir
+    mkdirSync(join(testState.fakeHomeDir, '.codex'), { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(testState.userDataDir, { recursive: true, force: true })
+    rmSync(testState.fakeHomeDir, { recursive: true, force: true })
+    if (testState.previousUserDataPath === undefined) {
+      delete process.env.ORCA_USER_DATA_PATH
+    } else {
+      process.env.ORCA_USER_DATA_PATH = testState.previousUserDataPath
+    }
+  })
+
+  it('registers a managed Codex account by importing an authenticated CODEX_HOME', async () => {
+    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
+    const sourceHome = mkdtempSync(join(tmpdir(), 'orca-codex-source-'))
+    writeFileSync(
+      join(sourceHome, 'auth.json'),
+      createCodexAuthJson('new@example.com', 'provider-account-1', 'refresh-token'),
+      'utf-8'
+    )
+
+    try {
+      const settings = createSettings()
+      const store = createStore(settings)
+      const rateLimits = createRateLimits()
+      const runtimeHome = createRuntimeHome()
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+
+      const result = await service.addAccountFromHome(sourceHome)
+
+      expect(result.accounts).toHaveLength(1)
+      expect(result.accounts[0]?.email).toBe('new@example.com')
+      const managedHomePath = store.getSettings().codexManagedAccounts[0].managedHomePath
+      expect(existsSync(join(managedHomePath, 'auth.json'))).toBe(true)
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+    } finally {
+      rmSync(sourceHome, { recursive: true, force: true })
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
+
+  it('restores settings and runtime selection when post-write activation fails', async () => {
+    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
+    const sourceHome = mkdtempSync(join(tmpdir(), 'orca-codex-source-rollback-'))
+    writeFileSync(
+      join(sourceHome, 'auth.json'),
+      createCodexAuthJson('new@example.com', 'provider-account-1', 'refresh-token'),
+      'utf-8'
+    )
+
+    try {
+      const settings = createSettings()
+      const store = createStore(settings)
+      const rateLimits = createRateLimits()
+      const runtimeHome = createRuntimeHome()
+      let managedHomePath: string | null = null
+      runtimeHome.syncForCurrentSelection.mockImplementationOnce(() => {
+        managedHomePath = store.getSettings().codexManagedAccounts[0]?.managedHomePath ?? null
+        throw new Error('activation failed')
+      })
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+
+      await expect(service.addAccountFromHome(sourceHome)).rejects.toThrow('activation failed')
+
+      expect(store.getSettings().codexManagedAccounts).toHaveLength(0)
+      expect(store.getSettings().activeCodexManagedAccountId).toBeNull()
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(2)
+      expect(managedHomePath).not.toBeNull()
+      expect(existsSync(managedHomePath!)).toBe(false)
+    } finally {
+      rmSync(sourceHome, { recursive: true, force: true })
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
+
+  it('rejects when the source home has no auth.json', async () => {
+    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
+    const sourceHome = mkdtempSync(join(tmpdir(), 'orca-codex-source-empty-'))
+
+    try {
+      const settings = createSettings()
+      const store = createStore(settings)
+      const rateLimits = createRateLimits()
+      const runtimeHome = createRuntimeHome()
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+
+      await expect(service.addAccountFromHome(sourceHome)).rejects.toThrow(
+        /No Codex credentials found/
+      )
+      expect(store.getSettings().codexManagedAccounts).toHaveLength(0)
+    } finally {
+      rmSync(sourceHome, { recursive: true, force: true })
+      vi.doUnmock('../codex-cli/command')
+    }
   })
 })

@@ -10,6 +10,11 @@ import {
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace-statuses'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  resolveDashboardCardTerminalInput,
+  type DashboardCardTerminalInputState
+} from './dashboard-card-terminal-input'
+import { readDashboardClientHost } from './dashboard-client-host'
 import { getAgentRowConversationName } from '../../../../shared/agent-row-conversation-name'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { applyAgentRowLineage } from './agent-row-lineage'
@@ -54,7 +59,8 @@ export type DashboardSnapshotState = Pick<
   | 'acknowledgedAgentsByPaneKey'
   | 'settings'
 > &
-  DashboardCardContextState
+  DashboardCardContextState &
+  Partial<DashboardCardTerminalInputState>
 
 function bucketForState(state: DashboardAgentRow['state']): DashboardBucket {
   switch (state) {
@@ -123,6 +129,7 @@ export function buildDashboardSnapshot(
   options: { includeCardDetails?: boolean; includeFilterOptions?: boolean } = {}
 ): DashboardSnapshot {
   const cards: DashboardCard[] = []
+  const clientHost = readDashboardClientHost()
   const repoIconsByRepoId: Record<string, RepoIcon | null> = {}
   const includeCardDetails = options.includeCardDetails !== false
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
@@ -262,6 +269,23 @@ export function buildDashboardSnapshot(
           : null
       const dotState = row.state as DashboardCardDotState
       const bucket = bucketForState(row.state)
+      // Why: only a live pty can open a preview terminal, and only a
+      // card-rendering caller can open one — the sidebar's bucket counts must
+      // not pay host resolution on every agent-status tick.
+      const terminalInput =
+        ptyId && includeCardDetails
+          ? resolveDashboardCardTerminalInput(state, {
+              ptyId,
+              worktreeId,
+              paneKey: routingPaneKey,
+              cwd: row.tab.startupCwd ?? worktree.path,
+              shellOverride: row.tab.shellOverride,
+              launchAgent: row.tab.launchAgent,
+              clientPlatform: clientHost.platform,
+              userAgent: clientHost.userAgent,
+              osRelease: clientHost.osRelease
+            })
+          : null
       // Only repos that actually contribute a card ship their icon.
       repoIconsByRepoId[repo.id] = repo.repoIcon ?? null
 
@@ -295,7 +319,8 @@ export function buildDashboardSnapshot(
           !isTitleDerived &&
           (state.acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
-        conversationName: boundedLabelOrUndefined(rowConversationName(row, generatedTitlesEnabled))
+        conversationName: boundedLabelOrUndefined(rowConversationName(row, generatedTitlesEnabled)),
+        ...(terminalInput ? { terminalInput } : {})
       })
     }
   }

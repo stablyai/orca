@@ -53,6 +53,7 @@ import {
   confirmSeededClaudeLivePtys,
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
+import { parseDaemonReadyIdentity } from './daemon-ready-identity'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -600,14 +601,8 @@ function createOutOfProcessLauncher(
             if (settled) {
               return
             }
-            const selfReported = (msg as { startedAtMs?: unknown }).startedAtMs
-            if (
-              !Number.isSafeInteger(child.pid) ||
-              (child.pid as number) <= 0 ||
-              typeof selfReported !== 'number' ||
-              !Number.isFinite(selfReported) ||
-              selfReported <= 0
-            ) {
+            const readyIdentity = parseDaemonReadyIdentity(msg)
+            if (!Number.isSafeInteger(child.pid) || (child.pid as number) <= 0 || !readyIdentity) {
               void fail(new Error('Daemon readiness identity is incomplete'))
               return
             }
@@ -617,7 +612,7 @@ function createOutOfProcessLauncher(
                 pidPath,
                 serializeDaemonPidFile({
                   pid: child.pid as number,
-                  startedAtMs: selfReported,
+                  ...readyIdentity,
                   entryPath,
                   appVersion: app.getVersion(),
                   launchNonce
@@ -718,7 +713,9 @@ export async function initDaemonPtyProvider(
     // Why: fail-open may already have spawned fallback PTYs; don't install late, but retire an empty daemon (live sessions reject it and survive).
     const abortedStartupAdapter = new DaemonPtyAdapter({
       socketPath: info.socketPath,
-      tokenPath: info.tokenPath
+      tokenPath: info.tokenPath,
+      pidPath: getDaemonPidPath(runtimeDir),
+      profileScope: runtimeDir
     })
     releaseDaemonAdoptionLease(newSpawner.getHandle())
     await abortedStartupAdapter.disconnectOnly()
@@ -728,6 +725,8 @@ export async function initDaemonPtyProvider(
   const newAdapter = new DaemonPtyAdapter({
     socketPath: info.socketPath,
     tokenPath: info.tokenPath,
+    pidPath: getDaemonPidPath(runtimeDir),
+    profileScope: runtimeDir,
     historyPath: getHistoryDir(),
     // Why: on daemon death, ensureConnected() detects the dead socket and calls this to fork a replacement before retrying.
     respawn: async (reason: DaemonRespawnReason) => {
@@ -831,6 +830,26 @@ export function getDaemonProvider(): DaemonProvider | null {
   return adapter
 }
 
+/** Returns null unless every daemon generation supplied an authoritative inventory. */
+export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
+  if (!adapter) {
+    return null
+  }
+  const adapters =
+    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
+      ? adapter.getAllAdapters()
+      : [adapter]
+  const inventories = await Promise.allSettled(
+    adapters.map((daemonAdapter) => daemonAdapter.listProcesses())
+  )
+  if (inventories.some((inventory) => inventory.status === 'rejected')) {
+    return null
+  }
+  return inventories.flatMap((inventory) =>
+    inventory.status === 'fulfilled' ? inventory.value.map((process) => process.id) : []
+  )
+}
+
 // Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
 export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
   adapter = newAdapter
@@ -925,6 +944,8 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   const newCurrent = new DaemonPtyAdapter({
     socketPath: info.socketPath,
     tokenPath: info.tokenPath,
+    pidPath: getDaemonPidPath(runtimeDir),
+    profileScope: runtimeDir,
     historyPath: getHistoryDir(),
     respawn: async (reason: DaemonRespawnReason) => {
       // Why: attribute rather than emit — the launcher below is the one that completes the
@@ -1155,6 +1176,8 @@ export async function createLegacyDaemonAdapters(
       new DaemonPtyAdapter({
         socketPath,
         tokenPath,
+        pidPath: getDaemonPidPath(runtimeDir, protocolVersion),
+        profileScope: runtimeDir,
         protocolVersion,
         historyPath
       })

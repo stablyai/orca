@@ -24,7 +24,9 @@ const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(),
-    clear: vi.fn()
+    clear: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn()
   }
 }))
 
@@ -39,7 +41,8 @@ import {
   attachIdentityMismatches,
   formatNodePtyUnavailableMessage
 } from './pty-handler'
-import type { RelayDispatcher } from './dispatcher'
+import { RelayDispatcher } from './dispatcher'
+import { encodeJsonRpcFrame } from './protocol'
 
 type TestRequestContext = {
   isStale: () => boolean
@@ -127,6 +130,8 @@ describe('PtyHandler', () => {
     mockPtyInstance.resize.mockReset()
     mockPtyInstance.kill.mockReset()
     mockPtyInstance.clear.mockReset()
+    mockPtyInstance.pause.mockReset()
+    mockPtyInstance.resume.mockReset()
 
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
@@ -160,6 +165,60 @@ describe('PtyHandler', () => {
     expect(notifMethods).toContain('pty.data')
     expect(notifMethods).toContain('pty.resize')
     expect(notifMethods).toContain('pty.ackData')
+  })
+
+  it('pauses native output at the producer hard water and resumes after retained writes settle', async () => {
+    let onData: ((data: string) => void) | undefined
+    const pause = vi.fn()
+    const resume = vi.fn()
+    mockPtySpawn.mockReturnValueOnce({
+      ...mockPtyInstance,
+      pause,
+      resume,
+      onData: vi.fn((callback: (data: string) => void) => {
+        onData = callback
+      })
+    })
+    const writeCallbacks: (() => void)[] = []
+    let writableLength = 0
+    const boundedDispatcher = new RelayDispatcher(
+      (data, settle) => {
+        writableLength += data.length
+        writeCallbacks.push(() => {
+          writableLength -= data.length
+          settle({ ok: true })
+        })
+        return true
+      },
+      {
+        supportsWriteCallback: true,
+        writableLength: () => writableLength,
+        writableHighWaterMark: () => 4 * 1024 * 1024
+      }
+    )
+    const boundedHandler = new PtyHandler(boundedDispatcher)
+    try {
+      boundedDispatcher.feed(
+        encodeJsonRpcFrame({ jsonrpc: '2.0', id: 1, method: 'pty.spawn', params: {} }, 1, 0)
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onData).toBeTypeOf('function')
+
+      onData?.('x'.repeat(1536 * 1024))
+      expect(pause).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(300)
+
+      expect(writeCallbacks.length).toBeGreaterThan(50)
+      expect(resume).not.toHaveBeenCalled()
+      for (const settle of writeCallbacks.splice(0)) {
+        settle()
+      }
+      await vi.advanceTimersByTimeAsync(0)
+      expect(resume).toHaveBeenCalledTimes(1)
+    } finally {
+      await boundedHandler.dispose({ waitForPhysicalExit: false }).catch(() => {})
+      boundedDispatcher.dispose()
+    }
   })
 
   it('rejects strict process inspection for a missing relay PTY', async () => {
@@ -1229,6 +1288,175 @@ describe('PtyHandler', () => {
     ).resolves.toEqual({ replay: 'prompt', incarnationId: expect.any(String) })
   })
 
+  it('does not carry transformed raw length into the next plain pending entry', async () => {
+    await handler.dispose({ waitForPhysicalExit: false })
+    const admitted: Record<string, unknown>[] = []
+    let hasCapacity = false
+    const tryNotifyPtyData = vi.fn((params: Record<string, unknown>) => {
+      if (hasCapacity) {
+        admitted.push(params)
+      }
+      return hasCapacity
+    })
+    Object.assign(dispatcher, {
+      onLegacyPtyCapacity: vi.fn(() => vi.fn()),
+      tryNotifyPtyData,
+      tryNotifyPtyExit: vi.fn(() => true),
+      legacyRetentionBelowLowWater: true
+    })
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((callback: (data: string) => void) => {
+        dataCallback = callback
+      }),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {
+      startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
+      startupIngress: {
+        colors: { foreground: '#2e3434', background: '#ffffff' },
+        deadlineMs: 5_000
+      }
+    })
+
+    const query = '\x1b]10;?\x07'
+    dataCallback?.(query)
+    dataCallback?.('fresh')
+    hasCapacity = true
+    await vi.runAllTimersAsync()
+
+    expect(tryNotifyPtyData).toHaveBeenCalledTimes(3)
+    expect(admitted).toEqual([
+      {
+        id: 'pty-1',
+        data: '',
+        rawLength: query.length,
+        seq: query.length,
+        transformed: true
+      },
+      { id: 'pty-1', data: 'fresh' }
+    ])
+  })
+
+  describe('legacy flush retry with a memoized source chunk', () => {
+    let capacityListener: (() => void) | undefined
+    let hasCapacity: boolean
+    let maxChars: number
+    let admitted: Record<string, unknown>[]
+    let dataCallback: ((data: string) => void) | undefined
+
+    async function setupRetryHarness(spawnParams: Record<string, unknown> = {}): Promise<void> {
+      await handler.dispose({ waitForPhysicalExit: false })
+      capacityListener = undefined
+      hasCapacity = false
+      admitted = []
+      Object.assign(dispatcher, {
+        onLegacyPtyCapacity: vi.fn((listener: () => void) => {
+          capacityListener = listener
+          return vi.fn()
+        }),
+        tryNotifyPtyData: vi.fn((params: Record<string, unknown>) => {
+          if (hasCapacity) {
+            admitted.push(params)
+          }
+          return hasCapacity
+        }),
+        tryNotifyPtyExit: vi.fn(() => true),
+        legacyRetentionBelowLowWater: true,
+        // Clamped like the real dispatcher: never more than min(data.length, limit).
+        maxLegacyPtyDataChars: vi.fn((_params: unknown, data: string, limit?: number) =>
+          Math.min(maxChars, data.length, limit ?? data.length)
+        )
+      })
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      dataCallback = undefined
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        onData: vi.fn((callback: (data: string) => void) => {
+          dataCallback = callback
+        }),
+        onExit: vi.fn()
+      })
+      await dispatcher.callRequest('pty.spawn', spawnParams)
+      expect(dataCallback).toBeDefined()
+    }
+
+    it('resends the memo verbatim and keeps the coalesced tail when capacity grows', async () => {
+      maxChars = 5_000
+      await setupRetryHarness()
+      dataCallback!('a'.repeat(20_000))
+      await vi.advanceTimersByTimeAsync(8)
+      // Why before restoring capacity: the failed batch made zero writes so no flush is
+      // rescheduled; this enqueue re-arms the timer.
+      dataCallback!('b'.repeat(10))
+      hasCapacity = true
+      maxChars = 16_384
+      await vi.runAllTimersAsync()
+
+      expect(admitted.map((frame) => frame.data).join('')).toBe('a'.repeat(20_000) + 'b'.repeat(10))
+      expect((admitted[0].data as string).length).toBe(5_000)
+      // Why: remainder frames must not leak transformed/rawLength/seq keys.
+      expect(admitted[1]).toStrictEqual({ id: 'pty-1', data: expect.any(String) })
+    })
+
+    it('keeps a tail appended after a failed flush under constant capacity', async () => {
+      maxChars = 16_384
+      await setupRetryHarness()
+      dataCallback!('a'.repeat(5_000))
+      await vi.advanceTimersByTimeAsync(8)
+      dataCallback!('b'.repeat(10))
+      hasCapacity = true
+      await vi.runAllTimersAsync()
+
+      expect(admitted.map((frame) => frame.data).join('')).toBe('a'.repeat(5_000) + 'b'.repeat(10))
+      expect(admitted[1].data).toBe('b'.repeat(10))
+    })
+
+    it('does not duplicate memoized chars when capacity shrinks before the retry', async () => {
+      maxChars = 16_384
+      await setupRetryHarness()
+      dataCallback!('a'.repeat(20_000))
+      await vi.advanceTimersByTimeAsync(8)
+      maxChars = 5_000
+      hasCapacity = true
+      // Why: nothing else re-arms the flush timer after a zero-write batch.
+      capacityListener!()
+      await vi.runAllTimersAsync()
+
+      expect(admitted.map((frame) => frame.data).join('')).toBe('a'.repeat(20_000))
+      expect((admitted[0].data as string).length).toBe(16_384)
+      expect((admitted[1].data as string).length).toBe(3_616)
+    })
+
+    it('retains a coalesced transformed raw advance behind a memoized source-only chunk', async () => {
+      maxChars = 16_384
+      await setupRetryHarness({
+        startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
+        }
+      })
+      // First answered query: direct publish fails, entry queued without a memo.
+      dataCallback!('\x1b]10;?\x07')
+      // Capacity event while still blocked: the flush fails and memoizes the source-only chunk.
+      capacityListener!()
+      await vi.advanceTimersByTimeAsync(0)
+      // Second answered query coalesces into the memoized transformed head.
+      dataCallback!('\x1b]11;?\x07')
+      hasCapacity = true
+      capacityListener!()
+      await vi.runAllTimersAsync()
+
+      expect(admitted).toEqual([
+        { id: 'pty-1', data: '', rawLength: 7, seq: 7, transformed: true },
+        { id: 'pty-1', data: '', rawLength: 7, seq: 14, transformed: true }
+      ])
+    })
+  })
+
   it('leaves startup queries untouched for an unsupported relay capability version', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
@@ -1456,6 +1684,78 @@ describe('PtyHandler', () => {
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
   })
 
+  it('suppresses legacy replay after the V1 owner is already active', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+    const spawn = await spawnPty()
+    dataCallback!('buffered output')
+    handler.setSourcePublication({
+      activate: vi.fn(() => 'existing'),
+      accepts: vi.fn(() => true),
+      publish: vi.fn(() => true),
+      dispose: vi.fn()
+    } as never)
+
+    const result = await attachPty({
+      id: 'pty-1',
+      suppressReplayNotification: true
+    })
+
+    expect(result).toEqual({ incarnationId: spawn.incarnationId })
+  })
+
+  it('requires restore when the V1 pending-send recovery fence expires', async () => {
+    const spawn = await spawnPty()
+    const waitForPendingSend = vi.fn().mockResolvedValue(false)
+    const activate = vi
+      .fn()
+      .mockReturnValue({ status: 'restoreRequired', reason: 'checkpointUnavailable' })
+    handler.setSourcePublication({
+      activate,
+      accepts: vi.fn(() => true),
+      waitForPendingSend,
+      dispose: vi.fn()
+    } as never)
+
+    const result = await dispatcher.callRequest(
+      'pty.attach',
+      {
+        id: spawn.id,
+        sourceRecovery: {
+          status: 'checkpoint',
+          deliveryToken: 'old-token',
+          ptyIncarnation: spawn.incarnationId,
+          clientGeneration: 1,
+          ownerGeneration: 1,
+          acceptedSourceEndSu: 0
+        }
+      },
+      {
+        clientId: 2,
+        isStale: () => false,
+        onResponseSettled: vi.fn()
+      } as never
+    )
+
+    expect(waitForPendingSend).toHaveBeenCalledWith(spawn.id)
+    expect(activate).toHaveBeenCalledWith(
+      spawn.id,
+      spawn.incarnationId,
+      expect.anything(),
+      Object.freeze({ status: 'checkpointUnavailable' })
+    )
+    expect(result).toEqual({
+      incarnationId: spawn.incarnationId,
+      sourceRecovery: { status: 'restoreRequired', reason: 'checkpointUnavailable' }
+    })
+  })
+
   it('notifies replay on normal attach', async () => {
     let dataCallback: ((data: string) => void) | undefined
     mockPtySpawn.mockReturnValue({
@@ -1547,6 +1847,42 @@ describe('PtyHandler', () => {
       incarnationId: spawn.incarnationId
     })
     expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('retains PTY exit until the ordinary writer admits it', async () => {
+    await handler.dispose({ waitForPhysicalExit: false })
+    let capacityListener: (() => void) | undefined
+    const tryNotifyPtyExit = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
+    Object.assign(dispatcher, {
+      onLegacyPtyCapacity: vi.fn((listener: () => void) => {
+        capacityListener = listener
+        return vi.fn()
+      }),
+      tryNotifyPtyData: vi.fn(() => true),
+      tryNotifyPtyExit,
+      legacyRetentionBelowLowWater: true
+    })
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    let exitCallback: ((info: { exitCode: number }) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn(),
+      onExit: vi.fn((callback: (info: { exitCode: number }) => void) => {
+        exitCallback = callback
+      })
+    })
+
+    const spawn = await spawnPty()
+    exitCallback?.({ exitCode: 0 })
+    expect(tryNotifyPtyExit).toHaveBeenCalledOnce()
+
+    capacityListener?.()
+    expect(tryNotifyPtyExit).toHaveBeenLastCalledWith({
+      id: 'pty-1',
+      code: 0,
+      incarnationId: spawn.incarnationId
+    })
+    expect(tryNotifyPtyExit).toHaveBeenCalledTimes(2)
   })
 
   it('flushes pending PTY output before notifying exit', async () => {
@@ -2052,8 +2388,13 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_TAB_ID).toBe('tab-1')
   })
 
-  it('passes the PTY id and renderer paneKey to env augmenters', async () => {
-    const seenContexts: { id: string; paneKey?: string; env: Record<string, string> }[] = []
+  it('passes PTY and explicit launch identity to env augmenters', async () => {
+    const seenContexts: {
+      id: string
+      paneKey?: string
+      launchAgent?: string
+      env: Record<string, string>
+    }[] = []
     handler.addEnvAugmenter((ctx) => {
       seenContexts.push(ctx)
       return {
@@ -2062,7 +2403,8 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {
-      env: { ORCA_PANE_KEY: 'tab-context:0' }
+      env: { ORCA_PANE_KEY: 'tab-context:0' },
+      launchAgent: 'pi'
     })
     await dispatcher.callRequest('pty.spawn', {})
 
@@ -2071,6 +2413,7 @@ describe('PtyHandler', () => {
     expect(seenContexts[0]).toMatchObject({
       id: 'pty-1',
       paneKey: 'tab-context:0',
+      launchAgent: 'pi',
       env: { ORCA_PANE_KEY: 'tab-context:0' }
     })
     expect(seenContexts[1]).toMatchObject({ id: 'pty-2', paneKey: undefined })
@@ -2972,6 +3315,195 @@ describe('PtyHandler', () => {
       { id: 'pty-2', paneKey: 'tab-dispose:1' }
     ])
     expect(handler.activePtyCount).toBe(0)
+  })
+
+  describe('onPtyPoolEmpty', () => {
+    it('fires once when natural exit drains the last PTY, never while one remains', async () => {
+      const onExitCallbacks: ((evt: { exitCode: number }) => void)[] = []
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        onData: vi.fn(),
+        onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+          onExitCallbacks.push(cb)
+        })
+      })
+      const poolEmpty = vi.fn()
+      handler.onPtyPoolEmpty(poolEmpty)
+
+      await spawnPty()
+      await spawnPty()
+      expect(onExitCallbacks).toHaveLength(2)
+
+      onExitCallbacks[0]({ exitCode: 0 })
+      expect(handler.activePtyCount).toBe(1)
+      expect(poolEmpty).not.toHaveBeenCalled()
+
+      onExitCallbacks[1]({ exitCode: 0 })
+      expect(handler.activePtyCount).toBe(0)
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+    })
+
+    it('fires when the dead-shell reap inside attach removes the last PTY', async () => {
+      mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+      const poolEmpty = vi.fn()
+      handler.onPtyPoolEmpty(poolEmpty)
+      await spawnPty()
+
+      const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+      try {
+        await expect(attachPty({ id: 'pty-1', suppressReplayNotification: true })).rejects.toThrow(
+          'PTY "pty-1" not found'
+        )
+      } finally {
+        aliveSpy.mockRestore()
+      }
+
+      expect(handler.activePtyCount).toBe(0)
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+    })
+
+    it('fires when dispose-for-shutdown removes the last PTY', async () => {
+      mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+      const poolEmpty = vi.fn()
+      handler.onPtyPoolEmpty(poolEmpty)
+      await spawnPty()
+      await spawnPty()
+
+      await handler.dispose({ waitForPhysicalExit: false })
+
+      expect(handler.activePtyCount).toBe(0)
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+    })
+
+    it('fires when a spawn fails before the PTY ever reaches the pool', async () => {
+      // Why: removePty can only announce a PTY it stored, so a creation that dies mid-flight
+      // would otherwise leave the relay believing it is still non-idle forever.
+      mockPtySpawn.mockImplementation(() => {
+        throw new Error('posix_spawnp failed')
+      })
+      const poolEmpty = vi.fn()
+      handler.onPtyPoolEmpty(poolEmpty)
+
+      await expect(spawnPty()).rejects.toThrow()
+
+      expect(handler.activePtyCount).toBe(0)
+      expect(handler.pendingPtyCreationCount).toBe(0)
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+    })
+
+    it('stays silent when a failing creation settles while another is still admitted', async () => {
+      let spawnCall = 0
+      mockPtySpawn.mockImplementation(() => {
+        spawnCall += 1
+        if (spawnCall === 1) {
+          throw new Error('posix_spawnp failed')
+        }
+        return { ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() }
+      })
+      const poolEmpty = vi.fn()
+      handler.onPtyPoolEmpty(poolEmpty)
+
+      // Both admissions land before either creation resolves, so the failing one must not
+      // announce an empty pool while the surviving one still owns a shell.
+      const failing = spawnPty()
+      const succeeding = spawnPty()
+      expect(handler.pendingPtyCreationCount).toBe(2)
+
+      await expect(failing).rejects.toThrow()
+      await succeeding
+
+      expect(handler.activePtyCount).toBe(1)
+      expect(poolEmpty).not.toHaveBeenCalled()
+    })
+
+    it('stops notifying after the returned unsubscribe runs', async () => {
+      const onExitCallbacks: ((evt: { exitCode: number }) => void)[] = []
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        onData: vi.fn(),
+        onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+          onExitCallbacks.push(cb)
+        })
+      })
+      const poolEmpty = vi.fn()
+      const unsubscribe = handler.onPtyPoolEmpty(poolEmpty)
+
+      await spawnPty()
+      onExitCallbacks[0]({ exitCode: 0 })
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+
+      unsubscribe()
+      await spawnPty()
+      onExitCallbacks[1]({ exitCode: 0 })
+      expect(handler.activePtyCount).toBe(0)
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('onPtyPoolActive', () => {
+    it('fires at admission, while the pool is still empty', async () => {
+      mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+      const poolCounts: number[] = []
+      handler.onPtyPoolActive(() => {
+        poolCounts.push(handler.activePtyCount)
+      })
+
+      const pending = spawnPty()
+      // The relay must learn it is non-idle here, not after the creation resolves.
+      expect(poolCounts).toEqual([0])
+
+      await pending
+      expect(poolCounts).toEqual([0, 1])
+    })
+
+    it('fires for a revived PTY whose creation was admitted before the pool was empty', async () => {
+      await spawnPty({ cols: 80, rows: 24, cwd: '/tmp' })
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      await handler.dispose({ waitForPhysicalExit: false })
+      dispatcher = createMockDispatcher()
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+      const poolActive = vi.fn()
+      handler.onPtyPoolActive(poolActive)
+
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      try {
+        await dispatcher.callRequest('pty.revive', { state })
+      } finally {
+        killSpy.mockRestore()
+      }
+
+      expect(handler.activePtyCount).toBe(1)
+      expect(poolActive).toHaveBeenCalled()
+    })
+
+    it('stops notifying after the returned unsubscribe runs', async () => {
+      mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+      const poolActive = vi.fn()
+      const unsubscribe = handler.onPtyPoolActive(poolActive)
+
+      await spawnPty()
+      const callsWhileSubscribed = poolActive.mock.calls.length
+      expect(callsWhileSubscribed).toBeGreaterThan(0)
+
+      unsubscribe()
+      await spawnPty()
+      expect(poolActive).toHaveBeenCalledTimes(callsWhileSubscribed)
+    })
+  })
+
+  it('counts a spawn admitted but not yet pooled as a pending creation', async () => {
+    mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+    expect(handler.pendingPtyCreationCount).toBe(0)
+
+    const pending = spawnPty()
+    // The shell is already owned even though activePtyCount still reads zero.
+    expect(handler.activePtyCount).toBe(0)
+    expect(handler.pendingPtyCreationCount).toBe(1)
+
+    await pending
+    expect(handler.activePtyCount).toBe(1)
+    expect(handler.pendingPtyCreationCount).toBe(0)
   })
 })
 

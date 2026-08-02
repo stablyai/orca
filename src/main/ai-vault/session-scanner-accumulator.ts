@@ -13,6 +13,11 @@ import type {
   SessionAccumulator
 } from './session-scanner-types'
 import {
+  extractFullFirstUserPromptText,
+  normalizeFullFirstUserPromptText,
+  shouldCaptureFullFirstUserPrompt
+} from './session-scanner-first-user-prompt'
+import {
   extractPreviewContentText,
   extractString,
   normalizePreviewText,
@@ -41,6 +46,7 @@ export function createAccumulator(args: {
     messageCount: 0,
     totalTokens: 0,
     previewMessages: [],
+    firstUserPrompt: null,
     lastUserPrompt: null,
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
@@ -113,6 +119,7 @@ export function finalizeSession(
     messageCount: accumulator.messageCount,
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
+    ...(accumulator.firstUserPrompt ? { firstUserPrompt: accumulator.firstUserPrompt } : {}),
     ...(accumulator.lastUserPrompt ? { lastUserPrompt: accumulator.lastUserPrompt } : {}),
     queuedMessageCount: accumulator.queuedMessageCount,
     subagentTranscriptCount: accumulator.subagentTranscriptCount,
@@ -149,6 +156,9 @@ export function addPreviewMessage(
     role: AiVaultSessionPreviewMessage['role']
     text: string | null
     timestamp?: unknown
+    // Why: Claude meta/injected turns still preview, but must not seed the
+    // copyable first-prompt row.
+    seedFirstUserPrompt?: boolean
   }
 ): void {
   const text = normalizePreviewText(args.text ?? '')
@@ -163,18 +173,40 @@ export function addPreviewMessage(
   if (accumulator.previewMessages.length > SESSION_PREVIEW_MESSAGE_LIMIT) {
     accumulator.previewMessages.shift()
   }
+  // Why: list scans never store firstUserPrompt (payload/perf). Only the
+  // on-demand full-capture path seeds the untruncated copy body.
+  if (
+    args.role === 'user' &&
+    args.seedFirstUserPrompt !== false &&
+    !accumulator.firstUserPrompt &&
+    shouldCaptureFullFirstUserPrompt() &&
+    args.text
+  ) {
+    accumulator.firstUserPrompt = normalizeFullFirstUserPromptText(args.text)
+  }
 }
 
 export function addPreviewContent(
   accumulator: SessionAccumulator,
   role: AiVaultSessionPreviewMessage['role'],
   content: unknown,
-  timestamp?: unknown
+  timestamp?: unknown,
+  options?: { seedFirstUserPrompt?: boolean }
 ): void {
+  if (
+    role === 'user' &&
+    options?.seedFirstUserPrompt !== false &&
+    !accumulator.firstUserPrompt &&
+    shouldCaptureFullFirstUserPrompt()
+  ) {
+    accumulator.firstUserPrompt = extractFullFirstUserPromptText(content)
+  }
   addPreviewMessage(accumulator, {
     role,
     text: extractPreviewContentText(content),
-    timestamp
+    timestamp,
+    // Content path already seeded above when capture is enabled.
+    seedFirstUserPrompt: false
   })
 }
 

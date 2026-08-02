@@ -42,6 +42,10 @@ vi.mock('@/store', () => ({
   )
 }))
 
+vi.mock('@/store/selectors', () => ({
+  useAllWorktrees: () => mocks.state.allWorktrees()
+}))
+
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
     open ? <div>{children}</div> : null,
