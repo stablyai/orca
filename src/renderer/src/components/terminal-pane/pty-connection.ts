@@ -6251,11 +6251,11 @@ export function connectPanePty(
         ? shouldForceForegroundRenderRefresh(data)
         : { refresh: false, inPlaceRewrite: false, recoverWebglAtlasAfterParse: false }
       if (!foregroundOutput) {
-        hiddenOutputNeedsAtlasRecoveryAfterParse(data)
+        // Advance hidden rewrite state; reveal owns atlas recovery.
+        void hiddenOutputNeedsAtlasRecoveryAfterParse(data)
       }
       const recoverWebglAtlasAfterParse =
         foreground && renderRefreshDecision.recoverWebglAtlasAfterParse
-      // Hidden panes rebuild on reveal; scheduling a shared-atlas wipe here fans out remote streams.
       // Why: atlas recovery must repaint from the parsed xterm buffer, not a pre-write snapshot a late TUI redraw can stale.
       const onParsedAtlasRecovery = foreground
         ? recoverWebglAtlasAfterParse

@@ -280,7 +280,7 @@ async function dispatchDocumentVisibilityCycle(page: Page): Promise<void> {
   })
 }
 
-test.describe('terminal document visibility WebGL recovery @headful', () => {
+test.describe('terminal document visibility WebGL recovery', () => {
   test('preserves the WebGL atlas and keeps terminal text painted after document visibility resumes', async ({
     electronApp,
     orcaPage
@@ -293,7 +293,7 @@ test.describe('terminal document visibility WebGL recovery @headful', () => {
     await waitForPaneCount(orcaPage, 2)
 
     const webglActive = await forceWebgl(orcaPage)
-    test.skip(!webglActive, 'WebGL was not active in this headful environment')
+    test.skip(!webglActive, 'WebGL was not active in this Electron environment')
 
     await writeStableTerminalContent(orcaPage)
     expect(await patchAtlasCounter(orcaPage)).toBe(true)
