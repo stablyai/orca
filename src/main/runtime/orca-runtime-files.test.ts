@@ -262,10 +262,6 @@ describe('RuntimeFileCommands', () => {
     const result = await commands.listRuntimeFiles('id:wt-1')
     const options = listFiles.mock.calls[0]?.[1]
     const serializedBytes = Buffer.byteLength(JSON.stringify(result), 'utf8')
-    process.stdout.write(
-      `reproduction maxResults=${String(options?.maxResults)} excludePaths=${String(options?.excludePaths)} resultLength=${result.length} serializedBytes=${serializedBytes} laneLimit=2097152\n`
-    )
-
     expect({
       excludePaths: options?.excludePaths,
       maxResults: options?.maxResults,
@@ -300,7 +296,6 @@ describe('RuntimeFileCommands', () => {
     expect(aboveLimit.files).toHaveLength(5000)
     expect(aboveLimit.totalCount).toBe(5001)
     expect(aboveLimit.truncated).toBe(true)
-    process.stdout.write('remote mobile boundary 5000/5001 passed\n')
   })
 
   it('preserves the mobile listing sentinel on the local route', async () => {
@@ -323,7 +318,6 @@ describe('RuntimeFileCommands', () => {
     expect(atLimit.files).toHaveLength(5000)
     expect(aboveLimit).toMatchObject({ totalCount: 5001, truncated: true })
     expect(aboveLimit.files).toHaveLength(5000)
-    process.stdout.write('local mobile boundary 5001/5002 passed\n')
   })
 
   it('preserves the existing mobile search bounds on both routes', async () => {
