@@ -53,7 +53,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "orchestrationUsageToggleDescription": "Show workspace-scoped orchestration usage and data-quality details."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3247,7 +3248,8 @@
             "antigravityUsage": "Antigravity Usage",
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
-            "grokUsageMenu": "Grok Usage"
+            "grokUsageMenu": "Grok Usage",
+            "orchestrationUsage": "Orchestration Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3474,6 +3476,40 @@
                 "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process."
               }
             }
+          },
+          "OrchestrationUsageStatusSegment": {
+            "dataQuality": "Data quality",
+            "staleDetail": "Stale: the latest refresh failed; values are from the last successful report.",
+            "completeDetail": "Complete within the report row and provider-session limits.",
+            "partialDetail": "Partial: one or more report inputs were unavailable or truncated.",
+            "inferredDetail": "Attribution is inferred from exact worktree and dispatch time intervals.",
+            "attributionCounts": "{{value0}} unlinked · {{value1}} ambiguous sessions",
+            "costUnavailable": "Cost unavailable: no attributable provider estimate was reported.",
+            "costPartial": "Cost partial: the estimate excludes providers without cost data.",
+            "providers": "Providers",
+            "noAttributedUsage": "No attributed provider usage is available.",
+            "nodes": "Branch and node breakdown",
+            "noNodes": "No task nodes are available.",
+            "nodesOmitted": "{{value0}} additional nodes omitted.",
+            "elapsed": "Elapsed",
+            "attributedTokens": "Attributed tokens",
+            "estimatedCost": "Estimated cost",
+            "run": "Run",
+            "generated": "Report generated",
+            "liveSelection": "Selected from live orchestration activity in this workspace.",
+            "lineageSelection": "Selected from instance-verified workspace lineage; the run may be completed.",
+            "olderRuntime": "Usage reports are unavailable on this runtime version.",
+            "runNotFound": "The linked orchestration run is no longer available.",
+            "runtimeUnavailable": "The orchestration usage report is temporarily unavailable.",
+            "tokens": "tokens",
+            "stale": "stale",
+            "partial": "partial",
+            "inferred": "inferred",
+            "title": "Orchestration usage",
+            "ambiguousRun": "Orchestration usage — multiple active runs are linked to this workspace.",
+            "noRun": "Orchestration usage — no exact run is linked to this workspace.",
+            "attributionUnavailableDetail": "Attribution unavailable: no provider usage could be linked to this run.",
+            "attributionUnavailable": "attribution unavailable"
           }
         }
       },
@@ -7814,7 +7850,9 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "orchestrationUsageTitle": "Orchestration Usage",
+            "orchestrationUsageDescription": "Show elapsed time, attributed tokens, and estimated cost for the active workspace orchestration."
           }
         },
         "auto": {

@@ -9,7 +9,8 @@ import {
   Loader2,
   PanelsTopLeft,
   RefreshCw,
-  Server
+  Server,
+  Workflow
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -116,6 +117,11 @@ const PetStatusSegment = lazyWithRetry(() =>
 const ResourceUsageStatusSegment = lazyWithRetry(() =>
   import('./ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
+  }))
+)
+const OrchestrationUsageStatusSegment = lazyWithRetry(() =>
+  import('./OrchestrationUsageStatusSegment').then((module) => ({
+    default: module.OrchestrationUsageStatusSegment
   }))
 )
 const PortsStatusSegment = lazyWithRetry(() =>
@@ -2118,6 +2124,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
+  const showOrchestrationUsage = statusBarItems.includes('orchestration-usage')
   const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
@@ -2357,6 +2364,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           {showResourceUsage ? (
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
           ) : null}
+          {showOrchestrationUsage ? (
+            <OrchestrationUsageStatusSegment compact={compact} iconOnly={iconOnly} />
+          ) : null}
           {showPorts ? <PortsStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
           {showSsh ? <SshStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
         </React.Suspense>
@@ -2519,6 +2529,16 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           >
             <Activity className="size-3.5" />
             {translate('auto.components.status.bar.StatusBar.d1e1a7a6bf', 'Resource Manager')}
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('orchestration-usage')}
+            onCheckedChange={() => toggleStatusBarItem('orchestration-usage')}
+          >
+            <Workflow className="size-3.5" />
+            {translate(
+              'auto.components.status.bar.StatusBar.orchestrationUsage',
+              'Orchestration Usage'
+            )}
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ports')}

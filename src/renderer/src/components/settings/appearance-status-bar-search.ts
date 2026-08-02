@@ -1,18 +1,13 @@
-import type { StatusBarItem } from '../../../../shared/types'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getAntigravityStatusBarToggleSearchEntry } from './appearance-status-bar-antigravity-toggle-search'
 import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-toggle-search'
+import { getOrchestrationUsageStatusBarToggleSearchEntry } from './appearance-status-bar-orchestration-usage-toggle-search'
+import type { StatusBarToggleSearchEntry } from './appearance-status-bar-orchestration-usage-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
-  (): readonly {
-    id: StatusBarItem
-    title: string
-    description: string
-    keywords: string[]
-    toggleDescription: string
-  }[] => [
+  (): readonly StatusBarToggleSearchEntry[] => [
     {
       id: 'claude',
       title: translate('auto.components.settings.appearance.search.9dc15020d7', 'Claude Usage'),
@@ -265,6 +260,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
         'Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.'
       )
     },
+    getOrchestrationUsageStatusBarToggleSearchEntry(),
     {
       id: 'ports',
       title: translate('auto.components.settings.appearance.search.cf409b6c4d', 'Ports'),
