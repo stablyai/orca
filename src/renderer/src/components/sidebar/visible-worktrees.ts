@@ -210,17 +210,21 @@ export function computeVisibleWorktreeIds(
     all = all.filter((w) => selectedRepoIds.has(w.repoId))
   }
 
+  const inactiveWorktreeIds = new Set<string>()
   if (!opts.showSleepingWorkspaces) {
-    all = all.filter(
-      (w) =>
-        !isInactiveWorkspace(
-          w.id,
-          opts.tabsByWorktree,
-          opts.ptyIdsByTabId,
-          opts.browserTabsByWorktree,
-          opts.worktreeIdsWithLiveAgent
-        )
-    )
+    all = all.filter((worktree) => {
+      const isInactive = isInactiveWorkspace(
+        worktree.id,
+        opts.tabsByWorktree,
+        opts.ptyIdsByTabId,
+        opts.browserTabsByWorktree,
+        opts.worktreeIdsWithLiveAgent
+      )
+      if (isInactive) {
+        inactiveWorktreeIds.add(worktree.id)
+      }
+      return !isInactive
+    })
   }
 
   if (opts.forcedVisibleWorktreeIds && opts.forcedVisibleWorktreeIds.length > 0) {
@@ -247,15 +251,7 @@ export function computeVisibleWorktreeIds(
   return opts.injectLineageAncestors === false
     ? visibleIds
     : addVisibleLineageAncestors(visibleIds, lineageAncestorById, opts.worktreeLineageById, {
-        canRestoreAncestor: (worktree) =>
-          opts.showSleepingWorkspaces ||
-          !isInactiveWorkspace(
-            worktree.id,
-            opts.tabsByWorktree,
-            opts.ptyIdsByTabId,
-            opts.browserTabsByWorktree,
-            opts.worktreeIdsWithLiveAgent
-          ),
+        canRestoreAncestor: (worktree) => !inactiveWorktreeIds.has(worktree.id),
         forceRestoreAncestorForIds: new Set(opts.forcedVisibleWorktreeIds ?? [])
       })
 }

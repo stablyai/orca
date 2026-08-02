@@ -3930,8 +3930,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // reconnect the restored active workspace in that legacy case.
       const shutdownIds =
         session.activeWorktreeIdsOnShutdown ??
-        (activeWorktreeId &&
-        legacyActiveTabs.some((tab) => tab.ptyId || remoteSessionIds[tab.id])
+        (activeWorktreeId && legacyActiveTabs.some((tab) => tab.ptyId || remoteSessionIds[tab.id])
           ? [activeWorktreeId]
           : [])
       const pendingReconnectWorktreeIds = shutdownIds.filter((id) => validWorktreeIds.has(id))

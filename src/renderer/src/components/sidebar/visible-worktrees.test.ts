@@ -553,7 +553,7 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([child.id])
   })
 
-  it('includes a filtered parent from resolved inline lineage when hydration has no side-map entry', () => {
+  it('does not restore an inactive inline lineage parent without a side-map entry', () => {
     const parent = makeWorktree('parent')
     const child = makeWorktree('child')
     const lineage = makeWorktreeLineage(child, parent)
@@ -569,7 +569,77 @@ describe('computeVisibleWorktreeIds', () => {
       })
     )
 
+    expect(result).toEqual([child.id])
+  })
+
+  it('restores a live-agent lineage parent while sleeping workspaces are hidden', () => {
+    const parent = makeWorktree('parent')
+    const child = makeWorktree('child')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [parent, child] },
+      [child.id, parent.id],
+      visibleOptions({
+        showSleepingWorkspaces: false,
+        tabsByWorktree: { [child.id]: [makeTab('t-child', child.id, 'p-child')] },
+        ptyIdsByTabId: { 't-child': ['p-child'] },
+        worktreeIdsWithLiveAgent: new Set([parent.id]),
+        worktreeLineageById: { [child.id]: makeWorktreeLineage(child, parent) }
+      })
+    )
+
     expect(result).toEqual([parent.id, child.id])
+  })
+
+  it('stops lineage restoration at the first inactive ancestor', () => {
+    const grandparent = makeWorktree('grandparent')
+    const parent = makeWorktree('parent')
+    const child = makeWorktree('child')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [grandparent, parent, child] },
+      [child.id, parent.id, grandparent.id],
+      visibleOptions({
+        showSleepingWorkspaces: false,
+        tabsByWorktree: {
+          [parent.id]: [makeTab('t-parent', parent.id, 'p-parent')],
+          [child.id]: [makeTab('t-child', child.id, 'p-child')]
+        },
+        ptyIdsByTabId: { 't-parent': ['p-parent'], 't-child': ['p-child'] },
+        worktreeLineageById: {
+          [parent.id]: makeWorktreeLineage(parent, grandparent),
+          [child.id]: makeWorktreeLineage(child, parent)
+        }
+      })
+    )
+
+    expect(result).toEqual([parent.id, child.id])
+  })
+
+  it('keeps inactive folder and SSH lineage parents hidden', () => {
+    const remoteRepo = { ...makeRepo('repo1', 'Repo 1', '#000'), connectionId: 'slow-host' }
+    for (const { parent, parentRepoMap } of [
+      {
+        parent: { ...makeWorktree('folder-parent'), isMainWorktree: true, branch: '', head: '' },
+        parentRepoMap: repoMap
+      },
+      { parent: makeWorktree('ssh-parent'), parentRepoMap: new Map([['repo1', remoteRepo]]) }
+    ]) {
+      const child = makeWorktree(`child-${parent.id}`)
+      const result = computeVisibleWorktreeIds(
+        { repo1: [parent, child] },
+        [child.id, parent.id],
+        visibleOptions({
+          showSleepingWorkspaces: false,
+          repoMap: parentRepoMap,
+          tabsByWorktree: { [child.id]: [makeTab('t-child', child.id, 'p-child')] },
+          ptyIdsByTabId: { 't-child': ['p-child'] },
+          worktreeLineageById: { [child.id]: makeWorktreeLineage(child, parent) }
+        })
+      )
+
+      expect(result).toEqual([child.id])
+    }
   })
 
   it('keeps inline parents out of non-nested board results across parent filters', () => {
@@ -656,8 +726,11 @@ describe('computeVisibleWorktreeIds', () => {
       [child.id, inlineParent.id, hydratedParent.id],
       visibleOptions({
         showSleepingWorkspaces: false,
-        tabsByWorktree: { [child.id]: [makeTab('t-child', child.id, 'p-child')] },
-        ptyIdsByTabId: { 't-child': ['p-child'] },
+        tabsByWorktree: {
+          [hydratedParent.id]: [makeTab('t-parent', hydratedParent.id, 'p-parent')],
+          [child.id]: [makeTab('t-child', child.id, 'p-child')]
+        },
+        ptyIdsByTabId: { 't-parent': ['p-parent'], 't-child': ['p-child'] },
         worktreeLineageById: { [child.id]: hydratedLineage }
       })
     )
