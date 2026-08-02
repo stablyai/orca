@@ -3806,6 +3806,7 @@ export class OrchestrationDb {
     })[]
   }
 
+  // Why: this method starts a top-level write transaction; callers must invoke it outside BEGIN IMMEDIATE.
   updateTaskStatus(id: string, status: TaskStatus, result?: string): TaskRow | undefined {
     this.db.exec('BEGIN IMMEDIATE')
     try {
@@ -6026,6 +6027,7 @@ export class OrchestrationDb {
     }
   }
 
+  // Why: failDispatch now follows current-dispatch authority and is idempotent for terminal dispatches.
   failDispatch(ctxId: string, error: string): DispatchContextRow | undefined {
     return this.failDispatchWithDisposition(ctxId, error).dispatch
   }

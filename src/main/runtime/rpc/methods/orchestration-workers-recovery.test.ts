@@ -152,7 +152,7 @@ describe('orchestration worker recovery', () => {
       completed_at: replacementBefore?.completed_at
     })
     expect(db.getTask(dependent.id)).toEqual(dependentBefore)
-    expect(db.listTasks({ ready: true })).not.toContainEqual(taskBefore)
+    expect(db.listTasks({ ready: true }).some((row) => row.id === task.id)).toBe(false)
   })
 
   it('workerStop does not adopt or stop a same-looking pane with a new process incarnation', async () => {

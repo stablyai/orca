@@ -128,7 +128,7 @@ describe('dispatch failure authority', () => {
     ['failed', 'failed result', '2026-01-02T00:00:00.000Z', 'pending'],
     ['failed', 'failed result', '2026-01-02T00:00:00.000Z', 'dispatched']
   ] as const)(
-    'legacy active task-state matrix (%s, %s, %s)',
+    'legacy active task-state matrix (task=%s, result=%s, completedAt=%s, dispatch=%s)',
     (status, result, completedAt, dispatchStatus) => {
       const d = createDb()
       const task = d.createTask({ spec: `legacy ${status} task` })
