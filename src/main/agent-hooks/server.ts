@@ -924,19 +924,28 @@ export class AgentHookServer {
     }
   }
 
-  private shouldSuppressClosedTabStatus(paneKey: string): boolean {
+  private getAgentStatusDisposition(
+    paneKey: string,
+    event?: { hookEventName?: string; isReplay?: boolean }
+  ): 'accept' | 'restart' | 'suppress' {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
-    if (
+    const paneRetired =
       this.closedAgentStatusPaneKeys.has(paneKey) ||
       this.closedAgentStatusPaneKeys.has(ownerPaneKey)
-    ) {
-      return true
-    }
     const tabId = parsePaneKey(ownerPaneKey)?.tabId
-    if (!tabId) {
-      return false
+    if (tabId && this.closedAgentStatusTabIds.has(tabId)) {
+      return 'suppress'
     }
-    return this.closedAgentStatusTabIds.has(tabId)
+    if (!paneRetired) {
+      return 'accept'
+    }
+    // Why: command completion retires launch authority but leaves its shell pane reusable.
+    if (event?.hookEventName === 'UserPromptSubmit' && event.isReplay !== true) {
+      this.closedAgentStatusPaneKeys.delete(paneKey)
+      this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
+      return 'restart'
+    }
+    return 'suppress'
   }
 
   private markPaneClosedForAgentStatus(paneKey: string): void {
@@ -1716,7 +1725,7 @@ export class AgentHookServer {
       return
     }
     const tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
-    if (this.shouldSuppressClosedTabStatus(paneKey)) {
+    if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
       return
     }
     const worktreeId =
@@ -1836,16 +1845,20 @@ export class AgentHookServer {
       return
     }
     const tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
-    if (this.shouldSuppressClosedTabStatus(paneKey)) {
+    const hookEventName =
+      typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
+        ? envelope.hookEventName.trim()
+        : undefined
+    const statusDisposition = this.getAgentStatusDisposition(paneKey, {
+      hookEventName,
+      isReplay: envelope.isReplay === true
+    })
+    if (statusDisposition === 'suppress') {
       return
     }
     const worktreeId =
       envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()
-        : undefined
-    const hookEventName =
-      typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
-        ? envelope.hookEventName.trim()
         : undefined
     const promptInteractionKey =
       typeof envelope.promptInteractionKey === 'string' &&
@@ -1895,7 +1908,7 @@ export class AgentHookServer {
     })
     const event: AgentHookEventPayload = {
       paneKey,
-      launchToken: envelope.launchToken,
+      launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
       tabId,
       worktreeId,
       connectionId: trimmedConnectionId,
@@ -1997,9 +2010,19 @@ export class AgentHookServer {
         trackEmptyPaneKeyHook(body)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
-        if (normalized.event && !this.shouldSuppressClosedTabStatus(normalized.event.paneKey)) {
-          this.recordCurrentAuthorityObservation(normalized.event)
-          const enriched = this.applyNormalizedStatus(normalized.event, normalized.onAccepted)
+        const statusDisposition = normalized.event
+          ? this.getAgentStatusDisposition(normalized.event.paneKey, {
+              hookEventName: normalized.event.hookEventName,
+              isReplay: normalized.event.isReplay
+            })
+          : 'suppress'
+        if (normalized.event && statusDisposition !== 'suppress') {
+          const event =
+            statusDisposition === 'restart'
+              ? { ...normalized.event, launchToken: undefined }
+              : normalized.event
+          this.recordCurrentAuthorityObservation(event)
+          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
           this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
         }

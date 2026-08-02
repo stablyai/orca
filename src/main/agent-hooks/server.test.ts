@@ -2219,6 +2219,97 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('accepts a new local prompt after launch authority retires in a reusable pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload, { launchToken: 'retired-launch-token' }))
+        })
+
+      await postHook({ hook_event_name: 'UserPromptSubmit', prompt: 'first launch' })
+      server.retirePaneAuthority(PANE)
+      await postHook({ hook_event_name: 'Stop', last_assistant_message: 'late prior hook' })
+      expect(server.getStatusSnapshot()).toEqual([])
+
+      await postHook({ hook_event_name: 'UserPromptSubmit', prompt: 'manual restart' })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, state: 'working', prompt: 'manual restart' })
+      ])
+      expect(
+        server.attestCompatibilityAuthority({
+          paneKey: PANE,
+          launchTokenHash: createHash('sha256').update('retired-launch-token').digest('hex'),
+          connectionId: null,
+          terminalProvenance: 'current_runtime'
+        })
+      ).toBeNull()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('accepts a live remote prompt but not replay after launch authority retires', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'UserPromptSubmit',
+        launchToken: 'retired-remote-launch-token',
+        payload: { state: 'working', prompt: 'first launch', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.retirePaneAuthority(PANE)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'UserPromptSubmit',
+        launchToken: 'retired-remote-launch-token',
+        isReplay: true,
+        payload: { state: 'working', prompt: 'stale replay', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()).toEqual([])
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'UserPromptSubmit',
+        launchToken: 'retired-remote-launch-token',
+        payload: { state: 'working', prompt: 'remote manual restart', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        state: 'working',
+        prompt: 'remote manual restart',
+        connectionId: 'conn-1'
+      })
+    ])
+    expect(
+      server.attestCompatibilityAuthority({
+        paneKey: PANE,
+        launchTokenHash: createHash('sha256').update('retired-remote-launch-token').digest('hex'),
+        connectionId: 'conn-1',
+        terminalProvenance: 'current_runtime'
+      })
+    ).toBeNull()
+  })
+
   it('hydrates cached statuses as not observed in the current runtime', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-'))
     const firstServer = new AgentHookServer()
