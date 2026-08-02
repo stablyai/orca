@@ -927,6 +927,66 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
+  describe('inspectProcess', () => {
+    // Why: daemons survive app updates, so a protocol-<27 remote daemon must
+    // still surface agent activity instead of throwing on every poll.
+    async function withLegacyDaemon(
+      fn: (adapter: DaemonPtyAdapter) => Promise<void>
+    ): Promise<void> {
+      const legacyDir = createTestDir()
+      const legacySocket = getDaemonSocketPath(legacyDir)
+      const legacyToken = join(legacyDir, 'legacy.token')
+      const legacyServer = new DaemonServer({
+        socketPath: legacySocket,
+        tokenPath: legacyToken,
+        log: daemonLog,
+        protocolVersion: 26,
+        spawnSubprocess: (opts) => {
+          lastSpawnOpts = opts
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+      await legacyServer.start()
+      const legacy = new DaemonPtyAdapter({
+        socketPath: legacySocket,
+        tokenPath: legacyToken,
+        protocolVersion: 26
+      })
+      try {
+        await fn(legacy)
+      } finally {
+        legacy.dispose()
+        await legacyServer.shutdown()
+        rmSync(legacyDir, { recursive: true, force: true })
+      }
+    }
+
+    it('falls back to getForegroundProcess on a pre-inspectProcess daemon protocol', async () => {
+      await withLegacyDaemon(async (legacy) => {
+        const { id } = await legacy.spawn({ cols: 80, rows: 24 })
+        vi.mocked(lastSubprocess.getForegroundProcess).mockReturnValue('codex')
+
+        await expect(legacy.inspectProcess(id)).resolves.toEqual({
+          foregroundProcess: 'codex',
+          hasChildProcesses: true
+        })
+      })
+    })
+
+    it('derives hasChildProcesses as false for a shell foreground on legacy protocols', async () => {
+      await withLegacyDaemon(async (legacy) => {
+        const { id } = await legacy.spawn({ cols: 80, rows: 24 })
+        vi.mocked(lastSubprocess.getForegroundProcess).mockReturnValue('bash')
+
+        await expect(legacy.inspectProcess(id)).resolves.toEqual({
+          foregroundProcess: 'bash',
+          hasChildProcesses: false
+        })
+      })
+    })
+  })
+
   describe('serialize / revive', () => {
     it('serialize returns JSON', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })

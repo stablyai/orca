@@ -827,7 +827,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
     id: string
   ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
     if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
-      throw new Error('terminal_liveness_unavailable')
+      // Why: daemons survive app updates, so a protocol-<27 daemon never learned
+      // the combined inspectProcess request. Fall back to getForegroundProcess
+      // (always supported) so agent activity still resolves instead of throwing
+      // terminal_liveness_unavailable on every poll.
+      const foregroundProcess = await this.getForegroundProcess(id)
+      return {
+        foregroundProcess,
+        hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess)
+      }
     }
     return this.client.request<{
       foregroundProcess: string | null
