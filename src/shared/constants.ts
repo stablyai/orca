@@ -389,7 +389,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
-    voice: getDefaultVoiceSettings()
+    voice: getDefaultVoiceSettings(),
+    agentcookieSyncEnabled: true,
+    agentcookieDetected: false,
+    agentcookieLastSyncAt: null,
+    agentcookieLastImported: null
   }
 }
 

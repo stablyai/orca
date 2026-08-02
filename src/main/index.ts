@@ -75,6 +75,8 @@ import { callRuntimeEnvironment } from './ipc/runtime-environment-transport-rout
 import { resolveEnvironment } from '../shared/runtime-environment-store'
 import { getPreferredPairingOffer } from '../shared/runtime-environments'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
+import { AgentcookieSessionSync } from './browser/agentcookie-session-sync'
+import { ORCA_BROWSER_PARTITION } from '../shared/constants'
 import {
   recordRuntimeRpcStartFailure,
   showRuntimeRpcStartupFailureDialog
@@ -323,6 +325,7 @@ let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
+let agentcookieSync: AgentcookieSessionSync | null = null
 const serveReadinessPublisher = new ServeReadinessPublisher()
 let desktopRelayService: DesktopRelayService | null = null
 let desktopRelayStatus: RelayBrokerStatus = 'offline'
@@ -991,6 +994,27 @@ function prepareCodexRuntimeHomeForLaunch(
     )
   }
   return runtimeHomePath
+}
+
+// Why: starts the agentcookie session sync once (guarded), wiring the loop's
+// detected/last-sync status back into settings so the Settings UI can show it.
+function startAgentcookieSessionSync(): void {
+  if (agentcookieSync || !store) {
+    return
+  }
+  const settingsStore = store
+  agentcookieSync = new AgentcookieSessionSync({
+    targetPartition: ORCA_BROWSER_PARTITION,
+    isEnabled: () => settingsStore.getSettings().agentcookieSyncEnabled !== false,
+    onStatus: (status) => {
+      settingsStore.updateSettings({
+        agentcookieDetected: status.detected,
+        ...(status.lastSyncAt !== null ? { agentcookieLastSyncAt: status.lastSyncAt } : {}),
+        ...(status.lastImported !== null ? { agentcookieLastImported: status.lastImported } : {})
+      })
+    }
+  })
+  agentcookieSync.start()
 }
 
 async function prepareCodexSessionResumeForLaunch(args: {
@@ -2870,6 +2894,11 @@ void app.whenReady().then(async () => {
     void showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
   }
 
+  // Why: when the optional agentcookie CLI is installed, keep the embedded
+  // browser signed in automatically by pulling the session from it. Inert when
+  // agentcookie is not installed or the setting is off.
+  startAgentcookieSessionSync()
+
   const cloudAuth = getOrcaCloudAuthConfig()
   if (cloudAuth.configured) {
     try {
@@ -2968,6 +2997,7 @@ app.on('will-quit', (e) => {
   // Why: stats.flushAsync() must precede killAllPty() so still-running agents emit synthetic agent_stop events (killAllPty skips runtime.onPtyExit()). It closes them out synchronously and only defers the write.
   starNag?.stop()
   automations?.stop()
+  agentcookieSync?.stop()
   // Why: plugin hosts are forked children; dispose sends shutdown and
   // escalates to SIGKILL so they cannot outlive the app. The promise joins
   // the teardown barrier below — quitting before it resolves would let

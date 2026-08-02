@@ -3069,6 +3069,15 @@ export type GlobalSettings = {
   tabSwitchKeybindingSeed?: 'pending' | 'done'
   /** Local voice/dictation config. Optional for pre-voice profiles; getDefaultSettings() hydrates defaults via the persistence merge. */
   voice?: VoiceSettings
+  /** agentcookie integration. When the optional agentcookie CLI is installed,
+   *  keep the embedded browser signed in automatically by pulling the user's
+   *  session from `agentcookie export` instead of a manual cookie import. On by
+   *  default; completely inert when agentcookie is not installed. */
+  agentcookieSyncEnabled?: boolean
+  /** Runtime status set by the sync loop, surfaced in Settings. */
+  agentcookieDetected?: boolean
+  agentcookieLastSyncAt?: number | null
+  agentcookieLastImported?: number | null
 }
 
 export type OrcaWorkspaceLayout = {
