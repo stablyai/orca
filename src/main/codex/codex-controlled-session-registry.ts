@@ -1,5 +1,6 @@
 import type { CodexUnixAppServerClient } from './codex-unix-app-server-client'
 import { CodexControlledSessionDisposalFence } from './codex-controlled-session-disposal-fence'
+import { trackControlledSessionLaunch } from './codex-controlled-session-launch-tracker'
 import {
   assertControlledThreadAlive,
   buildControlledThreadResumeParams,
@@ -20,6 +21,7 @@ import {
   createControlledCodexSession,
   createReadyControlledTerminal,
   submitControlledInitialPrompt,
+  toControlledSessionError,
   type ControlledCodexSession
 } from './codex-controlled-session-acquisition'
 import type {
@@ -60,7 +62,12 @@ export class CodexControlledSessionRegistry {
   }
 
   async launch(input: CodexControlledSessionLaunch): Promise<CodexControlledSessionLaunchResult> {
-    return this.trackLaunch(input.conversationId, () => this.launchExistingThread(input))
+    return trackControlledSessionLaunch(
+      this.launches,
+      input.conversationId,
+      (conversationId) => this.assertNotDisposing(conversationId),
+      () => this.launchExistingThread(input)
+    )
   }
   private async launchExistingThread(
     input: CodexControlledSessionLaunch
@@ -111,7 +118,7 @@ export class CodexControlledSessionRegistry {
       try {
         await this.rollbackFailedLaunch(input, socketPath, server, client, visibleIdentity)
       } catch (cleanupError) {
-        Object.assign(asError(error), { cleanupError })
+        Object.assign(toControlledSessionError(error), { cleanupError })
       }
       throw error
     }
@@ -120,7 +127,12 @@ export class CodexControlledSessionRegistry {
     input: CodexControlledNewSessionLaunch,
     command: ControlledCodexCommand = resolveControlledCodexCommand(input.command)
   ): Promise<CodexControlledSessionLaunchResult> {
-    return this.trackLaunch(input.conversationId, () => this.launchNewThread(input, command))
+    return trackControlledSessionLaunch(
+      this.launches,
+      input.conversationId,
+      (conversationId) => this.assertNotDisposing(conversationId),
+      () => this.launchNewThread(input, command)
+    )
   }
   private async launchNewThread(
     input: CodexControlledNewSessionLaunch,
@@ -182,7 +194,7 @@ export class CodexControlledSessionRegistry {
       try {
         await this.rollbackFailedLaunch(launch ?? provisional, socketPath, server, client, identity)
       } catch (cleanupError) {
-        Object.assign(asError(error), { cleanupError })
+        Object.assign(toControlledSessionError(error), { cleanupError })
       }
       throw threadStartAttempted ? controlledLaunchOutcomeUnknown(error) : error
     }
@@ -277,24 +289,6 @@ export class CodexControlledSessionRegistry {
     }
   }
 
-  private async trackLaunch<T>(conversationId: string, start: () => Promise<T>): Promise<T> {
-    this.assertNotDisposing(conversationId)
-    const active = this.launches.get(conversationId)
-    if (active) {
-      await active.catch(() => {})
-      return this.trackLaunch(conversationId, start)
-    }
-    const launch = start()
-    this.launches.set(conversationId, launch)
-    try {
-      return await launch
-    } finally {
-      if (this.launches.get(conversationId) === launch) {
-        this.launches.delete(conversationId)
-      }
-    }
-  }
-
   private assertLaunchPermitted(input: CodexControlledSessionLaunch): void {
     this.assertNotDisposing(input.conversationId)
     this.assertCanLaunch(input)
@@ -303,8 +297,4 @@ export class CodexControlledSessionRegistry {
   private assertNotDisposing(conversationId: string): void {
     this.disposalFence.assertNotDisposing(conversationId)
   }
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error))
 }

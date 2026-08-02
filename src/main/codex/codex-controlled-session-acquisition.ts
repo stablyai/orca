@@ -98,7 +98,7 @@ export async function createReadyControlledTerminal(
       try {
         await options.closeVisibleTerminal(cleanupIdentity)
       } catch (cleanupError) {
-        Object.assign(asError(error), { cleanupError })
+        Object.assign(toControlledSessionError(error), { cleanupError })
       }
     }
     throw error
@@ -147,6 +147,6 @@ export function createControlledCodexSession(params: {
   return session
 }
 
-function asError(error: unknown): Error {
+export function toControlledSessionError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
