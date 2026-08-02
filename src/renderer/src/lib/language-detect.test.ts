@@ -49,6 +49,9 @@ describe('detectLanguage', () => {
     expect(detectLanguage('gate/top.vho')).toBe('vhdl')
     expect(detectLanguage('tb/top_tb.vht')).toBe('vhdl')
     expect(detectLanguage('gen/pll.vhi')).toBe('vhdl')
+    expect(detectLanguage('rtl/source.vhs')).toBe('vhdl')
+    expect(detectLanguage('gen/wrapper.vhw')).toBe('vhdl')
+    expect(detectLanguage('gen/comp.vhf')).toBe('vhdl')
     expect(detectLanguage('C:\\rtl\\TOP.VHD')).toBe('vhdl')
   })
 

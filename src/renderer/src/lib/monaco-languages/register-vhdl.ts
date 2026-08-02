@@ -38,8 +38,10 @@ export const vhdlMonarchLanguage: Monaco.languages.IMonarchLanguage = {
   keywords: VHDL_RESERVED_WORDS,
   typeKeywords: VHDL_PREDEFINED_TYPES,
 
-  // `-` only outside a `--` pair, so `q <=-- note` still starts a comment.
-  symbols: /(?:[=><!~?:&|+*/^%]|-(?!-))+/,
+  // `-` is its own alternative, never part of a run: it must not glue onto a
+  // preceding operator (`q<=-1` is `<=` then unary minus, not `<=-`), and the
+  // `(?!-)` keeps `q <=-- note` starting a comment.
+  symbols: /[=><!~?:&|+*/^%]+|-(?!-)/,
 
   tokenizer: {
     root: [

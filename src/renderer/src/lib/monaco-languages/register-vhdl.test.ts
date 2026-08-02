@@ -257,6 +257,21 @@ describe('vhdl tokenizer', () => {
     expect(tokenFor('q <=-- tight', '-- tight')).toBe('comment')
   })
 
+  it('scans an unspaced unary minus as its own lexeme', () => {
+    // `<=-` is not a VHDL token. Invisible in the editor either way — Monaco
+    // merges adjacent same-type tokens, and both halves are delimiters — so this
+    // asserts the rule boundary, which is what a future token split would rely on.
+    expect(tokenize('q<=-1;').slice(0, 3)).toEqual([
+      { text: 'q', token: 'identifier' },
+      { text: '<=', token: 'delimiter' },
+      { text: '-', token: 'delimiter' }
+    ])
+    expect(tokenize('v:=-5;').slice(1, 3)).toEqual([
+      { text: ':=', token: 'delimiter' },
+      { text: '-', token: 'delimiter' }
+    ])
+  })
+
   it('escapes an embedded quote by doubling it', () => {
     expect(tokenize('report "say ""hi"" now";')).toContainEqual({
       text: '""',
