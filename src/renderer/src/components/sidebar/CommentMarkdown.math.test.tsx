@@ -45,9 +45,12 @@ describe('CommentMarkdown math rendering', () => {
     expect(markup).toContain('$unfinished')
   })
 
-  it('recovers bracket-delimited display math without capturing prose or code fences', () => {
+  it('recovers bare and TeX bracket-delimited display math without capturing prose or code fences', () => {
     const formulaMarkup = renderToStaticMarkup(
       <CommentMarkdown content={'[\nS(x)=\\min_i \\frac{x_i^2}{r_i}\n]'} enableMath />
+    )
+    const latexDelimitedMarkup = renderToStaticMarkup(
+      <CommentMarkdown content={'\\[\nS(x)=\\min_i \\frac{x_i^2}{r_i}\n\\]'} enableMath />
     )
     const proseMarkup = renderToStaticMarkup(
       <CommentMarkdown content={'[\nplain bracketed prose\n]'} enableMath />
@@ -58,6 +61,8 @@ describe('CommentMarkdown math rendering', () => {
 
     expect(formulaMarkup).toContain('class="katex-display"')
     expect(formulaMarkup).toContain('<msub>')
+    expect(latexDelimitedMarkup).toContain('class="katex-display"')
+    expect(latexDelimitedMarkup).toContain('<msub>')
     expect(proseMarkup).not.toContain('class="katex"')
     expect(proseMarkup).toContain('plain bracketed prose')
     expect(fencedMarkup).not.toContain('class="katex"')

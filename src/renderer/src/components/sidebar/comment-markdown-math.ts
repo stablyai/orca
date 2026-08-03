@@ -36,7 +36,7 @@ function normalizeGitHubBacktickMathNode(node: MarkdownAstNode): void {
   }
 }
 
-export function normalizeBareBracketMathSource(source: string): string {
+export function normalizeBracketDelimitedMathSource(source: string): string {
   const lines = source.split('\n')
   const normalized: string[] = []
   let index = 0
@@ -62,14 +62,16 @@ export function normalizeBareBracketMathSource(source: string): string {
       continue
     }
 
-    if (line.trim() !== '[') {
+    const openingDelimiter = line.trim()
+    if (openingDelimiter !== '[' && openingDelimiter !== '\\[') {
       normalized.push(line)
       index += 1
       continue
     }
 
+    const closingDelimiter = openingDelimiter === '\\[' ? '\\]' : ']'
     let closingIndex = index + 1
-    while (closingIndex < lines.length && lines[closingIndex].trim() !== ']') {
+    while (closingIndex < lines.length && lines[closingIndex].trim() !== closingDelimiter) {
       closingIndex += 1
     }
 

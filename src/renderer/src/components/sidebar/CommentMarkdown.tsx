@@ -15,7 +15,10 @@ import {
   isTrustedCompactImageSrc,
   type CommentMarkdownLinkClickHandler
 } from './comment-markdown-element-renderers'
-import { normalizeBareBracketMathSource, remarkGitHubBacktickMath } from './comment-markdown-math'
+import {
+  normalizeBracketDelimitedMathSource,
+  remarkGitHubBacktickMath
+} from './comment-markdown-math'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
@@ -240,7 +243,7 @@ const CommentMarkdown = React.memo(
     }, [enableMath, githubRepo])
 
     const renderedContent = React.useMemo(
-      () => (enableMath ? normalizeBareBracketMathSource(content) : content),
+      () => (enableMath ? normalizeBracketDelimitedMathSource(content) : content),
       [content, enableMath]
     )
 

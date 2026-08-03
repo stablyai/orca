@@ -50,12 +50,12 @@ function createSession(): NativeChatLiveSession {
               '```'
             ].join('\n')
           },
-          { type: 'text', text: '[' },
+          { type: 'text', text: '\\[' },
           {
             type: 'text',
             text: 'S(x)=\\min_i \\frac{\\left\\lVert z(x)-z_i\\right\\rVert_2^2}{r_i}'
           },
-          { type: 'text', text: ']' }
+          { type: 'text', text: '\\]' }
         ]
       }
     ]
