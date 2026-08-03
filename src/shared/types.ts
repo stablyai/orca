@@ -1407,6 +1407,9 @@ export type PRCheckDetail = {
   url: string | null
   checkRunId?: number
   workflowRunId?: number
+  // Why: GitLab pipeline jobs have no check-run/workflow ids; carry the raw job
+  // id so the Checks panel can load its trace via `gitlab:jobTrace`.
+  gitlabJobId?: number
 }
 
 export type PRCheckAnnotation = {

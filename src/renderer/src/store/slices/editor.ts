@@ -66,6 +66,7 @@ import {
   statRuntimePath
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { loadGitLabCheckRunDetails } from '@/components/right-sidebar/gitlab-check-details-loader'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -3475,17 +3476,26 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
     patch({ details: checkRunDetails.details, loading: true, error: null })
     try {
-      const details = await get().fetchPRCheckDetails(
-        repo.path,
-        {
-          checkRunId: check.checkRunId,
-          workflowRunId: check.workflowRunId,
-          checkName: check.name,
-          url: check.url,
-          prRepo: null
-        },
-        { repoId: repo.id }
-      )
+      // GitLab pipeline jobs have no check-run/workflow ids; reload their trace
+      // through `gitlab:jobTrace` instead of GitHub's check-details API.
+      const details = check.gitlabJobId
+        ? await loadGitLabCheckRunDetails({
+            repoPath: repo.path,
+            repoId: repo.id,
+            settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
+            check
+          })
+        : await get().fetchPRCheckDetails(
+            repo.path,
+            {
+              checkRunId: check.checkRunId,
+              workflowRunId: check.workflowRunId,
+              checkName: check.name,
+              url: check.url,
+              prRepo: null
+            },
+            { repoId: repo.id }
+          )
       patch({
         details,
         loading: false,

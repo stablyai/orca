@@ -1061,7 +1061,12 @@ export function ChecksList({
       if (detailsByCheckKey[row.key]?.loading || detailsByCheckKey[row.key]?.details) {
         return
       }
-      if (!row.check.checkRunId && !row.check.workflowRunId && !row.check.url) {
+      if (
+        !row.check.checkRunId &&
+        !row.check.workflowRunId &&
+        !row.check.url &&
+        !row.check.gitlabJobId
+      ) {
         setDetailsByCheckKey((current) => ({
           ...current,
           [row.key]: {

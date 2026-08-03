@@ -44,26 +44,51 @@ describe('gitLabPipelineJobsToPRChecks', () => {
         name: 'test: unit',
         status: 'completed',
         conclusion: 'failure',
-        url: 'https://gitlab.com/acme/orca/-/jobs/1'
+        url: 'https://gitlab.com/acme/orca/-/jobs/1',
+        gitlabJobId: 1
       },
       {
         name: 'deploy: deploy',
         status: 'completed',
         conclusion: 'neutral',
-        url: null
+        url: null,
+        gitlabJobId: 2
       },
       {
         name: 'deploy: delayed deploy',
         status: 'queued',
         conclusion: 'pending',
-        url: 'https://gitlab.com/acme/orca/-/jobs/3'
+        url: 'https://gitlab.com/acme/orca/-/jobs/3',
+        gitlabJobId: 3
       },
       {
         name: 'integration: external callback',
         status: 'queued',
         conclusion: 'pending',
-        url: 'https://gitlab.com/acme/orca/-/jobs/4'
+        url: 'https://gitlab.com/acme/orca/-/jobs/4',
+        gitlabJobId: 4
       }
     ])
+  })
+
+  it('omits gitlabJobId when the job has no id', () => {
+    const [row] = gitLabPipelineJobsToPRChecks([
+      {
+        id: 0,
+        name: 'orphan',
+        stage: '',
+        status: 'success',
+        webUrl: '',
+        duration: null
+      }
+    ])
+
+    expect(row).toEqual({
+      name: 'orphan',
+      status: 'completed',
+      conclusion: 'success',
+      url: null
+    })
+    expect(row).not.toHaveProperty('gitlabJobId')
   })
 })
