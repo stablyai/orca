@@ -89,6 +89,7 @@ import {
 } from '../../../../shared/task-source-context'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
+import { isLinearIssueIdentifier } from '../../../../shared/linear-links'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getGitHubRuntimeRepoId,
@@ -1294,7 +1295,7 @@ export default function SmartWorkspaceNameField({
     if (parseGitLabIssueOrMRLink(trimmed) !== null) {
       return 'gitlab'
     }
-    if (linearAvailable && /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(trimmed)) {
+    if (linearAvailable && isLinearIssueIdentifier(trimmed)) {
       return 'linear'
     }
     return null

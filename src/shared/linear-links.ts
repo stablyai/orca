@@ -44,7 +44,14 @@ export type ParsedLinearIssueInput = {
   organizationUrlKey?: string
 }
 
-const LINEAR_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*-\d+$/
+// Team keys may start with a digit (`2ENG-1`), but requiring at least one letter
+// keeps dates, phone numbers, and port ranges (`2026-07`, `555-1234`, `8080-8090`)
+// from being read as issue identifiers.
+const LINEAR_IDENTIFIER_PATTERN = /^(?=[A-Za-z0-9_]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9_]*-\d+$/
+
+export function isLinearIssueIdentifier(value: string): boolean {
+  return LINEAR_IDENTIFIER_PATTERN.test(value.trim())
+}
 
 export function parseLinearIssueInput(input: string): ParsedLinearIssueInput | null {
   const trimmed = input.trim()
