@@ -5,18 +5,29 @@ import {
 
 export const TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS = 200
 
+// Ceiling for a composition that stops making progress. Measured from the last
+// compositionupdate, not from the start: multi-segment bunsetsu conversion keeps a
+// Japanese composition legitimately pending far longer than this, and finishing on a
+// total-elapsed ceiling would split it with the newline this deferral exists to hold back.
+export const TERMINAL_IME_DEFERRED_NEWLINE_MAX_IDLE_MS = 2000
+
 export function sendTerminalInputAfterComposition(
   terminalElement: HTMLElement | null | undefined,
   send: () => void,
-  options?: { fallbackMs?: number }
+  options?: { fallbackMs?: number; maxIdleMs?: number }
 ): void {
   if (!terminalElement) {
     window.setTimeout(send, 0)
     return
   }
 
-  const fallbackMs = options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS
+  const fallbackMs = Math.max(1, options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS)
+  const maxIdleMs = Math.max(
+    fallbackMs,
+    options?.maxIdleMs ?? TERMINAL_IME_DEFERRED_NEWLINE_MAX_IDLE_MS
+  )
   let done = false
+  let idleMs = 0
 
   const finish = (): void => {
     if (done) {
@@ -24,6 +35,7 @@ export function sendTerminalInputAfterComposition(
     }
     done = true
     terminalElement.removeEventListener('compositionend', onCompositionEnd)
+    terminalElement.removeEventListener('compositionupdate', onCompositionUpdate)
     terminalElement.removeEventListener(
       XTERM_COMPOSITION_SESSION_END_EVENT,
       onCompositionSessionEnd
@@ -40,9 +52,33 @@ export function sendTerminalInputAfterComposition(
   }
   const onCompositionEnd = (): void => finishAfterPendingComposition()
   const onCompositionSessionEnd = (): void => finishAfterPendingComposition()
+  // Each preedit change proves the composition is still progressing, so the idle
+  // ceiling only ever expires on a composition that is genuinely stuck.
+  let sawRecentUpdate = false
+  const onCompositionUpdate = (): void => {
+    idleMs = 0
+    sawRecentUpdate = true
+  }
   terminalElement.addEventListener('compositionend', onCompositionEnd)
+  terminalElement.addEventListener('compositionupdate', onCompositionUpdate)
   terminalElement.addEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, onCompositionSessionEnd)
-  const fallbackTimer = window.setTimeout(finish, fallbackMs)
+
+  // Re-arm rather than sending: firing mid-composition splits the preedit with a newline.
+  const onFallbackDeadline = (): void => {
+    idleMs += fallbackMs
+    // A live compositionupdate counts as evidence on its own: a route installed while a
+    // composition was already in flight never saw that session start, so it has nothing
+    // recorded to report as pending.
+    const compositionInProgress =
+      hasPendingTerminalImeComposition(terminalElement) || sawRecentUpdate
+    sawRecentUpdate = false
+    if (!compositionInProgress || idleMs >= maxIdleMs) {
+      finish()
+      return
+    }
+    fallbackTimer = window.setTimeout(onFallbackDeadline, fallbackMs)
+  }
+  let fallbackTimer = window.setTimeout(onFallbackDeadline, fallbackMs)
 }
 
 export type TerminalImeDeferredNewlineSender = {

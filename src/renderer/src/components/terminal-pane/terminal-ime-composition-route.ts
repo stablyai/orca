@@ -82,11 +82,13 @@ export function installTerminalImeCompositionRoute(args: {
     if (!detail) {
       return
     }
-    event.preventDefault()
     const captured = sessions.get(detail.id)
     if (!captured) {
+      // Not our session — the route was installed mid-composition, so no start was seen.
+      // Preventing default here would suppress xterm's insertion with nothing to replace it.
       return
     }
+    event.preventDefault()
     sessions.delete(detail.id)
     adjustPendingCompositionCount(terminalElement, -1)
     if (
