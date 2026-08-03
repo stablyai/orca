@@ -1,5 +1,6 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { PtyTransport } from './pty-transport'
+import { installTerminalImeAbandonedPreeditGuard } from './terminal-ime-abandoned-preedit'
 
 export const XTERM_COMPOSITION_SESSION_START_EVENT = 'xterm-composition-session-start'
 export const XTERM_COMPOSITION_SESSION_END_EVENT = 'xterm-composition-session-end'
@@ -64,6 +65,8 @@ export function installTerminalImeCompositionRoute(args: {
     return { dispose: () => undefined }
   }
 
+  const abandonedPreedit = installTerminalImeAbandonedPreeditGuard(terminalElement)
+
   const onSessionStart = (event: Event): void => {
     const detail = getCompositionDetail(event)
     if (!detail || disposed) {
@@ -87,10 +90,12 @@ export function installTerminalImeCompositionRoute(args: {
     if (!captured) {
       return
     }
+    const abandoned = abandonedPreedit.consume()
     sessions.delete(detail.id)
     adjustPendingCompositionCount(terminalElement, -1)
     if (
       disposed ||
+      abandoned ||
       detail.dataPendingReconciliation ||
       !detail.data ||
       captured.ptyId === null ||
@@ -110,6 +115,7 @@ export function installTerminalImeCompositionRoute(args: {
       disposed = true
       adjustPendingCompositionCount(terminalElement, -sessions.size)
       sessions.clear()
+      abandonedPreedit.dispose()
       terminalElement.removeEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, onSessionStart)
       terminalElement.removeEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, onSessionEnd)
     }

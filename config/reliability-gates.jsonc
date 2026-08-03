@@ -5697,10 +5697,12 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-abandoned-preedit.test.ts",
         "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-abandoned-preedit.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
@@ -5716,6 +5718,15 @@
           "assertions": [
             "native text commits route once to the intended PTY",
             "composition/preedit bookkeeping does not leak premature text"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-abandoned-preedit.test.ts",
+          "assertions": [
+            "a Backspace that empties the preedit sends nothing to the PTY instead of replaying the abandoned preedit, whether or not the IME blanks the preedit with its own compositionupdate first",
+            "shrinking a multi-character preedit keeps composing and stays out of the PTY",
+            "real commits still route once, including a Sogou-style commit announced by an empty compositionupdate and an fcitx-style commit whose text only lands on the input event after an empty compositionend",
+            "the routeless dashboard-popout preview terminal drops the abandoned preedit too"
           ]
         },
         {
@@ -5776,6 +5787,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "linux",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-abandoned-preedit.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.461,
+          "summary": "7 tests passed against real xterm instances: a Backspace that empties the preedit stays out of the PTY in both IME dialects (with and without a blanking compositionupdate), a shrinking multi-character preedit keeps composing, Sogou-style and fcitx-style commits still route exactly once, and the routeless dashboard-popout preview terminal drops the abandoned preedit. Forcing the guard off turns the four suppression assertions red while the three commit assertions stay green."
+        },
         {
           "date": "2026-07-11",
           "runner": "local",
@@ -5845,7 +5865,7 @@
       ],
       "knownGaps": [
         "Current commands include renderer-unit coverage and a CDP-driven Electron repro; real OS IME automation may need manual or soak evidence.",
-        "Backspace/Enter during composition, JIS yen, Arabic/RTL, paste edge cases, and Windows ConPTY post-agent key reset still need representative gate coverage."
+        "Backspace that empties a preedit is covered on both xterm surfaces by renderer-unit tests, not by real OS IME automation; Enter during composition, JIS yen, Arabic/RTL, paste edge cases, and Windows ConPTY post-agent key reset still need representative gate coverage."
       ],
       "demotionRule": "Cannot promote if success is based only on DOM text without PTY byte/cell evidence."
     },
