@@ -157,7 +157,7 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
             tagName: 'button'
           }
         },
-        'click #login-btn (340,215) @ example.com/checkout'
+        'click `#login-btn` (340,215) @ example.com/checkout'
       ],
       [
         {
@@ -171,7 +171,7 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
             target: '#email'
           }
         },
-        'type "user@example.com" into #email @ example.com/checkout'
+        'type "user@example.com" into `#email` @ example.com/checkout'
       ],
       [
         {
@@ -181,10 +181,11 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
             kind: 'keydown',
             page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
             startedAt: '2026-07-31T10:15:30.000Z',
-            key: 'Enter'
+            key: 'Enter',
+            target: '#email'
           }
         },
-        'key Enter @ example.com/checkout'
+        'key Enter `#email` @ example.com/checkout'
       ],
       [
         {
@@ -197,7 +198,7 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
             target: '#menu-stok'
           }
         },
-        'hover #menu-stok @ example.com/checkout'
+        'hover `#menu-stok` @ example.com/checkout'
       ],
       [
         {
@@ -346,7 +347,7 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
     const lines = formatBrowserRecorderStepsAsMarkdown(steps)
       .split('\n')
       .filter((line) => /^\d+\./.test(line))
-    expect(lines[0]).toBe('1. click button.btn-save (620,480) @ example.com/checkout')
+    expect(lines[0]).toBe('1. click `button.btn-save` (620,480) @ example.com/checkout')
     expect(lines[1]).toContain('2.   └ request POST')
     expect(lines[2]).toBe('3. console log "ok" (a.js) @ example.com/checkout')
   })

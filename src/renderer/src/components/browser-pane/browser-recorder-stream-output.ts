@@ -35,18 +35,20 @@ export function elementPropsSuffix(element: BrowserRecorderElementProps | undefi
 
 export function formatInteractionSummary(interaction: BrowserRecorderInteraction): string {
   const props = elementPropsSuffix(interaction.element)
+  // Why: backticks keep dotted selectors (a.menu-item) from being
+  // auto-linkified as if they were URLs.
   switch (interaction.kind) {
     case 'click': {
       const coords =
         interaction.x != null && interaction.y != null ? ` (${interaction.x},${interaction.y})` : ''
-      return `click ${interaction.target ?? `${interaction.x ?? 0},${interaction.y ?? 0}`}${coords}${props}`
+      return `click \`${interaction.target ?? `${interaction.x ?? 0},${interaction.y ?? 0}`}\`${coords}${props}`
     }
     case 'type':
-      return `type "${interaction.text ?? ''}" into ${interaction.target ?? 'body'}${props}`
+      return `type "${interaction.text ?? ''}" into \`${interaction.target ?? 'body'}\`${props}`
     case 'keydown':
-      return `key ${interaction.key ?? ''}${props}`
+      return `key ${interaction.key ?? ''} \`${interaction.target ?? ''}\`${props}`
     case 'hover':
-      return `hover ${interaction.target ?? ''}${props}`
+      return `hover \`${interaction.target ?? ''}\`${props}`
     case 'scroll':
       return `scroll x=${interaction.scrollX ?? 0}, y=${interaction.scrollY ?? 0}`
   }

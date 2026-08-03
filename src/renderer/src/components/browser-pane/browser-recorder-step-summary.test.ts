@@ -98,7 +98,7 @@ describe('formatBrowserRecorderStepSummary', () => {
           }
         })
       )
-    ).toBe('User type "ABC" into #stok_kod')
+    ).toBe('User type "ABC" into `#stok_kod`')
     expect(
       formatBrowserRecorderStepSummary(
         makeStep({

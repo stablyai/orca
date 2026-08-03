@@ -158,13 +158,20 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
     lastHover = { target: target, at: now }
     report('hover', { target: target, tagName: e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '', el: elementInfo(e.target) })
   }, true)
-  // ── scroll (throttled) ──
-  var lastScroll = 0
-  document.addEventListener('scroll', function () {
+  // ── scroll (throttled, change-only) ──
+  var lastScroll = null
+  var lastScrollAt = 0
+  window.addEventListener('scroll', function () {
+    var x = Math.round(window.scrollX)
+    var y = Math.round(window.scrollY)
     var now = Date.now()
-    if (now - lastScroll < 1000) { return }
-    lastScroll = now
-    report('scroll', { x: Math.round(window.scrollX || 0), y: Math.round(window.scrollY || 0) })
+    // Why: only meaningful position changes are recorded — wheel events that
+    // move nothing would otherwise log scroll x=0, y=0 noise.
+    if (lastScroll && lastScroll.x === x && lastScroll.y === y) { return }
+    if (now - lastScrollAt < 1000) { return }
+    lastScroll = { x: x, y: y }
+    lastScrollAt = now
+    report('scroll', { x: x, y: y })
   }, true)
   function originStack() {
     try { return new Error().stack || '' } catch (e) { return '' }

@@ -29,7 +29,14 @@ import type { BrowserRecorderPageSource } from './browser-recorder-page-source'
 import type { BrowserRecorderWebRequestDetails } from './browser-recorder-web-request'
 
 function requestKey(url: string, method: string): string {
-  return `${method}|${url}`
+  // Why: the page hook reports relative URLs while webRequest reports
+  // absolute ones — normalize both to path+search so dedup matches.
+  try {
+    const parsed = new URL(url, 'http://localhost')
+    return `${method}|${parsed.pathname}${parsed.search}`
+  } catch {
+    return `${method}|${url}`
+  }
 }
 
 /** Filters app console chatter so real messages stay visible. */
