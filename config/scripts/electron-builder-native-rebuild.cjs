@@ -10,10 +10,14 @@ function electronBuilderNativeRebuild(context) {
 function runElectronBuilderNativeRebuild(context, runner = execFileSync, runtime = {}) {
   const args = buildNativeRebuildArgs(context, runtime)
   if (readPlatformName(context?.platform) === 'win32') {
-    runner(process.execPath, ['config/scripts/build-windows-cli-launcher.mjs'], {
-      cwd: projectDir,
-      stdio: 'inherit'
-    })
+    // Why: electron-builder's win extraResources ship both the orca launcher and the
+    // agent-teams tmux shim; the default target builds only the launcher.
+    for (const target of ['orca', 'tmux']) {
+      runner(process.execPath, ['config/scripts/build-windows-cli-launcher.mjs', '--target', target], {
+        cwd: projectDir,
+        stdio: 'inherit'
+      })
+    }
   }
   runner(process.execPath, args, {
     cwd: projectDir,

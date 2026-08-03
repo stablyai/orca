@@ -69,7 +69,7 @@ describe('electron-builder native rebuild hook', () => {
     ).toContain('--force')
   })
 
-  it('builds the native CLI launcher before packaging Windows resources', () => {
+  it('builds the native CLI launcher and tmux shim before packaging Windows resources', () => {
     const calls = []
     const result = runElectronBuilderNativeRebuild(
       {
@@ -83,7 +83,12 @@ describe('electron-builder native rebuild hook', () => {
     expect(calls).toEqual([
       [
         process.execPath,
-        ['config/scripts/build-windows-cli-launcher.mjs'],
+        ['config/scripts/build-windows-cli-launcher.mjs', '--target', 'orca'],
+        expect.objectContaining({ stdio: 'inherit' })
+      ],
+      [
+        process.execPath,
+        ['config/scripts/build-windows-cli-launcher.mjs', '--target', 'tmux'],
         expect.objectContaining({ stdio: 'inherit' })
       ],
       [
