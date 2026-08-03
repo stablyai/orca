@@ -54,7 +54,10 @@ import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-revi
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
 import { findRepoForWorktreeOwner } from './repo-host-identity'
-import { isGitHubWorkItemsQueryTooLarge } from './github-work-items-query-bounds'
+import {
+  GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN,
+  isGitHubWorkItemsQueryTooLarge
+} from './github-work-items-query-bounds'
 import { classifyGitHubUnavailable } from '../../../../shared/github-api-availability'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { translate } from '@/i18n/i18n'
@@ -668,6 +671,9 @@ const CHECKS_CACHE_TTL = 60_000 // 1 minute — checks change more frequently
 const EMPTY_CHECKS_CACHE_TTL = 10_000
 // Why: the work-item list is a browse surface, not a source of truth, so 60s staleness is fine (SWR keeps it current).
 const WORK_ITEMS_CACHE_TTL = 60_000
+// GitHub's Search API serves the page that starts within its first 1000 results;
+// the next page 422s even when the final reachable page crosses the boundary.
+const GITHUB_SEARCH_RESULT_WINDOW = 1000
 // Why: long-lived (matches repos.ts) so the user has time to read + act on persist failures before the toast vanishes.
 const ERROR_TOAST_DURATION = 60_000
 
@@ -1978,7 +1984,11 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     page: number
-  ) => Promise<{ items: GitHubWorkItem[]; failedCount: number }>
+  ) => Promise<{
+    items: GitHubWorkItem[]
+    failedCount: number
+    errorTypes: ClassifiedError['type'][]
+  }>
   /** Count items and derive pages from the largest per-repo result set. */
   countWorkItemsAcrossRepos: (
     repos: {
@@ -2802,9 +2812,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, page) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
-      return { items: [], failedCount: 0 }
+      return { items: [], failedCount: 0, errorTypes: [] }
     }
     let failedCount = 0
+    const errorTypes: ClassifiedError['type'][] = []
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         const requestState = get()
@@ -2830,9 +2841,28 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           })
           // Why: page-N failures aren't in the per-repo banner (keyed on the initial fetch); log them so pagination failures are observable instead of silently truncating (richer surface deferred, design doc §6).
           if (envelope.errors?.issues) {
+            const { type, message } = envelope.errors.issues
+            // Why: only the 1000-result-window 422 may drive the unreachable
+            // clamp; demote other validation errors so they read as failures.
+            errorTypes.push(
+              type === 'validation_error' &&
+                !GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN.test(message)
+                ? 'unknown'
+                : type
+            )
             console.warn(
               `[workItems] next page ${r.repoId} issues-side partial failure:`,
               envelope.errors.issues
+            )
+          }
+          if (envelope.errors?.prs) {
+            // Why: the window 422 is issue-side only — a PR-side validation
+            // error must never join the unreachable signal.
+            const { type } = envelope.errors.prs
+            errorTypes.push(type === 'validation_error' ? 'unknown' : type)
+            console.warn(
+              `[workItems] next page ${r.repoId} prs-side partial failure:`,
+              envelope.errors.prs
             )
           }
           const ownerHostId = getGitHubWorkItemSourceHostId(requestState, repo, r.sourceContext)
@@ -2856,7 +2886,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       })
     )
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
-    return { items: merged, failedCount }
+    return { items: merged, failedCount, errorTypes }
   },
 
   countWorkItemsAcrossRepos: async (repos, query, perRepoLimit) => {
@@ -2864,6 +2894,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return { totalCount: 0, totalPages: 0 }
     }
     const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
+    // Why: GitHub 422s pages that start past its 1000-result search window.
+    const maxReachablePages = Math.max(1, Math.ceil(GITHUB_SEARCH_RESULT_WINDOW / normalizedLimit))
     const counts = await Promise.all(
       repos.map(async (r) => {
         // Why: same stampede cap as item-fetch — without a slot a 90-repo selection fires 90 concurrent count IPCs before the main-side rate-limit guard sees the first 403.
@@ -2895,7 +2927,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       totalCount: counts.reduce((sum, count) => sum + count, 0),
       // Why: repos advance independently by page, so take the max across repos — a sum/page-width undercounts when one repo owns most results.
       totalPages: counts.reduce(
-        (maxPages, count) => Math.max(maxPages, Math.ceil(count / normalizedLimit)),
+        (maxPages, count) =>
+          Math.max(maxPages, Math.min(Math.ceil(count / normalizedLimit), maxReachablePages)),
         0
       )
     }

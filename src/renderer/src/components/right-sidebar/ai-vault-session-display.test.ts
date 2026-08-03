@@ -123,4 +123,31 @@ describe('ai vault session display', () => {
       })
     ).toBeNull()
   })
+  // Remote/SSH rows never re-parse on demand, so a truncated window would
+  // otherwise show a RECENT ask permanently labelled as the first prompt.
+  it('refuses the preview fallback once the sliding window has truncated', () => {
+    expect(
+      sessionFirstPrompt({
+        ...baseSession,
+        previewMessagesTruncated: true,
+        previewMessages: [
+          { role: 'user', text: 'Later user turn still in the preview window', timestamp: null },
+          { role: 'assistant', text: 'Later reply', timestamp: null }
+        ]
+      })
+    ).toBeNull()
+  })
+
+  it('still prefers a stored firstUserPrompt when the window has truncated', () => {
+    expect(
+      sessionFirstPrompt({
+        ...baseSession,
+        previewMessagesTruncated: true,
+        firstUserPrompt: 'Original long first prompt that scrolled out of preview',
+        previewMessages: [
+          { role: 'user', text: 'Later user turn still in the preview window', timestamp: null }
+        ]
+      })
+    ).toBe('Original long first prompt that scrolled out of preview')
+  })
 })

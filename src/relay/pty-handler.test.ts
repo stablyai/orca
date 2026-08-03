@@ -687,6 +687,60 @@ describe('PtyHandler', () => {
     }
   })
 
+  // Why: both spellings classify as a POSIX startup family, so the relay must not be the one host
+  // that hard-fails a setting the local and daemon PTYs accept.
+  it.each(['bash', 'bash.exe'])(
+    'accepts the %s shell override and routes it through Git Bash resolution',
+    async (shellOverride) => {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: 'win32'
+      })
+      const resolveGitBashSpy = vi
+        .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+        .mockReturnValue('C:\\Program Files\\Git\\bin\\bash.exe')
+      try {
+        await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, shellOverride })
+
+        expect(resolveGitBashSpy).toHaveBeenCalledWith(shellOverride)
+        expect(mockPtySpawn).toHaveBeenCalledWith(
+          'C:\\Program Files\\Git\\bin\\bash.exe',
+          expect.any(Array),
+          expect.any(Object)
+        )
+      } finally {
+        resolveGitBashSpy.mockRestore()
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: originalPlatform
+        })
+      }
+    }
+  )
+
+  it('falls back to the literal bash override when Git Bash is not installed', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveGitBashSpy = vi
+      .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+      .mockReturnValue(null)
+    try {
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, shellOverride: 'bash' })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith('bash', expect.any(Array), expect.any(Object))
+    } finally {
+      resolveGitBashSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
   it('resolves the Git Bash sentinel to the remote bash.exe path on Windows', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', {

@@ -51,6 +51,20 @@ export function getDeleteWorktreeToastCopy(
         isDestructive: false
       }
     }
+    if (forceDeleteReason === 'unstopped-pty') {
+      return {
+        title: translate(
+          'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+          'Failed to delete workspace {{value0}}',
+          { value0: worktreeName }
+        ),
+        description: translate(
+          'auto.components.sidebar.delete.worktree.toast.unstoppedPty',
+          'Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.'
+        ),
+        isDestructive: false
+      }
+    }
     if (forceDeleteReason === 'missing-registration') {
       return {
         title: translate(

@@ -2,7 +2,22 @@ import type { GitWorktreeInfo } from './types'
 
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 
-export type WorktreeForceDeleteReason = 'dirty' | 'orphan-directory' | 'missing-registration'
+export const UNSTOPPED_PTY_REMOVAL_PREFIX = 'Failed to physically stop every PTY for worktree:'
+
+// Why (#11960): the desktop force affordance is driven entirely by the classifier
+// below, so this hint and its matcher must stay in the same file — a message that
+// tells the user to force-delete while the UI hides the button is the same dead end.
+export const WORKTREE_TEARDOWN_FORCE_HINT = 'Retry with force delete (--force) to remove it anyway.'
+
+export type WorktreeForceDeleteReason =
+  | 'dirty'
+  | 'orphan-directory'
+  | 'missing-registration'
+  | 'unstopped-pty'
+
+export function isUnstoppedPtyRemovalError(error: string): boolean {
+  return error.includes(UNSTOPPED_PTY_REMOVAL_PREFIX)
+}
 
 export function createLockedWorktreeRemovalError(lockReason?: string): Error {
   const reason = lockReason?.trim()
@@ -46,12 +61,20 @@ const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
 
 export function classifyWorktreeForceDeleteReason(
   error: string,
-  force = false
+  force = false,
+  allowUnverifiedPtyStop = false
 ): WorktreeForceDeleteReason | null {
   if (isLockedWorktreeRemovalError(error)) {
     // Why: a Git lock can represent an external safety contract. It must be
     // unlocked explicitly rather than folded into Orca's dirty-file force path.
     return null
+  }
+  // Why (#11960): this must be decided before the `force` guard below. The ordinary
+  // delete confirmation already passes force:true to skip the dirty-file prompt, but
+  // it does NOT waive PTY-stop proof — so `force` alone is no evidence that the user
+  // has already spent this escape hatch. Only the waiver itself is.
+  if (isUnstoppedPtyRemovalError(error)) {
+    return allowUnverifiedPtyStop ? null : 'unstopped-pty'
   }
   if (force) {
     return null

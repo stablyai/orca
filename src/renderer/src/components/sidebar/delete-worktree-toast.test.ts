@@ -10,6 +10,23 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
+  // Why (#11960): the PTY gate's error tells the user to force-delete, so the
+  // toast has to actually offer it — a reason of null hides the button entirely.
+  it('uses terminal-teardown guidance when a PTY stop could not be proven', () => {
+    expect(
+      getDeleteWorktreeToastCopy(
+        'feature/foo',
+        'unstopped-pty',
+        'Failed to physically stop every PTY for worktree: repo-1::/w — still live: term_a'
+      )
+    ).toEqual({
+      title: 'Failed to delete workspace feature/foo',
+      description:
+        'Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.',
+      isDestructive: false
+    })
+  })
+
   it('uses orphaned-directory guidance when Git tracking is already gone', () => {
     expect(
       getDeleteWorktreeToastCopy(

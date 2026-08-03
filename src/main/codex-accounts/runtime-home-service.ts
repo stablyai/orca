@@ -77,7 +77,7 @@ import {
   codexAuthMatchesSystemDefaultIdentity
 } from './codex-auth-identity'
 import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-migration'
-import { hasStoredCodexCredential } from './managed-codex-auth-readiness'
+import { CodexCredentialAbsenceGrace } from './codex-credential-absence-grace'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
 import {
   hasRecordedLegacySharedCodexPane,
@@ -179,6 +179,8 @@ export class CodexRuntimeHomeService {
   // provenance so a later deselect/rollback never adopts stale shared bytes.
   private lastHostAccountUsedSelfContainedHome = false
   private sharedAuthRefreshBlockedByManagedTransition = false
+  // Why: transient auth.json read/parse failures must not deselect an account.
+  private readonly credentialAbsenceGrace = new CodexCredentialAbsenceGrace()
 
   constructor(private readonly store: Store) {
     this.safeRecoverInterruptedRuntimeAuthOperation()
@@ -307,11 +309,15 @@ export class CodexRuntimeHomeService {
     if (
       unavailableManagedHomePath &&
       normalizeRuntimePathForComparison(unavailableManagedHomePath) ===
-        normalizeRuntimePathForComparison(perAccountHome) &&
-      !hasStoredCodexCredential(join(perAccountHome, 'auth.json'))
+        normalizeRuntimePathForComparison(perAccountHome)
     ) {
-      this.clearSelfContainedManagedSelection(account, 'credential remained unavailable')
-      return null
+      const absence = this.credentialAbsenceGrace.assess(join(perAccountHome, 'auth.json'))
+      if (absence.state !== 'present' && absence.durable) {
+        this.clearSelfContainedManagedSelection(account, 'credential remained unavailable')
+        return null
+      }
+      // Why: a transient missing/unreadable auth.json is usually codex rotating
+      // it; keep the selection and launch — the CLI re-reads the settled file.
     }
     // Why: link the user's real ~/.codex resources and mirror config into THIS
     // home (never symlinking into or mutating ~/.codex), so the per-account home
@@ -732,11 +738,22 @@ export class CodexRuntimeHomeService {
     }
 
     const activeAuthPath = join(activeAccount.managedHomePath, 'auth.json')
-    if (!existsSync(activeAuthPath)) {
+    const authAbsence = this.credentialAbsenceGrace.assess(activeAuthPath)
+    if (authAbsence.state !== 'present' && authAbsence.state !== 'incomplete') {
+      if (!authAbsence.durable) {
+        // Why: mid-rotation reads look missing/unreadable for a moment; skip
+        // this sync without deselecting and let a settled read decide later.
+        console.warn(
+          '[codex-runtime-home] Active managed account auth.json unavailable, keeping selection through grace window'
+        )
+        return
+      }
       console.warn(
-        '[codex-runtime-home] Active managed account is missing auth.json, restoring system default'
+        '[codex-runtime-home] Active managed account credential is unavailable, restoring system default'
       )
-      if (this.lastSyncedAccountId === activeAccount.id) {
+      // Why: valid credential-free JSON is an explicit logout; never revive it
+      // from stale shared-home bytes while clearing the selection.
+      if (authAbsence.state !== 'no-credential' && this.lastSyncedAccountId === activeAccount.id) {
         outgoingReadBackResult = this.recoverRefreshForMissingActiveAccount(activeAccount)
       }
       this.store.updateSettings({

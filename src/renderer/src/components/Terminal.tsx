@@ -45,7 +45,7 @@ import type {
 } from '../../../shared/types'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
-import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
+import { RetainedBrowserPaneOverlayLayer } from './browser-pane/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
 import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
 import { useBrowserMobileDriverForAny } from '@/lib/pane-manager/browser-mobile-driver-state'
@@ -119,7 +119,6 @@ import {
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
-import CodexRestartChip from './CodexRestartChip'
 import {
   findActivityTerminalPortal,
   useActivityTerminalPortals,
@@ -2400,7 +2399,6 @@ function Terminal(): React.JSX.Element | null {
                     }
                     aria-hidden={!isVisible}
                   >
-                    <CodexRestartChip isVisible={isVisible} worktreeId={workspace.id} />
                     {(tabsByWorktree[workspace.id] ?? [])
                       .filter((tab) =>
                         shouldMountBackgroundWorktreeTab(
@@ -2656,7 +2654,6 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       inert={!isVisible}
       aria-hidden={!isVisible}
     >
-      <CodexRestartChip isVisible={isVisible} worktreeId={worktreeId} />
       <TabGroupSplitLayout
         layout={layout}
         worktreeId={worktreeId}
@@ -2674,11 +2671,19 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         backgroundMountTabIds={backgroundMountTabIds}
         activationDeferredMountTabIds={activationDeferredMountTabIds}
       />
+      {/* Why: once eligible, retain slot DOM so hidden worktrees keep their Electron guests alive (STA-3228). */}
+      <RetainedBrowserPaneOverlayLayer
+        worktreeId={worktreeId}
+        isWorktreeActive={isVisible}
+        mountEligible={
+          isVisible ||
+          backgroundMountTabIds === null ||
+          hasAutomationVisibleBrowser ||
+          hasMobileDrivenBrowser
+        }
+      />
       {isVisible || backgroundMountTabIds === null ? (
-        <>
-          <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
-          <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
-        </>
+        <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
       ) : null}
       <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
     </div>

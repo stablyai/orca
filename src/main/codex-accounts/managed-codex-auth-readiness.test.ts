@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { CodexManagedAccount, GlobalSettings } from '../../shared/types'
-import { waitForManagedCodexAuthReady } from './managed-codex-auth-readiness'
+import {
+  readStoredCodexCredentialState,
+  waitForManagedCodexAuthReady
+} from './managed-codex-auth-readiness'
 
 const roots: string[] = []
 const testIdToken = 'e30.eyJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20ifQ.sig'
@@ -87,6 +90,7 @@ describe('waitForManagedCodexAuthReady', () => {
     writeAuth(fixture.home, {
       tokens: { access_token: 'access', id_token: testIdToken }
     })
+    expect(readStoredCodexCredentialState(join(fixture.home, 'auth.json'))).toBe('incomplete')
     let resolved = false
     const readiness = waitForManagedCodexAuthReady(fixture.args)
     void readiness?.then(() => {
@@ -99,6 +103,16 @@ describe('waitForManagedCodexAuthReady', () => {
     await vi.advanceTimersByTimeAsync(25)
 
     await expect(readiness).resolves.toBe(true)
+  })
+
+  it('does not treat empty ChatGPT token fields as credential material', () => {
+    const fixture = createFixture()
+    writeAuth(fixture.home, {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: '', id_token: '', refresh_token: '' }
+    })
+
+    expect(readStoredCodexCredentialState(join(fixture.home, 'auth.json'))).toBe('no-credential')
   })
 
   it('waits for an empty managed ChatGPT refresh token to be restored', async () => {

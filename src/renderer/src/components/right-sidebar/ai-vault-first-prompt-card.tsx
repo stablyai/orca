@@ -7,6 +7,10 @@ import { translate } from '@/i18n/i18n'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
+// Why: the main-process re-parse has no deadline of its own. Without this the
+// card can sit in `loading` forever on a huge or stalled transcript.
+const FULL_FIRST_PROMPT_LOAD_TIMEOUT_MS = 15_000
+
 function canLoadFullFirstPrompt(
   session: Pick<AiVaultSession, 'executionHostId' | 'filePath'>
 ): boolean {
@@ -22,7 +26,11 @@ export function FirstPromptCard({
   previewText
 }: {
   session: AiVaultSession
-  /** Short preview from list scan; replaced by the full on-demand body when available. */
+  /**
+   * Short preview from the list scan; replaced by the full on-demand body when
+   * available. Empty unless the scan proved it really is the opening ask, so the
+   * fallback below can never show a recent turn (remote rows never re-parse).
+   */
   previewText: string
 }): React.JSX.Element {
   // Loading starts true when an on-demand re-parse is possible so the mount effect
@@ -47,24 +55,37 @@ export function FirstPromptCard({
     }
 
     if (!canLoadFullFirstPrompt({ executionHostId, filePath })) {
+      // Deps can change to a non-loadable session after mount started `loading`.
+      setLoading(false)
       return Promise.resolve(null)
     }
     const getFirstUserPrompt = window.api.aiVault.getFirstUserPrompt
 
     const generation = generationRef.current
     const isStale = (): boolean => generationRef.current !== generation
-    const promise = getFirstUserPrompt({
-      agent,
-      filePath,
-      sessionId,
-      executionHostId,
-      codexHome
+    let timeoutId: number | undefined
+    const deadline = new Promise<null>((resolve) => {
+      timeoutId = window.setTimeout(() => {
+        resolve(null)
+      }, FULL_FIRST_PROMPT_LOAD_TIMEOUT_MS)
     })
+
+    const promise = Promise.race([
+      getFirstUserPrompt({
+        agent,
+        filePath,
+        sessionId,
+        executionHostId,
+        codexHome
+      }),
+      deadline
+    ])
       .then((result) => {
         if (isStale()) {
           return null
         }
-        const prompt = result.prompt?.trim() || null
+        // A timed-out read lands here as null and falls back to the preview text.
+        const prompt = result?.prompt?.trim() || null
         fullTextRef.current = prompt
         setFullText(prompt)
         return prompt
@@ -78,11 +99,13 @@ export function FirstPromptCard({
         return null
       })
       .finally(() => {
+        window.clearTimeout(timeoutId)
         // A stale settle must not clear the live request's dedupe handle.
         if (isStale()) {
           return
         }
         setLoading(false)
+        // Left null on timeout/failure so a later copy click can retry.
         loadPromiseRef.current = null
       })
 
@@ -97,6 +120,11 @@ export function FirstPromptCard({
     void loadFullPrompt()
     return () => {
       generationRef.current += 1
+      // Why: the bump above makes the in-flight request stale, and a stale settle
+      // deliberately skips setLoading(false). Drop the dedupe handle too, or the
+      // next pass (StrictMode's remount, or a prop change) would await that same
+      // stale promise and strand the card on "Loading first prompt…" forever.
+      loadPromiseRef.current = null
     }
   }, [loadFullPrompt])
 

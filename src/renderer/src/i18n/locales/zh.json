@@ -1857,7 +1857,10 @@
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
         "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
-        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
+        "loadPageUnreachable": "第 {{value0}} 页超出了 GitHub 搜索可返回的范围。",
+        "loadPageFailed": "无法从 GitHub 加载第 {{value0}} 页。",
+        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -2489,7 +2492,9 @@
             "selectedForDeletionCount": "已选择删除：{{value0}}",
             "deleteButtonCount": "删除 {{value0}}",
             "archivedStatus": "已归档",
-            "readyStatus": "就绪"
+            "readyStatus": "就绪",
+            "f637f63882": "资源管理器统计到 {{value0}} 个，此列表找到 {{value1}} 个。该计数仅依据 Orca 的活动记录，而此次扫描还会检查每个工作区的 git 历史，并跳过未连接的远程主机。",
+            "74f6c16279": "返回"
           },
           "backgroundRemoval": {
             "removed": "已删除工作区：{{value0}}",
@@ -2536,6 +2541,16 @@
             "dirtyFilesBlocker": "已更改文件",
             "unknownBaseBlocker": "无法验证未推送提交",
             "dismissedBlocker": "已忽略"
+          },
+          "workspace": {
+            "cleanup": {
+              "candidate": {
+                "row": {
+                  "b5d2b33e47": "正在删除…",
+                  "e1135728e3": "已加入删除队列"
+                }
+              }
+            }
           }
         }
       },
@@ -11092,6 +11107,7 @@
             "transcriptsSkipped": "跳过了 {{count}} 个记录",
             "noAgentSessionsFound": "未找到智能体会话",
             "noSessionsMatchFilters": "没有会话符合当前筛选条件",
+            "noAgentsSelected": "未选择任何智能体",
             "sessionId": "会话 ID",
             "logPath": "日志路径",
             "agents": "智能体",
@@ -11117,6 +11133,8 @@
             "viewOptionsAriaLabel": "会话历史查看选项",
             "viewOptions": "查看选项",
             "agents": "智能体",
+            "selectAllAgents": "选择全部",
+            "clearAgents": "清除",
             "sort": "排序",
             "lastUpdated": "最后更新",
             "created": "创建时间",

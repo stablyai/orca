@@ -1857,7 +1857,10 @@
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
         "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
-        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
+        "loadPageUnreachable": "{{value0}} 페이지는 GitHub 검색이 반환할 수 있는 범위를 벗어났습니다.",
+        "loadPageFailed": "GitHub에서 {{value0}} 페이지를 불러오지 못했습니다.",
+        "loadPageNoMoreResults": "{{value0}} 페이지에 더 이상 결과가 없습니다."
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -11092,6 +11095,7 @@
             "transcriptsSkipped": "대화 기록 {{count}}개 건너뜀",
             "noAgentSessionsFound": "agent 세션을 찾을 수 없습니다",
             "noSessionsMatchFilters": "현재 필터와 일치하는 세션이 없습니다",
+            "noAgentsSelected": "선택된 에이전트가 없습니다",
             "sessionId": "세션 ID",
             "logPath": "로그 경로",
             "agents": "에이전트",
@@ -11117,6 +11121,8 @@
             "viewOptionsAriaLabel": "세션 기록 보기 옵션",
             "viewOptions": "보기 옵션",
             "agents": "에이전트",
+            "selectAllAgents": "모두 선택",
+            "clearAgents": "모두 해제",
             "sort": "정렬",
             "lastUpdated": "마지막 업데이트",
             "created": "생성됨",
