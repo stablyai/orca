@@ -40,6 +40,11 @@ type NonInteractiveExecQueueEntry = {
   release: () => void
 }
 
+// Why: the mux default (30s) aborts relay execs before their payload timeout
+// elapses (see #11723). This margin covers relay tree-kill plus SSH RTT so the
+// client never cuts a legitimate execution short.
+const REMOTE_EXEC_REQUEST_TIMEOUT_MARGIN_MS = 30_000
+
 function isJsonRpcMethodNotFoundError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false
@@ -372,7 +377,10 @@ export class SshGitProvider implements IGitProvider {
       entry.started = true
       return (await this.mux.request(
         'agent.execNonInteractive',
-        payload
+        payload,
+        // Why: #11723 — the 30s mux default aborted legit 31–60s generations;
+        // margin covers relay tree-kill and SSH RTT beyond the exec budget.
+        { timeoutMs: payload.timeoutMs + REMOTE_EXEC_REQUEST_TIMEOUT_MARGIN_MS }
       )) as RemoteCommitMessageExecResult
     } finally {
       signal?.removeEventListener('abort', abortEntry)

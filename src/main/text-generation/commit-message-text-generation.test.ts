@@ -611,6 +611,17 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
+  it('reports client-side mux timeouts during remote model discovery', async () => {
+    const result = await discoverCommitMessageModelsRemote('cursor', '/remote/repo', async () => {
+      throw new Error('Request "agent.execNonInteractive" timed out after 90000ms')
+    })
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Cursor model discovery timed out after 60s.'
+    })
+  })
+
   it('uses a prepared remote execution plan instead of running git on the remote side', async () => {
     const result = await generateCommitMessageFromContext(
       {
@@ -1134,6 +1145,34 @@ describe('generateCommitMessageFromContext', () => {
       success: false,
       error:
         'agent could not be reached on the remote PATH. Try again after the SSH connection recovers.'
+    })
+  })
+
+  it('reports client-side mux timeouts as generation timeouts', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => {
+          throw new Error('Request "agent.execNonInteractive" timed out after 90000ms')
+        }
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Generation timed out after 60s.'
     })
   })
 

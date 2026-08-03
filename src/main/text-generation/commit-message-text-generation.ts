@@ -63,6 +63,12 @@ import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
 
+// Why: #11723 — mux rejects `Request "<method>" timed out after <n>ms` when the
+// client-side budget aborts a relay exec; that is a timeout, not a transport failure.
+function isRemoteRequestTimeoutError(error: unknown): boolean {
+  return error instanceof Error && /timed out after \d+ms/.test(error.message)
+}
+
 export type GenerateCommitMessageParams = ResolvedSourceControlAiGenerationParams
 
 export type GenerateCommitMessageResult =
@@ -503,6 +509,12 @@ export async function discoverCommitMessageModelsRemote(
     result = await execute(planned.plan, cwd, GENERATION_TIMEOUT_MS)
   } catch (error) {
     console.error('[commit-message] Remote model discovery request failed:', error)
+    if (isRemoteRequestTimeoutError(error)) {
+      return {
+        success: false,
+        error: `${spec.label} model discovery timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`
+      }
+    }
     return {
       success: false,
       error: `${spec.label} model discovery could not be reached on the remote PATH. Try again after the SSH connection recovers.`
@@ -976,6 +988,12 @@ async function runRemotePlan(
     result = await target.execute(plan, target.cwd, GENERATION_TIMEOUT_MS, operation)
   } catch (error) {
     console.error('[commit-message] Remote generator request failed:', error)
+    if (isRemoteRequestTimeoutError(error)) {
+      return {
+        success: false,
+        error: `Generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`
+      }
+    }
     return {
       success: false,
       error: `${label} could not be reached on the ${target.missingBinaryLocation}. Try again after the SSH connection recovers.`
