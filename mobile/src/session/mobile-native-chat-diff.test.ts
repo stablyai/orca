@@ -36,6 +36,18 @@ describe('diffFromText', () => {
     expect(diffFromText('Here is a list:\n- one bullet\nthat is all')).toBeNull()
   })
 
+  it('counts a removed -- comment line despite the --- prefix collision', () => {
+    // Parity with the renderer test: a deleted `-- comment` (SQL/Lua/Haskell) is emitted
+    // by git as `---<content>` and must read as a deletion, not a file header.
+    const diff = diffFromText('@@ -1,2 +1,2 @@\n ctx\n---sql comment\n+new')
+    expect(diff).toEqual([
+      { kind: 'meta', text: '@@ -1,2 +1,2 @@' },
+      { kind: 'context', text: ' ctx' },
+      { kind: 'del', text: '--sql comment' },
+      { kind: 'add', text: 'new' }
+    ])
+  })
+
   it('caps large diffs before creating render rows', () => {
     const text = Array.from(
       { length: 1_000 },

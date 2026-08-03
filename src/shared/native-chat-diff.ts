@@ -62,17 +62,28 @@ export function diffFromText(
     return null
   }
   const bounded = toLines(text, maxLines)
+  const raw = bounded.lines
   let added = 0
   let removed = 0
-  const lines = bounded.lines.map((line): NativeChatDiffLine => {
+  const lines = raw.map((line, i): NativeChatDiffLine => {
     if (line.startsWith('@@') || line.startsWith('diff ') || line.startsWith('index ')) {
       return { kind: 'meta', text: line }
     }
-    if (line.startsWith('+') && !line.startsWith('+++')) {
+    // Why: `--- <old>`/`+++ <new>` file headers always carry a trailing space + path and
+    // travel as a consecutive pair. A deletion of `-- comment` (SQL/Lua/Haskell) is emitted
+    // by git as `---<content>` (no space) — match the canonical separator pair, not a lone
+    // prefix, so it counts as a deletion (agent-tool diffs may lack the `@@` countDiffLines relies on).
+    const isHeaderPair =
+      (line.startsWith('--- ') && raw[i + 1]?.startsWith('+++ ')) ||
+      (line.startsWith('+++ ') && i > 0 && raw[i - 1].startsWith('--- '))
+    if (isHeaderPair) {
+      return { kind: 'context', text: line }
+    }
+    if (line.startsWith('+')) {
       added += 1
       return { kind: 'add', text: line.slice(1) }
     }
-    if (line.startsWith('-') && !line.startsWith('---')) {
+    if (line.startsWith('-')) {
       removed += 1
       return { kind: 'del', text: line.slice(1) }
     }
