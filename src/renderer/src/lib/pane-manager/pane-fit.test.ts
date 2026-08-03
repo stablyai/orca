@@ -106,6 +106,22 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     await expect(handle.completion).resolves.toBe(true)
   })
 
+  it('cancels a throttled animation frame when the timer wins', async () => {
+    const pane = createPane({ rect: { width: 0, height: 0 } })
+    const continuation = vi.fn()
+
+    const handle = safeFitAndThen(pane, 'reattach-pty-resize', continuation, {
+      retryIfUnmeasurable: true
+    })
+    pane.setRect({ width: 800, height: 600 })
+    vi.advanceTimersByTime(32)
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(1)
+    expect(pendingRafs.size).toBe(0)
+    expect(continuation).toHaveBeenCalledOnce()
+    await expect(handle.completion).resolves.toBe(true)
+  })
+
   it('cancels its scheduled frame with the continuation', async () => {
     const pane = createPane({ rect: { width: 0, height: 0 } })
     const continuation = vi.fn()

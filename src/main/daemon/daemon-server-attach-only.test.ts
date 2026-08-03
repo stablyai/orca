@@ -73,4 +73,33 @@ describe('DaemonServer attach-only preparation', () => {
     ).resolves.toMatchObject({ isNew: false })
     expect(preparePtySpawn).toHaveBeenCalledOnce()
   })
+
+  it('prepares a fresh spawn when attachOnly is not the boolean true', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'daemon-attach-only-shape-test-'))
+    directories.push(directory)
+    const socketPath = getDaemonSocketPath(directory)
+    const tokenPath = join(directory, 'test.token')
+    const preparePtySpawn = vi.fn(async () => {})
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      preparePtySpawn,
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    servers.push(server)
+    await server.start()
+    const client = new DaemonClient({ socketPath, tokenPath })
+    clients.push(client)
+    await client.ensureConnected()
+
+    await expect(
+      client.request('createOrAttach', {
+        sessionId: 'malformed-attach-only-session',
+        cols: 80,
+        rows: 24,
+        attachOnly: 'false' as never
+      })
+    ).resolves.toMatchObject({ isNew: true })
+    expect(preparePtySpawn).toHaveBeenCalledOnce()
+  })
 })

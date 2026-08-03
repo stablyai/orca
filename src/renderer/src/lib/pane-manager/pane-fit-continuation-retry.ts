@@ -26,6 +26,9 @@ function scheduleRetryTick(run: () => void): RetrySchedule {
         return
       }
       settled = true
+      if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(rafId)
+      }
       run()
     }
     const rafId = requestAnimationFrame(() => {
