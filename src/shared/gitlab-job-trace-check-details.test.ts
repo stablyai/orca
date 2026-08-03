@@ -7,7 +7,7 @@ import { gitLabPipelineJobsToPRChecks } from './gitlab-pipeline-checks'
 import type { GitLabPipelineJob } from './gitlab-types'
 import type { PRCheckDetail } from './types'
 
-const STRINGS = { emptyTrace: 'This GitLab job has not produced a log yet.' }
+const STRINGS = { emptyTrace: 'No log is available for this GitLab job.' }
 
 const failedJob: PRCheckDetail = {
   name: 'Component Tests: Purchase API',
@@ -65,8 +65,8 @@ describe('gitLabJobTraceToCheckRunDetails', () => {
 })
 
 describe('gitLabJobCanHaveTrace', () => {
-  // Why: GitLab answers 404 for a job that never ran, and the panel has no retry
-  // affordance, so a raw error would replace the benign empty state permanently.
+  // Why: GitLab answers 404 for a job that never ran, so skip the round trip. Jobs that
+  // may have run are still asked; main turns a missing log into an empty trace.
   const cases: { status: string; expected: boolean }[] = [
     { status: 'failed', expected: true },
     { status: 'success', expected: true },

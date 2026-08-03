@@ -70,7 +70,7 @@ function emptyTraceStrings(): { emptyTrace: string } {
   return {
     emptyTrace: translate(
       'auto.runtime.gitlabJobTraceClient.emptyTrace',
-      'This GitLab job has not produced a log yet.'
+      'No log is available for this GitLab job.'
     )
   }
 }

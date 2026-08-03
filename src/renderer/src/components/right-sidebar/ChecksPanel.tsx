@@ -3438,47 +3438,45 @@ export default function ChecksPanel(): React.JSX.Element {
     setIsFixingChecksWithAI(true)
     try {
       const checkRunDetailsByCheckKey: Record<string, PRCheckRunDetails> = {}
-      if (repo) {
-        await Promise.all(
-          broken.slice(0, 5).map(async (check, index) => {
-            const isGitLabJob = Boolean(check.gitlabJobId)
-            if (
-              !isGitLabJob &&
-              (activeReview.provider === 'gitlab' || !hasGitHubCheckHandle(check))
-            ) {
-              return
+      await Promise.all(
+        broken.slice(0, 5).map(async (check, index) => {
+          const isGitLabJob = Boolean(check.gitlabJobId)
+          if (
+            !isGitLabJob &&
+            (activeReview.provider === 'gitlab' || !hasGitHubCheckHandle(check))
+          ) {
+            return
+          }
+          try {
+            // Why: GitLab job logs are now loadable, so the fix prompt gets the same
+            // failure context the sidebar shows instead of check names alone.
+            const details = isGitLabJob
+              ? await loadGitLabJobLogDetails({
+                  repoPath: repo.path,
+                  repoId: repo.id,
+                  settings,
+                  check,
+                  projectRef: gitLabProjectRefRef.current
+                })
+              : await fetchPRCheckDetails(
+                  repo.path,
+                  {
+                    checkRunId: check.checkRunId,
+                    workflowRunId: check.workflowRunId,
+                    checkName: check.name,
+                    url: check.url,
+                    prRepo: pr?.prRepo ?? null
+                  },
+                  { repoId: repo.id }
+                )
+            if (details) {
+              checkRunDetailsByCheckKey[getCheckDetailsPromptKey(check, index)] = details
             }
-            try {
-              // Why: GitLab job logs are now loadable, so the fix prompt gets the same
-              // failure context the sidebar shows instead of check names alone.
-              const details = isGitLabJob
-                ? await loadGitLabJobLogDetails({
-                    repoPath: repo.path,
-                    repoId: repo.id,
-                    settings,
-                    check,
-                    projectRef: gitLabProjectRefRef.current
-                  })
-                : await fetchPRCheckDetails(
-                    repo.path,
-                    {
-                      checkRunId: check.checkRunId,
-                      workflowRunId: check.workflowRunId,
-                      checkName: check.name,
-                      url: check.url,
-                      prRepo: pr?.prRepo ?? null
-                    },
-                    { repoId: repo.id }
-                  )
-              if (details) {
-                checkRunDetailsByCheckKey[getCheckDetailsPromptKey(check, index)] = details
-              }
-            } catch (error) {
-              console.warn('[ChecksPanel] failed to load check details for AI fix prompt', error)
-            }
-          })
-        )
-      }
+          } catch (error) {
+            console.warn('[ChecksPanel] failed to load check details for AI fix prompt', error)
+          }
+        })
+      )
       if (!isCurrentAsyncResult(requestKey)) {
         return
       }

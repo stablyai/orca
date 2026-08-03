@@ -2,7 +2,7 @@ import { gitLabJobTraceToLogExcerpt } from './gitlab-job-log-excerpt'
 import type { PRCheckDetail, PRCheckRunDetails } from './types'
 
 export type GitLabJobTraceCheckDetailsStrings = {
-  /** Shown when GitLab returns an empty trace (manual/created jobs that never ran). */
+  /** Shown for a job with no log: never ran, waiting on a human, or log erased/expired. */
   emptyTrace: string
 }
 
@@ -10,8 +10,9 @@ export type GitLabJobTraceCheckDetailsStrings = {
  * Whether GitLab can have a trace for this job yet.
  *
  * Jobs that never started (`created`/`pending` -> queued) and jobs waiting on a human
- * (`manual` -> neutral) or bypassed (`skipped`) have no trace, and the API answers 404.
- * Asking anyway would replace the panel's benign empty state with a raw error string.
+ * (`manual` -> neutral) or bypassed (`skipped`) have no trace, so skip the round trip.
+ * Other jobs may still lack a log (canceled before start, erased); main maps that 404
+ * to an empty trace rather than an error.
  */
 export function gitLabJobCanHaveTrace(check: PRCheckDetail): boolean {
   if (check.status === 'queued') {

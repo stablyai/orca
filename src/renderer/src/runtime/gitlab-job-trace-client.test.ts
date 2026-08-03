@@ -91,11 +91,33 @@ describe('loadGitLabJobLogDetails', () => {
       check: manualCheck
     })
 
-    // Why: GitLab 404s on a job with no trace, and the panel pins that error string.
+    // Why: GitLab 404s on a job with no trace, so skip the round trip entirely.
     expect(jobTrace).not.toHaveBeenCalled()
     expect(callRuntimeRpc).not.toHaveBeenCalled()
     expect(details?.jobs).toEqual([])
-    expect(details?.summary).toBe('This GitLab job has not produced a log yet.')
+    expect(details?.summary).toBe('No log is available for this GitLab job.')
+  })
+
+  // #7732 round 1: a job canceled before it started is `completed`/`cancelled`, so it is
+  // fetched; main answers with an empty trace and the row must show that, not an error.
+  it('explains an empty trace for a job canceled before it produced output', async () => {
+    jobTrace.mockResolvedValue({ ok: true, trace: '' })
+    const canceledCheck: PRCheckDetail = {
+      name: 'unit',
+      status: 'completed',
+      conclusion: 'cancelled',
+      url: null,
+      gitlabJobId: 5
+    }
+
+    const details = await loadGitLabJobLogDetails({
+      repoPath: '/repo',
+      settings: { activeRuntimeEnvironmentId: null },
+      check: canceledCheck
+    })
+
+    expect(details?.jobs).toEqual([])
+    expect(details?.summary).toBe('No log is available for this GitLab job.')
   })
 
   it('routes to the owning runtime environment and still requests the excerpt', async () => {

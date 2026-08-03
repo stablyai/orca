@@ -16,8 +16,10 @@ import {
   _resetKnownHostsCache,
   _resetProjectRefCache,
   classifyGlabError,
+  classifyJobLogError,
   classifyListIssuesError,
   getIssueProjectRef,
+  isMissingJobLogError,
   getGlabKnownHosts,
   getProjectRef,
   getProjectRefForRemote,
@@ -420,6 +422,18 @@ describe('glab error classification', () => {
   it('rewrites copy for read contexts via classifyListIssuesError', () => {
     expect(classifyListIssuesError('HTTP 403').message).toMatch(/permission to read issues/i)
     expect(classifyListIssuesError('HTTP 404').message).toBe('Project not found.')
+  })
+
+  it('rewrites issue-edit copy for job logs via classifyJobLogError', () => {
+    expect(classifyJobLogError('HTTP 403').message).toMatch(/permission to read this job's log/i)
+    expect(classifyJobLogError('HTTP 403').message).not.toMatch(/issue/i)
+    expect(classifyJobLogError('boom').message).toBe('Failed to load the job log: boom')
+  })
+
+  it('treats a 404 job log as missing, but keeps a missing project an error', () => {
+    expect(isMissingJobLogError('HTTP 404 Not Found')).toBe(true)
+    expect(isMissingJobLogError('HTTP 404: Project Not Found')).toBe(false)
+    expect(isMissingJobLogError('HTTP 403 Forbidden')).toBe(false)
   })
 })
 

@@ -10636,7 +10636,6 @@
                 "fd46a70f1a": "Iniciado",
                 "a54ae21c6f": "Estado:",
                 "e4e3af15ee": "Ver detalles completos",
-                "2524d1fb83": "Cola del log disponible en los detalles completos.",
                 "a2fb3f4408": "Mostrando los primeros 100 jobs",
                 "df137989b3": "Mostrando las primeras 20 anotaciones",
                 "1f2b980522": "Cargando detalles del check…",
@@ -14352,7 +14351,7 @@
       },
       "gitlabJobTraceClient": {
         "loadFailed": "No se pudo cargar el registro del job de GitLab.",
-        "emptyTrace": "Este job de GitLab aún no ha generado un registro."
+        "emptyTrace": "No hay ningún registro disponible para este job de GitLab."
       }
     }
   },
