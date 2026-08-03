@@ -668,9 +668,7 @@ function Settings(): React.JSX.Element {
         setSettingsProjectHostSelection(
           hostSelection.projectId,
           hostSelection.hostId,
-          'setupId' in hostSelection && typeof hostSelection.setupId === 'string'
-            ? hostSelection.setupId
-            : undefined
+          hostSelection.setupId
         )
       }
     }

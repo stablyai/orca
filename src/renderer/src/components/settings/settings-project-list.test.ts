@@ -152,11 +152,14 @@ describe('deep-link resolution', () => {
     expect(map.get('local-1')).toBe('local-1')
   })
 
-  it('maps a repoId to its owning project + host for selection', () => {
+  // Why: #11689 added setupId — a host can own several setups (two clones), so
+  // the selection has to name the exact setup row, not just the host.
+  it('maps a repoId to its owning project + host + setup for selection', () => {
     const map = buildRepoIdToHostSelection(projects)
     expect(map.get('remote-9')).toEqual({
       projectId: projects[0].projectId,
-      hostId: 'runtime:home-mac'
+      hostId: 'runtime:home-mac',
+      setupId: 'remote-9'
     })
   })
 
@@ -203,6 +206,26 @@ describe('deep-link resolution', () => {
     expect(
       resolveSettingsTargetRepoId({ repoId: null, sectionId: 'repo-app-2-icon' }, ['app', 'app-2'])
     ).toBe('app-2')
+  })
+
+  // Why: #11689 — two clones of one remote on the same host collapse into a
+  // single project, so a deep link that only named the host opened the host's
+  // first setup, i.e. the third project's settings showed the first project's.
+  it('opens the deep-linked clone, not the host first setup, for same-host clones', () => {
+    const clonedRepos: Repo[] = [
+      makeRepo({ id: 'clone-1', gitRemoteIdentity: gitRemote, path: '/repos/one' }),
+      makeRepo({ id: 'solo-2', path: '/repos/two' }),
+      makeRepo({ id: 'clone-3', gitRemoteIdentity: gitRemote, path: '/repos/three' })
+    ]
+    const clonedProjects = buildSettingsProjectList(clonedRepos)
+    const representative = buildRepoIdToRepresentative(clonedProjects).get('clone-3')
+    const selection = buildRepoIdToHostSelection(clonedProjects).get('clone-3')
+    const target = clonedProjects.find((p) => p.representativeRepoId === representative)
+
+    expect(selection?.setupId).toBe('clone-3')
+    expect(
+      getSettingsProjectHostRepo(target!, clonedRepos, selection?.hostId, selection?.setupId)?.path
+    ).toBe('/repos/three')
   })
 
   it('resolves the remote host repo row when a remote host is selected', () => {

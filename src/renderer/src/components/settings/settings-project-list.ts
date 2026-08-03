@@ -13,6 +13,13 @@ export type SettingsProject = {
   representativeRepoId: string
 }
 
+/** Which project + host + setup row a Settings deep link should open. */
+export type SettingsProjectHostSelection = {
+  projectId: string
+  hostId: ExecutionHostId
+  setupId: string
+}
+
 /**
  * Which repo row identifies a project's single Settings nav row + pane. Pure
  * over the project's setups so nav and panes derive the same id. Prefers the
@@ -107,16 +114,22 @@ export function buildRepoIdToRepresentative(
   return map
 }
 
-/** Maps each host's repoId to its owning project + host, so a deep link can
- *  select that host in the pane's "Available Hosts" switcher. */
+/** Maps each host's repoId to its owning project + host + setup, so a deep link
+ *  can select that host in the pane's "Available Hosts" switcher. The setup id
+ *  is required: one host can own several setups (two clones of the same remote),
+ *  and naming only the host opens the host's first setup — the wrong project. */
 export function buildRepoIdToHostSelection(
   projects: readonly SettingsProject[]
-): Map<string, { projectId: string; hostId: ExecutionHostId }> {
-  const map = new Map<string, { projectId: string; hostId: ExecutionHostId }>()
+): Map<string, SettingsProjectHostSelection> {
+  const map = new Map<string, SettingsProjectHostSelection>()
   for (const settingsProject of projects) {
     for (const setup of settingsProject.setups) {
       if (setup.repoId.trim().length > 0 && !map.has(setup.repoId)) {
-        map.set(setup.repoId, { projectId: settingsProject.projectId, hostId: setup.hostId })
+        map.set(setup.repoId, {
+          projectId: settingsProject.projectId,
+          hostId: setup.hostId,
+          setupId: setup.id
+        })
       }
     }
   }
@@ -127,7 +140,7 @@ export function getSettingsTargetHostSelection(
   projects: readonly SettingsProject[],
   repoId: string,
   hostId: ExecutionHostId
-): { projectId: string; hostId: ExecutionHostId; setupId: string } | null {
+): SettingsProjectHostSelection | null {
   for (const settingsProject of projects) {
     const setup = settingsProject.setups.find(
       (candidate) => candidate.repoId === repoId && candidate.hostId === hostId
