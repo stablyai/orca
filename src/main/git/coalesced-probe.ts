@@ -8,16 +8,21 @@
  * progress is what lets a host recover in-session.
  */
 
-export type CoalescedProbe<T> = { startedAt: number; promise: Promise<T> }
+export type CoalescedProbe<T> = { startedAt: number; token: object; promise: Promise<T> }
 export type CoalescedProbes<T> = Map<string, CoalescedProbe<T>>
 
 /** Every step under a probe is bounded well inside this, so an older one is wedged, not slow. */
 export const PROBE_COALESCE_STALE_MS = 60_000
 
+/**
+ * `createProbe` receives `ownsKey`: false once this probe has been abandoned for
+ * a successor, which is what tells a late one not to publish its answer over the
+ * fresher one someone else is already being served.
+ */
 export async function runCoalescedProbe<T>(
   probes: CoalescedProbes<T>,
   key: string,
-  createProbe: () => Promise<T>,
+  createProbe: (ownsKey: () => boolean) => Promise<T>,
   staleAfterMs: number = PROBE_COALESCE_STALE_MS
 ): Promise<T> {
   const now = Date.now()
@@ -29,7 +34,12 @@ export async function runCoalescedProbe<T>(
     // The abandoned probe keeps running; nothing here will await it again.
     void existing.promise.catch(() => {})
   }
-  const entry: CoalescedProbe<T> = { startedAt: now, promise: createProbe() }
+  const token = {}
+  const entry: CoalescedProbe<T> = {
+    startedAt: now,
+    token,
+    promise: createProbe(() => probes.get(key)?.token === token)
+  }
   probes.set(key, entry)
   try {
     return await entry.promise

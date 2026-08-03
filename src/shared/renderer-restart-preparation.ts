@@ -1,8 +1,8 @@
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
-} from '../shared/editor-save-events'
-import type { UpdateStatus } from '../shared/types'
+} from './editor-save-events'
+import type { UpdateStatus } from './types'
 
 export type AppRestartPrepOptions = {
   startedEventName: string

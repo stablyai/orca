@@ -28,7 +28,11 @@ describe('GitHubItemDialog source host boundaries', () => {
 
   it('routes reviewer metadata and reviewer mutations through the task source context', () => {
     const source = componentSource('GitHubItemDialog.tsx')
-    const section = sourceBetween(source, 'function PRReviewersPanel', 'function isPRFileViewed')
+    const section = sourceBetween(
+      source,
+      'function PRReviewersPanel',
+      'const WORK_ITEM_DETAILS_CACHE_MAX'
+    )
 
     expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
     expect(section).toContain('useRepoAssigneesBySlug(')
@@ -50,11 +54,7 @@ describe('GitHubItemDialog source host boundaries', () => {
   it('routes edit metadata through the same task source as issue mutations', () => {
     const source = componentSource('GitHubItemDialog.tsx')
     const section = sourceBetween(source, 'function GHEditSection', 'const hasAttachedWorkspace')
-    const helperSection = sourceBetween(
-      source,
-      'function getGitHubMutationSettings',
-      'function GitHubLabelsSettingsLink'
-    )
+    const helperSection = componentSource('github/github-work-item-edit-mutations.ts')
 
     expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
     expect(section).toContain('useRepoLabels(')
@@ -142,11 +142,7 @@ describe('GitHubItemDialog source host boundaries', () => {
 
   it('routes PR file viewed mutations through the task source context', () => {
     const source = componentSource('GitHubItemDialog.tsx')
-    const helperSection = sourceBetween(
-      source,
-      'function setPRFileViewedForRepo',
-      'function PRViewedCheckbox'
-    )
+    const helperSection = componentSource('github/github-work-item-comment-mutations.ts')
     const changeSection = sourceBetween(
       source,
       'const handlePRFileViewedChange = useCallback',
@@ -164,7 +160,7 @@ describe('GitHubItemDialog source host boundaries', () => {
   })
 
   it('routes comment mutations through runtime source context when needed', () => {
-    const source = componentSource('GitHubItemDialog.tsx')
+    const source = componentSource('github/github-work-item-comment-mutations.ts')
     const helperSection = sourceBetween(
       source,
       'function addIssueCommentForRepo',
@@ -183,10 +179,11 @@ describe('GitHubItemDialog source host boundaries', () => {
 
   it('routes PR file contents and runtime viewed invalidations through the task source context', () => {
     const source = componentSource('GitHubItemDialog.tsx')
+    const commentMutations = componentSource('github/github-work-item-comment-mutations.ts')
     const fileContentsSection = sourceBetween(
       source,
       'function loadPRFileContents',
-      'function setPRFileViewedForRepo'
+      'function PRFilesCombinedDiffViewer'
     )
     const fileContentsCacheKeySection = sourceBetween(
       source,
@@ -205,9 +202,9 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(fileContentsSection).toContain('sourceContext: args.sourceContext')
     expect(fileContentsSection).toContain('sourceContext,')
     expect(listenerSection).toContain('onGitHubWorkItemDetailsCacheMutation')
-    expect(source).toContain('emitGitHubWorkItemDetailsCacheMutation(args)')
-    expect(source).toContain('options.local !== false')
-    expect(source).toContain('notifyWorkItemMutated({')
+    expect(commentMutations).toContain('emitGitHubWorkItemDetailsCacheMutation(args)')
+    expect(commentMutations).toContain('options.local !== false')
+    expect(commentMutations).toContain('notifyWorkItemMutated({')
   })
 
   it('routes merge actions through the repo owner host (#6957)', () => {
@@ -215,7 +212,7 @@ describe('GitHubItemDialog source host boundaries', () => {
     const actionsSection = sourceBetween(
       source,
       'function PRActionsPanel',
-      'function CommentReactions'
+      'function CommentReplyForm'
     )
 
     expect(actionsSection).toContain(
@@ -242,7 +239,7 @@ describe('GitHubItemDialog source host boundaries', () => {
     const checksSection = sourceBetween(
       source,
       'function ChecksTab',
-      'function getGitHubMutationSettings'
+      'function GitHubLabelsSettingsLink'
     )
 
     expect(checksSection).toContain('sourceContext?: TaskSourceContext | null')

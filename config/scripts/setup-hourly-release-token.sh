@@ -8,6 +8,10 @@
 # — no yearly rotation — and it belongs to the org rather than to the person who
 # created it, so it survives that person leaving.
 #
+# The same App also serves adhoc-mac-build.yml, which reads these same two
+# secrets: one credential, one rotation, both dev channels. Widening it to cover
+# stablyai/orca-adhoc is config/scripts/setup-adhoc-release-repo.sh's job.
+#
 # The key is read from a file and piped straight into `gh secret set`. It is never
 # echoed, never passed as a command-line argument (argv is world-readable via
 # `ps`), and never copied anywhere on disk.

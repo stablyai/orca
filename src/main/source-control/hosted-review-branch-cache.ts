@@ -6,7 +6,7 @@ import {
 } from './hosted-review-active-branch-claims'
 import {
   __resetUnsettledHostedReviewLookupsForTests,
-  hasLookupCapacity,
+  lookupCapacityRefusal,
   noteDetachedLookup,
   noteLookupStarted,
   settleDetachedLookup,
@@ -251,10 +251,7 @@ function lookupUnavailableReason(key: string): string | null {
       until
     ).toLocaleTimeString()}.`
   }
-  if (!hasLookupCapacity(key)) {
-    return 'Hosted review lookup is still running from an earlier attempt that never answered. It will be retried once that attempt settles.'
-  }
-  return null
+  return lookupCapacityRefusal(key)
 }
 
 /**

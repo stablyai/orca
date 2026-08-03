@@ -2,12 +2,7 @@ import { open, readFile, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
-import {
-  MAX_CONCURRENT_STREAMS,
-  STREAM_ACK_WINDOW_CHUNKS,
-  STREAM_CHUNK_SIZE,
-  RelayErrorCode
-} from './protocol'
+import { MAX_CONCURRENT_STREAMS, STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE } from './protocol'
 import { TooManyStreamsError, type RelayStreamRegistry } from './fs-stream-registry'
 import {
   BINARY_PROBE_BYTES,
@@ -359,8 +354,4 @@ async function readFullStreamChunk(
     totalRead += bytesRead
   }
   return totalRead
-}
-
-export function isTooManyStreamsError(err: unknown): err is TooManyStreamsError {
-  return err instanceof Error && (err as { code?: number }).code === RelayErrorCode.TooManyStreams
 }

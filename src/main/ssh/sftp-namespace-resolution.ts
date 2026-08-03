@@ -116,8 +116,8 @@ function realpathSftp(sftp: SFTPWrapper, remotePath: string): Promise<string> {
   })
 }
 
-// Why: sftpPathExists collapses "absent" and "could not tell" into one boolean;
-// namespace selection must never treat an inconclusive probe as absence.
+// Why: namespace selection must never treat an inconclusive lstat as absence,
+// so the probe reports "unknown" rather than collapsing to a boolean.
 function probeMarkerPath(sftp: SFTPWrapper, remotePath: string): Promise<MarkerProbe> {
   return new Promise((resolve) => {
     sftp.lstat(remotePath, (err) => {

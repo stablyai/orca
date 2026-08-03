@@ -401,7 +401,7 @@ export function useTerminalKeyboardShortcuts({
       const capturedTransport = paneTransportsRef.current.get(pane.id)
       const capturedPtyId = capturedTransport?.getPtyId() ?? null
       const capturedBinding = panePtyBindingsRef.current.get(pane.id) as
-        | (IDisposable & { requestDroidReconfirmation?: () => void })
+        | (IDisposable & { requestWindowsShiftEnterReconfirmation?: () => void })
         | undefined
       const getCurrentManager = () => managerRef.current
       const getCurrentTransport = () => paneTransportsRef.current.get(pane.id)

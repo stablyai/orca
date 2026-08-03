@@ -21,7 +21,6 @@ vi.mock('./ssh-relay-deploy', () => ({
 }))
 
 vi.mock('./ssh-pty-consumer-session', () => ({
-  SSH_PTY_SOURCE_WINDOW_SU: 256 * 1024,
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
 

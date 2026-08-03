@@ -118,7 +118,9 @@ describe('parseAzureDevOpsRepoRef', () => {
       webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
     })
 
-    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
+    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo', {
+      signal: expect.any(AbortSignal)
+    })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 

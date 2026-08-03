@@ -118,13 +118,6 @@ export function buildSidebarHostScopeOptions(
   ]
 }
 
-export function getSidebarHostScopeLabel(
-  scope: WorkspaceHostScope,
-  options: readonly SidebarHostScopeOption[]
-): string {
-  return options.find((option) => option.id === scope)?.label ?? 'All hosts'
-}
-
 export function getSidebarHostVisibilityLabel(
   visibleHostIds: readonly ExecutionHostId[] | null | undefined,
   hosts: readonly SidebarHostOption[]

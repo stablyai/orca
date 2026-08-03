@@ -9,7 +9,7 @@ import {
   type GitHubRemoteIdentity
 } from './github-remote-identity-parsing'
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
-import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
+import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
 
 export type OwnerRepo = GitHubOwnerRepo
 

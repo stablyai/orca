@@ -8474,6 +8474,55 @@ describe('OrcaRuntimeService', () => {
       expect(events).toHaveLength(1)
     })
 
+    it('bounds decorative title delivery per paired client without reducing local frames', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      const firstClientEvents: RuntimeClientEvent[] = []
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.onClientEvent((event) => firstClientEvents.push(event))
+
+      const ptyIds = Array.from({ length: 64 }, (_, index) => `pty-remote-${index}`)
+      const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+      for (const ptyId of ptyIds) {
+        runtime.ingestSyntheticTitleFrame(ptyId, `\x1b]0;${frames[0]} Cursor Agent\x07`)
+      }
+      firstClientEvents.length = 0
+
+      for (const frame of frames.slice(1)) {
+        for (const ptyId of ptyIds) {
+          runtime.ingestSyntheticTitleFrame(ptyId, `\x1b]0;${frame} Cursor Agent\x07`)
+        }
+      }
+
+      expect(firstClientEvents).toEqual([])
+      expect(batches).toHaveLength(ptyIds.length * frames.length)
+
+      const bellChunk = `\x1b]0;${frames.at(-1)} Cursor Agent\x07\x07`
+      runtime.onPtyData(ptyIds[0], bellChunk, 1)
+      expect(firstClientEvents).toEqual([
+        expect.objectContaining({
+          type: 'terminalSideEffects',
+          batch: expect.objectContaining({ facts: [{ kind: 'bell' }] })
+        })
+      ])
+      firstClientEvents.length = 0
+
+      const secondClientEvents: RuntimeClientEvent[] = []
+      runtime.onClientEvent((event) => secondClientEvents.push(event))
+      for (const ptyId of ptyIds) {
+        runtime.ingestSyntheticTitleFrame(ptyId, `\x1b]0;${frames[0]} Cursor Agent\x07`)
+      }
+
+      expect(firstClientEvents).toEqual([])
+      expect(secondClientEvents).toHaveLength(ptyIds.length)
+
+      for (const ptyId of ptyIds) {
+        runtime.ingestSyntheticTitleFrame(ptyId, '\x1b]0;Cursor ready\x07')
+      }
+      expect(firstClientEvents).toHaveLength(ptyIds.length)
+      expect(secondClientEvents).toHaveLength(ptyIds.length * 2)
+    })
+
     it('omits terminalSideEffects from non-consuming listeners while other events still flow', () => {
       const runtime = new OrcaRuntimeService(store)
       const desktopEvents: RuntimeClientEvent[] = []

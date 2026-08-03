@@ -12,8 +12,9 @@ import { gitExecFileAsync } from './runner'
  * wedged host — a dead network mount or stalled WSL interop. Unbounded, the call
  * never returns and every caller above it hangs with it. Passing a timeout is
  * also what arms the runner's kill path; Node's own waits forever on a child
- * that ignores signals. The SSH branch is bounded by the relay mux's own 30s
- * request timeout.
+ * that ignores signals. The SSH branch spends the same budget as one deadline
+ * over the whole round trip: the relay's own bounds are per-phase and restart on
+ * every frame, so a relay dribbling output outlives them.
  */
 export const REMOTE_URL_PROBE_TIMEOUT_MS = 30_000
 
@@ -33,7 +34,9 @@ export async function readRemoteUrl(
     if (!provider) {
       return null
     }
-    const { stdout } = await provider.exec(['remote', 'get-url', remoteName], context.repoPath)
+    const { stdout } = await provider.exec(['remote', 'get-url', remoteName], context.repoPath, {
+      signal: AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
+    })
     return stdout
   }
   const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
@@ -58,6 +61,15 @@ const TRANSIENT_PROBE_PATTERNS = [
  * report it as "no review": it is an unavailable result, not a negative one.
  */
 export function isTransientGitProbeError(error: unknown): boolean {
+  // Why: an abort — this probe's deadline, or a caller cancelling — carries no
+  // message a pattern could match, but it is the emptiest answer of all.
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  ) {
+    return true
+  }
   const parts: string[] = []
   if (error instanceof Error) {
     parts.push(error.message)
