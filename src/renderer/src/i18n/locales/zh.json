@@ -2491,7 +2491,9 @@
             "selectedForDeletionCount": "已选择删除：{{value0}}",
             "deleteButtonCount": "删除 {{value0}}",
             "archivedStatus": "已归档",
-            "readyStatus": "就绪"
+            "readyStatus": "就绪",
+            "f637f63882": "资源管理器统计到 {{value0}} 个，此列表找到 {{value1}} 个。该计数仅依据 Orca 的活动记录，而此次扫描还会检查每个工作区的 git 历史，并跳过未连接的远程主机。",
+            "74f6c16279": "返回"
           },
           "backgroundRemoval": {
             "removed": "已删除工作区：{{value0}}",
@@ -2538,6 +2540,16 @@
             "dirtyFilesBlocker": "已更改文件",
             "unknownBaseBlocker": "无法验证未推送提交",
             "dismissedBlocker": "已忽略"
+          },
+          "workspace": {
+            "cleanup": {
+              "candidate": {
+                "row": {
+                  "b5d2b33e47": "正在删除…",
+                  "e1135728e3": "已加入删除队列"
+                }
+              }
+            }
           }
         }
       },

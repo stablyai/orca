@@ -51,6 +51,7 @@ import {
   hasHooksFile,
   loadHooks,
   parseOrcaYaml,
+  resolveSetupRunnerShell,
   runHook,
   shouldRunSetupForCreate
 } from '../hooks'
@@ -466,6 +467,7 @@ vi.mock('../hooks', () => ({
     ORCA_WORKTREE_PATH: worktreePath
   }),
   loadHooks: vi.fn().mockReturnValue(null),
+  resolveSetupRunnerShell: vi.fn().mockReturnValue(undefined),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' }),
   shouldRunSetupForCreate: vi
     .fn()
@@ -683,6 +685,7 @@ function resetRuntimeTestMocks(): void {
   vi.mocked(getEffectiveHooksFromConfig).mockReset()
   vi.mocked(getDefaultTabsLaunch).mockReset()
   vi.mocked(loadHooks).mockReset()
+  vi.mocked(resolveSetupRunnerShell).mockReset()
   vi.mocked(hasHooksFile).mockReset()
   vi.mocked(parseOrcaYaml).mockReset()
   vi.mocked(runHook).mockReset()
@@ -692,6 +695,7 @@ function resetRuntimeTestMocks(): void {
   vi.mocked(getEffectiveHooksFromConfig).mockReturnValue(null)
   vi.mocked(getDefaultTabsLaunch).mockReturnValue(undefined)
   vi.mocked(loadHooks).mockReturnValue(null)
+  vi.mocked(resolveSetupRunnerShell).mockReturnValue(undefined)
   vi.mocked(hasHooksFile).mockReturnValue(false)
   vi.mocked(parseOrcaYaml).mockReturnValue(null)
   computeWorktreePathMock.mockReset()
@@ -12632,6 +12636,253 @@ describe('OrcaRuntimeService', () => {
     expect(markCodexProjectTrustedMock.mock.invocationCallOrder[0]).toBeLessThan(
       spawn.mock.invocationCallOrder[0]!
     )
+  })
+
+  // Why: `cursor` on PATH is the Cursor desktop launcher; only `cursor-agent` is
+  // the CLI Orca can host (issue #11926).
+  it('launches the configured agent CLI for a startupAgent id, not the raw id', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { cursor: '--force' },
+        agentDefaultEnv: { cursor: { CURSOR_PROFILE: 'captured' } }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      startupAgent: 'cursor',
+      title: 'worker'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; launchAgent?: string; env?: Record<string, string> }
+      | undefined
+    expect(spawnCall?.command).toBe("cursor-agent '--force'")
+    expect(spawnCall?.launchAgent).toBe('cursor')
+    expect(spawnCall?.env).toMatchObject({ CURSOR_PROFILE: 'captured' })
+    expect(markCursorWorkspaceTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
+  })
+
+  it('resolves a startupAgent to the CLI binary on Windows, where `cursor` is the IDE', async () => {
+    setPlatform('win32')
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        terminalWindowsShell: 'cmd.exe',
+        agentCmdOverrides: {},
+        // Why: pin the arg here rather than inherit the shared yolo default, so
+        // this test tracks Windows quoting and not an unrelated default's value.
+        agentDefaultArgs: { cursor: '--force' },
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'cursor' })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+    // Why: assert the cmd.exe double quoting too — a platform-insensitive prefix
+    // match would pass on any OS and prove nothing about the reported platform.
+    expect(spawnCall?.command).toBe('cursor-agent "--force"')
+  })
+
+  // Why: claude-agent-teams is the only agent whose launcher name varies by
+  // platform (launchCmdByPlatform), so it is what proves resolution is
+  // platform-aware rather than a fixed string.
+  it.each([
+    { platform: 'win32' as const, expected: 'orca.cmd claude-teams' },
+    { platform: 'linux' as const, expected: 'orca-ide claude-teams' },
+    { platform: 'darwin' as const, expected: 'orca claude-teams' }
+  ])(
+    'resolves a startupAgent through the $platform launcher name',
+    async ({ platform, expected }) => {
+      setPlatform(platform)
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: {},
+          agentDefaultArgs: { 'claude-agent-teams': '' },
+          agentDefaultEnv: {}
+        })
+      })
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+
+      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        startupAgent: 'claude-agent-teams'
+      })
+
+      const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+      expect(spawnCall?.command).toBe(expected)
+    }
+  )
+
+  // Why: a user who worked around this bug by pointing the override at their own
+  // cursor-agent path must keep that override once the id resolves properly.
+  it('honors an agentCmdOverrides entry for a startupAgent', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: { cursor: 'cursor-agent --beta' },
+        agentDefaultArgs: { cursor: '--force' },
+        agentDefaultEnv: {}
+      })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'cursor' })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+    expect(spawnCall?.command).toBe("cursor-agent --beta '--force'")
+  })
+
+  // Why: with no selector the launch is never resolved, so a dropped startupAgent
+  // would reach the renderer as a bare shell — the failure this option prevents.
+  it('rejects a startupAgent create with no workspace selector', async () => {
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {}
+      })
+    })
+
+    await expect(
+      runtime.createTerminal(undefined, { startupAgent: 'cursor', rendererBacked: true })
+    ).rejects.toThrow(/requires a workspace selector/)
+  })
+
+  // Why: folder workspaces have no repo, so command sniffing skipped them entirely
+  // and spawned the bare string; an explicit agent must still resolve.
+  it('resolves a startupAgent in a repo-less folder workspace', async () => {
+    const folderPath = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-startup-agent-'))
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const folderWorkspace = makeFolderWorkspace({ folderPath })
+    const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+    const runtime = new OrcaRuntimeService({
+      ...createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup),
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { cursor: '--force' },
+        agentDefaultEnv: {}
+      })
+    } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`id:${TEST_FOLDER_WORKSPACE_KEY}`, { startupAgent: 'cursor' })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; launchAgent?: string }
+      | undefined
+    expect(spawnCall?.command).toBe("cursor-agent '--force'")
+    expect(spawnCall?.launchAgent).toBe('cursor')
+  })
+
+  // Why: silently returning the caller's opts would spawn a bare shell that can
+  // only time out at agent readiness — the failure startupAgent exists to stop.
+  it('rejects a startupAgent create that also supplies its own launch', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {}
+      })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    for (const conflicting of [
+      { env: { SOME_VAR: 'set' } },
+      // Why: a raw command would be silently overwritten by the built launch.
+      { command: 'cursor-agent --resume' },
+      // Why: resume identity paired with a freshly built launch is incoherent.
+      { resumeProviderSession: { key: 'session_id', id: 'prior-session' } as never },
+      { launchAgent: 'cursor' as const },
+      { launchConfig: { agentArgs: '', agentEnv: {} } as never },
+      { startupCommandDelivery: 'provider' as never },
+      { claudeAgentTeamsSourceCommand: 'claude' }
+    ]) {
+      await expect(
+        runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+          startupAgent: 'cursor',
+          ...conflicting
+        })
+      ).rejects.toThrow(/cannot combine/)
+    }
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('rejects a startupAgent create for a disabled agent', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: ['cursor' as const],
+        agentCmdOverrides: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await expect(
+      runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'cursor' })
+    ).rejects.toThrow(/disabled/)
+    expect(spawn).not.toHaveBeenCalled()
   })
 
   it('quotes local Windows bare agent command defaults for cmd.exe terminal creates', async () => {
@@ -37825,6 +38076,7 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ id: 'repo-1', path: '/tmp/repo' }),
       '/tmp/workspaces/runtime-hook-test',
       'pnpm worktree:setup',
+      undefined,
       undefined
     )
     expect(runHook).not.toHaveBeenCalled()
@@ -37916,6 +38168,85 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('passes the selected Windows setup shell into runtime runner generation', async () => {
+    setPlatform('win32')
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        terminalWindowsShell: 'git-bash'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const activateWorktree = vi.fn()
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree,
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\runtime-hook-activate')
+    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\runtime-hook-activate')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(resolveSetupRunnerShell).mockReturnValue({ family: 'posix' })
+    vi.mocked(createSetupRunnerScript).mockReturnValue({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix' },
+      envVars: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\workspaces\\runtime-hook-activate'
+      }
+    })
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: 'C:/workspaces/runtime-hook-activate',
+        head: 'def',
+        branch: 'runtime-hook-activate',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-hook-activate',
+      runHooks: true,
+      activate: true
+    })
+
+    expect(createSetupRunnerScript).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1', path: '/tmp/repo' }),
+      'C:\\workspaces\\runtime-hook-activate',
+      'pnpm worktree:setup',
+      undefined,
+      { family: 'posix' }
+    )
+    expect(result.setup).toMatchObject({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix' }
+    })
+    expect(activateWorktree).toHaveBeenCalledWith(
+      'repo-1',
+      expect.any(String),
+      result.setup,
+      undefined,
+      undefined
+    )
+  })
+
   it('follows normal setup policy for CLI-created worktrees without activating them', async () => {
     const runtime = new OrcaRuntimeService(store)
     const activateWorktree = vi.fn()
@@ -37980,6 +38311,7 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ id: 'repo-1', path: '/tmp/repo' }),
       '/tmp/workspaces/runtime-hook-skip',
       'pnpm worktree:setup',
+      undefined,
       undefined
     )
     expect(runHook).not.toHaveBeenCalled()
@@ -38031,6 +38363,224 @@ describe('OrcaRuntimeService', () => {
       tabId: setupSpawnEnv.ORCA_TAB_ID,
       leafId: setupLeafId
     })
+  })
+
+  it('uses returned WSL setup shell metadata when runtime spawns setup', async () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-created-worktree' })
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-primary' })
+      .mockResolvedValueOnce({ id: 'pty-setup' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\runtime-hook-wsl')
+    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\runtime-hook-wsl')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+    vi.mocked(createSetupRunnerScript).mockReturnValue({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix', executable: 'wsl.exe' },
+      envVars: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\workspaces\\runtime-hook-wsl'
+      }
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: 'C:/workspaces/runtime-hook-wsl',
+        head: 'def',
+        branch: 'runtime-hook-wsl',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-hook-wsl'
+    })
+
+    expect(result.setup).toBeUndefined()
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        command: 'bash /mnt/c/repo/.git/orca/setup-runner.sh',
+        env: expect.objectContaining({
+          ORCA_ROOT_PATH: 'C:\\repo',
+          ORCA_WORKTREE_PATH: 'C:\\workspaces\\runtime-hook-wsl',
+          ORCA_TAB_ID: expect.stringMatching(UUID_RE),
+          ORCA_PANE_KEY: expect.any(String),
+          ORCA_WORKTREE_ID: result.worktree.id
+        }),
+        worktreeId: result.worktree.id
+      })
+    )
+  })
+
+  it('uses the shell-aware setup runner for windowless creates without a startup command', async () => {
+    // Regression (C1): with no authoritative window and no startup command the
+    // create fell back to runHook, which hardcodes cmd.exe on Windows and so ran
+    // batch even when the configured terminal resolves to Git Bash.
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-windowless' })
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-primary' })
+      .mockResolvedValueOnce({ id: 'pty-setup' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    // Deliberately no attachWindow: this is the windowless/CLI create path.
+
+    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\runtime-hook-windowless')
+    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\runtime-hook-windowless')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+    vi.mocked(resolveSetupRunnerShell).mockReturnValue({ family: 'posix' })
+    vi.mocked(createSetupRunnerScript).mockReturnValue({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix' },
+      envVars: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\workspaces\\runtime-hook-windowless'
+      }
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: 'C:/workspaces/runtime-hook-windowless',
+        head: 'def',
+        branch: 'runtime-hook-windowless',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-hook-windowless',
+      awaitTerminalProvisioning: true
+    })
+
+    expect(createSetupRunnerScript).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1' }),
+      'C:\\workspaces\\runtime-hook-windowless',
+      'pnpm worktree:setup',
+      undefined,
+      { family: 'posix' }
+    )
+    expect(runHook).not.toHaveBeenCalled()
+    expect(result.setupReceipt).toMatchObject({ state: 'running' })
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        command: 'bash /c/repo/.git/orca/setup-runner.sh',
+        worktreeId: result.worktree.id
+      })
+    )
+  })
+
+  it('reports the in-process setup hook as running when nothing can launch the runner', async () => {
+    // Regression (C1): the fire-and-forget hook is the last resort when there is
+    // no PTY controller; reporting spawn_failed made callers retry a live hook.
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-hook-no-pty')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-hook-no-pty')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+    vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-hook-no-pty',
+        head: 'def',
+        branch: 'runtime-hook-no-pty',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-hook-no-pty',
+      awaitTerminalProvisioning: true
+    })
+
+    expect(createSetupRunnerScript).not.toHaveBeenCalled()
+    expect(runHook).toHaveBeenCalledWith(
+      'setup',
+      '/tmp/workspaces/runtime-hook-no-pty',
+      expect.objectContaining({ id: 'repo-1' }),
+      '/tmp/workspaces/runtime-hook-no-pty',
+      undefined
+    )
+    expect(result.setupReceipt).toMatchObject({ state: 'running' })
   })
 
   it('sequences setup before startup for opted-in local headless worktree creates', async () => {
@@ -38085,7 +38635,8 @@ describe('OrcaRuntimeService', () => {
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
     vi.mocked(createSetupRunnerScript).mockReturnValue({
-      runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
+      runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix', executable: 'wsl.exe' },
       envVars: {
         ORCA_ROOT_PATH: '/tmp/repo',
         ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-headless-startup-setup'
@@ -38122,6 +38673,8 @@ describe('OrcaRuntimeService', () => {
     const nonceMatch = startupCommand.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
     expect(nonceMatch?.[1]).toBeTruthy()
     expect(startupCommand).toContain('exec claude')
+    expect(startupCommand).toContain('/mnt/c/tmp/repo/.git/orca/setup-runner.sh')
+    expect(setupCommand).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
     expect(setupCommand).toContain('printf')
     expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
     expect(result.setup).toBeUndefined()
@@ -38202,6 +38755,75 @@ describe('OrcaRuntimeService', () => {
       state: 'running',
       terminalHandle: expect.stringMatching(/^term_/)
     })
+  })
+
+  it('observes setup completion through the launch shell the runner was written for', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-observed-wsl-shell' })
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-observed-wsl-startup' })
+      .mockResolvedValueOnce({ id: 'pty-observed-wsl-setup' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-observed-wsl-shell')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-observed-wsl-shell')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+    vi.mocked(createSetupRunnerScript).mockReturnValue({
+      runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix', executable: 'wsl.exe' },
+      envVars: {
+        ORCA_ROOT_PATH: '/tmp/repo',
+        ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-observed-wsl-shell'
+      }
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-observed-wsl-shell',
+        head: 'def',
+        branch: 'runtime-observed-wsl-shell',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-observed-wsl-shell',
+      setupDecision: 'run',
+      startup: { command: 'claude' },
+      observeSetupCompletion: true,
+      awaitTerminalProvisioning: true
+    })
+
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
+    const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
+    expect(setupCommand).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
+    expect(setupCommand).toContain('__ORCA_SETUP_COMPLETE__:')
   })
 
   it('creates the first terminal for CLI-created worktrees without activating them', async () => {
@@ -39418,7 +40040,8 @@ describe('OrcaRuntimeService', () => {
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
     vi.mocked(createSetupRunnerScript).mockReturnValue({
-      runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
+      runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix', executable: 'wsl.exe' },
       envVars: {
         ORCA_ROOT_PATH: '/tmp/repo',
         ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup-retry'
@@ -39448,8 +40071,8 @@ describe('OrcaRuntimeService', () => {
       'repo-1',
       expect.any(String),
       expect.objectContaining({
-        runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
-        command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh')
+        runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
+        command: expect.stringContaining('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
       }),
       undefined,
       undefined

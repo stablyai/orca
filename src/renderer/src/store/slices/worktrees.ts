@@ -4017,7 +4017,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ? window.api.worktrees.forgetLocal({ worktreeId, hostId })
           : target.kind === 'local'
             ? (removalGenerationGuard?.assertCurrent(),
-              window.api.worktrees.remove({ worktreeId, hostId, force, skipArchive }))
+              window.api.worktrees.remove({
+                worktreeId,
+                hostId,
+                force,
+                allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
+                skipArchive
+              }))
             : (removalGenerationGuard?.assertCurrent(),
               callRuntimeRpc<RemoveWorktreeResult>(
                 target,
@@ -4025,6 +4031,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 {
                   worktree: toRuntimeWorktreeSelector(worktreeId),
                   force,
+                  allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
                   runHooks: !skipArchive
                 },
                 { timeoutMs: 60_000 }
@@ -4373,7 +4380,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // Why: git refusing a non-force delete for dirty/untracked files is a handled user decision, not an app error.
       console.warn('Failed to remove worktree:', err)
       const error = err instanceof Error ? err.message : String(err)
-      const forceDeleteReason = classifyWorktreeForceDeleteReason(error, force)
+      const forceDeleteReason = classifyWorktreeForceDeleteReason(
+        error,
+        force,
+        options?.allowUnverifiedPtyStop === true
+      )
       const locked = isLockedWorktreeRemovalError(error)
       set((s) => ({
         deleteStateByWorktreeId: {

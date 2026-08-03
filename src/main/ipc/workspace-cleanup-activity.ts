@@ -1,19 +1,12 @@
 import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Repo, Worktree } from '../../shared/types'
+import { getPersistedWorkspaceCleanupActivityAt } from '../../shared/workspace-cleanup'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 
 type StatPath = (targetPath: string) => Promise<{ mtimeMs: number }>
 type ReadTextFile = (targetPath: string) => Promise<string>
-
-export function getPersistedWorkspaceCleanupActivityAt(
-  worktree: Pick<Worktree, 'createdAt' | 'lastActivityAt'>
-): number {
-  const persistedActivityAt = Number.isFinite(worktree.lastActivityAt) ? worktree.lastActivityAt : 0
-  const createdAt = Number.isFinite(worktree.createdAt) ? (worktree.createdAt ?? 0) : 0
-  return Math.max(persistedActivityAt, createdAt)
-}
 
 export function resolvePersistedWorkspaceCleanupActivityWorktree(worktree: Worktree): Worktree {
   const persistedActivityAt = getPersistedWorkspaceCleanupActivityAt(worktree)
@@ -56,7 +49,7 @@ async function resolveWorkspaceCleanupActivityAt(
     return persistedActivityAt
   }
 
-  const filesystemActivityAt = await getNewestLocalWorktreeStatMtime(
+  const filesystemActivityAt = await getNewestLocalWorktreeActivityAt(
     worktree.path,
     statPath,
     readTextFile
@@ -67,26 +60,54 @@ async function resolveWorkspaceCleanupActivityAt(
 // Why: best-effort only. Win32 stat over \\wsl.localhost (9P) can falsely
 // report ENOENT (see wslUncDirectoryExists), so a failed stat degrades to the
 // persisted activity timestamp instead of blocking or mislabeling the row.
-async function getNewestLocalWorktreeStatMtime(
+async function getNewestLocalWorktreeActivityAt(
   worktreePath: string,
   statPath: StatPath,
   readTextFile: ReadTextFile
 ): Promise<number> {
   const gitPath = path.join(worktreePath, '.git')
   const gitDirPath = await readLocalWorktreeGitDir(worktreePath, gitPath, readTextFile)
-  const gitDirMtimePromises = gitDirPath
+  // Why: every entry here must move only on a user action. Excluded on purpose:
+  // the gitdir directory and logs/HEAD (restamped for every linked worktree at
+  // once by `git gc` / `git reflog expire`, which made one maintenance run look
+  // like activity everywhere), and index (rewritten by `git status` — this scan
+  // runs one per candidate, so it would erase the evidence it just read).
+  const gitDirProbes = gitDirPath
     ? [
-        readMtime(gitDirPath, statPath),
         readMtime(path.join(gitDirPath, 'HEAD'), statPath),
-        readMtime(path.join(gitDirPath, 'logs', 'HEAD'), statPath)
+        readMtime(path.join(gitDirPath, 'COMMIT_EDITMSG'), statPath),
+        readMtime(path.join(gitDirPath, 'ORIG_HEAD'), statPath),
+        readNewestReflogEntryAt(path.join(gitDirPath, 'logs', 'HEAD'), readTextFile)
       ]
     : []
-  const mtimes = await Promise.all([
+  const timestamps = await Promise.all([
     readMtime(worktreePath, statPath),
     readMtime(gitPath, statPath),
-    ...gitDirMtimePromises
+    ...gitDirProbes
   ])
-  return Math.max(0, ...mtimes)
+  return Math.max(0, ...timestamps)
+}
+
+// Why: the reflog records when HEAD actually moved, so it survives the mtime
+// churn that makes logs/HEAD itself unreadable as a signal. Expired reflogs are
+// truncated to an empty file, which degrades to the other probes.
+async function readNewestReflogEntryAt(
+  reflogPath: string,
+  readTextFile: ReadTextFile
+): Promise<number> {
+  try {
+    const lines = (await readTextFile(reflogPath)).split('\n')
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      // The trailing timezone + tab anchors the capture, so no digit-count floor is needed.
+      const seconds = /\s(\d{1,11})\s[-+]\d{4}\t/.exec(lines[index] ?? '')?.[1]
+      if (seconds) {
+        return Number(seconds) * 1000
+      }
+    }
+    return 0
+  } catch {
+    return 0
+  }
 }
 
 async function readLocalWorktreeGitDir(

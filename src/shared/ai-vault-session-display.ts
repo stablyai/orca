@@ -55,6 +55,13 @@ export function sessionFirstPrompt(session: AiVaultSession): string | null {
     return stored
   }
 
+  // Why: `previewMessages` is a newest-N sliding window. Once it has truncated,
+  // its earliest user turn is a RECENT ask, not the opening one — returning it
+  // would show (and copy) the wrong message under a "first prompt" label.
+  if (session.previewMessagesTruncated) {
+    return null
+  }
+
   for (const message of session.previewMessages) {
     if (message.role !== 'user') {
       continue

@@ -294,9 +294,17 @@ export async function parseOpenCodeSqliteSession(args: {
 
     const previewSql = buildPreviewQuery(db)
     if (previewSql) {
-      const previewRows = db
+      // Why: SQL already dropped anything older than the newest-N window, so the
+      // accumulator never shifts and cannot detect the truncation itself. Ask for
+      // one extra row so an exactly-full window is not mistaken for a trimmed one.
+      const probedRows = db
         .prepare(previewSql)
-        .all(sessionId, OPENCODE_SQLITE_PREVIEW_LIMIT) as PreviewRow[]
+        .all(sessionId, OPENCODE_SQLITE_PREVIEW_LIMIT + 1) as PreviewRow[]
+      if (probedRows.length > OPENCODE_SQLITE_PREVIEW_LIMIT) {
+        accumulator.previewMessagesTruncated = true
+      }
+      // Newest-first, so the probe row to drop is the oldest one at the tail.
+      const previewRows = probedRows.slice(0, OPENCODE_SQLITE_PREVIEW_LIMIT)
       // Why: query returns newest-first; push in chronological order so the
       // accumulator's ring buffer keeps the newest OPENCODE_SQLITE_PREVIEW_LIMIT
       // messages.

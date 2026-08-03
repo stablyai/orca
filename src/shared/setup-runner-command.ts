@@ -1,7 +1,16 @@
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
+import {
+  buildWindowsCmdRunnerDelayedLaunchCommand,
+  windowsRunnerPathNeedsCmdGuard
+} from './windows-cmd-runner-delayed-launch'
 
 export type SetupRunnerCommandPlatform = 'windows' | 'posix'
+export type SetupRunnerShellFamily = 'posix' | 'cmd'
 export type SetupRunnerCommandShell = 'posix' | 'windows'
+export type SetupRunnerShell = {
+  family: SetupRunnerShellFamily
+  executable?: string
+}
 
 export type SetupRunnerCommandResolution = {
   command: string
@@ -11,9 +20,10 @@ export type SetupRunnerCommandResolution = {
 
 export function buildSetupRunnerCommand(
   runnerScriptPath: string,
-  platform: SetupRunnerCommandPlatform
+  platform: SetupRunnerCommandPlatform,
+  shell?: SetupRunnerShell
 ): string {
-  return resolveSetupRunnerCommand(runnerScriptPath, platform).command
+  return resolveSetupRunnerCommand(runnerScriptPath, platform, shell).command
 }
 
 export function getSetupRunnerCommandPlatformForPath(
@@ -31,7 +41,8 @@ export function getSetupRunnerCommandPlatformForPath(
 
 export function resolveSetupRunnerCommand(
   runnerScriptPath: string,
-  platform: SetupRunnerCommandPlatform
+  platform: SetupRunnerCommandPlatform,
+  shell?: SetupRunnerShell
 ): SetupRunnerCommandResolution {
   if (platform === 'windows') {
     if (isWslUncPath(runnerScriptPath)) {
@@ -49,8 +60,30 @@ export function resolveSetupRunnerCommand(
         shell: 'posix'
       }
     }
+    if (shell?.family === 'posix' || /\.sh$/i.test(runnerScriptPath)) {
+      // Why: WSL shells need /mnt/... paths, while Git Bash expects /c/... when replaying deferred setup scripts.
+      if (isWslExecutable(shell?.executable)) {
+        const wslPath = nativeWindowsPathToWslShellPath(runnerScriptPath)
+        return {
+          command: `bash ${quotePosixArg(wslPath)}`,
+          runnerScriptPathForShell: wslPath,
+          shell: 'posix'
+        }
+      }
+      // Why: queued setup launches can outlive the process that generated them, so convert native paths before handing off to POSIX shells.
+      const posixPath = nativeWindowsPathToPosixShellPath(runnerScriptPath)
+      return {
+        command: `bash ${quotePosixArg(posixPath)}`,
+        runnerScriptPathForShell: posixPath,
+        shell: 'posix'
+      }
+    }
     return {
-      command: `cmd.exe /c ${quoteWindowsArg(runnerScriptPath)}`,
+      // Why: some path characters survive no amount of quoting on a cmd command line, so those
+      // paths take a delayed-expansion launcher instead. Every other path keeps the plain form.
+      command: windowsRunnerPathNeedsCmdGuard(runnerScriptPath)
+        ? buildWindowsCmdRunnerDelayedLaunchCommand(runnerScriptPath)
+        : `cmd.exe /c ${quoteWindowsArg(runnerScriptPath)}`,
       runnerScriptPathForShell: runnerScriptPath,
       shell: 'windows'
     }
@@ -84,4 +117,25 @@ function quotePosixArg(value: string): string {
 
 function quoteWindowsArg(value: string): string {
   return `"${value.replace(/"/g, '""')}"`
+}
+
+export function nativeWindowsPathToPosixShellPath(value: string): string {
+  const driveMatch = value.match(/^([A-Za-z]):[\\/](.*)$/)
+  if (driveMatch) {
+    return `/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
+  }
+  return value.replace(/\\/g, '/')
+}
+
+function nativeWindowsPathToWslShellPath(value: string): string {
+  const driveMatch = value.match(/^([A-Za-z]):[\\/](.*)$/)
+  if (driveMatch) {
+    return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
+  }
+  return value.replace(/\\/g, '/')
+}
+
+function isWslExecutable(value: string | undefined): boolean {
+  const basename = value?.trim().replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
+  return basename === 'wsl.exe' || basename === 'wsl'
 }

@@ -20,13 +20,25 @@ function makeRpcChild(rateLimitResetCredits?: unknown) {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter
     stderr: EventEmitter
-    stdin: { write: ReturnType<typeof vi.fn> }
+    stdin: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> }
     kill: ReturnType<typeof vi.fn>
+    exitCode: number | null
   }
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
-  child.kill = vi.fn()
-  child.stdin = {
+  child.exitCode = null
+  // Why: like the real app-server, the fake dies on stdin EOF or a signal —
+  // the graceful shutdown path resolves only once the child reports exit.
+  const exitNow = (): void => {
+    child.exitCode = 0
+    child.emit('exit', 0, null)
+  }
+  child.kill = vi.fn(() => {
+    exitNow()
+    return true
+  })
+  child.stdin = Object.assign(new EventEmitter(), {
+    end: vi.fn(exitNow),
     write: vi.fn((line: string) => {
       const message = JSON.parse(line) as { id?: number; method?: string }
       if (message.method === 'initialize') {
@@ -57,7 +69,7 @@ function makeRpcChild(rateLimitResetCredits?: unknown) {
         }, 0)
       }
     })
-  }
+  })
   return child
 }
 

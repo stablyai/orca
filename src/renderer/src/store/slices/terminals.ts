@@ -748,6 +748,11 @@ export type TerminalSlice = {
   ) => string[]
   clearCodexRestartNotice: (ptyId: string) => void
   dismissCodexRestartNotices: (ptyIds: string[]) => void
+  /** Puts an accepted-but-unexecuted restart back to the unanswered prompt, so a
+   *  failed execution never leaves a pane input-blocked with nothing visible. */
+  reopenCodexRestartPrompt: (ptyId: string) => void
+  /** Rebinds one layout leaf to a replacement PTY without a mounted pane. */
+  replaceTerminalLayoutPanePtyId: (tabId: string, leafId: string, ptyId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
@@ -3582,6 +3587,40 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return {
         codexRestartNoticeByPtyId: next,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+      }
+    })
+  },
+
+  reopenCodexRestartPrompt: (ptyId) => {
+    set((s) => {
+      const notice = s.codexRestartNoticeByPtyId[ptyId]
+      if (!notice?.restartRequested) {
+        return {}
+      }
+      const { restartRequested: _restartRequested, ...kept } = notice
+      const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+      delete nextPendingCodexPaneRestartIds[ptyId]
+      return {
+        codexRestartNoticeByPtyId: { ...s.codexRestartNoticeByPtyId, [ptyId]: kept },
+        pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+      }
+    })
+  },
+
+  replaceTerminalLayoutPanePtyId: (tabId, leafId, ptyId) => {
+    set((s) => {
+      const layout = s.terminalLayoutsByTabId[tabId]
+      if (!layout || layout.ptyIdsByLeafId?.[leafId] === ptyId) {
+        return {}
+      }
+      return {
+        terminalLayoutsByTabId: {
+          ...s.terminalLayoutsByTabId,
+          [tabId]: {
+            ...layout,
+            ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
+          }
+        }
       }
     })
   },

@@ -2532,7 +2532,9 @@
             "selectedForDeletionCount": "Selected for deletion: {{value0}}",
             "deleteButtonCount": "Delete {{value0}}",
             "archivedStatus": "Archived",
-            "readyStatus": "Ready"
+            "readyStatus": "Ready",
+            "f637f63882": "Resource Manager counts {{value0}}; this list found {{value1}}. That counter reads Orca's activity record alone, while this scan also checks each workspace's git history and skips disconnected remotes.",
+            "74f6c16279": "Back"
           },
           "backgroundRemoval": {
             "removed": "Removed workspaces: {{value0}}",
@@ -2579,6 +2581,16 @@
             "dirtyFilesBlocker": "Changed files",
             "unknownBaseBlocker": "Could not verify unpushed commits",
             "dismissedBlocker": "Ignored"
+          },
+          "workspace": {
+            "cleanup": {
+              "candidate": {
+                "row": {
+                  "b5d2b33e47": "Deleting…",
+                  "e1135728e3": "Queued for deletion"
+                }
+              }
+            }
           }
         }
       },
@@ -4752,7 +4764,8 @@
               "905fc8efac": "Git already removed this workspace. Use Force Delete to clear it from Orca.",
               "0899ebdb28": "Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory.",
               "locked": "This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
-              "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion."
+              "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
+              "unstoppedPty": "Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway."
             }
           }
         },
@@ -9145,7 +9158,13 @@
               "20574cbc72": "Enable Voice Dictation",
               "322d457a0d": "transcription",
               "dcc7846641": "Configure the OpenAI API key used for cloud speech-to-text models.",
-              "ebfd0b32e5": "OpenAI Transcription"
+              "ebfd0b32e5": "OpenAI Transcription",
+              "microphoneTitle": "Microphone",
+              "microphoneDescription": "Choose which input device voice dictation uses.",
+              "micInput": "input",
+              "micDevice": "device",
+              "micAirpods": "airpods",
+              "micDefault": "system default"
             }
           }
         },
@@ -10136,6 +10155,14 @@
           "webUnavailable": "Switching builds is only available in the desktop app.",
           "devChannelMacOnlyAria": "{{value0}} (macOS only)",
           "devChannelMacOnly": "{{value0}} builds are produced only for macOS. Linux and Windows stay on Stable or RC."
+        },
+        "VoiceMicrophoneSetting": {
+          "systemDefault": "System default",
+          "unavailable": "unavailable",
+          "label": "Microphone",
+          "description": "Input device used for voice dictation. System default follows the OS microphone setting.",
+          "accessHint": "Allow microphone access to list input devices.",
+          "allowAccess": "Allow access"
         }
       },
       "right": {
@@ -13328,7 +13355,9 @@
           "55127a3706": "Dictation failed: {{value0}}",
           "bb7f599ee7": "Open Settings",
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
-          "5d2c3e7ae3": "No speech detected."
+          "5d2c3e7ae3": "No speech detected.",
+          "micFallback": "Selected microphone unavailable. Using system default.",
+          "micDisconnected": "Microphone disconnected. Dictation stopped."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Stop dictation"

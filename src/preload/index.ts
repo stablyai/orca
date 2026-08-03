@@ -95,7 +95,8 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeDefaultTabsLaunch,
   WorktreeHeadIdentity,
-  WorktreeRemoteBranchConflictEvent
+  WorktreeRemoteBranchConflictEvent,
+  WorktreeSetupLaunch
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
@@ -2868,8 +2869,7 @@ const api = {
       repoId: string
       worktreePath: string
       command: string
-    }): Promise<{ runnerScriptPath: string; envVars: Record<string, string> }> =>
-      ipcRenderer.invoke('hooks:createIssueCommandRunner', args),
+    }): Promise<WorktreeSetupLaunch> => ipcRenderer.invoke('hooks:createIssueCommandRunner', args),
 
     readIssueCommand: (args: {
       repoId: string
@@ -3685,7 +3685,7 @@ const api = {
       callback: (data: {
         repoId: string
         worktreeId: string
-        setup?: { runnerScriptPath: string; envVars: Record<string, string> }
+        setup?: WorktreeSetupLaunch
         startup?: { command: string; env?: Record<string, string> }
         defaultTabs?: WorktreeDefaultTabsLaunch
       }) => void
@@ -3695,7 +3695,7 @@ const api = {
         data: {
           repoId: string
           worktreeId: string
-          setup?: { runnerScriptPath: string; envVars: Record<string, string> }
+          setup?: WorktreeSetupLaunch
           startup?: { command: string; env?: Record<string, string> }
           defaultTabs?: WorktreeDefaultTabsLaunch
         }

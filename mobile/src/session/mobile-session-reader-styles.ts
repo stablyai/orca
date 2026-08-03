@@ -1,6 +1,6 @@
 import { Platform, StyleSheet } from 'react-native'
 
-import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
+import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 
 export const mobileSessionReaderStyles = StyleSheet.create({
   markdownTextInput: {

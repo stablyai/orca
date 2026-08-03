@@ -1409,6 +1409,10 @@ export type PreloadApi = {
       worktreeId: string
       hostId?: ExecutionHostId
       force?: boolean
+      // Why (#11960): distinct from `force`, which the plain Delete confirmation
+      // already sets to skip the dirty-file prompt. Only an explicit Force Delete
+      // may waive the proof that every PTY stopped.
+      allowUnverifiedPtyStop?: boolean
       skipArchive?: boolean
     }) => Promise<RemoveWorktreeResult>
     // Forget a workspace from Orca only (no remote Git/FS work) — for workspaces pinned to a removed/disconnected SSH host.

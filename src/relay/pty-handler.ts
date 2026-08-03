@@ -263,6 +263,10 @@ const ALLOWED_WINDOWS_SHELL_OVERRIDES = new Set([
   'cmd',
   'wsl.exe',
   'wsl',
+  // Why: both spellings classify as a POSIX startup family, so rejecting them here made the relay
+  // the one host that hard-failed a setting the local and daemon PTYs accept.
+  'bash.exe',
+  'bash',
   WINDOWS_GIT_BASH_SHELL
 ])
 

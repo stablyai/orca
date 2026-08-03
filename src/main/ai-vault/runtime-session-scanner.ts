@@ -76,6 +76,7 @@ const aiVaultListResultSchema = z.object({
       totalTokens: z.number(),
       previewMessages: z.array(aiVaultSessionPreviewMessageSchema),
       // Optional keeps paired hosts on older builds compatible.
+      previewMessagesTruncated: z.boolean().optional(),
       firstUserPrompt: z.string().nullable().optional(),
       lastUserPrompt: z.string().nullable().optional(),
       // Default keeps remote hosts running an older build (no recoverable-signal

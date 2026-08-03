@@ -1760,11 +1760,14 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         targetBranch,
         isCrossRepository
       }),
-    remove: async ({ worktreeId, force, skipArchive }) => {
+    remove: async ({ worktreeId, force, allowUnverifiedPtyStop, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         force,
+        // Why (#11960): the web client renders the same Force Delete affordances, so
+        // dropping this field here would leave paired clients permanently wedged.
+        allowUnverifiedPtyStop,
         runHooks: skipArchive !== true
       })
     },

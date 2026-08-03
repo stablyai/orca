@@ -1,13 +1,10 @@
-import type { MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
-import type { MobileTerminalTheme } from '../../../../src/terminal/terminal-webview-contract'
-import type { MobileDiffLine } from '../../../../src/session/mobile-diff-lines'
-import type {
-  MobileHighlightedDiffLine,
-  MobileSyntaxSegment
-} from '../../../../src/session/mobile-file-syntax'
-import type { TerminalRecord } from '../../../../src/session/mobile-terminal-records'
-import type { DiffComment, TuiAgent } from '../../../../../src/shared/types'
-import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
+import type { DiffComment, TuiAgent } from '../../../src/shared/types'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
+import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
+import type { MobileDiffLine } from './mobile-diff-lines'
+import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
+import type { TerminalRecord } from './mobile-terminal-records'
 
 export type Terminal = TerminalRecord
 

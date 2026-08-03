@@ -267,8 +267,8 @@ import {
   reconcileMobileSessionCreateWarningState
 } from '../../../../src/session/mobile-session-create-warning-state'
 import { colors, spacing } from '../../../../src/theme/mobile-theme'
-import { styles } from './mobile-session-styles'
-import { QuickCommandsTabButton } from './QuickCommandsTabButton'
+import { QuickCommandsTabButton } from '../../../../src/session/QuickCommandsTabButton'
+import { styles } from '../../../../src/session/mobile-session-styles'
 import type { DiffComment, TerminalQuickCommand } from '../../../../../src/shared/types'
 import type {
   DiffCommentActions,
@@ -289,7 +289,7 @@ import type {
   TerminalCreateResult,
   TerminalGestureInputBucket,
   TerminalGestureInputQueue
-} from './mobile-session-route-types'
+} from '../../../../src/session/mobile-session-route-types'
 
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
