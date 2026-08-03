@@ -546,4 +546,135 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     )
     expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('browser-unified-1')
   })
+
+  // Why: issue #11699 — split-group closes used to deselect the emptied workspace,
+  // which blanked the file explorer and Git panel until the user re-opened it.
+  it('keeps the workspace selected when the last terminal tab in a group closes', async () => {
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeItem('unified-terminal-1')
+
+    expect(mocks.closeTab).toHaveBeenCalledWith('terminal-1')
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+  })
+
+  it('keeps the workspace selected when the last browser tab in a group closes', async () => {
+    storeBox.state = {
+      ...storeBox.state,
+      browserPagesByWorkspace: {},
+      browserTabsByWorktree: { 'wt-1': [] },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'browser-unified-1',
+            tabOrder: ['browser-unified-1']
+          }
+        ]
+      },
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-unified-1',
+            entityId: 'browser-workspace-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'browser',
+            label: 'New Browser Tab',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeItem('browser-unified-1')
+
+    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('browser-unified-1')
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+  })
+
+  it('keeps the workspace selected when the sole group is closed', async () => {
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeGroup()
+
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith('wt-1', 'group-1')
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+  })
+
+  // Why: split-group closes were the path that bypassed Terminal.tsx, so cover the
+  // real two-group shape — collapse the emptied pane, leave the survivor's tab alone.
+  it('collapses one of two split groups without touching the survivor or the selection', async () => {
+    const secondUnifiedTab = {
+      id: 'unified-terminal-2',
+      entityId: 'terminal-2',
+      groupId: 'group-2',
+      worktreeId: 'wt-1',
+      contentType: 'terminal',
+      label: 'Terminal 2',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    const currentState = storeBox.state as {
+      tabsByWorktree: Record<string, unknown[]>
+      unifiedTabsByWorktree: Record<string, { id: string }[]>
+    }
+    const firstUnified = currentState.unifiedTabsByWorktree['wt-1'][0]
+    storeBox.state = {
+      ...storeBox.state,
+      tabsByWorktree: {
+        'wt-1': [
+          ...currentState.tabsByWorktree['wt-1'],
+          {
+            id: 'terminal-2',
+            ptyId: 'pty-2',
+            worktreeId: 'wt-1',
+            title: 'Terminal 2',
+            defaultTitle: 'Terminal 2',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1
+          }
+        ]
+      },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: firstUnified.id,
+            tabOrder: [firstUnified.id]
+          },
+          {
+            id: 'group-2',
+            worktreeId: 'wt-1',
+            activeTabId: secondUnifiedTab.id,
+            tabOrder: [secondUnifiedTab.id]
+          }
+        ]
+      },
+      unifiedTabsByWorktree: { 'wt-1': [firstUnified, secondUnifiedTab] }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-2', worktreeId: 'wt-1' })
+
+    model.commands.closeGroup()
+
+    expect(mocks.closeTab).toHaveBeenCalledWith('terminal-2')
+    expect(mocks.closeTab).not.toHaveBeenCalledWith('terminal-1')
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith('wt-1', 'group-2')
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+  })
 })

@@ -1620,7 +1620,8 @@ function Terminal(): React.JSX.Element | null {
               setActiveTab(terminalTab.id)
               setActiveTabType('terminal')
             } else {
-              setActiveWorktree(null)
+              // Why: no tabs left, but the workspace stays selected so file/Git browsing survives (issue #11699).
+              setActiveTabType('terminal')
             }
           }
         }
@@ -1636,14 +1637,7 @@ function Terminal(): React.JSX.Element | null {
       destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
       closeBrowserTab(tabId)
     },
-    [
-      closeBrowserTab,
-      setActiveBrowserTab,
-      setActiveFile,
-      setActiveTab,
-      setActiveTabType,
-      setActiveWorktree
-    ]
+    [closeBrowserTab, setActiveBrowserTab, setActiveFile, setActiveTab, setActiveTabType]
   )
 
   const handlePtyExit = useCallback(

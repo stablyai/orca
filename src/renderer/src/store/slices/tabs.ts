@@ -961,7 +961,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         nextLayoutByWorktree = collapsedState.layoutByWorktree
         nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
       }
-      const shouldDeactivateWorktree =
+      const worktreeBecameEmpty =
         current.activeWorktreeId === worktreeId &&
         nextTabs.length === 0 &&
         (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
@@ -979,12 +979,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         ...(nextUnreadTerminalTabs !== current.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
           : {}),
-        // Why: closing the last tab can leave the worktree selected but render-empty, so write the landing-state fallback directly.
-        ...(shouldDeactivateWorktree
+        // Why: the workspace stays selected at zero tabs so file/Git browsing survives; only the per-surface actives are cleared.
+        ...(worktreeBecameEmpty
           ? {
-              activeWorktreeId: null,
-              activeWorkspaceKey: null,
-              activeWorkspaceExecutionHostId: null,
               activeTabId: null,
               activeBrowserTabId: null,
               activeFileId: null,
@@ -1007,7 +1004,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               }
             }
           : {}),
-        ...(!shouldDeactivateWorktree && current.activeWorktreeId === worktreeId
+        ...(!worktreeBecameEmpty && current.activeWorktreeId === worktreeId
           ? buildActiveSurfacePatch(
               {
                 ...current,

@@ -44,7 +44,6 @@ type TerminalOverlaySlotProps = {
   activityTerminalPortal: ActivityTerminalPortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
-  leaveWorktreeIfEmpty: () => void
 }
 
 export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
@@ -59,8 +58,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   isActive,
   activityTerminalPortal,
   onFocusOwningGroup,
-  consumeSuppressedPtyExit,
-  leaveWorktreeIfEmpty
+  consumeSuppressedPtyExit
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const overlayRef = useRef<HTMLDivElement | null>(null)
@@ -239,15 +237,14 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         }
         closeTerminalTab(terminalTabId, {
           reason: 'pty-exit',
-          lifecyclePtyId: ptyId,
-          onClosed: leaveWorktreeIfEmpty
+          lifecyclePtyId: ptyId
         })
       }}
       onCloseTab={() => {
         // Why: route through closeTerminalTab (not the raw store closeTab) so a
         // pinned tab hits the confirmation guard. The overlay's direct
         // store.closeTab was the path that closed pinned terminals silently.
-        closeTerminalTab(terminalTabId, { onClosed: leaveWorktreeIfEmpty })
+        closeTerminalTab(terminalTabId)
       }}
     />
   )

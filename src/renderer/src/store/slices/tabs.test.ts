@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Tab, TabGroup } from '../../../../shared/types'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultUIState } from '../../../../shared/constants'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph'
 import { closeMobileSessionTabInStore } from '../../runtime/mobile-session-tab-close'
 
@@ -301,6 +302,57 @@ describe('TabsSlice', () => {
     it('returns null for nonexistent tab', () => {
       const result = store.getState().closeUnifiedTab('nonexistent')
       expect(result).toBeNull()
+    })
+
+    // Why: issue #11699 — deselecting the emptied workspace here blanked the file explorer and Git panel.
+    it('keeps the workspace selected but clears surface actives when the last tab closes', () => {
+      const groupId = 'editor-group'
+      const file = makeOpenFile({
+        id: '/tmp/feature/src/app.ts',
+        filePath: '/tmp/feature/src/app.ts',
+        relativePath: 'src/app.ts',
+        language: 'typescript',
+        worktreeId: WT
+      })
+      const tab = makeUnifiedTab({
+        id: 'app-unified',
+        entityId: file.id,
+        contentType: 'editor',
+        label: 'app.ts',
+        worktreeId: WT,
+        groupId
+      })
+      store.setState({
+        openFiles: [],
+        unifiedTabsByWorktree: { [WT]: [tab] },
+        groupsByWorktree: {
+          [WT]: [
+            makeTabGroup({
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: tab.id,
+              tabOrder: [tab.id],
+              recentTabIds: [tab.id]
+            })
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        activeFileId: file.id,
+        activeFileIdByWorktree: { [WT]: file.id },
+        activeWorktreeId: WT,
+        activeWorkspaceKey: worktreeWorkspaceKey(WT),
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' }
+      })
+
+      store.getState().closeUnifiedTab(tab.id)
+
+      const state = store.getState()
+      expect(state.activeWorktreeId).toBe(WT)
+      expect(state.activeWorkspaceKey).toBe(worktreeWorkspaceKey(WT))
+      expect(state.activeTabId).toBeNull()
+      expect(state.activeFileId).toBeNull()
+      expect(state.activeBrowserTabId).toBeNull()
     })
 
     it('removes a mobile-closed markdown tab from open files so it is not republished', () => {

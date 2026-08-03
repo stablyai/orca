@@ -181,9 +181,9 @@ export function closeTerminalTab(
         : {})
     })
     if (state.activeWorktreeId === owningWorktreeId) {
-      // Why: only deactivate the worktree when no tabs of any kind remain.
-      // Editor files are a separate tab type; closing the last terminal tab
-      // should switch to the editor view instead of tearing down the workspace.
+      // Why: editor/browser tabs are separate tab types, so reveal one instead of
+      // leaving the empty terminal view up. With none left the workspace stays
+      // selected (issue #11699) — file/Git browsing must survive a zero-tab state.
       const worktreeFile = state.openFiles.find((f) => f.worktreeId === owningWorktreeId)
       if (worktreeFile) {
         state.setActiveFile(worktreeFile.id)
@@ -193,8 +193,6 @@ export function closeTerminalTab(
         if (browserTab) {
           state.setActiveBrowserTab(browserTab.id)
           state.setActiveTabType('browser')
-        } else {
-          state.setActiveWorktree(null)
         }
       }
     }

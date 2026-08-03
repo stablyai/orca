@@ -2335,7 +2335,8 @@ describe('createEditorSlice editor drafts', () => {
     expect(store.getState().activeBrowserTabId).toBe('browser-1')
   })
 
-  it('returns to the landing state when closing the last editor in a worktree with no other surfaces', () => {
+  // Why: issue #11699 — the workspace stays selected so file/Git browsing survives zero tabs.
+  it('keeps the workspace selected when closing the last editor in a worktree with no other surfaces', () => {
     const store = createEditorStore()
 
     store.getState().openFile({
@@ -2348,7 +2349,7 @@ describe('createEditorSlice editor drafts', () => {
 
     store.getState().closeFile('/repo/notes.md')
 
-    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(store.getState().activeWorktreeId).toBe('wt-1')
     expect(store.getState().activeFileId).toBeNull()
     expect(store.getState().activeBrowserTabId).toBeNull()
     expect(store.getState().activeTabType).toBe('terminal')
@@ -2391,7 +2392,7 @@ describe('createEditorSlice editor drafts', () => {
     expect(store.getState().activeBrowserTabId).toBe('browser-1')
   })
 
-  it('returns to the landing state when closing all editors and no other surfaces remain', () => {
+  it('keeps the workspace selected when closing all editors and no other surfaces remain', () => {
     const store = createEditorStore()
 
     store.getState().openFile({
@@ -2404,7 +2405,7 @@ describe('createEditorSlice editor drafts', () => {
 
     store.getState().closeAllFiles()
 
-    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(store.getState().activeWorktreeId).toBe('wt-1')
     expect(store.getState().activeFileId).toBeNull()
     expect(store.getState().activeBrowserTabId).toBeNull()
     expect(store.getState().activeTabType).toBe('terminal')

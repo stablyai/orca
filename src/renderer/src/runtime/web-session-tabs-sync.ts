@@ -194,6 +194,21 @@ export function getLastKnownHostTerminalTabCount(
   )
 }
 
+// Why: the freshness maps are module-local, so readers of the publication epoch get no
+// store notification. Expose an explicit subscription for useSyncExternalStore consumers.
+const publicationListeners = new Set<() => void>()
+
+export function subscribeWebSessionTabsPublication(listener: () => void): () => void {
+  publicationListeners.add(listener)
+  return () => publicationListeners.delete(listener)
+}
+
+function notifyWebSessionTabsPublication(): void {
+  for (const listener of publicationListeners) {
+    listener()
+  }
+}
+
 export function getLatestWebSessionTabsPublicationEpoch(
   environmentId: string,
   worktreeId: string
@@ -257,6 +272,9 @@ export function shouldApplyWebSessionTabsSnapshot(
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion
   })
+  // Why: a zero-tab snapshot changes no store slice, so this is the only signal that
+  // tells the UI the host has spoken and the worktree is genuinely empty, not pending.
+  notifyWebSessionTabsPublication()
   // Why: a mounted mirror that exhausted bounded polling needs fresh host evidence without subscribing to every store write.
   queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
   return true
@@ -330,6 +348,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   replayableSessionTabsSnapshotByWorktree.clear()
   lastHostTerminalTabCountByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
+  notifyWebSessionTabsPublication()
 }
 
 export function _getWebSessionTabsTrackingCountsForTest(): {
@@ -357,6 +376,8 @@ function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeI
       hostSessionTabIdByLocalKey.delete(key)
     }
   }
+  // Why: dropping the epoch returns this worktree to "awaiting the host", so readers must re-ask.
+  notifyWebSessionTabsPublication()
 }
 
 export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
@@ -387,6 +408,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   }
   clearWebAgentSessionHandoffsForEnvironment(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
+  notifyWebSessionTabsPublication()
 }
 
 function hostSessionTabMappingKey(args: {

@@ -173,7 +173,7 @@ export async function runKillAllTerminalSurfaces(
     }
     const activeWorktreeId = state.activeWorktreeId
     // Why: keeping the active worktree until its targets close lets the existing
-    // tab action choose editor/browser/deactivation without spawning a replacement.
+    // tab action fall back to an editor/browser tab without spawning a replacement.
     const closeOrder = [
       ...presentTargetIds.filter((targetId) => ownerByTargetId.get(targetId) !== activeWorktreeId),
       ...presentTargetIds.filter((targetId) => ownerByTargetId.get(targetId) === activeWorktreeId)

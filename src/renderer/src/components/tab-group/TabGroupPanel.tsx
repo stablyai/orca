@@ -13,6 +13,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import TabBar from '../tab-bar/TabBar'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
+import { TabGroupEmptyState } from './TabGroupEmptyState'
+import { useTabGroupEmptyStateVisible } from './tab-group-empty-state-visibility'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
@@ -58,6 +60,7 @@ export default function TabGroupPanel({
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
+  const emptyStateVisible = useTabGroupEmptyStateVisible(worktreeId, model.groupTabs.length)
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -307,6 +310,10 @@ export default function TabGroupPanel({
             className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
             data-contextual-tour-target="workspace-agent-terminal-tip"
           />
+        ) : null}
+        {/* Why: closing the last tab keeps the workspace selected, so this pane body would otherwise render nothing at all. */}
+        {emptyStateVisible ? (
+          <TabGroupEmptyState onNewTerminalTab={commands.newTerminalTab} />
         ) : null}
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
