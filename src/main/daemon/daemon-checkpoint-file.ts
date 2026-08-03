@@ -10,11 +10,13 @@ export type TerminalCheckpointFile = {
   scrollbackAnsi: string
   oscLinks?: TerminalOscLinkRange[]
   rehydrateSequences: string
+  pendingEscapeTailAnsi?: string
   cwd: string | null
   cols: number
   rows: number
   modes: TerminalModes
   scrollbackLines: number
+  lastTitle?: string
   /** Ties this checkpoint to the output.log whose header carries the same
    *  generation. Absent on checkpoints written before incremental logs. */
   generation?: number

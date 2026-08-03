@@ -55,6 +55,9 @@ export type SshTarget = {
   systemSshConnectionReuse?: boolean
 }
 
+/** Public target identity safe to mirror to a paired client. */
+export type SshTargetSummary = Pick<SshTarget, 'id' | 'label'>
+
 /** Identity of a removed SSH target, recorded so that re-adding the same host
  *  can re-point orphaned repos/worktrees from the old (deleted) target id to
  *  the new one. Repos store only the target id, so without this record the old
@@ -108,16 +111,35 @@ export type SshConnectionStatus =
 
 export type SshRemotePlatform = 'linux' | 'darwin' | 'win32'
 
+export type SshProviderEpoch = string & { readonly __sshProviderEpoch: unique symbol }
+
+export type DirectSshAuthority = {
+  targetId: string
+  providerEpoch: SshProviderEpoch
+  connectionGeneration: number
+}
+
 export type SshConnectionState = {
   targetId: string
   status: SshConnectionStatus
   error: string | null
   /** Number of reconnection attempts since last disconnect. */
   reconnectAttempt: number
+  /** Opaque provider-incarnation token issued by main. */
+  providerEpoch?: SshProviderEpoch | null
+  /** Non-secret owner token used to reject mutations captured for an obsolete SSH session. */
+  connectionGeneration?: number
   /** Folder downloads require ssh2 SFTP and are unavailable on system SSH. */
   supportsFolderDownload?: boolean
   /** Remote OS detected by the SSH relay once available. */
   remotePlatform?: SshRemotePlatform
+}
+
+/** Non-secret mutation provenance. Both fields are required when an SSH provider is selected. */
+export type SshMutationExpectation = {
+  expectedExecutionHostId?: 'local' | `ssh:${string}`
+  expectedSshTargetId?: string
+  expectedSshConnectionGeneration?: number
 }
 
 export type SshRemotePtyLeaseState = 'attached' | 'detached' | 'terminated' | 'expired'
@@ -133,6 +155,20 @@ export type SshRemotePtyLease = {
   updatedAt: number
   lastAttachedAt?: number
   lastDetachedAt?: number
+}
+
+/** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */
+export type SshPtyConsumerRecovery = {
+  targetId: string
+  clientInstanceId: string
+  serverBuildId: string
+  clientGeneration: number
+  ownerGeneration: number
+  ownerLease: string
+  outputFlowControl?: {
+    version: 1
+    windowSu: number
+  }
 }
 
 // ─── Port Forwarding Types ─────────────────────────────────────────

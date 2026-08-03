@@ -81,6 +81,9 @@ export class TerminalPreviewOutputStream {
   }
 
   append(data: string, meta?: TerminalPreviewOutputMeta): void {
+    if (this.isDisposed || this.awaitingReconnect || this.resyncPending) {
+      return
+    }
     if (this.bufferingSnapshot) {
       this.appendInitial(data, meta)
     } else {
@@ -107,6 +110,25 @@ export class TerminalPreviewOutputStream {
     this.initialPendingBytes = 0
     this.bufferingSnapshot = false
     return replay
+  }
+
+  // Why: the PTY grid changed under this stream (viewer fit, host reclaim,
+  // phone takeover) — buffered bytes were parsed for the old grid, so drop
+  // them and hand the renderer a fresh authoritative snapshot instead.
+  requestResync(): void {
+    if (this.isDisposed || this.awaitingReconnect || this.resyncPending) {
+      return
+    }
+    if (this.batchTimer) {
+      clearTimeout(this.batchTimer)
+      this.batchTimer = null
+    }
+    this.batchChunks = []
+    this.batchBytes = 0
+    this.pendingBatches = []
+    this.pendingBatchBytes = 0
+    this.resyncPending = true
+    this.maybeDrain()
   }
 
   pauseForReconnect(): void {

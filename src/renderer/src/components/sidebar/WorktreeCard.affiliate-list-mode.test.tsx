@@ -206,7 +206,8 @@ describe('WorktreeCard affiliate list mode', () => {
     })
 
     expect(testDoubles.activateWorktreeFromSidebar).toHaveBeenCalledWith(
-      'repo-1::/repo/worktrees/affiliate'
+      'repo-1::/repo/worktrees/affiliate',
+      'local'
     )
   })
 

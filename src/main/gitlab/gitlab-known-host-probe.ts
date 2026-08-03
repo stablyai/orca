@@ -1,3 +1,4 @@
+import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { glabExecFileAsync } from '../git/runner'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from './project-ref-parser'
@@ -8,7 +9,7 @@ export type LocalGitExecOptions = {
 
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
 const knownHostsCacheByExecutionContext = new Map<string, readonly string[]>()
-const knownHostsInFlightByExecutionContext = new Map<string, Promise<readonly string[]>>()
+const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
 
 function knownHostsExecutionKey(
   connectionId?: string | null,
@@ -32,13 +33,30 @@ export function rememberGlabKnownHost(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): void {
-  const normalizedHost = normalizeGitLabHost(host)
+  rememberGlabKnownHosts([host], connectionId, localGitOptions)
+}
+
+export function rememberGlabKnownHosts(
+  hosts: readonly string[],
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): void {
   const key = knownHostsExecutionKey(connectionId, localGitOptions)
-  const cached = knownHostsCacheByExecutionContext.get(key)
-  if (!cached || cached.map(normalizeGitLabHost).includes(normalizedHost)) {
+  const cached = knownHostsCacheByExecutionContext.get(key) ?? DEFAULT_GITLAB_HOSTS
+  const seen = new Set(cached.map(normalizeGitLabHost))
+  const additions: string[] = []
+  for (const host of hosts) {
+    const normalizedHost = normalizeGitLabHost(host)
+    if (seen.has(normalizedHost)) {
+      continue
+    }
+    seen.add(normalizedHost)
+    additions.push(normalizedHost)
+  }
+  if (additions.length === 0) {
     return
   }
-  knownHostsCacheByExecutionContext.set(key, [...cached, normalizedHost])
+  knownHostsCacheByExecutionContext.set(key, [...cached, ...additions])
 }
 
 export async function getGlabKnownHosts(
@@ -50,19 +68,11 @@ export async function getGlabKnownHosts(
   if (cached) {
     return cached
   }
-  const inFlight = knownHostsInFlightByExecutionContext.get(key)
-  if (inFlight) {
-    return inFlight
-  }
-  const probe = probeGlabKnownHosts(key, connectionId, localGitOptions)
-  knownHostsInFlightByExecutionContext.set(key, probe)
-  try {
-    return await probe
-  } finally {
-    if (knownHostsInFlightByExecutionContext.get(key) === probe) {
-      knownHostsInFlightByExecutionContext.delete(key)
-    }
-  }
+  // Why: only join a probe still young enough to answer, so a wedged one cannot
+  // pin every later retry for the life of the process (P1-D).
+  return runCoalescedProbe(knownHostsInFlightByExecutionContext, key, () =>
+    probeGlabKnownHosts(key, connectionId, localGitOptions)
+  )
 }
 
 async function probeGlabKnownHosts(
@@ -80,12 +90,13 @@ async function probeGlabKnownHosts(
         : {})
     })
     const hosts = parseGlabAuthStatusHosts(`${stdout}\n${stderr}`)
-    const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...hosts]))
+    const remembered = knownHostsCacheByExecutionContext.get(key) ?? []
+    const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
     knownHostsCacheByExecutionContext.set(key, merged)
     return merged
   } catch {
     // Keep failures uncached so auth or tunnel recovery is discovered later.
-    return [...DEFAULT_GITLAB_HOSTS]
+    return knownHostsCacheByExecutionContext.get(key) ?? [...DEFAULT_GITLAB_HOSTS]
   }
 }
 

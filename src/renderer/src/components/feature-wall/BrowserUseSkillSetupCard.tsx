@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_NAME,
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
@@ -74,6 +75,9 @@ export function BrowserUseSkillSetupCard(props: {
       onBeforeOpenTerminal={handleBeforeOpenTerminal}
       showRecheckWhenInstalled={false}
       onRecheck={skill.refresh}
+      freshnessSkillName={
+        activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined
+      }
     />
   )
 

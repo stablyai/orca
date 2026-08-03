@@ -3,6 +3,7 @@ import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../shared/types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { readLastTerminalInputAt } from './terminal-input-activity-coalescing'
 
 export type AutomationTerminalOwnershipStore = {
   getState: () => AppState
@@ -73,14 +74,19 @@ export function createAutomationTerminalOwnership(
 ): AutomationTerminalOwnership {
   let consumed = false
   let userTookOver = false
-  const inputAtLaunch = args.store.getState().lastTerminalInputAtByPaneKey[args.paneKey]
+  // Why: input stamps are coalesced, so compare the freshest value (including a
+  // pending keystroke) or a take-over inside the coalescing window is missed.
+  const inputAtLaunch = readLastTerminalInputAt(
+    args.store.getState().lastTerminalInputAtByPaneKey,
+    args.paneKey
+  )
   const observeTakeover = (): void => {
     const state = args.store.getState()
     if (
       (state.activeWorktreeId === args.worktreeId &&
         state.activeTabId === args.tabId &&
         state.activeTabType === 'terminal') ||
-      state.lastTerminalInputAtByPaneKey[args.paneKey] !== inputAtLaunch
+      readLastTerminalInputAt(state.lastTerminalInputAtByPaneKey, args.paneKey) !== inputAtLaunch
     ) {
       userTookOver = true
     }

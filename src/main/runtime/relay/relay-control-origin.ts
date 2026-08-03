@@ -42,6 +42,7 @@ export class RelayControlOrigin {
   private leaseExpiresAt = 0
   private acceptingConnections = true
   private closed = false
+  private readonly detachMobileSocketTransport: () => void
 
   constructor(options: RelayControlOriginOptions) {
     this.options = options
@@ -53,8 +54,9 @@ export class RelayControlOrigin {
       createSocket: options.createDataSocket,
       onConnectionClosed: (connectionId) => options.onConnectionReleased(connectionId, this)
     })
-    options.mobileSocketWiring.attachTransport(this.transport, (ws) =>
-      this.transport.metadataFor(ws)
+    this.detachMobileSocketTransport = options.mobileSocketWiring.attachTransport(
+      this.transport,
+      (ws) => this.transport.metadataFor(ws)
     )
   }
 
@@ -67,6 +69,10 @@ export class RelayControlOrigin {
 
   get availableControl(): RelayControlClient | null {
     return this.activeControl
+  }
+
+  hasLiveControl(): boolean {
+    return this.activeControl?.isLive() ?? false
   }
 
   get cellUrl(): string {
@@ -152,7 +158,12 @@ export class RelayControlOrigin {
     }
     this.controls.clear()
     this.activeControl = null
-    await this.transport.stop()
+    try {
+      await this.transport.stop()
+    } finally {
+      // Why: detaching earlier would skip socket-close cleanup in MobileSocketWiring.
+      this.detachMobileSocketTransport()
+    }
   }
 
   closeNow(): void {
@@ -218,6 +229,13 @@ export class RelayControlOrigin {
   }
 
   private activate(control: RelayControlClient, ack: RelayHostHelloAckMessage): void {
+    // Why: a socket can deliver hello-ack and close in the same ws parser turn.
+    // That close already ran onClose (removing the control) before this
+    // continuation, so promoting it would publish a dead control that no close
+    // event will ever recover.
+    if (!this.controls.has(control) || !control.isLive()) {
+      throw new Error('relay_control_closed_before_activation')
+    }
     if (ack.generation <= 0) {
       throw new Error('invalid_relay_generation')
     }

@@ -36,7 +36,16 @@ const GUIDE_ALIASES = {
 // Migrating a topic here is effectively one-way — earlier fat installs rely on the stub
 // landing to converge — so entries are added as skills convert, never removed. The stub
 // body lives in skill-stubs/<topic>.md; the projection reuses the guide's own frontmatter.
-const STUB_TOPICS = ['orca-cli']
+const STUB_TOPICS = [
+  'computer-use',
+  'linear-tickets',
+  'orca-cli',
+  'orca-emulator',
+  'orca-emulator-android',
+  'orca-linear',
+  'orca-per-workspace-env',
+  'orchestration'
+]
 
 function normalizeMarkdown(markdown) {
   return markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n')

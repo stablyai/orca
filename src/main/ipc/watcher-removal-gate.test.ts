@@ -6,6 +6,7 @@ import {
   TerminalRemovalInProgressError,
   WatcherRemovalInProgressError
 } from './watcher-removal-gate'
+import { isWorktreeRemovalFenceError } from '../../shared/worktree-removal-fence-error'
 
 describe('watcher removal gate', () => {
   it('waits for an existing install and rejects later equivalent-path installs', async () => {
@@ -26,6 +27,47 @@ describe('watcher removal gate', () => {
 
     const finishLaterInstall = beginWatcherInstall('C:/repo')
     finishLaterInstall()
+  })
+
+  it('drops abandoned install fences so a later removal is not fenced by a wedged install', async () => {
+    beginWatcherInstall('/repo/nested')
+    const removal = acquireWatcherRemovalGate('/repo')
+    let ready = false
+    void removal.ready.then(() => {
+      ready = true
+    })
+    await Promise.resolve()
+    expect(ready).toBe(false)
+
+    removal.abandonPendingInstalls()
+    await removal.ready
+    removal.release()
+
+    const retry = acquireWatcherRemovalGate('/repo')
+    await retry.ready
+    retry.release()
+  })
+
+  it('keeps a fresh install fenced after an unrelated install was abandoned', async () => {
+    const wedged = beginWatcherInstall('/repo')
+    const removal = acquireWatcherRemovalGate('/repo')
+    removal.abandonPendingInstalls()
+    removal.release()
+    // Why: a late finishInstall from the abandoned slot must not release a newer install's fence.
+    const finishFresh = beginWatcherInstall('/repo')
+    wedged()
+
+    const retry = acquireWatcherRemovalGate('/repo')
+    let ready = false
+    void retry.ready.then(() => {
+      ready = true
+    })
+    await Promise.resolve()
+    expect(ready).toBe(false)
+
+    finishFresh()
+    await retry.ready
+    retry.release()
   })
 
   it('scopes identical roots to their execution host', async () => {
@@ -104,6 +146,36 @@ describe('watcher removal gate', () => {
 
     const finishInstall = beginWatcherInstall('/srv/team/repo')
     finishInstall()
+    removal.release()
+  })
+
+  // Why: the renderer swallows this fence via isWorktreeRemovalFenceError so a
+  // doomed pane never shows the raw error. That only holds if the thrown message
+  // still matches the shared predicate — pin the cross-module contract here.
+  it('throws fence errors the renderer recognizes as benign removal fences', async () => {
+    const removal = acquireWatcherRemovalGate('/repo')
+    await removal.ready
+
+    const terminalError = (() => {
+      try {
+        beginTerminalInstall('/repo')
+      } catch (error) {
+        return error as Error
+      }
+      throw new Error('expected terminal install to be fenced')
+    })()
+    const watcherError = (() => {
+      try {
+        beginWatcherInstall('/repo')
+      } catch (error) {
+        return error as Error
+      }
+      throw new Error('expected watcher install to be fenced')
+    })()
+
+    expect(isWorktreeRemovalFenceError(terminalError.message)).toBe(true)
+    expect(isWorktreeRemovalFenceError(watcherError.message)).toBe(true)
+
     removal.release()
   })
 })

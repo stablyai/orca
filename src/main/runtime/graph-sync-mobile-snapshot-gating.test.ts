@@ -325,6 +325,28 @@ describe('graph-sync mobile snapshot gating', () => {
     expect(events).toHaveLength(0)
   })
 
+  it('drains a pending notify to existing subscribers instead of replaying it to a new one', () => {
+    const { runtime, events, sync } = createRuntime(makeSession())
+
+    sync([makeRendererSnapshot({ version: 1 })])
+    // Mid-window: the notify is armed but has not fired.
+    vi.advanceTimersByTime(20)
+    expect(events).toHaveLength(0)
+
+    const lateEvents: RuntimeMobileSessionTabsResult[] = []
+    runtime.onMobileSessionTabsChanged((snapshot) => lateEvents.push(snapshot))
+    const drainedOnSubscribe = events.length
+
+    vi.advanceTimersByTime(500)
+    // The new subscriber's initial snapshot already folded that state in, so it
+    // must never see the armed notify — otherwise the timer lands as a stale
+    // `updated` frame carrying pre-subscribe state.
+    expect(lateEvents).toEqual([])
+    // Drained on subscribe, not cancelled: no existing subscriber loses it.
+    expect(drainedOnSubscribe).toBe(1)
+    expect(events).toHaveLength(1)
+  })
+
   it('forces an emit by the starvation cap under sustained sync churn', () => {
     const { events, sync } = createRuntime(makeSession())
 
@@ -686,8 +708,10 @@ describe('graph-sync mobile snapshot gating', () => {
     ).toBe(true)
 
     // The persisted SSH binding is removed with no renderer-visible change, so
-    // the renderer resends the unchanged version 1 — the tab must still drop.
+    // the renderer resends the unchanged version 1 after the bounded HUB-restart
+    // recovery grace — the tab must still drop.
     setSession(makeSession())
+    vi.advanceTimersByTime(30_001)
     sync([makeRendererSnapshot({ version: 1 })])
     vi.advanceTimersByTime(60)
     expect(
@@ -762,9 +786,10 @@ describe('graph-sync mobile snapshot gating', () => {
         ?.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'ssh-tab')
     ).toBe(true)
 
-    // Once the SSH binding disappears from persistence (and no live PTY backs
-    // it), the next renderer revision must stop preserving it.
+    // Once the recovery grace expires and the SSH binding disappears from
+    // persistence (with no live PTY), the next revision must stop preserving it.
     setSession(makeSession())
+    vi.advanceTimersByTime(30_001)
     sync([makeRendererSnapshot({ version: 3, title: 'Renamed again' })])
     vi.advanceTimersByTime(60)
     expect(

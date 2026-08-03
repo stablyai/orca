@@ -71,7 +71,7 @@ describe('MobileOnboardingPage', () => {
   it('renders the session choices and sends exactly one selected view', async () => {
     const callbacks = await renderPage('session-view')
 
-    act(() => button('Open sessions in native chat').props.onPress())
+    act(() => button('Open sessions in Chat UI').props.onPress())
     expect(callbacks.onSessionChoice).toHaveBeenCalledWith('chat')
     expect(callbacks.onNotificationChoice).not.toHaveBeenCalled()
   })

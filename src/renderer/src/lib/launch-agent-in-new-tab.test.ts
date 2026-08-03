@@ -8,6 +8,7 @@ const mockSetTabBarOrder = vi.fn()
 const mockSetAgentStatus = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockSeedNativeChatLaunchPrompt = vi.fn()
+const mockSeedNativeChatLaunchDraft = vi.fn()
 const mockMarkNativeChatLaunchPromptFailed = vi.fn()
 const mockTrack = vi.fn()
 const mockToastMessage = vi.fn()
@@ -80,6 +81,7 @@ const store = {
   setTabBarOrder: mockSetTabBarOrder,
   setAgentStatus: mockSetAgentStatus,
   seedNativeChatLaunchPrompt: mockSeedNativeChatLaunchPrompt,
+  seedNativeChatLaunchDraft: mockSeedNativeChatLaunchDraft,
   markNativeChatLaunchPromptFailed: mockMarkNativeChatLaunchPromptFailed
 }
 
@@ -115,10 +117,13 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 const mockCreateWebRuntimeSessionTerminal = vi.fn()
+const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft = vi.fn()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
+  createWebRuntimeAgentSessionTerminalWithLaunchDraft:
+    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft,
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive,
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
@@ -128,6 +133,7 @@ describe('launchAgentInNewTab', () => {
     vi.clearAllMocks()
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
+    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({ status: 'created' })
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
     store.settings = {
@@ -266,6 +272,72 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
+  it('mirrors an argv-prefill draft into chat and opens the tab there', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'https://github.com/o/r/issues/12',
+      promptDelivery: 'draft'
+    })
+
+    // Claude takes the draft on --prefill, so no paste runs and
+    // deliverLaunchPromptToAgentTab never fires — this is the only seed.
+    expect(result?.pasteDraftAfterLaunch).toBe(false)
+    expect(mockSeedNativeChatLaunchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-1',
+        agent: 'claude',
+        text: 'https://github.com/o/r/issues/12'
+      })
+    )
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ viewMode: 'chat' })
+    )
+  })
+
+  it('mirrors a multi-line draft into chat and opens the tab there', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const prompt = 'Reproduce first\n\nhttps://github.com/o/r/issues/12'
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt,
+      promptDelivery: 'draft'
+    })
+
+    expect(mockSeedNativeChatLaunchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-1', agent: 'claude', text: prompt })
+    )
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ viewMode: 'chat' })
+    )
+  })
+
   it('passes quick command labels only to locally-created agent tabs', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -306,15 +378,20 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(result).toEqual(expect.objectContaining({ tabId: null, pasteDraftAfterLaunch: false }))
-    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+    // The draft rides in on the launch command, so this host-class launch also
+    // carries the text that seeds the mirrored tab's chat composer.
+    expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         launchAgent: 'claude',
         prompt: 'review before sending',
         promptDelivery: 'draft',
         agentArgs: '--permission-mode plan',
-        launchPreferences: { model: 'opus', effort: 'high' }
+        launchPreferences: { model: 'opus', effort: 'high' },
+        agent: 'claude',
+        launchDraft: 'review before sending'
       })
     )
+    expect(mockCreateWebRuntimeSessionTerminal).not.toHaveBeenCalled()
     expect(mockCreateTab).not.toHaveBeenCalled()
   })
 
@@ -439,157 +516,6 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
-  })
-
-  it('uses the explicit startup shell platform when building draft launch commands', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: "review Bob's change",
-      promptDelivery: 'draft',
-      launchPlatform: 'win32'
-    })
-
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob''s change'"
-      })
-    )
-  })
-
-  it('quotes local Windows default agent args for cmd.exe empty launches', async () => {
-    store.settings.terminalWindowsShell = 'cmd.exe'
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      launchPlatform: 'win32'
-    })
-
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: 'claude "--dangerously-skip-permissions"'
-      })
-    )
-  })
-
-  it('keeps PowerShell quoting for local Windows default agent args', async () => {
-    store.settings.terminalWindowsShell = 'powershell.exe'
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      launchPlatform: 'win32'
-    })
-
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions'"
-      })
-    )
-  })
-
-  it('quotes local Windows explicit agent args for cmd.exe prompt launches', async () => {
-    store.settings.terminalWindowsShell = 'cmd.exe'
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'fix the spinner',
-      agentArgs: '--model gpt-5',
-      launchPlatform: 'win32'
-    })
-
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: 'codex "--model" "gpt-5" "fix the spinner"',
-        agentArgsOverride: '--model gpt-5'
-      })
-    )
-  })
-
-  it('quotes local Windows draft launches for Git Bash', async () => {
-    store.settings.terminalWindowsShell = 'git-bash'
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: "review Bob's change",
-      promptDelivery: 'draft',
-      launchPlatform: 'win32'
-    })
-
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
-      })
-    )
-  })
-
-  it('does not use the local Windows shell setting for remote Windows launches', async () => {
-    store.settings.terminalWindowsShell = 'cmd.exe'
-    store.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: 'C:\\remote\\repo' }]
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'claude',
-      worktreeId: 'wt-1'
-    })
-
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions'"
-      })
-    )
-  })
-
-  it('uses WSL launch quoting by default for Windows-path projects forced to WSL', async () => {
-    store.settings.terminalWindowsShell = 'cmd.exe'
-    store.projects = [
-      {
-        id: 'repo-1',
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      }
-    ]
-    store.repos = [{ id: 'repo-1', connectionId: null, path: 'C:\\Users\\jinwo\\repo' }]
-    store.worktreesByRepo = {
-      'repo-1': [
-        {
-          id: 'wt-1',
-          repoId: 'repo-1',
-          projectId: 'repo-1',
-          path: 'C:\\Users\\jinwo\\repo\\feature',
-          displayName: 'feature'
-        }
-      ]
-    }
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: "review Bob's change",
-      promptDelivery: 'draft'
-    })
-
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
-      })
-    )
   })
 
   it('falls back to post-ready draft paste when a Windows inline draft would be too large', async () => {

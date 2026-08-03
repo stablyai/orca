@@ -1,7 +1,12 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { BrowserTab, DetectedWorktreeListResult, Worktree } from '../../../../shared/types'
+import type {
+  BrowserPage,
+  BrowserTab,
+  DetectedWorktreeListResult,
+  Worktree
+} from '../../../../shared/types'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
@@ -719,6 +724,52 @@ describe('hydrateBrowserSession', () => {
     expect(s.activeBrowserTabId).toBe('browser-1')
   })
 
+  it('drops legacy window close bypass state during hydration', () => {
+    const store = createTestStore()
+    const validWt = 'repo1::/path/wt1'
+    const legacyPage: BrowserPage & { allowWindowClose: boolean } = {
+      id: 'page-1',
+      workspaceId: 'browser-1',
+      worktreeId: validWt,
+      url: 'https://example.com',
+      title: 'Example',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 1,
+      allowWindowClose: true
+    }
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: validWt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: validWt
+    })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: validWt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [validWt]: [makeBrowserTab({ id: 'browser-1', worktreeId: validWt, url: legacyPage.url })]
+      },
+      browserPagesByWorkspace: { 'browser-1': [legacyPage] },
+      activeBrowserTabIdByWorktree: { [validWt]: 'browser-1' }
+    })
+
+    expect(store.getState().browserPagesByWorkspace['browser-1']?.[0]).not.toHaveProperty(
+      'allowWindowClose'
+    )
+  })
+
   it('restores floating workspace browser tabs without a repo worktree', () => {
     const store = createTestStore()
 
@@ -938,7 +989,9 @@ describe('terminal slice behaviors', () => {
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [
+          makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1', hostId: 'local' })
+        ]
       },
       tabsByWorktree: {
         [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-2' })]
@@ -964,7 +1017,9 @@ describe('terminal slice behaviors', () => {
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [
+          makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1', hostId: 'local' })
+        ]
       },
       tabsByWorktree: {
         [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-1' })]
@@ -992,8 +1047,18 @@ describe('terminal slice behaviors', () => {
       ],
       worktreesByRepo: {
         repo1: [
-          makeWorktree({ id: targetWorktreeId, repoId: 'repo1', path: '/path/wt1' }),
-          makeWorktree({ id: otherWorktreeId, repoId: 'repo1', path: '/path/wt2' })
+          makeWorktree({
+            id: targetWorktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            hostId: 'local'
+          }),
+          makeWorktree({
+            id: otherWorktreeId,
+            repoId: 'repo1',
+            path: '/path/wt2',
+            hostId: 'local'
+          })
         ]
       },
       tabsByWorktree: {
@@ -1047,8 +1112,18 @@ describe('terminal slice behaviors', () => {
       ],
       worktreesByRepo: {
         repo1: [
-          makeWorktree({ id: targetWorktreeId, repoId: 'repo1', path: '/path/wt1' }),
-          makeWorktree({ id: otherWorktreeId, repoId: 'repo1', path: '/path/wt2' })
+          makeWorktree({
+            id: targetWorktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            hostId: 'local'
+          }),
+          makeWorktree({
+            id: otherWorktreeId,
+            repoId: 'repo1',
+            path: '/path/wt2',
+            hostId: 'local'
+          })
         ]
       },
       tabsByWorktree: {
@@ -1080,7 +1155,8 @@ describe('terminal slice behaviors', () => {
       makeWorktree({
         id: `repo1::/path/wt-${index}`,
         repoId: 'repo1',
-        path: `/path/wt-${index}`
+        path: `/path/wt-${index}`,
+        hostId: 'local'
       })
     )
     const tabsByWorktree = Object.fromEntries(
@@ -1522,6 +1598,7 @@ describe('terminal slice behaviors', () => {
             id: worktreeId,
             repoId: 'repo1',
             path: '/path/wt1',
+            hostId: 'local',
             lastActivityAt: 1000
           })
         ]
@@ -1624,6 +1701,8 @@ describe('reconnectPersistedTerminals', () => {
         worktreeIdsWithLiveAgent: new Set(),
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
+        hideCliCreatedWorkspaces: false,
+        hideDetachedHeadWorkspaces: false,
         repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
         workspaceHostScope: 'all',
         defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -1969,6 +2048,8 @@ describe('reconnectPersistedTerminals', () => {
         worktreeIdsWithLiveAgent: new Set(),
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
+        hideCliCreatedWorkspaces: false,
+        hideDetachedHeadWorkspaces: false,
         repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
         workspaceHostScope: 'all',
         defaultHostId: LOCAL_EXECUTION_HOST_ID,

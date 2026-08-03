@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   buildTerminalTabRetirementPlan,
   buildTerminalTabRetirementPlans,
@@ -25,6 +28,12 @@ function makeTab(id: string, worktreeId: string, ptyId: string | null): Terminal
 
 function makeState(overrides: Partial<RetirementState> = {}): RetirementState {
   return {
+    worktreesByRepo: {
+      repo: [
+        { id: 'wt-1', repoId: 'repo', hostId: 'local' },
+        { id: 'wt-2', repoId: 'repo', hostId: 'local' }
+      ]
+    },
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},
     ptyIdsByTabId: {},
@@ -135,6 +144,12 @@ describe('terminal tab retirement planning', () => {
     const legacy = 'remote:terminal-1'
     const state = makeState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
+      worktreesByRepo: {
+        repo: [
+          { id: 'wt-1', repoId: 'repo' },
+          { id: 'wt-2', repoId: 'repo' }
+        ]
+      },
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1', 'wt-1', legacy)],
         'wt-2': [makeTab('tab-2', 'wt-2', scoped)]
@@ -150,6 +165,7 @@ describe('terminal tab retirement planning', () => {
   it('deduplicates legacy and scoped aliases owned by the closing tab', () => {
     const state = makeState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
+      worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo' }] },
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1', 'wt-1', 'remote:terminal-1')]
       },
@@ -183,6 +199,149 @@ describe('terminal tab retirement planning', () => {
     expect(plan.unroutablePtyIds).toEqual([malformedRemote])
     expect(plan.localOrSshPtyIds).toEqual(['pty-live'])
     expect(plan.sharedPtyIds).toEqual([])
+  })
+
+  it('never kills a HUB-native PTY when duplicate worktree ownership is ambiguous', () => {
+    const state = makeState({
+      worktreesByRepo: {
+        repo: [
+          { id: 'wt-1', repoId: 'repo', hostId: 'ssh:private', runtimeOwnerEnvironmentId: 'hub-a' },
+          { id: 'wt-1', repoId: 'repo', hostId: 'ssh:private', runtimeOwnerEnvironmentId: 'hub-b' }
+        ]
+      },
+      tabsByWorktree: {
+        'wt-1': [makeTab('tab-1', 'wt-1', 'ssh:private@@pty-1')]
+      }
+    })
+
+    const plan = buildTerminalTabRetirementPlan(state, 'tab-1')
+
+    expect(plan.localOrSshPtyIds).toEqual([])
+    expect(plan.runtimeTerminals).toEqual([])
+    expect(plan.unroutablePtyIds).toEqual(['ssh:private@@pty-1'])
+  })
+
+  it('never falls an unknown stale worktree through to local PTY teardown', () => {
+    const state = makeState({
+      worktreesByRepo: {},
+      tabsByWorktree: {
+        'stale-worktree': [makeTab('tab-1', 'stale-worktree', 'ssh:private@@pty-1')]
+      }
+    })
+
+    const plan = buildTerminalTabRetirementPlan(state, 'tab-1')
+
+    expect(plan.localOrSshPtyIds).toEqual([])
+    expect(plan.unroutablePtyIds).toEqual(['ssh:private@@pty-1'])
+  })
+
+  // STA-2639: these surfaces publish no runtime owner, so teardown read them as unresolved and
+  // dropped their ordinary local PTYs instead of killing them.
+  describe('host-agnostic terminal surfaces are killed, not dropped', () => {
+    const localSurfaces: [string, string][] = [
+      ['floating terminal', FLOATING_TERMINAL_WORKTREE_ID],
+      ['ephemeral setup terminal', brandEphemeralSetupTerminalWorktreeId('panel-1')],
+      ['folder workspace', folderWorkspaceKey('fw-1')]
+    ]
+
+    for (const [label, worktreeId] of localSurfaces) {
+      it(`kills a local ${label} PTY while a runtime is focused`, () => {
+        // Why: a focused runtime must not make a local surface read as runtime-owned — that focus
+        // also flips as the runtime catalog hydrates, so teardown cannot trust it.
+        const state = makeState({
+          settings: { activeRuntimeEnvironmentId: 'hub-a' },
+          runtimeEnvironments: [{ id: 'hub-a' }],
+          folderWorkspaces: [{ id: 'fw-1', projectGroupId: 'pg-1', connectionId: null }],
+          projectGroups: [{ id: 'pg-1', connectionId: null, executionHostId: null }],
+          tabsByWorktree: { [worktreeId]: [makeTab('tab-1', worktreeId, 'pty-1')] }
+        } as unknown as Partial<RetirementState>)
+
+        const plan = buildTerminalTabRetirementPlan(state, 'tab-1')
+
+        expect(plan.localOrSshPtyIds).toEqual(['pty-1'])
+        expect(plan.unroutablePtyIds).toEqual([])
+      })
+    }
+
+    it('closes a runtime-hosted floating terminal over RPC instead of killing it locally', () => {
+      const state = makeState({
+        settings: { activeRuntimeEnvironmentId: 'hub-a' },
+        runtimeEnvironments: [{ id: 'hub-a' }],
+        tabsByWorktree: {
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            makeTab('tab-1', FLOATING_TERMINAL_WORKTREE_ID, 'remote:hub-a@@handle-1')
+          ]
+        }
+      } as unknown as Partial<RetirementState>)
+
+      const plan = buildTerminalTabRetirementPlan(state, 'tab-1')
+
+      expect(plan.localOrSshPtyIds).toEqual([])
+      expect(plan.runtimeTerminals).toEqual([
+        { ptyId: 'remote:hub-a@@handle-1', environmentId: 'hub-a', handle: 'handle-1' }
+      ])
+    })
+
+    it('never kills a HUB-owned folder workspace PTY', () => {
+      const state = makeState({
+        folderWorkspaces: [{ id: 'fw-1', projectGroupId: 'pg-1', connectionId: null }],
+        projectGroups: [{ id: 'pg-1', connectionId: null, executionHostId: 'runtime:hub-a' }],
+        tabsByWorktree: {
+          [folderWorkspaceKey('fw-1')]: [makeTab('tab-1', folderWorkspaceKey('fw-1'), 'pty-hub')]
+        }
+      } as unknown as Partial<RetirementState>)
+
+      const plan = buildTerminalTabRetirementPlan(state, 'tab-1')
+
+      expect(plan.localOrSshPtyIds).toEqual([])
+      expect(plan.unroutablePtyIds).toEqual(['pty-hub'])
+    })
+
+    it('never kills a HUB wake hint on a worktree owned only by the focused runtime', () => {
+      // Why: an ownerless mixed-version row legitimately spawns on the focused HUB (see
+      // pty-connection "uses the focused runtime only for ownerless mixed-version publications"),
+      // and its wake hint is `ssh:`-shaped, not `remote:` — killing it would hit the wrong host.
+      const state = makeState({
+        repos: [{ id: 'repo1', connectionId: null }],
+        worktreesByRepo: { repo1: [{ id: 'wt-legacy', repoId: 'repo1' }] },
+        settings: { activeRuntimeEnvironmentId: 'legacy-hub' },
+        runtimeEnvironments: [{ id: 'legacy-hub' }],
+        tabsByWorktree: {
+          'wt-legacy': [makeTab('tab-1', 'wt-legacy', 'ssh:hub-private@@pty-2')]
+        }
+      } as unknown as Partial<RetirementState>)
+
+      const plan = buildTerminalTabRetirementPlan(state, 'tab-1')
+
+      expect(plan.localOrSshPtyIds).toEqual([])
+      expect(plan.unroutablePtyIds).toEqual(['ssh:hub-private@@pty-2'])
+    })
+
+    it('never kills a PTY whose owning tab row is already gone', () => {
+      // Why: a vanished row is the ambiguity #9994 guards — nothing proves which host holds the PTY.
+      const state = makeState({ ptyIdsByTabId: { 'tab-1': ['pty-ghost'] } })
+
+      const plan = buildTerminalTabRetirementPlan(state, 'tab-1')
+
+      expect(plan.localOrSshPtyIds).toEqual([])
+      expect(plan.unroutablePtyIds).toEqual(['pty-ghost'])
+    })
+
+    it('never kills an unknown worktree PTY when every owner catalog is absent', () => {
+      // Why: spawn falls back to the focused runtime (local when none) while catalogs load, but
+      // teardown taking that fail-open would kill an unidentified PTY on a guess.
+      const state = makeState({
+        worktreesByRepo: undefined,
+        detectedWorktreesByRepo: undefined,
+        repos: undefined,
+        tabsByWorktree: { 'wt-unknown': [makeTab('tab-1', 'wt-unknown', 'pty-1')] }
+      } as unknown as Partial<RetirementState>)
+
+      const plan = buildTerminalTabRetirementPlan(state, 'tab-1')
+
+      expect(plan.localOrSshPtyIds).toEqual([])
+      expect(plan.unroutablePtyIds).toEqual(['pty-1'])
+    })
   })
 
   it('deduplicates batch-owned PTYs while protecting owners outside the close set', () => {

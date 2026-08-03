@@ -65,6 +65,10 @@ import { getAgentForegroundContextPaths } from '../providers/agent-foreground-co
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import type { TuiAgent } from '../../shared/types'
+import {
+  expandWindowsEnvironmentVariables,
+  expandWindowsPathEnvironmentVariables
+} from '../../shared/windows-environment-expansion'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 
 const PANE_IDENTITY_ENV_KEYS = [
@@ -171,12 +175,17 @@ function promoteAgentTeamsShimPath(
   if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
     return
   }
-  const shimDir = requestedPath.split(delimiter)[0]
+  const normalizedRequestedPath =
+    process.platform === 'win32'
+      ? expandWindowsEnvironmentVariables(requestedPath, env)
+      : requestedPath
+  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
+  const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
   if (!shimDir) {
     return
   }
-  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
-  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
+  const currentParts = env.PATH?.split(pathDelimiter).filter(Boolean) ?? []
+  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
 /**
@@ -582,7 +591,6 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'
-
   // Why: shellOverride must win over env.COMSPEC, or Windows always resolves to cmd.exe/PowerShell regardless of the user's pick.
   const resolvedWslContext = resolveWslSessionContext(opts)
   // Why: older persisted tabs can carry a PowerShell/cmd shellOverride; ignore it so WSL reconnects still enter the distro.
@@ -592,10 +600,12 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
-  if (opts.command && startupAgentRecognition) {
-    assertSafeAgentStartupCwd(opts.cwd, opts.command)
-  }
+  // Why: gate on the effective cwd, not raw opts.cwd — an omitted cwd becomes a safe
+  // default (mirrors LocalPtyProvider). Guarding first treated undefined as root-like (#9578).
   const requestedCwd = opts.cwd || getDefaultCwd()
+  if (opts.command && startupAgentRecognition) {
+    assertSafeAgentStartupCwd(requestedCwd, opts.command)
+  }
   let spawnCwd = requestedCwd
   let validationCwd = spawnCwd
 
@@ -766,6 +776,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   ) {
     addWslEnvKeys(env, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
   }
+  expandWindowsPathEnvironmentVariables(env)
   promoteAgentTeamsShimPath(env, opts.env?.PATH)
 
   // Why: asar packaging can strip +x from node-pty's spawn-helper; the daemon is a separate forked process from the main-process fix.

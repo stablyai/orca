@@ -22,6 +22,9 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentGetStatus = vi.fn()
 const settingsSet = vi.fn().mockResolvedValue(undefined)
+const settingsGet = vi.fn()
+const runtimeEnvironmentList = vi.fn()
+const setActiveRuntimeEnvironmentPreference = vi.fn().mockResolvedValue(undefined)
 const worktreesListDetected = vi.fn()
 
 const env2Lineage: WorktreeLineage = {
@@ -49,6 +52,8 @@ beforeEach(() => {
     },
     _meta: { runtimeId: 'runtime-2' }
   })
+  settingsGet.mockResolvedValue({ notifications: {} })
+  runtimeEnvironmentList.mockResolvedValue([])
   runtimeEnvironmentCall.mockImplementation(
     ({ method, params }: { method: string; params?: { repo?: string } }) => {
       const detectedRepoId = params?.repo ?? 'repo-env-2'
@@ -132,10 +137,95 @@ beforeEach(() => {
   })
   vi.stubGlobal('window', {
     api: {
-      settings: { set: settingsSet },
-      runtimeEnvironments: { call: runtimeEnvironmentCall, getStatus: runtimeEnvironmentGetStatus },
+      settings: { get: settingsGet, set: settingsSet, setActiveRuntimeEnvironmentPreference },
+      runtimeEnvironments: {
+        call: runtimeEnvironmentCall,
+        getStatus: runtimeEnvironmentGetStatus,
+        list: runtimeEnvironmentList
+      },
       worktrees: { listDetected: worktreesListDetected }
     }
+  })
+})
+
+describe('createSettingsSlice checked persistence', () => {
+  it('stores the authoritative settings after a successful checked update', async () => {
+    const authoritativeSettings = {
+      pluginSystemEnabled: true,
+      notifications: {}
+    } as unknown as NonNullable<AppState['settings']>
+    settingsSet.mockResolvedValueOnce(authoritativeSettings)
+    const store = createTestStore()
+    store.setState({
+      settings: {
+        pluginSystemEnabled: false,
+        notifications: {}
+      } as unknown as AppState['settings']
+    })
+
+    await expect(
+      store.getState().updateSettingsOrThrow({ pluginSystemEnabled: true })
+    ).resolves.toBeUndefined()
+
+    expect(settingsSet).toHaveBeenCalledWith({ pluginSystemEnabled: true })
+    expect(store.getState().settings).toBe(authoritativeSettings)
+  })
+
+  it('rejects a failed checked update without changing local settings', async () => {
+    const persistenceError = new Error('settings IPC failed')
+    const currentSettings = {
+      pluginSystemEnabled: false,
+      notifications: {}
+    } as unknown as NonNullable<AppState['settings']>
+    settingsSet.mockRejectedValueOnce(persistenceError)
+    const store = createTestStore()
+    store.setState({ settings: currentSettings })
+
+    await expect(
+      store.getState().updateSettingsOrThrow({ pluginSystemEnabled: true })
+    ).rejects.toBe(persistenceError)
+
+    expect(store.getState().settings).toBe(currentSettings)
+  })
+
+  it('keeps the existing update action best-effort and logs persistence failures', async () => {
+    const persistenceError = new Error('settings IPC failed')
+    const currentSettings = {
+      pluginSystemEnabled: false,
+      notifications: {}
+    } as unknown as NonNullable<AppState['settings']>
+    settingsSet.mockRejectedValueOnce(persistenceError)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const store = createTestStore()
+    store.setState({ settings: currentSettings })
+
+    try {
+      await expect(
+        store.getState().updateSettings({ pluginSystemEnabled: true })
+      ).resolves.toBeUndefined()
+
+      expect(consoleError).toHaveBeenCalledWith('Failed to update settings:', persistenceError)
+      expect(store.getState().settings).toBe(currentSettings)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('normalizes malformed mobile pairing addresses before renderer IPC', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { notifications: {} } as unknown as AppState['settings']
+    })
+
+    await store.getState().updateSettingsOrThrow({
+      mobilePairingCustomAddress: 'host:99999' as never,
+      mobilePairingCustomAddresses: [' first.example:6768 ', 'host:99999', 'first.example:6768']
+    })
+
+    expect(settingsSet).toHaveBeenCalledWith({
+      mobilePairingCustomAddress: null,
+      mobilePairingCustomAddresses: ['first.example:6768']
+    })
   })
 })
 
@@ -251,9 +341,11 @@ describe('createSettingsSlice runtime switching', () => {
       jiraIssueCache: { 'JIRA-1': { data: { key: 'JIRA-1' } as never, fetchedAt: Date.now() } }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-2')).resolves.toBe(
+      true
+    )
 
-    expect(settingsSet).toHaveBeenCalledWith({ activeRuntimeEnvironmentId: 'env-2' })
+    expect(setActiveRuntimeEnvironmentPreference).toHaveBeenCalledWith({ environmentId: 'env-2' })
     expect(runtimeEnvironmentGetStatus).toHaveBeenCalledWith({
       selector: 'env-2',
       timeoutMs: 15_000
@@ -372,9 +464,11 @@ describe('createSettingsSlice runtime switching', () => {
       }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-2')).resolves.toBe(
+      true
+    )
 
-    expect(settingsSet).toHaveBeenCalledWith({ activeRuntimeEnvironmentId: 'env-2' })
+    expect(setActiveRuntimeEnvironmentPreference).toHaveBeenCalledWith({ environmentId: 'env-2' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-1', method: 'terminal.close' })
     )
@@ -437,7 +531,9 @@ describe('createSettingsSlice runtime switching', () => {
       }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-2')).resolves.toBe(
+      true
+    )
 
     // No teardown RPC was issued against the previous host's live resources.
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
@@ -496,9 +592,11 @@ describe('createSettingsSlice runtime switching', () => {
       editorDrafts: { '/env-1/repo/dirty.md': 'draft' }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-2')).resolves.toBe(
+      true
+    )
 
-    expect(settingsSet).toHaveBeenCalledWith({ activeRuntimeEnvironmentId: 'env-2' })
+    expect(setActiveRuntimeEnvironmentPreference).toHaveBeenCalledWith({ environmentId: 'env-2' })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-2', method: 'repo.list' })
     )
@@ -520,9 +618,11 @@ describe('createSettingsSlice runtime switching', () => {
       ptyIdsByTabId: { tab1: ['remote:env-1@@terminal-a'] }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(false)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-2')).resolves.toBe(
+      false
+    )
 
-    expect(settingsSet).not.toHaveBeenCalled()
+    expect(setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
     expect(runtimeEnvironmentGetStatus).toHaveBeenCalledWith({
       selector: 'env-2',
       timeoutMs: 15_000
@@ -558,9 +658,11 @@ describe('createSettingsSlice runtime switching', () => {
       openFiles: []
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-old')).resolves.toBe(false)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-old')).resolves.toBe(
+      false
+    )
 
-    expect(settingsSet).not.toHaveBeenCalled()
+    expect(setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
     expect(runtimeEnvironmentGetStatus).toHaveBeenCalledWith({
       selector: 'env-old',
       timeoutMs: 15_000
@@ -569,5 +671,31 @@ describe('createSettingsSlice runtime switching', () => {
     expect(toast.error).toHaveBeenCalledWith('Failed to switch servers', {
       description: expect.stringContaining('server is too old')
     })
+  })
+})
+
+describe('fetchSettings runtime catalog probe', () => {
+  // Why: skill discovery waits for the runtime catalog to settle. If a rejected
+  // settings read skipped the probe, every skill badge would sit on a spinner
+  // for the whole session with no retry affordance.
+  it('still probes the runtime catalog when the settings read fails', async () => {
+    settingsGet.mockRejectedValueOnce(new Error('unreadable settings.json'))
+    const store = createTestStore()
+
+    await store.getState().fetchSettings()
+    await vi.waitFor(() => expect(runtimeEnvironmentList).toHaveBeenCalled())
+
+    expect(store.getState().settings).toBeNull()
+    expect(store.getState().runtimeEnvironmentCatalogSettled).toBe(true)
+  })
+
+  it('probes the runtime catalog after a successful settings read', async () => {
+    const store = createTestStore()
+
+    await store.getState().fetchSettings()
+    await vi.waitFor(() => expect(runtimeEnvironmentList).toHaveBeenCalled())
+
+    expect(store.getState().settings).not.toBeNull()
+    expect(store.getState().runtimeEnvironmentCatalogSettled).toBe(true)
   })
 })

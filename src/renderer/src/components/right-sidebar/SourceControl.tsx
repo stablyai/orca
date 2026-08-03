@@ -45,7 +45,8 @@ import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +97,7 @@ import {
   namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
 } from './source-control-tree'
+import { compareGitStatusEntries } from './source-control-status-sort'
 import {
   collectListSelectionEntries,
   getSubmoduleExpansionKey,
@@ -147,7 +149,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
@@ -263,11 +265,14 @@ import {
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep,
+  shouldAttemptCreateHostedReviewForIntent,
+  shouldGenerateHostedReviewDetailsForIntent,
   type CreatePrIntentRunToken
 } from './source-control-create-pr-intent-flow'
 import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-intent-state'
 import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
 import {
+  buildCreatePrIntentUnavailableEligibility,
   buildLoadingHostedReviewCreationEligibility,
   buildLocalBlockerHostedReviewCreationEligibility,
   resolveHostedReviewCreationProviderForTarget
@@ -809,7 +814,6 @@ function SourceControlInner(): React.JSX.Element {
   const activeRepoConnectionId = activeRepo?.connectionId ?? null
   const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
-  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const entries = useAppStore((s) =>
     activeWorktreeId
@@ -1579,6 +1583,7 @@ function SourceControlInner(): React.JSX.Element {
     resolveHostedReviewCreationProviderForTarget(
       hostedReviewCreationProviderHintRef.current,
       { repoId: activeRepoId, worktreeId: activeWorktreeId ?? null, branch: branchName },
+      // Why: provisional already infers the remote host and defaults to github; never fall back to unsupported mid-load.
       provisionalHostedReviewProvider
     )
   )
@@ -1716,7 +1721,10 @@ function SourceControlInner(): React.JSX.Element {
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
       linkedGiteaPR,
-      staleWhileRevalidate: true
+      staleWhileRevalidate: true,
+      // Why: scoped to the active worktree, so it earns the host's fast
+      // re-check tier instead of the O(N) card pacing (#11532).
+      active: true
     })
     // Why: keep the GitHub cache refresh behind the coordinator so Source Control doesn't bypass pacing.
     enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
@@ -3408,7 +3416,7 @@ function SourceControlInner(): React.JSX.Element {
       token: CreatePrIntentRunToken,
       eligibility: HostedReviewCreationEligibility
     ): Promise<boolean> => {
-      if (!activeRepo || !token.branch || !eligibility.canCreate) {
+      if (!activeRepo || !token.branch || !shouldAttemptCreateHostedReviewForIntent(eligibility)) {
         return false
       }
 
@@ -3440,6 +3448,7 @@ function SourceControlInner(): React.JSX.Element {
       }
 
       if (
+        shouldGenerateHostedReviewDetailsForIntent(eligibility) &&
         hasConfiguredSourceControlTextGenerationDefaults({
           actionId: 'pullRequest',
           settings,
@@ -3650,23 +3659,43 @@ function SourceControlInner(): React.JSX.Element {
       if (!activeRepo || !token.branch) {
         return null
       }
-      const result = await getHostedReviewCreationEligibility({
-        repoPath: activeRepo.path,
-        repoId: activeRepo.id,
-        worktreePath: token.worktreePath,
-        branch: token.branch,
-        base: token.baseRef ?? null,
-        hasUncommittedChanges,
-        hasUpstream: upstreamStatus?.hasUpstream,
-        ahead: upstreamStatus?.ahead,
-        behind: upstreamStatus?.behind,
-        linkedGitHubPR,
-        fallbackGitHubPR: fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR
-      })
+      let result: HostedReviewCreationEligibility
+      try {
+        result = await getHostedReviewCreationEligibility({
+          repoPath: activeRepo.path,
+          repoId: activeRepo.id,
+          worktreePath: token.worktreePath,
+          branch: token.branch,
+          base: token.baseRef ?? null,
+          hasUncommittedChanges,
+          hasUpstream: upstreamStatus?.hasUpstream,
+          ahead: upstreamStatus?.ahead,
+          behind: upstreamStatus?.behind,
+          linkedGitHubPR,
+          fallbackGitHubPR: fallbackGitHubPRNumber,
+          linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR,
+          linkedGiteaPR
+        })
+      } catch (error) {
+        console.warn('[SourceControl] Create PR intent eligibility failed', error)
+        // Why: when local status still yields a prep step (dirty/push/sync), keep the intent
+        // moving. If nothing actionable can be synthesized, rethrow so the outer intent
+        // catch surfaces a retry notice instead of leaving "Preparing…" stuck forever.
+        const fallback = buildCreatePrIntentUnavailableEligibility(token.provider, {
+          branch: token.branch,
+          baseRef: token.baseRef,
+          hasUncommittedChanges,
+          hasUpstream: upstreamStatus?.hasUpstream,
+          ahead: upstreamStatus?.ahead,
+          behind: upstreamStatus?.behind
+        })
+        if (!fallback) {
+          throw error
+        }
+        result = fallback
+      }
       setHostedReviewCreationState({
         repoId: activeRepo.id,
         worktreeId: token.worktreeId,
@@ -3738,6 +3767,9 @@ function SourceControlInner(): React.JSX.Element {
       worktreeId: activeWorktreeId,
       worktreePath,
       branch: branchName,
+      // Why: token carries the same provisional provider used for UI copy so a failed
+      // eligibility IPC can synthesize local prep steps for the correct host.
+      provider: provisionalHostedReviewProvider,
       // Why: intent crosses async commit/push steps, so the base stays tied to what was selected when the run started.
       baseRef: effectiveBaseRef ?? null
     })
@@ -3938,19 +3970,25 @@ function SourceControlInner(): React.JSX.Element {
         }
       }
 
-      const branchAhead = await refreshBranchCompareForCreatePrIntent(token)
-      if (abortIfStale()) {
-        return
-      }
       let eligibility = await readHostedReviewCreationEligibilityForIntent({
         token,
         hasUncommittedChanges: latestStatusEntries.length > 0,
         upstreamStatus: latestUpstreamStatus
       })
-      if (abortIfStale() || !eligibility) {
+      if (abortIfStale()) {
         return
       }
-      if (eligibility.canCreate) {
+      if (!eligibility) {
+        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+          tone: 'destructive',
+          message: translate(
+            'auto.components.right.sidebar.SourceControl.d7492cafce',
+            'Could not refresh Source Control. Retry Create PR.'
+          )
+        })
+        return
+      }
+      if (shouldAttemptCreateHostedReviewForIntent(eligibility)) {
         await createHostedReviewForCreatePrIntent(token, eligibility)
         if (abortIfStale()) {
           return
@@ -3962,6 +4000,13 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
 
+      const branchAhead =
+        eligibility.blockedReason === 'no_upstream'
+          ? await refreshBranchCompareForCreatePrIntent(token)
+          : undefined
+      if (abortIfStale()) {
+        return
+      }
       const remoteStep = resolveCreatePrIntentRemoteStep({
         upstreamStatus: latestUpstreamStatus,
         hostedReviewCreation: eligibility,
@@ -4046,19 +4091,23 @@ function SourceControlInner(): React.JSX.Element {
       if (abortIfStale()) {
         return
       }
-      if (eligibility?.canCreate) {
+      if (eligibility && shouldAttemptCreateHostedReviewForIntent(eligibility)) {
         await createHostedReviewForCreatePrIntent(token, eligibility)
         if (abortIfStale()) {
           return
         }
         return
       }
+      // Why: prefer the blocked-reason notice (incl. unavailable lookup) over a generic stop.
+      const blockedNotice = resolveBlockedCreateReviewNoticeMessage(eligibility)
       setCreatePrIntentNoticeForWorktree(token.worktreeId, {
-        tone: 'muted',
-        message: translate(
-          'auto.components.right.sidebar.SourceControl.995c5e67ec',
-          'Review setup needs attention.'
-        )
+        tone: blockedNotice ? 'destructive' : 'muted',
+        message:
+          blockedNotice ??
+          translate(
+            'auto.components.right.sidebar.SourceControl.995c5e67ec',
+            'Review setup needs attention.'
+          )
       })
     } catch (error) {
       console.warn('[SourceControl] Create PR intent failed', error)
@@ -4105,6 +4154,7 @@ function SourceControlInner(): React.JSX.Element {
     readHostedReviewCreationEligibilityForIntent,
     refreshGitStatusForCreatePrIntent,
     refreshBranchCompareForCreatePrIntent,
+    provisionalHostedReviewProvider,
     remoteStatus,
     runRemoteAction,
     setCreatePrIntentNoticeForWorktree,
@@ -4709,6 +4759,13 @@ function SourceControlInner(): React.JSX.Element {
     remoteStatusForActions,
     runCreatePrIntent
   ])
+
+  const handleSourceControlKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      handleSourceControlCommitShortcut(event, primaryAction, handlePrimaryClick)
+    },
+    [handlePrimaryClick, primaryAction]
+  )
 
   const handleCreatePrHeaderClick = useCallback((): void => {
     if (!createPrHeaderAction || createPrHeaderAction.disabled) {
@@ -5450,7 +5507,11 @@ function SourceControlInner(): React.JSX.Element {
 
   return (
     <>
-      <div ref={setSourceControlRoot} className="relative flex h-full flex-col overflow-hidden">
+      <div
+        ref={setSourceControlRoot}
+        className="relative flex h-full flex-col overflow-hidden"
+        onKeyDown={handleSourceControlKeyDown}
+      >
         <SourceControlHeaderToolbar
           filterQuery={filterQuery}
           filterExpanded={filterExpanded}
@@ -5472,15 +5533,10 @@ function SourceControlInner(): React.JSX.Element {
           onExpandNotes={() => setDiffCommentsExpanded(true)}
           branchSummary={branchSummary}
           compareBaseRef={compareBaseRef}
+          headDisplay={gitIdentityDisplay}
           upstreamStatus={remoteStatus}
           manualReviewUrl={manualReviewUrl}
         />
-
-        {detachedHeadDisplay && (
-          <div className="border-b border-border px-3 py-2">
-            <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />
-          </div>
-        )}
 
         {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
@@ -5525,6 +5581,7 @@ function SourceControlInner(): React.JSX.Element {
                   groupId={activeGroupId ?? activeWorktreeId}
                   comments={diffCommentsForActive}
                   triggerClassName="size-6"
+                  respondToOpenRequest
                 />
                 {diffCommentCount > 0 && (
                   <TooltipProvider delayDuration={400}>
@@ -6329,6 +6386,7 @@ function SourceControlInner(): React.JSX.Element {
         settings={settings}
         repo={activeRepo ?? null}
         discoveryHostKey={sourceControlAiDiscoveryHostKey}
+        linkedIssue={activeWorktree?.linkedIssue ?? null}
         onGenerate={(params) => {
           void handleGenerate({ sourceControlAiResolvedParams: params })
         }}
@@ -6350,6 +6408,7 @@ function SourceControlInner(): React.JSX.Element {
         settings={settings}
         repo={activeRepo ?? null}
         discoveryHostKey={sourceControlAiDiscoveryHostKey}
+        linkedIssue={activeWorktree?.linkedIssue ?? null}
         onGenerate={(params) => {
           void handleGeneratePullRequestFields({ sourceControlAiResolvedParams: params })
         }}
@@ -6361,6 +6420,20 @@ function SourceControlInner(): React.JSX.Element {
 
 const SourceControl = React.memo(SourceControlInner)
 export default SourceControl
+
+export function handleSourceControlCommitShortcut(
+  event: React.KeyboardEvent<HTMLElement>,
+  primaryAction: Pick<PrimaryAction, 'disabled' | 'kind'>,
+  onCommit: () => void
+): void {
+  if (primaryAction.disabled || primaryAction.kind !== 'commit' || !isScreenSubmitShortcut(event)) {
+    return
+  }
+  // Why: the handler lives on the Source Control root, so the shortcut cannot fire from the editor, terminal, or another sidebar tab.
+  event.preventDefault()
+  event.stopPropagation()
+  onCommit()
+}
 
 type CommitAreaProps = {
   worktreeId: string | null
@@ -6694,8 +6767,11 @@ export function CommitArea({
                 </Button>
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6} className="max-w-72">
-              {primaryAction.title}
+            <TooltipContent side="top" sideOffset={6} className="flex max-w-72 items-center gap-2">
+              <span>{primaryAction.title}</span>
+              {primaryAction.kind === 'commit' ? (
+                <ShortcutKeyCombo keys={[getScreenSubmitModifierLabel(), 'Enter']} />
+              ) : null}
             </TooltipContent>
           </Tooltip>
           <DropdownMenu>
@@ -7827,6 +7903,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      relativePath={entry.path}
       connectionId={connectionId}
       onView={() => onOpen(entry)}
       onRevealInExplorer={onRevealInExplorer}
@@ -8076,6 +8153,7 @@ function BranchEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      relativePath={entry.path}
       connectionId={connectionId}
       onView={() => onOpen()}
       onRevealInExplorer={onRevealInExplorer}
@@ -8184,21 +8262,4 @@ export function ActionButton({
       </TooltipContent>
     </Tooltip>
   )
-}
-
-function compareGitStatusEntries(a: GitStatusEntry, b: GitStatusEntry): number {
-  return (
-    getConflictSortRank(a) - getConflictSortRank(b) ||
-    a.path.localeCompare(b.path, undefined, { numeric: true })
-  )
-}
-
-function getConflictSortRank(entry: GitStatusEntry): number {
-  if (entry.conflictStatus === 'unresolved') {
-    return 0
-  }
-  if (entry.conflictStatus === 'resolved_locally') {
-    return 1
-  }
-  return 2
 }

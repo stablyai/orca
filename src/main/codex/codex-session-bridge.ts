@@ -1,13 +1,11 @@
 import {
   existsSync,
-  linkSync,
   lstatSync,
   mkdirSync,
   readFileSync,
   readlinkSync,
   renameSync,
-  rmSync,
-  symlinkSync
+  rmSync
 } from 'node:fs'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
@@ -15,6 +13,7 @@ import {
   listCodexSessionJsonlFiles,
   listCodexSessionJsonlFilesIncrementally
 } from './codex-session-file-listing'
+import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from './codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
 
 export type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
@@ -154,43 +153,11 @@ function linkSystemCodexSessionFile(
   targetPath: string,
   relativePath: string
 ): boolean {
-  const linked = tryLinkSystemCodexSessionFile(sourcePath, targetPath)
+  const linked = linkCodexSessionFile(sourcePath, targetPath)
   if (linked) {
     clearLegacyCopiedSessionMarker(relativePath)
   }
   return linked
-}
-
-/**
- * Attempts to link a session file with hardlink first and symlink fallback.
- */
-function tryLinkSystemCodexSessionFile(sourcePath: string, targetPath: string): boolean {
-  if (tryHardlinkSystemCodexSessionFile(sourcePath, targetPath)) {
-    return true
-  }
-  try {
-    // Why fallback: hardlinks keep sessions visible to Codex resume, but can
-    // fail across volumes. A symlink is still better than a diverging copy.
-    symlinkSync(sourcePath, targetPath, process.platform === 'win32' ? 'file' : undefined)
-    return true
-  } catch (error) {
-    console.warn('[codex-session-bridge] Failed to link system Codex session:', sourcePath, error)
-  }
-  return false
-}
-
-/**
- * Attempts a hardlink so resume sees one physical JSONL session log.
- */
-function tryHardlinkSystemCodexSessionFile(sourcePath: string, targetPath: string): boolean {
-  try {
-    // Why: Codex resume ignores symlinked JSONL sessions, while a hardlink
-    // preserves one physical log without copy divergence.
-    linkSync(sourcePath, targetPath)
-    return true
-  } catch {
-    return false
-  }
 }
 
 /**
@@ -217,7 +184,7 @@ function replaceSymlinkSessionBridgeWithHardlink(
     }
 
     replacementPath = `${targetPath}.orca-link-${process.pid}-${Date.now()}`
-    if (!tryHardlinkSystemCodexSessionFile(sourcePath, replacementPath)) {
+    if (!tryHardlinkCodexSessionFile(sourcePath, replacementPath)) {
       return false
     }
     rmSync(targetPath, { force: true })
@@ -261,7 +228,7 @@ function migrateLegacyCopiedSessionBridge(
       return
     }
     replacementPath = `${targetPath}.orca-link-${process.pid}-${Date.now()}`
-    if (!tryLinkSystemCodexSessionFile(sourcePath, replacementPath)) {
+    if (!linkCodexSessionFile(sourcePath, replacementPath)) {
       return
     }
     rmSync(targetPath, { force: true })

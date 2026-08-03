@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   fieldProps: null as {
     onSend?: () => void
     onStop?: () => void
+    onCompositionStart?: () => void
+    onCompositionEnd?: (event: { currentTarget: HTMLTextAreaElement }) => void
     sessionOptionsSurface?: SessionOptionsSurface | null
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
   } | null,
@@ -32,14 +34,18 @@ const mocks = vi.hoisted(() => ({
   sendNativeChatMessageVerified: vi.fn(),
   trackPendingSend: vi.fn(),
   setDraft: vi.fn(),
-  draftScopeKeys: [] as string[]
+  draftScopeKeys: [] as string[],
+  clearNativeChatLaunchDraft: vi.fn(),
+  markNativeChatLaunchDraftAdopted: vi.fn()
 }))
 
 vi.mock('../../store', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
-    updateSettings: vi.fn()
+    updateSettings: vi.fn(),
+    clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft,
+    markNativeChatLaunchDraftAdopted: mocks.markNativeChatLaunchDraftAdopted
   }
   const useAppStore = (selector: (value: typeof state) => unknown) => selector(state)
   useAppStore.getState = () => state
@@ -201,6 +207,22 @@ describe('NativeChatComposer', () => {
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
   })
 
+  it('retires the launch-draft seed once a send clears the TUI input line', () => {
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+    expect(mocks.clearNativeChatLaunchDraft).not.toHaveBeenCalled()
+
+    act(() => mocks.fieldProps?.onSend?.())
+
+    expect(mocks.clearNativeChatLaunchDraft).toHaveBeenCalledWith('tab-1')
+  })
+
   it('keeps the draft scope anchored to the pane while the PTY reconnects', () => {
     const view = render(
       <NativeChatComposer
@@ -229,6 +251,46 @@ describe('NativeChatComposer', () => {
     )
 
     expect(new Set(mocks.draftScopeKeys)).toEqual(new Set(['tab-1:leaf-1']))
+  })
+
+  it('adopts an IME deletion delivered only by compositionend', () => {
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+    const textarea = document.createElement('textarea')
+    textarea.value = ''
+    mocks.setDraft.mockClear()
+
+    act(() => {
+      mocks.fieldProps?.onCompositionStart?.()
+      mocks.fieldProps?.onCompositionEnd?.({ currentTarget: textarea })
+    })
+
+    expect(mocks.setDraft).toHaveBeenCalledOnce()
+    expect(mocks.setDraft).toHaveBeenCalledWith('')
+  })
+
+  it('does not duplicate a composition value already adopted by onChange', () => {
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+    const textarea = document.createElement('textarea')
+    textarea.value = 'hello'
+    mocks.setDraft.mockClear()
+
+    act(() => mocks.fieldProps?.onCompositionEnd?.({ currentTarget: textarea }))
+
+    expect(mocks.setDraft).not.toHaveBeenCalled()
   })
 
   it('shows the model already selected in the Claude TUI when chat opens', async () => {

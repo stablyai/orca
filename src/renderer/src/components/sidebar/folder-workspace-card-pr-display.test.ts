@@ -171,6 +171,109 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     expect(display).toMatchObject({ number: 4, status: 'success' })
   })
 
+  it('includes a nested PR from exact inline-only legacy lineage', () => {
+    const parent = makeWorktree({ id: 'parent', instanceId: 'parent' })
+    const nested = makeWorktree({ id: 'nested', instanceId: 'nested', linkedPR: 4 })
+    const inlineNested = { ...nested, lineage: makeWorktreeLineage(nested, parent) } as Worktree
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([
+        [parent.id, parent],
+        [inlineNested.id, inlineNested]
+      ]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::nested': makePrEntry(4, 'success') }
+    })
+
+    expect(display).toMatchObject({ number: 4, status: 'success' })
+  })
+
+  it('keeps a stale side-map entry authoritative over valid inline lineage', () => {
+    const parent = makeWorktree({ id: 'parent', instanceId: 'parent' })
+    const nested = makeWorktree({ id: 'nested', instanceId: 'nested', linkedPR: 4 })
+    const inlineNested = { ...nested, lineage: makeWorktreeLineage(nested, parent) } as Worktree
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      worktreeLineageById: {
+        [nested.id]: {
+          ...makeWorktreeLineage(nested, parent),
+          parentWorktreeInstanceId: 'stale-parent'
+        }
+      },
+      worktreeMap: new Map([
+        [parent.id, parent],
+        [inlineNested.id, inlineNested]
+      ]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::nested': makePrEntry(4, 'success') }
+    })
+
+    expect(display).toBeNull()
+  })
+
+  it.each([
+    ['repository', { repoId: 'repo-2' }, {}],
+    ['known host', { hostId: 'ssh:remote' as const }, { hostId: 'local' as const }],
+    ['known project', { projectId: 'project-b' }, { projectId: 'project-a' }]
+  ])('excludes nested PRs across a %s boundary', (_boundary, childOverrides, parentOverrides) => {
+    const parent = makeWorktree({ id: 'parent', instanceId: 'parent', ...parentOverrides })
+    const nested = makeWorktree({
+      id: 'nested',
+      instanceId: 'nested',
+      linkedPR: 4,
+      ...childOverrides
+    })
+    const nestedRepo = { ...repo, id: nested.repoId }
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
+      worktreeMap: new Map([
+        [parent.id, parent],
+        [nested.id, nested]
+      ]),
+      repoMap: new Map([
+        [repo.id, repo],
+        [nestedRepo.id, nestedRepo]
+      ]),
+      hostedReviewCache: null,
+      prCache: { [`${nested.repoId}::nested`]: makePrEntry(4, 'success') }
+    })
+
+    expect(display).toBeNull()
+  })
+
+  it('excludes nested PRs from cyclic projected lineage', () => {
+    const parent = makeWorktree({ id: 'parent', instanceId: 'parent' })
+    const nested = makeWorktree({ id: 'nested', instanceId: 'nested', linkedPR: 4 })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      worktreeLineageById: {
+        [parent.id]: makeWorktreeLineage(parent, nested),
+        [nested.id]: makeWorktreeLineage(nested, parent)
+      },
+      worktreeMap: new Map([
+        [parent.id, parent],
+        [nested.id, nested]
+      ]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::nested': makePrEntry(4, 'success') }
+    })
+
+    expect(display).toBeNull()
+  })
+
   it('uses branch-discovered PR cache for unlinked attached worktrees', () => {
     const worktree = makeWorktree({ id: 'branch-discovered', linkedPR: null })
 

@@ -1,4 +1,5 @@
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import { releaseRemoteRuntimePreparedRequest } from './remote-runtime-prepared-request-admission'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type {
@@ -43,6 +44,7 @@ export function rejectSharedControlPendingRequest(
   }
   pendingRequests.delete(requestId)
   clearTimeout(pending.timeout)
+  releaseRemoteRuntimePreparedRequest(pending)
   pending.reject(error)
 }
 
@@ -57,6 +59,7 @@ export function resolveSharedControlPendingResponse(
   }
   pendingRequests.delete(requestId)
   clearTimeout(pending.timeout)
+  releaseRemoteRuntimePreparedRequest(pending)
   pending.resolve(response)
 }
 
@@ -74,22 +77,6 @@ export function refreshSharedControlPendingRequestTimeouts(
   }
 }
 
-export function waitForSharedControlReady(ready: Promise<void>, timeoutMs: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(remoteRuntimeUnavailableError()), timeoutMs)
-    void ready.then(
-      () => {
-        clearTimeout(timeout)
-        resolve()
-      },
-      (error) => {
-        clearTimeout(timeout)
-        reject(error)
-      }
-    )
-  })
-}
-
 export function rejectAllSharedControlPendingRequests(
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>,
   error?: Error
@@ -98,6 +85,7 @@ export function rejectAllSharedControlPendingRequests(
   for (const [requestId, pending] of pendingRequests) {
     clearTimeout(pending.timeout)
     pendingRequests.delete(requestId)
+    releaseRemoteRuntimePreparedRequest(pending)
     pending.reject(closeError)
   }
 }
@@ -182,9 +170,15 @@ export function closeSharedControlSocketState(args: {
   socketCleanup: (() => void) | null
   ws: { close: () => void } | null
   error?: Error
+  preserveReadyWaitersAndPendingRequests?: boolean
 }): void {
-  rejectSharedControlReadyWaiters(args.readyWaiters, args.error ?? remoteRuntimeUnavailableError())
-  rejectAllSharedControlPendingRequests(args.pendingRequests, args.error)
+  if (!args.preserveReadyWaitersAndPendingRequests) {
+    rejectSharedControlReadyWaiters(
+      args.readyWaiters,
+      args.error ?? remoteRuntimeUnavailableError()
+    )
+    rejectAllSharedControlPendingRequests(args.pendingRequests, args.error)
+  }
   markSharedControlSubscriptionsUnsent(args.subscriptions)
   try {
     args.socketCleanup?.()

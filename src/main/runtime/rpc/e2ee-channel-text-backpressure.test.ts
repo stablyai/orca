@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WebSocket } from 'ws'
 import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
 import { deriveSharedKey, decrypt, encrypt, generateKeyPair } from './e2ee-crypto'
+import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 
 // Repro for gap (a): the streaming JSON reply path (encryptedReply) had no
 // bufferedAmount gate, so a fast producer over a slow link (legacy
@@ -97,5 +98,25 @@ describe('E2EE text reply backpressure', () => {
     emitReply(ctx, '{"ok":true}')
     expect(ctx.ws.sent.length).toBe(baseline + 1)
     expect(decrypt(ctx.ws.sent[baseline]!, ctx.sharedKey)).toBe('{"ok":true}')
+  })
+
+  it('rejects aggregate queue growth across independently backpressured sockets', () => {
+    const outboundMemoryBudget = createMobileE2EEOutboundMemoryBudget({
+      maxBufferedBytes: 1_000,
+      maxQueuedBytes: 150,
+      maxQueuedFrames: 10
+    })
+    const first = setup({ outboundMemoryBudget })
+    const second = setup({ outboundMemoryBudget })
+    first.ws.bufferedAmount = 1_001
+    second.ws.bufferedAmount = 1_001
+
+    emitReply(first, 'x'.repeat(40))
+    emitReply(second, 'x'.repeat(40))
+
+    expect(first.onError).not.toHaveBeenCalled()
+    expect(second.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
+    first.channel.destroy()
+    expect(outboundMemoryBudget.evidence().queuedBytes).toBe(0)
   })
 })

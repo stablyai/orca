@@ -8,10 +8,8 @@ import { createDroidSessionResumeState } from './session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
-import {
-  createCopilotSessionResumeState,
-  createCursorSessionResumeState
-} from './session-scanner-secondary-parsers'
+import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
+import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
 
@@ -311,12 +309,28 @@ async function consumeCompleteJsonlLines(args: {
 }): Promise<JsonlReadResult> {
   let consumedThrough = args.start
   let bytesRead = 0
-  let remainder: Buffer | null = null
+  // Why a piece list: re-joining the partial line with every chunk made one
+  // oversized record (a big tool result) cost O(record^2). Joining once, when a
+  // newline finally arrives, keeps it linear.
+  let remainderParts: Buffer[] = []
+  let remainderLength = 0
 
   const stream = createReadStream(args.path, { start: args.start })
   for await (const chunk of stream as AsyncIterable<Buffer>) {
     bytesRead += chunk.length
-    const data = remainder ? Buffer.concat([remainder, chunk]) : chunk
+    // Why check the chunk alone: the pieces held over are all mid-line, so none
+    // of them contains a newline.
+    if (!chunk.includes(NEWLINE_BYTE)) {
+      remainderParts.push(chunk)
+      remainderLength += chunk.length
+      continue
+    }
+    const data =
+      remainderLength > 0
+        ? Buffer.concat([...remainderParts, chunk], remainderLength + chunk.length)
+        : chunk
+    remainderParts = []
+    remainderLength = 0
     let lineStart = 0
     let newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
     while (newlineIndex !== -1) {
@@ -329,13 +343,19 @@ async function consumeCompleteJsonlLines(args: {
       newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
     }
     consumedThrough += lineStart
-    // Copy the tail so retaining it doesn't pin the whole chunk buffer.
-    remainder = lineStart < data.length ? Buffer.from(data.subarray(lineStart)) : null
+    if (lineStart < data.length) {
+      // Copy the tail so retaining it doesn't pin the whole chunk buffer.
+      remainderParts = [Buffer.from(data.subarray(lineStart))]
+      remainderLength = data.length - lineStart
+    }
   }
+
+  const trailingPartialLine =
+    remainderLength > 0 ? Buffer.concat(remainderParts, remainderLength).toString('utf-8') : null
 
   return {
     consumedThrough,
-    trailingPartialLine: remainder && remainder.length > 0 ? remainder.toString('utf-8') : null,
+    trailingPartialLine,
     bytesRead
   }
 }

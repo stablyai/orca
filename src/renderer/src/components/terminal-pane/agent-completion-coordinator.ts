@@ -471,6 +471,13 @@ export function createAgentCompletionCoordinator(
   }
 
   function handleProcessInspectionResult(result: RuntimeTerminalProcessInspection): boolean {
+    if (result.unavailable === true) {
+      // Why: unknown liveness breaks the consecutive-idle proof without erasing known agent ownership.
+      pendingProcessExitAgent = null
+      consecutiveInspectionErrors += 1
+      scheduleNextPoll()
+      return false
+    }
     consecutiveInspectionErrors = 0
     const recognized = recognizeAgentProcess(result.foregroundProcess)
     if (recognized) {
@@ -551,6 +558,8 @@ export function createAgentCompletionCoordinator(
             inspectionSucceeded = true
           }
         } catch {
+          // Why: a failed inspection breaks the consecutive-idle proof just like an unavailable result.
+          pendingProcessExitAgent = null
           consecutiveInspectionErrors += 1
         } finally {
           inspectionInFlight = false

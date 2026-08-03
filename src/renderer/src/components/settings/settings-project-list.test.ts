@@ -6,6 +6,7 @@ import {
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
   getSettingsProjectRepresentativeRepoId,
+  getSettingsTargetHostSelection,
   removeSettingsProjectFromAllHosts,
   resolveEffectiveProjectHost,
   resolveSettingsTargetRepoId
@@ -159,6 +160,26 @@ describe('deep-link resolution', () => {
     })
   })
 
+  it('uses an explicit host when same-id repo rows collide', () => {
+    const sameIdProjects = buildSettingsProjectList([
+      makeRepo({ id: 'same-repo', gitRemoteIdentity: gitRemote }),
+      makeRepo({
+        id: 'same-repo',
+        gitRemoteIdentity: gitRemote,
+        executionHostId: 'ssh:server',
+        connectionId: 'server',
+        path: '/remote/repo'
+      })
+    ])
+
+    expect(getSettingsTargetHostSelection(sameIdProjects, 'same-repo', 'ssh:server')).toEqual(
+      expect.objectContaining({
+        projectId: sameIdProjects[0].projectId,
+        hostId: 'ssh:server'
+      })
+    )
+  })
+
   it('parses a repoId from a host-specific subsection sectionId', () => {
     const repoIds = [...buildRepoIdToHostSelection(projects).keys()]
     expect(
@@ -210,6 +231,32 @@ describe('deep-link resolution', () => {
     expect(
       getSettingsProjectHostRepo(sameIdProjects[0], sameIdRepos, 'runtime:home-mac')?.path
     ).toBe('/remote/repo')
+  })
+
+  it('selects a same-transport setup by setup id', () => {
+    const directRepo = makeRepo({
+      id: 'direct-repo',
+      gitRemoteIdentity: gitRemote,
+      executionHostId: 'runtime:home-mac',
+      path: '/direct/repo'
+    })
+    const jumpRepo = makeRepo({
+      id: 'jump-repo',
+      gitRemoteIdentity: gitRemote,
+      executionHostId: 'runtime:home-mac',
+      path: '/jump/repo'
+    })
+    const sameHubProjects = buildSettingsProjectList([directRepo, jumpRepo])
+    const jumpSetup = sameHubProjects[0].setups.find((setup) => setup.repoId === 'jump-repo')
+
+    expect(
+      getSettingsProjectHostRepo(
+        sameHubProjects[0],
+        [directRepo, jumpRepo],
+        'runtime:home-mac',
+        jumpSetup?.id
+      )?.path
+    ).toBe('/jump/repo')
   })
 })
 

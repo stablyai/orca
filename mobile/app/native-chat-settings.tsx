@@ -23,7 +23,7 @@ export default function NativeChatSettingsScreen() {
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Native chat</Text>
+        <Text style={styles.heading}>Chat UI</Text>
       </View>
 
       <ScrollView
@@ -33,17 +33,17 @@ export default function NativeChatSettingsScreen() {
         <Text style={styles.groupHeading}>DEFAULT VIEW</Text>
         <Text style={styles.groupDescription}>
           Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on
-          this device. Terminal shows the raw CLI; native chat shows a chat interface like the
-          desktop app. You can still switch any individual session from its long-press menu.
+          this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop
+          app. You can still switch any individual session from its long-press menu.
         </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <View style={styles.row}>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Open sessions in native chat</Text>
+              <Text style={styles.rowLabel}>Open sessions in Chat UI</Text>
               <Text style={styles.rowSublabel}>{chatDefault ? 'On' : 'Off'}</Text>
             </View>
             <Switch
-              accessibilityLabel="Open sessions in native chat"
+              accessibilityLabel="Open sessions in Chat UI"
               value={chatDefault}
               onValueChange={(next) => setDefaultView(next ? 'chat' : 'terminal')}
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}

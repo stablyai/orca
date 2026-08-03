@@ -438,6 +438,33 @@ describe('fetchWorkspaceSessionFromHosts', () => {
   })
 })
 
+describe('buildHostIdByWorktreeId nested ownership', () => {
+  it('persists an SSH worktree in its paired HUB session partition', () => {
+    const worktreeId = 'nested-repo::/srv/remote-wt'
+    const owner = buildHostIdByWorktreeId({
+      repos: [
+        {
+          id: 'nested-repo',
+          connectionId: 'hub-private-ssh',
+          executionHostId: 'runtime:owner-hub'
+        }
+      ],
+      worktreesByRepo: {
+        'nested-repo': [
+          {
+            id: worktreeId,
+            repoId: 'nested-repo',
+            hostId: 'ssh:hub-private-ssh',
+            runtimeOwnerEnvironmentId: 'owner-hub'
+          }
+        ]
+      }
+    })
+
+    expect(owner(worktreeId)).toBe('runtime:owner-hub')
+  })
+})
+
 describe('persistWorkspaceSessionByHost', () => {
   it('awaits every host write before crossing the durable flush boundary', async () => {
     const localWorktreeId = 'local-repo::/src/local'

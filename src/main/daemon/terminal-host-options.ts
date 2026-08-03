@@ -18,6 +18,8 @@ export type TerminalHostOptions = {
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   }) => SubprocessHandle
+  // Why: login-session death detection (#7936) needs subprocess exits even when no client is attached.
+  onSessionReaped?: (sessionId: string) => void
   // Why: graceful shutdown checkpoints must finish in-process before teardown.
   onFinalCheckpoint?: (
     sessionId: string,

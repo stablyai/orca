@@ -20,6 +20,39 @@ const RUNTIME_A = toRuntimeExecutionHostId('env-a')
 const RUNTIME_B = toRuntimeExecutionHostId('env-b')
 
 describe('purgeStaleRuntimeHostState ownership evidence', () => {
+  it('purges nested SSH rows when their transport-owning runtime is removed', () => {
+    const store = createTestStore()
+    const worktreeId = 'repoA::/nested-ssh'
+    seedStore(store, {
+      repos: [
+        {
+          id: 'repoA',
+          path: '/nested-ssh',
+          displayName: 'Nested SSH',
+          executionHostId: RUNTIME_A
+        } as never
+      ],
+      worktreesByRepo: {
+        repoA: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repoA',
+            hostId: 'ssh:hub-private-target',
+            runtimeOwnerEnvironmentId: 'env-a'
+          })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'nested-tab', worktreeId })]
+      }
+    })
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    expect(store.getState().worktreesByRepo.repoA).toEqual([])
+    expect(store.getState().tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
   it('uses an explicit removed-host worktree as owner evidence before catalogs load', () => {
     const store = createTestStore()
     const removedWorktreeId = 'repoA::/hosted'

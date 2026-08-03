@@ -38,6 +38,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+  const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
+  const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const repos = useAppStore((s) => s.repos)
   const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
@@ -80,12 +82,16 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     hasSleepingFilter ||
     hideDefaultBranchWorkspace ||
     hideAutomationGeneratedWorkspaces ||
+    hideCliCreatedWorkspaces ||
+    hideDetachedHeadWorkspaces ||
     hasRepoFilter ||
     hasHostVisibilityFilter
   const activeFilterCount =
     (hasSleepingFilter ? 1 : 0) +
     (hideDefaultBranchWorkspace ? 1 : 0) +
     (hideAutomationGeneratedWorkspaces ? 1 : 0) +
+    (hideCliCreatedWorkspaces ? 1 : 0) +
+    (hideDetachedHeadWorkspaces ? 1 : 0) +
     (hasHostVisibilityFilter ? 1 : 0) +
     selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`

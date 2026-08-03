@@ -623,6 +623,30 @@ describe('openTerminal — addon and provider wiring', () => {
     expect(pane.linkifierHoverResetDisposable).toBeNull()
   })
 
+  it('installs the mouseleave linkifier hover reset and disposes it', () => {
+    const { pane } = createOpenTerminalHarness()
+    const addEventListener = vi.fn()
+    const removeEventListener = vi.fn()
+    const screen = {
+      addEventListener,
+      removeEventListener
+    } as unknown as HTMLElement
+    vi.mocked(pane.terminal.element!.querySelector).mockReturnValueOnce(screen)
+
+    openTerminal(pane)
+    const disposable = pane.linkifierMouseLeaveResetDisposable
+    expect(disposable?.dispose).toBeTypeOf('function')
+    expect(addEventListener).toHaveBeenCalledWith('mouseleave', expect.any(Function))
+    const mouseLeaveHandler = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === 'mouseleave'
+    )?.[1]
+    expect(mouseLeaveHandler).toBeTypeOf('function')
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(removeEventListener).toHaveBeenCalledWith('mouseleave', mouseLeaveHandler)
+    expect(pane.linkifierMouseLeaveResetDisposable).toBeNull()
+  })
+
   // Why: the DOM renderer misrenders joined spans (per-character
   // letter-spacing blowout), so the joiner must only join while this pane's
   // WebGL addon is live — locked here against the real openTerminal wiring.

@@ -8,9 +8,20 @@ import type {
   RuntimeTerminalDriverState
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 
+function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(false), TERMINAL_FIT_RESTORE_DEADLINE_MS)
+    timer.unref?.()
+  })
+  return Promise.race([pending, deadline]).finally(() => clearTimeout(timer))
+}
+
 export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
+  const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
   ipcMain.removeHandler('runtime:syncWindowGraph')
   ipcMain.removeHandler('runtime:getStatus')
   ipcMain.removeHandler('runtime:call')
@@ -101,12 +112,34 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     // Electron try to structured-clone a Promise — "An object could not
     // be cloned" error — and the renderer's restoreTerminalFit() rejected
     // with no useful info.
-    try {
-      const reclaimed = await runtime.reclaimTerminalForDesktop(args.ptyId)
-      return { restored: reclaimed }
-    } catch {
-      return { restored: false }
+    // Why: keep one underlying reclaim per PTY even after callers time out;
+    // layout serialization means a retry cannot bypass the wedged operation.
+    let pending = pendingTerminalFitRestores.get(args.ptyId)
+    if (!pending) {
+      try {
+        let tracked!: Promise<boolean>
+        const clearTrackedRestore = (): void => {
+          if (pendingTerminalFitRestores.get(args.ptyId) === tracked) {
+            pendingTerminalFitRestores.delete(args.ptyId)
+          }
+        }
+        tracked = runtime.reclaimTerminalForDesktop(args.ptyId).then(
+          (restored) => {
+            clearTrackedRestore()
+            return restored
+          },
+          () => {
+            clearTrackedRestore()
+            return false
+          }
+        )
+        pending = tracked
+        pendingTerminalFitRestores.set(args.ptyId, pending)
+      } catch {
+        return { restored: false }
+      }
     }
+    return { restored: await boundTerminalFitRestore(pending) }
   })
 
   ipcMain.removeHandler('runtime:reclaimBrowserForDesktop')

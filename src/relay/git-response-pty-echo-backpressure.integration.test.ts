@@ -28,6 +28,7 @@ import {
 import { requestGitStreamable } from '../main/ssh/ssh-git-response-stream-reader'
 
 import { RelayDispatcher } from './dispatcher'
+import type { SinkWriteSettlement } from './dispatcher'
 import { RelayContext } from './context'
 import { GitHandler } from './git-handler'
 import { GIT_RESPONSE_CHUNK_SIZE } from './protocol'
@@ -91,7 +92,10 @@ function createHarness(opts: { congested: boolean }): Harness {
     onClose: () => {}
   }
 
-  const outQueue: Buffer[] = []
+  const outQueue: {
+    data: Buffer
+    settle: (result: SinkWriteSettlement) => void
+  }[] = []
   let queuedBytes = 0
   const drainWaiters = new Set<() => void>()
   const fireDrainIfIdle = (): void => {
@@ -105,8 +109,8 @@ function createHarness(opts: { congested: boolean }): Harness {
   }
 
   const dispatcher = new RelayDispatcher(
-    (data: Buffer) => {
-      outQueue.push(data)
+    (data: Buffer, settle) => {
+      outQueue.push({ data, settle })
       queuedBytes += data.length
       if (!opts.congested) {
         return true
@@ -114,6 +118,9 @@ function createHarness(opts: { congested: boolean }): Harness {
       return queuedBytes < SINK_HIGH_WATER_MARK
     },
     {
+      supportsWriteCallback: true,
+      writableLength: () => queuedBytes,
+      writableHighWaterMark: () => SINK_HIGH_WATER_MARK,
       waitWriteDrain: (cb: () => void) => {
         drainWaiters.add(cb)
         fireDrainIfIdle()
@@ -124,11 +131,12 @@ function createHarness(opts: { congested: boolean }): Harness {
 
   const deliverAll = (): void => {
     while (outQueue.length > 0) {
-      const buf = outQueue.shift()!
-      queuedBytes -= buf.length
+      const { data, settle } = outQueue.shift()!
+      queuedBytes -= data.length
       for (const cb of clientDataCallbacks) {
-        cb(buf)
+        cb(data)
       }
+      settle({ ok: true })
     }
     fireDrainIfIdle()
   }

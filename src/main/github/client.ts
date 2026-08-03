@@ -27,6 +27,7 @@ import {
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
+import { summarizeProviderChecks } from '../../shared/provider-check-summary'
 import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
 import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
@@ -54,6 +55,7 @@ import {
   release,
   classifyGhError,
   classifyListIssuesError,
+  classifyListPrsError,
   ghRepoExecOptions,
   githubRepoContext,
   getRemoteUrlForRepo,
@@ -76,7 +78,6 @@ import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-d
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
   getGitHubApiRepositoryForRemote,
-  getIssueGitHubApiRepository,
   getOriginGitHubApiRepository,
   githubHostExecOptions,
   githubRepositorySlugArg,
@@ -195,6 +196,52 @@ async function assertRateLimitBudget(
   }
 }
 
+// Why: a branch lookup prefers REST but can fall back to `gh pr list` and
+// `gh pr view`, so both buckets are guarded and charged. Mirrors the PR refresh
+// coordinator's own estimate.
+const PR_BRANCH_LOOKUP_BUCKETS = ['core', 'graphql'] as const
+
+/**
+ * Rate-limit floor for GitHub PR lookups that do not run through the PR refresh
+ * coordinator's queue (#11532).
+ *
+ * The coordinator guards and paces its own background refreshes, but
+ * `hostedReview:forBranch` polls the same lookup straight from the renderer.
+ * Ungated, the two paths together could spend the user's entire hourly quota —
+ * which is per user and shared with their own `gh` and CLI agents.
+ * Returns the reset time when the caller must not spend, else `null`.
+ */
+export async function getGitHubPRLookupRateLimitBlock(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<{ resetAt: number } | null> {
+  const executionOptions = ghRepoExecOptions(
+    githubRepoContext(repoPath, connectionId, localGitOptions)
+  )
+  // Why: identity resolution runs local git, which can fail for reasons that
+  // have nothing to do with the budget; let the lookup itself classify those.
+  const repository = await getOriginGitHubApiRepository(
+    repoPath,
+    connectionId,
+    executionOptions
+  ).catch(() => null)
+  if (repository === null) {
+    return null
+  }
+  if (spendsSharedGitHubComQuota(repository, executionOptions)) {
+    // Why: the probe only warms the snapshot and is exempt from limits, so a
+    // failure must fail open rather than block the lookup (#7553).
+    await getRateLimit().catch(() => undefined)
+  }
+  // Why: retrying at the earlier reset would fail again on the bucket that has
+  // not reset yet, so the latest blocked reset is the only honest retry time.
+  const resets = PR_BRANCH_LOOKUP_BUCKETS.map((bucket) =>
+    repositoryRateLimitGuard(repository, bucket, executionOptions)
+  ).flatMap((guard) => (guard.blocked ? [guard.resetAt] : []))
+  return resets.length > 0 ? { resetAt: Math.max(...resets) } : null
+}
+
 function prRefreshUpstreamError(
   err: unknown
 ): Extract<PRRefreshOutcome, { kind: 'upstream-error' }> {
@@ -283,16 +330,35 @@ export type PullRequestPushTarget = {
   maintainerCanModify?: boolean
 }
 
+// Why: only an explicit `origin` preference is origin-only; `upstream`/`auto`/
+// undefined keep the multi-candidate probe ordered upstream-first, matching
+// resolvePrWorkItemSource list semantics.
+async function resolvePullRequestLookupCandidates(
+  repoPath: string,
+  preference: IssueSourcePreference | undefined,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<GitHubApiRepository[]> {
+  if (preference === 'origin') {
+    const origin = await getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions)
+    return origin ? [origin] : []
+  }
+  return (await resolveGitHubApiRepositoryCandidates(repoPath, connectionId, localGitOptions))
+    .candidates
+}
+
 export async function getPullRequestPushTarget(
   repoPath: string,
   prNumber: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
 ): Promise<PullRequestPushTarget | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(context)
-  const { candidates } = await resolveGitHubApiRepositoryCandidates(
+  const candidates = await resolvePullRequestLookupCandidates(
     repoPath,
+    preference,
     connectionId,
     localGitOptions
   )
@@ -638,42 +704,19 @@ function checkRollupEntries(value: unknown): unknown[] {
 }
 
 function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['checksSummary'] {
-  const entries = checkRollupEntries(value)
-  if (entries.length === 0) {
-    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0 }
-  }
-  let passed = 0
-  let failed = 0
-  let pending = 0
-  for (const entry of entries) {
-    if (typeof entry !== 'object' || entry === null) {
-      pending += 1
-      continue
-    }
-    const raw = entry as Record<string, unknown>
-    const conclusion = String(raw.conclusion ?? raw.state ?? '').toUpperCase()
-    const status = String(raw.status ?? '').toUpperCase()
-    if (['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(conclusion)) {
-      passed += 1
-    } else if (
-      ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(
-        conclusion
-      )
-    ) {
-      failed += 1
-    } else if (status === 'COMPLETED' && conclusion) {
-      failed += 1
-    } else {
-      pending += 1
-    }
-  }
-  return {
-    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : 'success',
-    total: entries.length,
-    passed,
-    failed,
-    pending
-  }
+  return summarizeProviderChecks(
+    checkRollupEntries(value).map((entry) => {
+      if (typeof entry !== 'object' || entry === null) {
+        return { status: '', conclusion: '' }
+      }
+      const raw = entry as Record<string, unknown>
+      // Why: StatusContext reports `state` and carries no `status`; CheckRun reports both.
+      return {
+        status: String(raw.status ?? ''),
+        conclusion: String(raw.conclusion ?? raw.state ?? '')
+      }
+    })
+  )
 }
 
 function mapPullRequestWorkItem(
@@ -954,14 +997,19 @@ async function fetchPullRequestWorkItemFromCandidates(
   repoPath: string,
   number: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
 ): Promise<MainWorkItem | null> {
-  const { candidates } = await resolveGitHubApiRepositoryCandidates(
+  const candidates = await resolvePullRequestLookupCandidates(
     repoPath,
+    preference,
     connectionId,
     localGitOptions
   )
   if (candidates.length === 0) {
+    if (preference === 'origin') {
+      return null
+    }
     return fetchPullRequestWorkItem(repoPath, null, number, connectionId, localGitOptions)
   }
   for (const candidate of candidates) {
@@ -1075,10 +1123,11 @@ function buildWorkItemListRequest(args: {
   return { args: out, offset: (page - 1) * limit }
 }
 
-// Why: shared shape so listWorkItems can lift the issue-side error (#1076 silent wrongness) into the IPC envelope; PR errors out of scope (§6).
+// Why: shared shape so listWorkItems can lift per-side errors (#1076 silent wrongness) into the IPC envelope — a swallowed side reads as end-of-data to pagination (#11485).
 type PartialWorkItemsResult = {
   items: MainWorkItem[]
   issuesError?: ClassifiedError
+  prsError?: ClassifiedError
 }
 
 function assertSshRepoHasResolvedGitHubSource(args: {
@@ -1109,8 +1158,10 @@ async function resolvePrWorkItemSource(
     getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions),
     getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
   ])
-  const source =
-    preference === 'upstream' ? (upstreamCandidate ?? originCandidate) : originCandidate
+  // Why: fork-contribution PRs live on the upstream repo (the fork's own PR
+  // list is almost always empty), so 'auto' resolves upstream-first exactly
+  // like the issue side. Only an explicit 'origin' pick pins PRs to the fork.
+  const source = preference === 'origin' ? originCandidate : (upstreamCandidate ?? originCandidate)
   return { source, originCandidate, upstreamCandidate }
 }
 
@@ -1230,6 +1281,7 @@ async function listQueriedWorkItems(
   let successfulRequestCount = 0
   let nonAvailabilityFailureCount = 0
   let availabilityError: unknown
+  let prsError: ClassifiedError | undefined
 
   // Why: surface the issue-side error separately for the IPC envelope; PR-side keeps prior swallow-and-log (parent doc §6).
   const issueFetch = (async (): Promise<PartialWorkItemsResult> => {
@@ -1301,6 +1353,7 @@ async function listQueriedWorkItems(
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
       const stderr = err instanceof Error ? err.message : String(err)
+      prsError = classifyListPrsError(stderr)
       if (classifyGitHubUnavailable(stderr)) {
         availabilityError ??= err
       } else {
@@ -1317,7 +1370,8 @@ async function listQueriedWorkItems(
   }
   return {
     items: sortWorkItemsByNumber([...issueResult.items, ...prItems]).slice(0, limit),
-    issuesError: issueResult.issuesError
+    issuesError: issueResult.issuesError,
+    prsError
   }
 }
 
@@ -1375,7 +1429,13 @@ export async function listWorkItems(
           localGitOptions
         )
 
-    const errors = partial.issuesError ? { issues: partial.issuesError } : undefined
+    const errors =
+      partial.issuesError || partial.prsError
+        ? {
+            ...(partial.issuesError ? { issues: partial.issuesError } : {}),
+            ...(partial.prsError ? { prs: partial.prsError } : {})
+          }
+        : undefined
     return {
       items: partial.items,
       sources: {
@@ -1951,38 +2011,55 @@ export async function getWorkItem(
   number: number,
   type?: 'issue' | 'pr',
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
 ): Promise<MainWorkItem | null> {
   await acquire()
   try {
+    // Why: listWorkItems uses resolveIssueGitHubApiRepositorySource; open-by-number
+    // must share that preference so origin/upstream toggles cannot disagree.
     if (type === 'issue') {
-      return await fetchIssueWorkItem(
+      const { source } = await resolveIssueGitHubApiRepositorySource(
         repoPath,
-        await getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
-        number,
+        preference,
         connectionId,
         localGitOptions
       )
+      // Why: explicit origin with no origin identity must not bare-lookup ambient gh
+      // (same fail-closed rule as origin-pinned PR candidate resolution).
+      if (!source && preference === 'origin') {
+        return null
+      }
+      return await fetchIssueWorkItem(repoPath, source, number, connectionId, localGitOptions)
     }
     if (type === 'pr') {
       return await fetchPullRequestWorkItemFromCandidates(
         repoPath,
         number,
         connectionId,
-        localGitOptions
+        localGitOptions,
+        preference
       )
     }
 
     try {
-      const issue = await fetchIssueWorkItem(
+      const { source } = await resolveIssueGitHubApiRepositorySource(
         repoPath,
-        await getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
-        number,
+        preference,
         connectionId,
         localGitOptions
       )
-      if (issue) {
-        return issue
+      if (source || preference !== 'origin') {
+        const issue = await fetchIssueWorkItem(
+          repoPath,
+          source,
+          number,
+          connectionId,
+          localGitOptions
+        )
+        if (issue) {
+          return issue
+        }
       }
     } catch (err) {
       // Why: only fall through to PR #N on a genuine 404; re-throw transient errors so a flake can't surface an unrelated PR.
@@ -1995,7 +2072,8 @@ export async function getWorkItem(
       repoPath,
       number,
       connectionId,
-      localGitOptions
+      localGitOptions,
+      preference
     )
   } catch {
     return null
@@ -2934,6 +3012,13 @@ export async function getPRForBranchOutcome(
     // here can honor process GH_REPO/GH_HOST and return an unrelated PR.
     if (connectionId && candidates.length === 0) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
+    }
+    // Why (#11532): account every lookup, not just the coordinator's queue —
+    // `hostedReview:forBranch` reaches this directly from renderer polling and
+    // was spending the shared quota invisibly. headRepo is `origin`, the same
+    // identity the coordinator guards on.
+    for (const bucket of PR_BRANCH_LOOKUP_BUCKETS) {
+      noteRepositoryRateLimitSpend(headRepo ?? candidates[0], bucket, 1, ghOptions)
     }
     let data: PullRequestLookupData | null = null
     let dataRepo: OwnerRepo | null = null

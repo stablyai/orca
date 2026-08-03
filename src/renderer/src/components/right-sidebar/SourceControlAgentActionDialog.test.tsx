@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
 import path from 'node:path'
-import React, { type ReactNode, useState } from 'react'
-import { act } from 'react'
+import React, { type ReactNode, useState, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'

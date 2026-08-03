@@ -3,8 +3,11 @@ import type { ReadClipboardTextOptions } from '../../../shared/clipboard-text'
 export const PRIMARY_SELECTION_MAX_LENGTH = 65_536
 const PRIMARY_SELECTION_MAX_BYTES = PRIMARY_SELECTION_MAX_LENGTH * 4
 
+const PRIMARY_SELECTION_NATIVE_PASTE_SUPPRESSION_MS = 750
+
 let enabled = false
 let primarySelectionText = ''
+let nativePasteSuppressionUntil = 0
 
 type SelectionClipboardApi = {
   readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
@@ -45,7 +48,29 @@ export function setPrimarySelectionEnabled(nextEnabled: boolean): void {
   enabled = nextEnabled
   if (!enabled) {
     primarySelectionText = ''
+    nativePasteSuppressionUntil = 0
   }
+}
+
+// Why: the integrated terminal injects the primary selection into the PTY
+// itself on middle-click, so arm a short window to swallow Chromium's follow-up
+// native paste event instead of forwarding text to the PTY twice. Only X11/Linux
+// emits that native follow-up; arming elsewhere would swallow legitimate pastes.
+export function armPrimarySelectionNativePasteSuppression(now: number = Date.now()): void {
+  if (!enabled || !isLinuxUserAgent(getUserAgent())) {
+    return
+  }
+  nativePasteSuppressionUntil = now + PRIMARY_SELECTION_NATIVE_PASTE_SUPPRESSION_MS
+}
+
+// Why: single-shot — the arm owes exactly one follow-up paste, so clearing the
+// deadline on consume keeps a real keyboard paste inside the same 750ms alive.
+export function consumePrimarySelectionNativePasteSuppression(now: number = Date.now()): boolean {
+  if (!enabled || nativePasteSuppressionUntil === 0 || now > nativePasteSuppressionUntil) {
+    return false
+  }
+  nativePasteSuppressionUntil = 0
+  return true
 }
 
 export function isPrimarySelectionEnabled(): boolean {
@@ -94,4 +119,5 @@ export async function readPrimarySelectionText(): Promise<string> {
 export function resetPrimarySelectionForTests(): void {
   enabled = false
   primarySelectionText = ''
+  nativePasteSuppressionUntil = 0
 }

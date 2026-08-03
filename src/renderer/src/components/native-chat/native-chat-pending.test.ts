@@ -134,6 +134,16 @@ describe('prunePendingSends', () => {
     expect(prunePendingSends(pending, [oldUser, oldAnswer])).toEqual(pending)
   })
 
+  it('prunes a first send against a timestampless transcript turn (grok)', () => {
+    const pending = [{ ...pendingOf('p1', 'rename it'), afterMessageId: null }]
+    const transcript = [
+      { ...userMessage('u1', 'rename it'), timestamp: null },
+      { ...assistantMessage('a1', 'done'), timestamp: null }
+    ]
+
+    expect(prunePendingSends(pending, transcript)).toEqual([])
+  })
+
   it('prunes only one of two identical pending sends for one completed turn', () => {
     const pending = [pendingOf('p1', 'repeat'), pendingOf('p2', 'repeat')]
     expect(
@@ -246,6 +256,14 @@ describe('pendingSendsAsMessages', () => {
     expect(prunePendingSends(pending, remoteTranscript)).toEqual([])
   })
 
+  it('hides a first send while its timestampless transcript turn is visible (grok)', () => {
+    const pending = [{ ...pendingOf('p1', 'rename it'), afterMessageId: null }]
+
+    expect(
+      pendingSendsAsMessages(pending, [{ ...userMessage('u1', 'rename it'), timestamp: null }])
+    ).toEqual([])
+  })
+
   it('hides only one of two identical pending sends for one real user turn', () => {
     const pending = [pendingOf('p1', 'repeat'), pendingOf('p2', 'repeat')]
     expect(pendingSendsAsMessages(pending, [userMessage('u1', 'repeat')]).map((m) => m.id)).toEqual(
@@ -338,6 +356,20 @@ describe('launchPromptAsMessage', () => {
         { ...assistantMessage('a1', 'working'), timestamp: 44 }
       ])
     ).toBe(true)
+  })
+
+  // Grok transcripts carry no timestamps; before the null-matchable rule the
+  // seeded bubble was never hidden or pruned and sat rank-pinned at the list
+  // tail forever, reading as the conversation reordering.
+  it('hides and prunes the launch prompt against a timestampless transcript (grok)', () => {
+    const entry = { tabId: 'tab-1', agent: 'grok' as const, text: 'rename it', createdAt: 42 }
+    const transcript = [
+      { ...userMessage('u1', 'rename it'), timestamp: null },
+      { ...assistantMessage('a1', 'done'), timestamp: null }
+    ]
+
+    expect(launchPromptAsMessage(entry, transcript)).toBeNull()
+    expect(shouldPruneLaunchPrompt(entry, transcript)).toBe(true)
   })
 
   it('does not bind a launch prompt to an older identical completed turn', () => {

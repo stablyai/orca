@@ -4,7 +4,6 @@ import { join, basename } from 'node:path'
 import { realpath, readdir, stat } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
-import type { Repo } from '../../shared/types'
 import type {
   ClaudeUsageAttributedTurn,
   ClaudeUsageDailyAggregate,
@@ -124,8 +123,10 @@ function getSortedWorktreeEntries(
   return sorted
 }
 
+// Why setImmediate: setTimeout(0) is clamped to ~1ms, and this yields once per
+// 4-file batch, so a 7.5k-transcript scan spent ~2s parked on timers.
 async function yieldToEventLoop(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await new Promise((resolve) => setImmediate(resolve))
 }
 
 async function walkJsonlFiles(dirPath: string): Promise<string[]> {
@@ -166,24 +167,6 @@ export async function listClaudeTranscriptFiles(): Promise<string[]> {
     })
   )
   return [...new Set(files.flat())].sort()
-}
-
-export async function getProcessedFileInfo(filePath: string): Promise<ClaudeUsageProcessedFile> {
-  const fileStat = await stat(filePath)
-  let lineCount = 0
-  const lines = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-  for await (const _line of lines) {
-    lineCount++
-  }
-  return {
-    path: filePath,
-    mtimeMs: fileStat.mtimeMs,
-    size: fileStat.size,
-    lineCount
-  }
 }
 
 async function getProcessedFileStat(
@@ -755,24 +738,6 @@ export async function scanClaudeUsageFiles(
   }
 }
 
-export function createWorktreeRefs(
-  repos: Repo[],
-  worktreesByRepo: Map<string, { path: string; worktreeId: string; displayName: string }[]>
-): ClaudeUsageWorktreeRef[] {
-  const refs: ClaudeUsageWorktreeRef[] = []
-  for (const repo of repos) {
-    for (const worktree of worktreesByRepo.get(repo.id) ?? []) {
-      refs.push({
-        repoId: repo.id,
-        worktreeId: worktree.worktreeId,
-        path: worktree.path,
-        displayName: worktree.displayName
-      })
-    }
-  }
-  return refs
-}
-
 export function getSessionProjectLabel(locationBreakdown: ClaudeUsageLocationBreakdown[]): string {
   if (locationBreakdown.length === 0) {
     return 'Unknown location'
@@ -781,8 +746,4 @@ export function getSessionProjectLabel(locationBreakdown: ClaudeUsageLocationBre
     return locationBreakdown[0].projectLabel
   }
   return 'Multiple locations'
-}
-
-export function getDefaultWorktreeLabel(pathValue: string): string {
-  return basename(pathValue)
 }

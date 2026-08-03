@@ -3,6 +3,7 @@ import {
   buildToolchainProbeCommand,
   parseBuildToolchainProbe,
   formatMissingToolchainError,
+  formatSkippedNodePtyWarning,
   shouldProbeBuildToolchainAfterNativeDepsFailure
 } from './ssh-relay-build-toolchain'
 
@@ -107,5 +108,20 @@ describe('formatMissingToolchainError', () => {
     expect(msg).toContain('a C++ compiler (g++ or clang++)')
     expect(msg).not.toMatch(/\(make,/)
     expect(msg).toContain('sudo pacman -S --needed base-devel python')
+  })
+})
+
+describe('formatSkippedNodePtyWarning', () => {
+  it('quotes the tailored install command when a package manager was detected', () => {
+    const warning = formatSkippedNodePtyWarning(parseBuildToolchainProbe('PKG dnf'))
+    expect(warning).toContain('skipping node-pty')
+    expect(warning).toContain('sudo dnf install -y make gcc gcc-c++ python3')
+  })
+
+  it('stays distro-neutral when no package manager was detected', () => {
+    // The hint list is the cross-distro menu here; quoting its first line would name Debian on any host.
+    const warning = formatSkippedNodePtyWarning(parseBuildToolchainProbe(''))
+    expect(warning).not.toContain('apt-get')
+    expect(warning).toContain('install a C/C++ toolchain')
   })
 })

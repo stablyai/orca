@@ -26,6 +26,7 @@ vi.mock('node:os', async () => {
 import {
   prepareSystemConfigForFreshRuntimeMirror,
   resolveCodexConfigMirrorSourceDirectory,
+  syncSystemConfigIntoLegacySharedCodexHome,
   syncSystemConfigIntoManagedCodexHome
 } from './codex-config-mirror'
 
@@ -259,6 +260,41 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
     expect(runtimeConfig).toContain('[features]\nhooks = true')
     expect(runtimeConfig).not.toContain('codex_hooks')
+  })
+
+  it('preserves an existing runtime config when the system config is missing', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    const runtimeConfig = [
+      'model = "runtime-model"',
+      '',
+      '[features]',
+      'hooks = true',
+      '',
+      '[projects."/repo"]',
+      'trust_level = "trusted"',
+      ''
+    ].join('\n')
+    writeFileSync(getRuntimeConfigPath(), runtimeConfig, 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(getRuntimeConfigPath(), 'utf-8')).toBe(runtimeConfig)
+    expect(existsSync(getSystemConfigPath())).toBe(false)
+  })
+
+  it('preserves an existing runtime config when the system config is blank', () => {
+    // Why: a 0-byte config.toml is what a half-written or unhydrated
+    // cloud-synced home shows, not a deliberate "erase all my settings".
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    const runtimeConfig = ['model = "runtime-model"', '', '[features]', 'hooks = true', ''].join(
+      '\n'
+    )
+    writeFileSync(getRuntimeConfigPath(), runtimeConfig, 'utf-8')
+    writeFileSync(getSystemConfigPath(), '', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(getRuntimeConfigPath(), 'utf-8')).toBe(runtimeConfig)
   })
 
   it('mirrors system config updates while preserving runtime-owned trust sections', () => {
@@ -711,6 +747,23 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     expect(existsSync(getRuntimeConfigPath())).toBe(false)
+  })
+})
+
+describe('syncSystemConfigIntoLegacySharedCodexHome', () => {
+  it('recovers an interrupted runtime config when the system source is missing', () => {
+    const runtimeConfigPath = getRuntimeConfigPath()
+    const heldConfigPath = `${runtimeConfigPath}.orca-guarded`
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(heldConfigPath, 'model = "retained"\n', 'utf-8')
+
+    syncSystemConfigIntoLegacySharedCodexHome({
+      runtimeHomePath: join(userDataDir, 'codex-runtime-home', 'home'),
+      systemHomePath: getSystemCodexHomePath()
+    })
+
+    expect(readFileSync(runtimeConfigPath, 'utf-8')).toBe('model = "retained"\n')
+    expect(existsSync(heldConfigPath)).toBe(false)
   })
 })
 

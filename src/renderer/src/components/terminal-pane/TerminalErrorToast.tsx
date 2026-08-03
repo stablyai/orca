@@ -1,5 +1,7 @@
 import { translate } from '@/i18n/i18n'
 const SSH_PREFIX = 'SSH connection is not active'
+// Produced by pty-connection.ts reportError() when a PTY reattach can't reach its SSH host.
+const SSH_CONNECT_FAILURE_PREFIX = 'SSH connection failed'
 const STALE_NODE_PTY_DAEMON_MARKERS = [
   "Daemon's node-pty install is gone",
   'node-pty: posix_spawn failed: ENOENT'
@@ -11,6 +13,21 @@ const STALE_DAEMON_CWD_MARKERS = [
 
 function isSshError(error: string): boolean {
   return error.startsWith(SSH_PREFIX)
+}
+
+/** A single error line the SSH reconnect banner already covers — hide instead of stacking under/over it. */
+export function isSshReconnectOwnedTerminalError(error: string): boolean {
+  return error.startsWith(SSH_CONNECT_FAILURE_PREFIX) || error.startsWith(SSH_PREFIX)
+}
+
+// Why: onPtyError aggregates errors into one newline-joined string, so classify per line —
+// drop only the reconnect-owned lines and keep any unrelated error, regardless of order.
+export function stripSshReconnectOwnedErrorLines(error: string): string | null {
+  const kept = error
+    .split('\n')
+    .filter((line) => !isSshReconnectOwnedTerminalError(line))
+    .join('\n')
+  return kept.length > 0 ? kept : null
 }
 
 export function shouldOfferDaemonRestart(error: string): boolean {

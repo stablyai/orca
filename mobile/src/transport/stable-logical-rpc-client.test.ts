@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ConnectionState, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
+import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import {
   createStableLogicalRpcClient,
   LogicalClientCutoverError
@@ -56,10 +57,12 @@ function success(value: unknown): RpcResponse {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
+    reject = rejectPromise
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 describe('stable logical RPC client', () => {
@@ -141,6 +144,44 @@ describe('stable logical RPC client', () => {
       undefined
     )
     await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
+  })
+
+  it('lets the physical close settle in-flight requests on suspend, preserving delivery marks', async () => {
+    const session = new FakeSession('connected')
+    const inFlight = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValue(inFlight.promise)
+    // Mirror the real physical contract: close() rejects post-write pendings
+    // with a delivery-unknown-marked error.
+    const closeError = markRpcDeliveryUnknown(new Error('Client closed'))
+    session.close.mockImplementation(() => inFlight.reject(closeError))
+    const client = createStableLogicalRpcClient(session, 'relay')
+    const request = client.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+
+    client.suspendActiveSession()
+
+    await expect(request).rejects.toBe(closeError)
+    await expect(request.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
+    // New requests while suspended still fail definitively before any write.
+    await expect(client.sendRequest('status.get')).rejects.toThrow('Client suspended')
+  })
+
+  it('lets the physical close settle in-flight requests on close, keeping pre-write failures definite', async () => {
+    const session = new FakeSession('connected')
+    const inFlight = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValue(inFlight.promise)
+    // A request still waiting for connect never wrote its frame — the physical
+    // layer rejects it unmarked and that must survive the logical close.
+    const preWriteError = new Error('Connection closed')
+    session.close.mockImplementation(() => inFlight.reject(preWriteError))
+    const client = createStableLogicalRpcClient(session, 'lan')
+    const request = client.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+
+    client.close()
+
+    await expect(request).rejects.toBe(preWriteError)
+    await expect(request.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(
+      false
+    )
   })
 
   it('closes a replacement that fails authentication and preserves the active session', async () => {

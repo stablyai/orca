@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
+import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
 import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield
@@ -85,10 +86,6 @@ function getNextChunkBoundary(text: string, startIndex: number, maxBytes: number
   }
 
   return index
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
 }
 
 function isEditorAvailable(

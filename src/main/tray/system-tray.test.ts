@@ -142,7 +142,14 @@ function builtMenuItems(): MenuItem[] {
   return menuFromTemplateMock.mock.calls.at(-1)?.[0] as MenuItem[]
 }
 
+// Why: tray image/tooltip writes are deferred off the caller's stack to keep the
+// NSStatusItem scene update out of AppKit's dispatch; run the pending turn.
+function flushTraySceneMutation(): void {
+  vi.advanceTimersByTime(0)
+}
+
 beforeEach(() => {
+  vi.useFakeTimers()
   trayInstances.length = 0
   menuFromTemplateMock.mockClear()
   composeAttentionMock.mockClear()
@@ -180,6 +187,7 @@ beforeEach(() => {
 
 afterEach(() => {
   setPlatform(originalPlatform)
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -296,6 +304,7 @@ describe('dev instance indicator', () => {
     createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'my-branch' }))
 
     setTrayAttention(true)
+    flushTraySceneMutation()
 
     expect(tintTemplateMock).toHaveBeenCalledWith(devBadgeImage, false)
   })
@@ -334,8 +343,10 @@ describe('dev instance indicator', () => {
     created.setToolTip.mockClear()
 
     setTrayAttention(true)
+    flushTraySceneMutation()
     expect(created.setToolTip).toHaveBeenCalledWith('Orca DEV (my-branch) - activity waiting')
     setTrayAttention(false)
+    flushTraySceneMutation()
     expect(created.setToolTip).toHaveBeenLastCalledWith('Orca DEV (my-branch)')
   })
 
@@ -388,9 +399,11 @@ describe('setTrayAttention', () => {
     created.setImage.mockClear()
 
     setTrayAttention(true)
+    flushTraySceneMutation()
     expect(composeAttentionMock).toHaveBeenCalledWith(resizedImage)
     expect(created.setImage).toHaveBeenCalledWith(attentionImage)
     setTrayAttention(false)
+    flushTraySceneMutation()
     expect(created.setImage).toHaveBeenLastCalledWith(resizedImage)
   })
 
@@ -403,6 +416,7 @@ describe('setTrayAttention', () => {
     created.setToolTip.mockClear()
 
     setTrayAttention(true)
+    flushTraySceneMutation()
     expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, false)
     expect(composeAttentionMock).toHaveBeenCalledWith(tintedMacImage)
     // Why: the attention image is rebuilt from 1x pixels, so the @2x
@@ -417,6 +431,7 @@ describe('setTrayAttention', () => {
     expect(created.setToolTip).toHaveBeenCalledWith('Orca - activity waiting')
 
     setTrayAttention(false)
+    flushTraySceneMutation()
     expect(baseMacImage.setTemplateImage).toHaveBeenLastCalledWith(true)
     expect(created.setImage).toHaveBeenLastCalledWith(baseMacImage)
     expect(created.setToolTip).toHaveBeenLastCalledWith('Orca')
@@ -427,11 +442,15 @@ describe('setTrayAttention', () => {
     const { createSystemTray, setTrayAttention } = await loadModule()
     createSystemTray(createOptions())
     setTrayAttention(true)
+    flushTraySceneMutation()
     tintTemplateMock.mockClear()
     nativeThemeMock.shouldUseDarkColors = true
 
     themeState.updatedListener?.()
+    // Why: appearance changes arrive on an AppKit dispatch too, so the recompose defers.
+    expect(tintTemplateMock).not.toHaveBeenCalled()
 
+    flushTraySceneMutation()
     expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, true)
   })
 
@@ -453,8 +472,72 @@ describe('setTrayAttention', () => {
 
     setTrayAttention(true)
     setTrayAttention(true)
+    flushTraySceneMutation()
 
     expect(created.setImage).toHaveBeenCalledTimes(1)
+  })
+
+  it('never touches the NSStatusItem scene inside the caller stack', async () => {
+    setPlatform('darwin')
+    const { createSystemTray, setTrayAttention } = await loadModule()
+    createSystemTray(createOptions())
+    const created = trayInstances[0]
+    created.setImage.mockClear()
+    created.setToolTip.mockClear()
+
+    // Why: show/restore call this from AppKit's window-state dispatch; a scene
+    // update sent there self-deadlocks the main thread on macOS 26.
+    setTrayAttention(true)
+    expect(created.setImage).not.toHaveBeenCalled()
+    expect(created.setToolTip).not.toHaveBeenCalled()
+
+    flushTraySceneMutation()
+    expect(created.setImage).toHaveBeenCalledWith(attentionImage)
+  })
+
+  it('collapses a burst of toggles into one deferred repaint', async () => {
+    setPlatform('darwin')
+    const { createSystemTray, setTrayAttention } = await loadModule()
+    createSystemTray(createOptions())
+    const created = trayInstances[0]
+    created.setImage.mockClear()
+
+    setTrayAttention(true)
+    setTrayAttention(false)
+    setTrayAttention(true)
+    flushTraySceneMutation()
+
+    expect(created.setImage).toHaveBeenCalledTimes(1)
+    expect(created.setImage).toHaveBeenCalledWith(attentionImage)
+  })
+
+  it('still dedupes after the deferred repaint has run', async () => {
+    setPlatform('darwin')
+    const { createSystemTray, setTrayAttention } = await loadModule()
+    createSystemTray(createOptions())
+    const created = trayInstances[0]
+    created.setImage.mockClear()
+
+    setTrayAttention(true)
+    flushTraySceneMutation()
+    setTrayAttention(true)
+    flushTraySceneMutation()
+
+    expect(created.setImage).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not throw when the tray is destroyed before the deferred repaint runs', async () => {
+    setPlatform('darwin')
+    const { createSystemTray, destroySystemTray, setTrayAttention } = await loadModule()
+    createSystemTray(createOptions())
+    const created = trayInstances[0]
+    created.setImage.mockClear()
+
+    setTrayAttention(true)
+    destroySystemTray()
+
+    expect(() => flushTraySceneMutation()).not.toThrow()
+    expect(created.setImage).not.toHaveBeenCalled()
   })
 
   it('keeps a pending attention dot across a macOS hide/show toggle', async () => {
@@ -514,7 +597,8 @@ describe('macOS hardening', () => {
       throw new Error('native image failure')
     })
 
-    expect(() => setTrayAttention(true)).not.toThrow()
+    setTrayAttention(true)
+    expect(() => flushTraySceneMutation()).not.toThrow()
     expect(created.setImage).toHaveBeenLastCalledWith(baseMacImage)
     expect(created.setToolTip).toHaveBeenLastCalledWith('Orca')
     expect(warn).toHaveBeenCalledWith(

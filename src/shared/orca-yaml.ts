@@ -1,10 +1,16 @@
-import { parse } from 'yaml'
+import { parseDocument } from 'yaml'
 import type {
   OrcaDefaultTabTemplate,
   OrcaHooks,
   OrcaVmRecipe,
   OrcaVmRecipeDiagnostic
 } from './types'
+import {
+  isOrcaYamlFieldWithinLimit,
+  isOrcaYamlTextWithinLimit,
+  MAX_ORCA_YAML_ALIAS_COUNT,
+  MAX_ORCA_YAML_COLLECTION_ENTRIES
+} from './orca-yaml-file-limit'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -13,7 +19,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function asTrimmedString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+  if (typeof value !== 'string' || !isOrcaYamlFieldWithinLimit(value)) {
+    return undefined
+  }
+  const trimmed = value.trim()
+  return trimmed || undefined
 }
 
 const DEFAULT_TAB_COLOR_RE = /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?$/
@@ -21,8 +31,48 @@ export const ORCA_VM_RECIPE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/
 export const ORCA_VM_RECIPE_ID_RULE =
   'Use 1-64 lowercase letters, numbers, dots, underscores, or hyphens, starting with a letter or number.'
 
-function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
+// Why: bound the work one repo file can request; entries beyond this are ignored.
+const MAX_SHARED_DIRECTORIES = 100
+
+/** Normalize `worktree.sharedDirectories` into deduped repo-root-relative paths.
+ *  `\` becomes `/`, a `./` prefix and trailing `/` are stripped. Absolute paths,
+ *  `..` traversal and `.git` are dropped here so callers get only safe entries.
+ *
+ *  Entries that would still need collapsing (`apps/./web`) are dropped rather
+ *  than rewritten: `resolve()` collapses them when the symlink is created, but
+ *  Git reports the collapsed path, so every later comparison against the stored
+ *  entry would miss and the link would look like permanent untracked work. */
+function normalizeSharedDirectories(value: unknown): string[] {
   if (!Array.isArray(value)) {
+    return []
+  }
+
+  const seen = new Set<string>()
+  for (const entry of value.slice(0, MAX_SHARED_DIRECTORIES)) {
+    const raw = asTrimmedString(entry)
+    if (!raw) {
+      continue
+    }
+    const normalized = raw.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
+    const segments = normalized.split('/')
+    if (
+      !normalized ||
+      normalized.startsWith('/') ||
+      /^[a-zA-Z]:/.test(normalized) ||
+      segments.includes('..') ||
+      segments.includes('.') ||
+      segments.includes('') ||
+      segments.includes('.git')
+    ) {
+      continue
+    }
+    seen.add(normalized)
+  }
+  return Array.from(seen)
+}
+
+function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
+  if (!Array.isArray(value) || value.length > MAX_ORCA_YAML_COLLECTION_ENTRIES) {
     return []
   }
 
@@ -57,6 +107,17 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
   const diagnostics: OrcaVmRecipeDiagnostic[] = []
   if (!Array.isArray(value)) {
     return { recipes: [], diagnostics }
+  }
+  if (value.length > MAX_ORCA_YAML_COLLECTION_ENTRIES) {
+    return {
+      recipes: [],
+      diagnostics: [
+        {
+          index: MAX_ORCA_YAML_COLLECTION_ENTRIES,
+          message: `At most ${MAX_ORCA_YAML_COLLECTION_ENTRIES} environment recipes are supported.`
+        }
+      ]
+    }
   }
 
   const seenIds = new Set<string>()
@@ -126,9 +187,22 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
  * Parse the supported project defaults from `orca.yaml`.
  */
 export function parseOrcaYaml(content: string): OrcaHooks | null {
+  if (!isOrcaYamlTextWithinLimit(content)) {
+    return null
+  }
+
   let root: unknown
   try {
-    root = parse(content)
+    const document = parseDocument(content, {
+      keepSourceTokens: false,
+      logLevel: 'silent',
+      prettyErrors: false,
+      uniqueKeys: true
+    })
+    if (document.errors.length > 0) {
+      return null
+    }
+    root = document.toJS({ maxAliasCount: MAX_ORCA_YAML_ALIAS_COUNT })
   } catch {
     return null
   }
@@ -146,6 +220,10 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   const environmentRecipeParse = normalizeVmRecipes(record.environmentRecipes)
   const environmentRecipes = environmentRecipeParse.recipes
   const environmentRecipeDiagnostics = environmentRecipeParse.diagnostics
+  const worktreeRecord = asRecord(record.worktree)
+  const sharedDirectories = worktreeRecord
+    ? normalizeSharedDirectories(worktreeRecord.sharedDirectories)
+    : []
 
   if (
     !setup &&
@@ -153,7 +231,8 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     !issueCommand &&
     defaultTabs.length === 0 &&
     environmentRecipes.length === 0 &&
-    environmentRecipeDiagnostics.length === 0
+    environmentRecipeDiagnostics.length === 0 &&
+    sharedDirectories.length === 0
   ) {
     return null
   }
@@ -166,6 +245,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     ...(issueCommand ? { issueCommand } : {}),
     ...(defaultTabs.length > 0 ? { defaultTabs } : {}),
     ...(environmentRecipes.length > 0 ? { environmentRecipes } : {}),
-    ...(environmentRecipeDiagnostics.length > 0 ? { environmentRecipeDiagnostics } : {})
+    ...(environmentRecipeDiagnostics.length > 0 ? { environmentRecipeDiagnostics } : {}),
+    ...(sharedDirectories.length > 0 ? { worktree: { sharedDirectories } } : {})
   }
 }

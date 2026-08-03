@@ -29,6 +29,7 @@ describe('SSH remote Orca CLI launcher', () => {
       relayDir: 'C:/Users/me user/.orca-remote/relay-v1',
       nodePath: 'C:/Program Files/nodejs/node.exe',
       sockPath: '\\\\.\\pipe\\orca-relay-123',
+      credentialFile: 'C:/Users/me user/.orca-remote/relay-v1/relay.sock.credential',
       hostPlatform: getRemoteHostPlatform('win32-x64')
     })
   }
@@ -41,6 +42,7 @@ describe('SSH remote Orca CLI launcher', () => {
     expect(plan.files[0]?.path).toBe('C:/Users/me user/.orca-relay/bin/orca-launcher.cs')
     expect(plan.files[0]?.contents).toContain('ProcessStartInfo')
     expect(plan.files[0]?.contents).toContain('"--orca-cli"')
+    expect(plan.files[0]?.contents).toContain('socketPath + ".credential"')
     expect(plan.files[0]?.contents).toContain("value[index] == '\"'")
     expect(plan.files[0]?.contents).toContain("character == '\\\\'")
     expect(plan.files[0]?.contents).not.toContain('cmd.exe')
@@ -83,11 +85,13 @@ describe('SSH remote Orca CLI launcher', () => {
       const binDir = join(root, 'bin').replaceAll('\\', '/')
       const relayDir = join(root, 'relay').replaceAll('\\', '/')
       const sockPath = '\\\\.\\pipe\\orca-relay-test'
+      const credentialFile = `${relayDir}/relay.sock.credential`
       const plan = createRemoteCliInstallPlan({
         binDir,
         relayDir,
         nodePath: process.execPath,
         sockPath,
+        credentialFile,
         hostPlatform: getRemoteHostPlatform('win32-x64')
       })
       for (const file of plan.files) {
@@ -127,7 +131,8 @@ describe('SSH remote Orca CLI launcher', () => {
             ...process.env,
             ORCA_RELAY_NODE_PATH: process.execPath,
             ORCA_RELAY_DIR: relayDir,
-            ORCA_RELAY_SOCKET_PATH: sockPath
+            ORCA_RELAY_SOCKET_PATH: sockPath,
+            ORCA_RELAY_CREDENTIAL_FILE: credentialFile
           }
         }
       )
@@ -136,12 +141,34 @@ describe('SSH remote Orca CLI launcher', () => {
       expect(JSON.parse(launched.stdout)).toEqual([
         '--sock-path',
         sockPath,
+        '--credential-file',
+        credentialFile,
         '--orca-cli',
         'orchestration',
         'send',
         '--body',
         body,
         '--json'
+      ])
+
+      const defaulted = spawnSync(plan.launcherPath, ['status'], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ORCA_RELAY_NODE_PATH: process.execPath,
+          ORCA_RELAY_DIR: relayDir,
+          ORCA_RELAY_SOCKET_PATH: sockPath,
+          ORCA_RELAY_CREDENTIAL_FILE: ''
+        }
+      })
+      expect(defaulted.status, defaulted.stderr).toBe(0)
+      expect(JSON.parse(defaulted.stdout)).toEqual([
+        '--sock-path',
+        sockPath,
+        '--credential-file',
+        `${sockPath}.credential`,
+        '--orca-cli',
+        'status'
       ])
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -161,6 +188,7 @@ describe('SSH remote Orca CLI launcher', () => {
         relayDir: join(root, 'relay').replaceAll('\\', '/'),
         nodePath: process.execPath,
         sockPath: '\\\\.\\pipe\\orca-relay-test',
+        credentialFile: join(root, 'relay', 'relay.sock.credential').replaceAll('\\', '/'),
         hostPlatform: getRemoteHostPlatform('win32-x64')
       })
       for (const file of plan.files) {

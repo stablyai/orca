@@ -28,12 +28,8 @@ vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 
-import {
-  getOwnerRepo,
-  getIssueOwnerRepo,
-  getOwnerRepoForRemote,
-  _resetOwnerRepoCache
-} from './github-repository-identity'
+import { getOwnerRepoForRemote, _resetOwnerRepoCache } from './github-repository-identity'
+import { getOwnerRepo, getIssueOwnerRepo } from './github-owner-repo-selection'
 import { getRepoUpstream } from './client'
 
 const FORK_PATH = '/tmp/fork-checkout'

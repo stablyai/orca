@@ -12,6 +12,7 @@ import {
   resetRemoteRuntimeTerminalMultiplexersForTests,
   type RemoteRuntimeMultiplexedTerminal
 } from './remote-runtime-terminal-multiplexer'
+import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 
 // Why: reproduces the silent frame-drop corruption. The server multiplex path
 // drops Output frames when the websocket buffer is over its cap
@@ -38,6 +39,9 @@ class FakeMultiplexServer {
   dropNextOutput = false
   droppedFrames = 0
   holdNextManualSnapshot = false
+  truncateNextRecoverySnapshot = false
+  dropNextRecoverySnapshotEnd = false
+  holdNextRecoverySnapshot = false
   snapshotRequests: (number | undefined)[] = []
   private heldManualRequestId: number | null = null
   private snapshotData = 'INITIAL'
@@ -70,6 +74,21 @@ class FakeMultiplexServer {
       // Resync request: the server serializes the *current* buffer, so recovery
       // includes everything the client missed.
       this.snapshotData = 'RECOVERED'
+      if (typeof payload?.requestId !== 'number' && this.holdNextRecoverySnapshot) {
+        // The reply's binary frames were all dropped under backpressure.
+        this.holdNextRecoverySnapshot = false
+        return
+      }
+      if (typeof payload?.requestId !== 'number' && this.truncateNextRecoverySnapshot) {
+        this.truncateNextRecoverySnapshot = false
+        this.sendSnapshot(undefined, { truncated: true })
+        return
+      }
+      if (typeof payload?.requestId !== 'number' && this.dropNextRecoverySnapshotEnd) {
+        this.dropNextRecoverySnapshotEnd = false
+        this.sendSnapshot(undefined, { omitEnd: true })
+        return
+      }
       this.sendSnapshot(payload?.requestId)
     }
   }
@@ -78,14 +97,27 @@ class FakeMultiplexServer {
     this.toClient(encodeTerminalStreamFrame({ opcode, streamId: this.streamId, seq, payload }))
   }
 
-  private sendSnapshot(requestId?: number): void {
+  private sendSnapshot(
+    requestId?: number,
+    options?: { truncated?: boolean; omitEnd?: boolean }
+  ): void {
     this.send(
       TerminalStreamOpcode.SnapshotStart,
-      encodeTerminalStreamJson({ cols: 80, rows: 24, seq: this.cursorUnits, requestId }),
+      encodeTerminalStreamJson({
+        cols: 80,
+        rows: 24,
+        seq: options?.truncated ? undefined : this.cursorUnits,
+        requestId,
+        truncated: options?.truncated
+      }),
       0
     )
-    this.send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText(this.snapshotData), 0)
-    this.send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array(), 0)
+    if (!options?.truncated) {
+      this.send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText(this.snapshotData), 0)
+    }
+    if (!options?.omitEnd) {
+      this.send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array(), 0)
+    }
   }
 
   /** Emit an Output chunk, honoring simulated websocket backpressure. */
@@ -122,6 +154,10 @@ class FakeMultiplexServer {
     )
   }
 
+  replaySnapshotCoveredOutput(text: string): void {
+    this.send(TerminalStreamOpcode.Output, encodeTerminalStreamText(text), this.cursorUnits)
+  }
+
   flushHeldManualSnapshot(): void {
     if (this.heldManualRequestId === null) {
       throw new Error('No manual snapshot is held')
@@ -136,12 +172,16 @@ class FakeMultiplexServer {
 describe('remote terminal frame-drop resync', () => {
   const unsubscribe = vi.fn()
   let server: FakeMultiplexServer
+  let subscribe: ReturnType<typeof vi.fn>
+  let subscriptionCallbacks: SubscribeCallbacks
 
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeTerminalMultiplexersForTests()
+    replaceRuntimeEnvironmentRevisions([])
 
-    const subscribe = vi.fn(async (_args: unknown, callbacks: SubscribeCallbacks) => {
+    subscribe = vi.fn(async (_args: unknown, callbacks: SubscribeCallbacks) => {
+      subscriptionCallbacks = callbacks
       server = new FakeMultiplexServer((bytes) => callbacks.onBinary?.(bytes))
       queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
       return {
@@ -204,6 +244,109 @@ describe('remote terminal frame-drop resync', () => {
     expect(server.droppedFrames).toBe(1)
     // Instead, a fresh authoritative snapshot recovers the terminal.
     expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+
+    server.replaySnapshotCoveredOutput('ccc')
+    server.output('ddd')
+    expect(data).toEqual(['aaa', 'ddd'])
+  })
+
+  it('retries a truncated recovery on a backoff without accepting output across the gap', async () => {
+    vi.useFakeTimers()
+    try {
+      const { data, snapshots } = await subscribeClient()
+      server.truncateNextRecoverySnapshot = true
+
+      server.output('aaa')
+      server.dropNextOutput = true
+      server.output('bbb')
+      server.output('ccc')
+      // The gate stays shut across the backoff: the post-gap tail is corrupt,
+      // and retrying once per chunk would stampede a flooded server.
+      server.output('ddd')
+      expect(server.snapshotRequests).toEqual([undefined])
+
+      // The retry fires from the backoff timer alone — no further output needed.
+      await vi.advanceTimersByTimeAsync(500)
+      expect(server.snapshotRequests).toEqual([undefined, undefined])
+
+      server.output('eee')
+      expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+      expect(data).toEqual(['aaa', 'eee'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-opens the live path when only the JSON error event for a resync survives', async () => {
+    const { data, snapshots, stream } = await subscribeClient()
+    server.holdNextRecoverySnapshot = true
+
+    server.output('aaa')
+    server.dropNextOutput = true
+    server.output('bbb')
+    server.output('ccc')
+    expect(server.snapshotRequests).toEqual([undefined])
+
+    // The paired binary Error frame was dropped under backpressure; only the
+    // reliable JSON error event arrives. It must release the resync gate.
+    subscriptionCallbacks.onResponse({
+      ok: true,
+      result: { type: 'error', streamId: stream.streamId, message: 'snapshot failed' }
+    })
+
+    server.output('ddd')
+    server.output('eee')
+
+    expect(server.snapshotRequests).toEqual([undefined, undefined])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+    expect(data).toEqual(['aaa', 'eee'])
+  })
+
+  it('dispatches the deferred resync when a JSON error consumes the manual snapshot', async () => {
+    const { data, snapshots, stream } = await subscribeClient()
+    server.holdNextManualSnapshot = true
+    const manualSnapshot = stream.serializeBuffer({ scrollbackRows: 100 })
+    await Promise.resolve()
+
+    server.output('aaa')
+    server.dropNextOutput = true
+    server.output('bbb')
+    server.output('ccc')
+    expect(server.snapshotRequests).toHaveLength(1)
+
+    subscriptionCallbacks.onResponse({
+      ok: true,
+      result: { type: 'error', streamId: stream.streamId, message: 'stream failed' }
+    })
+    await expect(manualSnapshot).rejects.toThrow('stream failed')
+
+    expect(server.snapshotRequests).toEqual([expect.any(Number), undefined])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+
+    server.output('ddd')
+    expect(data).toEqual(['aaa', 'ddd'])
+  })
+
+  it('times out a dropped recovery end and retries on the next sequence gap', async () => {
+    vi.useFakeTimers()
+    try {
+      const { data, snapshots } = await subscribeClient()
+      server.dropNextRecoverySnapshotEnd = true
+
+      server.output('aaa')
+      server.dropNextOutput = true
+      server.output('bbb')
+      server.output('ccc')
+      await vi.advanceTimersByTimeAsync(10_000)
+      server.output('ddd')
+      server.output('eee')
+
+      expect(server.snapshotRequests).toEqual([undefined, undefined])
+      expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+      expect(data).toEqual(['aaa', 'eee'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('passes contiguous output straight through without resyncing', async () => {
@@ -217,6 +360,78 @@ describe('remote terminal frame-drop resync', () => {
 
     expect(data).toEqual(['one', 'two', 'three'])
     expect(snapshots).toEqual(['INITIAL'])
+  })
+
+  it('replaces the stream and subscription CAS after a same-id re-pair', async () => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 10 }])
+    const onTransportClose = vi.fn()
+    const firstMultiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
+    await firstMultiplexer.subscribeTerminal({
+      terminal: 'terminal-1',
+      client: { id: 'desktop-1', type: 'desktop' },
+      callbacks: { onData: vi.fn(), onSnapshot: vi.fn(), onTransportClose }
+    })
+
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 11 }])
+    const secondMultiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
+    await secondMultiplexer.subscribeTerminal({
+      terminal: 'terminal-2',
+      client: { id: 'desktop-1', type: 'desktop' },
+      callbacks: { onData: vi.fn(), onSnapshot: vi.fn() }
+    })
+
+    expect(secondMultiplexer).not.toBe(firstMultiplexer)
+    expect(onTransportClose).toHaveBeenCalledTimes(1)
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(subscribe.mock.calls.map((call) => call[0])).toEqual([
+      expect.objectContaining({ expectedEnvironmentPairingRevision: 10 }),
+      expect.objectContaining({ expectedEnvironmentPairingRevision: 11 })
+    ])
+  })
+
+  it('drops stale binary output and retires the old transport after a same-id re-pair', async () => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 10 }])
+    const data: string[] = []
+    const onTransportClose = vi.fn()
+    const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
+    await multiplexer.subscribeTerminal({
+      terminal: 'terminal-1',
+      client: { id: 'desktop-1', type: 'desktop' },
+      callbacks: {
+        onData: (chunk) => data.push(chunk),
+        onSnapshot: vi.fn(),
+        onTransportClose
+      }
+    })
+
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 11 }])
+    server.output('stale output')
+
+    expect(data).toEqual([])
+    expect(onTransportClose).toHaveBeenCalledTimes(1)
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops stale JSON events and retires the old transport after a same-id re-pair', async () => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 10 }])
+    const onEnd = vi.fn()
+    const onTransportClose = vi.fn()
+    const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
+    const stream = await multiplexer.subscribeTerminal({
+      terminal: 'terminal-1',
+      client: { id: 'desktop-1', type: 'desktop' },
+      callbacks: { onData: vi.fn(), onSnapshot: vi.fn(), onEnd, onTransportClose }
+    })
+
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 11 }])
+    subscriptionCallbacks.onResponse({
+      ok: true,
+      result: { type: 'end', streamId: stream.streamId }
+    })
+
+    expect(onEnd).not.toHaveBeenCalled()
+    expect(onTransportClose).toHaveBeenCalledTimes(1)
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 
   it('delivers an empty transformed span with its raw sequence metadata', async () => {
@@ -275,5 +490,8 @@ describe('remote terminal frame-drop resync', () => {
     await expect(manualSnapshot).resolves.toMatchObject({ data: 'MANUAL' })
     expect(server.snapshotRequests).toHaveLength(2)
     expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+
+    server.output('ddd')
+    expect(data).toEqual(['aaa', 'ddd'])
   })
 })

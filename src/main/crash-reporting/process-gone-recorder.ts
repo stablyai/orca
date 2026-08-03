@@ -1,9 +1,16 @@
 import os from 'node:os'
 import { app } from 'electron'
-import { isCrashReportReason, sanitizeCrashReportString } from '../../shared/crash-reporting'
+import {
+  isCrashReportReason,
+  sanitizeCrashReportString,
+  type CrashReportBreadcrumbData
+} from '../../shared/crash-reporting'
 import type { CrashReportStore } from './crash-report-store'
 import { getCrashBreadcrumbSnapshot } from './crash-breadcrumb-store'
-import { recordDurableCrashBreadcrumb } from './durable-crash-breadcrumb'
+import {
+  recordCoalescedDurableCrashBreadcrumb,
+  recordDurableCrashBreadcrumb
+} from './durable-crash-breadcrumb'
 import {
   shouldRecordProcessGoneCrash,
   type ExpectedTeardownScope,
@@ -32,8 +39,27 @@ export type ProcessGoneCrashEvent = {
 
 type CrashReportRecorderStore = Pick<CrashReportStore, 'record'>
 
+// Why: the coalesce map prunes every key against the calling window, so a shorter
+// one here would weaken the other 30s coalescers. Stay uniform with them.
+const SUPPRESSED_PROCESS_GONE_COALESCE_MS = 30_000
+
 function processGoneBreadcrumbData(event: ProcessGoneCrashEvent) {
   return buildSuppressedProcessGoneBreadcrumbData(event)
+}
+
+// Why: key off the emitted breadcrumb, not the crash-report dedupe key, so two
+// different recoverable services can never suppress each other's evidence.
+function suppressedProcessGoneCoalesceKey(data: CrashReportBreadcrumbData): string {
+  return JSON.stringify([
+    data.source,
+    data.processType,
+    data.reason,
+    data.exitCode,
+    data.expectedTeardown,
+    data.serviceName ?? null,
+    data.name ?? null,
+    data.type ?? null
+  ])
 }
 
 function persistFailureData(event: ProcessGoneCrashEvent, error: unknown) {
@@ -68,7 +94,16 @@ export function recordProcessGoneCrash(
       expectedTeardown: event.expectedTeardown
     })
   ) {
-    recordDurableCrashBreadcrumb('process_gone_suppressed', processGoneBreadcrumbData(event))
+    // Why: Chromium can crash-loop a recoverable child (network service seen at
+    // 1459/min) and each suppressed event costs a span plus a forced disk flush,
+    // which both floods the 30-entry ring and evicts the real pre-crash trail.
+    const suppressedData = processGoneBreadcrumbData(event)
+    recordCoalescedDurableCrashBreadcrumb({
+      name: 'process_gone_suppressed',
+      data: suppressedData,
+      coalesceKey: suppressedProcessGoneCoalesceKey(suppressedData),
+      minIntervalMs: SUPPRESSED_PROCESS_GONE_COALESCE_MS
+    })
     return
   }
   if (!store) {

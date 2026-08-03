@@ -19,6 +19,7 @@ import {
   REPO_HEADER_ACTION_BUTTON_CLASS,
   REPO_HEADER_ACTION_REVEAL_CLASS
 } from './repo-header-action-button-class'
+import { getWorktreeLineageAncestors } from './worktree-lineage-projection'
 import type {
   DetectedWorktree,
   Project,
@@ -764,7 +765,7 @@ describe('buildRows with pinned worktrees', () => {
     )
   })
 
-  it('splits all project setups when one host has duplicate checkouts', () => {
+  it('splits only the surface with duplicate checkouts', () => {
     const localRepoB: Repo = {
       ...repo,
       id: 'repo-local-b',
@@ -821,8 +822,141 @@ describe('buildRows with pinned worktrees', () => {
     expect(headers.map((row) => row.key)).toEqual([
       'project:github:stablyai/orca::setup:repo-1',
       'project:github:stablyai/orca::setup:repo-local-b',
-      'project:github:stablyai/orca::setup:repo-remote'
+      'project:github:stablyai/orca'
     ])
+  })
+
+  it('counts projection twins for one directory as one checkout', () => {
+    const runtimeHostId = 'runtime:m2-air'
+    const runtimeRepo: Repo = {
+      ...remoteRepo,
+      id: 'repo-runtime',
+      path: '/home/alice/orca-runtime',
+      connectionId: undefined,
+      executionHostId: runtimeHostId
+    }
+    const runtimeWorktree: Worktree = {
+      ...remoteWorktree,
+      id: 'wt-runtime',
+      repoId: runtimeRepo.id,
+      path: '/home/alice/orca-runtime-feature'
+    }
+    const runtimeSetup: ProjectHostSetup = {
+      ...projectHostSetups[1]!,
+      id: runtimeRepo.id,
+      repoId: runtimeRepo.id,
+      path: runtimeRepo.path,
+      hostId: runtimeHostId,
+      executionHostId: runtimeHostId
+    }
+    const derivedSetup: ProjectHostSetup = {
+      ...projectHostSetups[1]!,
+      hostId: runtimeHostId,
+      connectionId: 'intel mac',
+      executionHostId: runtimeHostId
+    }
+    const authoritativeSetup: ProjectHostSetup = {
+      ...derivedSetup,
+      id: 'setup-authoritative',
+      path: `${derivedSetup.path}/`,
+      connectionId: null,
+      executionHostId: 'ssh:intel%20mac'
+    }
+    const grouping = {
+      projects: [{ ...project, sourceRepoIds: [remoteRepo.id, runtimeRepo.id] }],
+      projectHostSetups: [runtimeSetup, derivedSetup, authoritativeSetup]
+    }
+
+    expect([
+      getGroupKeyForWorktree(
+        'repo',
+        remoteWorktree,
+        new Map([[remoteRepo.id, remoteRepo]]),
+        null,
+        undefined,
+        undefined,
+        grouping
+      ),
+      getGroupKeyForWorktree(
+        'repo',
+        runtimeWorktree,
+        new Map([[runtimeRepo.id, runtimeRepo]]),
+        null,
+        undefined,
+        undefined,
+        grouping
+      )
+    ]).toEqual(['project:github:stablyai/orca', 'project:github:stablyai/orca'])
+  })
+
+  it('keeps Git hosts grouped when folder setups share the project identity', () => {
+    const windowsHostId = 'runtime:windows-server'
+    const windowsRepo: Repo = {
+      ...repo,
+      id: 'repo-windows',
+      path: 'C:\\Users\\neil\\orca\\orca',
+      executionHostId: windowsHostId
+    }
+    const folderRepoA: Repo = {
+      ...repo,
+      id: 'folder-qa-a',
+      path: '/tmp/pr11751-folder-qa',
+      displayName: 'pr11751-folder-qa',
+      kind: 'folder'
+    }
+    const folderRepoB: Repo = {
+      ...folderRepoA,
+      id: 'folder-qa-b',
+      path: '/tmp/pr11767-runtime-folder',
+      displayName: 'pr11767-runtime-folder'
+    }
+    const setups: ProjectHostSetup[] = [
+      projectHostSetups[0]!,
+      { ...projectHostSetups[0]!, id: 'projection-twin' },
+      projectHostSetups[1]!,
+      {
+        ...projectHostSetups[0]!,
+        id: windowsRepo.id,
+        repoId: windowsRepo.id,
+        path: windowsRepo.path,
+        hostId: windowsHostId,
+        executionHostId: windowsHostId
+      },
+      {
+        ...projectHostSetups[0]!,
+        id: folderRepoA.id,
+        repoId: folderRepoA.id,
+        path: folderRepoA.path,
+        displayName: folderRepoA.displayName,
+        kind: 'folder'
+      },
+      {
+        ...projectHostSetups[0]!,
+        id: folderRepoB.id,
+        repoId: folderRepoB.id,
+        path: folderRepoB.path,
+        displayName: folderRepoB.displayName,
+        kind: 'folder'
+      }
+    ]
+    const repos = [repo, remoteRepo, windowsRepo, folderRepoA, folderRepoB]
+    const grouping = {
+      projects: [{ ...project, sourceRepoIds: repos.map((entry) => entry.id) }],
+      projectHostSetups: setups
+    }
+
+    const groupKeys = repos.map((entry) =>
+      getGroupKeyForWorktree(
+        'repo',
+        { ...worktree, id: `wt-${entry.id}`, repoId: entry.id, path: entry.path },
+        new Map([[entry.id, entry]]),
+        null,
+        undefined,
+        undefined,
+        grouping
+      )
+    )
+    expect(new Set(groupKeys)).toEqual(new Set(['project:github:stablyai/orca']))
   })
 
   it('keeps a provisioned runtime copy under the project header alongside a same-host checkout', () => {
@@ -1121,6 +1255,65 @@ describe('buildRows with pinned worktrees', () => {
       { type: 'header', key: 'project:github:stablyai/orca', label: 'Orca', count: 2 },
       { type: 'item', worktree: { id: worktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
       { type: 'item', worktree: { id: runtimeWorktree.id }, hostContextLabel: 'dev box' }
+    ])
+  })
+
+  it('shows distinct Orca server names when status grouping mixes runtime hosts', () => {
+    const firstRepo: Repo = {
+      ...repo,
+      id: 'repo-runtime-a',
+      executionHostId: 'runtime:env-a'
+    }
+    const secondRepo: Repo = {
+      ...repo,
+      id: 'repo-runtime-b',
+      executionHostId: 'runtime:env-b'
+    }
+    const firstWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-runtime-a',
+      repoId: firstRepo.id
+    }
+    const secondWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-runtime-b',
+      repoId: secondRepo.id
+    }
+    const rows = buildRows(
+      'workspace-status',
+      [firstWorktree, secondWorktree],
+      new Map([
+        [firstRepo.id, firstRepo],
+        [secondRepo.id, secondRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [firstWorktree.id, firstWorktree],
+        [secondWorktree.id, secondWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [],
+      new Map([
+        ['runtime:env-a', 'Remote Mac'],
+        ['runtime:env-b', 'Build Linux']
+      ])
+    )
+
+    expect(rows.filter((row) => row.type === 'item')).toMatchObject([
+      { worktree: { id: firstWorktree.id }, hostContextLabel: 'Remote Mac' },
+      { worktree: { id: secondWorktree.id }, hostContextLabel: 'Build Linux' }
     ])
   })
 
@@ -3309,6 +3502,12 @@ describe('project groups', () => {
 })
 
 describe('buildRows workspace lineage nesting', () => {
+  type ResolvedLineageWorktree = Worktree & {
+    lineage: WorktreeLineage | null
+    workspaceLineage?: null
+    parentWorktreeId?: string | null
+  }
+
   const parent: Worktree = {
     ...worktree,
     id: 'wt-parent',
@@ -3397,6 +3596,255 @@ describe('buildRows workspace lineage nesting', () => {
       worktree: { id: child.id },
       depth: 1
     })
+  })
+
+  it('nests stable-update resolved legacy lineage when generalized lineage is absent', () => {
+    const parentId =
+      '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/orca/workspaces/orca/assigned-issues'
+    const childId =
+      '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/orca/workspaces/orca/issue-9276-nested-ssh-runtime-routing'
+    const secondChildId =
+      '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/orca/workspaces/orca/issue-9744-terminal-close-lifecycle'
+    const resolvedParent: ResolvedLineageWorktree = {
+      ...parent,
+      id: parentId,
+      instanceId: 'b0ffd635-91cd-424f-b804-80d4bb277a4c',
+      lineage: null,
+      workspaceLineage: null
+    }
+    const resolvedLineage: WorktreeLineage = {
+      ...lineage,
+      worktreeId: childId,
+      worktreeInstanceId: '1ceb9823-aa98-4f79-8eaa-af0b3a3d551b',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'b0ffd635-91cd-424f-b804-80d4bb277a4c',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+    }
+    const resolvedChild: ResolvedLineageWorktree = {
+      ...child,
+      id: childId,
+      instanceId: '1ceb9823-aa98-4f79-8eaa-af0b3a3d551b',
+      lineage: resolvedLineage,
+      workspaceLineage: null
+    }
+    const secondResolvedLineage: WorktreeLineage = {
+      ...resolvedLineage,
+      worktreeId: secondChildId,
+      worktreeInstanceId: '87e2ef9a-99d3-48e3-9a53-3d1a979b5417'
+    }
+    const secondResolvedChild: ResolvedLineageWorktree = {
+      ...child,
+      id: secondChildId,
+      instanceId: '87e2ef9a-99d3-48e3-9a53-3d1a979b5417',
+      lineage: secondResolvedLineage,
+      workspaceLineage: null
+    }
+
+    const rows = buildRows(
+      'none',
+      [secondResolvedChild, resolvedChild, resolvedParent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [resolvedParent.id, resolvedParent],
+        [resolvedChild.id, resolvedChild],
+        [secondResolvedChild.id, secondResolvedChild]
+      ]),
+      true
+    )
+
+    const items = rows.filter((row) => row.type === 'item')
+    expect(items.map((row) => [row.worktree.id, row.depth])).toEqual([
+      [parentId, 0],
+      [secondChildId, 1],
+      [childId, 1]
+    ])
+    expect(items[0]).toMatchObject({ lineageChildCount: 2, lineageCollapsed: false })
+  })
+
+  it('rejects stale resolved lineage after a parent instance is replaced', () => {
+    const resolvedChild: ResolvedLineageWorktree = {
+      ...child,
+      lineage: { ...lineage, parentWorktreeInstanceId: 'replaced-parent-instance' }
+    }
+    const rows = buildRows(
+      'none',
+      [resolvedChild, parent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [parent.id, parent],
+        [resolvedChild.id, resolvedChild]
+      ]),
+      true
+    )
+
+    expect(rows.filter((row) => row.type === 'item').map((row) => row.depth)).toEqual([0, 0])
+  })
+
+  it('keeps mixed cyclic lineage participants visible as roots', () => {
+    const parentLineage: WorktreeLineage = {
+      ...lineage,
+      worktreeId: parent.id,
+      worktreeInstanceId: parent.instanceId!,
+      parentWorktreeId: child.id,
+      parentWorktreeInstanceId: child.instanceId!
+    }
+    const rows = buildRows(
+      'none',
+      [grandchild, child, parent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage, [parent.id]: parentLineage },
+      new Map([
+        [parent.id, parent],
+        [child.id, child],
+        [grandchild.id, grandchild]
+      ]),
+      true
+    )
+
+    expect(
+      rows.filter((row) => row.type === 'item').map((row) => [row.worktree.id, row.depth])
+    ).toEqual([
+      [grandchild.id, 0],
+      [child.id, 0],
+      [parent.id, 0]
+    ])
+  })
+
+  it('resolves inline-only ancestor chains for reveal and temporary picker expansion', () => {
+    const resolvedChild: ResolvedLineageWorktree = { ...child, lineage }
+    const resolvedGrandchild: ResolvedLineageWorktree = {
+      ...grandchild,
+      lineage: grandchildLineage
+    }
+    const worktreeMap = new Map<string, Worktree>([
+      [parent.id, parent],
+      [resolvedChild.id, resolvedChild],
+      [resolvedGrandchild.id, resolvedGrandchild]
+    ])
+
+    expect(
+      getWorktreeLineageAncestors(resolvedGrandchild, {}, worktreeMap).map(
+        (worktree) => worktree.id
+      )
+    ).toEqual([child.id, parent.id])
+  })
+
+  it('keeps a resolved child at the root when its parent is missing', () => {
+    const resolvedChild: ResolvedLineageWorktree = { ...child, lineage }
+    const rows = buildRows(
+      'none',
+      [resolvedChild],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[child.id, resolvedChild]]),
+      true
+    )
+
+    expect(rows.find((row) => row.type === 'item')).toMatchObject({ depth: 0 })
+  })
+
+  it.each([
+    ['repo', { repoId: 'other-repo' }],
+    ['host', { hostId: 'ssh:other-host' as const }],
+    ['project', { projectId: 'github:other/project' }]
+  ])('does not nest resolved lineage across a known %s boundary', (_label, boundary) => {
+    const boundedParent = {
+      ...parent,
+      repoId: 'repo-1',
+      hostId: 'local' as const,
+      projectId: 'github:stablyai/orca',
+      ...boundary
+    }
+    const boundedChild: ResolvedLineageWorktree = {
+      ...child,
+      repoId: 'repo-1',
+      hostId: 'local' as const,
+      projectId: 'github:stablyai/orca',
+      lineage
+    }
+    const rows = buildRows(
+      'none',
+      [boundedChild, boundedParent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map<string, Worktree>([
+        [boundedParent.id, boundedParent],
+        [boundedChild.id, boundedChild]
+      ]),
+      true
+    )
+
+    expect(rows.filter((row) => row.type === 'item').map((row) => row.depth)).toEqual([0, 0])
+  })
+
+  it('keeps the hydrated lineage side-map authoritative when inline metadata disagrees', () => {
+    const otherParent = {
+      ...parent,
+      id: 'wt-other-parent',
+      instanceId: 'other-parent-instance'
+    }
+    const hydratedLineage = {
+      ...lineage,
+      parentWorktreeId: otherParent.id,
+      parentWorktreeInstanceId: otherParent.instanceId!
+    }
+    const resolvedChild: ResolvedLineageWorktree = {
+      ...child,
+      parentWorktreeId: parent.id,
+      lineage
+    }
+    const rows = buildRows(
+      'none',
+      [resolvedChild, parent, otherParent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: hydratedLineage },
+      new Map([
+        [parent.id, parent],
+        [otherParent.id, otherParent],
+        [child.id, resolvedChild]
+      ]),
+      true
+    )
+
+    expect(
+      rows.filter((row) => row.type === 'item').map((row) => [row.worktree.id, row.depth])
+    ).toEqual([
+      [parent.id, 0],
+      [otherParent.id, 0],
+      [child.id, 1]
+    ])
   })
 
   it('supports nested lineage chains beyond one level', () => {
@@ -3504,7 +3952,8 @@ describe('buildRows workspace lineage nesting', () => {
       new Map([
         [parent.id, parent],
         [child.id, child]
-      ])
+      ]),
+      new Set()
     )
 
     expect(info).toMatchObject({ state: 'missing' })

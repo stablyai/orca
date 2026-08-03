@@ -6,7 +6,7 @@ import type {
 } from '../shared/runtime-types'
 import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import type { RuntimeClient } from './runtime-client'
-import { RuntimeClientError } from './runtime-client'
+import { RuntimeClientError } from './runtime/types'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
 
 export type BrowserCliTarget = {
@@ -211,7 +211,7 @@ export async function getComputerCommandTarget(
   }
 }
 
-// Mirror getBrowserCommandTarget / getBrowserWorktreeSelector for emulator (workspace scoped by default + explicit --device/--emulator/--worktree; active from bridge for unqualified).
+// Match browser targeting: workspace by default, explicit device/emulator/worktree overrides.
 export type EmulatorCliTarget = {
   worktree?: string
   device?: string

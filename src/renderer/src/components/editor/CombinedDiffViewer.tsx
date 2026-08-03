@@ -14,12 +14,12 @@ import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { setWithLRU } from '@/lib/scroll-cache'
-import { getConnectionIdForFile } from '@/lib/connection-context'
 import { getCombinedDiffSectionConnectionId } from './combined-diff-section-connection'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import {
@@ -79,6 +79,7 @@ import {
   beginCombinedDiffScrollbarDrag,
   type CombinedDiffScrollbarDragCleanup
 } from './combined-diff-scrollbar-drag'
+import { shouldRequestCombinedDiffSectionLoad } from './combined-diff-section-load-state'
 import { translate } from '@/i18n/i18n'
 
 type CachedCombinedDiffViewState = {
@@ -977,6 +978,14 @@ export default function CombinedDiffViewer({
     }
     retrySectionRef.current(index)
   }, [])
+  const ensureCombinedDiffSectionLoaded = useCallback((index: number): void => {
+    const section = sectionsRef.current[index]
+    if (!shouldRequestCombinedDiffSectionLoad(section, loadingIndicesRef.current.has(index))) {
+      return
+    }
+    loadedIndicesRef.current.delete(index)
+    loadSchedulerRef.current.request(index)
+  }, [])
   const [activeTreeSectionState, setActiveTreeSectionState] = useState<{
     entrySignature: string
     key: string | null
@@ -1000,6 +1009,7 @@ export default function CombinedDiffViewer({
         sections: sectionsRef.current,
         sectionIndexByKey,
         toggleSection,
+        loadSection: ensureCombinedDiffSectionLoaded,
         scrollToIndex: (index) => {
           scrollAnchorRef.current = null
           latestDomScrollAnchorRef.current = null
@@ -1013,8 +1023,6 @@ export default function CombinedDiffViewer({
         }
       })
       if (navigatedIndex !== null) {
-        // Why: re-selecting an already-loaded row must refetch — the file or git index may have changed while it stayed mounted.
-        requestCombinedDiffSectionReload(navigatedIndex)
         setActiveTreeSectionState({
           entrySignature,
           key: sectionsRef.current[navigatedIndex]?.key ?? null
@@ -1022,9 +1030,9 @@ export default function CombinedDiffViewer({
       }
     },
     [
+      ensureCombinedDiffSectionLoaded,
       entrySignature,
       markDirectScrollInput,
-      requestCombinedDiffSectionReload,
       sectionIndexByKey,
       toggleSection,
       treeMode,
@@ -1185,18 +1193,20 @@ export default function CombinedDiffViewer({
       const content = modifiedEditor?.getValue() ?? section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
       try {
-        const connectionId = getConnectionIdForFile(file.worktreeId, absolutePath) ?? undefined
         const state = useAppStore.getState()
         const worktree = file.worktreeId
           ? findWorktreeById(state.worktreesByRepo, file.worktreeId)
           : null
         await writeRuntimeFile(
-          {
-            settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
-            worktreeId: file.worktreeId,
-            worktreePath: worktree?.path ?? null,
-            connectionId
-          },
+          getEditorFileOperationContext(
+            state,
+            {
+              worktreeId: file.worktreeId,
+              runtimeEnvironmentId: file.runtimeEnvironmentId,
+              operationProvenance: file.operationProvenance
+            },
+            worktree?.path ?? null
+          ),
           absolutePath,
           content
         )
@@ -1237,7 +1247,7 @@ export default function CombinedDiffViewer({
         console.error('Save failed:', err)
       }
     },
-    [file.filePath, file.runtimeEnvironmentId, file.worktreeId, sections]
+    [file.filePath, file.operationProvenance, file.runtimeEnvironmentId, file.worktreeId, sections]
   )
 
   const handleSectionSaveRef = useRef(handleSectionSave)

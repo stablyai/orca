@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -7,6 +7,7 @@ import {
   EphemeralVmRuntimeStoreError,
   getEphemeralVmRuntimeStorePath,
   listEphemeralVmRuntimes,
+  MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES,
   removeEphemeralVmRuntime,
   updateEphemeralVmRuntimeStatus,
   upsertEphemeralVmRuntime
@@ -172,5 +173,28 @@ describe('ephemeral VM runtime store', () => {
     writeFileSync(getEphemeralVmRuntimeStorePath(userDataPath), '{ nope', 'utf8')
 
     expect(() => listEphemeralVmRuntimes(userDataPath)).toThrow(EphemeralVmRuntimeStoreError)
+  })
+
+  it('rejects an oversized sparse runtime store before parsing it', () => {
+    const userDataPath = makeUserDataPath()
+    const path = getEphemeralVmRuntimeStorePath(userDataPath)
+    writeFileSync(path, '{"version":1,"runtimes":[]}', 'utf8')
+    truncateSync(path, MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES + 1)
+
+    expect(() => listEphemeralVmRuntimes(userDataPath)).toThrow(EphemeralVmRuntimeStoreError)
+  })
+
+  it('rejects an oversized write without publishing a partial runtime record', () => {
+    const userDataPath = makeUserDataPath()
+
+    expect(() =>
+      upsertEphemeralVmRuntime(
+        userDataPath,
+        runtimeRecord({
+          cleanupLastError: 'x'.repeat(MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES)
+        })
+      )
+    ).toThrow(EphemeralVmRuntimeStoreError)
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([])
   })
 })

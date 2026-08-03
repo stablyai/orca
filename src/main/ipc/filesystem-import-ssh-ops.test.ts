@@ -35,6 +35,10 @@ vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import {
+  advanceSshConnectionGeneration,
+  resetSshConnectionGenerations
+} from '../ssh/ssh-connection-generation'
+import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
@@ -112,7 +116,15 @@ describe('fs:importExternalPaths — SSH operations', () => {
     })
   }
   const invoke = (args: Record<string, unknown>) =>
-    handlers.get('fs:importExternalPaths')!(null, args) as Promise<{
+    handlers.get('fs:importExternalPaths')!(null, {
+      ...args,
+      ...(typeof args.connectionId === 'string'
+        ? {
+            expectedSshTargetId: args.expectedSshTargetId ?? args.connectionId,
+            expectedSshConnectionGeneration: args.expectedSshConnectionGeneration ?? 0
+          }
+        : {})
+    }) as Promise<{
       results: Record<string, unknown>[]
     }>
 
@@ -145,6 +157,42 @@ describe('fs:importExternalPaths — SSH operations', () => {
 
   afterEach(() => {
     unregisterSshFilesystemProvider(connId)
+    resetSshConnectionGenerations()
+  })
+
+  it('rejects a staged upload when a restarted HUB reaches the same target counter', async () => {
+    resetSshConnectionGenerations(71)
+    const stagedGeneration = advanceSshConnectionGeneration(connId)
+    const sourcePath = path.resolve('/tmp/dropped/restart.txt')
+    lstatMock.mockImplementation(async (candidate: string) => {
+      if (candidate !== sourcePath) {
+        throw enoent()
+      }
+      resetSshConnectionGenerations(72)
+      advanceSshConnectionGeneration(connId)
+      return {
+        size: 12,
+        ino: 1,
+        dev: 1,
+        isFile: () => true,
+        isDirectory: () => false,
+        isSymbolicLink: () => false
+      }
+    })
+
+    const { results } = await invoke({
+      sourcePaths: [sourcePath],
+      destDir,
+      connectionId: connId,
+      expectedSshTargetId: connId,
+      expectedSshConnectionGeneration: stagedGeneration
+    })
+
+    expect(results[0]).toMatchObject({
+      status: 'failed',
+      reason: 'SSH connection changed; refresh and try again'
+    })
+    expect(uploadSession.uploadFile).not.toHaveBeenCalled()
   })
 
   it('deconflicts file names via provider stat', async () => {

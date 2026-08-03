@@ -14,6 +14,9 @@ export function MobileHostCard(props: {
   verdict: ConnectionVerdict
   path: MobileConnectionPath
   worktreeCounts?: { total: number; active: number }
+  // Why (STA-3123): the host is connected but its worktree catalog request failed,
+  // so the card must say "unavailable" instead of asserting a count of zero.
+  worktreeCountsUnavailable?: boolean
   onPress: () => void
   onLongPress: () => void
 }) {
@@ -21,7 +24,9 @@ export function MobileHostCard(props: {
   const isError = ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
   const worktreeSummary = props.worktreeCounts
     ? `${props.worktreeCounts.total} worktree${props.worktreeCounts.total === 1 ? '' : 's'}${props.worktreeCounts.active > 0 ? ` · ${props.worktreeCounts.active} active` : ''}`
-    : null
+    : props.worktreeCountsUnavailable
+      ? 'Worktree list unavailable'
+      : null
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}

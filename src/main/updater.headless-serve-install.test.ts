@@ -476,7 +476,12 @@ describe('headless serve update install handoff', () => {
       return Promise.resolve(null)
     })
 
-    const { checkForUpdatesFromMenu, downloadUpdate, setupAutoUpdater } = await import('./updater')
+    const {
+      checkForUpdatesFromMenu,
+      downloadUpdate,
+      getRemoteServerUpdateSupport,
+      setupAutoUpdater
+    } = await import('./updater')
     setupAutoUpdater({ webContents: { send } } as never, {
       getLastUpdateCheckAt: () => Date.now(),
       installMode: 'interactive'
@@ -488,10 +493,31 @@ describe('headless serve update install handoff', () => {
     expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(true)
     expect(autoUpdaterMock.autoRunAppAfterInstall).toBe(true)
     expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+    expect(getRemoteServerUpdateSupport()).toEqual({
+      installMode: 'interactive',
+      automatic: true,
+      reason: 'available'
+    })
     expect(recordUpdaterLifecycleMock).not.toHaveBeenCalledWith(
       'headless_serve_install_deferred',
       expect.anything(),
       expect.anything()
     )
+  })
+
+  it('advertises remote update control only for safely restartable installs', async () => {
+    const { checkForRemoteServerUpdate, getRemoteServerUpdateSupport, setupAutoUpdater } =
+      await import('./updater')
+    setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      installMode: 'unsupported-headless-serve'
+    })
+
+    expect(getRemoteServerUpdateSupport()).toEqual({
+      installMode: 'unsupported-headless-serve',
+      automatic: false,
+      reason: 'manual-service-update-required'
+    })
+    expect(() => checkForRemoteServerUpdate('runtime-1')).toThrow('remote_update_manual_required')
   })
 })

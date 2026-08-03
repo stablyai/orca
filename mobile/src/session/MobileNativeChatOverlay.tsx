@@ -1,17 +1,23 @@
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
+import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 
 type Props = {
   controller: MobileNativeChatController
-  onAttachImage: () => void
-  isAttaching: boolean
+  /** Native-chat image attachments: picking adds a composer chip, and sending
+   *  rides the pending images along with the message text (desktop parity). */
+  images: MobileNativeChatImageAttachments
   onMicPress: () => void
   micActive: boolean
   dictationMode: 'toggle' | 'hold'
   onMicPressIn: () => void
   onMicPressOut: () => void
   inputLockReason: MobileNativeChatInputLockReason | null
+  /** Latest send failure, rendered inline above the composer. */
+  sendErrorMessage: string | null
+  /** Drops that failure once a later send succeeds. */
+  onClearSendError: () => void
   keyboardInset: number
 }
 
@@ -19,14 +25,15 @@ type Props = {
  *  view toggles while the native surface owns the visible composer. */
 export function MobileNativeChatOverlay({
   controller,
-  onAttachImage,
-  isAttaching,
+  images,
   onMicPress,
   micActive,
   dictationMode,
   onMicPressIn,
   onMicPressOut,
   inputLockReason,
+  sendErrorMessage,
+  onClearSendError,
   keyboardInset
 }: Props): React.JSX.Element | null {
   if (!controller.showNativeChat) {
@@ -47,25 +54,29 @@ export function MobileNativeChatOverlay({
         onAnswerAsk={controller.handleNativeChatAnswerAsk}
         onCancelAsk={controller.handleNativeChatCancelAsk}
         question={controller.nativeChatQuestion}
-        onAnswerQuestion={controller.handleNativeChatSend}
+        onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
         onOpenFile={controller.handleNativeChatOpenFile}
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}
-        onSend={controller.handleNativeChatSend}
+        onSend={images.sendNativeChat}
         pending={controller.chatPending}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}
-        onAttachImage={onAttachImage}
-        isAttaching={isAttaching}
+        onAttachImage={() => void images.attachImage('library')}
+        attachments={images.attachments}
+        onRemoveAttachment={images.removeAttachment}
+        isAttaching={images.isAttaching}
         onMicPress={onMicPress}
         micActive={micActive}
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}
         inputLockReason={inputLockReason}
+        sendErrorMessage={sendErrorMessage}
+        onClearSendError={onClearSendError}
         filePaths={controller.nativeChatFilePaths}
         onNeedFiles={controller.loadNativeChatFiles}
         keyboardInset={keyboardInset}

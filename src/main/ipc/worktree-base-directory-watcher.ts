@@ -17,7 +17,10 @@ import {
   buildWorktreeBaseDirectoryWatchTargets,
   clearWorktreeBaseDirectoryWatchTargetWarnings
 } from './worktree-base-directory-watch-targets'
-import { startWorktreeBaseDirectoryPoller } from './worktree-base-directory-poller'
+import {
+  createWorktreePollerWindowVisibility,
+  startWorktreeBaseDirectoryPoller
+} from './worktree-base-directory-poller'
 
 type ActiveWatch = WorktreeBaseWatchTarget & {
   mainWindow: BrowserWindow
@@ -58,9 +61,8 @@ function scheduleNotification(watch: ActiveWatch, changes: PendingNotificationIn
   for (const repoId of changes.headIdentityRepoIds ?? []) {
     watch.pendingHeadIdentityRepoIds.add(repoId)
   }
-  if (watch.notifyTimer) {
-    clearTimeout(watch.notifyTimer)
-  }
+  // clearTimeout tolerates null (no-op), so no guard needed before rescheduling.
+  clearTimeout(watch.notifyTimer ?? undefined)
   watch.notifyTimer = setTimeout(() => {
     watch.notifyTimer = null
     if (watch.disposed || watch.mainWindow.isDestroyed()) {
@@ -192,10 +194,14 @@ async function subscribeTarget(
     () => (activeWatches.get(target.key) ?? activeWatch)?.repos ?? target.repos,
     (events) => {
       const currentWatch = activeWatches.get(target.key) ?? activeWatch
-      if (!currentWatch || currentWatch.disposed) {
-        return
+      if (currentWatch && !currentWatch.disposed) {
+        handleLocalWatchEvents(currentWatch, null, events)
       }
-      handleLocalWatchEvents(currentWatch, null, events)
+    },
+    {
+      visibility: createWorktreePollerWindowVisibility(
+        () => (activeWatches.get(target.key) ?? activeWatch)?.mainWindow ?? null
+      )
     }
   )
   activeWatch = createActiveWatch(target, mainWindow, subscription)
@@ -241,9 +247,7 @@ async function removeWatch(key: string): Promise<void> {
   }
   activeWatches.delete(key)
   watch.disposed = true
-  if (watch.notifyTimer) {
-    clearTimeout(watch.notifyTimer)
-  }
+  clearTimeout(watch.notifyTimer ?? undefined)
   clearPendingRepoIds(watch)
   await watch.subscription.unsubscribe().catch((error) => {
     console.warn(`[worktree-base-watcher] failed to unwatch ${watch.path}:`, error)

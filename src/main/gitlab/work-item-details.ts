@@ -10,6 +10,7 @@ import type {
   GitLabPipelineJob,
   GitLabWorkItem,
   GitLabWorkItemDetails,
+  IssueSourcePreference,
   MRComment
 } from '../../shared/types'
 import { mapIssueToWorkItem, mapMRToWorkItem } from './mappers'
@@ -24,7 +25,6 @@ import {
   type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
-import type { IssueSourcePreference } from '../../shared/types'
 
 function encodedProject(projectPath: string): string {
   return encodeURIComponent(projectPath)
@@ -169,11 +169,29 @@ async function fetchPipelineJobs(
   return data.map((job) => mapPipelineJob(job, pipelineId))
 }
 
-function countDiffLines(diff: string): { additions: number; deletions: number } {
+/**
+ * Counts the added/removed lines in a single GitLab MR file's unified diff,
+ * feeding the +N/-N shown in the MR file list. `---`/`+++` are file headers
+ * only before the first `@@` hunk; every `+`/`-` line inside a hunk is content.
+ * Requires hunk headers: a diff with no `@@` counts zero, so do not reuse this
+ * for header-less agent-tool diffs (see `diffFromText` in shared/native-chat-diff).
+ *
+ * @internal - exposed for tests only.
+ */
+export function countDiffLines(diff: string): { additions: number; deletions: number } {
   let additions = 0
   let deletions = 0
+  // Why: `---`/`+++` are file headers only before the first hunk. A removed line
+  // whose original text began with `--` (SQL/Lua/Haskell `-- comment`) becomes a
+  // diff line `---<content>`, colliding with the `--- a/file` header — so it must
+  // be counted once inside a hunk, not skipped.
+  let inHunk = false
   for (const line of diff.split('\n')) {
-    if (line.startsWith('+++') || line.startsWith('---')) {
+    if (line.startsWith('@@')) {
+      inHunk = true
+      continue
+    }
+    if (!inHunk) {
       continue
     }
     if (line.startsWith('+')) {

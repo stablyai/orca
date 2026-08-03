@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { parsePairingCode } from '../../shared/pairing'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
+import type { PersistedMobileClientTabSelections } from '../../shared/types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
@@ -187,6 +188,10 @@ function resultType(response: Record<string, unknown>): string | undefined {
 
 function activeTabId(response: Record<string, unknown>): string | null {
   return (response.result as RuntimeMobileSessionTabsResult | undefined)?.activeTabId ?? null
+}
+
+function snapshotVersion(response: Record<string, unknown>): number {
+  return (response.result as RuntimeMobileSessionTabsResult | undefined)?.snapshotVersion ?? -1
 }
 
 function seedSessionTabs(runtime: OrcaRuntimeService): void {
@@ -409,11 +414,17 @@ describe('paired runtime navigation isolation', () => {
         notifyClients: false
       }
     })
-    expect(activeTabId(await harness.readerA.next('select-a2'))).toBe('client-a2-tab')
+    const selectA2 = await harness.readerA.next('select-a2')
+    expect(activeTabId(selectA2)).toBe('client-a2-tab')
 
     harness.runtime.notifyMobileSessionTabsChanged(SESSION_WORKTREE_ID)
     const [updateA, updateB] = await Promise.all([
-      harness.readerA.next('tabs-a', (response) => resultType(response) === 'updated'),
+      harness.readerA.next(
+        'tabs-a',
+        (response) =>
+          resultType(response) === 'updated' &&
+          snapshotVersion(response) >= snapshotVersion(selectA2)
+      ),
       harness.readerB.next('tabs-b', (response) => resultType(response) === 'updated')
     ])
     expect(activeTabId(updateA)).toBe('client-a2-tab')
@@ -577,5 +588,44 @@ describe('paired runtime navigation isolation', () => {
 
     expect(serverOne.hostSelections.tabId).toBe('host-tab')
     expect(serverTwo.hostSelections.tabId).toBe('host-tab')
+  })
+
+  it('restores a device tab selection after a runtime restart', async () => {
+    const persisted: { state: PersistedMobileClientTabSelections } = { state: {} }
+    const makeStoreWithSelections = () => ({
+      ...makeStore(),
+      getMobileClientTabSelections: () => persisted.state,
+      setMobileClientTabSelections: (next: PersistedMobileClientTabSelections) => {
+        persisted.state = next
+      }
+    })
+
+    const first = new OrcaRuntimeService(makeStoreWithSelections() as never)
+    first.attachWindow(1)
+    first.markGraphReady(1)
+    seedSessionTabs(first)
+    await first.activateMobileSessionTab(`id:${SESSION_WORKTREE_ID}`, 'client-a-tab', undefined, {
+      notifyClients: false,
+      clientNavigationId: 'device-a',
+      navigation: 'caller'
+    })
+    expect(persisted.state['device-a']?.[SESSION_WORKTREE_ID]?.activeTabId).toBe('client-a-tab')
+
+    const restarted = new OrcaRuntimeService(makeStoreWithSelections() as never)
+    restarted.attachWindow(1)
+    restarted.markGraphReady(1)
+    seedSessionTabs(restarted)
+    const remembered = await restarted.listMobileSessionTabs(
+      `id:${SESSION_WORKTREE_ID}`,
+      'device-a'
+    )
+    expect(remembered.activeTabId).toBe('client-a-tab')
+    expect(remembered.tabs.find((tab) => tab.isActive)?.id).toBe('client-a-tab')
+    // Why: an unknown device must still start from deterministic topology, not inherit another device's restored state.
+    const freshDevice = await restarted.listMobileSessionTabs(
+      `id:${SESSION_WORKTREE_ID}`,
+      'device-b'
+    )
+    expect(freshDevice.activeTabId).toBe('host-tab')
   })
 })

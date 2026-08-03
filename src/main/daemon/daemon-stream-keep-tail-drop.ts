@@ -33,10 +33,13 @@ export type PendingStreamDataBatch = {
   // Per-session held totals so the flush hold can spare small talkers
   // (echo/replies) from waiting behind other sessions' floods.
   queuedCharsBySession: Map<string, number>
+  // Membership is reconciled when queued data first appears and on rare
+  // background lifecycle changes, keeping steady-state enqueue constant-time.
+  droppableQueuedSessionIds: Set<string>
   // Last droppable-sessions-with-queued-data count seen by the keep-tail
   // logic: when it GROWS the shared budget tightens, and sessions that
   // finished producing must be re-trimmed (they will never re-enqueue).
-  lastDroppableSessionCount?: number
+  lastEvaluatedDroppableSessionCount?: number
 }
 
 // The keep-tail must comfortably cover a full TUI repaint (~cols×rows×SGR ≈

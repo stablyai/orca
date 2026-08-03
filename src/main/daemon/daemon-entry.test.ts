@@ -97,4 +97,17 @@ describe('daemon-entry parseArgs', () => {
   it('still requires --socket and --token when --log-file is given', () => {
     expect(() => parseArgs(['--log-file', '/tmp/daemon.log'])).toThrow('Usage:')
   })
+
+  it('parses the GUI-only --login-session-watch flag and omits it when absent', () => {
+    expect(
+      parseArgs(['--socket', '/tmp/t.sock', '--token', '/tmp/t.token', '--login-session-watch'])
+    ).toEqual({
+      socketPath: '/tmp/t.sock',
+      tokenPath: '/tmp/t.token',
+      loginSessionWatch: true
+    })
+    expect(parseArgs(['--socket', '/tmp/t.sock', '--token', '/tmp/t.token'])).not.toHaveProperty(
+      'loginSessionWatch'
+    )
+  })
 })

@@ -1,5 +1,5 @@
 import React from 'react'
-import { CircleCheck } from 'lucide-react'
+import { CircleCheck, MessageCircleQuestion } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 
@@ -95,6 +95,17 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     )
   }
 
+  if (state === 'permission' || state === 'waiting') {
+    return (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <MessageCircleQuestion className={cn('text-amber-500', icon)} aria-hidden="true" />
+      </span>
+    )
+  }
+
   return (
     <span
       className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
@@ -104,11 +115,9 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         className={cn(
           'block rounded-full',
           inner,
-          state === 'permission' || state === 'waiting'
-            ? 'bg-amber-500'
-            : state === 'blocked' || state === 'interrupted' || state === 'failed'
-              ? 'bg-red-500'
-              : 'bg-neutral-500/40'
+          state === 'blocked' || state === 'interrupted' || state === 'failed'
+            ? 'bg-red-500'
+            : 'bg-neutral-500/40'
         )}
       />
     </span>

@@ -10,6 +10,7 @@ import type { DiffSection } from './diff-section-types'
 import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
+import { monacoFindOptions } from './monaco-find-options'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -198,11 +199,7 @@ export function DiffSectionBody({
             renderOverviewRuler: false,
             scrollbar: combinedDiffSectionScrollbarOptions,
             hideUnchangedRegions: { enabled: true },
-            find: {
-              addExtraSpaceOnTop: false,
-              autoFindInSelection: 'never',
-              seedSearchStringFromSelection: 'never'
-            }
+            find: monacoFindOptions
           }}
         />
       )}

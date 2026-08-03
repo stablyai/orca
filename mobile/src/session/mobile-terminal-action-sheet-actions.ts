@@ -7,9 +7,12 @@ type TerminalTab = MobileNativeChatTab & { id: string; terminal: string | null }
 
 /** Builds the terminal long-press menu without adding another action block to the
  *  already dense session route. Native chat stays first as the view switch. */
-export function getMobileTerminalActionSheetActions<Target extends { handle: string }>(args: {
+export function getMobileTerminalActionSheetActions<
+  Target extends { handle: string },
+  Tab extends TerminalTab
+>(args: {
   target: Target | null
-  tabs: readonly TerminalTab[]
+  tabs: readonly Tab[]
   isTabChatView: (tabId: string) => boolean
   nativeChatTranscriptIsLocalReadable: boolean
   onDismiss: () => void
@@ -18,13 +21,20 @@ export function getMobileTerminalActionSheetActions<Target extends { handle: str
   onToggleDisplayMode: (handle: string) => void
   onRename: (target: Target) => void
   onClear: (target: Target) => void
+  /** Fallback for a live handle with no matching session tab. */
   onClose: (target: Target) => void
+  /** Preferred path runs host teardown and records the local tombstone. */
+  onCloseSessionTab: (tab: Tab) => void
+  /** Appended after Close; receives the pressed tab's id so the session route's
+   *  bulk-close builder can resolve the anchor itself. */
+  bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
 }): ActionSheetAction[] {
   const { target } = args
   if (!target) {
     return []
   }
   const phoneMode = args.isPhoneMode(target.handle)
+  const sessionTab = args.tabs.find((tab) => tab.terminal === target.handle)
   return [
     ...getMobileNativeChatToggleActions({
       terminalHandle: target.handle,
@@ -44,8 +54,8 @@ export function getMobileTerminalActionSheetActions<Target extends { handle: str
     },
     {
       label: 'Rename',
+      closeBeforePress: true,
       onPress: () => {
-        args.onDismiss()
         args.onRename(target)
       }
     },
@@ -62,8 +72,13 @@ export function getMobileTerminalActionSheetActions<Target extends { handle: str
       destructive: true,
       onPress: () => {
         args.onDismiss()
+        if (sessionTab) {
+          args.onCloseSessionTab(sessionTab)
+          return
+        }
         args.onClose(target)
       }
-    }
+    },
+    ...(args.bulkCloseActions?.(sessionTab?.id, args.onDismiss) ?? [])
   ]
 }

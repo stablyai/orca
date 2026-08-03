@@ -1,5 +1,8 @@
 import type { FsChangeEvent } from '../../shared/types'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import {
+  createNormalizedPathInsideOrEqualMatcher,
+  normalizeRuntimePathForComparison
+} from '../../shared/cross-platform-path'
 import {
   failSshFilesystemWatchRegistration,
   type WatchRegistration
@@ -12,10 +15,17 @@ export function routeSshFilesystemWatchNotification(
 ): void {
   if (method === 'fs.changed') {
     const events = params.events as FsChangeEvent[]
+    // Why normalize once: isPathInsideOrEqual NFC-normalizes both sides, so the
+    // nested fan-out re-normalized every event path once per watch root.
+    const normalizedEvents = events.map((event) => ({
+      event,
+      normalizedPath: normalizeRuntimePathForComparison(event.absolutePath)
+    }))
     for (const registration of registrations.values()) {
-      const matching = events.filter((event) =>
-        isPathInsideOrEqual(registration.rootPath, event.absolutePath)
-      )
+      const isInsideRoot = createNormalizedPathInsideOrEqualMatcher(registration.rootPath)
+      const matching = normalizedEvents
+        .filter(({ normalizedPath }) => isInsideRoot(normalizedPath))
+        .map(({ event }) => event)
       if (matching.length > 0) {
         for (const callback of registration.callbacks) {
           callback(matching)

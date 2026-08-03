@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { MobileNotificationEvent } from './orca-runtime'
 
 // Why: when a mobile client's socket is reaped (background/sleep, or a warm
@@ -22,6 +23,9 @@ import type { MobileNotificationEvent } from './orca-runtime'
 // single field name end-to-end is what makes live and replay interchangeable.
 export type ReplayableMobileNotification = MobileNotificationEvent & {
   notificationSeq: number
+  // The counter lifetime `notificationSeq` belongs to. Lets a client tell "seq 3
+  // is older than my watermark" from "seq 3 came from a counter I've never seen".
+  notificationEpoch: string
 }
 
 // Why: bound the buffer. 256 completes a few minutes of real agent activity and
@@ -35,9 +39,20 @@ export class MobileNotificationReplayBuffer {
   private readonly capacity: number
   private seq = 0
   private readonly buffer: ReplayableMobileNotification[] = []
+  // Why: `seq` restarts at 0 every desktop launch, but the client's watermark is
+  // persisted and monotonic. After a desktop restart a client holding seq 57 meets
+  // a counter at 3, `57 >= 3` cuts everything, and catch-up stays silently dead
+  // until the new process dispatches 57 notifications. The epoch names the counter's
+  // lifetime so both sides can tell "nothing missed" from "different counter".
+  private readonly epochId: string = randomUUID()
 
   constructor(capacity: number = DEFAULT_CAPACITY) {
     this.capacity = capacity
+  }
+
+  // Identifies this counter's lifetime. Changes on every desktop restart.
+  get epoch(): string {
+    return this.epochId
   }
 
   // Records a dispatched event and returns the monotonic seq assigned to it.
@@ -45,7 +60,7 @@ export class MobileNotificationReplayBuffer {
   // (both on the live fan-out and on explicit catch-up requests).
   record(event: MobileNotificationEvent): number {
     const seq = ++this.seq
-    this.buffer.push({ ...event, notificationSeq: seq })
+    this.buffer.push({ ...event, notificationSeq: seq, notificationEpoch: this.epochId })
     if (this.buffer.length > this.capacity) {
       // Why: insertion-order array; oldest entries sit at the front.
       this.buffer.splice(0, this.buffer.length - this.capacity)
@@ -56,7 +71,16 @@ export class MobileNotificationReplayBuffer {
   // Returns every recorded event with seq strictly greater than lastSeenSeq.
   // Because seq is monotonic and global, this is an exact, idempotent cut:
   // the same lastSeenSeq always yields the same result.
-  getMissedSince(lastSeenSeq: number): ReplayableMobileNotification[] {
+  //
+  // `epoch` is the counter lifetime the caller's watermark came from. A mismatch
+  // means the watermark indexes a counter this process no longer has, so it is
+  // meaningless here and the whole retained buffer is returned instead — every
+  // entry in it postdates the restart, so none can have reached that client.
+  // Omitting `epoch` keeps the seq-only cut, for clients that predate the field.
+  getMissedSince(lastSeenSeq: number, epoch?: string): ReplayableMobileNotification[] {
+    if (epoch !== undefined && epoch !== this.epochId) {
+      return [...this.buffer]
+    }
     if (lastSeenSeq >= this.seq) {
       return []
     }

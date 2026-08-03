@@ -14,12 +14,12 @@ describe('resource manager terminal copy', () => {
   it('points users from the status-bar count back to workspace terminals', () => {
     expect(
       getResourceManagerTooltipLines({
-        memoryLabel: '512 MB',
+        memoryLabel: '512 MB · Σ RSS',
         sessionCount: 2,
         spaceScanReady: false
       })
     ).toEqual([
-      'Resource Manager - 512 MB - 2 terminal sessions',
+      'Resource Manager - 512 MB · Σ RSS - 2 terminal sessions',
       'Terminal sessions are grouped by workspace.'
     ])
   })

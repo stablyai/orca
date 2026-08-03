@@ -67,9 +67,11 @@ export function encodeRawMarkdownHtmlForRichEditor(
   let result = ''
 
   while (index < normalizedContent.length) {
-    const lineRest = normalizedContent.slice(index)
-
     if (isLineStart) {
+      // Why: only line starts inspect the rest of the line, so slicing the suffix on every
+      // character (one throwaway string per char) is pure waste — compute it here. On a large
+      // doc this drops O(n) suffix allocations from the rich-editor open path (#7056).
+      const lineRest = normalizedContent.slice(index)
       const fenceMatch = lineRest.match(/^\s*(`{3,}|~{3,})/)
       if (fenceMatch) {
         const fenceChar = fenceMatch[1][0] as '`' | '~'

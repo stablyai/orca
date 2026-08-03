@@ -617,8 +617,14 @@ function readFileForEchoVerification(args: {
   relativePath: string
   worktreeId: string | null | undefined
   connectionId: string | undefined
+  expectedExternalSshTargetId?: string
 }): ReturnType<typeof readRuntimeFileContent> {
-  const key = `${args.runtimeEnvironmentId ?? ''}::${args.connectionId ?? ''}::${args.filePath}`
+  const key = [
+    args.runtimeEnvironmentId ?? '',
+    args.connectionId ?? '',
+    args.expectedExternalSshTargetId ?? '',
+    args.filePath
+  ].join('::')
   let pending = inFlightEchoVerificationReads.get(key)
   if (!pending) {
     pending = readRuntimeFileContent({
@@ -628,7 +634,8 @@ function readFileForEchoVerification(args: {
       filePath: args.filePath,
       relativePath: args.relativePath,
       worktreeId: args.worktreeId ?? undefined,
-      connectionId: args.connectionId
+      connectionId: args.connectionId,
+      expectedExternalSshTargetId: args.expectedExternalSshTargetId
     })
     inFlightEchoVerificationReads.set(key, pending)
     const release = (): void => {
@@ -791,7 +798,8 @@ function scheduleSelfMoveEchoVerification(
       filePath: file.filePath,
       relativePath: file.relativePath,
       worktreeId: file.worktreeId,
-      connectionId: target.connectionId
+      connectionId: target.connectionId,
+      expectedExternalSshTargetId: file.externalSshTargetId
     })
       .then((result) => {
         const diskSignature = result.isBinary ? null : getDiskBaselineSignature(result.content)
@@ -826,7 +834,8 @@ function scheduleSelfWriteAwareExternalReload(
     filePath: file.filePath,
     relativePath: file.relativePath,
     worktreeId: file.worktreeId,
-    connectionId: target.connectionId
+    connectionId: target.connectionId,
+    expectedExternalSshTargetId: file.externalSshTargetId
   })
     .then((result) => {
       if (

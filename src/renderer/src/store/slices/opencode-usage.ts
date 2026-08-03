@@ -45,7 +45,14 @@ export const createOpenCodeUsageSlice: StateCreator<AppState, [], [], OpenCodeUs
     try {
       const nextScanState = (await window.api.openCodeUsage.setEnabled({
         enabled
-      })) as OpenCodeUsageScanState
+      })) as OpenCodeUsageScanState | undefined
+      // Why: the web client (paired runtime) does not bridge the desktop-only
+      // usage IPC; its preload fallback resolves this call to `undefined`. Bail
+      // so the toggle no-ops instead of seeding an empty scan state and then
+      // crashing on the follow-up fetch.
+      if (!nextScanState) {
+        return
+      }
       set({
         openCodeUsageScanState: enabled
           ? {
@@ -81,7 +88,16 @@ export const createOpenCodeUsageSlice: StateCreator<AppState, [], [], OpenCodeUs
 
   fetchOpenCodeUsage: async (opts) => {
     try {
-      const scanState = (await window.api.openCodeUsage.getScanState()) as OpenCodeUsageScanState
+      const scanState = (await window.api.openCodeUsage.getScanState()) as
+        | OpenCodeUsageScanState
+        | undefined
+      // Why: in the web client the usage IPC is unavailable and the preload
+      // fallback resolves to `undefined`; reading `scanState.enabled` below would
+      // throw `Cannot read properties of undefined (reading 'enabled')`. Treat an
+      // absent scan state as "usage unavailable" and stop.
+      if (!scanState) {
+        return
+      }
       const currentScanState = get().openCodeUsageScanState
       const shouldPreserveLoadingState =
         opts?.forceRefresh === true &&

@@ -8,8 +8,10 @@ const projectDir = resolve(import.meta.dirname, '../..')
 // installable stub projection is checked separately below.
 const guidePath = join(projectDir, 'skill-guides', 'orca-cli.md')
 const stubPath = join(projectDir, 'skills', 'orca-cli', 'SKILL.md')
-const orchestrationSkillPath = join(projectDir, 'skills', 'orchestration', 'SKILL.md')
-const emulatorSkillPath = join(projectDir, 'skills', 'orca-emulator', 'SKILL.md')
+// Why: orchestration and orca-emulator also ship hybrid stubs now, so their version-sensitive
+// command guidance lives in the guide sources — read the cross-guide worktree-id contract there.
+const orchestrationSkillPath = join(projectDir, 'skill-guides', 'orchestration.md')
+const emulatorSkillPath = join(projectDir, 'skill-guides', 'orca-emulator.md')
 
 function readSkill(path = guidePath) {
   return readFileSync(path, 'utf8')

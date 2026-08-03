@@ -1,14 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  SectionList,
-  Pressable,
-  ActivityIndicator,
-  Alert,
-  RefreshControl
-} from 'react-native'
+import { View, Text, StyleSheet, SectionList, Pressable, Alert, RefreshControl } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
@@ -38,6 +29,7 @@ import {
   useForceReconnect
 } from '../../../src/transport/client-context'
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
+import { startHostWorktreeRefresh } from '../../../src/worktree/host-worktree-refresh'
 import {
   useLastConnectedAt,
   useReconnectAttempt
@@ -61,7 +53,7 @@ import { buildWorktreeNavigationActions } from '../../../src/agent-history/workt
 import { floatingWorkspaceSessionPath } from '../../../src/session/floating-workspace'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
-import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen'
+import { useHostProtocolGates } from '../../../src/components/HostProtocolGate'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
 import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
@@ -70,7 +62,6 @@ import { setCachedRepos } from '../../../src/cache/repo-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { leaveHostRoute } from '../../../src/host-route-exit'
-import { useHostStatusGates } from '../../../src/transport/host-status-gates'
 import { loadPinnedIds, savePinnedIds } from '../../../src/storage/preferences'
 import {
   createInitialHostRouteActionState,
@@ -94,6 +85,8 @@ import {
 import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sections'
 import { getMobileWorkspaceLineageGroupKey } from '../../../src/worktree/mobile-workspace-lineage'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
+import { WorktreeCatalogSnapshotClient } from '../../../src/worktree/worktree-catalog-snapshot-client'
+import { HostWorkspaceListStates } from '../../../src/worktree/host-workspace-list-states'
 import { repoColor } from '../../../src/worktree/repo-color'
 import {
   WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
@@ -141,7 +134,11 @@ export function HostScreen({
   const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const fetchWorktreesInFlightRef = useRef(false)
-  const fetchRepoMetadataInFlightRef = useRef(false)
+  // Why: useRef, not useMemo — React may discard memoized values, which would silently
+  // reset the snapshot token this object exists to own.
+  const worktreeCatalogRef = useRef(new WorktreeCatalogSnapshotClient())
+  const fetchRepoMetadataInFlightRef = useRef(new WeakSet<RpcClient>())
+  const fetchRepoMetadataPendingRef = useRef(new WeakSet<RpcClient>())
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const newWorktreeModalVisibleRef = useRef(false)
@@ -149,6 +146,9 @@ export function HostScreen({
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
+  // Why (STA-3123): error code of the last failed worktree.ps, so a broken catalog
+  // path renders as a failure instead of an empty host. Cleared on the next success.
+  const [catalogError, setCatalogError] = useState<string | null>(null)
   // Why: track the locally-opened worktree so the active-row highlight moves instantly instead of waiting for the next poll.
   const [optimisticActiveWorktreeId, setOptimisticActiveWorktreeId] = useState<string | null>(null)
   // One tick drives every visible agent row's relative timestamp.
@@ -176,11 +176,7 @@ export function HostScreen({
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
-  const { hostCapabilities, floatingWorkspaceEnabled, compatVerdict } = useHostStatusGates({
-    hostId,
-    client,
-    connState
-  })
+  const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [routeActionState, setRouteActionState] = useState(() =>
@@ -325,6 +321,7 @@ export function HostScreen({
     repoMetadataFetchedAtRef.current = 0
     // Why: useState initializer runs only on first mount, so re-seed the cache when Expo Router reuses this screen for a new hostId.
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
+    setCatalogError(null)
     if (freshCache) {
       setWorktrees(freshCache)
       setLastKnownWorktrees(freshCache)
@@ -356,48 +353,54 @@ export function HostScreen({
   }, [hostId])
 
   const fetchRepoMetadata = useCallback(
-    async (options: { force?: boolean } = {}) => {
+    async (options: { force?: boolean; queueIfInFlight?: boolean } = {}) => {
       if (!client || connState !== 'connected' || !hostId) {
         return
       }
-      if (fetchRepoMetadataInFlightRef.current) {
+      if (fetchRepoMetadataInFlightRef.current.has(client)) {
+        if (options.queueIfInFlight) {
+          fetchRepoMetadataPendingRef.current.add(client)
+        }
         return
       }
       const now = Date.now()
       if (!options.force && now - repoMetadataFetchedAtRef.current < REPO_METADATA_REFRESH_MS) {
         return
       }
-      fetchRepoMetadataInFlightRef.current = true
+      fetchRepoMetadataInFlightRef.current.add(client)
       const requestClient = client,
         requestHostId = hostId
       try {
-        const repoResponse = await requestClient.sendRequest('repo.list')
-        if (clientRef.current !== requestClient || hostId !== requestHostId || !repoResponse.ok) {
-          return
-        }
-        const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
-        repoMetadataFetchedAtRef.current = Date.now()
-        setCachedRepos(requestHostId, repoResult.repos)
-        setRepoColorsByName(
-          new Map(
-            repoResult.repos.map((repo) => [
-              repo.displayName,
-              repo.badgeColor || repoColor(repo.displayName)
-            ])
-          )
-        )
-        setRepoIconsByName(
-          new Map(
-            repoResult.repos.flatMap((repo) =>
-              repo.repoIcon ? [[repo.displayName, repo.repoIcon] as const] : []
+        do {
+          fetchRepoMetadataPendingRef.current.delete(requestClient)
+          const repoResponse = await requestClient.sendRequest('repo.list')
+          if (clientRef.current !== requestClient || hostId !== requestHostId || !repoResponse.ok) {
+            return
+          }
+          const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
+          repoMetadataFetchedAtRef.current = Date.now()
+          setCachedRepos(requestHostId, repoResult.repos)
+          setRepoColorsByName(
+            new Map(
+              repoResult.repos.map((repo) => [
+                repo.displayName,
+                repo.badgeColor || repoColor(repo.displayName)
+              ])
             )
           )
-        )
-        setRepoIdsByName(new Map(repoResult.repos.map((repo) => [repo.displayName, repo.id])))
+          setRepoIconsByName(
+            new Map(
+              repoResult.repos.flatMap((repo) =>
+                repo.repoIcon ? [[repo.displayName, repo.repoIcon] as const] : []
+              )
+            )
+          )
+          setRepoIdsByName(new Map(repoResult.repos.map((repo) => [repo.displayName, repo.id])))
+        } while (fetchRepoMetadataPendingRef.current.has(requestClient))
       } catch {
-        // Repo metadata is decorative; the next throttled refresh can retry.
+        // Repo metadata is decorative; the next refresh can retry.
       } finally {
-        fetchRepoMetadataInFlightRef.current = false
+        fetchRepoMetadataInFlightRef.current.delete(requestClient)
       }
     },
     [client, connState, hostId]
@@ -420,31 +423,42 @@ export function HostScreen({
       const requestHostId = hostId
 
       try {
-        // Why: worktree.ps silently truncates at 200; use a high cap so large hosts don't drop workspaces.
-        const response = await requestClient.sendRequest('worktree.ps', { limit: 10000 })
+        const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
         if (clientRef.current !== requestClient || hostId !== requestHostId) {
           return
         }
         if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
           return
         }
-        if (response.ok) {
-          const result = (response as RpcSuccess).result as { worktrees: Worktree[] }
+        // Why (STA-3123): a failed catalog request must not pass for "0 worktrees";
+        // surface it so a broken remote host is diagnosable instead of looking empty.
+        if (fetched.kind === 'request_failed') {
+          setCatalogError(fetched.code)
+          return
+        }
+        if (fetched.pending.admission.kind === 'invalid') {
+          setCatalogError('invalid_response')
+        }
+        // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
+        // host truth over optimistic local edits regardless of payload size.
+        const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
+        if (confirmed) {
+          setCatalogError(null)
           // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
           setWorktrees((current) =>
-            areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
+            areWorktreeListsEqual(current, confirmed) ? current : confirmed
           )
           setLastKnownWorktrees((current) =>
-            areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
+            areWorktreeListsEqual(current, confirmed) ? current : confirmed
           )
           setWorktreesLoaded(true)
           // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
           if (hostId) {
-            setCachedWorktrees(hostId, result.worktrees)
+            setCachedWorktrees(hostId, confirmed)
           }
           // Drop the optimistic active override once the host reports it active, so later desktop changes win.
           setOptimisticActiveWorktreeId((pending) =>
-            pending && result.worktrees.some((w) => w.worktreeId === pending && w.isActive)
+            pending && confirmed.some((w) => w.worktreeId === pending && w.isActive)
               ? null
               : pending
           )
@@ -456,7 +470,7 @@ export function HostScreen({
             }
             const still = new Set<string>()
             for (const id of prev) {
-              const wt = result.worktrees.find((w) => w.worktreeId === id)
+              const wt = confirmed.find((w) => w.worktreeId === id)
               if (wt && wt.liveTerminalCount > 0) {
                 still.add(id)
               }
@@ -465,9 +479,7 @@ export function HostScreen({
           })
 
           // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
-          const serverPinned = new Set(
-            result.worktrees.filter((w) => w.isPinned).map((w) => w.worktreeId)
-          )
+          const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
           setPinnedIds((prev) => {
             if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
               return prev
@@ -480,6 +492,9 @@ export function HostScreen({
         }
       } catch {
         // Will retry on reconnect
+        if (clientRef.current === requestClient && hostId === requestHostId) {
+          setCatalogError('network_error')
+        }
       } finally {
         fetchWorktreesInFlightRef.current = false
       }
@@ -494,39 +509,29 @@ export function HostScreen({
     }, [])
   )
 
-  useFocusEffect(
-    useCallback(() => {
-      // The embedded sidebar isn't a routed screen (focus never fires); it polls via the mount effect below.
-      if (embedded || connState !== 'connected') {
-        return
-      }
-      void fetchWorktrees()
-      void fetchRepoMetadata()
-      // Pull desktop's shared view settings on focus so desktop changes show up without a manual refresh.
-      void syncViewSettingsFromDesktop()
-      // Why: React Navigation keeps prior screens mounted; only poll while this route is visible.
-      const interval = setInterval(() => {
-        void fetchWorktrees()
-        void fetchRepoMetadata()
-      }, 3000)
-      return () => clearInterval(interval)
-    }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
-  )
-
-  // Why: the embedded sidebar is never the focused route, so useFocusEffect never polls; mirror it from a mount effect.
-  useEffect(() => {
-    if (!embedded || connState !== 'connected') {
+  const startWorktreeRefresh = useCallback(() => {
+    if (!client || connState !== 'connected') {
       return
     }
-    void fetchWorktrees()
-    void fetchRepoMetadata()
     void syncViewSettingsFromDesktop()
-    const interval = setInterval(() => {
-      void fetchWorktrees()
-      void fetchRepoMetadata()
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+    return startHostWorktreeRefresh({ client, fetchWorktrees, fetchRepoMetadata })
+  }, [client, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+
+  useFocusEffect(
+    useCallback(() => {
+      // The embedded sidebar isn't a routed screen (focus never fires); it refreshes via the mount effect below.
+      if (!embedded) {
+        return startWorktreeRefresh()
+      }
+    }, [embedded, startWorktreeRefresh])
+  )
+
+  // Why: the embedded sidebar is never the focused route, so wire its refresh lifecycle from a mount effect.
+  useEffect(() => {
+    if (embedded) {
+      return startWorktreeRefresh()
+    }
+  }, [embedded, startWorktreeRefresh])
 
   // Why (#8498): steady-state polls miss the transition INTO 'connected' after background/sleep, when the cache is stalest.
   const { refreshing, onRefresh } = useWorktreeResync({
@@ -745,14 +750,16 @@ export function HostScreen({
   const toggleCollapsed = useCallback(
     (key: string) => {
       const next = new Set(viewStateRef.current.collapsedGroups)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
+      if (!next.delete(key)) {
         next.add(key)
       }
       persistViewSettings({ collapsedGroups: [...next] })
     },
     [persistViewSettings]
+  )
+  const toggleWorktreeLineage = useCallback(
+    (item: Worktree) => toggleCollapsed(getMobileWorkspaceLineageGroupKey(item.worktreeId)),
+    [toggleCollapsed]
   )
   const { sections, rawSections, uniqueRepos, uniqueRepoColors } = useWorkspaceSections({
     displayWorktrees,
@@ -778,10 +785,6 @@ export function HostScreen({
         <Text style={styles.errorText}>{error}</Text>
       </View>
     )
-  }
-
-  if (compatVerdict.kind === 'blocked') {
-    return <ProtocolBlockScreen verdict={compatVerdict} />
   }
 
   return (
@@ -1105,27 +1108,15 @@ export function HostScreen({
         </View>
       )}
 
-      {/* Loading state */}
-      {((connState === 'connecting' || connState === 'reconnecting') &&
-        displayWorktrees.length === 0) ||
-      (connState === 'connected' && !worktreesLoaded && displayWorktrees.length === 0) ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
-      ) : null}
-
-      {/* Empty state */}
-      {connState === 'connected' && worktreesLoaded && sections.length === 0 && (
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>
-            {search
-              ? 'No matching worktrees'
-              : activeFilterCount > 0
-                ? 'No worktrees match filters'
-                : 'No worktrees'}
-          </Text>
-        </View>
-      )}
+      <HostWorkspaceListStates
+        connState={connState}
+        worktreesLoaded={worktreesLoaded}
+        displayCount={displayWorktrees.length}
+        sectionCount={sections.length}
+        catalogError={catalogError}
+        search={search}
+        activeFilterCount={activeFilterCount}
+      />
 
       {sections.length > 0 && (
         <SectionList
@@ -1200,9 +1191,7 @@ export function HostScreen({
               hideRepo={groupMode === 'repo'}
               onPress={openWorktreeSession}
               onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
-              onToggleLineage={(row) =>
-                toggleCollapsed(getMobileWorkspaceLineageGroupKey(row.worktreeId))
-              }
+              onToggleLineage={toggleWorktreeLineage}
             />
           )}
         />

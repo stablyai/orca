@@ -61,6 +61,7 @@ export class WebSocketTransport implements RpcTransport {
     | null = null
   // Why: maps each socket to its authenticated clientId so close can report which device disconnected.
   private wsClientIds = new Map<WebSocket, string>()
+  private heartbeatConnections = new Set<WebSocket>()
   private preAuthTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
 
   constructor({
@@ -147,8 +148,11 @@ export class WebSocketTransport implements RpcTransport {
         await this.tryListen(port)
         return
       } catch (error: unknown) {
-        // Why: any fallback-port failure must degrade to the next candidate (Windows can reserve the port → EACCES, not just EADDRINUSE); only non-EADDRINUSE preferred-port failures are fatal.
-        if (port !== persistedFallbackPort && (!isEAddressInUse(error) || port === 0)) {
+        // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.
+        if (
+          port !== persistedFallbackPort &&
+          (!isPortListenFallbackError(error, port) || port === 0)
+        ) {
           throw error
         }
         console.warn(
@@ -199,7 +203,6 @@ export class WebSocketTransport implements RpcTransport {
 
     this.httpServer = httpServer
     this.wss = wss
-    this.heartbeat.start(() => this.wss?.clients ?? [])
   }
 
   // Why: force-terminate soon after the 1013 close since a half-open phone may never ack and would hold the descriptor past the WS cap; the 'error' listener absorbs a reset while closing.
@@ -217,6 +220,7 @@ export class WebSocketTransport implements RpcTransport {
     this.wss = null
     this.httpServer = null
     this.heartbeat.stop()
+    this.heartbeatConnections.clear()
 
     if (wss) {
       for (const client of wss.clients) {
@@ -280,6 +284,10 @@ export class WebSocketTransport implements RpcTransport {
       ws.off('close', finalizeConnection)
       ws.off('error', onError)
       this.clearPreAuthTimer(ws)
+      this.heartbeatConnections.delete(ws)
+      if (this.heartbeatConnections.size === 0) {
+        this.heartbeat.stop()
+      }
       const clientId = this.wsClientIds.get(ws) ?? null
       this.wsClientIds.delete(ws)
       const hasOtherConnections =
@@ -298,15 +306,19 @@ export class WebSocketTransport implements RpcTransport {
     }
     this.preAuthTimers.set(ws, preAuthTimer)
 
-    // Why: seed alive so the first heartbeat tick doesn't reap a fresh socket before its first pong.
-    this.heartbeat.noteAlive(ws)
-
     ws.on('pong', onPong)
     ws.on('message', onMessage)
 
     // Why: clean up connection-scoped state (e.g. mobile-fit overrides) so a dropped phone doesn't leave orphaned phone-fit on desktop.
     ws.on('close', finalizeConnection)
     ws.on('error', onError)
+
+    // Why: every lifecycle event must have an owner before the first synchronous probe.
+    this.heartbeatConnections.add(ws)
+    this.heartbeat.noteAlive(ws)
+    if (this.heartbeatConnections.size === 1) {
+      this.heartbeat.start(() => this.wss?.clients ?? [])
+    }
   }
 
   private clearPreAuthTimer(ws: WebSocket): void {
@@ -318,6 +330,18 @@ export class WebSocketTransport implements RpcTransport {
   }
 }
 
-function isEAddressInUse(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'EADDRINUSE'
+function isPortListenFallbackError(error: unknown, port: number): boolean {
+  if (!(error instanceof Error) || !('code' in error)) {
+    return false
+  }
+  if (error.code === 'EADDRINUSE') {
+    return true
+  }
+  return (
+    error.code === 'EACCES' &&
+    'syscall' in error &&
+    error.syscall === 'listen' &&
+    'port' in error &&
+    error.port === port
+  )
 }

@@ -105,6 +105,12 @@ export default function TabGroupPanel({
           commands.closeToRight(item.id)
         }
       }}
+      onCloseToLeft={(visibleId) => {
+        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
+        if (item) {
+          commands.closeToLeft(item.id)
+        }
+      }}
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}

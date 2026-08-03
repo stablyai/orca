@@ -368,6 +368,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
+  const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -1051,10 +1052,22 @@ export default function AutomationsPage(): React.JSX.Element {
     useAppStore.getState().hydratePersistedUI(await window.api.ui.get(), 'sync')
   }, [])
 
+  const mountedBeforeStartupWorktreeRefreshRef = useRef(!startupWorktreeRefreshCompleted)
   useEffect(() => {
+    if (!startupWorktreeRefreshCompleted) {
+      return
+    }
+    if (mountedBeforeStartupWorktreeRefreshRef.current) {
+      // Why: App just supplied this mount's initial worktrees; a second full scan would duplicate every repo probe.
+      mountedBeforeStartupWorktreeRefreshRef.current = false
+      return
+    }
     void fetchAllWorktrees()
+  }, [fetchAllWorktrees, startupWorktreeRefreshCompleted])
+
+  useEffect(() => {
     void refresh()
-  }, [fetchAllWorktrees, refresh])
+  }, [refresh])
 
   useEffect(() => {
     // Pause the relative-time clock while the window is hidden.

@@ -41,6 +41,9 @@ const CJK_DIRECT_PUNCTUATION_KEYS = new Set<string>([
   '『',
   '』',
   '￥',
+  // Korean sources put ₩ on Backquote; its committed text can differ from
+  // `key` when DefaultKeyBinding.dict rewrites it (typically back to `).
+  '₩',
   '～',
   '·',
   '…'
@@ -81,6 +84,21 @@ function isAsciiPunctuationKey(key: string): boolean {
 
 function isCjkDirectPunctuationKey(key: string): boolean {
   return Array.from(key).length === 1 && CJK_DIRECT_PUNCTUATION_KEYS.has(key)
+}
+
+function isHangulJamoKey(key: string): boolean {
+  const chars = Array.from(key)
+  if (chars.length !== 1) {
+    return false
+  }
+  const codePoint = chars[0].codePointAt(0)!
+  return (
+    (codePoint >= 0x1100 && codePoint <= 0x11ff) ||
+    (codePoint >= 0x3130 && codePoint <= 0x318f) ||
+    (codePoint >= 0xa960 && codePoint <= 0xa97f) ||
+    (codePoint >= 0xd7b0 && codePoint <= 0xd7ff) ||
+    (codePoint >= 0xffa0 && codePoint <= 0xffdc)
+  )
 }
 
 function isAsciiShortTextReplacementKey(key: string): boolean {
@@ -138,6 +156,9 @@ export function isImeNativeTextKeydownCandidate(
     return false
   }
   if (isSyntheticUnicodeTextKey(event)) {
+    return true
+  }
+  if (inputSourceFeatures.forwardHangulJamo && isHangulJamoKey(event.key)) {
     return true
   }
   if (isCjkDirectPunctuationKey(event.key)) {

@@ -10,6 +10,10 @@ vi.mock('fs/promises', () => ({
 }))
 
 vi.mock('./worktree-base-directory-poller', () => ({
+  createWorktreePollerWindowVisibility: vi.fn(() => ({
+    isWindowVisible: () => true,
+    onWindowBecameVisible: () => () => {}
+  })),
   startWorktreeBaseDirectoryPoller: vi.fn()
 }))
 

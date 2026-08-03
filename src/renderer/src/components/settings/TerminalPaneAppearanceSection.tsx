@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY } from '../../../../shared/constants'
 import { NumberField, SettingsSubsectionHeader } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
@@ -47,7 +48,7 @@ export function TerminalPaneAppearanceSection({
               'Dim unfocused panes.'
             )}
             value={paneStyleOptions.inactivePaneOpacity}
-            defaultValue={0.8}
+            defaultValue={DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY}
             min={0}
             max={1}
             step={0.05}

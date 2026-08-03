@@ -3,9 +3,13 @@ import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
-import { shouldStepNativeChatAskAnswer } from '../../../../shared/native-chat-agent-support'
+import {
+  resolveNativeChatTranscriptAgent,
+  shouldStepNativeChatAskAnswer
+} from '../../../../shared/native-chat-agent-support'
 import {
   buildAskAnswerKeys,
+  buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   type AskAnswerSelection,
@@ -42,9 +46,8 @@ export type NativeChatInteractiveSend = {
  * Reuse the desktop composer's exact send path for the interactive cards:
  * resolve this tab's live ptyId + runtime owner settings, then write bytes via
  * `sendRuntimePtyInput` (which branches local pty:write vs remote runtime RPC,
- * so SSH panes work unchanged). Claude's AskUserQuestion answers are delivered
- * as selector keystrokes (by option number, `sendNativeChatAskAnswer`); other
- * agents' question tools commit a pasted answer, so those still go through
+ * so SSH panes work unchanged). Claude and Codex answers use their respective
+ * selector keystrokes via `sendNativeChatAskAnswer`; other agents still go through
  * `sendNativeChatMessage`. Control strings (option digits, ESC) are written raw.
  */
 export function useNativeChatInteractiveSend(
@@ -90,13 +93,10 @@ export function useNativeChatInteractiveSend(
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
       const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
-      // Claude's AskUserQuestion is an arrow-navigate selector: it commits by the
-      // highlighted option, not a pasted label, so answer it with per-option
-      // keystrokes (by option number), paced so each step renders before the next.
-      // Other agents' question tools commit a pasted answer, so send label text.
-      // Gate on the transcript agent (not `=== 'claude'`) so OpenClaude — which
-      // runs the same selector — takes the keystroke path too.
+      // Claude and Codex ignore pasted labels but have different selector state
+      // machines; Grok commits pasted text. OpenClaude follows Claude's path.
       const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
+      const buildsCodexAnswer = resolveNativeChatTranscriptAgent(agent) === 'codex'
       // Why: pin the answered question's baseline BEFORE delivery. A late settle
       // callback (paced writes + remote acceptance can span seconds on SSH) must
       // not read the live status and mint a fresh baseline for a replacement
@@ -132,7 +132,9 @@ export function useNativeChatInteractiveSend(
         ? sendNativeChatAskAnswer(
             settings,
             targetPtyId,
-            buildAskAnswerKeys(prompt, selections),
+            buildsCodexAnswer
+              ? buildCodexAskAnswerKeys(prompt, selections)
+              : buildAskAnswerKeys(prompt, selections),
             onSettled
           )
         : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))

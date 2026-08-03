@@ -164,8 +164,15 @@ function resolveHostGitHubCli(command: 'gh', args: string[]): ResolvedCommand {
   }
 }
 
+let defaultWslDistroOverride: string | null = null
+
+// Why: allow host commands fallback to route through the user's pinned WSL distro when host execution fails.
+export function setDefaultWslDistroOverride(distro: string | null): void {
+  defaultWslDistroOverride = distro
+}
+
 function resolveDefaultWslCli(command: 'gh' | 'glab', args: string[]): ResolvedCommand | null {
-  const distro = getDefaultWslDistro()
+  const distro = defaultWslDistroOverride ?? getDefaultWslDistro()
   return distro ? resolveCommand(command, args, undefined, distro) : null
 }
 
@@ -249,7 +256,7 @@ function resolveCommand(
 
 // ─── Git-specific runners ───────────────────────────────────────────
 
-// Why: execFile disables its cap when maxBuffer is undefined; unbounded output over V8's string max crashes main uncatchably — keep in sync with relay MAX_GIT_BUFFER.
+// Why: cap execFile output to prevent an uncatchable V8 string overflow; match relay MAX_GIT_BUFFER.
 export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
 
 type GitExecOptions = {
@@ -271,6 +278,7 @@ type CommandExecOptions = {
   timeout?: number
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
+  wslDistro?: string
 }
 
 function isMissingCommandError(error: unknown): boolean {
@@ -872,23 +880,24 @@ export async function commandExecFileAsync(
   args: string[],
   options: CommandExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
-  const resolved = resolveCommand(command, args, options.cwd)
+  const { wslDistro, ...execOptions } = options
+  const resolved = resolveCommand(command, args, options.cwd, wslDistro)
   const binary =
     resolved.wsl === null ? resolveWindowsCommand(resolved.binary, options.env) : resolved.binary
   if (isWindowsBatchScript(binary)) {
     return spawnCommandCapture(binary, resolved.args, {
-      ...options,
+      ...execOptions,
       cwd: resolved.cwd
     })
   }
   try {
     const { stdout, stderr } = await execFileCapture(binary, resolved.args, {
       cwd: resolved.cwd,
-      encoding: options.encoding ?? 'utf-8',
-      maxBuffer: options.maxBuffer,
-      timeout: options.timeout,
-      env: options.env,
-      signal: options.signal
+      encoding: execOptions.encoding ?? 'utf-8',
+      maxBuffer: execOptions.maxBuffer,
+      timeout: execOptions.timeout,
+      env: execOptions.env,
+      signal: execOptions.signal
     })
     return { stdout: stdout as string, stderr: stderr as string }
   } catch (error) {
@@ -897,7 +906,7 @@ export async function commandExecFileAsync(
         resolveWindowsCommand(`${resolved.binary}.cmd`, options.env),
         resolved.args,
         {
-          ...options,
+          ...execOptions,
           cwd: resolved.cwd
         }
       )

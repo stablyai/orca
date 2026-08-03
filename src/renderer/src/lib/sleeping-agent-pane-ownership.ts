@@ -78,6 +78,30 @@ function hasRestorableStablePanePty(
   )
 }
 
+// Why: a pane whose PTY is live *right now* already owns its running session
+// — e.g. a Pi TUI that finished a turn but stays alive in a background tab.
+// Resume must never fork such a pane into a duplicate tab, even when it isn't
+// the pane that reconnects on activation. Liveness comes from the runtime
+// live-PTY map (ptyIdsByTabId), not the layout's ptyIdsByLeafId snapshot, which
+// persists stale across sleep/restart.
+function stablePaneHasLivePty(
+  tabId: string,
+  leafId: string,
+  ptyIdsByTabId: Record<string, string[]>,
+  layout: TerminalLayoutSnapshot | undefined
+): boolean {
+  const livePtyIds = ptyIdsByTabId[tabId] ?? []
+  if (livePtyIds.length === 0) {
+    return false
+  }
+  const leafPtyId = layout?.ptyIdsByLeafId?.[leafId]
+  if (leafPtyId) {
+    return livePtyIds.includes(leafPtyId)
+  }
+  // Single-leaf tabs have no per-leaf binding; the tab's live PTY is this leaf's.
+  return layout?.root?.type === 'leaf' && layout.root.leafId === leafId
+}
+
 function paneWillConnectOnActivation(
   worktreeId: string,
   tabId: string,
@@ -117,6 +141,18 @@ export function recordPaneIsOwnedByPreservedPane(
       return false
     }
     if (isPassiveCompletedHibernationEvidence(record)) {
+      return true
+    }
+    // Why: a pane with a live PTY owns its running session regardless of which
+    // pane reconnects on activation; forking it would duplicate the session.
+    if (
+      stablePaneHasLivePty(
+        tabId,
+        stable.leafId,
+        state.ptyIdsByTabId,
+        state.terminalLayoutsByTabId[tabId]
+      )
+    ) {
       return true
     }
     // Why: active sessions rely on pane-level cold restore. A preserved leaf

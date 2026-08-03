@@ -14,6 +14,7 @@ import {
   getHostModelCapabilitySummary,
   getRuntimeCapabilitiesSummary,
   getRuntimeServerConnectionState,
+  isRuntimeEnvironmentRemovalBlocked,
   type RuntimeHostDetails
 } from './RuntimeEnvironmentsPane'
 
@@ -207,5 +208,11 @@ describe('RuntimeEnvironmentsPane host details', () => {
     expect(getActiveServerModeDescription(true)).toContain('browser/mobile handoff')
     expect(getActiveServerModeDescription(false)).toContain('default Host')
     expect(getActiveServerModeDescription(false)).toContain('paired Orca runtime')
+  })
+
+  it('blocks removing the active server independently of local-runtime availability', () => {
+    expect(isRuntimeEnvironmentRemovalBlocked('windows-2', 'windows-2')).toBe(true)
+    expect(isRuntimeEnvironmentRemovalBlocked(undefined, 'windows-2')).toBe(false)
+    expect(isRuntimeEnvironmentRemovalBlocked('local', 'windows-2')).toBe(false)
   })
 })

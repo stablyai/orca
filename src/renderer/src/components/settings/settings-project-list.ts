@@ -123,6 +123,22 @@ export function buildRepoIdToHostSelection(
   return map
 }
 
+export function getSettingsTargetHostSelection(
+  projects: readonly SettingsProject[],
+  repoId: string,
+  hostId: ExecutionHostId
+): { projectId: string; hostId: ExecutionHostId; setupId: string } | null {
+  for (const settingsProject of projects) {
+    const setup = settingsProject.setups.find(
+      (candidate) => candidate.repoId === repoId && candidate.hostId === hostId
+    )
+    if (setup) {
+      return { projectId: settingsProject.projectId, hostId, setupId: setup.id }
+    }
+  }
+  return null
+}
+
 /**
  * The repo row a Settings deep link points at, from either an explicit repoId
  * or a `repo-<id>-<subsection>` sectionId. repo ids can contain hyphens, so the
@@ -174,13 +190,17 @@ export async function removeSettingsProjectFromAllHosts(
 export function getSettingsProjectHostRepo(
   settingsProject: SettingsProject,
   repos: readonly Repo[],
-  selectedHostId: ExecutionHostId | undefined
+  selectedHostId: ExecutionHostId | undefined,
+  selectedSetupId?: string
 ): Repo | undefined {
   const effectiveHostId = resolveEffectiveProjectHost(settingsProject.setups, selectedHostId)
   if (!effectiveHostId) {
     return undefined
   }
   const effectiveSetup =
+    settingsProject.setups.find(
+      (setup) => setup.id === selectedSetupId && setup.hostId === effectiveHostId
+    ) ??
     settingsProject.setups.find((setup) => setup.hostId === effectiveHostId) ??
     settingsProject.setups[0]
   return (

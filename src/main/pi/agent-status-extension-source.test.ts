@@ -325,19 +325,83 @@ describe('getPiAgentStatusExtensionSource', () => {
     )
   })
 
-  it('routes an OMP executable through /hook/omp', async () => {
-    const harness = createHarness({
-      kind: 'pi',
-      title: 'omp',
-      existsSync: () => false
+  it('tracks persistent OMP sessions and clears ephemeral session ids', async () => {
+    const harness = createHarness({ kind: 'omp' })
+    let sessionId = 'omp-session-8'
+    const sessionManager = { getSessionId: () => sessionId, getSessionFile: () => '/tmp/s' }
+
+    await harness.callHook('agent_start', undefined, { sessionManager })
+    sessionId = 'omp-session-9'
+    await harness.callHook('before_agent_start', { prompt: 'hi' }, { sessionManager })
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    await harness.callHook('agent_end', undefined, {
+      sessionManager: { getSessionId: () => 'omp-ephemeral' }
     })
 
-    await harness.callHook('agent_start')
-
-    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.fetchMock.mock.calls[0]?.[0]).toBe('http://127.0.0.1:4321/hook/omp')
-    expect(harness.spawnMock).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(3))
+    expect(
+      harness.fetchMock.mock.calls.map(([_, init]) => JSON.parse(String(init?.body)).payload)
+    ).toEqual([
+      { hook_event_name: 'agent_start', session_id: 'omp-session-8' },
+      {
+        hook_event_name: 'before_agent_start',
+        prompt: 'hi',
+        session_id: 'omp-session-9'
+      },
+      { hook_event_name: 'agent_end' }
+    ])
   })
+
+  it.each([
+    ['OMP extension', { kind: 'omp' as const }],
+    ['runtime-routed OMP', { kind: 'pi' as const, title: 'omp' }]
+  ])(
+    'keeps queued %s status bound to the session active when it was posted',
+    async (_name, args) => {
+      const finishDeliveries: (() => void)[] = []
+      const harness = createHarness({
+        ...args,
+        fetchImpl: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              finishDeliveries.push(() => resolve({ ok: true }))
+            })
+        )
+      })
+
+      await harness.callHook('agent_start', undefined, {
+        sessionManager: {
+          getSessionId: () => 'omp-session-8',
+          getSessionFile: () => '/tmp/omp-session-8.jsonl'
+        }
+      })
+      await harness.callHook(
+        'message_end',
+        { message: { role: 'assistant', content: 'done' } },
+        {
+          sessionManager: {
+            getSessionId: () => 'omp-session-9',
+            getSessionFile: () => '/tmp/omp-session-9.jsonl'
+          }
+        }
+      )
+      await harness.callHook('message_end', { message: { role: 'user', content: 'next' } }, {})
+
+      finishDeliveries[0]?.()
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+      const body = JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body))
+      expect(body.payload).toEqual({
+        hook_event_name: 'message_end',
+        role: 'assistant',
+        text: 'done',
+        session_id: 'omp-session-9'
+      })
+      expect(body.payload).not.toHaveProperty('session_file')
+      expect(harness.fetchMock.mock.calls[1]?.[0]).toBe('http://127.0.0.1:4321/hook/omp')
+      expect(harness.spawnMock).not.toHaveBeenCalled()
+      finishDeliveries[1]?.()
+    }
+  )
 
   it.each(['pi', 'omp'] as const)(
     'registers no status handlers for a nested %s subagent process',

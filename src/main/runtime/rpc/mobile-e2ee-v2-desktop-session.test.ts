@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { deriveSharedKey } from './e2ee-crypto'
 import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
@@ -8,7 +8,10 @@ import {
   type MobileE2EEV2Hello
 } from '../../../shared/mobile-e2ee-v2-contract'
 import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
-import { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
+import {
+  DesktopMobileE2EEV2Session,
+  MAX_MOBILE_E2EE_V2_TEXT_FRAME_BASE64_CHARACTERS
+} from './mobile-e2ee-v2-desktop-session'
 
 const server = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
@@ -31,6 +34,22 @@ function hello(): MobileE2EEV2Hello {
 }
 
 describe('desktop mobile E2EE v2 session', () => {
+  it('rejects oversized text frames before base64 decoding', () => {
+    const session = DesktopMobileE2EEV2Session.create({
+      hello: hello(),
+      serverSecretKey: server.secretKey,
+      expectedContext: { transport: 'relay', relayHostId: 'AbCdEf0123_-xyZ9' },
+      randomBytes: () => new Uint8Array(32).fill(4)
+    })!
+    const decode = vi.spyOn(Buffer, 'from')
+
+    expect(
+      session.openText('A'.repeat(MAX_MOBILE_E2EE_V2_TEXT_FRAME_BASE64_CHARACTERS + 1))
+    ).toBeNull()
+    expect(decode).not.toHaveBeenCalled()
+    decode.mockRestore()
+  })
+
   it('creates a fresh ready message and opens exact-next auth counter zero', () => {
     const clientHello = hello()
     const session = DesktopMobileE2EEV2Session.create({

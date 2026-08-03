@@ -164,7 +164,7 @@ function addRuntimeHost(
     health: controlHealth ?? runtimeHealth(status, compatibility),
     compatibility: compatibility ?? undefined,
     capabilities: status?.capabilities,
-    appVersion: runtimeStatus?.appVersion ?? null,
+    appVersion: runtimeStatus?.appVersion ?? status?.appVersion ?? null,
     protocolVersion: status?.runtimeProtocolVersion ?? status?.protocolVersion ?? null,
     minCompatibleClientVersion:
       status?.minCompatibleRuntimeClientVersion ?? status?.minCompatibleMobileVersion ?? null,

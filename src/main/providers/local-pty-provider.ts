@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: splitting spawn() would scatter tightly coupled PTY lifecycle logic (scan → ready → write → exit) with no cleaner ownership seam. */
-import { basename, delimiter } from 'node:path'
+import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
@@ -12,7 +11,7 @@ import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-ch
 import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
-import { parseWslPath, isWslAvailable } from '../wsl'
+import { getDefaultWslDistro, parseWslPath, isWslAvailable } from '../wsl'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
@@ -55,10 +54,7 @@ import { resolveAgentForegroundProcessWithAvailability } from './agent-foregroun
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import {
-  captureDescendantSnapshot,
-  terminateDescendantSnapshot
-} from '../pty-descendant-termination'
+import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
 import { canConfirmAgentFromConsolePresence } from './windows-console-foreground'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
@@ -69,6 +65,10 @@ import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import {
+  expandWindowsEnvironmentVariables,
+  expandWindowsPathEnvironmentVariables
+} from '../../shared/windows-environment-expansion'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -80,7 +80,7 @@ const PANE_IDENTITY_ENV_KEYS = [
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyIncarnations = new Map<string, string>()
-// Why: only agent sessions get descendant tree-kill (tool children run in detached groups SIGHUP can't reach); plain terminals skip it so nohup-detached children survive.
+// Why: agent sessions always sweep descendant trees; plain terminals preserve nohup children except on immediate win32 shutdown.
 const ptyAgentSessionIds = new Set<string>()
 // Why: descendant capture is async, so reattach/duplicate shutdown must wait for the original owner, not return a dying PTY.
 type PtyShutdownOperation = {
@@ -162,12 +162,17 @@ function promoteAgentTeamsShimPath(
   if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
     return
   }
-  const shimDir = requestedPath.split(delimiter)[0]
+  const normalizedRequestedPath =
+    process.platform === 'win32'
+      ? expandWindowsEnvironmentVariables(requestedPath, env)
+      : requestedPath
+  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
+  const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
   if (!shimDir) {
     return
   }
-  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
-  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
+  const currentParts = env.PATH?.split(pathDelimiter).filter(Boolean) ?? []
+  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
 /**
@@ -551,6 +556,10 @@ export class LocalPtyProvider implements IPtyProvider {
       process.platform === 'win32'
         ? getWslContextFromPreferredDistro(args.terminalWindowsWslDistro)
         : undefined
+    let launchWslContext =
+      wslInfo !== null
+        ? getWslContextFromPreferredDistro(wslInfo.distro)
+        : (worktreeWslContext ?? preferredWslContext)
 
     let shellPath: string
     let shellArgs: string[]
@@ -576,6 +585,9 @@ export class LocalPtyProvider implements IPtyProvider {
         process.env.COMSPEC ||
         'powershell.exe'
       const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
+      if (!launchWslContext && pathWin32.basename(shellFamily).toLowerCase() === 'wsl.exe') {
+        launchWslContext = getWslContextFromPreferredDistro(getDefaultWslDistro())
+      }
       const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
       const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
       // Why: normalize setting-value and path forms to the PowerShell family so the resolver can fall back to inbox powershell.exe.
@@ -610,7 +622,7 @@ export class LocalPtyProvider implements IPtyProvider {
         shellPath,
         cwd,
         defaultCwd,
-        wslContext: worktreeWslContext ?? preferredWslContext,
+        wslContext: launchWslContext,
         startupCommand: args.command
       })
       const primaryAttempt = windowsFallbackAttempts[0]
@@ -625,7 +637,7 @@ export class LocalPtyProvider implements IPtyProvider {
           shellPath,
           cwd,
           defaultCwd,
-          worktreeWslContext ?? preferredWslContext,
+          launchWslContext,
           args.command
         )
         shellArgs = resolved.shellArgs
@@ -676,8 +688,7 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
-    const launchWslDistro =
-      wslInfo?.distro ?? worktreeWslContext?.distro ?? preferredWslContext?.distro ?? null
+    const launchWslDistro = isWslShell ? (launchWslContext?.distro ?? null) : null
     const finalEnv = this.opts.buildSpawnEnv
       ? this.opts.buildSpawnEnv(id, spawnEnv, {
           command: args.command,
@@ -787,6 +798,7 @@ export class LocalPtyProvider implements IPtyProvider {
         shellReadyLaunch = args.command ? shellLaunch : null
       }
     }
+    expandWindowsPathEnvironmentVariables(finalEnv)
     promoteAgentTeamsShimPath(finalEnv, args.env?.PATH)
 
     // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
@@ -800,7 +812,7 @@ export class LocalPtyProvider implements IPtyProvider {
     let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
     if (historyEnabled) {
       historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd, {
-        wslDistro: preferredWslContext?.distro ?? worktreeWslContext?.distro ?? null
+        wslDistro: launchWslDistro
       })
       logHistoryInjection(worktreeId, historyResult)
     }
@@ -847,7 +859,11 @@ export class LocalPtyProvider implements IPtyProvider {
     const proc = spawnResult.process
     const spawnedShellIsWsl =
       process.platform === 'win32' && pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
-    const spawnedWslDistro = spawnedShellIsWsl ? (launchWslDistro ?? undefined) : null
+    const spawnedWslDistro = spawnedShellIsWsl
+      ? (launchWslDistro ?? undefined)
+      : process.platform === 'win32'
+        ? null
+        : undefined
     createPtyPhysicalExit(id)
     ptyProcesses.set(id, proc)
     ptyInitialCwd.set(id, cwd)
@@ -1111,19 +1127,33 @@ export class LocalPtyProvider implements IPtyProvider {
     operation: PtyShutdownOperation
   ): Promise<void> {
     const physicalExit = ptyPhysicalExits.get(id)
-    // Why: snapshot before signaling — once the shell dies, descendants reparent to pid 1 and a ppid walk can't find them.
-    const descendants = ptyAgentSessionIds.has(id)
-      ? await captureDescendantSnapshot(proc.pid)
-      : null
-    // Why: a natural exit can race the snapshot — never signal descendants or the root PID after this PTY loses ownership.
-    if (ptyProcesses.get(id) === proc) {
-      if (descendants) {
-        terminateDescendantSnapshot(descendants)
+    const signalRoot = (): void => {
+      // Why: natural exit can race the sweep — never signal after this PTY loses ownership.
+      if (ptyProcesses.get(id) !== proc) {
+        return
       }
       // Cancel startup delivery now, but keep the exit listener and ownership maps until node-pty reports physical exit.
       runPtyCleanup(id)
       operation.rootSignalled = true
       this.requestTrackedPtyShutdown(id, proc, operation.immediate)
+    }
+    if (ptyAgentSessionIds.has(id)) {
+      // Why: POSIX needs a pre-kill descendant snapshot; Windows tree-kills only when the
+      // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
+      // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
+      await killWithDescendantSweep(proc.pid, signalRoot, {
+        ownsRoot: () => ptyProcesses.get(id) === proc
+      })
+    } else if (process.platform === 'win32' && operation.immediate) {
+      // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
+      // skips the console reap), so a live `pnpm i`/`node` keeps the ConPTY console alive and
+      // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
+      // otherwise root close alone, and detached children may block physical stop (#10004).
+      await killWithDescendantSweep(proc.pid, signalRoot, {
+        ownsRoot: () => ptyProcesses.get(id) === proc
+      })
+    } else {
+      signalRoot()
     }
     await waitForPtyPhysicalExit(id, physicalExit)
   }
@@ -1323,7 +1353,8 @@ export class LocalPtyProvider implements IPtyProvider {
       cwd: ptyInitialCwd.get(id) ?? '',
       title: proc.process || ptyShellName.get(id) || 'shell',
       ...(ptyWorktreeId.get(id) ? { worktreeId: ptyWorktreeId.get(id) } : {}),
-      ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {})
+      ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {}),
+      ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {})
     }))
   }
 

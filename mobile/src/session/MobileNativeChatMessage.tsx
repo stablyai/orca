@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Image, Pressable, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { ArrowUp, ChevronDown, Copy, SquareChevronRight } from 'lucide-react-native'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -13,6 +13,7 @@ import {
   type ToolPair
 } from './mobile-native-chat-blocks'
 import { diffFromText, diffFromToolCall, type DiffLine } from './mobile-native-chat-diff'
+import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { MAX_TOOL_RESULT_CHARS, styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import {
@@ -160,6 +161,19 @@ function Prose({
     )
   }
   if (isImageRefBlock(block)) {
+    // A local preview (composer echo) or real URL renders as a thumbnail; a bare
+    // host path (not loadable on the device) falls back to a text placeholder.
+    const uri = block.url ?? block.path
+    if (isRenderableImageUri(uri)) {
+      return (
+        <Image
+          source={{ uri }}
+          style={styles.imageThumb}
+          resizeMode="contain"
+          accessibilityLabel={block.alt ?? 'Attached image'}
+        />
+      )
+    }
     return (
       <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
         🖼 {block.alt ?? block.path ?? block.url ?? 'image'}

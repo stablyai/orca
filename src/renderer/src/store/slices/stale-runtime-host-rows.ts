@@ -28,7 +28,7 @@ export type DropRuntimeRowsResult<T> = {
  * both `Worktree[]` and the detected worktrees' `.worktrees` arrays.
  */
 export function dropWorktreeRowsForRemovedRuntimeEnvironments<
-  T extends { id: string; hostId?: ExecutionHostId }
+  T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
 >(
   rowsByRepo: Record<string, T[]>,
   removedEnvironmentIds: ReadonlySet<string>,
@@ -43,6 +43,8 @@ export function dropWorktreeRowsForRemovedRuntimeEnvironments<
   for (const [repoId, rows] of Object.entries(rowsByRepo)) {
     const survivors = rows.filter((row) => {
       if (
+        (row.runtimeOwnerEnvironmentId !== undefined &&
+          removedEnvironmentIds.has(row.runtimeOwnerEnvironmentId)) ||
         isRemovedRuntimeHostId(row.hostId, removedEnvironmentIds) ||
         (row.hostId === undefined && repoIdsWithoutSurvivingOwners?.has(repoId) === true)
       ) {

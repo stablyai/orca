@@ -103,4 +103,36 @@ describe('BrowserPane webview preferences', () => {
     expect(ensuredWebview?.webview.style.pointerEvents).toBe('none')
     expect(refreshedContainer.lastElementChild).toBe(ensuredWebview?.webview as unknown as Element)
   })
+
+  it('keeps a replacement viewport while rebuilding a parent-drifted webview (STA-3228)', () => {
+    const staleContainer = createContainer('stale')
+    const staleWebview = document.createElement('webview') as Electron.WebviewTag
+    staleWebview.setAttribute('partition', 'persist:orca-browser')
+    staleContainer.appendChild(staleWebview)
+    registryMocks.webviewRegistry.set('browser-page-1', staleWebview)
+    const replacementContainer = createContainer('replacement')
+    const resolveContainer = vi.fn(() => replacementContainer)
+    registryMocks.destroyPersistentWebview.mockImplementation(() => {
+      staleWebview.remove()
+      staleContainer.remove()
+      registryMocks.webviewRegistry.delete('browser-page-1')
+    })
+
+    const ensuredWebview = ensureBrowserPageWebview({
+      browserTabId: 'browser-page-1',
+      container: replacementContainer,
+      inputLocked: false,
+      webviewPartition: 'persist:orca-browser',
+      resolveContainer
+    })
+
+    expect(registryMocks.destroyPersistentWebview).toHaveBeenCalledWith('browser-page-1', {
+      preserveViewport: true
+    })
+    expect(ensuredWebview?.container).toBe(replacementContainer)
+    expect(replacementContainer.isConnected).toBe(true)
+    expect(replacementContainer.lastElementChild).toBe(
+      ensuredWebview?.webview as unknown as Element
+    )
+  })
 })

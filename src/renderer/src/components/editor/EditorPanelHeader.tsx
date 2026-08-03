@@ -90,6 +90,8 @@ export function EditorPanelHeader({
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
+  // Why: undefined/true mean wrap on; only explicit false turns wrap off (#9974).
+  const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fileDiffComments = useMemo(
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
@@ -313,11 +315,13 @@ export function EditorPanelHeader({
         isMarkdown={isMarkdown}
         isDiffSurface={isDiffSurface}
         diffWordWrap={diffWordWrap}
+        editorWordWrap={editorWordWrap}
         shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={markdownFrontmatterVisible}
         onToggleDiffWordWrap={() => void updateSettings({ diffWordWrap: !diffWordWrap })}
+        onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />

@@ -211,6 +211,7 @@ function contextsEqual(left: MobileE2EEV2Context, right: MobileE2EEV2Context): b
 function decodeCanonicalBase64Bytes(value: unknown, length: number): Uint8Array | null {
   if (
     typeof value !== 'string' ||
+    value.length !== Math.ceil(length / 3) * 4 ||
     !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
   ) {
     return null

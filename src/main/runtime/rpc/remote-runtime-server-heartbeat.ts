@@ -22,6 +22,11 @@ export class RemoteRuntimeServerHeartbeat {
     this.lastTickAt = this.now()
     this.timer = setInterval(() => this.sweep(getClients()), this.intervalMs)
     this.timer.unref?.()
+    // Why: the interval's first tick is a full intervalMs (~15s) out, so arming on the first accepted
+    // connection would leave that socket unprobed for the whole window. Sweep once now so the first
+    // liveness ping goes out immediately; seeded-alive sockets are pinged (not reaped) and have until
+    // the next tick to pong. WS pong is answered at the protocol level, so a live socket always survives.
+    this.sweep(getClients())
   }
 
   stop(): void {

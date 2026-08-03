@@ -916,7 +916,8 @@ function installManagedHooksIntoWslRuntime(
       tomlPath: plan.tomlPath,
       managedCommand: command,
       managedEntries: trustEntries,
-      host: { kind: 'wsl', distro: plan.wslDistro, linuxRuntimeHome: plan.linuxRuntimeHome }
+      host: { kind: 'wsl', distro: plan.wslDistro, linuxRuntimeHome: plan.linuxRuntimeHome },
+      telemetryLane: 'managed'
     })
     if (grant.lane === 'fallback') {
       // Why: WSL runtime homes may carry user hook approvals we did not rebuild
@@ -1353,7 +1354,8 @@ export class CodexHookService {
         tomlPath,
         managedCommand: command,
         managedEntries: managedTrustEntries,
-        host: { kind: 'native' }
+        host: { kind: 'native' },
+        telemetryLane: 'managed'
       })
       if (grant.lane === 'rpc') {
         recentGrantEntries = grant.entries

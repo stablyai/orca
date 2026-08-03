@@ -10,7 +10,9 @@ import {
   agentSessionClaimsEqual,
   agentSessionSurfacesEqual,
   buildClaimedAgentPtyOwnerIndex,
+  cloneAgentSessionClaim,
   cloneAgentSessionOwner,
+  cloneAgentSessionSurface,
   prepareRegisteredAgentSessionOwner,
   reconcileClaimedAgentPtyOwnerSnapshot,
   scopedAgentSessionClaimsEqual,
@@ -18,6 +20,8 @@ import {
 } from './claimed-agent-pty-owner-snapshot'
 
 export { agentSessionOwnerBindingsEqual } from './claimed-agent-pty-owner-snapshot'
+
+export const MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES = 1024
 
 type ReservedOwner = {
   claim: AgentSessionExecutionClaim
@@ -30,11 +34,11 @@ type ReservedOwner = {
 type LiveOwner = LiveAgentSessionOwner
 
 function cloneClaim(claim: AgentSessionExecutionClaim): AgentSessionExecutionClaim {
-  return { ...claim }
+  return cloneAgentSessionClaim(claim)
 }
 
 function cloneSurface(surface: AgentSessionSurfaceBinding): AgentSessionSurfaceBinding {
-  return { ...surface }
+  return cloneAgentSessionSurface(surface)
 }
 
 function cloneOwner(owner: LiveOwner): LiveOwner {
@@ -92,6 +96,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       return { disposition: 'adopted', owner: cloneOwner(result.owner as LiveOwner) }
     }
 
+    this.assertCapacityForNewOwner()
     const generation = randomUUID()
     let resolveReservation!: (result: AgentSessionClaimedSpawnResult) => void
     let rejectReservation!: (error: unknown) => void
@@ -191,6 +196,7 @@ export class ClaimedAgentPtyOwnerRegistry {
     if (!registered) {
       return
     }
+    this.assertCapacityForNewOwner()
     this.live.set(key, registered)
     const keys = this.keysByPtyId.get(owner.ptyId) ?? new Set<string>()
     keys.add(key)
@@ -201,6 +207,9 @@ export class ClaimedAgentPtyOwnerRegistry {
     owners: readonly AgentSessionOwnerBinding[],
     opts: { isInAuthoritativeScope?: (owner: AgentSessionOwnerBinding) => boolean } = {}
   ): void {
+    if (owners.length > MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES) {
+      throw new Error('execution_owner_unavailable')
+    }
     const next = reconcileClaimedAgentPtyOwnerSnapshot({
       live: this.live,
       conflicts: this.conflicts,
@@ -208,6 +217,12 @@ export class ClaimedAgentPtyOwnerRegistry {
       incoming: owners,
       isInAuthoritativeScope: opts.isInAuthoritativeScope ?? (() => true)
     })
+    if (
+      this.countOwners(next.live, next.conflicts) + this.reserved.size >
+      MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES
+    ) {
+      throw new Error('execution_owner_unavailable')
+    }
 
     // Why: recovery decisions must observe one complete provider snapshot;
     // mutating only after validation prevents first-provider residue on conflict.
@@ -273,5 +288,25 @@ export class ClaimedAgentPtyOwnerRegistry {
 
   private rebuildPtyIndex(): void {
     this.keysByPtyId = buildClaimedAgentPtyOwnerIndex(this.live, this.conflicts)
+  }
+
+  private assertCapacityForNewOwner(): void {
+    if (
+      this.countOwners(this.live, this.conflicts) + this.reserved.size >=
+      MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES
+    ) {
+      throw new Error('execution_owner_unavailable')
+    }
+  }
+
+  private countOwners(
+    live: ReadonlyMap<string, LiveOwner>,
+    conflicts: ReadonlyMap<string, readonly LiveOwner[]>
+  ): number {
+    let count = live.size
+    for (const owners of conflicts.values()) {
+      count += owners.length
+    }
+    return count
   }
 }

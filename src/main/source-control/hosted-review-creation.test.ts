@@ -387,7 +387,7 @@ describe('createHostedReview', () => {
       wslDistro: 'Ubuntu'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain'],
+      ['status', '--porcelain', '-z'],
       expect.objectContaining({ cwd: '/repo', wslDistro: 'Ubuntu' })
     )
     expect(getUpstreamStatusMock).toHaveBeenCalledWith('/repo', undefined, {
@@ -403,7 +403,10 @@ describe('createHostedReview', () => {
       expect.objectContaining({
         repoPath: '/repo',
         branch: 'feature',
-        localGitExecOptions: { wslDistro: 'Ubuntu' }
+        localGitExecOptions: { wslDistro: 'Ubuntu' },
+        // Why: a stale no-review answer here would leave Create enabled after a
+        // review was opened outside Orca, so eligibility takes the fast tier.
+        active: true
       })
     )
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(

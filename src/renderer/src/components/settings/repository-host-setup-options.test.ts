@@ -28,7 +28,46 @@ function runtimeHost(
   } as ExecutionHostRegistryEntry
 }
 
+function sshHost(health: ExecutionHostRegistryEntry['health']): ExecutionHostRegistryEntry {
+  return {
+    id: 'ssh:ssh-1',
+    kind: 'ssh',
+    label: 'SSH Host',
+    detail: 'SSH',
+    health
+  }
+}
+
 describe('buildSetupHostOptions', () => {
+  it('enables connected SSH hosts', () => {
+    expect(
+      buildSetupHostOptions({
+        projectHostSetups: [],
+        hostOptions: [sshHost('available')]
+      })[0]
+    ).toMatchObject({
+      isAvailable: true,
+      canUsePathActions: true,
+      detail: 'SSH'
+    })
+  })
+
+  it.each(['disconnected', 'connecting', 'error'] as const)(
+    'disables path actions for %s SSH hosts',
+    (health) => {
+      expect(
+        buildSetupHostOptions({
+          projectHostSetups: [],
+          hostOptions: [sshHost(health)]
+        })[0]
+      ).toMatchObject({
+        isAvailable: true,
+        canUsePathActions: false,
+        detail: 'Connect this host before importing or cloning the project'
+      })
+    }
+  )
+
   it('disables runtime hosts while capabilities are unknown', () => {
     expect(
       buildSetupHostOptions({

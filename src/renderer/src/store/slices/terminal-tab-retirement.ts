@@ -5,6 +5,10 @@ import {
   type WorktreeRuntimeOwnerState
 } from '@/lib/worktree-runtime-owner'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export type TerminalTabCloseReason = 'user' | 'cleanup' | 'pty-exit'
 
@@ -107,6 +111,22 @@ function hasOwnerOutsideTargets(
   return false
 }
 
+/** Worktree-id shape for diagnostics; raw ids embed absolute paths and must not be logged. */
+export function classifyTerminalRetirementWorktree(
+  worktreeId: string | null
+): 'floating' | 'ephemeral-setup' | 'folder-workspace' | 'worktree' | 'absent' {
+  if (!worktreeId) {
+    return 'absent'
+  }
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return 'floating'
+  }
+  if (isEphemeralSetupTerminalWorktreeId(worktreeId)) {
+    return 'ephemeral-setup'
+  }
+  return parseWorkspaceKey(worktreeId)?.type === 'folder' ? 'folder-workspace' : 'worktree'
+}
+
 export function isTerminalTabPresent(
   state: Pick<AppState, 'tabsByWorktree'>,
   tabId: string
@@ -156,6 +176,7 @@ export function buildTerminalTabRetirementPlans(
     const runtimeTerminals: TerminalTabRetirementPlan['runtimeTerminals'] = []
     const cleanupOnlyPtyIds: string[] = []
     const unroutablePtyIds: string[] = []
+    const providerOwnership = resolveTerminalHostOwnership(state, worktreeId, 'teardown')
 
     for (const ptyId of ptyIds) {
       const ownerIdentity = getTerminalPtyOwnershipIdentity(state, ptyId, worktreeId)
@@ -183,6 +204,9 @@ export function buildTerminalTabRetirementPlans(
           handle: remote.handle
         })
       } else if (ptyId.startsWith('remote:')) {
+        unroutablePtyIds.push(ptyId)
+      } else if (providerOwnership.kind !== 'local-or-ssh') {
+        // Why: HUB-native wake hints are not paired-client PTY ids; wait for pane resolution instead of killing the same-looking local id.
         unroutablePtyIds.push(ptyId)
       } else {
         localOrSshPtyIds.push(ptyId)

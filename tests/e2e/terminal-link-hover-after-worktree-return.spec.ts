@@ -98,14 +98,21 @@ async function hoverAndReadActiveLinkText(page: Page, probe: HoverProbe): Promis
       new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX, clientY })
     )
   }, probe)
-  return page.evaluate(({ tabId }) => {
-    const manager = window.__paneManagers?.get(tabId)
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    const core = pane?.terminal as unknown as
-      | { _core?: { linkifier?: { currentLink?: { link?: { text?: string } } } } }
-      | undefined
-    return core?._core?.linkifier?.currentLink?.link?.text ?? null
-  }, probe)
+  return readActiveLinkText(page, probe.tabId)
+}
+
+async function readActiveLinkText(page: Page, tabId: string): Promise<string | null> {
+  return page.evaluate(
+    ({ tabId }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      const core = pane?.terminal as unknown as
+        | { _core?: { linkifier?: { currentLink?: { link?: { text?: string } } } } }
+        | undefined
+      return core?._core?.linkifier?.currentLink?.link?.text ?? null
+    },
+    { tabId }
+  )
 }
 
 async function readTerminalCursor(page: Page, tabId: string): Promise<string | null> {
@@ -239,6 +246,47 @@ async function assertLinkRecoversAfterReturn(
 test.describe('Terminal link hover after worktree return', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
+  })
+
+  test('re-establishes a URL link on hover after the pointer leaves the terminal', async ({
+    orcaPage
+  }) => {
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
+
+    const url = `https://example.com/orca-link-${randomUUID()}`
+    await sendToTerminal(orcaPage, ptyId, `echo ${url}\r`)
+    await expect
+      .poll(() => getTerminalContent(orcaPage, 4000), {
+        timeout: 10_000,
+        message: 'URL fixture did not reach the terminal buffer'
+      })
+      .toContain(url)
+
+    // Let the streamed-output reset finish before creating the hover cache
+    // state this mouseleave regression targets.
+    await orcaPage.waitForTimeout(300)
+    const probe = await locateHoverProbe(orcaPage, url)
+    await expect
+      .poll(() => hoverAndReadActiveLinkText(orcaPage, probe), {
+        timeout: 5_000,
+        message: 'baseline hover never established the URL link'
+      })
+      .toContain(url)
+
+    await dispatchScreenMouseLeave(orcaPage, probe.tabId)
+    await expect.poll(() => readActiveLinkText(orcaPage, probe.tabId)).toBeNull()
+    await expect.poll(() => readTerminalCursor(orcaPage, probe.tabId)).not.toBe('pointer')
+
+    await expect
+      .poll(() => hoverAndReadActiveLinkText(orcaPage, probe), {
+        timeout: 5_000,
+        message: 'URL link did not re-establish after terminal mouseleave'
+      })
+      .toContain(url)
+    await expect.poll(() => readTerminalCursor(orcaPage, probe.tabId)).toBe('pointer')
   })
 
   test('re-establishes a file-path link on hover after switching worktrees and back', async ({

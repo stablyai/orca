@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: local/remote generation, cancellation, and
    env propagation share subprocess mocks; splitting would obscure the
    cross-path invariants these tests protect. */
-import { exec, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -20,21 +20,22 @@ import {
   trimGeneratedCommitMessage
 } from './commit-message-text-generation'
 
+const { terminateWindowsProcessTreeMock } = vi.hoisted(() => ({
+  terminateWindowsProcessTreeMock: vi.fn(async () => {})
+}))
+
+vi.mock('../windows-process-tree-kill', () => ({
+  terminateWindowsProcessTree: terminateWindowsProcessTreeMock
+}))
+
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
   return {
     ...actual,
-    exec: vi.fn((_command, callback) => {
-      if (typeof callback === 'function') {
-        callback(null, '', '')
-      }
-      return new actual.ChildProcess()
-    }),
     spawn: vi.fn(actual.spawn)
   }
 })
 
-const execMock = vi.mocked(exec)
 const spawnMock = vi.mocked(spawn)
 
 type MockDiscoveryChild = EventEmitter & {
@@ -71,7 +72,7 @@ function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
 
 function expectChildTerminated(child: { pid: number; kill: ReturnType<typeof vi.fn> }): void {
   if (process.platform === 'win32') {
-    expect(execMock).toHaveBeenCalledWith(`taskkill /pid ${child.pid} /T /F`, expect.any(Function))
+    expect(terminateWindowsProcessTreeMock).toHaveBeenCalledWith(child.pid)
     expect(child.kill).not.toHaveBeenCalled()
     return
   }
@@ -79,7 +80,8 @@ function expectChildTerminated(child: { pid: number; kill: ReturnType<typeof vi.
 }
 
 beforeEach(() => {
-  execMock.mockClear()
+  terminateWindowsProcessTreeMock.mockClear()
+  terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
   spawnMock.mockClear()
 })
 
@@ -499,6 +501,40 @@ describe('discoverCommitMessageModelsLocal', () => {
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
       expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the Codex home locked after a discovery timeout until the child closes', async () => {
+    vi.useFakeTimers()
+    const firstChild = createMockDiscoveryChild()
+    const secondChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const env = { CODEX_HOME: '/managed/codex-discovery-home' }
+
+    try {
+      const first = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(0)
+      const second = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      await expect(first).resolves.toMatchObject({
+        success: false,
+        error: 'Codex model discovery timed out after 60s.'
+      })
+      expectChildTerminated(firstChild)
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+
+      firstChild.emit('close', null)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+      secondChild.stdout.emit(
+        'data',
+        Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
+      )
+      secondChild.emit('close', 0)
+      await expect(second).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
     } finally {
       vi.useRealTimers()
     }
@@ -1618,6 +1654,129 @@ describe('generateCommitMessageFromContext', () => {
     }
   })
 
+  it('publishes Codex cancellation immediately but holds its home lock until close', async () => {
+    const firstChild = createMockDiscoveryChild()
+    const secondChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const env = { CODEX_HOME: '/managed/codex-generation-home' }
+    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
+    const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
+
+    const first = generateCommitMessageFromContext(context, params, {
+      kind: 'local',
+      cwd: '/repo',
+      env
+    })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    cancelGenerateCommitMessageLocal('/repo')
+
+    await expect(first).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true
+    })
+    expectChildTerminated(firstChild)
+
+    const second = generateCommitMessageFromContext(context, params, {
+      kind: 'local',
+      cwd: '/repo-2',
+      env
+    })
+    await Promise.resolve()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+
+    firstChild.emit('close', null)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    secondChild.stdout.emit('data', Buffer.from('Update README\n'))
+    secondChild.emit('close', 0)
+    await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
+  })
+
+  it('holds the Codex home lock until Windows tree termination and wrapper close', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    let finishTreeKill!: () => void
+    terminateWindowsProcessTreeMock.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishTreeKill = resolve
+      })
+    )
+    const firstChild = createMockDiscoveryChild()
+    const secondChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const env = { CODEX_HOME: 'C:\\managed\\codex-generation-home' }
+    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
+    const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
+
+    try {
+      const first = generateCommitMessageFromContext(context, params, {
+        kind: 'local',
+        cwd: 'C:\\repo',
+        env
+      })
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+      cancelGenerateCommitMessageLocal('C:\\repo')
+      await expect(first).resolves.toMatchObject({ canceled: true })
+
+      const second = generateCommitMessageFromContext(context, params, {
+        kind: 'local',
+        cwd: 'C:\\repo-2',
+        env
+      })
+      firstChild.emit('close', null)
+      await Promise.resolve()
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+
+      finishTreeKill()
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+      secondChild.stdout.emit('data', Buffer.from('Update README\n'))
+      secondChild.emit('close', 0)
+      await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('cancels Codex generation promptly while it is queued behind the home lock', async () => {
+    const discoveryChild = createMockDiscoveryChild()
+    const laterChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(discoveryChild as never).mockReturnValueOnce(laterChild as never)
+    const env = { CODEX_HOME: '/managed/codex-queued-home' }
+    const blocker = discoverCommitMessageModelsLocal('codex', env)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+
+    const queued = generateCommitMessageFromContext(
+      { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' },
+      { agentId: 'codex', model: 'gpt-5.5' },
+      { kind: 'local', cwd: '/queued-repo', env }
+    )
+    cancelGenerateCommitMessageLocal('/queued-repo')
+
+    await expect(queued).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+
+    discoveryChild.stdout.emit(
+      'data',
+      Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
+    )
+    discoveryChild.emit('close', 0)
+    await expect(blocker).resolves.toMatchObject({ success: true })
+
+    const later = generateCommitMessageFromContext(
+      { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+later' },
+      { agentId: 'codex', model: 'gpt-5.5' },
+      { kind: 'local', cwd: '/later-repo', env }
+    )
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    laterChild.stdout.emit('data', Buffer.from('Update later\n'))
+    laterChild.emit('close', 0)
+    await expect(later).resolves.toMatchObject({ success: true, message: 'Update later' })
+  })
+
   it('routes Windows batch-script agent commands through cmd.exe', async () => {
     const originalComSpec = process.env.ComSpec
     process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe'
@@ -1885,6 +2044,168 @@ describe('generateBranchNameFromContext', () => {
     expect(prompt).not.toContain('Additional user prompt:')
     expect(prompt).toContain('Generate a short git branch name')
     expect(prompt).toContain('Output ONLY the branch name on a single line')
+  })
+})
+
+describe('linkedIssue template substitution', () => {
+  const COMMIT_CONTEXT = {
+    branch: 'feature/login',
+    stagedSummary: 'M src/login.ts',
+    stagedPatch: 'diff --git a/src/login.ts b/src/login.ts'
+  }
+  const PULL_REQUEST_CONTEXT = {
+    branch: 'feature/login',
+    base: 'main',
+    branchChangedByPreparation: false,
+    currentTitle: 'Fix login',
+    currentBody: '',
+    currentDraft: false,
+    commitSummary: 'a1b2c3d Fix login',
+    changeSummary: 'src/login.ts | 4 ++--',
+    patch: 'diff --git a/src/login.ts b/src/login.ts'
+  }
+
+  function capturingTarget(capture: (prompt: string) => void): {
+    kind: 'remote'
+    cwd: string
+    missingBinaryLocation: string
+    execute: (plan: { stdinPayload: string | null }) => Promise<{
+      stdout: string
+      stderr: string
+      exitCode: number
+      timedOut: boolean
+    }>
+  } {
+    return {
+      kind: 'remote',
+      cwd: '/repo',
+      missingBinaryLocation: 'remote PATH',
+      execute: async (plan) => {
+        capture(plan.stdinPayload ?? '')
+        return {
+          stdout: '{"base":"main","title":"Fix login","body":"body","draft":false}',
+          stderr: '',
+          exitCode: 0,
+          timedOut: false
+        }
+      }
+    }
+  }
+
+  const templateParams = {
+    agentId: 'custom' as const,
+    model: '',
+    customAgentCommand: 'agent',
+    commandInputTemplate: '{basePrompt}\n\nFixes #{linkedIssue}'
+  }
+
+  it('substitutes the linked issue into the commit-message prompt', async () => {
+    let prompt = ''
+    await generateCommitMessageFromContext(
+      { ...COMMIT_CONTEXT, linkedIssue: 42 },
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #42')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('renders an empty commit-message issue for null and omitted fields', async () => {
+    for (const context of [{ ...COMMIT_CONTEXT, linkedIssue: null }, COMMIT_CONTEXT]) {
+      let prompt = ''
+      await generateCommitMessageFromContext(
+        context,
+        templateParams,
+        capturingTarget((value) => {
+          prompt = value
+        })
+      )
+
+      expect(prompt).toContain('Fixes #')
+      expect(prompt).not.toContain('{linkedIssue}')
+    }
+  })
+
+  // Why: a fixture-unique sentinel — a short number like 42 also appears in the
+  // character counts that truncateDiffForPrompt/limitSection emit, so growing any
+  // fixture past its limit would fail these guards for reasons unrelated to leakage.
+  const BUILT_IN_PROMPT_SENTINEL_ISSUE = 987654
+  const builtInPromptParams = {
+    agentId: 'custom' as const,
+    model: '',
+    customAgentCommand: 'agent'
+  }
+
+  it('leaves the built-in commit prompt free of issue guidance', async () => {
+    let prompt = ''
+    await generateCommitMessageFromContext(
+      { ...COMMIT_CONTEXT, linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE },
+      builtInPromptParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).not.toContain(String(BUILT_IN_PROMPT_SENTINEL_ISSUE))
+    expect(prompt).not.toContain('linkedIssue')
+  })
+
+  it('leaves the built-in pull-request prompt free of issue guidance', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      { ...PULL_REQUEST_CONTEXT, linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE },
+      builtInPromptParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).not.toContain(String(BUILT_IN_PROMPT_SENTINEL_ISSUE))
+    expect(prompt).not.toContain('linkedIssue')
+  })
+
+  it('substitutes the linked issue into the pull-request prompt', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      { ...PULL_REQUEST_CONTEXT, linkedIssue: 7 },
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #7')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('renders an empty pull-request issue when none resolves', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      PULL_REQUEST_CONTEXT,
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('leaves a hand-typed linkedIssue literal in branch-name templates', async () => {
+    let prompt = ''
+    await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      { ...templateParams, commandInputTemplate: '{basePrompt}\n\nIssue {linkedIssue}' },
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Issue {linkedIssue}')
   })
 })
 

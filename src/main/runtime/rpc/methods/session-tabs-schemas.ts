@@ -81,7 +81,10 @@ function parseTerminalPaneLayoutNode(value: unknown): TerminalPaneLayoutNodeInpu
       }
       if (
         node.ratio !== undefined &&
-        (typeof node.ratio !== 'number' || node.ratio < 0 || node.ratio > 1)
+        (typeof node.ratio !== 'number' ||
+          !Number.isFinite(node.ratio) ||
+          node.ratio < 0 ||
+          node.ratio > 1)
       ) {
         return null
       }
@@ -93,7 +96,7 @@ function parseTerminalPaneLayoutNode(value: unknown): TerminalPaneLayoutNodeInpu
   return value as TerminalPaneLayoutNodeInput
 }
 
-const TerminalPaneLayoutNodeSchema = z
+export const TerminalPaneLayoutNodeSchema = z
   .unknown()
   .transform((value) => parseTerminalPaneLayoutNode(value))
   .pipe(

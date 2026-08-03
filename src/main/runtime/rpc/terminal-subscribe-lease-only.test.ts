@@ -12,12 +12,13 @@ const request: RpcRequest = {
   params: {
     terminal: 'terminal-1',
     client: { id: 'phone-1', type: 'mobile' },
+    viewport: { cols: 40, rows: 20 },
     capabilities: { terminalBinaryStream: 1, mobileInputLeaseOnly: 1 }
   }
 }
 
 describe('terminal lease-only subscription', () => {
-  it('keeps mobile input ownership without registering output delivery', async () => {
+  it('keeps mobile input ownership without viewport resize or output delivery', async () => {
     const messages: string[] = []
     const cleanups = new Map<string, () => void>()
     const runtime = {

@@ -43,14 +43,17 @@ import {
   buildBrowserIframeClickedLinkRoutingScript
 } from './browser-clicked-link-routing'
 import { cleanElectronUserAgent } from './browser-session-ua'
-import type { BrowserViewportOverride } from '../../shared/types'
+import type {
+  BrowserViewportOverride,
+  BrowserCertificateFailure,
+  BrowserLoadError
+} from '../../shared/types'
 import {
   type BrowserAnnotationViewportBridgeOptions,
   BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
   buildBrowserAnnotationViewportBridgeScript
 } from '../../shared/browser-annotation-viewport-bridge'
 import type { KeybindingOverrides } from '../../shared/keybindings'
-import type { BrowserCertificateFailure, BrowserLoadError } from '../../shared/types'
 import {
   BrowserCertificateTrustController,
   type ManagedBrowserGuestContext
@@ -637,7 +640,6 @@ export class BrowserManager {
 
     // Why: bot detectors probe APIs that differ in Electron webviews; inject overrides each load so manual browsing passes.
     const disposeAntiDetection = this.injectAntiDetection(guest)
-
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
     const installClickedLinkRouting = (): void => {
@@ -937,11 +939,15 @@ export class BrowserManager {
   private retireStaleGuestWebContents(previousWebContentsId: number): void {
     // Why: after a renderer-process swap, stop the dead guest id resolving to the live page so stale callbacks don't hit the wrong session.
     this.cleanupGuestPolicyAttachment(previousWebContentsId)
-    this.tabIdByWebContentsId.delete(previousWebContentsId)
   }
 
   private cleanupGuestPolicyAttachment(guestWebContentsId: number): void {
-    const isPrimaryGuest = this.tabIdByWebContentsId.has(guestWebContentsId)
+    const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
+    const isPrimaryGuest = browserTabId !== undefined
+    if (browserTabId && this.webContentsIdByTabId.get(browserTabId) === guestWebContentsId) {
+      this.webContentsIdByTabId.delete(browserTabId)
+    }
+    this.tabIdByWebContentsId.delete(guestWebContentsId)
     this.certificateTrustController?.onGuestRetired(guestWebContentsId)
     const policyCleanup = this.policyCleanupByGuestId.get(guestWebContentsId)
     if (policyCleanup) {
@@ -1607,8 +1613,17 @@ export class BrowserManager {
     guest: Electron.WebContents
   ): Promise<boolean> {
     if (!enabled) {
+      const hadActiveGrabOp = this.hasActiveGrabOp(browserTabId)
       this.cancelGrabOp(browserTabId, 'user')
-      return true
+      if (hadActiveGrabOp) {
+        return true
+      }
+      try {
+        await guest.executeJavaScript(buildGuestOverlayScript('teardown'))
+        return true
+      } catch {
+        return false
+      }
     }
     // Why: inject the overlay runtime eagerly on arm so the hover UI appears instantly; re-injection is idempotent/safe.
     try {
@@ -1711,7 +1726,9 @@ export class BrowserManager {
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
         shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
         isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
-        getKeybindings: () => this.settingsResolver?.().keybindings
+        getKeybindings: () => this.settingsResolver?.().keybindings,
+        resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null,
+        resolveWorkspaceId: (tabId) => this.workspaceIdByPageId.get(tabId) ?? null
       })
     )
   }

@@ -13,8 +13,7 @@ const {
   prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
   readWindowsConptyProcessIdsMock,
-  captureDescendantSnapshotMock,
-  terminateDescendantSnapshotMock
+  killWithDescendantSweepMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -25,8 +24,7 @@ const {
   prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
   readWindowsConptyProcessIdsMock: vi.fn(),
-  captureDescendantSnapshotMock: vi.fn(),
-  terminateDescendantSnapshotMock: vi.fn()
+  killWithDescendantSweepMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -55,8 +53,7 @@ vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
 }))
 
 vi.mock('../pty-descendant-termination', () => ({
-  captureDescendantSnapshot: captureDescendantSnapshotMock,
-  terminateDescendantSnapshot: terminateDescendantSnapshotMock
+  killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths (the fs mock
@@ -99,6 +96,7 @@ vi.mock('../wsl', () => ({
   toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
   toWindowsWslPath: (path: string, distro: string) =>
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
+  getDefaultWslDistro: () => 'Ubuntu',
   isWslAvailable: () => true,
   // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
   // cwds that are meant to exist, so report them present without spawning wsl.exe.
@@ -150,9 +148,13 @@ describe('LocalPtyProvider', () => {
     accessSyncMock.mockReturnValue(undefined)
     mkdirSyncMock.mockReset()
     writeFileSyncMock.mockReset()
-    captureDescendantSnapshotMock.mockReset()
-    captureDescendantSnapshotMock.mockResolvedValue(null)
-    terminateDescendantSnapshotMock.mockReset()
+    killWithDescendantSweepMock.mockReset()
+    // Default: no-op sweep that still runs killRoot (matches empty-snapshot degrade).
+    killWithDescendantSweepMock.mockImplementation(
+      async (_rootPid: number, killRoot: () => void, _deps?: { ownsRoot?: () => boolean }) => {
+        killRoot()
+      }
+    )
     prepareMacosTccLoginShellMock.mockReset()
     prepareMacosTccLoginShellMock.mockResolvedValue(undefined)
     resolveAgentForegroundProcessMock.mockReset()
@@ -222,6 +224,25 @@ describe('LocalPtyProvider', () => {
       expect(typeof result.id).toBe('string')
     })
 
+    it('expands variables in PATH before spawning a Windows shell', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: {
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+          ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
+          PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
+        }
+      })
+
+      expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe(
+        'C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows'
+      )
+    })
+
     it('reattaches to an existing caller-supplied session id without spawning', async () => {
       const first = await provider.spawn({ cols: 80, rows: 24, sessionId: 'serve-session-1' })
       spawnMock.mockClear()
@@ -231,7 +252,6 @@ describe('LocalPtyProvider', () => {
       expect(second).toEqual({
         id: 'serve-session-1',
         pid: 12345,
-        wslDistro: null,
         isReattach: true
       })
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
@@ -880,6 +900,45 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
+    it('resolves and persists the default distro for Windows cwd WSL terminals', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const buildSpawnEnv = vi.fn(
+        (
+          _id: string,
+          env: Record<string, string>,
+          _ctx?: { isWsl?: boolean; wslDistro?: string | null }
+        ) => env
+      )
+      provider.configure({ buildSpawnEnv })
+
+      const result = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'repo-1::C:\\Users\\jin\\repo',
+        cwd: 'C:\\Users\\jin\\repo',
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: null
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[1]).toEqual([
+        '-d',
+        'Ubuntu',
+        '--',
+        'sh',
+        '-c',
+        expect.stringContaining("cd '/mnt/c/Users/jin/repo'")
+      ])
+      expect(buildSpawnEnv.mock.calls[0]?.[2]).toMatchObject({
+        isWsl: true,
+        wslDistro: 'Ubuntu'
+      })
+      expect(result.wslDistro).toBe('Ubuntu')
+      expect(
+        (await provider.listProcesses()).find((entry) => entry.id === result.id)?.wslDistro
+      ).toBe('Ubuntu')
+    })
+
     it('repro: keeps explicit PowerShell 7 selection when the pwsh probe is cold-false', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const pwshAvailable = vi.fn(() => false)
@@ -1426,11 +1485,15 @@ describe('LocalPtyProvider', () => {
     })
 
     it('waits for an in-flight agent shutdown before reusing the same session id', async () => {
-      let resolveSnapshot!: (value: null) => void
-      captureDescendantSnapshotMock.mockReturnValue(
-        new Promise<null>((resolve) => {
-          resolveSnapshot = resolve
-        })
+      let releaseSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(
+        (_rootPid: number, killRoot: () => void) =>
+          new Promise<void>((resolve) => {
+            releaseSweep = () => {
+              killRoot()
+              resolve()
+            }
+          })
       )
       const spawnArgs = {
         cols: 80,
@@ -1446,18 +1509,22 @@ describe('LocalPtyProvider', () => {
       await Promise.resolve()
       expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 1)
 
-      resolveSnapshot(null)
+      releaseSweep()
       await shutdown
       await respawn
       expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 2)
     })
 
-    it('coalesces duplicate shutdown while descendant capture is pending', async () => {
-      let resolveSnapshot!: (value: null) => void
-      captureDescendantSnapshotMock.mockReturnValue(
-        new Promise<null>((resolve) => {
-          resolveSnapshot = resolve
-        })
+    it('coalesces duplicate shutdown while descendant sweep is pending', async () => {
+      let releaseSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(
+        (_rootPid: number, killRoot: () => void) =>
+          new Promise<void>((resolve) => {
+            releaseSweep = () => {
+              killRoot()
+              resolve()
+            }
+          })
       )
       const { id } = await provider.spawn({
         cols: 80,
@@ -1467,22 +1534,27 @@ describe('LocalPtyProvider', () => {
 
       const first = provider.shutdown(id, { immediate: true })
       const second = provider.shutdown(id, { immediate: true })
-      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
-      resolveSnapshot(null)
+      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
+      releaseSweep()
       await Promise.all([first, second])
-      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
+      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
     })
 
-    it('does not signal a captured tree after the tracked root exits naturally', async () => {
-      let resolveSnapshot!: (value: {
-        rootPgid: number
-        descendants: []
-        capturedAtMs: number
-      }) => void
-      captureDescendantSnapshotMock.mockReturnValue(
-        new Promise((resolve) => {
-          resolveSnapshot = resolve
-        })
+    it('does not terminate descendants after the tracked root exits mid-sweep', async () => {
+      const terminateDescendants = vi.fn()
+      let releaseSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(
+        (_rootPid: number, killRoot: () => void, deps?: { ownsRoot?: () => boolean }) =>
+          new Promise<void>((resolve) => {
+            releaseSweep = () => {
+              // Production killWithDescendantSweep only signals descendants while ownsRoot.
+              if (deps?.ownsRoot?.() ?? true) {
+                terminateDescendants()
+              }
+              killRoot()
+              resolve()
+            }
+          })
       )
       const { id } = await provider.spawn({
         cols: 80,
@@ -1492,10 +1564,43 @@ describe('LocalPtyProvider', () => {
 
       const shutdown = provider.shutdown(id, { immediate: true })
       exitCb?.({ exitCode: 0 })
-      resolveSnapshot({ rootPgid: mockProc.pid, descendants: [], capturedAtMs: Date.now() })
+      releaseSweep()
       await shutdown
 
-      expect(terminateDescendantSnapshotMock).not.toHaveBeenCalled()
+      expect(terminateDescendants).not.toHaveBeenCalled()
+    })
+
+    it('win32 immediate shutdown of a plain shell taskkills the descendant tree', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await provider.shutdown(id, { immediate: true })
+
+      // Why: an orphaned pnpm/node child otherwise keeps the ConPTY console alive and holds
+      // the worktree cwd; the sweep taskkill /T /F clears the tree so removal can proceed.
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        mockProc.pid,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
+    })
+
+    it('win32 graceful shutdown of a plain shell does not taskkill the tree', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await provider.shutdown(id, { immediate: false })
+
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    })
+
+    it('non-win32 immediate shutdown of a plain shell skips the tree kill', async () => {
+      // beforeEach pins platform to linux; POSIX force-kill already reaches the child pgroup.
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await provider.shutdown(id, { immediate: true })
+
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
     })
   })
 
@@ -1788,6 +1893,28 @@ describe('LocalPtyProvider', () => {
       expect(newEntries[0]).toHaveProperty('title', 'zsh')
       expect(newEntries[0]).toHaveProperty('cwd', '/tmp/owned-cwd')
       expect(newEntries[0]).toHaveProperty('worktreeId', 'repo::/tmp/owned-cwd')
+      expect(newEntries[0]).not.toHaveProperty('wslDistro')
+      expect(newEntries[1]).not.toHaveProperty('wslDistro')
+    })
+
+    it('reports native and WSL ownership explicitly on Windows', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const native = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe'
+      })
+      const wsl = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+      })
+
+      const processes = await provider.listProcesses()
+
+      expect(processes.find((process) => process.id === native.id)?.wslDistro).toBeNull()
+      expect(processes.find((process) => process.id === wsl.id)?.wslDistro).toBe('Ubuntu')
     })
   })
 

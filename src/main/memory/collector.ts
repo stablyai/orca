@@ -27,17 +27,13 @@ import {
   iterateProcessOutputLines
 } from '../../shared/process-output-field-scanner'
 import { app } from 'electron'
-import type {
-  AppMemory,
-  MemorySnapshot,
-  HostMemory,
-  SessionMemory,
-  WorktreeMemory
-} from '../../shared/types'
+import type { AppMemory, MemorySnapshot, SessionMemory, WorktreeMemory } from '../../shared/types'
 import type { Store } from '../persistence'
 import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
 import { listRegisteredPtys } from './pty-registry'
 import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
+import { collectHostMemory, fallbackHostMemory } from './host-memory'
+import { getProcessMemoryMetric } from './process-memory-metric'
 
 export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
 
@@ -95,26 +91,13 @@ function clampNumber(value: unknown): number {
   return Math.max(0, value)
 }
 
-function hostMetrics(): HostMemory {
-  const total = clampNumber(os.totalmem())
-  const free = clampNumber(os.freemem())
-  const used = Math.max(0, total - free)
-  return {
-    totalMemory: total,
-    freeMemory: free,
-    usedMemory: used,
-    memoryUsagePercent: total > 0 ? (used / total) * 100 : 0,
-    cpuCoreCount: Math.max(1, os.cpus().length),
-    loadAverage1m: clampNumber(os.loadavg()[0])
-  }
-}
-
 function emptySnapshot(): MemorySnapshot {
   const zero = { cpu: 0, memory: 0 }
   return {
     app: { ...zero, main: zero, renderer: zero, other: zero, history: [] },
     worktrees: [],
-    host: hostMetrics(),
+    host: fallbackHostMemory(),
+    processMemoryMetric: getProcessMemoryMetric(),
     totalCpu: 0,
     totalMemory: 0,
     collectedAt: Date.now()
@@ -352,7 +335,7 @@ function makeEmptyBucket(
 // ─── Main collection path ───────────────────────────────────────────
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
-  const processIndex = await enumerateProcesses()
+  const [processIndex, host] = await Promise.all([enumerateProcesses(), collectHostMemory()])
   const appBuckets = bucketElectronMetrics(processIndex)
   const ptys = listRegisteredPtys()
 
@@ -446,7 +429,8 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   return {
     app: { ...appBuckets, history: readHistory(APP_HISTORY_KEY) },
     worktrees,
-    host: hostMetrics(),
+    host,
+    processMemoryMetric: getProcessMemoryMetric(),
     totalCpu: appBuckets.cpu + sessionCpuTotal,
     totalMemory: appBuckets.memory + sessionMemoryTotal,
     collectedAt: now

@@ -126,7 +126,13 @@ describe('repo slice project host setup lifecycle', () => {
       })
     ).resolves.toEqual({
       project,
-      setup: { ...runtimeSetup, displayName: 'GPU VM renamed' },
+      setup: {
+        ...runtimeSetup,
+        displayName: 'GPU VM renamed',
+        executionHostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
+        connectionId: null
+      },
       repo: undefined
     })
 

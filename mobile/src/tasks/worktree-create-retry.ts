@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
-import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import {
   CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
   getClientWorktreeCreateCandidate,
@@ -98,13 +98,6 @@ async function sendWorktreeCreateResilient(
       // authenticated replacement, so retry immediately instead of adding UI lag.
     }
   }
-}
-
-function isLogicalClientCutoverError(error: unknown): boolean {
-  return (
-    error instanceof LogicalClientCutoverError ||
-    (error instanceof Error && error.message === 'RPC interrupted by connection migration')
-  )
 }
 
 function defaultWorktreeCreateMutationId(): string {

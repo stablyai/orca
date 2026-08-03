@@ -12,6 +12,10 @@ const ZSH_AFTER_ENV_FILES = ['.zprofile', '.zshrc', '.zlogin']
 // .bashrc. Scanning .bashrc would mirror values the live Orca bash never sees.
 const BASH_LOGIN_FILES = ['.bash_profile', '.bash_login', '.profile']
 
+export function isShellStartupEnvProbeSupported(): boolean {
+  return process.platform !== 'win32'
+}
+
 function parseExportedValue(content: string, name: string, home: string): string | undefined {
   const assignment = new RegExp(`^export\\s+${name}=(.+)$`)
   let lastMatch: string | undefined
@@ -151,7 +155,7 @@ export function readShellStartupEnvVar(
   home = process.env.HOME,
   shell = process.env.SHELL
 ): string | undefined {
-  if (!home || process.platform === 'win32') {
+  if (!home || !isShellStartupEnvProbeSupported()) {
     return undefined
   }
   // Why: the regex above is fixed; rejecting unsafe names is cheap defense

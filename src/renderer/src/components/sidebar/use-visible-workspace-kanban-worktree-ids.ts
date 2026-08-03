@@ -20,6 +20,8 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+  const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
+  const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const settings = useAppStore((s) => s.settings)
@@ -57,13 +59,16 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         worktreeIdsWithLiveAgent,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
+        hideCliCreatedWorkspaces,
+        hideDetachedHeadWorkspaces,
         repoMap,
         workspaceHostScope,
         visibleWorkspaceHostIds,
         defaultHostId: getSettingsFocusedExecutionHostId(settings),
+        worktreeLineageById: {},
         // Why: the board has no nested lineage presentation. Ancestor injection
         // would make filtered-out parents appear as ordinary cards.
-        worktreeLineageById: {}
+        injectLineageAncestors: false
       })
     )
   }, [
@@ -72,6 +77,8 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     filterRepoIds,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
+    hideCliCreatedWorkspaces,
+    hideDetachedHeadWorkspaces,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,

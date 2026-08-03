@@ -25,7 +25,7 @@ export type CreateOrAttachOptions = {
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
   shellReadyTimeoutMs?: number
-  historySeed?: string
+  historySeedChunks?: readonly string[]
   startupIngress?: PtyStartupIngressIntent
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim

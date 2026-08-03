@@ -194,8 +194,21 @@ async function validateAuthenticatedPairing() {
       status?._meta?.runtimeId === payload.runtimeId,
     'paired client runtime ID does not match ready contract'
   )
+  assert(
+    typeof statusResult?.runtime?.appVersion === 'string',
+    'paired server did not report its Orca app version'
+  )
+  assert(
+    statusResult?.runtime?.capabilities?.includes('updater.remote-control.v1'),
+    'paired server did not advertise remote updater capability'
+  )
+  assert(
+    statusResult?.runtime?.remoteUpdateSupport?.automatic === false &&
+      statusResult.runtime.remoteUpdateSupport.reason === 'manual-service-update-required',
+    'direct headless server did not require a safe manual service update'
+  )
   stopContainer(server.name)
-  console.log('PASS authenticated E2EE pairing from an independent Debian container')
+  console.log('PASS paired E2EE updater inventory and manual-service fallback')
 }
 
 async function validateUnreachableOffer() {

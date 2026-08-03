@@ -3,6 +3,13 @@ import {
   type CodexHookTrustGrantRequest,
   type CodexHookTrustGrantSessionResult
 } from './codex-app-server-client'
+import {
+  classifyCodexTrustGrantError,
+  emitCodexTrustGrantTelemetry,
+  type CodexTrustGrantFallbackReason,
+  type CodexTrustGrantTelemetryLane,
+  type CodexTrustGrantVerifyClass
+} from './codex-trust-grant-telemetry'
 import { runCodexHookTrustGrantSessionSync } from './codex-app-server-grant-bridge'
 import {
   codexAppServerCapabilityCache,
@@ -46,67 +53,29 @@ export type CodexManagedTrustGrantPlan = {
   /** Managed trust identities Orca just wrote (no trustedHash). */
   managedEntries: readonly CodexTrustEntry[]
   host: CodexTrustGrantHost
+  telemetryLane: CodexTrustGrantTelemetryLane
   /** Match a pane where CODEX_HOME is absent instead of an explicit managed home. */
   useDefaultCodexHome?: boolean
 }
 
-export type CodexTrustGrantFallbackReason =
-  | 'disabled'
-  | 'no-managed-entries'
-  | 'unsupported'
-  | 'unsupported-cached'
-  | 'verify-failed'
-  | 'retry-cached'
-  | 'error'
+export type { CodexTrustGrantFallbackReason, CodexTrustGrantTelemetryLane }
 
 export type CodexManagedTrustGrantOutcome =
   | { lane: 'rpc'; entries: CodexTrustEntry[] }
   | { lane: 'fallback'; reason: CodexTrustGrantFallbackReason }
 
-export type CodexTrustGrantDiagnostics = {
-  granted: number
-  ledgerHits: number
-  fellBack: number
-  verifyFailed: number
-  lastFallbackReason: CodexTrustGrantFallbackReason | null
-}
-
-const diagnostics: CodexTrustGrantDiagnostics = {
+const diagnostics = {
   granted: 0,
   ledgerHits: 0,
   fellBack: 0,
   verifyFailed: 0,
-  lastFallbackReason: null
+  lastFallbackReason: null as CodexTrustGrantFallbackReason | null
 }
+export type CodexTrustGrantDiagnostics = typeof diagnostics
 const transientRetryAfterByHost = new Map<string, number>()
 
 export function getCodexTrustGrantDiagnostics(): CodexTrustGrantDiagnostics {
   return { ...diagnostics }
-}
-
-type CodexTrustGrantTelemetry = (event: {
-  outcome: 'granted' | 'fallback' | 'verify_failed'
-  hostKind: 'native' | 'wsl'
-  reason?: CodexTrustGrantFallbackReason
-}) => void
-
-// Why: hook-service is bundled into plain-node CLI entries where electron
-// (and therefore the telemetry client) cannot load; the Electron main process
-// injects the tracker at startup instead of a static import.
-let telemetry: CodexTrustGrantTelemetry = () => {}
-
-export function setCodexTrustGrantTelemetry(tracker: CodexTrustGrantTelemetry): void {
-  telemetry = tracker
-}
-
-function emitTelemetry(event: Parameters<CodexTrustGrantTelemetry>[0]): void {
-  try {
-    telemetry(event)
-  } catch (error) {
-    // Why: observability must never turn a verified grant into fallback or
-    // violate this launch-prep API's no-throw contract.
-    console.warn('[codex-trust-grant] failed to emit telemetry', error)
-  }
 }
 
 type GrantSessionRunnerSync = (
@@ -118,7 +87,8 @@ let runSessionSync: GrantSessionRunnerSync = runCodexHookTrustGrantSessionSync
 function fallback(
   plan: CodexManagedTrustGrantPlan,
   reason: CodexTrustGrantFallbackReason,
-  detail?: unknown
+  detail?: unknown,
+  verifyClass?: CodexTrustGrantVerifyClass
 ): CodexManagedTrustGrantOutcome {
   diagnostics.fellBack += 1
   diagnostics.lastFallbackReason = reason
@@ -129,10 +99,13 @@ function fallback(
     `[codex-trust-grant] falling back to self-computed trust (reason=${reason}, host=${plan.host.kind})`,
     detail ?? ''
   )
-  emitTelemetry({
+  emitCodexTrustGrantTelemetry({
     outcome: reason === 'verify-failed' ? 'verify_failed' : 'fallback',
     hostKind: plan.host.kind,
-    reason
+    lane: plan.telemetryLane,
+    reason,
+    ...(reason === 'error' ? { errorClass: classifyCodexTrustGrantError(detail) } : {}),
+    ...(verifyClass !== undefined ? { verifyClass } : {})
   })
   return { lane: 'fallback', reason }
 }
@@ -272,7 +245,7 @@ export function grantManagedCodexHookTrust(
         hostKey,
         Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
       )
-      return fallback(plan, 'verify-failed', result.reason)
+      return fallback(plan, 'verify-failed', result.reason, result.reasonClass)
     }
 
     const byNormalizedKey = new Map(expected.map((item) => [item.normalizedKey, item]))
@@ -287,7 +260,12 @@ export function grantManagedCodexHookTrust(
           hostKey,
           Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
         )
-        return fallback(plan, 'verify-failed', `unexpected granted key ${granted.key}`)
+        return fallback(
+          plan,
+          'verify-failed',
+          `unexpected granted key ${granted.key}`,
+          'unexpected-key'
+        )
       }
       if (seenNormalizedKeys.has(granted.normalizedKey)) {
         restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
@@ -295,7 +273,12 @@ export function grantManagedCodexHookTrust(
           hostKey,
           Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
         )
-        return fallback(plan, 'verify-failed', `duplicate granted key ${granted.key}`)
+        return fallback(
+          plan,
+          'verify-failed',
+          `duplicate granted key ${granted.key}`,
+          'duplicate-key'
+        )
       }
       seenNormalizedKeys.add(granted.normalizedKey)
       grantedEntries.push({ ...match.entry, trustedHash: granted.trustedHash })
@@ -310,7 +293,12 @@ export function grantManagedCodexHookTrust(
         hostKey,
         Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
       )
-      return fallback(plan, 'verify-failed', 'granted entry set did not cover expected entries')
+      return fallback(
+        plan,
+        'verify-failed',
+        'granted entry set did not cover expected entries',
+        'coverage'
+      )
     }
     transientRetryAfterByHost.delete(hostKey)
     try {
@@ -327,7 +315,11 @@ export function grantManagedCodexHookTrust(
       `[codex-trust-grant] granted ${grantedEntries.length} managed hook entries via codex app-server ` +
         `(host=${plan.host.kind}, wrote=${result.wroteTrust}, ${Date.now() - startedAtMs}ms)`
     )
-    emitTelemetry({ outcome: 'granted', hostKind: plan.host.kind })
+    emitCodexTrustGrantTelemetry({
+      outcome: 'granted',
+      hostKind: plan.host.kind,
+      lane: plan.telemetryLane
+    })
     return { lane: 'rpc', entries: grantedEntries }
   } catch (error) {
     return fallback(plan, 'error', error)

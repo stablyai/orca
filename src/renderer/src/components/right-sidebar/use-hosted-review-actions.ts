@@ -1,10 +1,9 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Repo } from '../../../../shared/types'
-import type { GitHubPRMergeMethod } from '../../../../shared/types'
+import type { PRInfo, Repo, GitHubPRMergeMethod } from '../../../../shared/types'
 import {
   mergeGitHubHostedReview,
   setGitHubHostedReviewAutoMerge,
@@ -182,7 +181,7 @@ export function useHostedReviewActions({
           toast.success(
             isClosing
               ? translate(
-                  'auto.components.right.sidebar.HostedReviewActions.fa3ee9a515',
+                  'auto.components.right.sidebar.HostedReviewActions.closedToast',
                   '{{value0}} closed',
                   { value0: shortLabel }
                 )

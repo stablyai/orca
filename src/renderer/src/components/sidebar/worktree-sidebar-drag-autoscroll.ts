@@ -1,5 +1,9 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeDragUnitGroup } from './worktree-drag-units'
+import type {
+  WorktreeSidebarDragGrab,
+  WorktreeSidebarDropAnchor
+} from './worktree-sidebar-drag-geometry'
 
 const EDGE_ZONE_PX = 56
 const MAX_OUTSIDE_EDGE_PX = 48
@@ -25,7 +29,12 @@ export type WorktreeSidebarDragSession = {
   draggedIds: readonly string[]
   reorderDraggedIds: readonly string[]
   reorderUnitDraggedIds: readonly string[]
+  // Why: one live coordinate space for both hit testing and rendering. Stability
+  // against mid-drag card resizes comes from holding the drop *decision*
+  // (`anchor`), not from freezing this geometry.
   rects: readonly WorktreeSidebarDragRect[]
+  grab: WorktreeSidebarDragGrab | null
+  anchor: WorktreeSidebarDropAnchor | null
 }
 
 export type WorktreeSidebarAutoscrollResult = {

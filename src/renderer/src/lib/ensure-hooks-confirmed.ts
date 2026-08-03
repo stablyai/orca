@@ -70,14 +70,17 @@ function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId)
 function settingsForHookRepoOwner(
   state: AppState,
   repoId: string,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  runtimeOwnerEnvironmentId?: string | null
 ): AppState['settings'] {
   const parsedHost = hostId ? parseExecutionHostId(hostId) : null
-  const runtimeEnvironmentId = hostId
-    ? parsedHost?.kind === 'runtime'
-      ? parsedHost.environmentId
-      : null
-    : getRuntimeEnvironmentIdForRepo(state, repoId)
+  const runtimeEnvironmentId =
+    runtimeOwnerEnvironmentId?.trim() ||
+    (hostId
+      ? parsedHost?.kind === 'runtime'
+        ? parsedHost.environmentId
+        : null
+      : getRuntimeEnvironmentIdForRepo(state, repoId))
   // Why: hook inspection must follow the repo owner. SSH/local repos execute
   // through desktop IPC, while runtime repos may differ from the focused host.
   return state.settings
@@ -89,7 +92,8 @@ export async function ensureHooksConfirmed(
   state: AppState,
   repoId: string,
   scriptKind: HookScriptKind,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  runtimeOwnerEnvironmentId?: string | null
 ): Promise<'run' | 'skip'> {
   return enqueueTrustPrompt(async () => {
     const hasDuplicateRepoId = state.repos.filter((repo) => repo.id === repoId).length > 1
@@ -104,7 +108,7 @@ export async function ensureHooksConfirmed(
         // Why: hostId disambiguates duplicate repo ids on the local IPC path,
         // matching the checkRuntimeHooks call below.
         const result = await readRuntimeIssueCommand(
-          settingsForHookRepoOwner(state, repoId, hostId),
+          settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
           hostId
         )
@@ -131,7 +135,7 @@ export async function ensureHooksConfirmed(
           return 'run'
         }
         const result = await checkRuntimeHooks(
-          settingsForHookRepoOwner(state, repoId, hostId),
+          settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
           hostId
         )

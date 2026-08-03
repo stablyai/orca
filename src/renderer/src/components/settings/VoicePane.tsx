@@ -22,7 +22,9 @@ type VoicePaneProps = {
 }
 
 export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.JSX.Element {
-  const voiceSettings = settings.voice ?? getDefaultVoiceSettings()
+  // Why: a stable fallback prevents the fetch effect from repeating on every parent render.
+  const [defaultVoiceSettings] = useState(getDefaultVoiceSettings)
+  const voiceSettings = settings.voice ?? defaultVoiceSettings
   const modelStates = useAppStore((s) => s.modelStates)
   const refreshModelStates = useAppStore((s) => s.refreshModelStates)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)

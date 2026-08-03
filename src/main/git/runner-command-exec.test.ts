@@ -501,6 +501,32 @@ describe('runner execFile timeout handling', () => {
     })
   })
 
+  it('routes fixed commands through an explicitly selected WSL distro', async () => {
+    await withPlatform('win32', async () => {
+      const child = createMockChildProcess(1234)
+      execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+        cb(null, 'hostname github.com\n', '')
+        return child
+      })
+
+      await commandExecFileAsync('ssh', ['-G', '--', 'github-work'], {
+        cwd: String.raw`C:\repo`,
+        timeout: 5_000,
+        wslDistro: 'Ubuntu'
+      })
+
+      expect(execFileMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu', '--', 'bash', '-c', expect.any(String)],
+        expect.objectContaining({ cwd: undefined }),
+        expect.any(Function)
+      )
+      const shellCommand = execFileMock.mock.calls[0]?.[1]?.[5] as string
+      expect(shellCommand).toContain('/mnt/c/repo')
+      expect(shellCommand).toContain("'ssh' '-G' '--' 'github-work'")
+    })
+  })
+
   it('forwards synthesized network SSH policy into the selected WSL distro', async () => {
     await withPlatform('win32', async () => {
       const child = createMockChildProcess(1234)

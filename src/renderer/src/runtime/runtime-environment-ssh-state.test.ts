@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { SshConnectionState, SshProviderEpoch } from '../../../shared/ssh-types'
 import { useAppStore } from '@/store'
 import {
   applyRuntimeEnvironmentSshStateChanged,
@@ -20,7 +20,14 @@ function connState(
   targetId: string,
   status: SshConnectionState['status'] = 'connected'
 ): SshConnectionState {
-  return { targetId, status, error: null, reconnectAttempt: 0 }
+  return {
+    targetId,
+    status,
+    error: null,
+    reconnectAttempt: 0,
+    providerEpoch: `${targetId}-provider-epoch` as SshProviderEpoch,
+    connectionGeneration: 7
+  }
 }
 
 type RpcResponses = {
@@ -34,7 +41,7 @@ type RpcResponses = {
 function installRpcResponses(responses: RpcResponses): void {
   callRuntimeRpcMock.mockImplementation((_target, method, params) => {
     switch (method) {
-      case 'ssh.listTargets':
+      case 'ssh.listTargetSummaries':
         if (responses.failListTargets) {
           return Promise.reject(new Error('method not found'))
         }
@@ -84,6 +91,10 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
     expect(bucket?.targetLabels.get('ssh-1')).toBe('devbox')
     expect(bucket?.removedTargetLabels.get('ssh-old')).toBe('retired box')
     expect(bucket?.connectionStates.get('ssh-1')?.status).toBe('connected')
+    expect(bucket?.connectionStates.get('ssh-1')).toMatchObject({
+      providerEpoch: 'ssh-1-provider-epoch',
+      connectionGeneration: 7
+    })
     // ssh-2 had no live state: absent, so reads fall back to 'disconnected'.
     expect(bucket?.connectionStates.has('ssh-2')).toBe(false)
     // Local maps stay untouched.
@@ -131,6 +142,82 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
     expect(bucket?.targetsHydrated).toBe(true)
     expect(bucket?.targetLabels.get('ssh-1')).toBe('devbox')
   })
+
+  it('does not let an in-flight response resurrect readiness after disconnect', async () => {
+    const envId = nextEnvId()
+    let resolveTargets!: (value: { targets: { id: string; label: string }[] }) => void
+    const targetsPromise = new Promise<{ targets: { id: string; label: string }[] }>((resolve) => {
+      resolveTargets = resolve
+    })
+    callRuntimeRpcMock.mockImplementation((_target, method) => {
+      if (method === 'ssh.listTargetSummaries') {
+        return targetsPromise as never
+      }
+      if (method === 'ssh.listRemovedTargetLabels') {
+        return Promise.resolve({ labels: {} } as never)
+      }
+      return Promise.resolve({ state: connState('ssh-1') } as never)
+    })
+
+    const hydration = hydrateRuntimeEnvironmentSshState(envId)
+    useAppStore.getState().markEnvironmentSshStateStale(envId)
+    resolveTargets({ targets: [{ id: 'ssh-1', label: 'devbox' }] })
+    await hydration
+
+    expect(useAppStore.getState().sshStateByEnvironment.has(envId)).toBe(false)
+  })
+
+  it('does not recreate a removed environment bucket from an in-flight response', async () => {
+    const envId = nextEnvId()
+    useAppStore
+      .getState()
+      .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-old', label: 'old box' }])
+    let resolveTargets!: (value: { targets: { id: string; label: string }[] }) => void
+    const targetsPromise = new Promise<{ targets: { id: string; label: string }[] }>((resolve) => {
+      resolveTargets = resolve
+    })
+    callRuntimeRpcMock.mockImplementation((_target, method) => {
+      if (method === 'ssh.listTargetSummaries') {
+        return targetsPromise as never
+      }
+      if (method === 'ssh.listRemovedTargetLabels') {
+        return Promise.resolve({ labels: {} } as never)
+      }
+      return Promise.resolve({ state: connState('ssh-new') } as never)
+    })
+
+    const hydration = hydrateRuntimeEnvironmentSshState(envId, { force: true })
+    useAppStore.getState().removeEnvironmentSshState(envId)
+    resolveTargets({ targets: [{ id: 'ssh-new', label: 'new box' }] })
+    await hydration
+
+    expect(useAppStore.getState().sshStateByEnvironment.has(envId)).toBe(false)
+  })
+
+  it('prunes connection state for targets removed by an authoritative refresh', async () => {
+    const envId = nextEnvId()
+    useAppStore.getState().setEnvironmentSshTargetsMetadata(envId, [
+      { id: 'ssh-live', label: 'live box' },
+      { id: 'ssh-removed', label: 'retired box' }
+    ])
+    useAppStore
+      .getState()
+      .setEnvironmentSshConnectionState(envId, 'ssh-live', connState('ssh-live'))
+    useAppStore
+      .getState()
+      .setEnvironmentSshConnectionState(envId, 'ssh-removed', connState('ssh-removed'))
+    installRpcResponses({
+      targets: [{ id: 'ssh-live', label: 'live box' }],
+      states: { 'ssh-live': connState('ssh-live') }
+    })
+
+    await hydrateRuntimeEnvironmentSshState(envId, { force: true })
+
+    const bucket = useAppStore.getState().sshStateByEnvironment.get(envId)
+    expect(bucket?.targetLabels.has('ssh-removed')).toBe(false)
+    expect(bucket?.connectionStates.has('ssh-removed')).toBe(false)
+    expect(bucket?.connectionStates.get('ssh-live')?.status).toBe('connected')
+  })
 })
 
 describe('applyRuntimeEnvironmentSshStateChanged', () => {
@@ -143,11 +230,34 @@ describe('applyRuntimeEnvironmentSshStateChanged', () => {
     applyRuntimeEnvironmentSshStateChanged(envId, 'ssh-1', connState('ssh-1', 'disconnected'))
 
     expect(
-      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')?.status
-    ).toBe('disconnected')
+      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')
+    ).toMatchObject({
+      status: 'disconnected',
+      providerEpoch: 'ssh-1-provider-epoch',
+      connectionGeneration: 7
+    })
     expect(callRuntimeRpcMock).not.toHaveBeenCalled()
     // Local map untouched.
     expect(useAppStore.getState().sshConnectionStates.size).toBe(0)
+  })
+
+  it('rejects partial authority before retaining a runtime-owned state', () => {
+    const envId = nextEnvId()
+    useAppStore
+      .getState()
+      .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-1', label: 'devbox' }])
+
+    applyRuntimeEnvironmentSshStateChanged(envId, 'ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'partial-provider-epoch' as SshProviderEpoch
+    })
+
+    expect(
+      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.has('ssh-1')
+    ).toBe(false)
   })
 
   it('does not touch another environment bucket or local state (no cross-pollution)', () => {
@@ -224,6 +334,12 @@ describe('connectRuntimeEnvironmentSshTarget', () => {
     expect(
       useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')?.status
     ).toBe('connected')
+    expect(
+      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')
+    ).toMatchObject({
+      providerEpoch: 'ssh-1-provider-epoch',
+      connectionGeneration: 7
+    })
     expect(useAppStore.getState().sshConnectionStates.size).toBe(0)
   })
 

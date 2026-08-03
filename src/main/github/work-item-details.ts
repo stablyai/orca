@@ -8,6 +8,7 @@ import type {
   GitHubIssueTimelineTarget,
   GitHubWorkItem,
   GitHubWorkItemDetails,
+  IssueSourcePreference,
   PRCheckDetail,
   PRComment
 } from '../../shared/types'
@@ -1047,14 +1048,16 @@ export async function getWorkItemDetails(
   number: number,
   type?: 'issue' | 'pr',
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
 ): Promise<GitHubWorkItemDetails | null> {
   const item: Omit<GitHubWorkItem, 'repoId'> | null = await getWorkItem(
     repoPath,
     number,
     type,
     connectionId,
-    ...localGitOptionArgs(localGitOptions)
+    localGitOptions,
+    preference
   )
   if (!item) {
     return null

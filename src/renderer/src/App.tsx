@@ -42,6 +42,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { useAppStore } from './store'
+import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
 import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
@@ -74,8 +75,8 @@ import {
 } from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
-  isFloatingWorkspacePanelShortcut,
   isFloatingWorkspaceTerminalInputTarget,
+  matchFloatingWorkspacePanelChord,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
 import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
@@ -109,6 +110,7 @@ import {
 } from './runtime/sync-runtime-graph'
 import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
+import { MacosTccPromptNoticeHost } from './hooks/MacosTccPromptNoticeHost'
 import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import {
@@ -121,6 +123,8 @@ import {
   shouldPersistWorkspaceSession
 } from './lib/workspace-session'
 import { createSessionWriteSubscriber } from './lib/session-write-subscriber'
+import { sweepRestoredCodexPanesForStaleAccounts } from './lib/codex-stale-pane-sweep'
+import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
 import { buildActiveViewUnloadPatch } from './lib/active-view-persist'
 import {
   buildWorkspaceSessionHostSnapshots,
@@ -131,7 +135,10 @@ import {
   createShutdownCheckpointBeforeUnloadHandler,
   createShutdownCheckpointGuard
 } from './lib/shutdown-checkpoint-guard'
-import { collectFolderWorkspaceKeysFromSession } from './lib/workspace-session-hydration-keys'
+import {
+  collectFolderWorkspaceKeysFromSession,
+  collectWorktreeHydrationRepoIdsFromSession
+} from './lib/workspace-session-hydration-keys'
 import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
@@ -175,13 +182,22 @@ import {
   keybindingMatchesAction,
   type KeybindingActionId,
   type KeybindingContext,
+  type KeybindingMatchOptions,
   type PhysicalModifierToken
 } from '../../shared/keybindings'
+import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../shared/plugins/plugin-command-actions'
+import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
+import { executePluginCommand } from '@/lib/plugin-command-execution'
+import { findPluginCommandForKeybinding } from '@/lib/plugin-command-keybindings'
+import { usePluginCommands } from '@/store/plugin-panels'
 import {
+  getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -191,10 +207,17 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { resolveMountedLazyModalIds, type LazyModalId } from './lazy-modal-mount-state'
 import { translate } from '@/i18n/i18n'
 import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
+import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
+import { useOsc52ClipboardDefaultOnNotice } from './components/terminal-pane/osc52-clipboard-default-on-notice'
 import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
 } from './components/terminal/background-terminal-worktree-mount'
+import {
+  collectTerminalProviderSnapshotPtyIds,
+  synchronizeTerminalProviderSnapshotCapabilities
+} from './components/terminal/terminal-provider-snapshot-capability'
+import { useRemoteRuntimeRecoveryTriggers } from './runtime/use-remote-runtime-recovery-triggers'
 
 // Why: bound the resume-record loss window on a hard kill to ~1 min; capture skips unchanged records so per-tick cost is negligible.
 const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
@@ -345,6 +368,9 @@ const SshPassphraseDialog = lazy(() =>
 const UpdateCard = lazy(() =>
   import('./components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
 )
+const RemoteServerUpdateDialog = lazy(
+  () => import('./components/settings/RemoteServerUpdateDialog')
+)
 const ContextualTourOverlay = lazy(() =>
   import('./components/contextual-tours/ContextualTourOverlay').then((module) => ({
     default: module.ContextualTourOverlay
@@ -390,8 +416,11 @@ function applyRemoteWorkspacePatchStatus(
     message:
       result.message ??
       (result.reason === 'stale-revision'
-        ? 'Workspace changed on another device'
-        : 'Remote workspace sync unavailable')
+        ? translate(
+            'auto.hooks.useIpcEvents.workspaceChangedOnAnotherDevice',
+            'Workspace changed on another device'
+          )
+        : translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable'))
   })
 }
 
@@ -422,11 +451,13 @@ function App(): React.JSX.Element {
       toggleSidebar: s.toggleSidebar,
       fetchRepos: s.fetchRepos,
       fetchReposForAllHosts: s.fetchReposForAllHosts,
+      awaitLocalRepoCatalogSettlement: s.awaitLocalRepoCatalogSettlement,
       fetchProjectGroups: s.fetchProjectGroups,
       fetchProjectGroupsForAllHosts: s.fetchProjectGroupsForAllHosts,
       fetchFolderWorkspaces: s.fetchFolderWorkspaces,
       fetchFolderWorkspacesForAllHosts: s.fetchFolderWorkspacesForAllHosts,
       fetchAllWorktrees: s.fetchAllWorktrees,
+      fetchWorktrees: s.fetchWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchOrcaProfiles: s.fetchOrcaProfiles,
       fetchSettings: s.fetchSettings,
@@ -456,6 +487,7 @@ function App(): React.JSX.Element {
       setRightSidebarTab: s.setRightSidebarTab,
       showRightSidebarFiles: s.showRightSidebarFiles,
       showRightSidebarSearch: s.showRightSidebarSearch,
+      openDiffNotesSendMenuForActiveWorktree: s.openDiffNotesSendMenuForActiveWorktree,
       setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
@@ -493,6 +525,7 @@ function App(): React.JSX.Element {
     hasRequestedBackgroundTerminalWorktreeMount
   )
   const keybindings = useAppStore((s) => s.keybindings)
+  const pluginCommands = usePluginCommands()
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
@@ -625,15 +658,19 @@ function App(): React.JSX.Element {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+  const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
+  const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const shouldMountContextualTourOverlay = activeContextualTourId !== null
+  useOsc52ClipboardDefaultOnNotice(persistedUIReady)
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const markdownTocPanelWidth = useAppStore((s) => s.markdownTocPanelWidth)
+  const combinedDiffFileTreeWidth = useAppStore((s) => s.combinedDiffFileTreeWidth)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -652,6 +689,7 @@ function App(): React.JSX.Element {
     settings?.primarySelectionMiddleClickPaste
   )
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
+
   useAppMenuPaste()
   useLargeTextControlPaste()
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
@@ -708,6 +746,7 @@ function App(): React.JSX.Element {
 
   // Subscribe to IPC push events
   useIpcEvents()
+  useRemoteRuntimeRecoveryTriggers()
   useAutomationDispatchEvents()
   // Why: retention runs at App level (in <RetainedAgentsSyncGate />, a null leaf) so "done" agents survive card collapse and its high-churn subscriptions don't re-render App.
   // Why: git polling lives at App level (RightSidebar unmounts when closed, stranding stale Rebasing/Merging badges); gate on workspaceSessionReady so it doesn't compete with first paint.
@@ -855,32 +894,76 @@ function App(): React.JSX.Element {
             hydratePersistedUI: actions.hydratePersistedUI
           })
         )
-        const startupRuntimeHostIds = await timeRendererStartupStep(
+        // Why: list-runtime-session-hosts reads no repo state, so overlap it with the repo scan
+        // instead of paying its IPC round-trip serially before repos. .catch marks rejections handled
+        // if an earlier await throws first; the value is awaited below and surfaces any error there.
+        const runtimeHostsPromise = timeRendererStartupStep(
           'list-runtime-session-hosts',
           listRuntimeSessionHostIdsForStartup
         )
+        runtimeHostsPromise.catch(() => {})
         // Why: saved remote runtimes can spend the full connect timeout; load only the local catalog for first paint and refresh remotes after hydration.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
         )
-        await timeRendererStartupStep('fetch-project-groups-local', () =>
-          actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
+        await timeRendererStartupStep('repo-catalog-settlement', () =>
+          actions.awaitLocalRepoCatalogSettlement()
         )
-        await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
-          actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
-        )
-        await timeRendererStartupStep('fetch-worktrees', () =>
-          actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
-        )
-        // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
-        const sessionRead = await timeRendererStartupStep('session-get', () =>
-          fetchWorkspaceSessionWithRuntimeHostOwners(
-            window.api.session,
-            useAppStore.getState().repos,
-            startupRuntimeHostIds
+        // Why: folder workspaces merge against projectGroups (repos.ts fetchFolderWorkspacesForAllHosts),
+        // so keep this chain ordered while overlapping it with session-scoped hydration.
+        const localCatalogChain = (async () => {
+          await timeRendererStartupStep('fetch-project-groups-local', () =>
+            actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
+          )
+          await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
+            actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+          )
+        })()
+        const sessionReadPromise = runtimeHostsPromise.then((startupRuntimeHostIds) =>
+          // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
+          timeRendererStartupStep('session-get', () =>
+            fetchWorkspaceSessionWithRuntimeHostOwners(
+              window.api.session,
+              useAppStore.getState().repos,
+              startupRuntimeHostIds
+            )
           )
         )
+        const hydrationSessionChain = sessionReadPromise.then(async (sessionRead) => {
+          const hydrationRepoIds = collectWorktreeHydrationRepoIdsFromSession(
+            sessionRead.session,
+            sessionRead.runtimeHostIdByWorkspaceSessionKey
+          )
+          const hydrationRepoIdSet = new Set(hydrationRepoIds)
+          const hydrationRepos = useAppStore.getState().repos.filter(
+            (repo) =>
+              hydrationRepoIdSet.has(repo.id) &&
+              // Why: disconnected SSH repos hydrate from local metadata; only runtime-owned repos use placeholders.
+              parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'
+          )
+          await timeRendererStartupStep('fetch-hydration-worktrees', () =>
+            mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY, (repo) =>
+              actions.fetchWorktrees(repo.id, { executionHostId: getRepoExecutionHostId(repo) })
+            )
+          )
+          return sessionRead
+        })
+        // Why: wait for both writers to settle before recovery so neither can mutate hydrated state afterward.
+        const [sessionOutcome, catalogOutcome] = await Promise.allSettled([
+          hydrationSessionChain,
+          localCatalogChain
+        ])
+        if (sessionOutcome.status === 'rejected') {
+          throw sessionOutcome.reason
+        }
+        if (catalogOutcome.status === 'rejected') {
+          throw catalogOutcome.reason
+        }
+        const sessionRead = sessionOutcome.value
         await keybindingsPromise
+        await timeRendererStartupStep('repo-catalog-final-settlement', () =>
+          actions.awaitLocalRepoCatalogSettlement()
+        )
         if (!cancelled) {
           const sessionHydrationOptions = {
             additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
@@ -994,10 +1077,24 @@ function App(): React.JSX.Element {
           await timeRendererStartupStep('first-window-services-await', () =>
             window.api.app.awaitFirstWindowStartupServices()
           )
+          await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
+            window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+          )
+          await timeRendererStartupStep('terminal-provider-snapshot-capabilities', () => {
+            return synchronizeTerminalProviderSnapshotCapabilities(
+              collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
+            )
+          })
           reconnectStarted = true
           await timeRendererStartupStep('reconnect-terminals', () =>
             actions.reconnectPersistedTerminals(abortController.signal)
           )
+          await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
+            window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+          )
+          // Why here: reconnect just published restored PTY ids; sweeping them now
+          // re-offers stale Codex panes whose tabs never mount this session.
+          sweepRestoredCodexPanesForStaleAccounts(useAppStore.getState())
           syncZoomCSSVar()
           // Why (issue #1158): unlock the session writer only after hydration and all dependent steps succeeded, so a mid-startup throw can't serialize partially-mutated state to disk.
           actions.setHydrationSucceeded(true)
@@ -1006,19 +1103,34 @@ function App(): React.JSX.Element {
           })
           void (async () => {
             try {
-              await timeRendererStartupStep('remote-catalog-refresh', async () => {
-                await actions.fetchReposForAllHosts()
-                await actions.fetchProjectGroupsForAllHosts()
-                await actions.fetchFolderWorkspacesForAllHosts()
-              })
-              if (!cancelled) {
-                await timeRendererStartupStep('remote-worktree-refresh', async () => {
-                  await actions.fetchAllWorktrees()
-                  await actions.fetchWorktreeLineage()
+              try {
+                await timeRendererStartupStep('remote-catalog-refresh', async () => {
+                  await actions.fetchReposForAllHosts()
+                  await actions.fetchProjectGroupsForAllHosts()
+                  await actions.fetchFolderWorkspacesForAllHosts()
                 })
+              } catch (err) {
+                console.warn('Remote startup catalog refresh failed:', err)
               }
-            } catch (err) {
-              console.warn('Remote startup catalog refresh failed:', err)
+              if (!cancelled) {
+                try {
+                  await timeRendererStartupStep('remote-worktree-refresh', async () => {
+                    // Why: the full scan is not required for session recovery, so keep it off the startup-critical path.
+                    await actions.fetchAllWorktrees()
+                    // Why: the startup prune only saw session-referenced repos; use the deferred scan's
+                    // authoritative results to drop deleted-worktree visit timestamps that would
+                    // otherwise accumulate unbounded (disconnected SSH stays non-authoritative and is kept).
+                    actions.pruneLastVisitedTimestamps()
+                    await actions.fetchWorktreeLineage()
+                  })
+                } catch (err) {
+                  console.warn('Deferred startup worktree refresh failed:', err)
+                }
+              }
+            } finally {
+              if (!cancelled) {
+                useAppStore.setState({ startupWorktreeRefreshCompleted: true })
+              }
             }
           })()
         }
@@ -1031,6 +1143,8 @@ function App(): React.JSX.Element {
           error
         )
         if (!cancelled) {
+          // Why: degraded mode stays interactive; later repo/runtime changes must not remain gated forever.
+          useAppStore.setState({ startupWorktreeRefreshCompleted: true })
           // Why (issue #1158): only apply default UI if ui.get() never hydrated; otherwise defaults would clobber ui.json via the debounced writer.
           const fallbackUI = getStartupErrorFallbackUI(uiHydrated)
           if (fallbackUI) {
@@ -1055,7 +1169,9 @@ function App(): React.JSX.Element {
           if (!reconnectStarted) {
             try {
               await window.api.app.awaitFirstWindowStartupServices()
+              await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
               await actions.reconnectPersistedTerminals(abortController.signal)
+              await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
             } catch (reconnectErr) {
               console.error(
                 '[startup] reconnectPersistedTerminals failed in error path:',
@@ -1098,6 +1214,8 @@ function App(): React.JSX.Element {
       setRuntimeGraphStoreStateGetter(null)
     }
   }, [])
+
+  useEffect(() => installCodexDetachedPaneRestartExecutor(), [])
 
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
@@ -1206,9 +1324,7 @@ function App(): React.JSX.Element {
       const sessionSnapshots = shouldCaptureSession
         ? buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)
         : []
-      // Why: one blocking checkpoint closes the immediate-quit race for both
-      // the narrow view preference and the larger session recovery snapshots.
-      window.api.app.persistBeforeUnloadSync({
+      window.api.app.stageBeforeUnloadSync({
         sessions: sessionSnapshots,
         ui: buildActiveViewUnloadPatch(freshState)
       })
@@ -1260,6 +1376,7 @@ function App(): React.JSX.Element {
         rightSidebarExplorerView,
         rightSidebarWidth,
         markdownTocPanelWidth,
+        combinedDiffFileTreeWidth,
         groupBy,
         sortBy,
         projectOrderBy,
@@ -1268,6 +1385,8 @@ function App(): React.JSX.Element {
         showSleepingWorkspaces,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
+        hideCliCreatedWorkspaces,
+        hideDetachedHeadWorkspaces,
         showDotfilesByWorktree,
         filterRepoIds,
         // Why (#9002): activeView is deliberately NOT included here. It used to
@@ -1292,12 +1411,15 @@ function App(): React.JSX.Element {
     rightSidebarExplorerView,
     rightSidebarWidth,
     markdownTocPanelWidth,
+    combinedDiffFileTreeWidth,
     groupBy,
     sortBy,
     projectOrderBy,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
+    hideCliCreatedWorkspaces,
+    hideDetachedHeadWorkspaces,
     showDotfilesByWorktree,
     filterRepoIds,
     acknowledgedAgentsByPaneKey
@@ -1359,6 +1481,24 @@ function App(): React.JSX.Element {
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
 
+  // Why (STA-2383): macOS throttles the backgrounded window; on occlusion-uncover only `focus`
+  // fires (invalidate-only), so the app-shell's dvh height stays stale and the bottom status bar
+  // is clipped off-screen until a manual resize. Relay the genuine hidden→visible reveal so main
+  // runs the same full repaint (size jiggle) that show/restore/resume get, recomputing the layout.
+  useEffect(() => {
+    if (!isMac || isPairedWebClientWindow()) {
+      return
+    }
+    const handler = (): void => {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+      window.api?.ui?.notifyWindowRevealed?.()
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [])
+
   const hasTabBar = tabCount >= 2
   const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
   // Activity/Space are full-page navigation surfaces (like Settings), so the worktree sidebar is hidden there.
@@ -1401,6 +1541,7 @@ function App(): React.JSX.Element {
     floatingTerminalOpen,
     floatingVisibleTabCount,
     keybindings,
+    pluginCommands,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy,
     setFloatingTerminalOpenWithFocus,
     workspaceChromeActive,
@@ -1415,6 +1556,7 @@ function App(): React.JSX.Element {
     floatingTerminalOpen,
     floatingVisibleTabCount,
     keybindings,
+    pluginCommands,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy,
     setFloatingTerminalOpenWithFocus,
     workspaceChromeActive,
@@ -1423,6 +1565,196 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
+
+    const createRegisteredCommandHandlers = (
+      input?: ShortcutDispatchInput,
+      keybindingContext: KeybindingContext = 'app'
+    ): Map<KeybindingActionId, () => boolean> => {
+      const {
+        activeView,
+        activeWorktreeId,
+        actions,
+        floatingTerminalEnabled,
+        floatingTerminalOpen,
+        terminalShortcutPolicy,
+        keybindings,
+        setFloatingTerminalOpenWithFocus,
+        workspaceChromeActive,
+        creationLayoutActive
+      } = globalShortcutStateRef.current
+      const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
+      const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
+      const claim = (actionId: KeybindingActionId, run: () => void): boolean => {
+        input?.preventDefault()
+        if (
+          input &&
+          keybindingContext === 'terminal' &&
+          (terminalShortcutPolicy ?? 'orca-first') === 'orca-first'
+        ) {
+          showTerminalShortcutCaptureNotification({
+            actionId,
+            platform: shortcutPlatform,
+            keybindings
+          })
+        }
+        run()
+        return true
+      }
+
+      return new Map<KeybindingActionId, () => boolean>([
+        [
+          'worktree.history.back',
+          () => {
+            if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
+              return false
+            }
+            return claim('worktree.history.back', () => useAppStore.getState().goBackWorktree())
+          }
+        ],
+        [
+          'worktree.history.forward',
+          () => {
+            if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
+              return false
+            }
+            return claim('worktree.history.forward', () =>
+              useAppStore.getState().goForwardWorktree()
+            )
+          }
+        ],
+        ['sidebar.left.toggle', () => claim('sidebar.left.toggle', () => actions.toggleSidebar())],
+        [
+          'sidebar.sleepingWorkspaces.toggle',
+          () =>
+            claim('sidebar.sleepingWorkspaces.toggle', () => {
+              const store = useAppStore.getState()
+              const nextShowSleeping = !store.showSleepingWorkspaces
+              store.setShowSleepingWorkspaces(nextShowSleeping)
+              if (nextShowSleeping) {
+                store.setSidebarOpen(true)
+              }
+            })
+        ],
+        [
+          'floatingWorkspace.maximize',
+          () => {
+            if (floatingTerminalOpen || !floatingTerminalEnabled) {
+              return false
+            }
+            return claim('floatingWorkspace.maximize', () => {
+              requestFloatingTerminalOpenMaximized()
+              setFloatingTerminalOpenWithFocus(true)
+            })
+          }
+        ],
+        [
+          'tab.rename',
+          () => {
+            const store = useAppStore.getState()
+            if (
+              !workspaceChromeActive ||
+              floatingWorkspaceFocused ||
+              store.activeTabType !== 'terminal' ||
+              !store.activeTabId
+            ) {
+              return false
+            }
+            return claim('tab.rename', () => store.setRenamingTabId(store.activeTabId!))
+          }
+        ],
+        [
+          'workspace.rename',
+          () => {
+            if (!workspaceChromeActive || floatingWorkspaceFocused || !activeWorktreeId) {
+              return false
+            }
+            return claim('workspace.rename', () => {
+              useAppStore.getState().setSidebarOpen(true)
+              requestScrollToCurrentWorkspaceRevealAndRename()
+            })
+          }
+        ],
+        [
+          'workspace.openBoard',
+          () => {
+            if (activeView === 'settings') {
+              return false
+            }
+            return claim('workspace.openBoard', () => {
+              useAppStore.getState().setSidebarOpen(true)
+              window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
+            })
+          }
+        ],
+        [
+          'view.tasks',
+          () => {
+            const store = useAppStore.getState()
+            if (activeView === 'settings' || !store.repos.some((repo) => isGitRepoKind(repo))) {
+              return false
+            }
+            return claim('view.tasks', () => store.openTaskPage())
+          }
+        ],
+        [
+          'sidebar.right.toggle',
+          () =>
+            canRevealRightSidebar
+              ? claim('sidebar.right.toggle', () => actions.toggleRightSidebar())
+              : false
+        ],
+        [
+          'sidebar.explorer.toggle',
+          () =>
+            canRevealRightSidebar
+              ? claim('sidebar.explorer.toggle', () => actions.showRightSidebarFiles())
+              : false
+        ],
+        [
+          'sidebar.search.toggle',
+          () =>
+            canRevealRightSidebar
+              ? claim('sidebar.search.toggle', () => actions.showRightSidebarSearch())
+              : false
+        ],
+        [
+          'sidebar.sourceControl.toggle',
+          () => {
+            if (!canRevealRightSidebar || document.querySelector('[data-terminal-search-root]')) {
+              return false
+            }
+            return claim('sidebar.sourceControl.toggle', () => {
+              actions.setRightSidebarTab('source-control')
+              actions.setRightSidebarOpen(true)
+            })
+          }
+        ],
+        [
+          'sidebar.checks.toggle',
+          () =>
+            canRevealRightSidebar
+              ? claim('sidebar.checks.toggle', () => {
+                  actions.setRightSidebarTab('checks')
+                  actions.setRightSidebarOpen(true)
+                })
+              : false
+        ],
+        [
+          'sidebar.ports.toggle',
+          () =>
+            canRevealRightSidebar
+              ? claim('sidebar.ports.toggle', () => {
+                  actions.setRightSidebarTab('ports')
+                  actions.setRightSidebarOpen(true)
+                })
+              : false
+        ]
+      ])
+    }
+
+    const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId) =>
+      (createRegisteredCommandHandlers().get(actionId) ?? (() => false))()
+    )
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
       const {
@@ -1433,9 +1765,9 @@ function App(): React.JSX.Element {
         floatingTerminalOpen,
         floatingVisibleTabCount,
         keybindings,
+        pluginCommands,
         terminalShortcutPolicy,
         setFloatingTerminalOpenWithFocus,
-        workspaceChromeActive,
         creationLayoutActive
       } = globalShortcutStateRef.current
 
@@ -1537,158 +1869,58 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Cmd/Ctrl+Alt+Arrow worktree history — kept before right-sidebar shortcuts because it's navigation, not sidebar reveal.
-      if (matchShortcut('worktree.history.back') || matchShortcut('worktree.history.forward')) {
-        // Back/Forward is live wherever the titlebar cluster shows (worktree + page visits), but suppressed in Settings.
-        if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
-          return
-        }
-        input.preventDefault()
-        const store = useAppStore.getState()
-        if (matchShortcut('worktree.history.back')) {
-          store.goBackWorktree()
-        } else {
-          store.goForwardWorktree()
-        }
-        return
-      }
-
       // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
       const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
       if (floatingWorkspaceFocused) {
+        const floatingMatchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
         if (
-          isFloatingWorkspacePanelShortcut(input, shortcutPlatform, null, keybindings, {
-            context,
-            terminalShortcutPolicy
-          })
+          matchFloatingWorkspacePanelChord(
+            input,
+            shortcutPlatform,
+            null,
+            keybindings,
+            floatingMatchOptions
+          ) !== null
         ) {
           return
         }
       }
 
-      // Cmd/Ctrl+B — toggle left sidebar
-      if (matchShortcut('sidebar.left.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.left.toggle')
-        actions.toggleSidebar()
-        return
-      }
-
-      // Toggle the sleeping-workspaces filter without the filters menu (issue #5209); open the sidebar when revealing so they're reachable.
-      if (matchShortcut('sidebar.sleepingWorkspaces.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.sleepingWorkspaces.toggle')
-        const store = useAppStore.getState()
-        const nextShowSleeping = !store.showSleepingWorkspaces
-        store.setShowSleepingWorkspaces(nextShowSleeping)
-        if (nextShowSleeping) {
-          store.setSidebarOpen(true)
-        }
-        return
-      }
-
-      // Cmd+R renames the active terminal tab — free here because the browser pane owns its own reload; non-terminal tabs fall through (no inline title editor).
-      if (workspaceChromeActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
-        const store = useAppStore.getState()
-        if (store.activeTabType === 'terminal' && store.activeTabId) {
+      // Plugin chords are user-reviewed instructional content. They win over
+      // built-in defaults only in app focus; terminal/editor/browser handlers
+      // retain their own shortcut authority.
+      if (context === 'app') {
+        const pluginCommand = findPluginCommandForKeybinding(
+          pluginCommands,
+          input,
+          shortcutPlatform,
+          keybindings,
+          Boolean(activeWorktreeId)
+        )
+        if (pluginCommand) {
           input.preventDefault()
-          notifyTerminalCapture('tab.rename')
-          store.setRenamingTabId(store.activeTabId)
+          void executePluginCommand(pluginCommand, 'plugin-keybinding').catch(() => {
+            toast.error(
+              translate('auto.App.pluginCommandFailed', 'Could not run the plugin command.')
+            )
+          })
           return
         }
       }
 
-      // Open/reveal the worktree card first so its inline title editor is mounted even when filters or collapse state would hide it.
-      if (
-        workspaceChromeActive &&
-        !floatingWorkspaceFocused &&
-        matchShortcut('workspace.rename') &&
-        activeWorktreeId
-      ) {
-        input.preventDefault()
-        notifyTerminalCapture('workspace.rename')
-        const store = useAppStore.getState()
-        store.setSidebarOpen(true)
-        requestScrollToCurrentWorkspaceRevealAndRename()
-        return
-      }
-
-      if (matchShortcut('workspace.openBoard') && activeView !== 'settings') {
-        input.preventDefault()
-        notifyTerminalCapture('workspace.openBoard')
-        const store = useAppStore.getState()
-        store.setSidebarOpen(true)
-        window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
-        return
-      }
-
-      // Cmd/Ctrl+N is handled in the main-process before-input-event allowlist (window-shortcut-policy.ts), not here, so it fires even inside editors/browser guests.
-
-      // Full-page navigation surfaces own the whole content area, so don't reveal the right sidebar.
-      if (matchShortcut('view.tasks') && activeView !== 'settings') {
-        const store = useAppStore.getState()
-        if (store.repos.some((repo) => isGitRepoKind(repo))) {
-          input.preventDefault()
-          notifyTerminalCapture('view.tasks')
-          store.openTaskPage()
-        }
-        return
-      }
-
-      if (!canRevealRightSidebar) {
-        return
-      }
-
-      // Cmd/Ctrl+L — toggle right sidebar
-      if (matchShortcut('sidebar.right.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.right.toggle')
-        actions.toggleRightSidebar()
-        return
-      }
-
-      // Cmd/Ctrl+Shift+E — toggle right sidebar / explorer tab
-      if (matchShortcut('sidebar.explorer.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.explorer.toggle')
-        actions.showRightSidebarFiles()
-        return
-      }
-
-      // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
-      if (matchShortcut('sidebar.search.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.search.toggle')
-        openSearchSidebar(null)
-        return
-      }
-
-      // Cmd/Ctrl+Shift+G — source control tab; skip when terminal search is open (there it means "find previous"). DOM check because capture-phase order varies.
-      if (matchShortcut('sidebar.sourceControl.toggle')) {
-        if (document.querySelector('[data-terminal-search-root]')) {
+      const handlers = createRegisteredCommandHandlers(input, context)
+      for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
+        if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
           return
         }
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.sourceControl.toggle')
-        actions.setRightSidebarTab('source-control')
-        actions.setRightSidebarOpen(true)
-        return
       }
 
-      if (matchShortcut('sidebar.checks.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.checks.toggle')
-        actions.setRightSidebarTab('checks')
-        actions.setRightSidebarOpen(true)
-        return
-      }
-
-      // Cmd+Shift+I — ports tab (macOS only); Ctrl+Shift+I is the DevTools accelerator on Windows/Linux.
-      if (matchShortcut('sidebar.ports.toggle')) {
-        input.preventDefault()
-        notifyTerminalCapture('sidebar.ports.toggle')
-        actions.setRightSidebarTab('ports')
-        actions.setRightSidebarOpen(true)
+      // Unbound by default, so it runs after the built-in alias handlers above; only consumes the chord when the active worktree has unsent notes.
+      if (canRevealRightSidebar && matchShortcut('sourceControl.sendReviewNotes')) {
+        if (actions.openDiffNotesSendMenuForActiveWorktree()) {
+          input.preventDefault()
+          notifyTerminalCapture('sourceControl.sendReviewNotes')
+        }
       }
     }
 
@@ -1754,6 +1986,7 @@ function App(): React.JSX.Element {
     window.addEventListener('keyup', onKeyUp, { capture: true })
     window.addEventListener('blur', onBlur)
     return () => {
+      unregisterAppCommandDispatcher()
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })
       window.removeEventListener('blur', onBlur)
@@ -1990,7 +2223,7 @@ function App(): React.JSX.Element {
   return (
     <div
       ref={setAppRootNode}
-      className="flex flex-col h-dvh w-screen overflow-hidden"
+      className="app-layout"
       style={
         {
           '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
@@ -2005,6 +2238,8 @@ function App(): React.JSX.Element {
         <ConfirmationDialogProvider>
           <LinkRoutingPreferenceDialogProvider>
             <WorkspacePortScanner enabled={workspaceSessionReady} />
+            {/* Why: plugin language-pack discovery must not re-render the App shell. */}
+            <MacosTccPromptNoticeHost />
             {/* Why: leaf-mounted retention sync keeps agent-status subscriptions out of the App render tree. */}
             <RetainedAgentsSyncGate />
             <AgentHibernationGate />
@@ -2535,11 +2770,21 @@ function App(): React.JSX.Element {
             >
               <SkillFreshnessUpdateDialog />
             </RecoverableRenderErrorBoundary>
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.remote-server-update-dialog"
+                surface="overlay"
+                compact
+              >
+                <RemoteServerUpdateDialog />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
       </TooltipProvider>
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
       <SkillFreshnessNudge />
+      <WorktreeBaseFallbackDialog />
       <PinnedTabCloseDialog />
       {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
       {hasCustomTitleBar && <WindowControls />}

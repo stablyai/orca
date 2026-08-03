@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake
@@ -27,6 +27,25 @@ describe('mobile E2EE v2 contract', () => {
         clientNonceB64: btoa(String.fromCharCode(...new Uint8Array(32).fill(9)))
       })
     ).toBeNull()
+  })
+
+  it('rejects wrong-length handshake fields before base64 decoding', () => {
+    const { hello, ready } = createMobileE2EEV2Fixture()
+    const oversized = 'A'.repeat(45)
+    const decode = vi.spyOn(globalThis, 'atob')
+
+    expect(
+      validateMobileE2EEV2Handshake(
+        { ...hello, clientPublicKeyB64: oversized, clientNonceB64: oversized },
+        {
+          ...ready,
+          desktopPublicKeyB64: oversized,
+          clientNonceB64: oversized,
+          desktopNonceB64: oversized
+        }
+      )
+    ).toBeNull()
+    expect(decode).not.toHaveBeenCalled()
   })
 
   it('rejects context and capability-selection changes', () => {

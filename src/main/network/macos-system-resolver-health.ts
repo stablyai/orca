@@ -16,8 +16,10 @@ export function classifyMacSystemResolverHealth(scutilOutput: string): SystemRes
   return 'unknown'
 }
 
-export async function readCurrentProcessMacSystemResolverHealth(): Promise<SystemResolverHealth> {
-  if (process.platform !== 'darwin') {
+export async function readCurrentProcessMacSystemResolverHealth(
+  signal?: AbortSignal
+): Promise<SystemResolverHealth> {
+  if (process.platform !== 'darwin' || signal?.aborted) {
     return 'unknown'
   }
 
@@ -35,6 +37,10 @@ export async function readCurrentProcessMacSystemResolverHealth(): Promise<Syste
     const onStderrData = (chunk: string): void => {
       stderr += chunk
     }
+    const onAbort = (): void => {
+      child.kill('SIGKILL')
+      finish()
+    }
     const finish = (): void => {
       if (settled) {
         return
@@ -48,6 +54,7 @@ export async function readCurrentProcessMacSystemResolverHealth(): Promise<Syste
       child.stderr.off('data', onStderrData)
       child.off('error', finish)
       child.off('close', finish)
+      signal?.removeEventListener('abort', onAbort)
       resolve(classifyMacSystemResolverHealth(`${stdout}\n${stderr}`))
     }
     timer = setTimeout(() => {
@@ -62,5 +69,6 @@ export async function readCurrentProcessMacSystemResolverHealth(): Promise<Syste
     child.stderr.on('data', onStderrData)
     child.on('error', finish)
     child.on('close', finish)
+    signal?.addEventListener('abort', onAbort, { once: true })
   })
 }

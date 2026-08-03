@@ -80,6 +80,43 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves the AI Vault OMP resume file through hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'omp',
+          providerSession: { key: 'session_id', id: 'omp-session' },
+          prompt: '',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 10,
+          launchConfig: {
+            agentArgs: '',
+            agentEnv: {},
+            ompResumeFilePath: '/custom/omp-sessions/project/session.jsonl'
+          },
+          origin: 'quit'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(
+        result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchConfig
+          ?.ompResumeFilePath
+      ).toBe('/custom/omp-sessions/project/session.jsonl')
+    }
+  })
+
   it('drops Pi sleeping-agent records without an authoritative session file', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

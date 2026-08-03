@@ -25,9 +25,9 @@ import {
   Pencil,
   SlidersHorizontal,
   Trash,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react'
-import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -99,6 +99,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useActiveWorktree } from '@/store/selectors'
 import { useAppStore } from '@/store'
+import { sortChecksBySeverity } from '../../../../shared/pr-check-severity-order'
+import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -344,10 +346,12 @@ export function PRTriageStrip({
   fixChecksDisabledReason?: string
 }): React.JSX.Element {
   const resolvedReview = review ?? pr
-  const failingCount = checks.filter((check) => isFailedCheck(check)).length
-  const pendingCount = checks.filter(
-    (check) => check.conclusion === 'pending' || check.conclusion === null
-  ).length
+  // Why: the whole strip reads one shared summary so it cannot contradict the checks pill — a
+  // `{status: completed, conclusion: null}` check used to spin here as "1 pending" forever while
+  // the pill two panes away called it unresolved.
+  const summary = summarizeProviderChecks(checks)
+  const failingCount = summary.failed
+  const pendingCount = summary.pending
 
   if (resolvedReview?.mergeable === 'CONFLICTING') {
     return (
@@ -429,6 +433,35 @@ export function PRTriageStrip({
     )
   }
 
+  // Why: nothing passed, failed or is still running — a green tick here would contradict the grey
+  // "Unresolved checks" pill reading the same list.
+  if (summary.state === 'neutral') {
+    return (
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <CircleDashed className="size-3.5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-medium text-foreground">
+              {summary.neutral}{' '}
+              {translate('auto.components.right.sidebar.checks.panel.content.5341023167', 'check')}
+              {summary.neutral === 1 ? '' : 's'}{' '}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedChip',
+                'unresolved'
+              )}
+            </div>
+            <div className="truncate text-[10px] text-muted-foreground">
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedStripHint',
+                'These checks finished without a pass or fail verdict.'
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="border-b border-border px-3 py-2">
       <div className="flex min-w-0 items-center gap-2">
@@ -502,17 +535,6 @@ export function ConflictTriageStrip({
       </div>
     </div>
   )
-}
-
-const CHECK_SORT_ORDER: Record<string, number> = {
-  failure: 0,
-  timed_out: 0,
-  action_required: 0,
-  cancelled: 1,
-  pending: 2,
-  neutral: 3,
-  skipped: 4,
-  success: 5
 }
 
 type CheckDetailsLoadState = {
@@ -970,15 +992,7 @@ export function ChecksList({
     shouldConstrainCheckList && checks.length > 0
   )
   detailsContextRef.current = checkDetailsContextKey
-  const sorted = React.useMemo(
-    () =>
-      [...checks].sort(
-        (a, b) =>
-          (CHECK_SORT_ORDER[a.conclusion ?? 'pending'] ?? 3) -
-          (CHECK_SORT_ORDER[b.conclusion ?? 'pending'] ?? 3)
-      ),
-    [checks]
-  )
+  const sorted = React.useMemo(() => sortChecksBySeverity(checks), [checks])
   const rows = React.useMemo(
     () =>
       sorted.map((check, index) => ({
@@ -987,11 +1001,15 @@ export function ChecksList({
       })),
     [checkDetailsContextKey, sorted]
   )
-  const passingCount = checks.filter((c) => c.conclusion === 'success').length
-  const failingCount = checks.filter((c) => isFailedCheck(c)).length
-  const pendingCount = checks.filter(
-    (c) => c.conclusion === 'pending' || c.conclusion === null
-  ).length
+  // Why: every header count comes from the same classifier the checks pill uses — counting only
+  // `success` made a 2-success/3-skipped PR say "2 passing" next to "5/5 passed", and treating a
+  // null conclusion as pending kept a completed-but-unresolved check spinning forever.
+  const {
+    passed: passingCount,
+    failed: failingCount,
+    pending: pendingCount,
+    neutral: neutralCount
+  } = summarizeProviderChecks(checks)
 
   useEffect(() => {
     const validKeys = new Set(rows.map((row) => row.key))
@@ -1200,6 +1218,18 @@ export function ChecksList({
               {translate(
                 'auto.components.right.sidebar.checks.panel.content.9ad98f2a17',
                 'pending'
+              )}
+            </span>
+          )}
+          {/* Why: without this chip a list of only unresolved checks rendered a header with no
+              counts at all, so nothing said why the pill was grey. */}
+          {neutralCount > 0 && (
+            <span className="flex items-center gap-1">
+              <CircleDashed className="size-3 text-muted-foreground" />
+              {neutralCount}{' '}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedChip',
+                'unresolved'
               )}
             </span>
           )}
@@ -2008,7 +2038,9 @@ function PRCommentGroupView({
     ) : null
   const startReply = onStartReply ? (comment: PRComment) => onStartReply(comment.id) : undefined
   const surfaceClassName = cn(
-    getPRCommentGroupSurfaceClasses(presentation, actionState, { queued: isQueued }),
+    getPRCommentGroupSurfaceClasses(presentation, actionState, {
+      queued: isQueued
+    }),
     group.kind === 'standalone' ? presentation.groupStandalone : presentation.groupThread
   )
   const sharedRowProps = {

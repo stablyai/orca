@@ -1,9 +1,12 @@
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
 import { commitFileExplorerOp } from '@/components/right-sidebar/fileExplorerUndoRedo'
 import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
+import {
+  captureFileExplorerOperationGuard,
+  getFileExplorerOperationOwner
+} from '@/components/right-sidebar/file-explorer-operation-owner'
+import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
 
 /**
  * Electron's ipcRenderer.invoke wraps errors as:
@@ -24,6 +27,7 @@ type RenameFileArgs = {
   newName: string
   worktreeId: string
   worktreePath: string
+  operationOwner?: FileExplorerOperationOwner
   /** refresh the parent directory in the explorer tree, if caller tracks one */
   refreshDir?: (dirPath: string) => Promise<void>
 }
@@ -50,15 +54,23 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
   }
   const parentDir = dirname(oldPath)
   const newPath = joinPath(parentDir, trimmed)
-  const connectionId = getConnectionId(worktreeId) ?? undefined
+  const operationGuard = captureFileExplorerOperationGuard(
+    worktreeId,
+    args.operationOwner ?? getFileExplorerOperationOwner(worktreeId)
+  )
+  const operationRoute = operationGuard.route
   const fileContext = {
-    settings: useAppStore.getState().settings,
+    settings: operationRoute.settings,
     worktreeId,
     worktreePath,
-    connectionId
+    connectionId: operationRoute.connectionId,
+    expectedExecutionHostId: operationRoute.expectedExecutionHostId,
+    expectedSshTargetId: operationRoute.expectedSshTargetId,
+    expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
   }
 
   try {
+    operationGuard.assertCurrent()
     await executeOpenEditorPathMove({
       context: fileContext,
       fromPath: oldPath,
@@ -68,6 +80,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
     })
     commitFileExplorerOp({
       undo: async () => {
+        operationGuard.assertCurrent()
         await executeOpenEditorPathMove({
           context: fileContext,
           fromPath: newPath,
@@ -80,6 +93,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
         }
       },
       redo: async () => {
+        operationGuard.assertCurrent()
         await executeOpenEditorPathMove({
           context: fileContext,
           fromPath: oldPath,

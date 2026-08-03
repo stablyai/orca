@@ -3,8 +3,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean } from '../schemas'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
 import { AI_VAULT_AGENTS, AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../../../../shared/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
 
 // Why: bound limit + scopePaths so a client cannot force an unbounded scan.
 // Each scopePath is a host-local match prefix (validated/capped, never used for

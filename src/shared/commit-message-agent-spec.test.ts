@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
+  COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS,
   CUSTOM_AGENT_ID,
   DEFAULT_COMMIT_MESSAGE_AGENT_ID,
   getCommitMessageAgentCapability,
@@ -218,6 +219,17 @@ describe('model discovery parsers', () => {
         defaultThinkingLevel: 'low'
       }
     ])
+  })
+
+  it('rejects excessive Codex model nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const depth = COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+    try {
+      expect(parseCodexModels(`${'['.repeat(depth)}0${']'.repeat(depth)}`)).toEqual([])
+      expect(parseSpy).not.toHaveBeenCalled()
+    } finally {
+      parseSpy.mockRestore()
+    }
   })
 
   it('parses one-model-per-line output', () => {

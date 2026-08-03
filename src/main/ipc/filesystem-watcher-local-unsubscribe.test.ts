@@ -32,7 +32,8 @@ vi.mock('./parcel-watcher-process', async (importOriginal) => {
 })
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn()
+  getSshFilesystemProvider: vi.fn(),
+  onSshFilesystemProviderRegistered: () => () => {}
 }))
 
 import {
