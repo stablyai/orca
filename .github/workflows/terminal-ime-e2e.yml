@@ -10,9 +10,25 @@ permissions:
 
 jobs:
   linux-x11:
-    name: Linux X11 terminal IME
+    name: Linux X11 terminal IME (${{ matrix.engine }})
     runs-on: ubuntu-22.04
     timeout-minutes: 25
+
+    strategy:
+      # Each engine is its own signal. A libpinyin candidate drifting must not
+      # hide a hangul regression, which is the one leg with recorded
+      # expectations.
+      fail-fast: false
+      matrix:
+        include:
+          - engine: hangul
+            apt-package: ibus-hangul
+          - engine: libpinyin
+            apt-package: ibus-libpinyin
+          - engine: anthy
+            apt-package: ibus-anthy
+          - engine: unikey
+            apt-package: ibus-unikey
 
     steps:
       - name: Checkout
@@ -28,7 +44,7 @@ jobs:
           dbus-x11
           dconf-gsettings-backend
           ibus
-          ibus-hangul
+          ${{ matrix.apt-package }}
           libglib2.0-bin
           python3
           xdotool
@@ -64,16 +80,16 @@ jobs:
           tests/e2e/terminal-ime-exact-byte.spec.ts
           --workers=1
 
-      - name: Run native IBus Hangul exact-byte tests
+      - name: Run native IBus ${{ matrix.engine }} exact-byte tests
         env:
           SKIP_BUILD: '1'
-        run: pnpm run test:e2e:terminal-ime-native
+        run: pnpm run test:e2e:terminal-ime-native -- --engine=${{ matrix.engine }}
 
       - name: Upload terminal IME evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: terminal-ime-evidence
+          name: terminal-ime-evidence-${{ matrix.engine }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
