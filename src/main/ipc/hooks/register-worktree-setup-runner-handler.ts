@@ -8,7 +8,7 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import { getSetupTrustContent } from '../../../shared/orca-hook-setup-config'
 import { getSetupCommandSource, loadHooks } from '../../hooks'
 import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
-import { createSetupRunnerScript } from '../../worktree-runner-script'
+import { createSetupRunnerScript, resolveSetupRunnerShell } from '../../worktree-runner-script'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
@@ -83,7 +83,8 @@ export function registerWorktreeSetupRunnerHandler(context: WorktreeIpcContext):
           repo,
           args.worktreePath,
           setupScript,
-          getLocalProjectWorktreeGitOptions(store, repo)
+          getLocalProjectWorktreeGitOptions(store, repo),
+          resolveSetupRunnerShell(store.getSettings())
         )
         const trustContent = getSetupTrustContent(loadHooks(args.worktreePath))
         return {
