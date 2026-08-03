@@ -27,6 +27,8 @@ import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import {
   isPairedWebClientWindow,
+  resolveWindowControlsWidth,
+  shouldRenderCustomWindowControls,
   shouldRenderDesktopWindowChrome
 } from '@/lib/desktop-window-chrome'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
@@ -223,10 +225,22 @@ const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
 const shortcutPlatform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
-// Why: Windows and Linux remove the native title bar so the renderer draws its own chrome; paired web clients run in a browser tab and must not.
+const isWebClient = isPairedWebClientWindow()
+// Why: Windows and Linux both place app content in the titlebar area; paired
+// web clients run in a browser tab and must not reserve desktop chrome.
 const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
   platform: shortcutPlatform,
-  isWebClient: isPairedWebClientWindow()
+  isWebClient
+})
+// Why: Windows uses Electron's native Window Controls Overlay for Win11 Snap
+// Layouts. Only frameless Linux still needs renderer-drawn caption buttons.
+const hasCustomWindowControls = shouldRenderCustomWindowControls({
+  platform: shortcutPlatform,
+  isWebClient
+})
+const windowControlsWidth = resolveWindowControlsWidth({
+  platform: shortcutPlatform,
+  isWebClient
 })
 
 async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
@@ -260,7 +274,8 @@ type ShortcutDispatchInput = {
   preventDefault: () => void
 }
 
-// Why: Windows and Linux both remove the native title bar, so we render our own min/max/close buttons (Fluent/Win11-style SVGs).
+// Why: frameless Linux has no native caption buttons, so render our own
+// min/max/close controls. Windows uses the native Window Controls Overlay.
 function WindowControls(): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
@@ -2221,7 +2236,7 @@ function App(): React.JSX.Element {
         {
           '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
           // Shared so surfaces can avoid the Windows/Linux window-controls overlay without hardcoding 138px everywhere.
-          '--window-controls-width': hasCustomTitleBar ? '138px' : '0px',
+          '--window-controls-width': windowControlsWidth,
           // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
           '--window-controls-height': hasCustomTitleBar ? '36px' : '0px'
         } as React.CSSProperties
@@ -2779,8 +2794,8 @@ function App(): React.JSX.Element {
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />
       <PinnedTabCloseDialog />
-      {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
-      {hasCustomTitleBar && <WindowControls />}
+      {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so Linux WindowControls stay clickable. */}
+      {hasCustomWindowControls && <WindowControls />}
     </div>
   )
 }

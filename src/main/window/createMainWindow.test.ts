@@ -9,6 +9,9 @@ const {
   menuPopupMock,
   notificationMock,
   notificationShowMock,
+  nativeThemeMock,
+  nativeThemeOnMock,
+  nativeThemeRemoveListenerMock,
   powerMonitorOnMock,
   powerMonitorRemoveListenerMock,
   isMock,
@@ -16,6 +19,13 @@ const {
 } = vi.hoisted(() => {
   const menuPopupMock = vi.fn()
   const notificationShowMock = vi.fn()
+  const nativeThemeOnMock = vi.fn()
+  const nativeThemeRemoveListenerMock = vi.fn()
+  const nativeThemeMock = {
+    shouldUseDarkColors: false,
+    on: nativeThemeOnMock,
+    removeListener: nativeThemeRemoveListenerMock
+  }
   return {
     browserWindowMock: vi.fn(),
     openExternalMock: vi.fn(),
@@ -26,6 +36,9 @@ const {
       return { show: notificationShowMock }
     }),
     notificationShowMock,
+    nativeThemeMock,
+    nativeThemeOnMock,
+    nativeThemeRemoveListenerMock,
     powerMonitorOnMock: vi.fn(),
     powerMonitorRemoveListenerMock: vi.fn(),
     isMock: { dev: false },
@@ -39,7 +52,7 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn(), handle: vi.fn(), removeHandler: vi.fn() },
   Menu: { buildFromTemplate: buildFromTemplateMock },
   Notification: notificationMock,
-  nativeTheme: { shouldUseDarkColors: false },
+  nativeTheme: nativeThemeMock,
   powerMonitor: { on: powerMonitorOnMock, removeListener: powerMonitorRemoveListenerMock },
   screen: {
     getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } }),
@@ -94,6 +107,9 @@ describe('createMainWindow', () => {
     menuPopupMock.mockClear()
     notificationMock.mockClear()
     notificationShowMock.mockClear()
+    nativeThemeMock.shouldUseDarkColors = false
+    nativeThemeOnMock.mockReset()
+    nativeThemeRemoveListenerMock.mockReset()
     powerMonitorOnMock.mockReset()
     powerMonitorRemoveListenerMock.mockReset()
     isMock.dev = false
@@ -196,7 +212,8 @@ describe('createMainWindow', () => {
       })
     } else if (process.platform === 'win32') {
       expect(browserWindowOptions).toMatchObject({
-        titleBarStyle: 'hidden'
+        titleBarStyle: 'hidden',
+        titleBarOverlay: { color: '#ffffff', symbolColor: '#0a0a0a', height: 36 }
       })
     } else {
       // Linux: native frame is dropped so the renderer titlebar isn't stacked
@@ -288,12 +305,23 @@ describe('createMainWindow', () => {
 
   it('sets platform-specific titlebar and frame options for every desktop platform', () => {
     for (const [platform, expected] of [
-      ['darwin', { titleBarStyle: 'hiddenInset', frame: undefined }],
-      ['win32', { titleBarStyle: 'hidden', frame: undefined }],
-      ['linux', { titleBarStyle: undefined, frame: false }]
+      ['darwin', { titleBarStyle: 'hiddenInset', titleBarOverlay: undefined, frame: undefined }],
+      [
+        'win32',
+        {
+          titleBarStyle: 'hidden',
+          titleBarOverlay: { color: '#ffffff', symbolColor: '#0a0a0a', height: 36 },
+          frame: undefined
+        }
+      ],
+      ['linux', { titleBarStyle: undefined, titleBarOverlay: undefined, frame: false }]
     ] satisfies [
       NodeJS.Platform,
-      { titleBarStyle: string | undefined; frame: boolean | undefined }
+      {
+        titleBarStyle: string | undefined
+        titleBarOverlay: { color: string; symbolColor: string; height: number } | undefined
+        frame: boolean | undefined
+      }
     ][]) {
       browserWindowMock.mockReset()
       const webContents = {
@@ -329,6 +357,7 @@ describe('createMainWindow', () => {
 
       const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
       expect(browserWindowOptions.titleBarStyle).toBe(expected.titleBarStyle)
+      expect(browserWindowOptions.titleBarOverlay).toEqual(expected.titleBarOverlay)
       expect(browserWindowOptions.frame).toBe(expected.frame)
     }
   })
@@ -2304,52 +2333,77 @@ describe('createMainWindow', () => {
     expect(destroy).not.toHaveBeenCalled()
   })
 
-  it('ignores traffic light sync IPC on non-macOS', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
+  it('syncs native window chrome with UI zoom by platform', () => {
+    for (const platform of ['darwin', 'win32', 'linux'] satisfies NodeJS.Platform[]) {
+      browserWindowMock.mockReset()
+      vi.mocked(ipcMain.on).mockReset()
+      const webContents = {
+        on: vi.fn(),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn()
+      }
+      const browserWindowInstance = {
+        webContents,
+        on: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        setWindowButtonPosition: vi.fn(),
+        setTitleBarOverlay: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+      browserWindowMock.mockImplementation(function () {
+        return browserWindowInstance
+      })
+
+      withPlatform(platform, () => {
+        createMainWindow(null)
+        const syncListener = vi
+          .mocked(ipcMain.on)
+          .mock.calls.find(([channel]) => channel === 'ui:sync-window-chrome')?.[1]
+
+        expect(syncListener).toBeTypeOf('function')
+        syncListener?.({} as never, 1.2)
+      })
+
+      if (platform === 'darwin') {
+        expect(browserWindowInstance.setWindowButtonPosition).toHaveBeenCalledWith({
+          x: 16,
+          y: 16
+        })
+      } else {
+        expect(browserWindowInstance.setWindowButtonPosition).not.toHaveBeenCalled()
+      }
+      if (platform === 'win32') {
+        expect(browserWindowInstance.setTitleBarOverlay).toHaveBeenCalledWith({
+          color: '#ffffff',
+          symbolColor: '#0a0a0a',
+          height: 43
+        })
+        const themeListener = nativeThemeOnMock.mock.calls.find(
+          ([event]) => event === 'updated'
+        )?.[1]
+        expect(themeListener).toBeTypeOf('function')
+        nativeThemeMock.shouldUseDarkColors = true
+        withPlatform(platform, () => themeListener?.())
+        expect(browserWindowInstance.setTitleBarOverlay).toHaveBeenLastCalledWith({
+          color: '#171717',
+          symbolColor: '#fafafa',
+          height: 43
+        })
+        nativeThemeMock.shouldUseDarkColors = false
+      } else {
+        expect(browserWindowInstance.setTitleBarOverlay).not.toHaveBeenCalled()
+      }
     }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      setWindowButtonPosition: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    createMainWindow(null)
-
-    const syncListener = vi
-      .mocked(ipcMain.on)
-      .mock.calls.find(([channel]) => channel === 'ui:sync-traffic-lights')?.[1]
-
-    expect(syncListener).toBeTypeOf('function')
-
-    syncListener?.({} as never, 1.2)
-
-    if (process.platform === 'darwin') {
-      expect(browserWindowInstance.setWindowButtonPosition).toHaveBeenCalledWith({ x: 16, y: 16 })
-      return
-    }
-
-    expect(browserWindowInstance.setWindowButtonPosition).not.toHaveBeenCalled()
   })
 
   it('intercepts Cmd+B for sidebar when the markdown editor is not focused', () => {
@@ -3645,13 +3699,19 @@ describe('createMainWindow', () => {
     })
 
     it('removes the powerMonitor resume listener when the window closes', () => {
-      const { windowHandlers } = setupResumeWindow()
-      createMainWindow(null)
-      const onResume = getPowerResumeListener()
+      withPlatform('win32', () => {
+        const { windowHandlers } = setupResumeWindow()
+        createMainWindow(null)
+        const onResume = getPowerResumeListener()
+        const onNativeThemeUpdated = nativeThemeOnMock.mock.calls.find(
+          ([event]) => event === 'updated'
+        )?.[1]
 
-      windowHandlers.closed()
+        windowHandlers.closed()
 
-      expect(powerMonitorRemoveListenerMock).toHaveBeenCalledWith('resume', onResume)
+        expect(powerMonitorRemoveListenerMock).toHaveBeenCalledWith('resume', onResume)
+        expect(nativeThemeRemoveListenerMock).toHaveBeenCalledWith('updated', onNativeThemeUpdated)
+      })
     })
   })
 

@@ -162,17 +162,40 @@ function isMacAppPasteInput(input: Electron.Input): boolean {
 
 // Why: titlebar content center sits ~18 CSS px from top (×zoom); traffic lights are ~12px tall, so top edge = center − 6.
 const TITLEBAR_CSS_CENTER = 18
+const TITLEBAR_CSS_HEIGHT = TITLEBAR_CSS_CENTER * 2
 const TRAFFIC_LIGHT_RADIUS = 6
 const TRAFFIC_LIGHT_X = 16
 const MIN_WIDTH = 600
 const MIN_HEIGHT = 400
 
-function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void {
-  if (process.platform !== 'darwin' || win.isDestroyed()) {
+// Why: BrowserWindow cannot read CSS variables before the renderer loads; mirror --background.
+function getWindowBackgroundColor(): string {
+  return nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff'
+}
+
+// Why: native WCO cannot read CSS variables; mirror the --card titlebar surface from main.css.
+function getWindowTitleBarColor(): string {
+  return nativeTheme.shouldUseDarkColors ? '#171717' : '#ffffff'
+}
+
+function getWindowsTitleBarOverlay(height: number): Electron.TitleBarOverlayOptions {
+  return {
+    color: getWindowTitleBarColor(),
+    symbolColor: nativeTheme.shouldUseDarkColors ? '#fafafa' : '#0a0a0a',
+    height
+  }
+}
+
+function syncWindowChrome(win: BrowserWindow, zoomFactor: number): void {
+  if (win.isDestroyed()) {
     return
   }
-  const y = Math.round(TITLEBAR_CSS_CENTER * zoomFactor - TRAFFIC_LIGHT_RADIUS)
-  win.setWindowButtonPosition({ x: TRAFFIC_LIGHT_X, y })
+  if (process.platform === 'darwin') {
+    const y = Math.round(TITLEBAR_CSS_CENTER * zoomFactor - TRAFFIC_LIGHT_RADIUS)
+    win.setWindowButtonPosition({ x: TRAFFIC_LIGHT_X, y })
+  } else if (process.platform === 'win32') {
+    win.setTitleBarOverlay(getWindowsTitleBarOverlay(Math.round(TITLEBAR_CSS_HEIGHT * zoomFactor)))
+  }
 }
 
 type CreateMainWindowOptions = {
@@ -265,7 +288,7 @@ export function createMainWindow(
     acceptFirstMouse: true,
     // Why: auto-hide the Windows/Linux menu bar to save a row (Alt reveals it); macOS uses the system menu bar anyway.
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    backgroundColor: getWindowBackgroundColor(),
     // Why: macOS 'hiddenInset' keeps native traffic lights in our custom titlebar; Windows 'hidden' removes the OS title bar so it doesn't double up.
     titleBarStyle:
       process.platform === 'darwin'
@@ -273,9 +296,17 @@ export function createMainWindow(
         : process.platform === 'win32'
           ? 'hidden'
           : undefined,
+    // Why: Windows needs a real native maximize caption button for the Windows 11
+    // Snap Layout hover menu. The overlay preserves our custom titlebar content
+    // while letting Windows own min/max/close hit-testing and system behavior.
+    ...(process.platform === 'win32'
+      ? {
+          titleBarOverlay: getWindowsTitleBarOverlay(TITLEBAR_CSS_HEIGHT)
+        }
+      : {}),
     // Why: Linux ignores titleBarStyle 'hidden'; frame:false drops the native frame so we don't get a double title bar (renderer draws its own).
     ...(process.platform === 'linux' ? { frame: false } : {}),
-    // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts on zoom change.
+    // Why: initial position for 1x zoom; syncWindowChrome() adjusts on zoom change.
     ...(process.platform === 'darwin'
       ? {
           trafficLightPosition: {
@@ -313,13 +344,21 @@ export function createMainWindow(
   }
   powerMonitor.on('resume', onSystemResume)
 
+  let windowChromeZoomFactor = 1
+  const onNativeThemeUpdated = (): void => {
+    syncWindowChrome(mainWindow, windowChromeZoomFactor)
+  }
+  if (process.platform === 'win32') {
+    nativeTheme.on('updated', onNativeThemeUpdated)
+  }
+
   mainWindow.webContents.on('dom-ready', () => {
     const level = store?.getUI().uiZoomLevel ?? 0
     mainWindow.webContents.setZoomLevel(level)
-    // Why: native traffic lights don't scale with CSS zoom; reposition on startup to stay aligned with the zoomed titlebar.
-    if (process.platform === 'darwin') {
-      syncTrafficLightPosition(mainWindow, Math.pow(1.2, level))
-    }
+    windowChromeZoomFactor = Math.pow(1.2, level)
+    // Why: native window controls don't scale with webFrame zoom; keep their
+    // platform chrome aligned with the restored CSS titlebar height.
+    syncWindowChrome(mainWindow, windowChromeZoomFactor)
   })
 
   // Why: macOS+Electron 41 re-emits ready-to-show on webview-guest creation; a one-shot guard stops re-running maximize() after resize (#591).
@@ -1040,11 +1079,12 @@ export function createMainWindow(
       mainWindow.close()
     }
   }
-  const trafficLightChannel = 'ui:sync-traffic-lights'
-  const onSyncTrafficLights = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
-    syncTrafficLightPosition(mainWindow, zoomFactor)
+  const windowChromeChannel = 'ui:sync-window-chrome'
+  const onSyncWindowChrome = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
+    windowChromeZoomFactor = zoomFactor
+    syncWindowChrome(mainWindow, zoomFactor)
   }
-  ipcMain.on(trafficLightChannel, onSyncTrafficLights)
+  ipcMain.on(windowChromeChannel, onSyncWindowChrome)
 
   // Why: renderer-drawn window controls on Windows/Linux replicate the native title-bar buttons hidden by custom chrome.
   const minimizeChannel = 'window:minimize'
@@ -1108,7 +1148,10 @@ export function createMainWindow(
     floatingPanelFocused = false
     shortcutRecorderFocused = false
     clearRendererRecoveryTimer()
-    ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
+    if (process.platform === 'win32') {
+      nativeTheme.removeListener('updated', onNativeThemeUpdated)
+    }
+    ipcMain.removeListener(windowChromeChannel, onSyncWindowChrome)
     ipcMain.removeListener(minimizeChannel, onMinimize)
     ipcMain.removeListener(maximizeChannel, onMaximize)
     browserManager.setDictationShortcutForwardingPredicate(null)

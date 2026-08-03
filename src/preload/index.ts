@@ -3991,8 +3991,8 @@ const api = {
       subscribeNativeFileDrop(callback),
     getZoomLevel: (): number => webFrame.getZoomLevel(),
     setZoomLevel: (level: number): void => webFrame.setZoomLevel(level),
-    syncTrafficLights: (zoomFactor: number): void =>
-      ipcRenderer.send('ui:sync-traffic-lights', zoomFactor),
+    syncWindowChrome: (zoomFactor: number): void =>
+      ipcRenderer.send('ui:sync-window-chrome', zoomFactor),
     // Why: one-way send so main's before-input-event can synchronously skip Cmd+B while the markdown editor is focused (TipTap bold).
     setMarkdownEditorFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setMarkdownEditorFocused', focused)
