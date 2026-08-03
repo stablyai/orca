@@ -949,6 +949,7 @@ import {
   createMobileSessionTabsNotifyCoalescer,
   type MobileSessionTabsNotifyCoalescer
 } from './mobile-session-tabs-notify-coalescer'
+import { TerminalFocusNavigationCoalescer } from './terminal-focus-navigation-coalescer'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   assertFolderWorkspacePathUsable,
@@ -2747,6 +2748,12 @@ export class OrcaRuntimeService {
     createMobileSessionTabsNotifyCoalescer((worktreeId) =>
       this.notifyMobileSessionTabsChangedNow(worktreeId)
     )
+  // Why: concurrent host terminal.focus storms (CLI switch fan-out / bulk open)
+  // each await a full host reveal; only one terminal can be focused, so latest-wins
+  // single-flight bounds host work. Does not replace cheaper activation or
+  // reconnect-scan bounding for sequential soft freezes.
+  private readonly terminalFocusNavigationCoalescer =
+    new TerminalFocusNavigationCoalescer<RuntimeTerminalFocus>()
   private pendingMobileSessionPtyInventoryRefresh: Promise<Set<string> | null> | null = null
   private leaves = new Map<string, RuntimeLeafRecord>()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
@@ -25873,38 +25880,158 @@ export class OrcaRuntimeService {
     handle: string,
     options: { navigateHost?: boolean } = {}
   ): Promise<RuntimeTerminalFocus> {
+    const navigateHost = options.navigateHost !== false
+    const livePtyIdentity = (): RuntimeTerminalFocus => {
+      const live = this.getLivePtyForHandle(handle)
+      if (!live?.pty.connected) {
+        throw new Error('terminal_exited')
+      }
+      return {
+        handle,
+        tabId: live.pty.tabId ?? live.record.tabId,
+        worktreeId: live.pty.worktreeId,
+        navigated: false
+      }
+    }
+    const liveLeafIdentity = (): RuntimeTerminalFocus => {
+      this.assertGraphReady()
+      const { leaf: current } = this.getLiveLeafForHandle(handle)
+      return {
+        handle,
+        tabId: current.tabId,
+        worktreeId: current.worktreeId,
+        navigated: false
+      }
+    }
+
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
         throw new Error('terminal_exited')
       }
-      const parsedPaneKey = parsePaneKey(pty.pty.paneKey ?? '')
-      const revealed =
-        options.navigateHost === false
-          ? undefined
-          : await this.notifier?.revealTerminalSession?.(pty.pty.worktreeId, {
-              ptyId: pty.pty.ptyId,
-              title: getLatestPtyTitle(pty.pty),
-              ...(pty.pty.launchConfig
-                ? { launchConfig: copySleepingAgentLaunchConfig(pty.pty.launchConfig) }
-                : {}),
-              ...(pty.pty.launchToken ? { launchToken: pty.pty.launchToken } : {}),
-              ...(pty.pty.launchAgent ? { launchAgent: pty.pty.launchAgent } : {}),
-              ...(pty.pty.tabId !== null ? { tabId: pty.pty.tabId } : {}),
-              ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
-            })
-      return {
-        handle,
-        tabId: revealed?.tabId ?? pty.pty.tabId ?? pty.record.tabId,
-        worktreeId: pty.pty.worktreeId
+      if (!navigateHost || !this.notifier?.revealTerminalSession) {
+        return {
+          handle,
+          tabId: pty.pty.tabId ?? pty.record.tabId,
+          worktreeId: pty.pty.worktreeId,
+          navigated: false
+        }
       }
+      // Coalesce concurrent host navigations: only the latest full reveal claims navigated.
+      return this.terminalFocusNavigationCoalescer.run({
+        key: handle,
+        resolveSuperseded: (completed) =>
+          completed ? { ...completed, navigated: false } : livePtyIdentity(),
+        run: async (ctx) => {
+          const live = this.getLivePtyForHandle(handle)
+          if (!live?.pty.connected) {
+            throw new Error('terminal_exited')
+          }
+          if (!ctx.isCurrent()) {
+            return {
+              handle,
+              tabId: live.pty.tabId ?? live.record.tabId,
+              worktreeId: live.pty.worktreeId,
+              navigated: false
+            }
+          }
+          const notifier = this.notifier
+          if (!notifier?.revealTerminalSession) {
+            return {
+              handle,
+              tabId: live.pty.tabId ?? live.record.tabId,
+              worktreeId: live.pty.worktreeId,
+              navigated: false
+            }
+          }
+          const parsedPaneKey = parsePaneKey(live.pty.paneKey ?? '')
+          const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
+            ptyId: live.pty.ptyId,
+            title: getLatestPtyTitle(live.pty),
+            ...(live.pty.launchConfig
+              ? { launchConfig: copySleepingAgentLaunchConfig(live.pty.launchConfig) }
+              : {}),
+            ...(live.pty.launchToken ? { launchToken: live.pty.launchToken } : {}),
+            ...(live.pty.launchAgent ? { launchAgent: live.pty.launchAgent } : {}),
+            ...(live.pty.tabId !== null ? { tabId: live.pty.tabId } : {}),
+            ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
+          })
+          if (!ctx.isCurrent() || this.notifier !== notifier) {
+            return {
+              handle,
+              tabId: revealed?.tabId ?? live.pty.tabId ?? live.record.tabId,
+              worktreeId: live.pty.worktreeId,
+              navigated: false
+            }
+          }
+          return {
+            handle,
+            tabId: revealed?.tabId ?? live.pty.tabId ?? live.record.tabId,
+            worktreeId: live.pty.worktreeId,
+            navigated: true
+          }
+        }
+      })
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    if (options.navigateHost !== false) {
-      this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId, leaf.leafId)
+    if (!navigateHost) {
+      return {
+        handle,
+        tabId: leaf.tabId,
+        worktreeId: leaf.worktreeId,
+        navigated: false
+      }
     }
-    return { handle, tabId: leaf.tabId, worktreeId: leaf.worktreeId }
+    if (!this.notifier?.focusTerminal) {
+      return {
+        handle,
+        tabId: leaf.tabId,
+        worktreeId: leaf.worktreeId,
+        navigated: false
+      }
+    }
+    return this.terminalFocusNavigationCoalescer.run({
+      key: handle,
+      resolveSuperseded: (completed) =>
+        completed ? { ...completed, navigated: false } : liveLeafIdentity(),
+      run: async (ctx) => {
+        this.assertGraphReady()
+        const { leaf: liveLeaf } = this.getLiveLeafForHandle(handle)
+        if (!ctx.isCurrent()) {
+          return {
+            handle,
+            tabId: liveLeaf.tabId,
+            worktreeId: liveLeaf.worktreeId,
+            navigated: false
+          }
+        }
+        const notifier = this.notifier
+        if (!notifier?.focusTerminal) {
+          return {
+            handle,
+            tabId: liveLeaf.tabId,
+            worktreeId: liveLeaf.worktreeId,
+            navigated: false
+          }
+        }
+        notifier.focusTerminal(liveLeaf.tabId, liveLeaf.worktreeId, liveLeaf.leafId)
+        if (!ctx.isCurrent() || this.notifier !== notifier) {
+          return {
+            handle,
+            tabId: liveLeaf.tabId,
+            worktreeId: liveLeaf.worktreeId,
+            navigated: false
+          }
+        }
+        return {
+          handle,
+          tabId: liveLeaf.tabId,
+          worktreeId: liveLeaf.worktreeId,
+          navigated: true
+        }
+      }
+    })
   }
 
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {

@@ -96,16 +96,15 @@ describe('xterm IME composition cancellation', () => {
     terminal.dispose()
   })
 
-  it('emits nothing when the preedit is cancelled without observed input events', async () => {
+  it('drops a Sogou preedit cancelled without a trailing input event', async () => {
     const { emitted, terminal, textarea } = openTerminal()
 
     dispatchCompositionEvent(textarea, 'compositionstart')
-    dispatchCompositionEvent(textarea, 'compositionupdate', 'ce')
-    textarea.value = 'ce'
-    await nextEventLoop()
-    dispatchCompositionEvent(textarea, 'compositionupdate', 'c')
-    textarea.value = 'c'
-    await nextEventLoop()
+    for (const preedit of ['nihao', 'niha', 'nih', 'ni', 'n']) {
+      dispatchCompositionEvent(textarea, 'compositionupdate', preedit)
+      textarea.value = preedit
+      await nextEventLoop()
+    }
     textarea.value = ''
     dispatchCompositionEvent(textarea, 'compositionend')
     await nextEventLoop()
