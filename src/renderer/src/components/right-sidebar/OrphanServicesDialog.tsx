@@ -7,7 +7,10 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import type { WorkspaceService } from '../../../../shared/workspace-services'
+import {
+  resolveServiceStopRequest,
+  type WorkspaceService
+} from '../../../../shared/workspace-services'
 import { ServiceRow, UNRESOLVED } from './ServiceRow'
 import { translate } from '@/i18n/i18n'
 
@@ -60,7 +63,13 @@ export function OrphanServicesDialog({
           <div className="max-h-80 overflow-y-auto scrollbar-sleek">
             {orphans.map((service) => (
               <div key={service.id} className="border-b border-border/40 last:border-b-0">
-                <ServiceRow service={service} showProject onOpen={onOpen} onStop={onStop} />
+                <ServiceRow
+                  service={service}
+                  showProject
+                  onOpen={onOpen}
+                  onStop={onStop}
+                  stopRequest={resolveServiceStopRequest(service, null)}
+                />
                 <div className="px-8 pb-1 text-[10px] text-muted-foreground/70">
                   {service.workingDir ?? UNRESOLVED}
                 </div>

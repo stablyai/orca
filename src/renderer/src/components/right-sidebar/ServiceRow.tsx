@@ -3,7 +3,10 @@ import { Box, Copy, ExternalLink, Server, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { WorkspaceService } from '../../../../shared/workspace-services'
+import type {
+  WorkspaceService,
+  WorkspaceServiceStopRequest
+} from '../../../../shared/workspace-services'
 import { translate } from '@/i18n/i18n'
 
 /** Shown wherever a value could not be resolved. Never replaced by a guess. */
@@ -13,18 +16,23 @@ export function ServiceRow({
   service,
   showProject,
   onOpen,
-  onStop
+  onStop,
+  stopRequest
 }: {
   service: WorkspaceService
   showProject: boolean
   onOpen: (service: WorkspaceService) => void
   onStop: ((service: WorkspaceService) => void) | null
+  stopRequest: WorkspaceServiceStopRequest | null
 }): React.JSX.Element {
   const handleCopy = useCallback(() => {
     void window.api.ui.writeClipboardText(service.address)
   }, [service.address])
 
-  const canStop = Boolean(onStop && service.pid)
+  // Why not `service.pid`: a container's pid is the shared docker proxy, and a
+  // process with no workspace owner is refused by the main-process guard. A
+  // button that always fails is worse than no button.
+  const canStop = Boolean(onStop && stopRequest)
   // Why: a container's listener is the docker proxy, so processName reads
   // `com.docker.backend` for every one of them. The container name is what
   // distinguishes them.

@@ -2,6 +2,8 @@ import { runBoundedCommand } from './port-scan-command-runner'
 
 const ANCESTRY_TIMEOUT_MS = 3_000
 const MAX_ANCESTOR_DEPTH = 16
+/** An agent's command line carries its entire prompt; nothing useful is that long. */
+const MAX_LAUNCH_COMMAND_LENGTH = 120
 
 export type ProcessAncestryRow = {
   pid: number
@@ -116,10 +118,22 @@ export function condenseLaunchCommand(command: string): string {
   }
   const runner = executableName(tokens[0])
   const isInterpreter = runner === 'node' || runner === 'node.exe' || runner === 'bun'
-  if (!isInterpreter || tokens.length < 2) {
-    return tokens.map(shortenPathToken).join(' ')
+  const condensed =
+    !isInterpreter || tokens.length < 2
+      ? tokens.map(shortenPathToken).join(' ')
+      : [basename(tokens[1]), ...tokens.slice(2).map(shortenPathToken)].filter(Boolean).join(' ')
+  return truncateLaunchCommand(condensed)
+}
+
+/**
+ * Bound the displayed command. A process can hold a command line of arbitrary
+ * length, and one long row would blow out the panel's layout.
+ */
+function truncateLaunchCommand(command: string): string {
+  if (command.length <= MAX_LAUNCH_COMMAND_LENGTH) {
+    return command
   }
-  return [basename(tokens[1]), ...tokens.slice(2).map(shortenPathToken)].filter(Boolean).join(' ')
+  return `${command.slice(0, MAX_LAUNCH_COMMAND_LENGTH - 1).trimEnd()}…`
 }
 
 function shortenPathToken(token: string): string {
@@ -160,6 +174,18 @@ export function resolveServiceLaunchOrigin(
       break
     }
     visited.add(parent.pid)
+
+    // Why an agent is a boundary as well as a shell: an agent may spawn a
+    // service with no shell in between, and its own command line carries the
+    // entire prompt. Climbing into it reports thousands of characters of
+    // unrelated text as the launch command.
+    const parentAgent = AGENT_COMMANDS.get(executableName(parent.command))
+    if (parentAgent) {
+      return {
+        launchCommand: condenseLaunchCommand(topmostNonShell.command),
+        launchedByAgent: parentAgent
+      }
+    }
 
     if (isShellCommand(parent.command)) {
       return {

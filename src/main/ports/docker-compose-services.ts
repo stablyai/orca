@@ -62,7 +62,7 @@ function dockerBinaryCandidates(): string[] {
   ]
 }
 
-async function resolveDockerBinary(): Promise<string> {
+export async function resolveDockerBinary(): Promise<string> {
   const candidates = dockerBinaryCandidates()
   for (const candidate of candidates) {
     if (!candidate.includes('/') && !candidate.includes('\\')) {

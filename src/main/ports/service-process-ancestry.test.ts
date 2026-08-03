@@ -144,6 +144,33 @@ describe('resolveServiceLaunchOrigin', () => {
     expect(resolveServiceLaunchOrigin(1001, table).launchCommand).toBe('b')
   })
 
+  it('stops at an agent parent instead of reporting its prompt as the command', () => {
+    // An agent can spawn a service with no shell in between. Its command line
+    // carries the whole prompt, so climbing into it dumps thousands of chars.
+    const prompt = 'You are taking over a feature. '.repeat(80)
+    const table = buildProcessAncestryTable([
+      { pid: 60, ppid: 59, command: 'python3 -m http.server 47311' },
+      { pid: 59, ppid: 58, command: `claude --dangerously-skip-permissions ${prompt}` }
+    ])
+
+    const origin = resolveServiceLaunchOrigin(60, table)
+
+    expect(origin.launchCommand).toBe('python3 -m http.server 47311')
+    expect(origin.launchedByAgent).toBe('Claude Code')
+  })
+
+  it('never returns an unbounded command', () => {
+    const table = buildProcessAncestryTable([
+      { pid: 70, ppid: 69, command: `node /repo/bin/server ${'--flag=value '.repeat(200)}` },
+      { pid: 69, ppid: 68, command: '/bin/zsh' }
+    ])
+
+    const { launchCommand } = resolveServiceLaunchOrigin(70, table)
+
+    expect(launchCommand!.length).toBeLessThanOrEqual(120)
+    expect(launchCommand).toMatch(/…$/)
+  })
+
   it('recognizes codex as the launching agent', () => {
     const table = buildProcessAncestryTable(
       parseProcessAncestryOutput(

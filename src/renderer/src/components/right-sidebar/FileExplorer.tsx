@@ -21,7 +21,11 @@ import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { OrphanServicesDialog } from './OrphanServicesDialog'
 import { ServicesSection } from './ServicesSection'
 import { useWorkspaceServices } from './use-workspace-services'
-import { selectOrphanServices, type WorkspaceService } from '../../../../shared/workspace-services'
+import {
+  resolveServiceStopRequest,
+  selectOrphanServices,
+  type WorkspaceService
+} from '../../../../shared/workspace-services'
 import { SearchFilters } from './SearchFilters'
 import { SearchQueryRow } from './SearchQueryRow'
 import { SearchResultsPane } from './SearchResultsPane'
@@ -267,21 +271,18 @@ function FileExplorerFiles(): React.JSX.Element {
 
   const handleStopService = useCallback(
     async (service: WorkspaceService) => {
-      if (!service.pid) {
+      const request = resolveServiceStopRequest(service, activeRepo?.id ?? null)
+      if (!request) {
         return
       }
-      const result = await window.api.workspacePorts.kill({
-        ...(activeRepo ? { repoId: activeRepo.id } : {}),
-        pid: service.pid,
-        port: service.port
-      })
+      const result = await window.api.workspacePorts.stopService(request)
       if (!result.ok) {
         toast.error(result.reason)
         return
       }
       await services.refresh()
     },
-    [activeRepo, services]
+    [activeRepo?.id, services]
   )
 
   const [bgMenuOpen, setBgMenuOpen] = useState(false)

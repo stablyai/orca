@@ -37,6 +37,33 @@ export type WorkspaceService = {
   container: WorkspaceServiceContainer | null
 }
 
+export type WorkspaceServiceStopRequest =
+  | { kind: 'container'; containerId: string }
+  | { kind: 'process'; repoId?: string; pid: number; port: number }
+
+/** Whether the panel can actually stop this service, and why not when it cannot. */
+export function resolveServiceStopRequest(
+  service: WorkspaceService,
+  repoId: string | null
+): WorkspaceServiceStopRequest | null {
+  if (service.kind === 'container') {
+    return service.container
+      ? { kind: 'container', containerId: service.container.containerId }
+      : null
+  }
+  // The process path requires Orca to own the workspace: stopping an
+  // unattributed listener would let the panel kill arbitrary system processes.
+  if (!service.pid || !service.owner) {
+    return null
+  }
+  return {
+    kind: 'process',
+    ...(repoId ? { repoId } : {}),
+    pid: service.pid,
+    port: service.port
+  }
+}
+
 export type WorkspaceServiceScanResult = {
   platform: NodeJS.Platform | 'unknown'
   scannedAt: number

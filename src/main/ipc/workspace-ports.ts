@@ -9,7 +9,11 @@ import type {
   WorkspacePortScanRequest,
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
-import type { WorkspaceServiceScanResult } from '../../shared/workspace-services'
+import type {
+  WorkspaceServiceScanResult,
+  WorkspaceServiceStopRequest
+} from '../../shared/workspace-services'
+import { stopWorkspaceService } from '../ports/workspace-service-stop'
 import {
   getStoreWorkspacePortProbes,
   killWorkspacePort,
@@ -90,6 +94,19 @@ export function registerWorkspacePortHandlers(
     }
   )
 
+  ipcMain.removeHandler('workspacePorts:stopService')
+  ipcMain.handle(
+    'workspacePorts:stopService',
+    async (_event, rawArgs?: unknown): Promise<WorkspacePortKillResult> => {
+      const request = parseStopServiceRequest(rawArgs)
+      if (!request) {
+        return { ok: false, reason: 'Invalid service.' }
+      }
+      const repoId = request.kind === 'process' ? request.repoId : undefined
+      return stopWorkspaceService(getStoreWorkspacePortProbes(store, repoId), request)
+    }
+  )
+
   ipcMain.handle(
     'workspacePorts:kill',
     async (_event, rawArgs?: unknown): Promise<WorkspacePortKillResult> => {
@@ -134,6 +151,36 @@ function parseScanRequest(value: unknown): WorkspacePortScanRequest | undefined 
   }
   const repoId = (value as { repoId?: unknown }).repoId
   return typeof repoId === 'string' && repoId.length > 0 ? { repoId } : undefined
+}
+
+function parseStopServiceRequest(value: unknown): WorkspaceServiceStopRequest | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const args = value as {
+    kind?: unknown
+    containerId?: unknown
+    repoId?: unknown
+    pid?: unknown
+    port?: unknown
+  }
+  if (args.kind === 'container') {
+    return typeof args.containerId === 'string' && args.containerId.length > 0
+      ? { kind: 'container', containerId: args.containerId }
+      : null
+  }
+  if (args.kind !== 'process') {
+    return null
+  }
+  if (!Number.isSafeInteger(args.pid) || !Number.isSafeInteger(args.port)) {
+    return null
+  }
+  return {
+    kind: 'process',
+    ...(typeof args.repoId === 'string' && args.repoId.length > 0 ? { repoId: args.repoId } : {}),
+    pid: args.pid as number,
+    port: args.port as number
+  }
 }
 
 function parseKillRequest(value: unknown): WorkspacePortKillRequest | null {

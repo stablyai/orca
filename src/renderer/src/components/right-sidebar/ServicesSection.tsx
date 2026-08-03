@@ -8,6 +8,7 @@ import type {
   WorkspaceServiceScanResult
 } from '../../../../shared/workspace-services'
 import {
+  resolveServiceStopRequest,
   selectServicesForOtherWorktrees,
   selectServicesForWorktree
 } from '../../../../shared/workspace-services'
@@ -151,6 +152,7 @@ export function ServicesSection({
               showProject
               onOpen={onOpen}
               onStop={onStop}
+              stopRequest={resolveServiceStopRequest(service, repoId)}
             />
           ))}
 
@@ -182,6 +184,7 @@ export function ServicesSection({
                     showProject
                     onOpen={onOpen}
                     onStop={onStop}
+                    stopRequest={resolveServiceStopRequest(service, repoId)}
                   />
                 ))}
             </div>
