@@ -65,6 +65,10 @@ import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import {
+  expandWindowsEnvironmentVariables,
+  expandWindowsPathEnvironmentVariables
+} from '../../shared/windows-environment-expansion'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -158,12 +162,17 @@ function promoteAgentTeamsShimPath(
   if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
     return
   }
-  const shimDir = requestedPath.split(delimiter)[0]
+  const normalizedRequestedPath =
+    process.platform === 'win32'
+      ? expandWindowsEnvironmentVariables(requestedPath, env)
+      : requestedPath
+  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
+  const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
   if (!shimDir) {
     return
   }
-  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
-  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
+  const currentParts = env.PATH?.split(pathDelimiter).filter(Boolean) ?? []
+  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
 /**
@@ -789,6 +798,7 @@ export class LocalPtyProvider implements IPtyProvider {
         shellReadyLaunch = args.command ? shellLaunch : null
       }
     }
+    expandWindowsPathEnvironmentVariables(finalEnv)
     promoteAgentTeamsShimPath(finalEnv, args.env?.PATH)
 
     // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).

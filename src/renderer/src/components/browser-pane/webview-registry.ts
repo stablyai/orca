@@ -72,6 +72,10 @@ function ensureDragListeners(): void {
   dragListenersAttached = true
 }
 
+export function hasLiveBrowserGuest(browserPageId: string): boolean {
+  return webviewRegistry.has(browserPageId)
+}
+
 export function getBrowserWebviewMemoryProfile(): BrowserWebviewMemoryProfile {
   return {
     browserWebviewCount: webviewRegistry.size,

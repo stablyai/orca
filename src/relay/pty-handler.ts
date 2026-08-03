@@ -50,6 +50,7 @@ import {
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
+import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
 import {
   agentSessionOwnerBindingsEqual,
   ClaimedAgentPtyOwnerRegistry
@@ -613,6 +614,7 @@ export class PtyHandler {
     if (!result.TERM) {
       result.TERM = 'xterm-256color'
     }
+    expandWindowsPathEnvironmentVariables(result)
     return result
   }
 

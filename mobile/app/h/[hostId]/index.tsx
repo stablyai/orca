@@ -1,14 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  SectionList,
-  Pressable,
-  ActivityIndicator,
-  Alert,
-  RefreshControl
-} from 'react-native'
+import { View, Text, StyleSheet, SectionList, Pressable, Alert, RefreshControl } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
@@ -95,6 +86,7 @@ import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sectio
 import { getMobileWorkspaceLineageGroupKey } from '../../../src/worktree/mobile-workspace-lineage'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
 import { WorktreeCatalogSnapshotClient } from '../../../src/worktree/worktree-catalog-snapshot-client'
+import { HostWorkspaceListStates } from '../../../src/worktree/host-workspace-list-states'
 import { repoColor } from '../../../src/worktree/repo-color'
 import {
   WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
@@ -154,6 +146,9 @@ export function HostScreen({
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
+  // Why (STA-3123): error code of the last failed worktree.ps, so a broken catalog
+  // path renders as a failure instead of an empty host. Cleared on the next success.
+  const [catalogError, setCatalogError] = useState<string | null>(null)
   // Why: track the locally-opened worktree so the active-row highlight moves instantly instead of waiting for the next poll.
   const [optimisticActiveWorktreeId, setOptimisticActiveWorktreeId] = useState<string | null>(null)
   // One tick drives every visible agent row's relative timestamp.
@@ -326,6 +321,7 @@ export function HostScreen({
     repoMetadataFetchedAtRef.current = 0
     // Why: useState initializer runs only on first mount, so re-seed the cache when Expo Router reuses this screen for a new hostId.
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
+    setCatalogError(null)
     if (freshCache) {
       setWorktrees(freshCache)
       setLastKnownWorktrees(freshCache)
@@ -427,17 +423,27 @@ export function HostScreen({
       const requestHostId = hostId
 
       try {
-        const pendingCatalog = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
+        const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
         if (clientRef.current !== requestClient || hostId !== requestHostId) {
           return
         }
         if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
           return
         }
+        // Why (STA-3123): a failed catalog request must not pass for "0 worktrees";
+        // surface it so a broken remote host is diagnosable instead of looking empty.
+        if (fetched.kind === 'request_failed') {
+          setCatalogError(fetched.code)
+          return
+        }
+        if (fetched.pending.admission.kind === 'invalid') {
+          setCatalogError('invalid_response')
+        }
         // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
         // host truth over optimistic local edits regardless of payload size.
-        const confirmed = worktreeCatalogRef.current.admit(pendingCatalog)
+        const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
         if (confirmed) {
+          setCatalogError(null)
           // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
           setWorktrees((current) =>
             areWorktreeListsEqual(current, confirmed) ? current : confirmed
@@ -486,6 +492,9 @@ export function HostScreen({
         }
       } catch {
         // Will retry on reconnect
+        if (clientRef.current === requestClient && hostId === requestHostId) {
+          setCatalogError('network_error')
+        }
       } finally {
         fetchWorktreesInFlightRef.current = false
       }
@@ -1099,27 +1108,15 @@ export function HostScreen({
         </View>
       )}
 
-      {/* Loading state */}
-      {((connState === 'connecting' || connState === 'reconnecting') &&
-        displayWorktrees.length === 0) ||
-      (connState === 'connected' && !worktreesLoaded && displayWorktrees.length === 0) ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
-      ) : null}
-
-      {/* Empty state */}
-      {connState === 'connected' && worktreesLoaded && sections.length === 0 && (
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>
-            {search
-              ? 'No matching worktrees'
-              : activeFilterCount > 0
-                ? 'No worktrees match filters'
-                : 'No worktrees'}
-          </Text>
-        </View>
-      )}
+      <HostWorkspaceListStates
+        connState={connState}
+        worktreesLoaded={worktreesLoaded}
+        displayCount={displayWorktrees.length}
+        sectionCount={sections.length}
+        catalogError={catalogError}
+        search={search}
+        activeFilterCount={activeFilterCount}
+      />
 
       {sections.length > 0 && (
         <SectionList

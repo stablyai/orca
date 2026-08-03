@@ -47,14 +47,32 @@ import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
 import { RetainedBrowserPaneOverlayLayer } from './browser-pane/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
-import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
-import { useBrowserMobileDriverForAny } from '@/lib/pane-manager/browser-mobile-driver-state'
+import {
+  isBrowserAutomationVisible,
+  useBrowserAutomationVisibilityForAny
+} from './browser-pane/browser-automation-visibility'
+import {
+  isBrowserPageMobileDriven,
+  useBrowserMobileDriverForAny
+} from '@/lib/pane-manager/browser-mobile-driver-state'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
   destroyRemovedBrowserWebview,
-  destroyWorkspaceWebviews
+  destroyWorkspaceWebviews,
+  destroyWorktreeBrowserGuests
 } from '../store/slices/browser-webview-cleanup'
+import {
+  browserTabVisibilityPageIds,
+  selectBrowserGuestEvictionWorktreeIds,
+  touchBrowserGuestWorktreeRecency,
+  worktreeHoldsLiveBrowserGuests
+} from './browser-pane/browser-guest-worktree-retention'
+import {
+  hasActiveBrowserPageDownload,
+  installBrowserPageDownloadActivityTracking
+} from './browser-pane/browser-page-download-activity'
+import { hasLiveBrowserGuest } from './browser-pane/webview-registry'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,
@@ -272,6 +290,8 @@ function getKeybindingContext(target: EventTarget | null): KeybindingContext {
 
 function Terminal(): React.JSX.Element | null {
   const mountedWorktreeIdsRef = useRef(new Set<string>())
+  // Why an array: browser-guest eviction needs activation order (LRU), not just membership.
+  const browserGuestWorktreeRecencyRef = useRef<string[]>([])
   const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
   const terminalWorktreeHiddenSinceRef = useRef(new Map<string, number>())
   // Why two extra clocks: hiddenSince survives a background-measure window (so
@@ -310,6 +330,9 @@ function Terminal(): React.JSX.Element | null {
   )
   const terminalRetentionBudgetEnabled = useAppStore(
     (s) => s.settings?.terminalHiddenWorktreeRetentionBudget !== false
+  )
+  const browserGuestRetentionBudgetEnabled = useAppStore(
+    (s) => s.settings?.browserGuestWorktreeRetentionBudget !== false
   )
   const terminalTitleSnapshotAuthorityEnabled = useAppStore((s) =>
     isMainTerminalSideEffectAuthorityForPty({
@@ -1141,6 +1164,69 @@ function Terminal(): React.JSX.Element | null {
     terminalSshParkingEnabled,
     workspaceSurfaces
   ])
+  // Why here: downloads outlive the pane-local state of hidden (unmounted)
+  // BrowserPanes, and the eviction veto below must see them.
+  useEffect(() => installBrowserPageDownloadActivityTracking(), [])
+  // Browser-guest retention budget (#12137 follow-up): hidden worktrees keep
+  // webview guests alive for instant revisits, but only the most recently
+  // activated few. Older ones have every guest FULLY destroyed through the
+  // sanctioned cleanup path while the worktree surface stays mounted: slots
+  // never unmount-detach a live guest (the STA-3228 blank-forever state), the
+  // hidden slot mounts no BrowserPane so nothing resurrects the guest early,
+  // and terminal panes/watchers/capture contracts are untouched. A revisit
+  // rebuilds guests from store state.
+  useEffect(() => {
+    if (!renderedActiveWorktreeId || !browserGuestRetentionBudgetEnabled) {
+      return
+    }
+    const recency = browserGuestWorktreeRecencyRef.current
+    touchBrowserGuestWorktreeRecency(recency, renderedActiveWorktreeId)
+    const surfaceIds = new Set(workspaceSurfaces.map((workspace) => workspace.id))
+    for (let index = recency.length - 1; index >= 0; index--) {
+      if (!surfaceIds.has(recency[index])) {
+        recency.splice(index, 1)
+      }
+    }
+    const state = useAppStore.getState()
+    // Why appended: a mounted worktree missing from recency (background mount) ranks oldest.
+    const recencyIds = new Set(recency)
+    const orderedWorktreeIds = [
+      ...recency,
+      ...workspaceSurfaces.map((workspace) => workspace.id).filter((id) => !recencyIds.has(id))
+    ]
+    const evictedWorktreeIds = selectBrowserGuestEvictionWorktreeIds({
+      orderedWorktreeIds,
+      activeWorktreeId: renderedActiveWorktreeId,
+      isRetained: (worktreeId) => mountedWorktreeIdsRef.current.has(worktreeId),
+      holdsLiveGuests: (worktreeId) =>
+        worktreeHoldsLiveBrowserGuests(
+          state.browserTabsByWorktree[worktreeId] ?? [],
+          state.browserPagesByWorkspace,
+          hasLiveBrowserGuest
+        ),
+      // Why these vetoes: automation/mobile keeps a hidden guest painted for a
+      // remote controller mid-drive, and main cancels a page's active downloads
+      // when its guest unregisters (tab-close semantics). Terminal state never
+      // vetoes — eviction only destroys guests and leaves the surface (panes,
+      // watchers) alone.
+      isEvictable: (worktreeId) =>
+        !(state.browserTabsByWorktree[worktreeId] ?? []).some((tab) =>
+          browserTabVisibilityPageIds(tab).some(
+            (pageId) =>
+              isBrowserAutomationVisible(pageId) ||
+              isBrowserPageMobileDriven(pageId) ||
+              hasActiveBrowserPageDownload(pageId)
+          )
+        )
+    })
+    for (const worktreeId of evictedWorktreeIds) {
+      destroyWorktreeBrowserGuests(
+        state.browserTabsByWorktree,
+        state.browserPagesByWorkspace,
+        worktreeId
+      )
+    }
+  }, [renderedActiveWorktreeId, workspaceSurfaces, browserGuestRetentionBudgetEnabled])
   // Why: a slow post-reconnect step exposes workspaceSessionReady before hydration can populate snapshot capabilities.
   if (
     renderedActiveWorktreeId &&
