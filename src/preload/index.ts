@@ -886,6 +886,7 @@ const api = {
 
   workspacePorts: {
     scan: (args) => ipcRenderer.invoke('workspacePorts:scan', args),
+    scanServices: (args) => ipcRenderer.invoke('workspacePorts:scanServices', args),
     kill: (args) => ipcRenderer.invoke('workspacePorts:kill', args),
     onAdvertisedUrlChanged: (callback) => {
       const listener = (

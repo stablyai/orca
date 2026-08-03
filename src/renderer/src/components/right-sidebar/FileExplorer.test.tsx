@@ -287,6 +287,8 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
     showGitIgnoredFilesToggle: true,
     showGitIgnoredFiles: true,
     onToggleGitIgnoredFiles: vi.fn(),
+    orphanServiceCount: 0,
+    onShowOrphanServices: vi.fn(),
     showDotfiles: true,
     onToggleDotfiles: vi.fn(),
     ...overrides
@@ -451,10 +453,17 @@ describe('FileExplorerToolbar', () => {
     const element = makeToolbar()
 
     expect(getToolbarButtonLabels(element)).toEqual([
+      'Orphaned Services',
       'Collapse All',
       'Refresh Explorer',
       'More Explorer Actions'
     ])
+  })
+
+  it('badges the orphaned services button only when there are orphans', () => {
+    expect(getToolbarButtonLabels(makeToolbar({ orphanServiceCount: 2 }))).toContain(
+      'Orphaned Services'
+    )
   })
 
   it('keeps open-in actions but hides the git ignored toggle for non-git folders', () => {

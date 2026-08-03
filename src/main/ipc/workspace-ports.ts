@@ -5,14 +5,17 @@ import type {
   WorkspacePortAdvertisedUrlChangedEvent,
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
+  WorkspacePortProbe,
   WorkspacePortScanRequest,
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
+import type { WorkspaceServiceScanResult } from '../../shared/workspace-services'
 import {
   getStoreWorkspacePortProbes,
   killWorkspacePort,
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
+import { scanWorkspaceServices } from '../ports/workspace-service-scan'
 
 type WorkspacePortHandlersOptions = {
   advertisedUrlEvents?: Pick<AdvertisedUrlWatcher, 'onDidChange'>
@@ -38,18 +41,40 @@ export function registerWorkspacePortHandlers(
     broadcastWorkspacePortAdvertisedUrlChanged(getWindows, event)
   })
 
+  const inFlightServiceScans = new Map<string, Promise<WorkspaceServiceScanResult>>()
+
   ipcMain.removeHandler('workspacePorts:scan')
+  ipcMain.removeHandler('workspacePorts:scanServices')
   ipcMain.removeHandler('workspacePorts:kill')
+
+  ipcMain.handle(
+    'workspacePorts:scanServices',
+    (_event, rawArgs?: unknown): Promise<WorkspaceServiceScanResult> => {
+      const args = parseScanRequest(rawArgs)
+      const worktrees = getStoreWorkspacePortProbes(store, args?.repoId)
+      const key = workspaceProbeKey(worktrees)
+      const existing = inFlightServiceScans.get(key)
+      // Why: the panel, its refresh button and the poll can all fire at once;
+      // one scan spawns three child processes, so coalescing matters here.
+      if (existing) {
+        return existing
+      }
+
+      const promise = scanWorkspaceServices(worktrees).finally(() => {
+        if (inFlightServiceScans.get(key) === promise) {
+          inFlightServiceScans.delete(key)
+        }
+      })
+      inFlightServiceScans.set(key, promise)
+      return promise
+    }
+  )
   ipcMain.handle(
     'workspacePorts:scan',
     (_event, rawArgs?: unknown): Promise<WorkspacePortScanResult> => {
       const args = parseScanRequest(rawArgs)
       const worktrees = getStoreWorkspacePortProbes(store, args?.repoId)
-      const key = JSON.stringify(
-        worktrees
-          .map((worktree) => [worktree.id, worktree.repoId, worktree.displayName, worktree.path])
-          .sort(([a], [b]) => String(a).localeCompare(String(b)))
-      )
+      const key = workspaceProbeKey(worktrees)
       const existing = inFlightScans.get(key)
       if (existing) {
         return existing
@@ -92,6 +117,15 @@ function broadcastWorkspacePortAdvertisedUrlChanged(
     }
     webContents.send('workspacePorts:advertised-url-changed', event)
   }
+}
+
+/** Identity of a probe set, so concurrent scans of the same workspaces coalesce. */
+function workspaceProbeKey(worktrees: readonly WorkspacePortProbe[]): string {
+  return JSON.stringify(
+    worktrees
+      .map((worktree) => [worktree.id, worktree.repoId, worktree.displayName, worktree.path])
+      .sort(([a], [b]) => String(a).localeCompare(String(b)))
+  )
 }
 
 function parseScanRequest(value: unknown): WorkspacePortScanRequest | undefined {

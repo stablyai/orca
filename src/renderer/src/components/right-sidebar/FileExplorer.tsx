@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: FileExplorer coordinates tree data, selection, drag/drop, and virtual rows; splitting it during this merge would obscure the interaction invariants. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { basename, dirname } from '@/lib/path'
@@ -17,6 +18,10 @@ import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
+import { OrphanServicesDialog } from './OrphanServicesDialog'
+import { ServicesSection } from './ServicesSection'
+import { useWorkspaceServices } from './use-workspace-services'
+import { selectOrphanServices, type WorkspaceService } from '../../../../shared/workspace-services'
 import { SearchFilters } from './SearchFilters'
 import { SearchQueryRow } from './SearchQueryRow'
 import { SearchResultsPane } from './SearchResultsPane'
@@ -246,6 +251,39 @@ function FileExplorerFiles(): React.JSX.Element {
   )
 
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
+  const [orphanServicesOpen, setOrphanServicesOpen] = useState(false)
+  // Why: service detection inspects local processes and the local docker
+  // daemon, neither of which describes an SSH-hosted workspace.
+  const servicesEnabled = Boolean(activeRepo && !activeRepo.connectionId)
+  const services = useWorkspaceServices(activeRepo?.id ?? null, servicesEnabled)
+  const orphanServices = useMemo(
+    () => selectOrphanServices(services.scan?.services ?? []),
+    [services.scan]
+  )
+
+  const handleOpenService = useCallback((service: WorkspaceService) => {
+    void window.api.shell.openUrl(`http://${service.address}`)
+  }, [])
+
+  const handleStopService = useCallback(
+    async (service: WorkspaceService) => {
+      if (!service.pid) {
+        return
+      }
+      const result = await window.api.workspacePorts.kill({
+        ...(activeRepo ? { repoId: activeRepo.id } : {}),
+        pid: service.pid,
+        port: service.port
+      })
+      if (!result.ok) {
+        toast.error(result.reason)
+        return
+      }
+      await services.refresh()
+    },
+    [activeRepo, services]
+  )
+
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
   const [bgMenuPoint, setBgMenuPoint] = useState({ x: 0, y: 0 })
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -678,6 +716,8 @@ function FileExplorerFiles(): React.JSX.Element {
           onToggleGitIgnoredFiles={toggleGitIgnoredFiles}
           showDotfiles={showDotfiles}
           onToggleDotfiles={handleToggleDotfiles}
+          orphanServiceCount={orphanServices.length}
+          onShowOrphanServices={() => setOrphanServicesOpen(true)}
         />
         <FileExplorerQueryStrip view={explorerView} onSelectView={handleSelectExplorerView}>
           {/* Why: keep both query rows mounted and cross-fade so the Names/Contents
@@ -823,7 +863,27 @@ function FileExplorerFiles(): React.JSX.Element {
             )}
           </div>
         </div>
+        {servicesEnabled && (
+          <ServicesSection
+            scan={services.scan}
+            isRefreshing={services.isRefreshing}
+            error={services.error}
+            repoId={activeRepo?.id ?? null}
+            worktreeId={activeWorktree?.id ?? null}
+            onRefresh={() => void services.refresh()}
+            onOpen={handleOpenService}
+            onStop={(service) => void handleStopService(service)}
+          />
+        )}
       </div>
+
+      <OrphanServicesDialog
+        open={orphanServicesOpen}
+        orphans={orphanServices}
+        onOpenChange={setOrphanServicesOpen}
+        onOpen={handleOpenService}
+        onStop={(service) => void handleStopService(service)}
+      />
 
       <FileExplorerBackgroundMenu
         open={bgMenuOpen}
