@@ -647,6 +647,51 @@ export class AgentHookServer {
     this.onPaneStatusCleared = listener
   }
 
+  /** Submit a hook event synthesized by an in-process Orca subsystem (no HTTP
+   *  POST). Why: crush has no CLI hook contract; Orca subscribes to its SSE
+   *  stream and re-emits each envelope as a synthetic hook event via this
+   *  method so it flows through the same normalize→apply pipeline as real hooks.
+   *  Source-specific jurisprudence (exhaustive switch in normalizeHookPayload)
+   *  still applies because the synthesized body carries source-tagged fields. */
+  submitSyntheticHookEvent(args: {
+    source: AgentHookSource
+    paneKey: string
+    launchToken?: string
+    tabId?: string
+    worktreeId?: string
+    hookEventName: string
+    hookPayload: Record<string, unknown>
+  }): void {
+    if (!args.paneKey) {
+      return
+    }
+    const body: Record<string, unknown> = {
+      paneKey: args.paneKey,
+      hook_event_name: args.hookEventName,
+      payload: args.hookPayload,
+      env: this.env
+    }
+    if (args.launchToken) {
+      body.launchToken = args.launchToken
+    }
+    if (args.tabId) {
+      body.tabId = args.tabId
+    }
+    if (args.worktreeId) {
+      body.worktreeId = args.worktreeId
+    }
+    try {
+      const normalized = normalizeHookPayload(this.state, args.source, body, this.env)
+      if (!normalized || this.shouldSuppressClosedTabStatus(normalized.paneKey)) {
+        return
+      }
+      this.applyNormalizedStatus(normalized)
+    } catch (err) {
+      // Why: a malformed SSE envelope must never crash the SSE client loop.
+      console.error('[agent-hooks] synthetic hook event failed', err)
+    }
+  }
+
   /** Snapshot of cached statuses in IPC shape. Used by `agentStatus:getSnapshot` after tabs hydrate so the
    *  dashboard catches up on hook events that fired during startup. */
   getStatusSnapshot(): AgentStatusIpcPayload[] {
