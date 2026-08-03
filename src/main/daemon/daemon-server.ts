@@ -733,7 +733,9 @@ export class DaemonServer {
           ) {
             throw new Error('agent_session_identity_required')
           }
-          await this.preparePtySpawnUnlessCanceled(p.sessionId, clientId)
+          if (!p.attachOnly) {
+            await this.preparePtySpawnUnlessCanceled(p.sessionId, clientId)
+          }
           if (p.historySeed !== undefined && p.historySeedTransferId !== undefined) {
             throw new Error('Multiple terminal history seed sources')
           }
@@ -752,6 +754,7 @@ export class DaemonServer {
             envToDelete: p.envToDelete,
             command: p.command,
             startupCommandDelivery: p.startupCommandDelivery,
+            ...(p.attachOnly === true ? { attachOnly: true } : {}),
             // Why: RPC payloads are untrusted JSON; persist only the allowlisted routing enum, never arbitrary identity.
             ...(isTuiAgent(p.launchAgent) ? { launchAgent: p.launchAgent } : {}),
             shellOverride: p.shellOverride,

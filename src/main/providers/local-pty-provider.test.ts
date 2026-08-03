@@ -258,6 +258,55 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
+    it('attaches only to an existing stable session', async () => {
+      await provider.spawn({ cols: 80, rows: 24, sessionId: 'stable-pane-session' })
+      spawnMock.mockClear()
+
+      const result = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: 'stable-pane-session',
+        attachOnly: true
+      })
+
+      expect(result).toMatchObject({ id: 'stable-pane-session', isReattach: true })
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('does not create when an attach-only stable session is absent', async () => {
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'missing-stable-pane-session',
+          attachOnly: true
+        })
+      ).rejects.toThrow('Session not found: missing-stable-pane-session')
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('attaches only to an existing numeric provider session', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24 })
+      spawnMock.mockClear()
+
+      const result = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: first.id,
+        attachOnly: true
+      })
+
+      expect(result).toMatchObject({ id: first.id, isReattach: true })
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('does not create when a numeric attach-only provider session is absent', async () => {
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, sessionId: '404', attachOnly: true })
+      ).rejects.toThrow('Session not found: 404')
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
     it('keeps a native UNC session native on a conflicting WSL reattach', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const first = await provider.spawn({

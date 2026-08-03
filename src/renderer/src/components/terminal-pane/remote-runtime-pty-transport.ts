@@ -430,7 +430,7 @@ export function createRemoteRuntimePtyTransport(
     result: RemoteAgentSessionLaunchResult,
     environmentId: string
   ): boolean {
-    if (result.disposition !== undefined) {
+    if (result.disposition !== undefined || result.terminal.isReattach === true) {
       // Why: every structured launch is host-owned; provisional teardown must
       // never close its canonical terminal while snapshot reconciliation catches up.
       return true
@@ -1968,6 +1968,9 @@ export function createRemoteRuntimePtyTransport(
         }
         handle = createdTerminal.handle
 
+        if (createdTerminal.isReattach === true) {
+          storedCallbacks.onReattachDetermined?.()
+        }
         remotePtyId = toRemoteRuntimePtyId(handle, currentRuntimeEnvironmentId)
         registerShutdownHandlers(remotePtyId)
         connected = true
@@ -1975,7 +1978,9 @@ export function createRemoteRuntimePtyTransport(
           cols: options.cols ?? 80,
           rows: options.rows ?? 24
         }
-        onPtySpawn?.(remotePtyId)
+        if (createdTerminal.isReattach !== true) {
+          onPtySpawn?.(remotePtyId)
+        }
         emitRecoveryState()
 
         try {
@@ -1991,7 +1996,8 @@ export function createRemoteRuntimePtyTransport(
 
         return {
           id: remotePtyId,
-          replay: ''
+          replay: '',
+          ...(createdTerminal.isReattach === true ? { isReattach: true } : {})
         } satisfies PtyConnectResult
       } catch (error) {
         if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {

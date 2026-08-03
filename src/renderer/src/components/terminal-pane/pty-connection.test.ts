@@ -297,6 +297,7 @@ function resolveMockPaneWindowsShiftEnterEncoding(
 }
 
 type ConnectCallbacks = {
+  onReattachDetermined?: () => void
   onConnect?: () => void
   onData?: (
     data: string,
@@ -5477,6 +5478,62 @@ describe('connectPanePty', () => {
     // Why: the restored shell keeps the CODEX_HOME it was spawned with, and this
     // bind is the first moment the daemon PTY can be inspected for it.
     expect(notifyCodexPaneBoundForStaleSweep).toHaveBeenCalledWith('pty-daemon-reattach')
+  })
+
+  it('replays a stable-pane adoption without submitting the SSH resume command', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const stablePtyId = toAppSshPtyId('conn-1', 'stable-pane-session')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }) => {
+      callbacks.onReattachDetermined?.()
+      transport.getPtyId.mockReturnValue(stablePtyId)
+      callbacks.onData?.('NEWER-LIVE-SSH-OUTPUT')
+      return {
+        id: stablePtyId,
+        isReattach: true,
+        replay: 'ORIGINAL-LIVE-SSH-OUTPUT'
+      }
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([['conn-1', { status: 'connected' }]])
+    }
+    const pane = createPane(1)
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      startup: { command: 'codex resume provider-session' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(4)
+    if (!onDataHandler || parseCallbacks.length === 0) {
+      throw new Error('expected replay and terminal input handlers')
+    }
+    ;(onDataHandler as (data: string) => void)('DURING_ADOPTION_REPLAY\r')
+    expect(transport.sendInput).not.toHaveBeenCalledWith('DURING_ADOPTION_REPLAY\r')
+    for (let step = 0; step < 30; step += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(2)
+    }
+    ;(onDataHandler as (data: string) => void)('AFTER_ADOPTION_REPLAY\r')
+
+    expect(pane.container.dataset.ptyId).toBe(stablePtyId)
+    expect(writes.join('')).toContain('ORIGINAL-LIVE-SSH-OUTPUT')
+    expect(writes.join('').indexOf('ORIGINAL-LIVE-SSH-OUTPUT')).toBeLessThan(
+      writes.join('').indexOf('NEWER-LIVE-SSH-OUTPUT')
+    )
+    expect(transport.sendInput).not.toHaveBeenCalledWith('codex resume provider-session\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('AFTER_ADOPTION_REPLAY\r')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, stablePtyId)
   })
 
   it('drops xterm onData while pane is replaying restored bytes', async () => {
@@ -10961,16 +11018,22 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalled()
   })
 
-  it('renders the reattach snapshot before live bytes delivered during the spawn reply', async () => {
+  it('drains live bytes after transport confirms an explicit reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const { deliverTerminalDataWithDeferredCredit } =
+      await import('@/lib/pane-manager/terminal-delivery-credit')
     const transport = createMockTransport('tab-pty')
+    const acknowledgeLiveFrame = vi.fn()
     transport.connect.mockImplementation(
       async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
         if (!sessionId) {
           return null
         }
         // Why: the real dispatcher drains post-snapshot bytes as soon as spawn IPC resolves, before connect() returns.
-        callbacks?.onData?.('post-snapshot-live')
+        callbacks?.onReattachDetermined?.()
+        deliverTerminalDataWithDeferredCredit(acknowledgeLiveFrame, () => {
+          callbacks?.onData?.('post-snapshot-live')
+        })
         return { id: sessionId, snapshot: 'authoritative-snapshot' }
       }
     )
@@ -10988,13 +11051,14 @@ describe('connectPanePty', () => {
     const snapshotIndex = writes.indexOf('authoritative-snapshot')
     expect(snapshotIndex).toBeGreaterThanOrEqual(0)
     expect(writes).not.toContain('post-snapshot-live')
-    while (parseCallbacks.length > 0) {
+    for (let step = 0; step < 40; step += 1) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(2)
     }
-    await flushAsyncTicks(8)
     const liveIndex = writes.indexOf('post-snapshot-live')
     expect(liveIndex).toBeGreaterThan(snapshotIndex)
+    expect(acknowledgeLiveFrame).toHaveBeenCalledOnce()
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'tab-pty')
   })
 
   it('re-enforces follow intent after deferred reattach live output parses', async () => {
