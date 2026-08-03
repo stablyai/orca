@@ -15,7 +15,7 @@ import {
   isTrustedCompactImageSrc,
   type CommentMarkdownLinkClickHandler
 } from './comment-markdown-element-renderers'
-import { remarkGitHubBacktickMath } from './comment-markdown-math'
+import { normalizeBareBracketMathSource, remarkGitHubBacktickMath } from './comment-markdown-math'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
@@ -239,6 +239,11 @@ const CommentMarkdown = React.memo(
       return githubRepo ? [...basePlugins, remarkGitHubReferences(githubRepo)] : basePlugins
     }, [enableMath, githubRepo])
 
+    const renderedContent = React.useMemo(
+      () => (enableMath ? normalizeBareBracketMathSource(content) : content),
+      [content, enableMath]
+    )
+
     return (
       <div
         ref={ref}
@@ -260,7 +265,7 @@ const CommentMarkdown = React.memo(
             allowFileUriLinks ? commentMarkdownFileUriUrlTransform : commentMarkdownUrlTransform
           }
         >
-          {content}
+          {renderedContent}
         </Markdown>
       </div>
     )

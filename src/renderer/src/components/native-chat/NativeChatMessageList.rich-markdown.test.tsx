@@ -49,7 +49,13 @@ function createSession(): NativeChatLiveSession {
               'const energy = mass * speedOfLight ** 2',
               '```'
             ].join('\n')
-          }
+          },
+          { type: 'text', text: '[' },
+          {
+            type: 'text',
+            text: 'S(x)=\\min_i \\frac{\\left\\lVert z(x)-z_i\\right\\rVert_2^2}{r_i}'
+          },
+          { type: 'text', text: ']' }
         ]
       }
     ]
@@ -73,7 +79,7 @@ describe('NativeChatMessageList rich Markdown', () => {
     expect(screen.getByRole('heading', { name: 'Energy model' })).toBeInTheDocument()
     expect(screen.getByRole('table')).toBeInTheDocument()
     expect(screen.getByText('const energy = mass * speedOfLight ** 2')).toBeInTheDocument()
-    expect(document.querySelector('.katex-display')).toBeInTheDocument()
-    expect(document.querySelectorAll('.katex')).toHaveLength(4)
+    expect(document.querySelectorAll('.katex-display')).toHaveLength(2)
+    expect(document.querySelectorAll('.katex')).toHaveLength(5)
   })
 })

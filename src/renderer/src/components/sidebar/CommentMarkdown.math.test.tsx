@@ -45,6 +45,39 @@ describe('CommentMarkdown math rendering', () => {
     expect(markup).toContain('$unfinished')
   })
 
+  it('recovers bracket-delimited display math without capturing prose or code fences', () => {
+    const formulaMarkup = renderToStaticMarkup(
+      <CommentMarkdown content={'[\nS(x)=\\min_i \\frac{x_i^2}{r_i}\n]'} enableMath />
+    )
+    const proseMarkup = renderToStaticMarkup(
+      <CommentMarkdown content={'[\nplain bracketed prose\n]'} enableMath />
+    )
+    const fencedMarkup = renderToStaticMarkup(
+      <CommentMarkdown content={'```\n[\nx=1\n]\n```'} enableMath />
+    )
+
+    expect(formulaMarkup).toContain('class="katex-display"')
+    expect(formulaMarkup).toContain('<msub>')
+    expect(proseMarkup).not.toContain('class="katex"')
+    expect(proseMarkup).toContain('plain bracketed prose')
+    expect(fencedMarkup).not.toContain('class="katex"')
+    expect(fencedMarkup).toContain('x=1')
+  })
+
+  it('renders stripped bracket-delimited aligned environments as display math', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        content={
+          '[\n\\begin{aligned}\n\\mathcal A_T &= \\left\\{x:S(x)\\le T\\right\\} \\\\\nS(x) &= \\min_i \\frac{\\left\\lVert z(x)-z_i\\right\\rVert_2^2}{r_i}\n\\end{aligned}\n]'
+        }
+        enableMath
+      />
+    )
+
+    expect(markup).toContain('class="katex-display"')
+    expect(markup).not.toContain('katex-error')
+  })
+
   it('keeps invalid formulas visible instead of throwing or blanking them', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown content={'$\\notARealCommand{x}$'} enableMath />

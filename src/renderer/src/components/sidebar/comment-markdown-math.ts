@@ -7,6 +7,14 @@ type MarkdownAstNode = {
   children?: MarkdownAstNode[]
 }
 
+type CodeFence = {
+  marker: string
+  length: number
+}
+
+const MATH_SIGNAL = /\\[A-Za-z]+|[=^_]/
+const CODE_FENCE = /^\s*(`{3,}|~{3,})/
+
 function normalizeGitHubBacktickMathNode(node: MarkdownAstNode): void {
   if (
     node.type === 'inlineMath' &&
@@ -26,6 +34,63 @@ function normalizeGitHubBacktickMathNode(node: MarkdownAstNode): void {
   for (const child of node.children ?? []) {
     normalizeGitHubBacktickMathNode(child)
   }
+}
+
+export function normalizeBareBracketMathSource(source: string): string {
+  const lines = source.split('\n')
+  const normalized: string[] = []
+  let index = 0
+  let activeFence: CodeFence | undefined
+
+  while (index < lines.length) {
+    const line = lines[index]
+    const fence = CODE_FENCE.exec(line)?.[1]
+
+    if (activeFence) {
+      if (fence && fence[0] === activeFence.marker && fence.length >= activeFence.length) {
+        activeFence = undefined
+      }
+      normalized.push(line)
+      index += 1
+      continue
+    }
+
+    if (fence) {
+      activeFence = { marker: fence[0], length: fence.length }
+      normalized.push(line)
+      index += 1
+      continue
+    }
+
+    if (line.trim() !== '[') {
+      normalized.push(line)
+      index += 1
+      continue
+    }
+
+    let closingIndex = index + 1
+    while (closingIndex < lines.length && lines[closingIndex].trim() !== ']') {
+      closingIndex += 1
+    }
+
+    if (closingIndex === lines.length) {
+      normalized.push(line)
+      index += 1
+      continue
+    }
+
+    const formula = lines.slice(index + 1, closingIndex).join('\n')
+    if (!formula || !MATH_SIGNAL.test(formula)) {
+      normalized.push(line)
+      index += 1
+      continue
+    }
+
+    normalized.push('```math', formula, '```')
+    index = closingIndex + 1
+  }
+
+  return normalized.join('\n')
 }
 
 export function remarkGitHubBacktickMath(): (tree: MarkdownAstNode) => void {
