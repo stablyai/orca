@@ -48,7 +48,7 @@ import {
   clampCombinedDiffFileTreeWidth,
   COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH
 } from '../../../../shared/combined-diff-file-tree-width'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
 import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
@@ -73,7 +73,11 @@ import {
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
+import {
+  findWorktreeById,
+  getRepoIdFromWorktreeId,
+  type ActiveWorktreeStateTransition
+} from './worktree-helpers'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   addAdditionalValidWorkspaceKeys,
@@ -1320,6 +1324,7 @@ export type RestoredEditorOwnerMigration = {
   targetRelativePath: string
   targetExecutionHostId: ExecutionHostId
   targetRuntimeEnvironmentId: string | null
+  targetOperationProvenance: EditorFileOperationProvenance
 }
 
 export type RestoredEditorOwnerResult =
@@ -2708,36 +2713,36 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   reparentRestoredEditorFileOwner: (args) => {
     let result: RestoredEditorOwnerResult = { ok: false, reason: 'stale' }
-    set((s) => {
+    const projectReparent: ActiveWorktreeStateTransition = (s) => {
       const source = s.openFiles.find((file) => file.id === args.fileId)
       if (!source) {
-        return s
+        return { patch: {}, activate: false }
       }
 
-      let operationProvenance: EditorFileOperationProvenance
       try {
-        operationProvenance = captureEditorFileOperationProvenance(
+        const currentRoute = assertEditorFileOperationCurrent(
           s,
           args.targetWorktreeId,
-          args.targetRuntimeEnvironmentId,
-          true
+          args.targetOperationProvenance
         )
+        if (
+          currentRoute.executionHostId !== args.targetExecutionHostId ||
+          currentRoute.runtimeEnvironmentId !== args.targetRuntimeEnvironmentId
+        ) {
+          throw new Error('owner changed')
+        }
       } catch {
         result = { ok: false, reason: 'owner-changed' }
         return {
-          openFiles: s.openFiles.map((file) =>
-            file.id === args.fileId ? { ...file, pendingOwnerMigration: undefined } : file
-          )
+          patch: {
+            openFiles: s.openFiles.map((file) =>
+              file.id === args.fileId ? { ...file, pendingOwnerMigration: undefined } : file
+            )
+          },
+          activate: false
         }
       }
-      if (operationProvenance.generation.route.executionHostId !== args.targetExecutionHostId) {
-        result = { ok: false, reason: 'owner-changed' }
-        return {
-          openFiles: s.openFiles.map((file) =>
-            file.id === args.fileId ? { ...file, pendingOwnerMigration: undefined } : file
-          )
-        }
-      }
+      const operationProvenance = args.targetOperationProvenance
 
       const destinationCollision = s.openFiles.some(
         (file) =>
@@ -2769,9 +2774,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       ) {
         result = { ok: false, reason: 'collision' }
         return {
-          openFiles: s.openFiles.map((file) =>
-            file.id === args.fileId ? { ...file, pendingOwnerMigration: undefined } : file
-          )
+          patch: {
+            openFiles: s.openFiles.map((file) =>
+              file.id === args.fileId ? { ...file, pendingOwnerMigration: undefined } : file
+            )
+          },
+          activate: false
         }
       }
 
@@ -2902,100 +2910,103 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         delete nextActiveGroupIdByWorktree[sourceWorktreeId]
       }
       nextActiveGroupIdByWorktree[targetWorktreeId] = targetGroupId
-      const activatesTargetWorkspace =
-        s.activeWorktreeId === sourceWorktreeId && s.activeFileId === source.id
-      const targetWorktree = findWorktreeById(s.worktreesByRepo, targetWorktreeId)
 
       result = { ok: true, fileId: newFileId }
       return {
-        openFiles: s.openFiles.map((file) =>
-          file.id === source.id
-            ? {
-                ...file,
-                id: newFileId,
-                worktreeId: targetWorktreeId,
-                relativePath: args.targetRelativePath,
-                runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
-                externalSshTargetId,
-                operationProvenance,
-                pendingOwnerMigration: undefined,
-                mirroredFromRuntimeSession: undefined
-              }
-            : file.markdownPreviewSourceFileId === source.id
+        patch: {
+          openFiles: s.openFiles.map((file) =>
+            file.id === source.id
               ? {
                   ...file,
-                  id: previewIdMigrations.get(file.id) ?? file.id,
+                  id: newFileId,
                   worktreeId: targetWorktreeId,
                   relativePath: args.targetRelativePath,
                   runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
                   externalSshTargetId,
                   operationProvenance,
-                  markdownPreviewSourceFileId: newFileId,
                   pendingOwnerMigration: undefined,
                   mirroredFromRuntimeSession: undefined
                 }
-              : file
-        ),
-        editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
-        editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
-        markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),
-        editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
-        markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
-        markdownTableOfContentsVisible: rekeyFileIdRecord(
-          s.markdownTableOfContentsVisible,
-          migrations
-        ),
-        activeFileId: s.activeFileId ? (migrations.get(s.activeFileId) ?? s.activeFileId) : null,
-        activeFileIdByWorktree: nextActiveFileIdByWorktree,
-        activeTabTypeByWorktree: {
-          ...s.activeTabTypeByWorktree,
-          [targetWorktreeId]: 'editor'
+              : file.markdownPreviewSourceFileId === source.id
+                ? {
+                    ...file,
+                    id: previewIdMigrations.get(file.id) ?? file.id,
+                    worktreeId: targetWorktreeId,
+                    relativePath: args.targetRelativePath,
+                    runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
+                    externalSshTargetId,
+                    operationProvenance,
+                    markdownPreviewSourceFileId: newFileId,
+                    pendingOwnerMigration: undefined,
+                    mirroredFromRuntimeSession: undefined
+                  }
+                : file
+          ),
+          editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
+          editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
+          markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),
+          editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
+          markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
+          markdownTableOfContentsVisible: rekeyFileIdRecord(
+            s.markdownTableOfContentsVisible,
+            migrations
+          ),
+          activeFileId: s.activeFileId ? (migrations.get(s.activeFileId) ?? s.activeFileId) : null,
+          activeFileIdByWorktree: nextActiveFileIdByWorktree,
+          activeTabTypeByWorktree: {
+            ...s.activeTabTypeByWorktree,
+            [targetWorktreeId]: 'editor'
+          },
+          unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+          groupsByWorktree: nextGroupsByWorktree,
+          layoutByWorktree: nextLayoutByWorktree,
+          activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+          tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+          ...(s.pendingEditorReveal?.fileId && migrations.has(s.pendingEditorReveal.fileId)
+            ? {
+                pendingEditorReveal: {
+                  ...s.pendingEditorReveal,
+                  fileId: migrations.get(s.pendingEditorReveal.fileId)!,
+                  filePath: source.filePath
+                }
+              }
+            : {}),
+          ...(s.pendingEditorFocusRequest?.fileId &&
+          migrations.has(s.pendingEditorFocusRequest.fileId)
+            ? {
+                pendingEditorFocusRequest: {
+                  ...s.pendingEditorFocusRequest,
+                  fileId: migrations.get(s.pendingEditorFocusRequest.fileId)!,
+                  worktreeId: targetWorktreeId
+                }
+              }
+            : {}),
+          ...(s.pendingExplorerReveal?.filePath === source.filePath
+            ? {
+                pendingExplorerReveal: {
+                  ...s.pendingExplorerReveal,
+                  worktreeId: targetWorktreeId
+                }
+              }
+            : {})
         },
-        unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
-        groupsByWorktree: nextGroupsByWorktree,
-        layoutByWorktree: nextLayoutByWorktree,
-        activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-        tabBarOrderByWorktree: nextTabBarOrderByWorktree,
-        ...(activatesTargetWorkspace
-          ? {
-              activeWorktreeId: targetWorktreeId,
-              activeWorkspaceKey: targetWorktree
-                ? worktreeWorkspaceKey(targetWorktreeId)
-                : (targetWorktreeId as AppState['activeWorkspaceKey']),
-              activeWorkspaceExecutionHostId: args.targetExecutionHostId,
-              activeRepoId: targetWorktree?.repoId ?? null,
-              activeTabType: 'editor' as const
-            }
-          : {}),
-        ...(s.pendingEditorReveal?.fileId && migrations.has(s.pendingEditorReveal.fileId)
-          ? {
-              pendingEditorReveal: {
-                ...s.pendingEditorReveal,
-                fileId: migrations.get(s.pendingEditorReveal.fileId)!,
-                filePath: source.filePath
-              }
-            }
-          : {}),
-        ...(s.pendingEditorFocusRequest?.fileId &&
-        migrations.has(s.pendingEditorFocusRequest.fileId)
-          ? {
-              pendingEditorFocusRequest: {
-                ...s.pendingEditorFocusRequest,
-                fileId: migrations.get(s.pendingEditorFocusRequest.fileId)!,
-                worktreeId: targetWorktreeId
-              }
-            }
-          : {}),
-        ...(s.pendingExplorerReveal?.filePath === source.filePath
-          ? {
-              pendingExplorerReveal: {
-                ...s.pendingExplorerReveal,
-                worktreeId: targetWorktreeId
-              }
-            }
-          : {})
+        activate: true,
+        preferredActiveUnifiedTabId: mappedMovedTabIds.at(-1)
       }
-    })
+    }
+    const initialSource = get().openFiles.find((file) => file.id === args.fileId)
+    const activatesTargetWorkspace = Boolean(
+      initialSource &&
+      get().activeWorktreeId === initialSource.worktreeId &&
+      get().activeFileId === initialSource.id
+    )
+    if (activatesTargetWorkspace) {
+      get().setActiveWorktree(args.targetWorktreeId, args.targetExecutionHostId, {
+        stateTransition: projectReparent
+      })
+    } else {
+      set((state) => projectReparent(state).patch)
+    }
     return result
   },
 

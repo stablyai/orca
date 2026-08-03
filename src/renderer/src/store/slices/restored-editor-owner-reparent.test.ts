@@ -10,7 +10,10 @@ import {
   getEditorExternalWatchTargets,
   useEditorExternalWatch
 } from '@/hooks/useEditorExternalWatch'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import {
+  captureEditorFileOperationProvenance,
+  getEditorFileOperationContext
+} from '@/lib/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
 import type { WorkspaceSessionState } from '../../../../shared/types'
 
@@ -33,8 +36,8 @@ function installWorkspaceState(): void {
       { id: 'repo-b', path: '/repo-b', kind: 'git', executionHostId: 'local' }
     ],
     worktreesByRepo: {
-      'repo-a': [{ id: SOURCE, repoId: 'repo-a', path: '/repo-a', hostId: 'local' }],
-      'repo-b': [{ id: TARGET, repoId: 'repo-b', path: '/repo-b', hostId: 'local' }]
+      'repo-a': [{ id: SOURCE, repoId: 'repo-a', path: '/repo-a', hostId: 'local', branch: '' }],
+      'repo-b': [{ id: TARGET, repoId: 'repo-b', path: '/repo-b', hostId: 'local', branch: '' }]
     },
     detectedWorktreesByRepo: {},
     runtimeEnvironments: [],
@@ -67,13 +70,15 @@ function openRestoredSource(): string {
 }
 
 function reparent(fileId: string) {
-  useAppStore.getState().setRestoredEditorOwnerMigrationPending(fileId, true)
-  return useAppStore.getState().reparentRestoredEditorFileOwner({
+  const state = useAppStore.getState()
+  state.setRestoredEditorOwnerMigrationPending(fileId, true)
+  return state.reparentRestoredEditorFileOwner({
     fileId,
     targetWorktreeId: TARGET,
     targetRelativePath: 'docs/readme.md',
     targetExecutionHostId: 'local',
-    targetRuntimeEnvironmentId: null
+    targetRuntimeEnvironmentId: null,
+    targetOperationProvenance: captureEditorFileOperationProvenance(state, TARGET, null, true)
   })
 }
 
@@ -176,6 +181,127 @@ describe('restored editor owner reparent', () => {
       worktreeId: TARGET
     })
     expect(next.pendingExplorerReveal?.worktreeId).toBe(TARGET)
+  })
+
+  it('commits active reparenting through the complete workspace activation projection', () => {
+    const oldId = openRestoredSource()
+    const refreshGitHubForWorktreeIfStale = vi.fn()
+    useAppStore.setState({
+      activeTabId: 'source-terminal',
+      activeBrowserTabId: 'source-browser',
+      activePendingCreationId: 'source-creation',
+      rightSidebarExplorerView: 'files',
+      rightSidebarExplorerViewByWorktree: { [TARGET]: 'search' },
+      tabsByWorktree: {
+        [SOURCE]: [
+          {
+            id: 'source-terminal',
+            ptyId: null,
+            worktreeId: SOURCE,
+            title: 'Source terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            generation: 1
+          }
+        ],
+        [TARGET]: [
+          {
+            id: 'target-terminal',
+            ptyId: null,
+            worktreeId: TARGET,
+            title: 'Target terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            generation: 4
+          }
+        ]
+      },
+      activeTabIdByWorktree: {
+        [SOURCE]: 'source-terminal',
+        [TARGET]: 'target-terminal'
+      },
+      unifiedTabsByWorktree: {
+        ...useAppStore.getState().unifiedTabsByWorktree,
+        [TARGET]: [
+          {
+            id: 'target-terminal',
+            entityId: 'target-terminal',
+            groupId: 'target-group',
+            worktreeId: TARGET,
+            contentType: 'terminal',
+            label: 'Target terminal',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      groupsByWorktree: {
+        ...useAppStore.getState().groupsByWorktree,
+        [TARGET]: [
+          {
+            id: 'target-group',
+            worktreeId: TARGET,
+            activeTabId: 'target-terminal',
+            tabOrder: ['target-terminal']
+          }
+        ]
+      },
+      layoutByWorktree: {
+        ...useAppStore.getState().layoutByWorktree,
+        [TARGET]: { type: 'leaf', groupId: 'target-group' }
+      },
+      activeGroupIdByWorktree: {
+        ...useAppStore.getState().activeGroupIdByWorktree,
+        [TARGET]: 'target-group'
+      },
+      browserTabsByWorktree: {
+        [SOURCE]: [{ id: 'source-browser' }],
+        [TARGET]: [{ id: 'target-browser' }]
+      },
+      activeBrowserTabIdByWorktree: {
+        [SOURCE]: 'source-browser',
+        [TARGET]: 'target-browser'
+      },
+      everActivatedWorktreeIds: new Set([SOURCE]),
+      refreshGitHubForWorktreeIfStale
+    } as unknown as Partial<AppState>)
+    const targetSnapshots: AppState[] = []
+    const unsubscribe = useAppStore.subscribe((state) => {
+      if (state.activeWorktreeId === TARGET) {
+        targetSnapshots.push(state)
+      }
+    })
+
+    const result = reparent(oldId)
+    unsubscribe()
+
+    expect(result.ok).toBe(true)
+    expect(targetSnapshots).toHaveLength(1)
+    const activated = targetSnapshots[0]
+    expect(activated).toMatchObject({
+      activeWorktreeId: TARGET,
+      activeRepoId: 'repo-b',
+      activeWorkspaceExecutionHostId: 'local',
+      activeTabId: 'target-terminal',
+      activeBrowserTabId: 'target-browser',
+      activePendingCreationId: null,
+      rightSidebarExplorerView: 'search',
+      activeTabType: 'editor'
+    })
+    expect(activated.activeFileId).toBe(result.ok ? result.fileId : null)
+    expect(activated.everActivatedWorktreeIds).toEqual(new Set([SOURCE, TARGET]))
+    expect(activated.tabsByWorktree[TARGET]?.[0]).toMatchObject({
+      id: 'target-terminal',
+      generation: 5
+    })
+    expect(refreshGitHubForWorktreeIfStale).toHaveBeenCalledOnce()
+    expect(refreshGitHubForWorktreeIfStale).toHaveBeenCalledWith(TARGET)
   })
 
   it('persists and restores the destination owner and dirty hot-exit draft', () => {
@@ -326,7 +452,13 @@ describe('restored editor owner reparent', () => {
       targetWorktreeId: 'folder:notes',
       targetRelativePath: 'todo.md',
       targetExecutionHostId: 'local',
-      targetRuntimeEnvironmentId: null
+      targetRuntimeEnvironmentId: null,
+      targetOperationProvenance: captureEditorFileOperationProvenance(
+        useAppStore.getState(),
+        'folder:notes',
+        null,
+        true
+      )
     })
 
     expect(result.ok).toBe(true)
@@ -383,7 +515,13 @@ describe('restored editor owner reparent', () => {
       targetWorktreeId: TARGET,
       targetRelativePath: 'docs/readme.md',
       targetExecutionHostId: 'ssh:ssh-1',
-      targetRuntimeEnvironmentId: null
+      targetRuntimeEnvironmentId: null,
+      targetOperationProvenance: captureEditorFileOperationProvenance(
+        useAppStore.getState(),
+        TARGET,
+        null,
+        true
+      )
     })
 
     expect(result.ok).toBe(true)

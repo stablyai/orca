@@ -22,6 +22,7 @@ import {
   applyWorktreeUpdates,
   withoutErasedRequiredWorktreeFields,
   getRepoIdFromWorktreeId,
+  type ActiveWorktreeStateTransition,
   type DirectSshWorktreeFetchOptions,
   type WorktreeFetchOptions,
   type WorktreeSlice
@@ -5238,7 +5239,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     return remounted
   },
 
-  setActiveWorktree: (worktreeId, executionHostId) => {
+  setActiveWorktree: (worktreeId, executionHostId, options) => {
     const workspaceScope = worktreeId ? parseWorkspaceKey(worktreeId) : null
     if (worktreeId && shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
@@ -5253,9 +5254,18 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     let shouldClearUnread = false
     let shouldPrepareTerminalTabs = false
     let shouldTagTerminalTabs = false
-    set((s) => {
+    let activationCommitted = false
+    set((current) => {
+      const stateTransition: ReturnType<ActiveWorktreeStateTransition> | undefined =
+        options?.stateTransition?.(current)
+      if (stateTransition && !stateTransition.activate) {
+        return stateTransition.patch
+      }
+      const s = stateTransition ? ({ ...current, ...stateTransition.patch } as AppState) : current
+      activationCommitted = true
       if (!worktreeId) {
         return {
+          ...stateTransition?.patch,
           activeWorktreeId: null,
           activeWorkspaceKey: null,
           activeWorkspaceExecutionHostId: null,
@@ -5279,7 +5289,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ? ((s.groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId) ??
           null)
         : null
-      const activeUnifiedTabId = reconciledActiveTabId ?? activeGroup?.activeTabId ?? null
+      const activeUnifiedTabId =
+        stateTransition?.preferredActiveUnifiedTabId ??
+        reconciledActiveTabId ??
+        activeGroup?.activeTabId ??
+        null
       const activeUnifiedTab =
         activeUnifiedTabId != null
           ? ((s.unifiedTabsByWorktree[worktreeId] ?? []).find(
@@ -5408,7 +5422,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 : workspace
             )
           : s.folderWorkspaces
-      const nextActiveRepoId = workspaceScope?.type === 'folder' ? null : s.activeRepoId
+      const nextActiveRepoId =
+        workspaceScope?.type === 'folder'
+          ? null
+          : stateTransition
+            ? (worktree?.repoId ?? s.activeRepoId)
+            : s.activeRepoId
       const tabsByWorktreeUpdate =
         allDead && worktreeId != null
           ? {
@@ -5444,13 +5463,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         nextWorktrees !== s.worktreesByRepo ||
         nextDetectedWorktrees !== s.detectedWorktreesByRepo ||
         nextFolderWorkspaces !== s.folderWorkspaces ||
-        nextActiveRepoId !== s.activeRepoId
+        nextActiveRepoId !== s.activeRepoId ||
+        stateTransition !== undefined
       if (!hasStateChange) {
         // Why: preserve the root Zustand reference on a no-op re-activation so session persistence/runtime sync don't fan out.
         return s
       }
 
       return {
+        ...stateTransition?.patch,
         activeRepoId: nextActiveRepoId,
         activeWorktreeId: worktreeId,
         activeWorkspaceKey: isWorkspaceKey(worktreeId)
@@ -5475,6 +5496,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ...tabsByWorktreeUpdate
       }
     })
+
+    if (!activationCommitted) {
+      return false
+    }
 
     if (worktreeId && shouldPrepareTerminalTabs) {
       const prepareTerminalTabs = (): void => {
@@ -5531,13 +5556,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
 
     if (!worktreeId || !get().getKnownWorktreeById(worktreeId, executionHostId)) {
-      return
+      return true
     }
 
     if (shouldClearUnread) {
       if (workspaceScope?.type === 'folder') {
         void get().updateFolderWorkspace(workspaceScope.folderWorkspaceId, { isUnread: false })
-        return
+        return true
       }
       persistPassiveWorktreeMetaForOwner(
         get,
@@ -5546,6 +5571,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         'persist worktree activation state'
       )
     }
+    return true
   },
 
   setActiveFolderWorkspace: (folderWorkspaceId, executionHostId) => {

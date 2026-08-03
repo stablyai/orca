@@ -27,7 +27,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve }
 }
 
-function seed(): string {
+function seed(filePath = FILE_PATH): string {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
     activeWorktreeId: SOURCE,
@@ -37,8 +37,8 @@ function seed(): string {
       { id: 'repo-b', path: '/repo-b', kind: 'git', executionHostId: 'local' }
     ],
     worktreesByRepo: {
-      'repo-a': [{ id: SOURCE, repoId: 'repo-a', path: '/repo-a', hostId: 'local' }],
-      'repo-b': [{ id: TARGET, repoId: 'repo-b', path: '/repo-b', hostId: 'local' }]
+      'repo-a': [{ id: SOURCE, repoId: 'repo-a', path: '/repo-a', hostId: 'local', branch: '' }],
+      'repo-b': [{ id: TARGET, repoId: 'repo-b', path: '/repo-b', hostId: 'local', branch: '' }]
     },
     detectedWorktreesByRepo: {},
     runtimeEnvironments: [],
@@ -49,8 +49,8 @@ function seed(): string {
   } as unknown as Partial<AppState>)
   return useAppStore.getState().openFile(
     {
-      filePath: FILE_PATH,
-      relativePath: FILE_PATH,
+      filePath,
+      relativePath: filePath,
       worktreeId: SOURCE,
       runtimeEnvironmentId: null,
       language: 'markdown',
@@ -120,5 +120,141 @@ describe('restored editor owner save lifecycle', () => {
     await vi.waitFor(() => expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(3))
     expect(mocks.writeRuntimeFile.mock.calls[2]?.[0]).toMatchObject({ worktreeId: TARGET })
     expect(mocks.writeRuntimeFile.mock.calls[2]?.[2]).toBe('autosave destination')
+  })
+
+  it('fails closed when the sibling workspace disappears during save quiescence', async () => {
+    const oldId = seed()
+    const firstWrite = deferred()
+    mocks.writeRuntimeFile.mockReturnValueOnce(firstWrite.promise)
+    detach = attachEditorAutosaveController(useAppStore)
+    useAppStore.getState().setEditorDraft(oldId, 'source save')
+    useAppStore.getState().markFileDirty(oldId, true)
+
+    const sourceSave = requestEditorFileSave({ fileId: oldId })
+    await vi.waitFor(() => expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1))
+    const migration = migrateRestoredEditorFileOwner(
+      oldId,
+      { worktreeId: TARGET, relativePath: 'file.md', executionHostId: 'local' },
+      null
+    )
+    await Promise.resolve()
+    useAppStore.setState((state) => ({
+      worktreesByRepo: { ...state.worktreesByRepo, 'repo-b': [] }
+    }))
+
+    firstWrite.resolve()
+    await sourceSave
+    await expect(migration).resolves.toEqual({ ok: false, reason: 'owner-changed' })
+    expect(useAppStore.getState().openFiles[0]).toMatchObject({
+      id: oldId,
+      worktreeId: SOURCE
+    })
+    expect(useAppStore.getState().openFiles[0]?.pendingOwnerMigration).toBeUndefined()
+  })
+
+  it('fails closed when a folder root changes during save quiescence', async () => {
+    const oldId = seed('/notes/todo.md')
+    useAppStore.setState({
+      folderWorkspaces: [
+        {
+          id: 'notes',
+          projectGroupId: 'notes-group',
+          folderPath: '/notes',
+          connectionId: null,
+          executionHostId: 'local'
+        }
+      ],
+      projectGroups: [{ id: 'notes-group', name: 'Notes', executionHostId: 'local' }]
+    } as unknown as Partial<AppState>)
+    const firstWrite = deferred()
+    mocks.writeRuntimeFile.mockReturnValueOnce(firstWrite.promise)
+    detach = attachEditorAutosaveController(useAppStore)
+    useAppStore.getState().setEditorDraft(oldId, 'source save')
+    useAppStore.getState().markFileDirty(oldId, true)
+
+    const sourceSave = requestEditorFileSave({ fileId: oldId })
+    await vi.waitFor(() => expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1))
+    const migration = migrateRestoredEditorFileOwner(
+      oldId,
+      { worktreeId: 'folder:notes', relativePath: 'todo.md', executionHostId: 'local' },
+      null
+    )
+    await Promise.resolve()
+    useAppStore.setState((state) => ({
+      folderWorkspaces: state.folderWorkspaces.map((workspace) => ({
+        ...workspace,
+        folderPath: '/renamed-notes'
+      }))
+    }))
+
+    firstWrite.resolve()
+    await sourceSave
+    await expect(migration).resolves.toEqual({ ok: false, reason: 'owner-changed' })
+    expect(useAppStore.getState().openFiles[0]).toMatchObject({
+      id: oldId,
+      worktreeId: SOURCE
+    })
+    expect(useAppStore.getState().openFiles[0]?.pendingOwnerMigration).toBeUndefined()
+  })
+
+  it('fails closed when direct-SSH authority reconnects during save quiescence', async () => {
+    const oldId = seed()
+    useAppStore.setState((state) => ({
+      repos: state.repos.map((repo) =>
+        repo.id === 'repo-b'
+          ? { ...repo, connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }
+          : repo
+      ),
+      worktreesByRepo: {
+        ...state.worktreesByRepo,
+        'repo-b': state.worktreesByRepo['repo-b'].map((worktree) => ({
+          ...worktree,
+          hostId: 'ssh:ssh-1'
+        }))
+      }
+    }))
+    useAppStore.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      connectionGeneration: 1
+    })
+    const firstWrite = deferred()
+    mocks.writeRuntimeFile.mockReturnValueOnce(firstWrite.promise)
+    detach = attachEditorAutosaveController(useAppStore)
+    useAppStore.getState().setEditorDraft(oldId, 'source save')
+    useAppStore.getState().markFileDirty(oldId, true)
+
+    const sourceSave = requestEditorFileSave({ fileId: oldId })
+    await vi.waitFor(() => expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1))
+    const migration = migrateRestoredEditorFileOwner(
+      oldId,
+      { worktreeId: TARGET, relativePath: 'file.md', executionHostId: 'ssh:ssh-1' },
+      null
+    )
+    await Promise.resolve()
+    useAppStore.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'disconnected',
+      error: null,
+      reconnectAttempt: 0,
+      connectionGeneration: 1
+    })
+    useAppStore.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      connectionGeneration: 2
+    })
+
+    firstWrite.resolve()
+    await sourceSave
+    await expect(migration).resolves.toEqual({ ok: false, reason: 'owner-changed' })
+    expect(useAppStore.getState().openFiles[0]).toMatchObject({
+      id: oldId,
+      worktreeId: SOURCE
+    })
   })
 })

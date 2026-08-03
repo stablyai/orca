@@ -26,13 +26,13 @@
       "providers": ["local", "ssh", "paired-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "paired-runtime"],
-      "coverageNotes": "Deterministic store/controller tests cover local, direct-SSH, paired-runtime identity, folder workspaces, queue quiescence, owner-derived IDs, drafts and editor maps, tab/group placement, exact watch replacement, change/delete/rename correlation, explicit save, autosave, collision refusal, provenance, and restart hot-exit persistence. Live headed/headless paired-runtime and post-establish Electron IPC remain uncollected.",
+      "coverageNotes": "Deterministic store/controller tests cover local, direct-SSH, paired-runtime identity, folder workspaces, queue quiescence, stale route and connection-generation rejection, authoritative active-workspace projection, owner-derived IDs, drafts and editor maps, tab/group placement, exact watch replacement, change/delete/rename correlation, explicit save, autosave, collision refusal, provenance, and restart hot-exit persistence. Live headed/headless paired-runtime and post-establish Electron IPC remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/11304",
         "https://github.com/stablyai/orca/pull/11369"
       ],
-      "invariant": "A restored absolute path owned by a same-host sibling workspace cannot read, save, watch, or persist until one atomic transaction drains old saves and installs the sibling workspace, relative path, execution host, runtime/SSH generation, mutation provenance, owner-derived IDs, editor state, and UI placement; collisions fail without mutation.",
-      "oracle": "Hold an old-owner save in flight, start migration, and require ownership to remain unchanged behind an autosave gate until the save settles. Then require destination authority for explicit save and autosave, one source-watch unsubscribe plus one destination subscribe, destination-only change/delete/rename handling, owner-derived state rekeys, folder and SSH provenance, hot-exit restart ownership, and no mutation for dirty or clean collisions.",
+      "invariant": "A restored absolute path owned by a same-host sibling workspace cannot read, save, watch, or persist until old saves drain, the exact route and host generations are revalidated, and one authoritative activation transaction installs the sibling owner, target projection, editor state, and first-activation terminal preparation; collisions and stale routes fail without migration.",
+      "oracle": "Hold an old-owner save in flight, start migration, then remove the sibling, change a folder root, or reconnect SSH and require owner migration to fail closed after quiescence. On a stable route require one coherent target-workspace projection, first-activation terminal generation preparation, destination authority for explicit save and autosave, exact watch replacement, destination-only change/delete/rename handling, owner-derived state rekeys, hot-exit restart ownership, and no mutation for dirty or clean collisions.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts src/renderer/src/lib/runtime-workspace-file-route.test.ts"
       ],
@@ -46,6 +46,7 @@
           "file": "src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts",
           "assertions": [
             "one atomic commit rekeys owner-derived editor, preview, draft, cursor, view, tab, group, active, reveal, focus, provenance, and persistence state",
+            "active reparenting uses the centralized workspace activation transaction for terminal, browser, pending-creation, explorer, first-activation, and post-commit state",
             "source watch unsubscribes once, destination watch subscribes once, and only destination change/delete/rename events reach the file",
             "dirty and clean destination collisions fail closed without changing either open session",
             "folder and direct-SSH owners retain exact root, host, target, and connection-generation authority"
@@ -54,7 +55,8 @@
         {
           "file": "src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts",
           "assertions": [
-            "migration waits for the old save queue and routes later explicit and automatic saves through the destination worktree"
+            "migration waits for the old save queue and routes later explicit and automatic saves through the destination worktree",
+            "a removed sibling, changed folder root, or changed direct-SSH generation after quiescence rejects migration without changing ownership"
           ]
         },
         {
@@ -72,7 +74,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts src/renderer/src/lib/runtime-workspace-file-route.test.ts",
           "result": "passed",
           "durationSeconds": 3,
-          "summary": "Three deterministic files passed 15 lifecycle, ownership, host, collision, persistence, watch, and save tests."
+          "summary": "Three deterministic files passed 19 lifecycle, stale-route, activation, ownership, host, collision, persistence, watch, and save tests."
         }
       ],
       "runtimeBudget": {
@@ -84,15 +86,15 @@
         "evidence": "One local deterministic run is recorded; CI and soak history have not started."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "The prior candidate lacks the migration action and fails the lifecycle invariant after its initial sibling read; an isolated byte-identical overlay run is still required before promotion."
+        "status": "complete",
+        "evidence": "The byte-identical two-file oracle (SHA-256 f6c13c1c964e15e758c70d1402f1c01742e3052995e407bb50667877de238a86 and a5e97014c38664987c69867733dca64b73a74d6c68f6375ce4633e0a34188951) is red on base e08eba674c, published 1bcfe3bcb0, previous candidate f92db196a1 (4 focused failures), and revert b3627461ab, while the correction passes 14/14. The base, published, and revert trees lack the migration action and fail structurally; the previous candidate reaches the stale-route and split-activation assertions and returns unsafe success or source projection."
       },
       "performanceBudget": {
         "required": true,
         "evidence": "Route lookup scans only the already-indexed renderer workspace catalog, while migration is O(open editor files + source/destination tabs/groups) and performs no provider call, Git scan, polling, retry, subprocess, or global fanout beyond the required old/new watch delta."
       },
       "promotionCriteria": [
-        "Collect isolated old-candidate red and current-candidate green artifacts with the same lifecycle oracle.",
+        "Collect two fresh child-verifier decisions against the correction candidate.",
         "Collect headed and headless paired-runtime coverage after the post-establish Electron IPC gap is fixed.",
         "Collect physical Windows or WSL path/host evidence and CI soak history."
       ],
