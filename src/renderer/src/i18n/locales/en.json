@@ -11499,8 +11499,6 @@
             "d3775acb14": "Stop Service",
             "39a29cea44": "Copy Address",
             "74831c740a": "Copy {{value0}}",
-            "8d74f1b74c": "Open in Browser",
-            "4af66eb968": "Open {{value0}} in Browser",
             "578fb812fd": "workspace deleted",
             "7a16db1af7": "Started by {{value0}}",
             "26b04179d6": "Stop service on port {{value0}}",

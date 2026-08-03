@@ -265,10 +265,6 @@ function FileExplorerFiles(): React.JSX.Element {
     [services.scan]
   )
 
-  const handleOpenService = useCallback((service: WorkspaceService) => {
-    void window.api.shell.openUrl(`http://${service.address}`)
-  }, [])
-
   const handleStopService = useCallback(
     async (service: WorkspaceService, notifyAgent: boolean) => {
       const request = resolveServiceStopRequest(service, activeRepo?.id ?? null)
@@ -874,7 +870,6 @@ function FileExplorerFiles(): React.JSX.Element {
             orphanCount={orphanServices.length}
             onShowOrphans={() => setOrphanServicesOpen(true)}
             onRefresh={() => void services.refresh()}
-            onOpen={handleOpenService}
             onStop={(service, notifyAgent) => void handleStopService(service, notifyAgent)}
           />
         )}
@@ -884,7 +879,6 @@ function FileExplorerFiles(): React.JSX.Element {
         open={orphanServicesOpen}
         orphans={orphanServices}
         onOpenChange={setOrphanServicesOpen}
-        onOpen={handleOpenService}
         onStop={(service, notifyAgent) => void handleStopService(service, notifyAgent)}
       />
 

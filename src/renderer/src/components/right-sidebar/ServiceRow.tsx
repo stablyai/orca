@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Box, Copy, ExternalLink, Server, Trash2 } from 'lucide-react'
+import { Box, Copy, Server, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -24,13 +24,11 @@ export const UNRESOLVED = '—'
 export function ServiceRow({
   service,
   showProject,
-  onOpen,
   onStop,
   stopRequest
 }: {
   service: WorkspaceService
   showProject: boolean
-  onOpen: (service: WorkspaceService) => void
   onStop: ((service: WorkspaceService, notifyAgent: boolean) => void) | null
   stopRequest: WorkspaceServiceStopRequest | null
 }): React.JSX.Element {
@@ -105,30 +103,6 @@ export function ServiceRow({
                   variant="ghost"
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
-                  onClick={() => onOpen(service)}
-                  aria-label={translate(
-                    'auto.components.right.sidebar.ServiceRow.4af66eb968',
-                    'Open {{value0}} in Browser',
-                    { value0: service.address }
-                  )}
-                >
-                  <ExternalLink size={13} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.right.sidebar.ServiceRow.8d74f1b74c',
-                  'Open in Browser'
-                )}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="text-muted-foreground hover:text-foreground"
                   onClick={handleCopy}
                   aria-label={translate(
                     'auto.components.right.sidebar.ServiceRow.74831c740a',
@@ -173,9 +147,6 @@ export function ServiceRow({
         <ContextMenuLabel className="px-2 py-1 text-[11px] font-semibold text-muted-foreground">
           {`:${service.port}`}
         </ContextMenuLabel>
-        <ContextMenuItem onSelect={() => onOpen(service)}>
-          {translate('auto.components.right.sidebar.ServiceRow.8d74f1b74c', 'Open in Browser')}
-        </ContextMenuItem>
         <ContextMenuItem onSelect={handleCopy}>
           {translate('auto.components.right.sidebar.ServiceRow.39a29cea44', 'Copy Address')}
         </ContextMenuItem>

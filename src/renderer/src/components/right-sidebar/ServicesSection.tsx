@@ -24,7 +24,6 @@ export function ServicesSection({
   orphanCount,
   onShowOrphans,
   onRefresh,
-  onOpen,
   onStop
 }: {
   scan: WorkspaceServiceScanResult | null
@@ -35,7 +34,6 @@ export function ServicesSection({
   orphanCount: number
   onShowOrphans: () => void
   onRefresh: () => void
-  onOpen: (service: WorkspaceService) => void
   onStop: (service: WorkspaceService, notifyAgent: boolean) => void
 }): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(false)
@@ -150,7 +148,6 @@ export function ServicesSection({
               key={service.id}
               service={service}
               showProject
-              onOpen={onOpen}
               onStop={onStop}
               stopRequest={resolveServiceStopRequest(service, repoId)}
             />
@@ -182,7 +179,6 @@ export function ServicesSection({
                     key={service.id}
                     service={service}
                     showProject
-                    onOpen={onOpen}
                     onStop={onStop}
                     stopRequest={resolveServiceStopRequest(service, repoId)}
                   />
