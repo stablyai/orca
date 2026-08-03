@@ -25,7 +25,11 @@ export function ServiceRow({
   }, [service.address])
 
   const canStop = Boolean(onStop && service.pid)
-  const secondary = service.launchCommand ?? service.processName ?? UNRESOLVED
+  // Why: a container's listener is the docker proxy, so processName reads
+  // `com.docker.backend` for every one of them. The container name is what
+  // distinguishes them.
+  const secondary =
+    service.container?.containerName ?? service.launchCommand ?? service.processName ?? UNRESOLVED
 
   return (
     <div className="group flex items-center gap-2 rounded px-1 py-1 transition-colors hover:bg-accent/50">
