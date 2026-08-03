@@ -17,6 +17,7 @@ import {
   stablePathId,
   type SkillScanRoot
 } from './skill-discovery-sources'
+import { rootMayContainSourceKind } from './skill-discovery-source-filter'
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from './skill-candidate-concurrency'
@@ -146,19 +147,6 @@ function normalizeSkillName(value: string): string {
   return value.trim().toLowerCase()
 }
 
-function rootMayContainSourceKind(
-  root: SkillScanRoot,
-  sourceKinds: readonly SkillSourceKind[] | undefined
-): boolean {
-  if (!sourceKinds) {
-    return true
-  }
-  if (root.sourceKind === 'home') {
-    return sourceKinds.includes('home') || sourceKinds.includes('bundled')
-  }
-  return sourceKinds.includes(root.sourceKind)
-}
-
 async function scanRoot(
   root: SkillScanRoot,
   filter: SkillDiscoveryFilter,
@@ -179,14 +167,14 @@ async function scanRoot(
       signal.throwIfAborted()
       // Why: path identity belongs to the scanning host; canonicalizing before
       // returning prevents symlinked roots from becoming duplicate picker rows.
-      const canonicalSkillFilePath = await realpath(skillFilePath).catch(() => skillFilePath)
       const directoryPath = dirname(skillFilePath)
-      const summary = await readSkillSummary(skillFilePath)
-      if (!summary) {
+      const sourceKind = sourceKindForSkill(root, skillFilePath, { relative, sep })
+      if (filter.sourceKinds?.length && !filter.sourceKinds.includes(sourceKind)) {
         return null
       }
-      const sourceKind = sourceKindForSkill(root, skillFilePath, { relative, sep })
-      if (filter.sourceKinds && !filter.sourceKinds.includes(sourceKind)) {
+      const canonicalSkillFilePath = await realpath(skillFilePath).catch(() => skillFilePath)
+      const summary = await readSkillSummary(skillFilePath)
+      if (!summary) {
         return null
       }
       const directoryName = basename(directoryPath)
@@ -319,7 +307,7 @@ export async function discoverSkills(args: {
     // Untargeted scans (Settings) keep their pre-picker inventory and cost.
     ...(args.cwd &&
     args.includeCwd !== false &&
-    (!args.sourceKinds || args.sourceKinds.includes('plugin'))
+    (!args.sourceKinds?.length || args.sourceKinds.includes('plugin'))
       ? await discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd })
       : [])
   ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))

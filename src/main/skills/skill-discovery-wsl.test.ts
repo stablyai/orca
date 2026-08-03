@@ -89,6 +89,11 @@ describe('WSL skill discovery', () => {
 
     expect(script).toContain("'orchestration'|'computer-use') return 0")
     expect(script).toContain('local normalized_name=${1,,}')
+    expect(script).toContain('metadata_name_known=0')
+    expect(script).toContain('bytes_read=$((bytes_read + ${#line} + 1))')
+    expect(script).toContain('[ "$bytes_read" -gt 262144 ] && return')
+    expect(script).toContain("line=${line#$'\\xEF\\xBB\\xBF'}")
+    expect(script).toContain('if [ "$metadata_name_known" -eq 1 ]; then')
     expect(script).toContain('done < "$1"')
     expect(script).not.toContain("awk '")
     expect(script).not.toContain("tr '[:upper:]'")
@@ -113,6 +118,45 @@ describe('WSL skill discovery', () => {
     ].join('')
 
     expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, ['home']).skills).toEqual([])
+    expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, []).skills).toHaveLength(1)
+  })
+
+  it('uses the TypeScript summary parser for uncertain WSL name candidates', () => {
+    const blockName = Buffer.from('\uFEFF---\nname: >-\n  Agent\n  Orchestration\n---\n').toString(
+      'base64'
+    )
+    const headingName = Buffer.from('# Computer Use\n\nUse the computer.\n').toString('base64')
+    const output = [
+      record('R', '0', '1'),
+      record(
+        'S',
+        '0',
+        '/home/alice/.agents/skills/renamed-a/SKILL.md',
+        '/home/alice/.agents/skills/renamed-a/SKILL.md',
+        '1700000000',
+        '1',
+        blockName
+      ),
+      record(
+        'S',
+        '0',
+        '/home/alice/.agents/skills/renamed-b/SKILL.md',
+        '/home/alice/.agents/skills/renamed-b/SKILL.md',
+        '1700000000',
+        '1',
+        headingName
+      )
+    ].join('')
+
+    expect(
+      parseWslSkillDiscoveryOutput(
+        output,
+        [homeRoot],
+        42,
+        ['home'],
+        ['agent orchestration', 'computer use']
+      ).skills.map((skill) => skill.name)
+    ).toEqual(['Agent Orchestration', 'Computer Use'])
   })
 
   it('rejects malformed host responses instead of reporting an empty scan', () => {

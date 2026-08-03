@@ -54,8 +54,10 @@ function normalizeSkillDiscoveryTarget(
   names?: readonly string[],
   sourceKinds?: readonly SkillSourceKind[]
 ): SkillDiscoveryTarget | undefined {
-  const effectiveNames = names ?? target?.names
-  const effectiveSourceKinds = sourceKinds ?? target?.sourceKinds
+  const effectiveNames = [
+    ...new Set((names ?? target?.names)?.map((name) => name.trim().toLowerCase()).filter(Boolean))
+  ]
+  const effectiveSourceKinds = [...new Set(sourceKinds ?? target?.sourceKinds ?? [])]
   const filters = {
     ...(effectiveNames?.length ? { names: [...effectiveNames] } : {}),
     ...(effectiveSourceKinds?.length ? { sourceKinds: [...effectiveSourceKinds] } : {})
@@ -86,26 +88,38 @@ function normalizeSkillDiscoveryTarget(
   return { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null, ...filters }
 }
 
-export function getSkillDiscoveryTargetKey(
-  target: SkillDiscoveryTarget | undefined,
-  names?: readonly string[],
-  sourceKinds?: readonly SkillSourceKind[]
+function appendSkillDiscoveryFiltersToKey(
+  runtimeKey: string,
+  target: SkillDiscoveryTarget | undefined
 ): string {
+  return target?.names?.length || target?.sourceKinds?.length
+    ? JSON.stringify([
+        runtimeKey,
+        target.names ? [...target.names].sort() : null,
+        target.sourceKinds ? [...target.sourceKinds].sort() : null
+      ])
+    : runtimeKey
+}
+
+function getNormalizedSkillDiscoveryRuntimeKey(target: SkillDiscoveryTarget | undefined): string {
   if (target?.projectRuntime) {
     return target.projectRuntime.status === 'resolved'
       ? target.projectRuntime.runtime.cacheKey
       : target.projectRuntime.repair.cacheKey
   }
+  return target?.runtime === 'wsl' ? `wsl:${target.wslDistro ?? ''}` : 'host'
+}
+
+export function getSkillDiscoveryTargetKey(
+  target: SkillDiscoveryTarget | undefined,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
+): string {
   const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
-  const runtimeKey =
-    normalizedTarget?.runtime === 'wsl' ? `wsl:${normalizedTarget.wslDistro ?? ''}` : 'host'
-  return normalizedTarget?.names?.length || normalizedTarget?.sourceKinds?.length
-    ? JSON.stringify([
-        runtimeKey,
-        normalizedTarget.names ?? null,
-        normalizedTarget.sourceKinds ?? null
-      ])
-    : runtimeKey
+  return appendSkillDiscoveryFiltersToKey(
+    getNormalizedSkillDiscoveryRuntimeKey(normalizedTarget),
+    normalizedTarget
+  )
 }
 
 // Why: a connected remote runtime scans its own disk. Sharing the local key
@@ -119,13 +133,12 @@ export function getRuntimeScopedSkillDiscoveryKey(
   names?: readonly string[],
   sourceKinds?: readonly SkillSourceKind[]
 ): string {
+  const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
   const runtimeKey =
     runtimeTarget.kind === 'environment'
       ? `runtime:${runtimeTarget.environmentId}`
-      : getSkillDiscoveryTargetKey(target)
-  return names?.length || sourceKinds?.length
-    ? JSON.stringify([runtimeKey, names ?? null, sourceKinds ?? null])
-    : runtimeKey
+      : getNormalizedSkillDiscoveryRuntimeKey(normalizedTarget)
+  return appendSkillDiscoveryFiltersToKey(runtimeKey, normalizedTarget)
 }
 
 function startInstalledAgentSkillDiscovery(

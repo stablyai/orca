@@ -16,6 +16,7 @@ import {
   stablePathId,
   type SkillScanRoot
 } from './skill-discovery-sources'
+import { rootMayContainSourceKind } from './skill-discovery-source-filter'
 import { discoverClaudePluginSkillSourcesInWsl } from './claude-plugin-skill-sources-wsl'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 import { SKILL_STAGING_GLOB } from './skill-delete/staging-names'
@@ -24,19 +25,6 @@ import { skillFileMaxDepth } from '../../shared/skill-discovery-depth'
 const MAX_MARKDOWN_BYTES = 256 * 1024
 const WSL_SCAN_TIMEOUT_MS = 30_000
 const WSL_SCAN_MAX_OUTPUT_BYTES = 128 * 1024 * 1024
-
-function rootMayContainSourceKind(
-  root: SkillScanRoot,
-  sourceKinds: readonly SkillSourceKind[] | undefined
-): boolean {
-  if (!sourceKinds) {
-    return true
-  }
-  if (root.sourceKind === 'home') {
-    return sourceKinds.includes('home') || sourceKinds.includes('bundled')
-  }
-  return sourceKinds.includes(root.sourceKind)
-}
 
 export function buildWslSkillDiscoveryCommand(
   roots: readonly SkillScanRoot[],
@@ -57,23 +45,33 @@ export function buildWslSkillDiscoveryCommand(
       '}',
       'read_frontmatter_name() {',
       '  metadata_name=',
-      '  local line first_line=1',
+      '  metadata_name_known=0',
+      '  local LC_ALL=C line first_line=1 bytes_read=0',
       '  while IFS= read -r line; do',
+      '    bytes_read=$((bytes_read + ${#line} + 1))',
+      `    [ "$bytes_read" -gt ${MAX_MARKDOWN_BYTES} ] && return`,
       "    line=${line%$'\\r'}",
       '    if [ "$first_line" -eq 1 ]; then',
       '      first_line=0',
+      "      line=${line#$'\\xEF\\xBB\\xBF'}",
       '      [[ "$line" =~ ^---[[:space:]]*$ ]] || return',
       '      continue',
       '    fi',
       '    [[ "$line" =~ ^---[[:space:]]*$ ]] && return',
-      '    if [[ "$line" =~ ^[[:space:]]*name[[:space:]]*:[[:space:]]*(.*)$ ]]; then',
+      '    if [[ "$line" =~ ^name:[[:space:]]*(.*)$ ]]; then',
       '      metadata_name=${BASH_REMATCH[1]}',
       '      while [[ "$metadata_name" == [[:space:]]* ]]; do metadata_name=${metadata_name#?}; done',
       '      while [[ "$metadata_name" == *[[:space:]] ]]; do metadata_name=${metadata_name%?}; done',
+      '      case "$metadata_name" in ""|"|"|"|-"|">"|">-") return ;; esac',
       '      local quote=${metadata_name:0:1}',
-      `      if { [ "$quote" = '"' ] || [ "$quote" = "'" ]; } && [ "\${metadata_name: -1}" = "$quote" ]; then`,
+      `      if [ "\${#metadata_name}" -eq 1 ] && { [ "$quote" = '"' ] || [ "$quote" = "'" ]; }; then return; fi`,
+      `      if [ "\${#metadata_name}" -ge 2 ] && { [ "$quote" = '"' ] || [ "$quote" = "'" ]; } && [ "\${metadata_name: -1}" = "$quote" ]; then`,
       '        metadata_name=${metadata_name:1:${#metadata_name}-2}',
       '      fi',
+      '      while [[ "$metadata_name" == [[:space:]]* ]]; do metadata_name=${metadata_name#?}; done',
+      '      while [[ "$metadata_name" == *[[:space:]] ]]; do metadata_name=${metadata_name%?}; done',
+      '      [ -n "$metadata_name" ] || return',
+      '      metadata_name_known=1',
       '      return',
       '    fi',
       '  done < "$1"',
@@ -83,7 +81,9 @@ export function buildWslSkillDiscoveryCommand(
       '    directory_name=${directory_path##*/}',
       '    if ! matches_requested_name "$directory_name"; then',
       '      read_frontmatter_name "$skill_file"',
-      '      matches_requested_name "$metadata_name" || continue',
+      '      if [ "$metadata_name_known" -eq 1 ]; then',
+      '        matches_requested_name "$metadata_name" || continue',
+      '      fi',
       '    fi'
     )
   }
@@ -153,11 +153,15 @@ export function parseWslSkillDiscoveryOutput(
   output: string,
   roots: readonly SkillScanRoot[],
   scannedAt = Date.now(),
-  sourceKinds?: readonly SkillSourceKind[]
+  sourceKinds?: readonly SkillSourceKind[],
+  names?: readonly string[]
 ): SkillDiscoveryResult {
   const fields = output.split('\0')
   const rootExists = new Map<number, boolean>()
   const skillsByCanonicalPath = new Map<string, DiscoveredSkill>()
+  const expectedNames = names?.length
+    ? new Set(names.map((name) => name.trim().toLowerCase()).filter(Boolean))
+    : undefined
   let index = 0
   while (index < fields.length && fields[index]) {
     const recordKind = fields[index++]
@@ -200,12 +204,20 @@ export function parseWslSkillDiscoveryOutput(
     const directoryPath = pathPosix.dirname(skillFilePath)
     const summary = summarizeSkillMarkdown(markdown)
     const sourceKind = sourceKindForSkill(root, skillFilePath, pathPosix)
-    if (sourceKinds && !sourceKinds.includes(sourceKind)) {
+    if (sourceKinds?.length && !sourceKinds.includes(sourceKind)) {
+      continue
+    }
+    const directoryName = pathPosix.basename(directoryPath)
+    if (
+      expectedNames &&
+      !expectedNames.has((summary.name ?? '').trim().toLowerCase()) &&
+      !expectedNames.has(directoryName.trim().toLowerCase())
+    ) {
       continue
     }
     skillsByCanonicalPath.set(canonicalSkillFilePath, {
       id: stablePathId(canonicalSkillFilePath),
-      name: summary.name ?? pathPosix.basename(directoryPath),
+      name: summary.name ?? directoryName,
       description: summary.description,
       // Copy: `root.providers` is shared across every skill/source from this
       // root, so a later in-place merge must not mutate the aliased array.
@@ -257,7 +269,7 @@ export async function discoverSkillsInWsl(args: {
   // degrade to zero plugin roots (matching the native readMetadataFile path),
   // not abort the mandatory native/home/repo/bundled scan.
   let pluginRoots: SkillScanRoot[] = []
-  if (args.cwd && (!args.sourceKinds || args.sourceKinds.includes('plugin'))) {
+  if (args.cwd && (!args.sourceKinds?.length || args.sourceKinds.includes('plugin'))) {
     try {
       pluginRoots = await discoverClaudePluginSkillSourcesInWsl({ ...args, cwd: args.cwd })
     } catch {
@@ -281,5 +293,5 @@ export async function discoverSkillsInWsl(args: {
     args.distro,
     buildWslSkillDiscoveryCommand(roots, args.names)
   )
-  return parseWslSkillDiscoveryOutput(output, roots, Date.now(), args.sourceKinds)
+  return parseWslSkillDiscoveryOutput(output, roots, Date.now(), args.sourceKinds, args.names)
 }

@@ -238,6 +238,18 @@ describe('skill discovery', () => {
       { name: 'Agent Orchestration', sourceKind: 'home', directoryPath: homeSkill }
     ])
     expect(result.sources.every((source) => source.sourceKind === 'home')).toBe(true)
+
+    const unfiltered = await discoverSkills({
+      homeDir: home,
+      cwd: repo,
+      repos: [],
+      sourceKinds: []
+    })
+    expect(unfiltered.skills.map((skill) => skill.name).sort()).toEqual([
+      'Agent Orchestration',
+      'computer-use',
+      'orchestration'
+    ])
   })
 
   it('discovers the enabled Claude plugin version applicable to the project cwd', async () => {
