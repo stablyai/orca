@@ -97,6 +97,10 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  /** Fresh local spawns currently route to an in-process, non-persistent fallback. */
+  readonly routesFreshSpawnsToLocalProvider?: true
+  /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
+  recoverFreshSpawnRouting?: () => Promise<boolean>
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
   /** Whether this spawn target can append the Git guard after its final env merge. */
   supportsGitCredentialGuardHost?: (sessionId?: string) => boolean

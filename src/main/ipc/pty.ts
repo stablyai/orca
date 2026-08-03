@@ -228,9 +228,6 @@ import type { PtyListedSession } from '../../shared/pty-listed-session'
 // Routes PTY operations by connectionId (null = local provider).
 
 let localProvider: IPtyProvider = new LocalPtyProvider()
-type FreshLocalFallbackProvider = IPtyProvider & {
-  routesFreshSpawnsToLocalProvider?: true
-}
 const sshProviders = new Map<string, IPtyProvider>()
 const sshProvidersByGeneration = new Map<number, IPtyProvider>()
 
@@ -1719,10 +1716,20 @@ function isClaudeLaunchCommand(command: string | undefined): boolean {
   )
 }
 
-function routesFreshSpawnsToLocalProvider(
-  provider: IPtyProvider
-): provider is FreshLocalFallbackProvider {
-  return (provider as FreshLocalFallbackProvider).routesFreshSpawnsToLocalProvider === true
+function routesFreshSpawnsToLocalProvider(provider: IPtyProvider): boolean {
+  return provider.routesFreshSpawnsToLocalProvider === true
+}
+
+function recoverFreshSpawnProviderRouting(
+  provider: IPtyProvider,
+  connectionId: string | null | undefined,
+  sessionId: string | undefined,
+  isNewSession = sessionId === undefined
+): Promise<boolean> | undefined {
+  if (connectionId || (!isNewSession && sessionId) || !routesFreshSpawnsToLocalProvider(provider)) {
+    return
+  }
+  return provider.recoverFreshSpawnRouting?.()
 }
 
 function beginPtySpawnForWorktree(
@@ -4212,6 +4219,17 @@ export function registerPtyHandlers(
       }
       const cwd = resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
       const provider = getProvider(args.connectionId)
+      const freshSpawnRecovery = preAdoptedStablePane
+        ? undefined
+        : recoverFreshSpawnProviderRouting(
+            provider,
+            args.connectionId,
+            args.sessionId,
+            args.isNewSession
+          )
+      if (freshSpawnRecovery) {
+        await freshSpawnRecovery
+      }
       const isClaudeLaunch =
         !preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -4244,7 +4262,10 @@ export function registerPtyHandlers(
         sessionId !== undefined ? getRelayPtyId(args.connectionId, sessionId) : undefined
       const effectiveSessionAppId =
         sessionId !== undefined ? getAppPtyId(args.connectionId, sessionId) : undefined
-      const isMintedSessionId = callerRequestedSessionId === undefined && isDaemonHostSpawn
+      const isNewDaemonSession =
+        !preAdoptedStablePane &&
+        isDaemonHostSpawn &&
+        (callerRequestedSessionId === undefined || args.isNewSession === true)
       const expectedWslDistro = !args.connectionId
         ? (resolveWslSessionContext({
             cwd,
@@ -4415,7 +4436,7 @@ export function registerPtyHandlers(
         rows: args.rows,
         cwd,
         env,
-        ...(isMintedSessionId ? { isNewSession: true } : {})
+        ...(isNewDaemonSession ? { isNewSession: true } : {})
       }
       if (!args.connectionId && !isDaemonHostSpawn) {
         spawnOptions.codexHomePathOverride = { value: selectedCodexHomePath }
@@ -4618,8 +4639,8 @@ export function registerPtyHandlers(
           if (isDaemonHostSpawn && expectedPtyId) {
             preparedProvisionalExecutionContext =
               runtime?.preparePtyExecutionContext?.(expectedPtyId, expectedWslDistro, {
-                resetIncarnation: isMintedSessionId && !stablePaneOwnerCandidate,
-                preserveExisting: !isMintedSessionId || Boolean(stablePaneOwnerCandidate)
+                resetIncarnation: isNewDaemonSession && !stablePaneOwnerCandidate,
+                preserveExisting: !isNewDaemonSession || Boolean(stablePaneOwnerCandidate)
               }) ?? false
           }
           const sequenceBeforeProviderSpawn = expectedPtyId
@@ -4720,7 +4741,7 @@ export function registerPtyHandlers(
             stablePaneOwner = stablePaneSpawn.owner
             if (
               stablePaneOwner &&
-              isMintedSessionId &&
+              isNewDaemonSession &&
               effectiveSessionAppId &&
               effectiveSessionAppId !== result.id
             ) {
@@ -4755,7 +4776,10 @@ export function registerPtyHandlers(
                 : result.wslDistro
           )
         } catch (err) {
-          if ((isMintedSessionId || preparedProvisionalExecutionContext) && effectiveSessionAppId) {
+          if (
+            (isNewDaemonSession || preparedProvisionalExecutionContext) &&
+            effectiveSessionAppId
+          ) {
             runtime?.preparePtyExecutionContext?.(effectiveSessionAppId, null, {
               resetIncarnation: true
             })
@@ -4798,7 +4822,7 @@ export function registerPtyHandlers(
               store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
             }
           }
-          if (isMintedSessionId && sessionId !== undefined) {
+          if (isNewDaemonSession && sessionId !== undefined) {
             clearProviderPtyState(sessionId)
           }
           throw spawnError
@@ -5500,6 +5524,12 @@ export function registerPtyHandlers(
             : null
         if (earlyStablePaneOwner && !preAdoptedStablePane) {
           await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+        }
+        const freshSpawnRecovery = preAdoptedStablePane
+          ? undefined
+          : recoverFreshSpawnProviderRouting(provider, args.connectionId, args.sessionId)
+        if (freshSpawnRecovery) {
+          await freshSpawnRecovery
         }
         const isClaudeLaunch =
           !preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)

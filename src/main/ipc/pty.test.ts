@@ -762,6 +762,7 @@ describe('registerPtyHandlers', () => {
       setPtyController: vi.fn((next) => {
         controller = next
       }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_recovered'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn()
     }
@@ -1029,6 +1030,85 @@ describe('registerPtyHandlers', () => {
     })
     expect(physicalSpawn).toHaveBeenCalledOnce()
     clearProviderPtyState('pty-local-claim')
+  })
+
+  it.each(['runtime controller', 'renderer IPC'] as const)(
+    'recovers degraded fresh-spawn routing before %s chooses daemon host semantics',
+    async (entryPoint) => {
+      let degraded = true
+      const daemonSpawn = vi.fn(async (options: { sessionId?: string }) => ({
+        id: options.sessionId ?? 'unexpected-fallback-id'
+      }))
+      const provider = createAgentClaimProvider({ spawn: daemonSpawn })
+      const recoverFreshSpawnRouting = vi.fn(async () => {
+        degraded = false
+        return true
+      })
+      Object.defineProperties(provider, {
+        routesFreshSpawnsToLocalProvider: {
+          configurable: true,
+          get: () => (degraded ? true : undefined)
+        },
+        recoverFreshSpawnRouting: { value: recoverFreshSpawnRouting }
+      })
+      setLocalPtyProvider(provider as never)
+      const controller = registerAgentClaimController()
+      const worktreeId = 'repo::/tmp/recovered-daemon-routing'
+      const spawnArgs = {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/recovered-daemon-routing',
+        worktreeId
+      }
+
+      await (entryPoint === 'runtime controller'
+        ? controller.spawn(spawnArgs)
+        : handlers.get('pty:spawn')!(null, spawnArgs))
+
+      expect(recoverFreshSpawnRouting).toHaveBeenCalledOnce()
+      expect(daemonSpawn).toHaveBeenCalledOnce()
+      expect(daemonSpawn.mock.calls[0]?.[0].sessionId).toMatch(
+        new RegExp(`^${worktreeId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@@`)
+      )
+      expect(recoverFreshSpawnRouting.mock.invocationCallOrder[0]).toBeLessThan(
+        daemonSpawn.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+      )
+    }
+  )
+
+  it('recovers degraded routing for a fresh runtime session with a stable id', async () => {
+    let degraded = true
+    const daemonSpawn = vi.fn(async (options: { sessionId?: string; isNewSession?: boolean }) => ({
+      id: options.sessionId ?? 'unexpected-fallback-id'
+    }))
+    const provider = createAgentClaimProvider({ spawn: daemonSpawn })
+    const recoverFreshSpawnRouting = vi.fn(async () => {
+      degraded = false
+      return true
+    })
+    Object.defineProperties(provider, {
+      routesFreshSpawnsToLocalProvider: {
+        configurable: true,
+        get: () => (degraded ? true : undefined)
+      },
+      recoverFreshSpawnRouting: { value: recoverFreshSpawnRouting }
+    })
+    setLocalPtyProvider(provider as never)
+    const controller = registerAgentClaimController()
+
+    await controller.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp/recovered-stable-session',
+      worktreeId: 'repo::/tmp/recovered-stable-session',
+      sessionId: 'serve-stable-session',
+      isNewSession: true
+    })
+
+    expect(recoverFreshSpawnRouting).toHaveBeenCalledOnce()
+    expect(daemonSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'serve-stable-session', isNewSession: true })
+    )
   })
 
   it('adopts a daemon owner recovered from provider listing before claimed ensure', async () => {
