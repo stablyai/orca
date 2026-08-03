@@ -58,6 +58,20 @@ describe('headless lock-loss exit contract', () => {
     }
   })
 
+  it('clears the start limit before every scripted start, which a tripped burst would refuse', () => {
+    const lines = doc.split('\n')
+    const startLines = lines.flatMap((line, index) =>
+      /^\s*sudo systemctl start orca-serve/.test(line) ? [index] : []
+    )
+
+    expect(startLines.length).toBeGreaterThan(0)
+    for (const index of startLines) {
+      expect(lines.slice(Math.max(0, index - 3), index).join('\n')).toContain(
+        'systemctl reset-failed orca-serve'
+      )
+    }
+  })
+
   it('leaves the Xvfb unit free to self-heal from a transient display flap', () => {
     const xvfbUnits = readSystemdUnitBlocks(doc).get('orca-xvfb.service') ?? []
 

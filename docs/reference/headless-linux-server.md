@@ -182,6 +182,10 @@ Exit status `3` means another process already owns this userData profile, so
 cannot succeed. Any other permanent startup fault is capped at 5 starts per
 5 minutes; systemd's defaults (10s window, 5 starts) can never trip at
 `RestartSec=5`, which is how one bad launch could restart thousands of times.
+The start limit counts operator-initiated starts too, so once it trips systemd
+refuses a plain `systemctl start` until the 5-minute window rolls over. Run
+`sudo systemctl reset-failed orca-serve.service` first to clear it — the
+[Upgrade](#upgrade-steps) and [Roll back](#roll-back) scripts already do.
 On systemd older than 230 those two directives are spelled
 `StartLimitInterval=`/`StartLimitBurst=` and belong in `[Service]`; Ubuntu
 20.04, Orca's oldest supported base, ships systemd 245.
@@ -430,6 +434,8 @@ recover_failed_upgrade() {
     sudo rm -f /opt/orca/orca-linux.AppImage.recovering \
       /opt/orca/VERSION.recovering
     if ((recovery_ok)); then
+      # A tripped StartLimitBurst refuses a plain start
+      sudo systemctl reset-failed orca-serve.service || true
       sudo systemctl start orca-serve.service || true
     else
       echo 'Upgrade recovery failed; service remains stopped' >&2
@@ -497,6 +503,8 @@ sudo mv "$ORCA_ROLLBACK_NEW" "$ORCA_ROLLBACK"
 ORCA_BINARY_PROMOTED=1
 sudo mv -f /opt/orca/orca-linux.AppImage.new /opt/orca/orca-linux.AppImage
 sudo mv -f /opt/orca/VERSION.new /opt/orca/VERSION
+# Clears a start-limit hit left by the version being replaced
+sudo systemctl reset-failed orca-serve.service
 sudo systemctl start orca-serve.service
 ORCA_SERVICE_STOPPED=0
 trap - EXIT
@@ -629,6 +637,8 @@ restart_after_rollback_error() {
       fi
     fi
     if ((recovery_ok)); then
+      # A tripped StartLimitBurst refuses a plain start
+      sudo systemctl reset-failed orca-serve.service || true
       sudo systemctl start orca-serve.service || true
     else
       echo 'Rollback recovery failed; service remains stopped' >&2
@@ -729,6 +739,8 @@ if ((ORCA_ROLLBACK_HAS_VERSION)); then
 else
   sudo rm -f /opt/orca/VERSION
 fi
+# The crash-looping build you are rolling back from tripped StartLimitBurst
+sudo systemctl reset-failed orca-serve.service
 sudo systemctl start orca-serve.service
 ORCA_SERVICE_STOPPED=0
 sudo rm -rf -- "$ORCA_RESTORE"
@@ -826,8 +838,8 @@ refuse to run there and print the command to run on the machine you want.
   owner with `systemctl status orca-serve` and `pgrep -af orca`. Stop it (or
   keep it and leave the unit down), then run
   `sudo systemctl reset-failed orca-serve && sudo systemctl start orca-serve` —
-  `reset-failed` is required because a tripped `StartLimitBurst` refuses a plain
-  `start`. If no owner exists, the lock is stale (Chromium recorded a pid that
+  `reset-failed` clears the failed state and any start-limit counter. If no owner
+  exists, the lock is stale (Chromium recorded a pid that
   has since been reused): remove `SingletonLock` and `SingletonSocket` from the
   userData directory and start again. If an earlier crash-loop already leaked
   AppImage mounts, list them with `findmnt -rn -t fuse.orca-linux.AppImage` and
@@ -835,7 +847,9 @@ refuse to run there and print the command to run on the machine you want.
   `umount -l <target>`), leaving the running instance's mount alone.
 - Service crash-loops right after an upgrade: use [Roll back](#roll-back) with
   the pre-upgrade `.ready` bundle. Do not rerun the upgrade first; doing so would
-  make the crashing version the next rollback binary.
+  make the crashing version the next rollback binary. The loop trips
+  `StartLimitBurst`, so any manual `systemctl start` outside that script needs
+  `sudo systemctl reset-failed orca-serve.service` first.
 - Diagnosing other missing libraries: extract the AppImage without launching it
   with `./orca-linux.AppImage --appimage-extract`, then run
   `ldd squashfs-root/orca` to list any shared libraries the host is missing.
