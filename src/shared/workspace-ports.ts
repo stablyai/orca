@@ -7,6 +7,15 @@ export type WorkspacePortProbe = {
 
 export type WorkspacePortAttributionConfidence = 'cwd' | 'command' | 'none'
 
+/** The dev server recognized behind a listening process. `id` is intentionally
+ *  a plain string rather than a union: a newer server may report a framework an
+ *  older client has never heard of, and that must not fail validation. */
+export type DevServerIdentity = {
+  id: string
+  /** Product name for display. A proper noun — never localized. */
+  label: string
+}
+
 export type WorkspacePortOwner = {
   worktreeId: string
   repoId: string
@@ -24,6 +33,9 @@ type WorkspacePortBase = {
   port: number
   pid?: number
   processName?: string
+  /** Set when the command line identified a known dev server. Absent when the
+   *  process is unrecognized, in which case callers fall back to `processName`. */
+  devServer?: DevServerIdentity
   protocol: 'http' | 'https' | 'unknown'
 }
 

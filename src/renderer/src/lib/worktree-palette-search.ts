@@ -74,7 +74,10 @@ export function searchWorktrees(
   repoMap: Map<string, Repo>,
   prCache: Record<string, PRCacheEntry> | null,
   issueCache: Record<string, IssueCacheEntry> | null,
-  workspacePortsByWorktreeId?: Map<string, { port: number; processName?: string }[]>,
+  workspacePortsByWorktreeId?: Map<
+    string,
+    { port: number; processName?: string; devServer?: { label: string } }[]
+  >,
   checksReviewByWorktree?: ReadonlyMap<Worktree, HostedReviewInfo | null>
 ): PaletteSearchResult[] {
   if (isWorktreePaletteQueryTooLarge(query)) {
@@ -183,7 +186,10 @@ export function searchWorktrees(
       const portText = String(port.port)
       const portIndex = portText.indexOf(numericQuery)
       if (portIndex !== -1) {
-        const label = port.processName ? `${portText} · ${port.processName}` : portText
+        // The dev server names the port better than `node` does; fall back to
+        // the process, and to the bare number when neither is known.
+        const processText = port.devServer?.label ?? port.processName
+        const label = processText ? `${portText} · ${processText}` : portText
         results.push(
           makeResult(worktree.id, 'port', {
             supportingText: {

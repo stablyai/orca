@@ -37,6 +37,10 @@ import {
   browserUrlForPortForwardEntry
 } from '@/lib/workspace-port-urls'
 import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
+import {
+  formatWorkspacePortProcessTooltip,
+  getWorkspacePortProcessLabel
+} from '@/lib/workspace-port-process-label'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   Dialog,
@@ -108,6 +112,10 @@ function workspacePortAsExternal(port: WorkspacePort & { kind: 'workspace' }): W
     port: port.port,
     pid: port.pid,
     processName: port.processName,
+    // Why carried: these are other repos' listeners shown as External. Dropping
+    // the label here would show `node` for the very server this panel calls
+    // Vite when its own repo is active.
+    ...(port.devServer ? { devServer: port.devServer } : {}),
     protocol: port.protocol,
     kind: 'external'
   }
@@ -559,7 +567,7 @@ function LocalPortRow({
     [onStop, port]
   )
 
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel = getWorkspacePortProcessLabel(port)
   const address = addressForPort(port)
   const ownerLabel =
     port.kind === 'workspace'
@@ -595,7 +603,16 @@ function LocalPortRow({
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-1.5">
                 <span className="text-xs font-medium text-foreground">:{port.port}</span>
-                <span className="truncate text-xs text-muted-foreground">{processLabel}</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {processLabel.label}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={4}>
+                    {formatWorkspacePortProcessTooltip(processLabel)}
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span className="truncate">{address}</span>
@@ -745,7 +762,7 @@ function LocalPortDetailsDialog({
               : translate('auto.components.right.sidebar.PortsPanel.d41a8241ec', 'Port')}
           </DialogTitle>
           <DialogDescription>
-            {port ? `${port.processName ?? 'Unknown process'} · ${addressForPort(port)}` : ''}
+            {port ? `${getWorkspacePortProcessLabel(port).label} · ${addressForPort(port)}` : ''}
           </DialogDescription>
         </DialogHeader>
         {port && (
@@ -770,8 +787,10 @@ function LocalPortDetailsDialog({
               {translate('auto.components.right.sidebar.PortsPanel.5dd86dcf2f', 'Process')}
             </dt>
             <dd className="min-w-0 break-all text-foreground">
-              {port.processName ??
-                translate('auto.components.right.sidebar.PortsPanel.3e13cb63ee', 'Unknown')}
+              {port.devServer
+                ? formatWorkspacePortProcessTooltip(getWorkspacePortProcessLabel(port))
+                : (port.processName ??
+                  translate('auto.components.right.sidebar.PortsPanel.3e13cb63ee', 'Unknown'))}
             </dd>
             <dt className="text-muted-foreground">
               {translate('auto.components.right.sidebar.PortsPanel.57d930fa45', 'PID')}

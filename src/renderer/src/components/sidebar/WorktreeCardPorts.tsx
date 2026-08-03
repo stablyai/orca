@@ -15,6 +15,10 @@ import {
   resolvePortOpenInOrcaBrowser
 } from '@/lib/workspace-port-actions'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
+import {
+  formatWorkspacePortProcessTooltip,
+  getWorkspacePortProcessLabel
+} from '@/lib/workspace-port-process-label'
 import { addressForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import {
@@ -113,7 +117,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
     () => getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }),
     [runtimeEnvironmentId, settings]
   )
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel = getWorkspacePortProcessLabel(port)
   const address = addressForPort(port)
   const canStop = canStopWorkspacePort(port)
   const openBrowserLabel = translate(
@@ -241,7 +245,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="flex min-w-0 select-text items-baseline gap-1 overflow-hidden pr-[3.75rem] text-[11px] text-muted-foreground">
-              <span className="min-w-0 flex-1 truncate">{processLabel}</span>
+              <span className="min-w-0 flex-1 truncate">{processLabel.label}</span>
               <span className="shrink-0 text-muted-foreground/45">-</span>
               <span className="min-w-0 flex-[1.1] truncate text-muted-foreground/70">
                 {address}
@@ -250,7 +254,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
             <span className="flex items-center gap-1.5">
-              <span>{processLabel}</span>
+              <span>{formatWorkspacePortProcessTooltip(processLabel)}</span>
               <span className="text-muted-foreground/60">-</span>
               <span>{address}</span>
             </span>

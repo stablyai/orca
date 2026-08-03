@@ -15,6 +15,10 @@ import {
 } from '@/lib/workspace-port-actions'
 import type { WorkspacePortGroup } from '@/lib/workspace-port-groups'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
+import {
+  formatWorkspacePortProcessTooltip,
+  getWorkspacePortProcessLabel
+} from '@/lib/workspace-port-process-label'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -94,7 +98,7 @@ export function PortRow({
     () => getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }),
     [runtimeEnvironmentId, settings]
   )
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel = getWorkspacePortProcessLabel(port)
   const canStop = canStopWorkspacePort(port)
   const openBrowserLabel = translate(
     'auto.components.status.bar.ports.status.popover.rows.085f4f0334',
@@ -226,11 +230,11 @@ export function PortRow({
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <span className="block min-w-0 select-text truncate text-[11px] text-muted-foreground">
-                {processLabel}
+                {processLabel.label}
               </span>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {processLabel}
+              {formatWorkspacePortProcessTooltip(processLabel)}
             </TooltipContent>
           </Tooltip>
           <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 can-hover:opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">

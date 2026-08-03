@@ -568,4 +568,34 @@ describe('worktree-palette-search', () => {
       matchRange: { start: 0, end: 4 }
     })
   })
+
+  it('names a matched port by its dev server instead of the process', () => {
+    const results = searchWorktrees(
+      [makeWorktree({ id: 'wt-port' })],
+      '5173',
+      repoMap,
+      null,
+      null,
+      new Map([['wt-port', [{ port: 5173, processName: 'node', devServer: { label: 'Vite' } }]]])
+    )
+
+    expect(results[0].supportingText).toEqual({
+      labelKind: 'port',
+      text: '5173 · Vite',
+      matchRange: { start: 0, end: 4 }
+    })
+  })
+
+  it('falls back to the bare port number when neither dev server nor process is known', () => {
+    const results = searchWorktrees(
+      [makeWorktree({ id: 'wt-port' })],
+      '8080',
+      repoMap,
+      null,
+      null,
+      new Map([['wt-port', [{ port: 8080 }]]])
+    )
+
+    expect(results[0].supportingText?.text).toBe('8080')
+  })
 })
