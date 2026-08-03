@@ -195,8 +195,13 @@ export function resolveTerminalShortcutAction(
     !event.shiftKey &&
     event.key === 'Enter'
   ) {
-    // Why: xterm.js collapses Ctrl+Enter to a bare CR, so forward kitty CSI-u (modifier 5 = Ctrl) so the chord reaches TUIs; no Windows fallback yet (#2418).
-    return { type: 'sendInput', data: '\x1b[13;5u' }
+    // Why: CSI-u only reaches a TUI as a chord while kitty keyboard is negotiated.
+    // Without it (local Windows ConPTY) the TUI prints the escape literally, so fall
+    // back to the bare CR xterm.js would have sent rather than leaking `[13;5u`.
+    return {
+      type: 'sendInput',
+      data: isKittyKeyboardActivePane?.() === true ? '\x1b[13;5u' : '\r'
+    }
   }
 
   if (

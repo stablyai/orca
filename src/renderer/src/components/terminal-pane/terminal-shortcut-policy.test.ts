@@ -270,27 +270,32 @@ describe('resolveTerminalShortcutAction', () => {
     expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(2)
   })
 
-  it('forwards Ctrl+Enter as the kitty CSI-u chord so TUIs can cue instead of send', () => {
-    // Why: xterm.js collapses Ctrl+Enter to a bare CR; intercept upstream and
-    // emit the kitty sequence (modifier code 5 = Ctrl) so probing TUIs receive
-    // the distinct chord on every platform.
-    expect(
-      resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter', ctrlKey: true }), true)
-    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
-    expect(
-      resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter', ctrlKey: true }), false)
-    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
-    // Windows uses the same kitty sequence for now: no TUI is known to treat the
-    // CSI-u Ctrl+Enter form as inert (cf. the Shift+Enter Codex-on-PowerShell case).
-    expect(
-      resolveTerminalShortcutAction(
-        event({ key: 'Enter', code: 'Enter', ctrlKey: true }),
-        false,
-        'false',
-        0,
-        true
-      )
-    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+  const ctrlEnter = (isWindows: boolean, kittyActive?: boolean) =>
+    resolveTerminalShortcutAction(
+      event({ key: 'Enter', code: 'Enter', ctrlKey: true }),
+      false,
+      'false',
+      0,
+      isWindows,
+      undefined,
+      undefined,
+      kittyActive === undefined ? undefined : () => kittyActive
+    )
+
+  it('forwards Ctrl+Enter as the kitty CSI-u chord while kitty keyboard is negotiated', () => {
+    // Why: xterm.js collapses Ctrl+Enter to a bare CR; intercept upstream and emit
+    // the kitty sequence (modifier code 5 = Ctrl) so probing TUIs receive the chord.
+    expect(ctrlEnter(false, true)).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+    expect(ctrlEnter(true, true)).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+  })
+
+  it('sends a bare CR for Ctrl+Enter when kitty keyboard is not active', () => {
+    // Regression: CSI-u is application input. On a local Windows ConPTY pane with no
+    // negotiated KKP the TUI printed the escape literally, leaking `[13;5u` into the
+    // prompt. Fall back to the CR xterm.js would otherwise have sent.
+    expect(ctrlEnter(true, false)).toEqual({ type: 'sendInput', data: '\r' })
+    expect(ctrlEnter(false, false)).toEqual({ type: 'sendInput', data: '\r' })
+    expect(ctrlEnter(true)).toEqual({ type: 'sendInput', data: '\r' })
 
     // Modifier combos that are NOT plain Ctrl+Enter must keep falling through.
     expect(
