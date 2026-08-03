@@ -55,7 +55,7 @@ describe('smart-workspace-localized-options', () => {
     await i18n.changeLanguage('zh')
 
     expect(getMrStateFilters().map((filter) => filter.label)).toEqual([
-      '开放',
+      '进行中',
       '合并',
       '已关闭',
       '全部'
