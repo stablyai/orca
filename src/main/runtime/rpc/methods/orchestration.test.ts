@@ -9,6 +9,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
+import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
@@ -2129,6 +2130,9 @@ describe('orchestration RPC methods', () => {
             : null
       )
       vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+      vi.spyOn(runtime, 'resolveTuiAgentLaunchCommand').mockImplementation(
+        async (_worktreeSelector, agent) => TUI_AGENT_CONFIG[agent].launchCmd
+      )
       vi.spyOn(runtime, 'showTerminal').mockImplementation(
         async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
       )

@@ -15660,6 +15660,22 @@ export class OrcaRuntimeService {
     }
   }
 
+  async resolveTuiAgentLaunchCommand(worktreeSelector: string, agent: TuiAgent): Promise<string> {
+    // Why: an agent id is not a shell command. `cursor` is the Cursor IDE launcher;
+    // the agent binary is `cursor-agent`. Resolve against the execution host, since
+    // launch commands vary by platform and by local vs remote.
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    const override = this.store?.getSettings()?.agentCmdOverrides?.[agent]?.trim()
+    return (
+      override ||
+      getTuiAgentLaunchCommand(
+        TUI_AGENT_CONFIG[agent],
+        this.getAgentLaunchPlatformForWorkspace(workspace),
+        { isRemote: workspace.repo ? repoIsRemote(workspace.repo) : false }
+      )
+    )
+  }
+
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
     // Why: the renderer context menu only knows the stable pane key; main owns
     // the runtime terminal handle that agents and CLI commands can address.
