@@ -12,7 +12,7 @@ The third correction is ready for independent final verification. Destination co
 - Rejected final2 candidate: `7890271160aafb760593023dd9afaf93d567d153`
 - Direct revert oracle: `b3627461ab81dd36cb31647ecee6a113fdc0fd4c`
 - Third-correction implementation: `b72a838cdc682c1c918fdf117792c4b0dcc420de`
-- Final candidate: the documentation commit containing this report, with the exact OID returned by the finalizer.
+- Final candidate: the finalizer-returned branch head containing this report and the typechecked implementation chain.
 
 ## Correction
 
@@ -43,14 +43,14 @@ Snapshots were created directly in Trash and retained no live process, socket, w
 ## Verification
 
 - Final2 reproduction evidence: rejected candidate `7890271160` passed the byte-identical post-quiescence lifecycle scope 21/21; previous `f92db196a1` failed 7 tests, while base, published, and revert were structurally red.
-- Permanent reliability gate: 3 files, 20 tests passed in 2.55 seconds.
+- Permanent reliability gate: 3 files, 20 tests passed in 2.35 seconds.
 - Focused ownership matrix: 9 files, 201 tests passed.
-- Store/tab/worktree regression matrix: 3 files, 352 tests passed; the larger activation matrix is rerun by the finalizer.
+- Central activation matrix: 7 files, 548 tests passed.
 - Mobile owner-routing matrix: 2 files, 13 tests passed.
 - Root and mobile TypeScript typechecks passed.
 - Full `pnpm lint` passed, including native and type-aware audits, reliability manifest, max-lines ratchet, bundled skills, and localization checks.
 - Changed-file formatting and `git diff --check` passed.
-- Zustand fanout gate passed: 2,500 subscribers across 2,000 unrelated writes, median 37.15 ms total, 0.0186 ms/write, and zero render invalidations.
+- Zustand fanout gate passed: 2,500 subscribers across 2,000 unrelated writes, median 33.66 ms total, 0.0168 ms/write, and zero render invalidations.
 
 ## Audit and remaining gaps
 

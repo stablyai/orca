@@ -5268,9 +5268,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const reconciliationChanged = Boolean(
         reconciliation && Object.keys(reconciliation.patch).length > 0
       )
-      const s = reconciliationChanged
-        ? ({ ...transitioned, ...reconciliation.patch } as AppState)
-        : transitioned
+      const s =
+        reconciliation && reconciliationChanged
+          ? ({ ...transitioned, ...reconciliation.patch } as AppState)
+          : transitioned
       const reconciledActiveTabId = reconciliation?.activeRenderableTabId ?? null
       if (!worktreeId) {
         return {
