@@ -995,6 +995,10 @@ export type AppApi = {
   /** Resolves Orca's app-owned directory for auto-created Floating Workspace
    *  markdown notes. */
   getFloatingMarkdownDirectory: () => Promise<string>
+  /** Opens a native picker for markdown documents rooted at `rootPath` (a LOCAL
+   *  worktree root; omit for the floating workspace) and authorizes the selected
+   *  file for editor reads/writes. */
+  pickMarkdownDocument: (rootPath?: string) => Promise<MarkdownDocument | null>
   /** Opens a native picker for markdown documents, rooted in the floating
    *  workspace, and authorizes the selected file for editor reads/writes. */
   pickFloatingMarkdownDocument: () => Promise<MarkdownDocument | null>

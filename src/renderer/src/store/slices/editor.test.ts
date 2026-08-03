@@ -5086,3 +5086,75 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     )
   })
 })
+
+describe('openMarkdownFileInActiveWorkspace — main-window open markdown (issue #8532)', () => {
+  const pickMarkdownDocumentMock = vi.fn()
+
+  function createOpenMarkdownStore(options?: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    repos?: any[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    worktreesByRepo?: Record<string, any[]>
+  }): StoreApi<AppState> {
+    const repos = options?.repos ?? [{ id: 'repo-1', path: '/repo' }]
+    const worktreesByRepo = options?.worktreesByRepo ?? {
+      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }]
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return createStore<any>()((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      repos,
+      worktreesByRepo,
+      folderWorkspaces: [],
+      projectGroups: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      getKnownWorktreeById: (id: string) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        Object.values(worktreesByRepo)
+          .flat()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .find((wt: any) => wt.id === id) ?? null,
+      recordFeatureInteraction: vi.fn(),
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    })) as unknown as StoreApi<AppState>
+  }
+
+  beforeEach(() => {
+    pickMarkdownDocumentMock.mockReset()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).window = (globalThis as any).window ?? {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).window.api = { app: { pickMarkdownDocument: pickMarkdownDocumentMock } }
+  })
+
+  it('opens a picked markdown file into the active LOCAL worktree, rooted at the worktree path', async () => {
+    const store = createOpenMarkdownStore()
+    pickMarkdownDocumentMock.mockResolvedValue({
+      filePath: '/repo/docs/notes.md',
+      relativePath: 'docs/notes.md',
+      basename: 'notes.md',
+      name: 'notes'
+    })
+
+    await store.getState().openMarkdownFileInActiveWorkspace('wt-1:group')
+
+    // Native picker must be rooted at the worktree path, not the floating workspace.
+    expect(pickMarkdownDocumentMock).toHaveBeenCalledWith('/repo')
+    const opened = store.getState().openFiles.find((f) => f.filePath === '/repo/docs/notes.md')
+    expect(opened).toBeDefined()
+    expect(opened?.worktreeId).toBe('wt-1')
+    expect(opened?.mode).toBe('edit')
+  })
+
+  it('no-ops for a remote/SSH worktree without invoking the local picker', async () => {
+    const store = createOpenMarkdownStore({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-host-1' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' }] }
+    })
+
+    await store.getState().openMarkdownFileInActiveWorkspace('wt-1:group')
+
+    expect(pickMarkdownDocumentMock).not.toHaveBeenCalled()
+    expect(store.getState().openFiles).toHaveLength(0)
+  })
+})

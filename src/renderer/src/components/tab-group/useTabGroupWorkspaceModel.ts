@@ -26,7 +26,11 @@ import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExecutionHostIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
@@ -86,6 +90,13 @@ export function useTabGroupWorkspaceModel({
   )
   const openNewMarkdownInActiveWorkspace = useAppStore(
     (state) => state.openNewMarkdownInActiveWorkspace
+  )
+  const openMarkdownFileInActiveWorkspace = useAppStore(
+    (state) => state.openMarkdownFileInActiveWorkspace
+  )
+  // Why: the native open picker runs locally, so "Open Markdown" is only offered for LOCAL worktrees (issue #8532).
+  const worktreeIsLocal = useAppStore(
+    (state) => getExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID
   )
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (state) => state.openNewTerminalTabInActiveWorkspace
@@ -631,6 +642,12 @@ export function useTabGroupWorkspaceModel({
       newFileTab: async () => {
         await openNewMarkdownInActiveWorkspace(groupId)
       },
+      // Why: undefined for remote worktrees hides the "Open Markdown" menu item (local-only native picker, issue #8532).
+      openFileTab: worktreeIsLocal
+        ? async () => {
+            await openMarkdownFileInActiveWorkspace(groupId)
+          }
+        : undefined,
       newTerminalTab: () => {
         void openNewTerminalTabInActiveWorkspace(groupId)
       },

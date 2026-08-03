@@ -68,7 +68,11 @@ import {
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExecutionHostIdForWorktree,
+  getExplicitRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -467,6 +471,9 @@ export type EditorSlice = {
     }
   ) => void
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  /** Opens a markdown file via the native picker into the active worktree.
+   *  No-ops for remote/SSH/runtime worktrees (the local dialog can't reach them). */
+  openMarkdownFileInActiveWorkspace: (groupId: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,
@@ -1928,6 +1935,41 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       get().recordFeatureInteraction('markdown-file-created')
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
+    }
+  },
+
+  openMarkdownFileInActiveWorkspace: async (groupId) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return
+    }
+    // Why: the native open dialog runs on the LOCAL machine, so a remote/SSH/runtime worktree must not receive a local file path (issue #8532).
+    if (getExecutionHostIdForWorktree(state, worktreeId) !== LOCAL_EXECUTION_HOST_ID) {
+      return
+    }
+    const worktree = state.getKnownWorktreeById(worktreeId)
+    if (!worktree) {
+      return
+    }
+    try {
+      const document = await window.api.app.pickMarkdownDocument(worktree.path)
+      if (!document) {
+        return
+      }
+      get().openFile(
+        {
+          filePath: document.filePath,
+          relativePath: document.relativePath,
+          worktreeId,
+          language: detectLanguage(document.relativePath),
+          mode: 'edit',
+          runtimeEnvironmentId: null
+        },
+        { preview: false, targetGroupId: groupId }
+      )
+    } catch (err) {
+      toast.error(extractIpcErrorMessage(err, 'Failed to open markdown file.'))
     }
   },
 

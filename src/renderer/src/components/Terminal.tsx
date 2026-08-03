@@ -159,7 +159,11 @@ import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { translate } from '@/i18n/i18n'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExecutionHostIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import {
@@ -351,6 +355,11 @@ function Terminal(): React.JSX.Element | null {
     (s) => s.openNewBrowserTabInActiveWorkspace
   )
   const openNewMarkdownInActiveWorkspace = useAppStore((s) => s.openNewMarkdownInActiveWorkspace)
+  const openMarkdownFileInActiveWorkspace = useAppStore((s) => s.openMarkdownFileInActiveWorkspace)
+  // Why: the native open picker runs locally, so the "Open Markdown" action is only offered for LOCAL worktrees (issue #8532).
+  const activeWorktreeIsLocal = useAppStore(
+    (s) => getExecutionHostIdForWorktree(s, s.activeWorktreeId) === LOCAL_EXECUTION_HOST_ID
+  )
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (s) => s.openNewTerminalTabInActiveWorkspace
   )
@@ -1576,6 +1585,20 @@ function Terminal(): React.JSX.Element | null {
     await openNewMarkdownInActiveWorkspace(targetGroupId)
   }, [activeWorktreeId, openNewMarkdownInActiveWorkspace])
 
+  const handleOpenFile = useCallback(async () => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const targetGroupId =
+      useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
+      useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+    if (!targetGroupId) {
+      return
+    }
+    // Why: the store action re-checks locality, so a rebound shortcut on a remote worktree safely no-ops.
+    await openMarkdownFileInActiveWorkspace(targetGroupId)
+  }, [activeWorktreeId, openMarkdownFileInActiveWorkspace])
+
   const handleCloseTab = useCallback((tabId: string) => {
     closeTerminalTab(tabId)
   }, [])
@@ -2015,6 +2038,21 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
+      // Cmd/Ctrl+Shift+O - open an existing markdown file (issue #8532).
+      // Why: the floating panel's own handler calls stopImmediatePropagation, so this window
+      // listener can't double-fire when the floating panel owns focus; guard anyway.
+      // Why: gate on locality so we don't swallow/notify the key on remote worktrees where the
+      // native picker no-ops — keeps the shortcut consistent with the (also local-only) menu item.
+      if (!e.repeat && activeWorktreeIsLocal && matchShortcut('tab.openMarkdown')) {
+        e.preventDefault()
+        notifyTerminalCapture('tab.openMarkdown')
+        if (floatingWorkspaceFocused) {
+          return
+        }
+        void handleOpenFile()
+        return
+      }
+
       if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
         return
       }
@@ -2132,9 +2170,11 @@ function Terminal(): React.JSX.Element | null {
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [
     activeWorktreeId,
+    activeWorktreeIsLocal,
     handleNewBrowserTab,
     handleNewSimulatorTab,
     handleNewFile,
+    handleOpenFile,
     handleNewTab,
     handleNewAgentTab,
     handleCloseTab,
@@ -2277,6 +2317,7 @@ function Terminal(): React.JSX.Element | null {
             onNewSimulatorTab={mobileEmulatorEnabled ? handleNewSimulatorTab : undefined}
             onOpenEntry={handleOpenEntry}
             onNewFileTab={handleNewFile}
+            onOpenFileTab={activeWorktreeIsLocal ? handleOpenFile : undefined}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
             expandedPaneByTabId={expandedPaneByTabId}

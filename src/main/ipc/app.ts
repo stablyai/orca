@@ -36,12 +36,14 @@ type RegisterAppHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
 }
 
-async function pickFloatingMarkdownDocument(
-  event: IpcMainInvokeEvent
+// Why: the dialog runs on the LOCAL machine; callers must only pass a rootPath for LOCAL worktrees (remote/SSH roots would mis-root the result). See issue #8532.
+async function pickMarkdownDocument(
+  event: IpcMainInvokeEvent,
+  rootPath?: string
 ): Promise<MarkdownDocument | null> {
-  const cwd = await ensureDefaultFloatingWorkspacePath()
+  const root = rootPath?.trim() ? rootPath : await ensureDefaultFloatingWorkspacePath()
   const options = {
-    defaultPath: cwd,
+    defaultPath: root,
     properties: ['openFile'],
     filters: [{ name: 'Markdown', extensions: ['md', 'mdx', 'markdown'] }]
   } satisfies Electron.OpenDialogOptions
@@ -57,7 +59,7 @@ async function pickFloatingMarkdownDocument(
     throw new Error('Selected file is not a markdown document.')
   }
   authorizeExternalPath(filePath)
-  return markdownDocumentFromFilePath(cwd, filePath, { outsideRootRelativePath: 'basename' })
+  return markdownDocumentFromFilePath(root, filePath, { outsideRootRelativePath: 'basename' })
 }
 
 async function pickFloatingWorkspaceDirectory(
@@ -309,7 +311,12 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
 
   ipcMain.handle('app:getFloatingMarkdownDirectory', () => ensureDefaultFloatingWorkspacePath())
 
-  ipcMain.handle('app:pickFloatingMarkdownDocument', (event) => pickFloatingMarkdownDocument(event))
+  ipcMain.handle('app:pickMarkdownDocument', (event, rootPath?: string) =>
+    pickMarkdownDocument(event, rootPath)
+  )
+
+  // Why: kept as an alias so the Floating Terminal picker keeps working unchanged.
+  ipcMain.handle('app:pickFloatingMarkdownDocument', (event) => pickMarkdownDocument(event))
 
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)
