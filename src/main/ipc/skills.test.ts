@@ -173,8 +173,25 @@ describe('registerSkillsHandlers', () => {
     expect(getWslHomeMock).toHaveBeenCalledWith('Ubuntu')
     expect(discoverSkillsInWslMock).toHaveBeenCalledWith({
       distro: 'Ubuntu',
+      homeDir: '/home/alice'
+    })
+  })
+
+  it('forwards inventory filters to WSL skill discovery', async () => {
+    const handler = getDiscoverHandler()
+
+    await handler(null, {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      names: ['orchestration'],
+      sourceKinds: ['home']
+    })
+
+    expect(discoverSkillsInWslMock).toHaveBeenCalledWith({
+      distro: 'Ubuntu',
       homeDir: '/home/alice',
-      cwd: '/home/alice'
+      names: ['orchestration'],
+      sourceKinds: ['home']
     })
   })
 

@@ -212,6 +212,34 @@ describe('skill discovery', () => {
     ])
   })
 
+  it('filters discovery by requested directory name and source kind', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const repo = join(root, 'repo')
+    const homeSkill = join(home, '.agents', 'skills', 'orchestration')
+    const repoSkill = join(repo, '.agents', 'skills', 'orchestration')
+    const unrelatedSkill = join(home, '.agents', 'skills', 'computer-use')
+    await mkdir(homeSkill, { recursive: true })
+    await mkdir(repoSkill, { recursive: true })
+    await mkdir(unrelatedSkill, { recursive: true })
+    await writeFile(join(homeSkill, 'SKILL.md'), '---\nname: Agent Orchestration\n---\n')
+    await writeFile(join(repoSkill, 'SKILL.md'), '# orchestration')
+    await writeFile(join(unrelatedSkill, 'SKILL.md'), '# computer-use')
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: repo,
+      repos: [],
+      names: ['orchestration'],
+      sourceKinds: ['home']
+    })
+
+    expect(result.skills).toMatchObject([
+      { name: 'Agent Orchestration', sourceKind: 'home', directoryPath: homeSkill }
+    ])
+    expect(result.sources.every((source) => source.sourceKind === 'home')).toBe(true)
+  })
+
   it('discovers the enabled Claude plugin version applicable to the project cwd', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')

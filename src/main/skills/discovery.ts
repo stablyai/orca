@@ -6,7 +6,8 @@ import type { Repo } from '../../shared/repo-types'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
-  SkillDiscoverySource
+  SkillDiscoverySource,
+  SkillSourceKind
 } from '../../shared/skills'
 import {
   buildSkillDiscoverySources,
@@ -136,12 +137,41 @@ async function readSkillSummary(skillFilePath: string): Promise<{
 
 type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 
-async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
+type SkillDiscoveryFilter = {
+  names?: readonly string[]
+  sourceKinds?: readonly SkillSourceKind[]
+}
+
+function normalizeSkillName(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function rootMayContainSourceKind(
+  root: SkillScanRoot,
+  sourceKinds: readonly SkillSourceKind[] | undefined
+): boolean {
+  if (!sourceKinds) {
+    return true
+  }
+  if (root.sourceKind === 'home') {
+    return sourceKinds.includes('home') || sourceKinds.includes('bundled')
+  }
+  return sourceKinds.includes(root.sourceKind)
+}
+
+async function scanRoot(
+  root: SkillScanRoot,
+  filter: SkillDiscoveryFilter,
+  signal: AbortSignal
+): Promise<ScannedSkill[]> {
   const maxDepth = skillDirectoryMaxDepth(root.sourceKind)
   const skillFiles = await findSkillFiles(root.path, maxDepth, signal)
   // Why: a root can hold many packages and each one costs a summary read plus a
   // package walk. Unbounded fan-out here is what turned one scan into a burst of
   // filesystem-metadata work across every core.
+  const expectedNames = filter.names?.length
+    ? new Set(filter.names.map(normalizeSkillName))
+    : undefined
   const skills = await runSkillCandidateTasks(
     skillFiles.map((skillFilePath) => async (): Promise<ScannedSkill | null> => {
       // Why: these tasks drain long after the walk, so an abandoned scan would
@@ -156,9 +186,20 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
         return null
       }
       const sourceKind = sourceKindForSkill(root, skillFilePath, { relative, sep })
+      if (filter.sourceKinds && !filter.sourceKinds.includes(sourceKind)) {
+        return null
+      }
+      const directoryName = basename(directoryPath)
+      if (
+        expectedNames &&
+        !expectedNames.has(normalizeSkillName(summary.name ?? '')) &&
+        !expectedNames.has(normalizeSkillName(directoryName))
+      ) {
+        return null
+      }
       return {
         id: stablePathId(canonicalSkillFilePath),
-        name: summary.name ?? basename(directoryPath),
+        name: summary.name ?? directoryName,
         description: summary.description,
         // Copy: `root.providers` is shared across every skill/source from this
         // root, so the dedup merge below must not mutate the aliased array.
@@ -180,22 +221,25 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
 // Why: two roots can share a path (e.g. `~/.claude/skills` is both a home root
 // and a repo root when the home dir is the workspace), and their scan differs
 // only by depth, which `sourceKind` decides.
-function rootScanKey(root: SkillScanRoot): string {
-  return `${root.sourceKind}\0${root.path}`
+function rootScanKey(root: SkillScanRoot, filter: SkillDiscoveryFilter): string {
+  const names = filter.names?.map(normalizeSkillName).sort().join('\0') ?? ''
+  const sourceKinds = filter.sourceKinds?.slice().sort().join('\0') ?? ''
+  return `${root.sourceKind}\0${root.path}\0${names}\0${sourceKinds}`
 }
 
 async function scanRootShared(
   root: SkillScanRoot,
+  filter: SkillDiscoveryFilter,
   refresh: boolean
 ): Promise<SkillScanOutcome<RootScan>> {
-  const key = rootScanKey(root)
+  const key = rootScanKey(root, filter)
   try {
     const outcome = await rootScans.run(
       key,
       { ttlMs: SKILL_ROOT_SCAN_TTL_MS, refresh },
       async (signal) => {
         const exists = await pathExists(root.path)
-        return { exists, skills: exists ? await scanRoot(root, signal) : [] }
+        return { exists, skills: exists ? await scanRoot(root, filter, signal) : [] }
       }
     )
     recordLastKnownRootScan(key, outcome.value)
@@ -263,6 +307,8 @@ export async function discoverSkills(args: {
   includeCwd?: boolean
   providerRootOverrides?: SkillProviderRootOverrides
   refresh?: boolean
+  names?: string[]
+  sourceKinds?: SkillSourceKind[]
 }): Promise<SkillDiscoveryResult> {
   const startedAt = Date.now()
   const homeDir = args.homeDir ?? homedir()
@@ -271,11 +317,13 @@ export async function discoverSkills(args: {
     ...buildSkillDiscoverySources({ ...args, homeDir }),
     // Why: plugin discovery is native-chat data keyed to an explicit workspace.
     // Untargeted scans (Settings) keep their pre-picker inventory and cost.
-    ...(args.cwd && args.includeCwd !== false
+    ...(args.cwd &&
+    args.includeCwd !== false &&
+    (!args.sourceKinds || args.sourceKinds.includes('plugin'))
       ? await discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd })
       : [])
-  ]
-  const scans = await Promise.all(roots.map((root) => scanRootShared(root, refresh)))
+  ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
+  const scans = await Promise.all(roots.map((root) => scanRootShared(root, args, refresh)))
   const sources: SkillDiscoverySource[] = roots.map((root, index) => ({
     ...root,
     providers: [...root.providers],

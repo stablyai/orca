@@ -3,7 +3,8 @@ import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
-  SkillDiscoverySource
+  SkillDiscoverySource,
+  SkillSourceKind
 } from '../../shared/skills'
 import { quoteBashString } from '../wsl-bash-command'
 import { runWslProcess } from '../wsl/wsl-runner'
@@ -21,13 +22,75 @@ import { SKILL_STAGING_GLOB } from './skill-delete/staging-names'
 import { skillFileMaxDepth } from '../../shared/skill-discovery-depth'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
-const WSL_SCAN_TIMEOUT_MS = 10_000
+const WSL_SCAN_TIMEOUT_MS = 30_000
 const WSL_SCAN_MAX_OUTPUT_BYTES = 128 * 1024 * 1024
 
-export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): string {
+function rootMayContainSourceKind(
+  root: SkillScanRoot,
+  sourceKinds: readonly SkillSourceKind[] | undefined
+): boolean {
+  if (!sourceKinds) {
+    return true
+  }
+  if (root.sourceKind === 'home') {
+    return sourceKinds.includes('home') || sourceKinds.includes('bundled')
+  }
+  return sourceKinds.includes(root.sourceKind)
+}
+
+export function buildWslSkillDiscoveryCommand(
+  roots: readonly SkillScanRoot[],
+  names?: readonly string[]
+): string {
+  const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
+  const nameFilterHelpers: string[] = []
+  const nameFilterBody: string[] = []
+  if (normalizedNames?.length) {
+    const patterns = [...new Set(normalizedNames)].map(quoteBashString).join('|')
+    nameFilterHelpers.push(
+      'matches_requested_name() {',
+      '  local normalized_name=${1,,}',
+      '  case "$normalized_name" in',
+      `    ${patterns}) return 0 ;;`,
+      '    *) return 1 ;;',
+      '  esac',
+      '}',
+      'read_frontmatter_name() {',
+      '  metadata_name=',
+      '  local line first_line=1',
+      '  while IFS= read -r line; do',
+      "    line=${line%$'\\r'}",
+      '    if [ "$first_line" -eq 1 ]; then',
+      '      first_line=0',
+      '      [[ "$line" =~ ^---[[:space:]]*$ ]] || return',
+      '      continue',
+      '    fi',
+      '    [[ "$line" =~ ^---[[:space:]]*$ ]] && return',
+      '    if [[ "$line" =~ ^[[:space:]]*name[[:space:]]*:[[:space:]]*(.*)$ ]]; then',
+      '      metadata_name=${BASH_REMATCH[1]}',
+      '      while [[ "$metadata_name" == [[:space:]]* ]]; do metadata_name=${metadata_name#?}; done',
+      '      while [[ "$metadata_name" == *[[:space:]] ]]; do metadata_name=${metadata_name%?}; done',
+      '      local quote=${metadata_name:0:1}',
+      `      if { [ "$quote" = '"' ] || [ "$quote" = "'" ]; } && [ "\${metadata_name: -1}" = "$quote" ]; then`,
+      '        metadata_name=${metadata_name:1:${#metadata_name}-2}',
+      '      fi',
+      '      return',
+      '    fi',
+      '  done < "$1"',
+      '}'
+    )
+    nameFilterBody.push(
+      '    directory_name=${directory_path##*/}',
+      '    if ! matches_requested_name "$directory_name"; then',
+      '      read_frontmatter_name "$skill_file"',
+      '      matches_requested_name "$metadata_name" || continue',
+      '    fi'
+    )
+  }
   const lines = [
     'set -u',
     'set -o pipefail',
+    ...nameFilterHelpers,
     'scan_root() {',
     '  root_index=$1',
     '  root_path=$2',
@@ -39,6 +102,8 @@ export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): 
     `  printf '%s\\0%s\\0%s\\0' R "$root_index" 1`,
     `  while IFS= read -r -d '' skill_file; do`,
     `    canonical_path=$(realpath -- "$skill_file" 2>/dev/null || printf '%s' "$skill_file")`,
+    `    directory_path=\${skill_file%/*}`,
+    ...nameFilterBody,
     `    updated_at=$(stat -c '%Y' -- "$skill_file" 2>/dev/null || true)`,
     `    encoded_markdown=$(head -c ${MAX_MARKDOWN_BYTES} -- "$skill_file" 2>/dev/null | base64 | tr -d '\\n') || continue`,
     `    printf '%s\\0%s\\0%s\\0%s\\0%s\\0' S "$root_index" "$skill_file" "$canonical_path" "$updated_at"`,
@@ -87,7 +152,8 @@ function readProtocolField(fields: string[], index: number): string {
 export function parseWslSkillDiscoveryOutput(
   output: string,
   roots: readonly SkillScanRoot[],
-  scannedAt = Date.now()
+  scannedAt = Date.now(),
+  sourceKinds?: readonly SkillSourceKind[]
 ): SkillDiscoveryResult {
   const fields = output.split('\0')
   const rootExists = new Map<number, boolean>()
@@ -134,6 +200,9 @@ export function parseWslSkillDiscoveryOutput(
     const directoryPath = pathPosix.dirname(skillFilePath)
     const summary = summarizeSkillMarkdown(markdown)
     const sourceKind = sourceKindForSkill(root, skillFilePath, pathPosix)
+    if (sourceKinds && !sourceKinds.includes(sourceKind)) {
+      continue
+    }
     skillsByCanonicalPath.set(canonicalSkillFilePath, {
       id: stablePathId(canonicalSkillFilePath),
       name: summary.name ?? pathPosix.basename(directoryPath),
@@ -173,7 +242,9 @@ export function parseWslSkillDiscoveryOutput(
 export async function discoverSkillsInWsl(args: {
   distro: string
   homeDir: string
-  cwd: string
+  cwd?: string
+  names?: string[]
+  sourceKinds?: SkillSourceKind[]
   providerRootOverrides?: SkillProviderRootOverrides
 }): Promise<SkillDiscoveryResult> {
   // Plugin roots are resolved (in JS) from metadata this first wsl.exe call
@@ -186,23 +257,29 @@ export async function discoverSkillsInWsl(args: {
   // degrade to zero plugin roots (matching the native readMetadataFile path),
   // not abort the mandatory native/home/repo/bundled scan.
   let pluginRoots: SkillScanRoot[] = []
-  try {
-    pluginRoots = await discoverClaudePluginSkillSourcesInWsl(args)
-  } catch {
-    pluginRoots = []
+  if (args.cwd && (!args.sourceKinds || args.sourceKinds.includes('plugin'))) {
+    try {
+      pluginRoots = await discoverClaudePluginSkillSourcesInWsl({ ...args, cwd: args.cwd })
+    } catch {
+      pluginRoots = []
+    }
   }
   const roots = [
     ...buildSkillDiscoverySources({
       homeDir: args.homeDir,
       cwd: args.cwd,
       repos: [],
+      includeCwd: Boolean(args.cwd),
       pathApi: pathPosix,
       providerRootOverrides: args.providerRootOverrides
     }),
     ...pluginRoots
-  ]
+  ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   // Why: UNC traversal applies Windows casing and symlink rules. The distro
   // must own enumeration, metadata reads, and canonical path identity.
-  const output = await executeWslSkillDiscovery(args.distro, buildWslSkillDiscoveryCommand(roots))
-  return parseWslSkillDiscoveryOutput(output, roots)
+  const output = await executeWslSkillDiscovery(
+    args.distro,
+    buildWslSkillDiscoveryCommand(roots, args.names)
+  )
+  return parseWslSkillDiscoveryOutput(output, roots, Date.now(), args.sourceKinds)
 }
