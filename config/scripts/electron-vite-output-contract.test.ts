@@ -10,7 +10,7 @@ import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
   BOOTSTRAP_FATAL_LOG_FILE_NAME,
   createBootstrapFatalExitBanner
-} from '../../build-plugins/bootstrap-fatal-exit-banner'
+} from '../build-plugins/bootstrap-fatal-exit-banner'
 import { electronViteConfig } from '../../electron.vite.config'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
 

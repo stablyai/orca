@@ -26,7 +26,7 @@ on:
       # Node, so any change to the daemon bundle graph or the main build must
       # re-run it (the v1.4.129-rc.1 daemon outage shipped with green CI).
       - 'electron.vite.config.ts'
-      - 'build-plugins/**'
+      - 'config/build-plugins/**'
       - 'src/main/daemon/**'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
