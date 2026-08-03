@@ -2727,7 +2727,7 @@
     "ko": "이 SSH 대상의 원격 릴레이를 강제로 중지합니다. 이 대상의 활성 원격 terminals과 포트 포워딩이 종료됩니다."
   },
   "auto.components.settings.SshTargetForm.137e88ce8d": {
-    "ko": "연결 해제 후 릴레이가 terminals을 활성 상태로 유지하는 기간입니다. 기본값: 10800(3시간). 최대:"
+    "ko": "연결 해제 후 릴레이가 터미널을 활성 상태로 유지하는 기간입니다. 기본값: 10800(3시간). 최대:"
   },
   "auto.components.settings.SshTargetForm.2ee9bcd2e8": {
     "ko": "server, deploy@server:2222, ssh://server"

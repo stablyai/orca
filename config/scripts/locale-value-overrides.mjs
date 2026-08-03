@@ -8,7 +8,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     'OpenCode Go': 'OpenCode Go',
     'Open in Cursor': 'Abrir en Cursor',
     'Local project, Git repo, or folder with many repos':
-      'Proyecto local, repo de Git o carpeta con muchos repos'
+      'Proyecto local, repositorio de Git o carpeta con muchos repositorios'
   },
   ko: {
     Save: '저장',
