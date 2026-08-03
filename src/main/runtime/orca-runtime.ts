@@ -2774,7 +2774,7 @@ export class OrcaRuntimeService {
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
   private readonly getOrchestrationUsageSnapshotsFn:
-    | (() => OrchestrationReportUsageSnapshot[])
+    | ((completedAt: number | null) => Promise<OrchestrationReportUsageSnapshot[]>)
     | null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
@@ -3240,7 +3240,9 @@ export class OrcaRuntimeService {
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
-      getOrchestrationUsageSnapshots?: () => OrchestrationReportUsageSnapshot[]
+      getOrchestrationUsageSnapshots?: (
+        completedAt: number | null
+      ) => Promise<OrchestrationReportUsageSnapshot[]>
     }
   ) {
     this.store = store
@@ -3744,8 +3746,10 @@ export class OrcaRuntimeService {
     this._orchestrationDb = db
   }
 
-  getOrchestrationUsageSnapshots(): OrchestrationReportUsageSnapshot[] {
-    return this.getOrchestrationUsageSnapshotsFn?.() ?? []
+  async getOrchestrationUsageSnapshots(
+    completedAt: number | null
+  ): Promise<OrchestrationReportUsageSnapshot[]> {
+    return (await this.getOrchestrationUsageSnapshotsFn?.(completedAt)) ?? []
   }
 
   resolveOrchestrationReportWorktreeHostScope(

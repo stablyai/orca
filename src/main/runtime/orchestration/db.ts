@@ -3840,6 +3840,29 @@ export class OrchestrationDb {
     return { run, tasks, dispatches, taskCount, dispatchCount }
   }
 
+  getRunReportCompletionAt(runId: string): number | null | undefined {
+    if (!this.getRunRaw(runId)) {
+      return undefined
+    }
+    const row = this.db
+      .prepare(
+        `SELECT completed_at FROM (
+           SELECT completed_at FROM tasks WHERE run_id = ?
+           UNION ALL
+           SELECT completed_at FROM dispatch_contexts WHERE run_id = ?
+         )
+         WHERE julianday(completed_at) IS NOT NULL
+         ORDER BY julianday(completed_at) DESC LIMIT 1`
+      )
+      .get(runId, runId) as { completed_at: string } | undefined
+    const completedAt = exposeUtcTimestamp(row?.completed_at ?? null)
+    if (!completedAt) {
+      return null
+    }
+    const timestamp = Date.parse(completedAt)
+    return Number.isFinite(timestamp) ? timestamp : null
+  }
+
   // Why: LEFT JOIN keeps non-dispatched tasks (NULL assignee); the MAX(rowid) subquery matches getDispatchContext's most-recent-active-dispatch semantics.
   listTasksWithDispatch(filter?: {
     status?: TaskStatus
