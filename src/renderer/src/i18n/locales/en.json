@@ -11503,7 +11503,8 @@
             "4af66eb968": "Open {{value0}} in Browser",
             "578fb812fd": "workspace deleted",
             "7a16db1af7": "Started by {{value0}}",
-            "26b04179d6": "Stop service on port {{value0}}"
+            "26b04179d6": "Stop service on port {{value0}}",
+            "650664d898": "Stop and tell {{value0}}"
           },
           "ServicesSection": {
             "0e191f08a4": "Other Workspaces",

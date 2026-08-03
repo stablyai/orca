@@ -100,7 +100,8 @@ describe('resolveServiceLaunchOrigin', () => {
   it('returns nulls for an unknown pid instead of inventing a chain', () => {
     expect(resolveServiceLaunchOrigin(4242, realTable)).toEqual({
       launchCommand: null,
-      launchedByAgent: null
+      launchedByAgent: null,
+      ancestorPids: []
     })
   })
 

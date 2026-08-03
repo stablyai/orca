@@ -270,12 +270,14 @@ function FileExplorerFiles(): React.JSX.Element {
   }, [])
 
   const handleStopService = useCallback(
-    async (service: WorkspaceService) => {
+    async (service: WorkspaceService, notifyAgent: boolean) => {
       const request = resolveServiceStopRequest(service, activeRepo?.id ?? null)
       if (!request) {
         return
       }
-      const result = await window.api.workspacePorts.stopService(request)
+      const result = await window.api.workspacePorts.stopService(
+        request.kind === 'process' ? { ...request, notifyAgent } : request
+      )
       if (!result.ok) {
         toast.error(result.reason)
         return
@@ -873,7 +875,7 @@ function FileExplorerFiles(): React.JSX.Element {
             onShowOrphans={() => setOrphanServicesOpen(true)}
             onRefresh={() => void services.refresh()}
             onOpen={handleOpenService}
-            onStop={(service) => void handleStopService(service)}
+            onStop={(service, notifyAgent) => void handleStopService(service, notifyAgent)}
           />
         )}
       </div>
@@ -883,7 +885,7 @@ function FileExplorerFiles(): React.JSX.Element {
         orphans={orphanServices}
         onOpenChange={setOrphanServicesOpen}
         onOpen={handleOpenService}
-        onStop={(service) => void handleStopService(service)}
+        onStop={(service, notifyAgent) => void handleStopService(service, notifyAgent)}
       />
 
       <FileExplorerBackgroundMenu

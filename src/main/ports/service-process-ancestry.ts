@@ -61,6 +61,8 @@ export type ServiceLaunchOrigin = {
   launchCommand: string | null
   /** Display name of the coding agent that owns the launching shell, when recognized. */
   launchedByAgent: string | null
+  /** Every ancestor pid walked, so a caller can match them against live PTYs. */
+  ancestorPids: number[]
 }
 
 export function parseProcessAncestryOutput(stdout: string): ProcessAncestryRow[] {
@@ -158,9 +160,10 @@ export function resolveServiceLaunchOrigin(
 ): ServiceLaunchOrigin {
   const start = table.get(pid)
   if (!start) {
-    return { launchCommand: null, launchedByAgent: null }
+    return { launchCommand: null, launchedByAgent: null, ancestorPids: [] }
   }
 
+  const ancestorPids: number[] = []
   const visited = new Set<number>([pid])
   let topmostNonShell = start
   let current = start
@@ -174,6 +177,7 @@ export function resolveServiceLaunchOrigin(
       break
     }
     visited.add(parent.pid)
+    ancestorPids.push(parent.pid)
 
     // Why an agent is a boundary as well as a shell: an agent may spawn a
     // service with no shell in between, and its own command line carries the
@@ -183,14 +187,16 @@ export function resolveServiceLaunchOrigin(
     if (parentAgent) {
       return {
         launchCommand: condenseLaunchCommand(topmostNonShell.command),
-        launchedByAgent: parentAgent
+        launchedByAgent: parentAgent,
+        ancestorPids
       }
     }
 
     if (isShellCommand(parent.command)) {
       return {
         launchCommand: condenseLaunchCommand(topmostNonShell.command),
-        launchedByAgent: findAgentAbove(parent, table, visited)
+        launchedByAgent: findAgentAbove(parent, table, visited, ancestorPids),
+        ancestorPids
       }
     }
 
@@ -200,14 +206,16 @@ export function resolveServiceLaunchOrigin(
 
   return {
     launchCommand: condenseLaunchCommand(topmostNonShell.command),
-    launchedByAgent: null
+    launchedByAgent: null,
+    ancestorPids
   }
 }
 
 function findAgentAbove(
   shell: ProcessAncestryRow,
   table: ProcessAncestryTable,
-  visited: Set<number>
+  visited: Set<number>,
+  ancestorPids: number[]
 ): string | null {
   let current = shell
   for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
@@ -216,6 +224,7 @@ function findAgentAbove(
       return null
     }
     visited.add(parent.pid)
+    ancestorPids.push(parent.pid)
     const agent = AGENT_COMMANDS.get(executableName(parent.command))
     if (agent) {
       return agent

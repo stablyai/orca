@@ -36,7 +36,7 @@ export function ServicesSection({
   onShowOrphans: () => void
   onRefresh: () => void
   onOpen: (service: WorkspaceService) => void
-  onStop: (service: WorkspaceService) => void
+  onStop: (service: WorkspaceService, notifyAgent: boolean) => void
 }): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(false)
   const [showOtherWorktrees, setShowOtherWorktrees] = useState(false)

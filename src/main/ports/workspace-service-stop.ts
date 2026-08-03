@@ -2,6 +2,9 @@ import type { WorkspacePortKillResult, WorkspacePortProbe } from '../../shared/w
 import type { WorkspaceServiceStopRequest } from '../../shared/workspace-services'
 import { resolveDockerBinary } from './docker-compose-services'
 import { runBoundedCommand } from './port-scan-command-runner'
+import { findLocalPtyIdByProcessId, writeToLocalPty } from '../providers/local-pty-provider'
+import { buildAgentStopNotice, toTerminalInput } from './agent-service-stop-notice'
+import { readProcessAncestryTable, resolveServiceLaunchOrigin } from './service-process-ancestry'
 import { killWorkspacePort } from './workspace-port-ownership'
 
 /** `docker stop` sends SIGTERM and waits out the container's grace period. */
@@ -25,11 +28,46 @@ export async function stopWorkspaceService(
   if (!Number.isSafeInteger(request.pid) || !Number.isSafeInteger(request.port)) {
     return { ok: false, reason: 'Invalid process or port.' }
   }
-  return killWorkspacePort(worktrees, {
+  // Capture the chain before the kill: once the process exits, its ancestors
+  // are no longer reachable from it and the owning agent cannot be found.
+  const notifyTarget = request.notifyAgent ? await resolveAgentPtyId(request.pid) : null
+  const result = await killWorkspacePort(worktrees, {
     ...(request.repoId ? { repoId: request.repoId } : {}),
     pid: request.pid,
     port: request.port
   })
+  if (result.ok && notifyTarget) {
+    notifyAgentOfStop(notifyTarget, request)
+  }
+  return result
+}
+
+async function resolveAgentPtyId(pid: number): Promise<string | null> {
+  const table = await readProcessAncestryTable()
+  const origin = resolveServiceLaunchOrigin(pid, table)
+  if (!origin.launchedByAgent) {
+    return null
+  }
+  return findLocalPtyIdByProcessId(new Set(origin.ancestorPids))
+}
+
+function notifyAgentOfStop(
+  ptyId: string,
+  request: Extract<WorkspaceServiceStopRequest, { kind: 'process' }>
+): void {
+  const notice = buildAgentStopNotice({
+    serviceName: request.serviceName ?? null,
+    port: request.port,
+    projectName: request.projectName ?? null
+  })
+  try {
+    // Why fire-and-forget: the service is already stopped. A terminal that
+    // closed between the kill and the write must not turn a successful stop
+    // into a reported failure.
+    writeToLocalPty(ptyId, toTerminalInput(notice))
+  } catch {
+    /* the agent's terminal is gone; nothing to tell */
+  }
 }
 
 async function stopContainer(

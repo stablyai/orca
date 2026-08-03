@@ -163,6 +163,9 @@ function parseStopServiceRequest(value: unknown): WorkspaceServiceStopRequest | 
     repoId?: unknown
     pid?: unknown
     port?: unknown
+    notifyAgent?: unknown
+    serviceName?: unknown
+    projectName?: unknown
   }
   if (args.kind === 'container') {
     return typeof args.containerId === 'string' && args.containerId.length > 0
@@ -179,7 +182,10 @@ function parseStopServiceRequest(value: unknown): WorkspaceServiceStopRequest | 
     kind: 'process',
     ...(typeof args.repoId === 'string' && args.repoId.length > 0 ? { repoId: args.repoId } : {}),
     pid: args.pid as number,
-    port: args.port as number
+    port: args.port as number,
+    notifyAgent: args.notifyAgent === true,
+    serviceName: typeof args.serviceName === 'string' ? args.serviceName : null,
+    projectName: typeof args.projectName === 'string' ? args.projectName : null
   }
 }
 

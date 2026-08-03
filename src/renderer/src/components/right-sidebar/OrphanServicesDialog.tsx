@@ -30,7 +30,7 @@ export function OrphanServicesDialog({
   orphans: WorkspaceService[]
   onOpenChange: (open: boolean) => void
   onOpen: (service: WorkspaceService) => void
-  onStop: (service: WorkspaceService) => void
+  onStop: (service: WorkspaceService, notifyAgent: boolean) => void
 }): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

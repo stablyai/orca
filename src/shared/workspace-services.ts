@@ -39,7 +39,16 @@ export type WorkspaceService = {
 
 export type WorkspaceServiceStopRequest =
   | { kind: 'container'; containerId: string }
-  | { kind: 'process'; repoId?: string; pid: number; port: number }
+  | {
+      kind: 'process'
+      repoId?: string
+      pid: number
+      port: number
+      /** Write a note into the terminal of the agent that started this service. */
+      notifyAgent?: boolean
+      serviceName?: string | null
+      projectName?: string | null
+    }
 
 /** Whether the panel can actually stop this service, and why not when it cannot. */
 export function resolveServiceStopRequest(
@@ -60,8 +69,15 @@ export function resolveServiceStopRequest(
     kind: 'process',
     ...(repoId ? { repoId } : {}),
     pid: service.pid,
-    port: service.port
+    port: service.port,
+    serviceName: service.serviceName,
+    projectName: service.projectName
   }
+}
+
+/** True when the panel can route a stop notice back to a launching agent. */
+export function canNotifyLaunchingAgent(service: WorkspaceService): boolean {
+  return service.kind === 'process' && Boolean(service.launchedByAgent) && Boolean(service.pid)
 }
 
 export type WorkspaceServiceScanResult = {
