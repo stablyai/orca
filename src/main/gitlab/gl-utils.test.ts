@@ -26,6 +26,7 @@ import {
   getProjectRef,
   getProjectRefForRemote,
   parseGlabApiResponse,
+  glabHostEnvOptions,
   parseGlabAuthStatusHosts,
   resolveIssueSource
 } from './gl-utils'
@@ -877,5 +878,49 @@ describe('getGlabKnownHosts', () => {
     ])
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
     unregisterSshGitProvider(connectionId)
+  })
+})
+
+describe('glabHostEnvOptions', () => {
+  const projectRef = { host: 'gitlab.example.internal' }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('carries the host in GITLAB_HOST for a connection-backed workspace', () => {
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.GITLAB_HOST).toBe('gitlab.example.internal')
+  })
+
+  it('returns nothing for a local workspace', () => {
+    expect(glabHostEnvOptions(projectRef, null)).toEqual({})
+    expect(glabHostEnvOptions(projectRef, undefined)).toEqual({})
+  })
+
+  it('returns nothing when the project ref carries no host', () => {
+    expect(glabHostEnvOptions(null, 'conn-1')).toEqual({})
+    expect(glabHostEnvOptions({ host: '' }, 'conn-1')).toEqual({})
+  })
+
+  // Why: spawn env stops at the wsl.exe boundary, so Windows has to name the
+  // variable in WSLENV or glab in the distro never sees the host.
+  it('forwards GITLAB_HOST through WSLENV on Windows', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    expect(env?.WSLENV?.split(':')).toContain('GITLAB_HOST')
+  })
+
+  it('leaves WSLENV alone off Windows', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.WSLENV).toBe(process.env.WSLENV)
   })
 })

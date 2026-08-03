@@ -285,6 +285,21 @@ describe('gitlab issue operations', () => {
     )
   })
 
+  // Why: `glab issue close` has no --hostname flag; a self-hosted instance is
+  // only reachable through GITLAB_HOST (#12193).
+  it('updateIssue closes through GITLAB_HOST on an SSH workspace', async () => {
+    const projectRef = { host: 'gitlab.example.internal', path: 'stablyai/orca' }
+    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+
+    await expect(
+      updateIssue('/repo-root', 5, { state: 'closed' }, undefined, 'conn-1', projectRef)
+    ).resolves.toEqual({ ok: true })
+
+    const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+    expect(args).toEqual(['issue', 'close', '5', '-R', 'stablyai/orca'])
+    expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
+  })
+
   it("updateIssue treats 'already closed' as a no-op", async () => {
     getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
     glabExecFileAsyncMock.mockRejectedValueOnce(new Error('Issue is already closed'))

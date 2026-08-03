@@ -4,6 +4,7 @@ const {
   getProjectSlugMock,
   glabExecFileAsyncMock,
   glabHostnameArgsMock,
+  glabHostEnvOptionsMock,
   glabRepoExecOptionsMock,
   acquireMock,
   releaseMock,
@@ -12,6 +13,9 @@ const {
   getProjectSlugMock: vi.fn(),
   glabExecFileAsyncMock: vi.fn(),
   glabHostnameArgsMock: vi.fn((projectRef: { host: string }) => ['--hostname', projectRef.host]),
+  glabHostEnvOptionsMock: vi.fn((projectRef: { host: string }, connectionId?: string | null) =>
+    connectionId ? { env: { GITLAB_HOST: projectRef.host } } : {}
+  ),
   glabRepoExecOptionsMock: vi.fn((repoPath: string, connectionId?: string | null) =>
     connectionId ? {} : { cwd: repoPath }
   ),
@@ -29,6 +33,7 @@ vi.mock('./gl-utils', () => ({
   release: releaseMock,
   glabExecFileAsync: glabExecFileAsyncMock,
   glabHostnameArgs: glabHostnameArgsMock,
+  glabHostEnvOptions: glabHostEnvOptionsMock,
   glabRepoExecOptions: glabRepoExecOptionsMock
 }))
 
@@ -43,6 +48,7 @@ describe('createGitLabMergeRequest', () => {
     getProjectSlugMock.mockReset()
     glabExecFileAsyncMock.mockReset()
     glabHostnameArgsMock.mockClear()
+    glabHostEnvOptionsMock.mockClear()
     glabRepoExecOptionsMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
@@ -259,5 +265,39 @@ describe('createGitLabMergeRequest', () => {
         'main'
       ])
     )
+  })
+
+  // Why: `glab mr list` has no --hostname flag, so the duplicate lookup has to
+  // reach a self-hosted instance through GITLAB_HOST instead (#12193).
+  it('looks up an existing merge request through GITLAB_HOST on an SSH workspace', async () => {
+    glabExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('merge request already exists'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 77,
+            web_url: 'https://gitlab.example.internal/acme/widgets/-/merge_requests/77'
+          }
+        ]),
+        stderr: ''
+      })
+    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.example.internal', path: 'acme/widgets' })
+
+    await expect(
+      createGitLabMergeRequest(
+        '/repo-root',
+        {
+          provider: 'gitlab',
+          base: 'main',
+          head: 'feature/existing',
+          title: 'Existing MR'
+        },
+        'ssh-1'
+      )
+    ).resolves.toMatchObject({ ok: false, code: 'already_exists' })
+
+    const [args, options] = glabExecFileAsyncMock.mock.calls[1]
+    expect(args).not.toContain('--hostname')
+    expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
   })
 })
