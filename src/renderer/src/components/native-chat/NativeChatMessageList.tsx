@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Image as ImageIcon } from 'lucide-react'
 import CommentMarkdown, {
+  type CommentMarkdownFilePathSpans,
   type CommentMarkdownLinkClickHandler
 } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
+import { reconcileNativeChatRowIdentity } from './native-chat-row-identity'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import {
@@ -122,11 +124,12 @@ function TypingIndicatorRow(): React.JSX.Element {
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
  *  lifted card, assistant prose as body copy, reasoning de-emphasized. */
-function MessageRow({
+function MessageRowImpl({
   message,
   expandSignal,
   onScrollMessageToTop,
   onLinkClick,
+  filePathSpans,
   allowFileUriLinks = false,
   deliveryFailed = false
 }: {
@@ -135,13 +138,14 @@ function MessageRow({
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
   onLinkClick?: CommentMarkdownLinkClickHandler
+  filePathSpans?: CommentMarkdownFilePathSpans
   allowFileUriLinks?: boolean
   deliveryFailed?: boolean
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
-  const markdown = proseToMarkdown(prose)
-  const hasImages = prose.some((block) => block.type === 'image-ref')
+  const markdown = useMemo(() => proseToMarkdown(prose), [prose])
+  const hasImages = useMemo(() => prose.some((block) => block.type === 'image-ref'), [prose])
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
@@ -178,6 +182,7 @@ function MessageRow({
                 variant="document"
                 className="text-sm"
                 onLinkClick={onLinkClick}
+                filePathSpans={filePathSpans}
                 allowFileUriLinks={allowFileUriLinks}
               />
             </>
@@ -225,6 +230,7 @@ function MessageRow({
           variant="document"
           className="text-sm"
           onLinkClick={onLinkClick}
+          filePathSpans={filePathSpans}
           allowFileUriLinks={allowFileUriLinks}
         />
       ) : null}
@@ -233,12 +239,18 @@ function MessageRow({
   )
 }
 
+// Every row body re-ran on each streaming frame without this; mobile has always
+// memoized its equivalent. Relies on stable row identity from
+// reconcileNativeChatRowIdentity — memoizing alone is not enough.
+const MessageRow = memo(MessageRowImpl)
+
 export function NativeChatMessageList({
   session,
   isWorking,
   expandSignal,
   fontScale,
   onLinkClick,
+  filePathSpans,
   allowFileUriLinks = false,
   failedDeliveryMessageIds
 }: {
@@ -249,6 +261,7 @@ export function NativeChatMessageList({
   /** Chat-only text multiplier (1 = default), driven by the zoom shortcuts. */
   fontScale: number
   onLinkClick?: CommentMarkdownLinkClickHandler
+  filePathSpans?: CommentMarkdownFilePathSpans
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>
 }): React.JSX.Element {
@@ -270,10 +283,19 @@ export function NativeChatMessageList({
   // matching the mobile chat. Then fold each turn's tool activity into the
   // assistant message it belongs to, ordered stably, so a turn's tools collapse
   // under one run.
-  const messages = useMemo(
-    () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
-    [session.messages]
-  )
+  // The projection mints new objects every streaming frame; reconciling against
+  // the previous frame keeps identity stable for rows that did not change, which
+  // is what MessageRow's memo and its inner splitNativeChatBlocks memo key on.
+  const previousRowsRef = useRef<NativeChatMessage[] | null>(null)
+  const messages = useMemo(() => {
+    const projected = foldToolMessages(
+      orderNativeChatMessages(stripNoiseMessages(session.messages))
+    )
+    return reconcileNativeChatRowIdentity(projected, previousRowsRef.current)
+  }, [session.messages])
+  useLayoutEffect(() => {
+    previousRowsRef.current = messages
+  }, [messages])
   const showTypingIndicator =
     isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
 
@@ -406,6 +428,7 @@ export function NativeChatMessageList({
               expandSignal={expandSignal}
               onScrollMessageToTop={scrollMessageToTop}
               onLinkClick={onLinkClick}
+              filePathSpans={filePathSpans}
               allowFileUriLinks={allowFileUriLinks}
               deliveryFailed={failedDeliveryMessageIds?.has(message.id) === true}
             />

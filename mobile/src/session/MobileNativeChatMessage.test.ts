@@ -41,7 +41,7 @@ describe('MobileNativeChatMessage image-ref rendering', () => {
     renderer = null
   })
 
-  function render(message: NativeChatMessage): ReactTestRenderer {
+  function render(message: NativeChatMessage, onOpenFile?: (target: unknown) => void) {
     const original = console.error
     const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
       if (typeof a[0] === 'string' && a[0].includes('react-test-renderer is deprecated')) {
@@ -51,7 +51,7 @@ describe('MobileNativeChatMessage image-ref rendering', () => {
     })
     try {
       act(() => {
-        renderer = create(createElement(MobileNativeChatMessage, { message }))
+        renderer = create(createElement(MobileNativeChatMessage, { message, onOpenFile }))
       })
     } finally {
       spy.mockRestore()
@@ -83,5 +83,46 @@ describe('MobileNativeChatMessage image-ref rendering', () => {
       .findAllByType('Text' as never)
       .map((node) => String(node.children.join('')))
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
+  })
+
+  it('opens a file path in the user bubble', () => {
+    const onOpenFile = vi.fn()
+    const path =
+      '/Users/jinjingliang/Documents/projects/orca/worktree/docs/native-chat-rendering-architecture.md'
+    const tree = render(userMessage([{ type: 'text', text: path }]), onOpenFile)
+    const link = tree.root.find(
+      (node) => node.type === 'Text' && node.props.accessibilityLabel === `Open file ${path}`
+    )
+
+    act(() => link.props.onPress())
+
+    expect(onOpenFile).toHaveBeenCalledWith({
+      pathText: path,
+      line: null,
+      column: null
+    })
+  })
+
+  it('only makes the file span in surrounding user prose tappable', () => {
+    const onOpenFile = vi.fn()
+    const tree = render(
+      userMessage([{ type: 'text', text: 'Please inspect src/app.ts before continuing' }]),
+      onOpenFile
+    )
+    const outerText = tree.root
+      .findAllByType('Text' as never)
+      .find((node) => node.children.some((child) => String(child).includes('Please inspect')))
+    const link = tree.root.find(
+      (node) => node.type === 'Text' && node.props.accessibilityLabel === 'Open file src/app.ts'
+    )
+
+    expect(outerText?.props.onPress).toBeUndefined()
+    expect(outerText?.props.accessibilityRole).toBeUndefined()
+    act(() => link.props.onPress())
+    expect(onOpenFile).toHaveBeenCalledWith({
+      pathText: 'src/app.ts',
+      line: null,
+      column: null
+    })
   })
 })

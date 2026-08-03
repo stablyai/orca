@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { MobileFileTapTarget } from '../files/mobile-file-tap-target'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import {
@@ -94,7 +95,7 @@ type Props = {
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
   /** Open a worktree file tapped in agent markdown. */
-  onOpenFile?: (relativePath: string) => void
+  onOpenFile?: (target: MobileFileTapTarget) => void
   /** Pixels to lift the composer by when the soft keyboard is open. The route
    *  owns keyboard tracking (the app uses manual lift, not KeyboardAvoidingView). */
   keyboardInset?: number

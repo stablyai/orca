@@ -8,9 +8,20 @@
 export const NATIVE_CHAT_INITIAL_LIMIT = 300
 export const NATIVE_CHAT_PAGE = 200
 
+// The window is not virtualized, so every loaded turn stays live DOM. Cap the
+// growth the way mobile does (MAX_MESSAGES) rather than letting repeated
+// load-earlier clicks grow it without bound. Raise or drop this once the
+// transcript is virtualized.
+export const NATIVE_CHAT_MAX_LIMIT = 2000
+
 /** The limit to request for the next older page. */
 export function nextNativeChatLimit(currentLimit: number): number {
-  return currentLimit + NATIVE_CHAT_PAGE
+  return Math.min(currentLimit + NATIVE_CHAT_PAGE, NATIVE_CHAT_MAX_LIMIT)
+}
+
+/** Whether the window can still grow; at the ceiling, stop offering "load earlier". */
+export function canGrowNativeChatWindow(currentLimit: number): boolean {
+  return currentLimit < NATIVE_CHAT_MAX_LIMIT
 }
 
 /** Whether an older page may still exist: the last read filled the window, so

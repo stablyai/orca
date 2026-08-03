@@ -1,13 +1,29 @@
 import { parseExplicitFileLinkTarget } from './explicit-file-link-target'
 import type { ParsedTerminalFileLink } from './terminal-links'
 
-const LEADING_TRIM_CHARS = new Set(['(', '[', '{', '"', "'"])
-const TRAILING_TRIM_CHARS = new Set([')', ']', '}', '"', "'", ',', ';', '.'])
+const LEADING_TRIM_CHARS = new Set(['{', '"', "'"])
+const TRAILING_TRIM_CHARS = new Set(['}', '"', "'", ',', ';', '.'])
 
 export type DetectedTerminalFileLinkRange = {
   startIndex: number
   endIndex: number
   text: string
+}
+
+function hasBalancedDelimiter(value: string, open: string, close: string): boolean {
+  let depth = 0
+  for (const char of value) {
+    if (char === open) {
+      depth += 1
+    } else if (char === close && --depth < 0) {
+      return false
+    }
+  }
+  return depth === 0
+}
+
+function hasBalancedRouteDelimiters(value: string): boolean {
+  return hasBalancedDelimiter(value, '(', ')') && hasBalancedDelimiter(value, '[', ']')
 }
 
 function trimBoundaryPunctuation(
@@ -21,6 +37,14 @@ function trimBoundaryPunctuation(
     start += 1
   }
   while (end > start && TRAILING_TRIM_CHARS.has(value[end - 1])) {
+    end -= 1
+  }
+  while (
+    end > start &&
+    (value[end - 1] === ')' || value[end - 1] === ']') &&
+    !hasBalancedRouteDelimiters(value.slice(start, end)) &&
+    hasBalancedRouteDelimiters(value.slice(start, end - 1))
+  ) {
     end -= 1
   }
 

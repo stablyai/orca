@@ -14591,7 +14591,8 @@
         "running": "Running…",
         "result": "Result",
         "countOne": "1 tool call",
-        "countN": "{{value0}} tool calls"
+        "countN": "{{value0}} tool calls",
+        "showAllLines": "Show all lines"
       },
       "status": {
         "responding": "Agent is responding"
@@ -14643,7 +14644,9 @@
         "allow": "Allow",
         "deny": "Deny"
       },
-      "launchPromptNotDelivered": "Not delivered — check the terminal"
+      "launchPromptNotDelivered": "Not delivered — check the terminal",
+      "fileLinkUnresolved": "Could not resolve that file path",
+      "fileLinkOutsideWorktree": "That file is outside the workspace"
     },
     "tab": {
       "bar": {

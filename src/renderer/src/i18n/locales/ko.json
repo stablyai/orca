@@ -14405,7 +14405,8 @@
       },
       "tool": {
         "running": "실행 중…",
-        "result": "결과"
+        "result": "결과",
+        "showAllLines": "Show all lines"
       },
       "status": {
         "responding": "Agent이 응답 중입니다."
@@ -14457,7 +14458,9 @@
         "allow": "허용하다",
         "deny": "부인하다"
       },
-      "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요"
+      "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요",
+      "fileLinkUnresolved": "Could not resolve that file path",
+      "fileLinkOutsideWorktree": "That file is outside the workspace"
     },
     "tab": {
       "bar": {

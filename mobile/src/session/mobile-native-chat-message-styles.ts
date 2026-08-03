@@ -30,6 +30,9 @@ export const styles = StyleSheet.create({
     lineHeight: TEXT_SIZE + 6,
     fontWeight: '500'
   },
+  userFileLink: {
+    textDecorationLine: 'underline'
+  },
   controls: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -102,6 +105,12 @@ export const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: 3
   },
+  toolLineToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minWidth: 0
+  },
   toolName: {
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
@@ -117,6 +126,9 @@ export const styles = StyleSheet.create({
   toolPreviewLink: {
     color: colors.accentBlue,
     textDecorationLine: 'underline'
+  },
+  toolPreviewButton: {
+    flex: 1
   },
   toolDetail: {
     paddingLeft: spacing.lg,

@@ -51,7 +51,14 @@ import type { NativeChatContextMenuActions } from './use-native-chat-context-men
 import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
-import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+import {
+  useNativeChatFilePathSpans,
+  useNativeChatFileLinkClick
+} from './use-native-chat-file-link-click'
+import { useThrottledLatestValue } from './use-throttled-latest-value'
+
+// Matches mobile's NATIVE_CHAT_STREAM_THROTTLE_MS and VS Code's chat tick.
+const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
 import type { NativeChatViewProps } from './native-chat-view-types'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
@@ -155,7 +162,11 @@ function NativeChatResolvedView({
   const liveWorking = session.status === 'working'
   // The agent's in-progress reply preview (hook), shown as a live streaming
   // bubble while it works — before the completed turn flushes to the transcript.
-  const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  const rawHookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  // Providers publish a frame per streamed part; each one re-projects the whole
+  // transcript window. Mobile has always throttled this; desktop had no
+  // renderer-side limit at all.
+  const hookPreview = useThrottledLatestValue(rawHookPreview, NATIVE_CHAT_STREAM_THROTTLE_MS)
   // Why: Stop suppression must clear on a newer working epoch even when status
   // never leaves 'working' (interrupt + immediate next turn coalesced).
   const hookWorkingEpoch = useAppStore(
@@ -363,6 +374,7 @@ function NativeChatResolvedView({
     interactiveSend.cancel()
   }, [interactiveSend, pendingScope])
   const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
+  const nativeChatFilePathSpans = useNativeChatFilePathSpans(fileLinkContext)
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
@@ -419,6 +431,7 @@ function NativeChatResolvedView({
             expandSignal={false}
             fontScale={fontScale.scale}
             onLinkClick={nativeChatFileLinkClick}
+            filePathSpans={nativeChatFilePathSpans}
             allowFileUriLinks={fileLinkContext !== null}
             failedDeliveryMessageIds={failedLaunchPromptMessageIds}
           />

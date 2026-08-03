@@ -747,13 +747,30 @@ export class RuntimeFileCommands {
 
     try {
       if (relativePath !== null && relativePath !== '' && isSafeMobileRelativePath(relativePath)) {
+        const [canonicalRoot, canonicalPath] = connectionId
+          ? await Promise.all([
+              getSshFilesystemProvider(connectionId).realpath(worktree.path),
+              getSshFilesystemProvider(connectionId).realpath(absolutePath)
+            ])
+          : await Promise.all([
+              resolveAuthorizedPath(worktree.path, store),
+              resolveAuthorizedPath(absolutePath, store)
+            ])
+        const canonicalRelativePath = relativePathInsideRoot(canonicalRoot, canonicalPath)
+        if (
+          canonicalRelativePath === null ||
+          canonicalRelativePath === '' ||
+          !isSafeMobileRelativePath(canonicalRelativePath)
+        ) {
+          return { ...empty, absolutePath: canonicalPath }
+        }
         const stats = connectionId
-          ? await this.statRemoteTerminalPath(absolutePath, connectionId)
-          : await stat(await resolveAuthorizedPath(absolutePath, store))
+          ? await this.statRemoteTerminalPath(canonicalPath, connectionId)
+          : await stat(canonicalPath)
         return {
           worktree: worktree.id,
-          relativePath,
-          absolutePath,
+          relativePath: canonicalRelativePath,
+          absolutePath: canonicalPath,
           exists: true,
           isDirectory: stats.isDirectory(),
           openTarget: stats.isDirectory()
@@ -761,8 +778,8 @@ export class RuntimeFileCommands {
             : {
                 kind: 'worktree-file',
                 provider: connectionId ? 'ssh' : 'local',
-                relativePath,
-                absolutePath
+                relativePath: canonicalRelativePath,
+                absolutePath: canonicalPath
               }
         }
       }

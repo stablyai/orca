@@ -1,3 +1,5 @@
+import { parseMobileFileTapTarget, type MobileFileTapTarget } from '../files/mobile-file-tap-target'
+
 // Conservative detection of file-path-like tokens inside an inline markdown text
 // run, so the chat view can render them as tappable (opening the mobile file
 // viewer). We deliberately favor precision over recall: a missed path is a minor
@@ -5,7 +7,7 @@
 
 export type FilePathSegment =
   | { type: 'text'; value: string }
-  | { type: 'file'; value: string; path: string }
+  | { type: 'file'; value: string; target: MobileFileTapTarget }
 
 // Common source/code/config extensions we treat as openable file paths. Kept
 // explicit (rather than "any extension") so prose like "etc." or "e.g." and
@@ -81,11 +83,27 @@ const FILE_EXTENSIONS = [
 ] as const
 
 const EXTENSION_SET = new Set<string>(FILE_EXTENSIONS)
+const EXTENSIONLESS_FILENAMES = new Set([
+  'dockerfile',
+  'makefile',
+  'procfile',
+  'rakefile',
+  'gemfile',
+  'justfile',
+  'brewfile',
+  'jenkinsfile',
+  'vagrantfile',
+  'codeowners'
+])
 
 // Accept the host's native separator because transcript paths originate on the
 // connected runtime, which may be Windows even when the phone is not.
 const CANDIDATE_PATTERN =
-  /(?:[A-Za-z]:[\\/]|\\\\)?(?:\.{1,2}[\\/])?(?:[\w.@~+-]+[\\/])+[\w.@+-]+\.[A-Za-z0-9]+/g
+  /^(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}_.@~+()[\]-]+[\\/])[\p{L}\p{N}_.@~+/%\\()[\]-]+\.[A-Za-z0-9]+(?::\d+)?(?::\d+)?$/u
+const TOKEN_PATTERN = /\S+/g
+const LEADING_PUNCTUATION = /^[<'"`]+/
+const TRAILING_PUNCTUATION = /[>'"`,.;:!?]+$/
+const DOMAIN_LIKE_SEGMENT = /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/i
 
 // A path candidate in chat prose is short; a much longer run can't hold one worth
 // linkifying but can push CANDIDATE_PATTERN into super-linear backtracking, so we
@@ -99,9 +117,69 @@ function hasMidTokenAt(candidate: string): boolean {
   return /[^\\/]@/.test(candidate)
 }
 
+function hasDomainLikeFirstSegment(pathText: string): boolean {
+  if (/^(?:[\\/~]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/.test(pathText)) {
+    return false
+  }
+  return DOMAIN_LIKE_SEGMENT.test(pathText.split(/[\\/]/)[0] ?? '')
+}
+
+function hasBalancedRouteDelimiters(value: string): boolean {
+  for (const [open, close] of [
+    ['(', ')'],
+    ['[', ']']
+  ]) {
+    let depth = 0
+    for (const char of value) {
+      if (char === open) {
+        depth += 1
+      } else if (char === close && --depth < 0) {
+        return false
+      }
+    }
+    if (depth !== 0) {
+      return false
+    }
+  }
+  return true
+}
+
+function trimTokenPunctuation(rawToken: string): {
+  candidate: string
+  leadingLength: number
+} {
+  const leading = LEADING_PUNCTUATION.exec(rawToken)?.[0].length ?? 0
+  const withoutLeading = rawToken.slice(leading)
+  const trailing = TRAILING_PUNCTUATION.exec(withoutLeading)?.[0].length ?? 0
+  let candidate = trailing > 0 ? withoutLeading.slice(0, -trailing) : withoutLeading
+  let wrapperLength = 0
+  while (
+    (candidate.startsWith('(') && candidate.endsWith(')')) ||
+    (candidate.startsWith('[') && candidate.endsWith(']')) ||
+    (candidate.startsWith('{') && candidate.endsWith('}'))
+  ) {
+    candidate = candidate.slice(1, -1)
+    wrapperLength += 1
+  }
+  return { candidate, leadingLength: leading + wrapperLength }
+}
+
+function decodeDetectedPath(value: string): string | null {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return null
+  }
+}
+
 function isOpenablePath(candidate: string): boolean {
   // Reject anything URL-ish or scheme-bearing — those are handled as web links.
-  if (candidate.includes('://') || hasMidTokenAt(candidate)) {
+  if (
+    candidate.includes('://') ||
+    hasMidTokenAt(candidate) ||
+    hasDomainLikeFirstSegment(candidate) ||
+    !hasBalancedRouteDelimiters(candidate)
+  ) {
     return false
   }
   // Must contain a separator (a bare "file.ts" is too ambiguous in prose).
@@ -148,25 +226,45 @@ export function detectFilePathSegments(text: string): FilePathSegment[] {
   }
   const segments: FilePathSegment[] = []
   let lastIndex = 0
-  let match: RegExpExecArray | null
-  CANDIDATE_PATTERN.lastIndex = 0
-
-  while ((match = CANDIDATE_PATTERN.exec(text))) {
-    const candidate = match[0]
-    // Skip candidates that are part of a URL (preceded by a scheme colon or an
-    // alphanumeric/host char that would make this a domain tail, not a path).
-    const prev = match.index > 0 ? text[match.index - 1]! : ''
-    if (prev === ':' || prev === '/' || /[\w.@]/.test(prev)) {
+  for (const match of text.matchAll(TOKEN_PATTERN)) {
+    const rawToken = match[0]
+    const { candidate, leadingLength } = trimTokenPunctuation(rawToken)
+    const candidateIndex = match.index + leadingLength
+    if (!candidate || !CANDIDATE_PATTERN.test(candidate)) {
       continue
     }
-    if (!isOpenablePath(candidate)) {
+    const previousToken = text.slice(0, match.index).trimEnd().match(/\S+$/)?.[0] ?? ''
+    const previousIsCompletePath =
+      CANDIDATE_PATTERN.test(previousToken) &&
+      Boolean(
+        parseMobileFileTapTarget(previousToken) &&
+        isOpenablePath(parseMobileFileTapTarget(previousToken)!.pathText)
+      )
+    const candidateFirstSegment = candidate.split(/[\\/]/)[0] ?? ''
+    const looksLikeSpacedRelativePath =
+      /^[\p{L}\p{N}_-]+$/u.test(previousToken) &&
+      /^[A-Z][\p{L}\p{N}_-]*$/u.test(candidateFirstSegment)
+    if (
+      (/[\\/]/.test(previousToken) || looksLikeSpacedRelativePath) &&
+      !previousIsCompletePath &&
+      !/[.!?:;,]$/.test(previousToken)
+    ) {
       continue
     }
-    if (match.index > lastIndex) {
-      segments.push({ type: 'text', value: text.slice(lastIndex, match.index) })
+    const parsed = parseMobileFileTapTarget(candidate)
+    const decodedPath = parsed ? decodeDetectedPath(parsed.pathText) : null
+    if (!parsed || !decodedPath || !isOpenablePath(decodedPath)) {
+      continue
     }
-    segments.push({ type: 'file', value: candidate, path: normalizeFilePath(candidate) })
-    lastIndex = match.index + candidate.length
+    if (candidateIndex > lastIndex) {
+      segments.push({ type: 'text', value: text.slice(lastIndex, candidateIndex) })
+    }
+    segments.push({
+      type: 'file',
+      value: candidate,
+      target: { ...parsed, pathText: normalizeFilePath(decodedPath) }
+    })
+    lastIndex = candidateIndex + candidate.length
   }
 
   if (lastIndex < text.length) {
@@ -186,27 +284,46 @@ export function detectFilePathSegments(text: string): FilePathSegment[] {
  */
 export function isFilePathCodeSpan(code: string): boolean {
   const trimmed = code.trim()
-  if (!trimmed || /\s/.test(trimmed)) {
+  if (!trimmed || /[\r\n]/.test(trimmed)) {
     return false
   }
-  if (trimmed.includes('://') || hasMidTokenAt(trimmed)) {
+  const parsed = parseMobileFileTapTarget(trimmed)
+  if (
+    !parsed ||
+    parsed.pathText.includes('://') ||
+    hasMidTokenAt(parsed.pathText) ||
+    !hasBalancedRouteDelimiters(parsed.pathText)
+  ) {
     return false
   }
-  if (isOpenablePath(trimmed)) {
+  if (isOpenablePath(parsed.pathText)) {
     return true
   }
-  // Separator-less code span: accept a clean name.ext with a known extension.
-  if (/[\\/]/.test(trimmed)) {
+  const lastSeparator = Math.max(
+    parsed.pathText.lastIndexOf('/'),
+    parsed.pathText.lastIndexOf('\\')
+  )
+  const lastSegment = parsed.pathText.slice(lastSeparator + 1)
+  if (!lastSegment) {
     return false
   }
-  const dot = trimmed.lastIndexOf('.')
+  if (EXTENSIONLESS_FILENAMES.has(lastSegment.toLowerCase())) {
+    return true
+  }
+  if (/^\.[\w-]+$/.test(lastSegment)) {
+    return true
+  }
+  const dot = lastSegment.lastIndexOf('.')
   if (dot <= 0) {
     return false
   }
-  const name = trimmed.slice(0, dot)
-  const ext = trimmed.slice(dot + 1).toLowerCase()
+  const name = lastSegment.slice(0, dot)
+  const ext = lastSegment.slice(dot + 1).toLowerCase()
   if (/[^\w.@+-]/.test(name)) {
     return false
   }
-  return EXTENSION_SET.has(ext)
+  if (/^\d+$/.test(ext)) {
+    return false
+  }
+  return lastSeparator >= 0 ? /^[a-z0-9]+$/i.test(ext) : EXTENSION_SET.has(ext)
 }

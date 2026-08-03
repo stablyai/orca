@@ -5,16 +5,21 @@ import remarkBreaks from 'remark-breaks'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import { cn } from '@/lib/utils'
+import { remarkFilePathLinks } from './remark-file-path-links'
 import {
   compactCommentMarkdownComponents,
   createCompactCommentMarkdownComponents,
   createDocumentCommentMarkdownComponents,
   documentCommentMarkdownComponents,
   isTrustedCompactImageSrc,
+  type CommentMarkdownFilePathSpans,
   type CommentMarkdownLinkClickHandler
 } from './comment-markdown-element-renderers'
 
-export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
+export type {
+  CommentMarkdownFilePathSpans,
+  CommentMarkdownLinkClickHandler
+} from './comment-markdown-element-renderers'
 
 type MarkdownPlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
 type UrlTransform = NonNullable<React.ComponentProps<typeof Markdown>['urlTransform']>
@@ -186,6 +191,9 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   expandImages?: boolean
+  // Opt-in per call site: only native chat linkifies inline-code file paths, so
+  // the ~56 other CommentMarkdown call sites keep rendering them as plain code.
+  filePathSpans?: CommentMarkdownFilePathSpans
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -201,12 +209,13 @@ const CommentMarkdown = React.memo(
       onLinkClick,
       allowFileUriLinks = false,
       expandImages = false,
+      filePathSpans,
       ...rest
     },
     ref
   ) {
     const components = React.useMemo(() => {
-      if (!onLinkClick) {
+      if (!onLinkClick && !filePathSpans) {
         return variant === 'document'
           ? documentCommentMarkdownComponents
           : expandImages
@@ -214,13 +223,16 @@ const CommentMarkdown = React.memo(
             : compactCommentMarkdownComponents
       }
       return variant === 'document'
-        ? createDocumentCommentMarkdownComponents(onLinkClick)
+        ? createDocumentCommentMarkdownComponents(onLinkClick, filePathSpans)
         : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
-    }, [expandImages, variant, onLinkClick])
-    const activeRemarkPlugins = React.useMemo(
-      () => (githubRepo ? [...remarkPlugins, remarkGitHubReferences(githubRepo)] : remarkPlugins),
-      [githubRepo]
-    )
+    }, [expandImages, variant, onLinkClick, filePathSpans])
+    const activeRemarkPlugins = React.useMemo(() => {
+      const plugins = githubRepo
+        ? [...remarkPlugins, remarkGitHubReferences(githubRepo)]
+        : remarkPlugins
+      // Opt-in: only surfaces that pass filePathSpans linkify bare prose paths.
+      return filePathSpans ? [...plugins, remarkFilePathLinks()] : plugins
+    }, [githubRepo, filePathSpans])
 
     return (
       <div

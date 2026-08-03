@@ -14405,7 +14405,8 @@
       },
       "tool": {
         "running": "実行中…",
-        "result": "結果"
+        "result": "結果",
+        "showAllLines": "Show all lines"
       },
       "status": {
         "responding": "Agent が応答中です"
@@ -14457,7 +14458,9 @@
         "allow": "許可する",
         "deny": "拒否"
       },
-      "launchPromptNotDelivered": "配信されませんでした — ターミナルを確認してください"
+      "launchPromptNotDelivered": "配信されませんでした — ターミナルを確認してください",
+      "fileLinkUnresolved": "Could not resolve that file path",
+      "fileLinkOutsideWorktree": "That file is outside the workspace"
     },
     "tab": {
       "bar": {

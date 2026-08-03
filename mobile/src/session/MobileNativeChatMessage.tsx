@@ -4,6 +4,7 @@ import * as Clipboard from 'expo-clipboard'
 import { ArrowUp, ChevronDown, Copy, SquareChevronRight } from 'lucide-react-native'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { parseMobileFileTapTarget, type MobileFileTapTarget } from '../files/mobile-file-tap-target'
 import { colors } from '../theme/mobile-theme'
 import {
   isImageRefBlock,
@@ -16,6 +17,7 @@ import { diffFromText, diffFromToolCall, type DiffLine } from './mobile-native-c
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { MAX_TOOL_RESULT_CHARS, styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
+import { MobileNativeChatUserProse } from './MobileNativeChatUserProse'
 import {
   summarizeToolInput,
   summarizeToolRun,
@@ -83,7 +85,7 @@ function ToolLine({
   pair: ToolPair
   defaultExpanded: boolean
   diffLineLimit: number
-  onOpenFile?: (relativePath: string) => void
+  onOpenFile?: (target: MobileFileTapTarget) => void
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const { call, result } = pair
@@ -99,31 +101,41 @@ function ToolLine({
   // A tool that targets a file (Read/Edit/Write…) renders its preview as a
   // tappable link that opens the file, independent of the line's expand tap.
   const filePath = call ? toolFilePath(call.input) : null
-  const openable = filePath !== null && onOpenFile !== undefined
+  const fileTarget = filePath ? parseMobileFileTapTarget(filePath) : null
+  const openable = fileTarget !== null && onOpenFile !== undefined
   return (
     <View>
-      <Pressable
-        style={styles.toolLine}
-        onPress={() => hasDetail && setExpanded((v) => !v)}
-        hitSlop={6}
-      >
-        {expanded ? (
-          <ChevronDown size={15} color={colors.textMuted} strokeWidth={2} />
-        ) : (
-          <SquareChevronRight size={15} color={colors.textMuted} strokeWidth={2} />
-        )}
-        <Text style={styles.toolName}>{name}</Text>
-        {preview ? (
-          <Text
-            style={[styles.toolPreview, openable && styles.toolPreviewLink]}
-            numberOfLines={1}
-            onPress={openable ? () => onOpenFile!(filePath!) : undefined}
-            suppressHighlighting={!openable}
+      <View style={styles.toolLine}>
+        <Pressable
+          style={styles.toolLineToggle}
+          onPress={() => hasDetail && setExpanded((v) => !v)}
+          hitSlop={6}
+        >
+          {expanded ? (
+            <ChevronDown size={15} color={colors.textMuted} strokeWidth={2} />
+          ) : (
+            <SquareChevronRight size={15} color={colors.textMuted} strokeWidth={2} />
+          )}
+          <Text style={styles.toolName}>{name}</Text>
+          {preview && !openable ? (
+            <Text style={styles.toolPreview} numberOfLines={1}>
+              {preview}
+            </Text>
+          ) : null}
+        </Pressable>
+        {preview && openable ? (
+          <Pressable
+            style={styles.toolPreviewButton}
+            onPress={() => onOpenFile(fileTarget)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open file ${fileTarget.pathText}`}
           >
-            {preview}
-          </Text>
+            <Text style={[styles.toolPreview, styles.toolPreviewLink]} numberOfLines={1}>
+              {preview}
+            </Text>
+          </Pressable>
         ) : null}
-      </Pressable>
+      </View>
       {expanded ? (
         <View style={styles.toolDetail}>
           {callDiff ? <DiffView lines={callDiff} /> : null}
@@ -146,14 +158,18 @@ function Prose({
   block: NativeChatBlock
   invert?: boolean
   fontScale: number
-  onOpenFile?: (relativePath: string) => void
+  onOpenFile?: (target: MobileFileTapTarget) => void
 }): React.JSX.Element | null {
   if (isTextBlock(block)) {
     // Inverted (user) bubbles use a fixed dark-on-light text rather than the
     // markdown renderer's light-on-dark palette.
     if (invert) {
       return (
-        <Text style={[styles.userText, { fontSize: TEXT_SIZE * fontScale }]}>{block.text}</Text>
+        <MobileNativeChatUserProse
+          text={block.text}
+          fontScale={fontScale}
+          onOpenFile={onOpenFile}
+        />
       )
     }
     return (
@@ -195,7 +211,7 @@ function ToolRun({
   blocks: NativeChatBlock[]
   defaultExpanded: boolean
   trailing?: React.ReactNode
-  onOpenFile?: (relativePath: string) => void
+  onOpenFile?: (target: MobileFileTapTarget) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(defaultExpanded)
   const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
@@ -295,7 +311,7 @@ function MobileNativeChatMessageImpl({
   messageIndex?: number
   /** Ask the list to align this message's top to the top of the viewport. */
   onScrollToMessage?: (index: number) => void
-  onOpenFile?: (relativePath: string) => void
+  onOpenFile?: (target: MobileFileTapTarget) => void
 }): React.JSX.Element {
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'

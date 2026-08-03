@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useLayoutEffect,
   useRef,
   type Dispatch,
   type MutableRefObject,
@@ -32,6 +33,9 @@ import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
+import type { MobileFilePreviewHref } from '../files/mobile-file-preview-route'
+import type { MobileFileTapTarget } from '../files/mobile-file-tap-target'
+import { triggerError, triggerSelection } from '../platform/haptics'
 
 const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
 
@@ -52,7 +56,7 @@ export type MobileNativeChatController = {
   nativeChatPermission: ReturnType<typeof detectAgentPermission>
   nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
   nativeChatAsk: ReturnType<typeof parseAskFromStatus>
-  handleNativeChatOpenFile: (relativePath: string) => void
+  handleNativeChatOpenFile: (target: MobileFileTapTarget) => void
   handleNativeChatAnswerAsk: (
     prompt: AskPrompt,
     selections: AskAnswerSelection[]
@@ -84,6 +88,7 @@ export function useMobileNativeChatController(args: {
   client: RpcClient | null
   hostId: string
   worktreeId: string
+  worktreeName?: string
   activeSessionTab: MobileNativeChatTab | null
   activeSessionTabId: string | null
   activeHandleRef: MutableRefObject<string | null>
@@ -92,6 +97,8 @@ export function useMobileNativeChatController(args: {
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
+  pushFilePreview: (href: MobileFilePreviewHref) => void
+  onOpenFileError: (message: string) => void
   onSendError: (message: string) => void
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */
@@ -101,6 +108,7 @@ export function useMobileNativeChatController(args: {
     client,
     hostId,
     worktreeId,
+    worktreeName,
     activeSessionTab,
     activeSessionTabId,
     activeHandleRef,
@@ -108,6 +116,8 @@ export function useMobileNativeChatController(args: {
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
+    pushFilePreview,
+    onOpenFileError,
     onSendError,
     onSendResolved
   } = args
@@ -175,20 +185,43 @@ export function useMobileNativeChatController(args: {
     status: nativeChatStatus,
     messages: nativeChatSession.messages
   })
-
+  const fileOpenSeqRef = useRef(0)
+  const pushFilePreviewRef = useRef(pushFilePreview)
+  useLayoutEffect(() => {
+    pushFilePreviewRef.current = pushFilePreview
+  }, [pushFilePreview])
+  useLayoutEffect(() => {
+    fileOpenSeqRef.current += 1
+    return () => {
+      fileOpenSeqRef.current += 1
+    }
+  }, [activeSessionTabId, client, hostId, showNativeChat, worktreeId])
   const handleNativeChatOpenFile = useCallback(
-    (pathText: string) => {
+    (target: MobileFileTapTarget) => {
+      const requestSeq = ++fileOpenSeqRef.current
       if (!client) {
+        triggerError()
+        onOpenFileError('Unable to open file')
         return
       }
+      triggerSelection()
       void openMobileNativeChatFile({
         client,
+        hostId,
         worktreeId,
-        pathText,
-        terminal: activeHandleRef.current
+        worktreeName,
+        target,
+        terminal: activeHandleRef.current,
+        pushPreviewRoute: (href) => pushFilePreviewRef.current(href),
+        isCurrent: () => fileOpenSeqRef.current === requestSeq
+      }).then((opened) => {
+        if (!opened && fileOpenSeqRef.current === requestSeq) {
+          triggerError()
+          onOpenFileError('Unable to open file')
+        }
       })
     },
-    [activeHandleRef, client, worktreeId]
+    [activeHandleRef, client, hostId, onOpenFileError, worktreeId, worktreeName]
   )
 
   // Every chat write gates on both: the lease proves the input floor is ours, and

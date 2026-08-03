@@ -8,6 +8,46 @@ import {
   isGitHubUserAttachmentVideoLink
 } from './comment-markdown-github-attachment-media'
 import { ExpandableMarkdownImage } from './MarkdownImageLightbox'
+import {
+  FencedCodeBoundary,
+  FilePathCodeSpan,
+  LinkedCodeBoundary,
+  readCodeSpanText,
+  useIsFencedCode,
+  useIsLinkedCode,
+  type CommentMarkdownFilePathSpans
+} from './comment-markdown-file-path-code-span'
+
+export type { CommentMarkdownFilePathSpans } from './comment-markdown-file-path-code-span'
+
+const DOCUMENT_INLINE_CODE_CLASS =
+  'rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]'
+
+// Split out so the `code` renderer can use hooks — react-markdown component
+// slots are plain functions, not components, so a hook cannot live inline.
+function DocumentInlineCode({
+  children,
+  spans
+}: {
+  children: React.ReactNode
+  spans: CommentMarkdownFilePathSpans | undefined
+}): React.ReactElement {
+  const isFenced = useIsFencedCode()
+  const isLinked = useIsLinkedCode()
+  const text = spans && !isFenced && !isLinked ? readCodeSpanText(children) : null
+  if (spans && text !== null && spans.isFilePath(text)) {
+    return (
+      <FilePathCodeSpan
+        pathText={text.trim()}
+        codeClassName={DOCUMENT_INLINE_CODE_CLASS}
+        spans={spans}
+      >
+        {children}
+      </FilePathCodeSpan>
+    )
+  }
+  return <code className={DOCUMENT_INLINE_CODE_CLASS}>{children}</code>
+}
 
 export type CommentMarkdownLinkClickHandler = (
   event: React.MouseEvent<HTMLElement>,
@@ -205,16 +245,38 @@ export function createCompactCommentMarkdownComponents(
 }
 
 export function createDocumentCommentMarkdownComponents(
-  onLinkClick?: CommentMarkdownLinkClickHandler
+  onLinkClick?: CommentMarkdownLinkClickHandler,
+  filePathSpans?: CommentMarkdownFilePathSpans
 ): Components {
   return {
     p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
-    a: ({ href, children }) =>
-      isGitHubUserAttachmentVideoLink(href, children) ? (
+    a: ({ href, children }) => {
+      if (isGitHubUserAttachmentVideoLink(href, children)) {
         // Why: GitHub's API returns uploaded videos as bare attachment links;
         // GitHub.com upgrades them to media embeds in its own renderer.
-        <GitHubUserAttachmentVideo href={href}>{children}</GitHubUserAttachmentVideo>
-      ) : (
+        return <GitHubUserAttachmentVideo href={href}>{children}</GitHubUserAttachmentVideo>
+      }
+      // A file-path href — whether authored as a markdown link or minted by
+      // remarkFilePathLinks — must always claim the click. Letting it fall
+      // through would navigate the anchor to a non-URL target.
+      if (filePathSpans && href && filePathSpans.isFilePath(href)) {
+        return (
+          <a
+            href={href}
+            // No underline: file paths read as a different destination from the
+            // web links sharing this accent.
+            className="break-all font-mono text-[0.95em] text-primary hover:text-primary/80"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              filePathSpans.onOpen(event, href)
+            }}
+          >
+            <LinkedCodeBoundary>{children}</LinkedCodeBoundary>
+          </a>
+        )
+      }
+      return (
         <a
           href={href || undefined}
           target="_blank"
@@ -222,9 +284,10 @@ export function createDocumentCommentMarkdownComponents(
           className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
           onClick={(e) => handleMarkdownAnchorClick(e, href, onLinkClick)}
         >
-          {children}
+          <LinkedCodeBoundary>{children}</LinkedCodeBoundary>
         </a>
-      ),
+      )
+    },
     code: ({ className, children }) =>
       isMermaidFence(className) ? (
         renderMermaidFence(
@@ -232,18 +295,18 @@ export function createDocumentCommentMarkdownComponents(
           'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
         )
       ) : (
-        <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
-          {children}
-        </code>
+        <DocumentInlineCode spans={filePathSpans}>{children}</DocumentInlineCode>
       ),
     // Mermaid fences render a <div>, which is invalid inside <pre>, so unwrap them.
     pre: ({ children }) =>
       isMermaidPre(children) ? (
         <>{children}</>
       ) : (
-        <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
-          {children}
-        </pre>
+        <FencedCodeBoundary>
+          <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
+            {children}
+          </pre>
+        </FencedCodeBoundary>
       ),
     ul: ({ children }) => <ul className="my-2 ml-5 list-disc space-y-1">{children}</ul>,
     ol: ({ children }) => <ol className="my-2 ml-5 list-decimal space-y-1">{children}</ol>,

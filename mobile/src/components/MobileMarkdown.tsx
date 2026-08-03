@@ -2,11 +2,12 @@ import { Fragment, memo, useMemo, type ReactNode } from 'react'
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { styles } from './mobile-markdown-styles'
+import { detectFilePathSegments, isFilePathCodeSpan } from './markdown-file-path-detection'
 import {
-  detectFilePathSegments,
-  isFilePathCodeSpan,
-  normalizeFilePath
-} from './markdown-file-path-detection'
+  normalizeMobileMarkdownDestination,
+  parseMobileMarkdownFileTarget
+} from '../files/mobile-markdown-file-target'
+import type { MobileFileTapTarget } from '../files/mobile-file-tap-target'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 
 type Props = {
@@ -15,10 +16,8 @@ type Props = {
   /** Multiplier for prose font size (paragraphs, lists, quotes). Defaults to 1;
    *  the chat view passes >1 so agent prose reads larger than the compact base. */
   textScale?: number
-  /** When provided, detected file-path tokens render as tappable and invoke this
-   *  with the worktree-relative path. Omitted on screens with no file viewer, where
-   *  paths render as plain text (no behavior change). */
-  onOpenFile?: (relativePath: string) => void
+  /** Makes detected host paths tappable with optional source positions. */
+  onOpenFile?: (target: MobileFileTapTarget) => void
 }
 
 const MAX_TABLE_ROWS = 40
@@ -36,7 +35,7 @@ function openMarkdownUrl(url: string): void {
 function renderTextRun(
   text: string,
   keyPrefix: string,
-  onOpenFile?: (relativePath: string) => void
+  onOpenFile?: (target: MobileFileTapTarget) => void
 ): ReactNode {
   if (!onOpenFile) {
     return text
@@ -51,7 +50,9 @@ function renderTextRun(
         <Text
           key={`${keyPrefix}:${segmentIndex}`}
           style={styles.link}
-          onPress={() => onOpenFile(segment.path)}
+          onPress={() => onOpenFile(segment.target)}
+          accessibilityRole="link"
+          accessibilityLabel={`Open file ${segment.target.pathText}`}
         >
           {segment.value}
         </Text>
@@ -61,10 +62,29 @@ function renderTextRun(
   })
 }
 
-function renderInline(text: string, onOpenFile?: (relativePath: string) => void): ReactNode[] {
+function inlineMarkdownLink(token: string): { label: string; href: string; image: boolean } | null {
+  const image = token.startsWith('![')
+  const labelStart = image ? 2 : 1
+  const destinationStart = token.indexOf('](')
+  if (destinationStart < labelStart || !token.endsWith(')')) {
+    return null
+  }
+  return {
+    label: token.slice(labelStart, destinationStart),
+    href:
+      normalizeMobileMarkdownDestination(token.slice(destinationStart + 2, -1)) ??
+      token.slice(destinationStart + 2, -1),
+    image
+  }
+}
+
+function renderInline(
+  text: string,
+  onOpenFile?: (target: MobileFileTapTarget) => void
+): ReactNode[] {
   const parts: ReactNode[] = []
   const pattern =
-    /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
+    /(!?\[[^\]]*\]\((?:[^()]|\([^()]*\))+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|(?<![\\/\w.@~+()[\]-])__[^_\n]+__(?![\\/\w.@~+()[\]-])|\*[^*\n]+\*|(?<![\\/\w.@~+()[\]-])_[^_\n]+_(?![\\/\w.@~+()[\]-])|https?:\/\/[^\s<]+)/g
   let lastIndex = 0
   let match: RegExpExecArray | null
 
@@ -74,18 +94,27 @@ function renderInline(text: string, onOpenFile?: (relativePath: string) => void)
     }
     const token = match[0]
     const key = `${match.index}:${token}`
-    const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
-    const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
-    if (image) {
+    const link = inlineMarkdownLink(token)
+    const linkFileTarget =
+      link && !link.image && onOpenFile ? parseMobileMarkdownFileTarget(link.href) : null
+    if (link?.image) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownUrl(image[2]!)}>
-          {image[1] || 'image'}
+        <Text key={key} style={styles.link} onPress={() => openMarkdownUrl(link.href)}>
+          {link.label || 'image'}
         </Text>
       )
     } else if (link) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownUrl(link[2]!)}>
-          {link[1]}
+        <Text
+          key={key}
+          style={styles.link}
+          onPress={() =>
+            linkFileTarget ? onOpenFile!(linkFileTarget) : openMarkdownUrl(link.href)
+          }
+          accessibilityRole="link"
+          accessibilityLabel={linkFileTarget ? `Open file ${linkFileTarget.pathText}` : undefined}
+        >
+          {link.label}
         </Text>
       )
     } else if (/^https?:\/\//i.test(token)) {
@@ -96,12 +125,16 @@ function renderInline(text: string, onOpenFile?: (relativePath: string) => void)
       )
     } else if (token.startsWith('`')) {
       const code = token.slice(1, -1)
-      if (onOpenFile && isFilePathCodeSpan(code)) {
+      const codeFileTarget =
+        onOpenFile && isFilePathCodeSpan(code) ? parseMobileMarkdownFileTarget(code) : null
+      if (onOpenFile && codeFileTarget) {
         parts.push(
           <Text
             key={key}
             style={[styles.inlineCode, styles.inlineCodeLink]}
-            onPress={() => onOpenFile(normalizeFilePath(code.trim()))}
+            onPress={() => onOpenFile(codeFileTarget)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open file ${codeFileTarget.pathText}`}
           >
             {code}
           </Text>
@@ -116,19 +149,19 @@ function renderInline(text: string, onOpenFile?: (relativePath: string) => void)
     } else if (token.startsWith('~~')) {
       parts.push(
         <Text key={key} style={styles.strike}>
-          {token.slice(2, -2)}
+          {renderTextRun(token.slice(2, -2), `${key}:strike`, onOpenFile)}
         </Text>
       )
     } else if (token.startsWith('**') || token.startsWith('__')) {
       parts.push(
         <Text key={key} style={styles.bold}>
-          {token.slice(2, -2)}
+          {renderTextRun(token.slice(2, -2), `${key}:bold`, onOpenFile)}
         </Text>
       )
     } else {
       parts.push(
         <Text key={key} style={styles.italic}>
-          {token.slice(1, -1)}
+          {renderTextRun(token.slice(1, -1), `${key}:italic`, onOpenFile)}
         </Text>
       )
     }

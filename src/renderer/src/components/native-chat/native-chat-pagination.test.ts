@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canGrowNativeChatWindow,
   hasMoreNativeChatHistory,
   NATIVE_CHAT_INITIAL_LIMIT,
+  NATIVE_CHAT_MAX_LIMIT,
   NATIVE_CHAT_PAGE,
   nextNativeChatLimit
 } from './native-chat-pagination'
@@ -14,6 +16,13 @@ describe('nextNativeChatLimit', () => {
     expect(nextNativeChatLimit(NATIVE_CHAT_INITIAL_LIMIT + NATIVE_CHAT_PAGE)).toBe(
       NATIVE_CHAT_INITIAL_LIMIT + 2 * NATIVE_CHAT_PAGE
     )
+  })
+
+  it('stops growing at the transcript window ceiling', () => {
+    expect(nextNativeChatLimit(NATIVE_CHAT_MAX_LIMIT - 100)).toBe(NATIVE_CHAT_MAX_LIMIT)
+    expect(nextNativeChatLimit(NATIVE_CHAT_MAX_LIMIT)).toBe(NATIVE_CHAT_MAX_LIMIT)
+    expect(canGrowNativeChatWindow(NATIVE_CHAT_MAX_LIMIT - 1)).toBe(true)
+    expect(canGrowNativeChatWindow(NATIVE_CHAT_MAX_LIMIT)).toBe(false)
   })
 })
 

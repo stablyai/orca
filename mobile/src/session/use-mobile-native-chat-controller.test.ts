@@ -9,6 +9,10 @@ const captureSendOrigin = vi.fn()
 const clearDraftForSend = vi.fn()
 const restoreRejectedDraft = vi.fn()
 const holdUnconfirmedSend = vi.fn()
+const haptics = vi.hoisted(() => ({
+  triggerError: vi.fn(),
+  triggerSelection: vi.fn()
+}))
 
 // Mutable stand-ins so the launch-draft wiring below can drive chat resolution
 // and transcript state; defaults keep the send-seam tests unchanged.
@@ -59,6 +63,7 @@ vi.mock('./use-mobile-native-chat-stop', () => ({
 vi.mock('./use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
+vi.mock('../platform/haptics', () => haptics)
 // Partial: the stale-input heal reaches the real transport through image-send,
 // which must read the REAL timeout constant, not a copy that can silently drift.
 vi.mock('./mobile-native-chat-send', async (importOriginal) => ({
@@ -92,22 +97,33 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   let controller: MobileNativeChatController | null = null
   const onSendError = vi.fn()
   const onSendResolved = vi.fn()
+  const onOpenFile = vi.fn()
+  const onOpenFileError = vi.fn()
   // Only the stale-input heal reaches the transport directly (the message send
   // itself is mocked above).
   const clientStub = { sendRequest: vi.fn() }
 
-  function Harness({ connState = 'connected' }: { connState?: ConnectionState }): null {
+  function Harness({
+    connState = 'connected',
+    worktreeId = 'w'
+  }: {
+    connState?: ConnectionState
+    worktreeId?: string
+  }): null {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState,
       hostId: 'h',
-      worktreeId: 'w',
+      worktreeId,
+      worktreeName: 'Project',
       activeSessionTab: null,
       activeSessionTabId: 'tab-1',
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
       nativeChatInputLeaseReady: true,
+      pushFilePreview: onOpenFile,
+      onOpenFileError,
       onSendError,
       onSendResolved
     })
@@ -138,6 +154,170 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     act(() => renderer?.unmount())
     renderer = null
     controller = null
+  })
+
+  it('opens resolved file taps in the mobile preview route', async () => {
+    clientStub.sendRequest.mockResolvedValue({
+      ok: true,
+      result: {
+        exists: true,
+        isDirectory: false,
+        openTarget: { kind: 'worktree-file', relativePath: 'docs/STYLEGUIDE.md' }
+      }
+    })
+
+    controller!.handleNativeChatOpenFile({
+      pathText: 'docs/STYLEGUIDE.md',
+      line: 14,
+      column: 2
+    })
+    await vi.waitFor(() => expect(onOpenFile).toHaveBeenCalledOnce())
+
+    expect(onOpenFile).toHaveBeenCalledWith({
+      pathname: '/h/[hostId]/files/preview/[worktreeId]',
+      params: {
+        hostId: 'h',
+        worktreeId: 'w',
+        worktreeName: 'Project',
+        source: 'worktree',
+        relativePath: 'docs/STYLEGUIDE.md',
+        name: 'STYLEGUIDE.md',
+        line: '14',
+        column: '2'
+      }
+    })
+  })
+
+  it('shows feedback when a detected path does not resolve', async () => {
+    clientStub.sendRequest.mockResolvedValue({
+      ok: true,
+      result: { exists: false, isDirectory: false }
+    })
+
+    controller!.handleNativeChatOpenFile({
+      pathText: 'docs/missing.md',
+      line: null,
+      column: null
+    })
+    await vi.waitFor(() => expect(onOpenFileError).toHaveBeenCalledOnce())
+
+    expect(onOpenFileError).toHaveBeenCalledWith('Unable to open file')
+    expect(onOpenFile).not.toHaveBeenCalled()
+  })
+
+  it('ignores an older file resolution that completes after the latest tap', async () => {
+    let resolveFirst!: (value: unknown) => void
+    let resolveSecond!: (value: unknown) => void
+    clientStub.sendRequest
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve
+          })
+      )
+
+    controller!.handleNativeChatOpenFile({
+      pathText: 'src/first.ts',
+      line: null,
+      column: null
+    })
+    controller!.handleNativeChatOpenFile({
+      pathText: 'src/second.ts',
+      line: null,
+      column: null
+    })
+    resolveSecond({
+      ok: true,
+      result: {
+        exists: true,
+        isDirectory: false,
+        openTarget: { kind: 'worktree-file', relativePath: 'src/second.ts' }
+      }
+    })
+    await vi.waitFor(() => expect(onOpenFile).toHaveBeenCalledOnce())
+    resolveFirst({
+      ok: true,
+      result: {
+        exists: true,
+        isDirectory: false,
+        openTarget: { kind: 'worktree-file', relativePath: 'src/first.ts' }
+      }
+    })
+    await vi.waitFor(() => expect(clientStub.sendRequest).toHaveBeenCalledTimes(2))
+
+    expect(onOpenFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ relativePath: 'src/second.ts' })
+      })
+    )
+    expect(onOpenFileError).not.toHaveBeenCalled()
+  })
+
+  it('invalidates a pending file open when the chat scope changes', async () => {
+    let resolveRequest!: (value: unknown) => void
+    clientStub.sendRequest.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve
+        })
+    )
+    controller!.handleNativeChatOpenFile({
+      pathText: 'src/old.ts',
+      line: null,
+      column: null
+    })
+
+    act(() => renderer!.update(createElement(Harness, { worktreeId: 'new-worktree' })))
+    resolveRequest({
+      ok: true,
+      result: {
+        exists: true,
+        isDirectory: false,
+        openTarget: { kind: 'worktree-file', relativePath: 'src/old.ts' }
+      }
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onOpenFile).not.toHaveBeenCalled()
+    expect(onOpenFileError).not.toHaveBeenCalled()
+  })
+
+  it('invalidates a pending file open on unmount', async () => {
+    let resolveRequest!: (value: unknown) => void
+    clientStub.sendRequest.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve
+        })
+    )
+    controller!.handleNativeChatOpenFile({
+      pathText: 'src/old.ts',
+      line: null,
+      column: null
+    })
+
+    act(() => renderer!.unmount())
+    renderer = null
+    resolveRequest({
+      ok: true,
+      result: {
+        exists: true,
+        isDirectory: false,
+        openTarget: { kind: 'worktree-file', relativePath: 'src/old.ts' }
+      }
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onOpenFile).not.toHaveBeenCalled()
+    expect(onOpenFileError).not.toHaveBeenCalled()
   })
 
   it('clears an orphaned image paste before a question-card answer (#10228)', async () => {
@@ -339,12 +519,15 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
       connState: 'connected',
       hostId: 'h',
       worktreeId: 'w',
+      worktreeName: 'Project',
       activeSessionTab: tab as never,
       activeSessionTabId: 'tab-1',
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
       nativeChatInputLeaseReady: true,
+      pushFilePreview: vi.fn(),
+      onOpenFileError: vi.fn(),
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
     })

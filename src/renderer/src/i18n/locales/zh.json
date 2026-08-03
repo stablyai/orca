@@ -14417,7 +14417,8 @@
       },
       "tool": {
         "running": "正在运行…",
-        "result": "结果"
+        "result": "结果",
+        "showAllLines": "Show all lines"
       },
       "status": {
         "responding": "智能体正在回复"
@@ -14469,7 +14470,9 @@
         "allow": "允许",
         "deny": "拒绝"
       },
-      "launchPromptNotDelivered": "未送达 — 请检查终端"
+      "launchPromptNotDelivered": "未送达 — 请检查终端",
+      "fileLinkUnresolved": "Could not resolve that file path",
+      "fileLinkOutsideWorktree": "That file is outside the workspace"
     },
     "tab": {
       "bar": {

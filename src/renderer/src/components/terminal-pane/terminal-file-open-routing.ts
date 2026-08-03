@@ -18,6 +18,8 @@ type TerminalFileOpenDeps = {
   worktreePath: string
   runtimeEnvironmentId?: string | null
   openWithSystemDefault?: boolean
+  allowExternalPaths?: boolean
+  openHtmlInBrowser?: boolean
 }
 
 export function isHtmlFilePath(filePath: string): boolean {
@@ -100,7 +102,14 @@ export function openDetectedFilePath(
   column: number | null,
   deps: TerminalFileOpenDeps
 ): void {
-  const { openWithSystemDefault = false, runtimeEnvironmentId, worktreeId, worktreePath } = deps
+  const {
+    allowExternalPaths = true,
+    openHtmlInBrowser = true,
+    openWithSystemDefault = false,
+    runtimeEnvironmentId,
+    worktreeId,
+    worktreePath
+  } = deps
   const mappedFilePath = mapTerminalFilePath(filePath, worktreePath)
   const requestId = ++latestOpenDetectedFilePathRequestId
   cancelPendingEditorRevealFrames()
@@ -129,7 +138,7 @@ export function openDetectedFilePath(
 
     try {
       // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
-      if (canOpenWithSystemDefault) {
+      if (canOpenWithSystemDefault && allowExternalPaths) {
         await window.api.fs.authorizeExternalPath({ targetPath: mappedFilePath })
       }
       statResult = await statRuntimePath(fileContext, mappedFilePath)
@@ -160,6 +169,7 @@ export function openDetectedFilePath(
     // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
     // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
     if (
+      openHtmlInBrowser &&
       isHtmlFilePath(mappedFilePath) &&
       shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)
     ) {

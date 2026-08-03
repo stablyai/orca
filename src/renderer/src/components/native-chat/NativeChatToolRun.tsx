@@ -1,22 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import {
-  isToolCallBlock,
-  isToolResultBlock,
-  type NativeChatBlock
-} from '../../../../shared/native-chat-types'
-import { diffFromText, diffFromToolCall, type DiffLine } from './native-chat-diff'
-import {
-  countToolCalls,
-  formatToolInput,
-  summarizeToolInput,
-  summarizeToolRun
-} from './native-chat-tool-summary'
+import type { NativeChatBlock } from '../../../../shared/native-chat-types'
+import { countToolCalls, summarizeToolRun } from './native-chat-tool-summary'
+import { deriveToolLine } from './native-chat-tool-line'
 import { NativeChatDiffView } from './NativeChatDiffView'
 
-const MAX_TOOL_RESULT_CHARS = 4000
+const MAX_VISIBLE_TOOL_LINES = 24
 
 /** A single inline tool line — `▸ ToolName  preview` — that expands in place to
  *  show the call's diff/input or the result's body. Tool calls read as flat
@@ -25,32 +16,12 @@ const MAX_TOOL_RESULT_CHARS = 4000
  *  reveals every line at once) and is then individually collapsible. */
 function ToolLine({ block }: { block: NativeChatBlock }): React.JSX.Element | null {
   const [expanded, setExpanded] = useState(true)
+  const model = useMemo(() => deriveToolLine(block), [block])
 
-  let name: string
-  let preview: string
-  let diff: DiffLine[] | null = null
-  let body: { output: string; isError?: boolean } | null = null
-  // Full, formatted input shown when a diff-less tool call is expanded.
-  let detail: string | null = null
-
-  if (isToolCallBlock(block)) {
-    name = block.name
-    preview = summarizeToolInput(block.input)
-    diff = diffFromToolCall(block.name, block.input)
-    detail = diff ? null : formatToolInput(block.input)
-  } else if (isToolResultBlock(block)) {
-    name = translate('components.native-chat.tool.result', 'Result')
-    preview = block.output.split('\n')[0]?.slice(0, 80) ?? ''
-    diff = diffFromText(block.output)
-    body = { output: block.output, isError: block.isError }
-  } else {
+  if (!model) {
     return null
   }
-
-  // Only offer expansion when there's more than the inline preview already shows —
-  // avoids re-rendering the same truncated string in a box below it.
-  const detailAddsInfo = detail !== null && detail.replace(/\s+/g, ' ').trim() !== preview
-  const hasDetail = diff !== null || body !== null || detailAddsInfo
+  const { name, preview, diff, body, detail, hasDetail } = model
 
   return (
     <div>
@@ -94,16 +65,12 @@ function ToolLine({ block }: { block: NativeChatBlock }): React.JSX.Element | nu
                 body.isError ? 'text-destructive' : 'text-foreground/80'
               )}
             >
-              {body.output.length > MAX_TOOL_RESULT_CHARS
-                ? `${body.output.slice(0, MAX_TOOL_RESULT_CHARS)}…`
-                : body.output}
+              {body.output}
             </pre>
           ) : null}
           {!diff && !body && detail ? (
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] text-foreground/80 scrollbar-sleek">
-              {detail.length > MAX_TOOL_RESULT_CHARS
-                ? `${detail.slice(0, MAX_TOOL_RESULT_CHARS)}…`
-                : detail}
+              {detail}
             </pre>
           ) : null}
         </div>
@@ -124,8 +91,18 @@ export function NativeChatToolRun({
   expandSignal: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(expandSignal)
+  // A long run mounts every line at once, and each line carries a diff or a
+  // formatted input — so cap the initial reveal and let the user ask for the
+  // rest. Mobile caps the equivalent at MAX_VISIBLE_TOOL_PAIRS.
+  const [showAll, setShowAll] = useState(false)
   // Re-sync when the global toolbar toggle flips.
   useEffect(() => setOpen(expandSignal), [expandSignal])
+
+  const visibleBlocks =
+    showAll || blocks.length <= MAX_VISIBLE_TOOL_LINES
+      ? blocks
+      : blocks.slice(0, MAX_VISIBLE_TOOL_LINES)
+  const hiddenCount = blocks.length - visibleBlocks.length
 
   const callCount = countToolCalls(blocks) || blocks.length
   const summary = summarizeToolRun(blocks)
@@ -162,9 +139,18 @@ export function NativeChatToolRun({
       </button>
       {open ? (
         <div className="mt-1">
-          {blocks.map((block, i) => (
+          {visibleBlocks.map((block, i) => (
             <ToolLine key={i} block={block} />
           ))}
+          {hiddenCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground/80"
+            >
+              {translate('components.native-chat.tool.showAllLines', 'Show all lines')}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

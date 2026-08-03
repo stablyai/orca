@@ -207,6 +207,17 @@ describe('terminal path helpers', () => {
       })
     })
 
+    it('detects framework route paths beginning with a route segment', () => {
+      expect(extractTerminalFileLinks('(shop)/page.tsx')[0]).toMatchObject({
+        pathText: '(shop)/page.tsx',
+        displayText: '(shop)/page.tsx'
+      })
+      expect(extractTerminalFileLinks('[id]/page.tsx')[0]).toMatchObject({
+        pathText: '[id]/page.tsx',
+        displayText: '[id]/page.tsx'
+      })
+    })
+
     it('handles large spaced path lists without quadratic overlap scans', () => {
       const line = Array.from({ length: 20_000 }, () => '/tmp/Foo Bar/file').join(', ')
 

@@ -1903,6 +1903,36 @@ describe('RuntimeFileCommands', () => {
       expect(result).toMatchObject({ relativePath: 'src/missing.ts', exists: false })
     })
 
+    it('rejects a local symlink target outside the selected worktree', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      statAsFile()
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) =>
+        p === '/repo/src/link.ts' ? '/other-repo/secret.ts' : p
+      )
+
+      const result = await commands.resolveTerminalPath('id:wt-1', 'src/link.ts')
+
+      expect(result).toMatchObject({ relativePath: null, exists: false })
+      expect(result.openTarget).toBeUndefined()
+      expect(statMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects an SSH symlink target outside the selected worktree', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const stat = vi.fn()
+      const realpath = vi.fn(async (p: string) =>
+        p === '/repo/src/link.ts' ? '/home/me/.ssh/id_rsa' : p
+      )
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ realpath, stat } as never)
+
+      const result = await commands.resolveTerminalPath('id:wt-1', 'src/link.ts')
+
+      expect(result).toMatchObject({ relativePath: null, exists: false })
+      expect(result.openTarget).toBeUndefined()
+      expect(stat).not.toHaveBeenCalled()
+    })
+
     it('does not expand ~/ on a remote worktree (home is unknown)', async () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
@@ -1919,7 +1949,8 @@ describe('RuntimeFileCommands', () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
       const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat } as never)
+      const realpath = vi.fn(async (p: string) => p)
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ realpath, stat } as never)
 
       const result = await commands.resolveTerminalPath('id:wt-1', 'src/missing.ts')
 
@@ -1930,7 +1961,8 @@ describe('RuntimeFileCommands', () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
       const stat = vi.fn().mockRejectedValue(new Error('Remote connection dropped'))
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat } as never)
+      const realpath = vi.fn(async (p: string) => p)
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ realpath, stat } as never)
 
       await expect(commands.resolveTerminalPath('id:wt-1', 'src/x.ts')).rejects.toThrow(
         'Remote connection dropped'
