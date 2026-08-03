@@ -22745,7 +22745,9 @@ export class OrcaRuntimeService {
       this.notificationDispatch?.({
         source: 'needs-attention',
         worktreeId: worktree.id,
-        worktreeLabel: worktree.displayName,
+        // Why: `worktree` was resolved before this call's own displayName update (if any)
+        // was persisted, so prefer the just-set value to avoid notifying with a stale name.
+        worktreeLabel: persistedMetaUpdates.displayName ?? worktree.displayName,
         repoLabel: this.store.getRepo(worktree.repoId)?.displayName,
         needsAttentionReason: metaUpdates.needsAttention,
         notificationId: `needs-attention:${worktree.id}`

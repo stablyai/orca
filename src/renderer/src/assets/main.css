@@ -175,7 +175,9 @@
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
-  --status-warning: #f59e0b;
+  /* Why: amber-500 (#f59e0b) is ~2.2:1 against light backgrounds, under the 3:1 WCAG
+     non-text-contrast floor for UI icons; amber-700 clears ~5:1 while staying amber. */
+  --status-warning: #b45309;
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   --chart-1: var(--color-blue-300);
@@ -281,7 +283,8 @@
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
-  --status-warning: #f59e0b;
+  /* Why: lighter amber for contrast against dark backgrounds, mirroring --status-success's split. */
+  --status-warning: #fcd34d;
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   --chart-1: var(--color-blue-300);

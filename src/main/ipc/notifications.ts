@@ -64,6 +64,11 @@ const activeNotificationsById = new Map<
   string,
   { notification: Notification; release: () => void }
 >()
+// Why: module-level (not local to registerNotificationHandlers) so dispatchNotification's
+// direct-call path (see setNotificationDispatch in register-core-handlers.ts) shares cooldown
+// state with the ipcMain.handle path. registerNotificationHandlers clears both below on every
+// call, restoring "fresh per session" semantics — callers must wire setNotificationDispatch
+// after registerNotificationHandlers so a direct dispatch never sees stale pre-session state.
 const recentDesktopNotifications = new Map<string, number>()
 const recentMobileNotifications = new Map<string, number>()
 
@@ -308,6 +313,15 @@ function reserveNotificationCooldown(
   return true
 }
 
+// Why: agent-task-complete and terminal-bell intentionally share one cooldown bucket per
+// worktree (they often co-fire and only the first should surface), but needs-attention is a
+// fully independent external-tool signal — sharing that bucket let a just-fired agent
+// notification silently swallow a distinct needs-attention notification for 5s afterward.
+function getNotificationDedupeKey(args: NotificationDispatchRequest): string {
+  const worktreeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
+  return args.source === 'needs-attention' ? `needs-attention:${worktreeKey}` : worktreeKey
+}
+
 /**
  * Core native-notification dispatch: settings gates, cooldown/dedupe, mobile fan-out, and
  * the actual Electron Notification. Exported (not just wired as an ipcMain handler) so
@@ -348,7 +362,7 @@ export function dispatchNotification(
 
   // Why: desktop focus only means this computer sees the worktree; the paired phone may still need the alert.
   if (runtime && args.source !== 'test') {
-    const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
+    const dedupeKey = getNotificationDedupeKey(args)
     if (reserveNotificationCooldown(recentMobileNotifications, dedupeKey, Date.now())) {
       runtime.dispatchMobileNotification({
         type: 'notification',
@@ -374,8 +388,9 @@ export function dispatchNotification(
 
   // Why: the Settings test button is an explicit, often-repeated user action, so it bypasses burst dedupe.
   if (args.source !== 'test') {
-    // Dedupe by worktree, not source — agent-finish and terminal-bell often fire in one chunk; surface only the first.
-    const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
+    // Dedupe by worktree, not source — agent-finish and terminal-bell often fire in one chunk; surface only
+    // the first. needs-attention gets its own bucket (see getNotificationDedupeKey) since it's independent.
+    const dedupeKey = getNotificationDedupeKey(args)
     if (!reserveNotificationCooldown(recentDesktopNotifications, dedupeKey, Date.now())) {
       return { delivered: false, reason: 'cooldown' }
     }

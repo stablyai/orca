@@ -36077,6 +36077,37 @@ describe('OrcaRuntimeService', () => {
     expect(notificationDispatch).toHaveBeenCalledTimes(2)
   })
 
+  it('uses the just-set displayName in the notification when both change in one call', async () => {
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({
+        instanceId: 'child-instance',
+        displayName: 'old-name'
+      })
+    }
+    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+      return metaById[worktreeId]
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const notificationDispatch = vi.fn()
+    runtime.setNotificationDispatch(notificationDispatch)
+
+    await runtime.updateManagedWorktreeMeta(`id:${TEST_WORKTREE_ID}`, {
+      displayName: 'new-name',
+      needsAttention: 'PR #996: 1 unresolved thread'
+    })
+
+    expect(notificationDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeLabel: 'new-name' })
+    )
+  })
+
   it('ignores stale instance-mismatched lineage when validating manual cycle repairs', async () => {
     const parentPath = '/tmp/worktree-a'
     const childPath = '/tmp/worktree-b'

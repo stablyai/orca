@@ -1222,6 +1222,64 @@ describe('registerNotificationHandlers', () => {
     expect(notificationShowMock).toHaveBeenCalledTimes(2)
   })
 
+  it('gives needs-attention its own cooldown bucket, independent of agent/terminal sources', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          needsAttention: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(await handler({}, { source: 'terminal-bell', worktreeId: 'repo::wt1' })).toEqual({
+      delivered: true
+    })
+    // A needs-attention notification for the same worktree, moments later, must not be
+    // swallowed by the terminal-bell's cooldown — it is an independent external signal.
+    expect(
+      await handler(
+        {},
+        {
+          source: 'needs-attention',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'wt1',
+          needsAttentionReason: 'PR #996: 1 unresolved thread'
+        }
+      )
+    ).toEqual({ delivered: true })
+    expect(notificationShowMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('still dedupes back-to-back needs-attention notifications for the same worktree', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          needsAttention: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    const request = {
+      source: 'needs-attention' as const,
+      worktreeId: 'repo::wt1',
+      worktreeLabel: 'wt1',
+      needsAttentionReason: 'PR #996: 1 unresolved thread'
+    }
+    expect(await handler({}, request)).toEqual({ delivered: true })
+    expect(await handler({}, request)).toEqual({ delivered: false, reason: 'cooldown' })
+    expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+
   it('bounds notification cooldown keys during unique worktree bursts', async () => {
     notificationIsSupportedMock.mockReturnValue(false)
     registerNotificationHandlers({

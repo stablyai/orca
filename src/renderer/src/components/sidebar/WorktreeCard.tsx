@@ -1200,7 +1200,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const hasMetadataBadge = showConflictOperationBadge
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
   // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
-  const showCombinedStatusSlot = showStatus
+  // needsAttention keeps its own always-visible lane inside the slot, so the slot must still
+  // render when a reason is set even if showStatus is off, or the indicator would never show.
+  const showCombinedStatusSlot = showStatus || Boolean(worktree.needsAttention)
   const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
   const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
   const showTitleRowIndicators = (newCardStyle || compactCards) && (hasDetails || hasPorts)
