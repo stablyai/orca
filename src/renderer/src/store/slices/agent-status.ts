@@ -1125,6 +1125,9 @@ function mergeCurrentOrchestrationContext(
   if (!sameDispatch) {
     return current
   }
+  if (current.dispatchStatus !== undefined) {
+    return orchestrationContextsEqual(existing, current) ? existing : current
+  }
   const merged = { ...existing, ...current }
   return orchestrationContextsEqual(existing, merged) ? existing : merged
 }

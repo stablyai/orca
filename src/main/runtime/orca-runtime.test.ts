@@ -37942,6 +37942,7 @@ describe('OrcaRuntimeService', () => {
         handle === workerHandle
           ? {
               id: 'ctx-1',
+              run_id: 'run-1',
               task_id: 'task-1',
               assignee_handle: workerHandle,
               status: 'dispatched'
@@ -37961,14 +37962,16 @@ describe('OrcaRuntimeService', () => {
       ),
       getTask: vi.fn(() => ({
         id: 'task-1',
+        run_id: 'run-1',
         task_title: 'Dispatch prompt work',
         display_name: 'Review dispatch prompts and make worker labels distinct',
         spec: 'Review dispatch prompts\n\nand make worker labels distinct',
         created_by_terminal_handle: coordinatorHandle
       })),
-      getActiveCoordinatorRun: vi.fn(() => ({
+      getRun: vi.fn(() => ({
         id: 'run-1',
-        coordinator_handle: coordinatorHandle
+        coordinator_handle: coordinatorHandle,
+        legacy: 0
       }))
     } as never)
     runtime.attachWindow(1)
@@ -38021,6 +38024,87 @@ describe('OrcaRuntimeService', () => {
       coordinatorHandle,
       orchestrationRunId: 'run-1'
     })
+  })
+
+  it('fails closed when a modern dispatch owning Run is missing', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const workerLeafId = '77777777-7777-4777-8777-777777777777'
+    const coordinatorLeafId = '88888888-8888-4888-8888-888888888888'
+    const workerPaneKey = makePaneKey('tab-worker', workerLeafId)
+    const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
+    const coordinatorHandle = runtime.preAllocateHandleForPty('pty-coordinator')
+    const getActiveCoordinatorRun = vi.fn(() => ({
+      id: 'run-legacy-unrelated',
+      coordinator_handle: coordinatorHandle
+    }))
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: vi.fn((handle: string) =>
+        handle === workerHandle
+          ? {
+              id: 'ctx-missing-run',
+              run_id: 'run-missing',
+              task_id: 'task-missing-run',
+              assignee_handle: workerHandle,
+              status: 'dispatched'
+            }
+          : undefined
+      ),
+      getLatestDispatchForTerminal: vi.fn(() => undefined),
+      getTask: vi.fn(() => ({
+        id: 'task-missing-run',
+        run_id: 'run-missing',
+        spec: 'modern task with missing Run'
+      })),
+      getRun: vi.fn(() => undefined),
+      getActiveCoordinatorRun
+    } as never)
+    runtime.attachWindow(1)
+
+    const result = runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-worker',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Worker',
+          activeLeafId: workerLeafId,
+          layout: null
+        },
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Coordinator',
+          activeLeafId: coordinatorLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-worker',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: workerLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-worker',
+          paneTitle: null
+        },
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: coordinatorLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'pty-coordinator',
+          paneTitle: null
+        }
+      ]
+    })
+
+    expect(result.agentOrchestrationByPaneKey?.[workerPaneKey]).toEqual({
+      taskId: 'task-missing-run',
+      dispatchId: 'ctx-missing-run',
+      dispatchStatus: 'dispatched',
+      taskTitle: 'modern task with missing Run',
+      displayName: 'modern task with missing Run'
+    })
+    expect(getActiveCoordinatorRun).not.toHaveBeenCalled()
   })
 
   it('uses durable Run ownership before worktree-scoped legacy attribution', () => {
@@ -38164,6 +38248,117 @@ describe('OrcaRuntimeService', () => {
       expect(legacyContext).not.toHaveProperty('orchestrationRunId')
       expect(getActiveCoordinatorRun).toHaveBeenCalledOnce()
     } finally {
+      db.close()
+    }
+  })
+
+  it('queries each stable terminal handle once while publishing orchestration context', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const terminals = Array.from({ length: 100 }, (_, index) => ({
+      tabId: `tab-query-${index}`,
+      leafId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      ptyId: `pty-query-${index}`,
+      paneRuntimeId: index + 1
+    }))
+    const handles = terminals.map((terminal) => runtime.preAllocateHandleForPty(terminal.ptyId))
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const run = db.createRun({
+        objective: 'query count oracle',
+        coordinatorHandle: handles[99],
+        coordinatorPaneKey: makePaneKey(terminals[99].tabId, terminals[99].leafId)
+      })
+      const task = db.createTask({ spec: 'one dispatched terminal', runId: run.id })
+      const dispatch = db.createDispatchContext(
+        task.id,
+        handles[0],
+        makePaneKey(terminals[0].tabId, terminals[0].leafId)
+      )
+      const getActiveDispatchForTerminal = vi.spyOn(db, 'getActiveDispatchForTerminal')
+      const getLatestDispatchForTerminal = vi.spyOn(db, 'getLatestDispatchForTerminal')
+      const getTask = vi.spyOn(db, 'getTask')
+      const getRun = vi.spyOn(db, 'getRun')
+      const getActiveCoordinatorRun = vi.spyOn(db, 'getActiveCoordinatorRun')
+      runtime.setOrchestrationDb(db)
+      runtime.attachWindow(1)
+
+      const graph = {
+        tabs: terminals.map((terminal) => ({
+          tabId: terminal.tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: terminal.tabId,
+          activeLeafId: terminal.leafId,
+          layout: null
+        })),
+        leaves: terminals.map((terminal) => ({
+          tabId: terminal.tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: terminal.leafId,
+          paneRuntimeId: terminal.paneRuntimeId,
+          ptyId: terminal.ptyId,
+          paneTitle: null
+        }))
+      }
+      runtime.syncWindowGraph(1, graph)
+
+      const queryCounts = {
+        activeDispatch: getActiveDispatchForTerminal.mock.calls.length,
+        latestDispatch: getLatestDispatchForTerminal.mock.calls.length,
+        task: getTask.mock.calls.length,
+        run: getRun.mock.calls.length,
+        legacyCoordinator: getActiveCoordinatorRun.mock.calls.length
+      }
+
+      db.completeDispatch(dispatch.id)
+      vi.useFakeTimers()
+      vi.setSystemTime(Date.now() + AGENT_STATUS_STALE_AFTER_MS + 5_000)
+      for (const query of [
+        getActiveDispatchForTerminal,
+        getLatestDispatchForTerminal,
+        getTask,
+        getRun,
+        getActiveCoordinatorRun
+      ]) {
+        query.mockClear()
+      }
+      runtime.syncWindowGraph(1, graph)
+
+      const historicalQueryCounts = {
+        activeDispatch: getActiveDispatchForTerminal.mock.calls.length,
+        latestDispatch: getLatestDispatchForTerminal.mock.calls.length,
+        task: getTask.mock.calls.length,
+        run: getRun.mock.calls.length,
+        legacyCoordinator: getActiveCoordinatorRun.mock.calls.length
+      }
+      expect({
+        active: {
+          ...queryCounts,
+          total: Object.values(queryCounts).reduce((sum, n) => sum + n)
+        },
+        historical: {
+          ...historicalQueryCounts,
+          total: Object.values(historicalQueryCounts).reduce((sum, n) => sum + n)
+        }
+      }).toEqual({
+        active: {
+          activeDispatch: 100,
+          latestDispatch: 99,
+          task: 1,
+          run: 1,
+          legacyCoordinator: 0,
+          total: 201
+        },
+        historical: {
+          activeDispatch: 100,
+          latestDispatch: 100,
+          task: 0,
+          run: 0,
+          legacyCoordinator: 0,
+          total: 200
+        }
+      })
+    } finally {
+      vi.useRealTimers()
       db.close()
     }
   })

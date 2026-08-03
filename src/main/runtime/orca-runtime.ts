@@ -29977,11 +29977,13 @@ export class OrcaRuntimeService {
       return undefined
     }
     const contexts: Record<string, AgentStatusOrchestrationContext> = {}
+    const queriedHandles = new Set<string>()
     for (const leaf of this.leaves.values()) {
       if (!leaf.ptyId) {
         continue
       }
       const handle = this.issueHandle(leaf)
+      queriedHandles.add(handle)
       const context = this.getAgentStatusOrchestrationContextForHandle(handle, db)
       if (context) {
         contexts[this.makeRuntimePaneKey(leaf)] = context
@@ -29992,6 +29994,10 @@ export class OrcaRuntimeService {
         continue
       }
       const handle = this.issuePtyHandle(pty)
+      if (queriedHandles.has(handle)) {
+        continue
+      }
+      queriedHandles.add(handle)
       const context = this.getAgentStatusOrchestrationContextForHandle(handle, db)
       if (context) {
         contexts[pty.paneKey] = context
@@ -30020,10 +30026,11 @@ export class OrcaRuntimeService {
             displayName: task.display_name
           })
         : { taskTitle: '', displayName: '' }
-    const owningRun = task?.run_id ? db?.getRun?.(task.run_id) : undefined
+    const owningRun =
+      task?.run_id && task.run_id === dispatch.run_id ? db?.getRun?.(dispatch.run_id) : undefined
     const runCoordinatorHandle = owningRun?.coordinator_handle ?? undefined
     const legacyActiveRun =
-      owningRun?.legacy !== 0 && (dispatch.status === 'pending' || dispatch.status === 'dispatched')
+      owningRun?.legacy === 1 && (dispatch.status === 'pending' || dispatch.status === 'dispatched')
         ? db?.getActiveCoordinatorRun?.()
         : undefined
     // Why: legacy coordinator runs have no durable task ownership, so fail closed across worktrees.
