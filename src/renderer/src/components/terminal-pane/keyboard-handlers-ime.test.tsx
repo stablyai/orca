@@ -308,6 +308,36 @@ describe('Windows IME keyboard ownership', () => {
     harness.dispose()
   })
 
+  it('does not open file search for an IME-consumed Ctrl+Shift+F', () => {
+    // Why: matchFileSearchShortcut runs before the shortcut resolver and takes the
+    // physical-code fallback itself — `Process` is not a Latin key, so a composing
+    // Ctrl+Shift+F matched `sidebar.search.toggle` on its `code`. The IME guard has
+    // to sit above it, not just above the resolver.
+    const harness = createHarness()
+    // The shortcut only acts when there is a selection to search for, so give it one.
+    const pane = harness.deps.managerRef.current?.getActivePane()
+    vi.mocked(pane!.terminal.getSelection).mockReturnValue('needle')
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    harness.startComposition()
+    const consumed = keyboardEvent('keydown', {
+      key: 'Process',
+      code: 'KeyF',
+      keyCode: 229,
+      timeStamp: 10,
+      isComposing: true,
+      ctrlKey: true,
+      shiftKey: true
+    })
+
+    harness.terminalInput.dispatchEvent(consumed)
+    vi.runAllTimers()
+
+    expect(harness.deps.onSearchSelectedText).not.toHaveBeenCalled()
+    expect(harness.sendInput).not.toHaveBeenCalled()
+    hook.unmount()
+    harness.dispose()
+  })
+
   it.each([
     { label: 'Ctrl+KeyK', code: 'KeyK' },
     { label: 'Ctrl+KeyW', code: 'KeyW' }

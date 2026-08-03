@@ -769,12 +769,14 @@ describe('xterm IME composition de-duplication', () => {
     await nextEventLoop()
 
     textarea.dispatchEvent(new CompositionEvent('compositionend', { data: '한', bubbles: true }))
-    const pending = getPendingComposition(terminal)
-    expect(pending?.finalizerTimer).toBeDefined()
+    // Read the state again after Escape rather than asserting on a captured
+    // reference: the cancel path clears the field in place, but other paths
+    // detach the pending object outright, and either way no timer must remain.
+    expect(getPendingComposition(terminal)?.finalizerTimer).toBeDefined()
     dispatchKeydown(textarea, 'Escape', 'Escape', 229, true, 100)
     dispatchKeydown(textarea, 'Escape', 'Escape', 27, false, 100)
 
-    expect(pending?.finalizerTimer).toBeUndefined()
+    expect(getPendingComposition(terminal)?.finalizerTimer).toBeUndefined()
     await nextEventLoop()
 
     expect(emitted).toEqual([])

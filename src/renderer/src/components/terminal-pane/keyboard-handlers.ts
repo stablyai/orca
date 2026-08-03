@@ -490,6 +490,26 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      const terminalPaneForImeShortcut = manager.getActivePane() ?? manager.getPanes()[0]
+      const hasPendingImeComposition = hasPendingTerminalImeComposition(
+        terminalPaneForImeShortcut?.terminal.element
+      )
+      const imeProcessEnter = isWindows && hasPendingImeComposition && isTerminalImeProcessEnter(e)
+      if (
+        isWindows &&
+        hasPendingImeComposition &&
+        !imeProcessEnter &&
+        isTerminalImeConsumedKey(e)
+      ) {
+        // Why: Process has no logical key, so shortcut matching falls back to the physical code and
+        // fires Ctrl+K/Ctrl+W here and in window-level handlers mid-composition. This must run before
+        // matchFileSearchShortcut, which takes that same fallback and would claim a composing
+        // Ctrl+Shift+F. xterm already ignores keyCode 229 while composing, so swallowing the chord
+        // loses no input.
+        e.stopImmediatePropagation()
+        return
+      }
+
       if (matchFileSearchShortcut(e, shortcutPlatform, keybindings, terminalShortcutPolicy)) {
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         const selectedText = normalizeSelectedTextForFileSearch(pane?.terminal.getSelection())
@@ -529,23 +549,6 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      const terminalPaneForImeShortcut = manager.getActivePane() ?? manager.getPanes()[0]
-      const hasPendingImeComposition = hasPendingTerminalImeComposition(
-        terminalPaneForImeShortcut?.terminal.element
-      )
-      const imeProcessEnter = isWindows && hasPendingImeComposition && isTerminalImeProcessEnter(e)
-      if (
-        isWindows &&
-        hasPendingImeComposition &&
-        !imeProcessEnter &&
-        isTerminalImeConsumedKey(e)
-      ) {
-        // Why: Process has no logical key, so shortcut matching would fall back to the physical code and
-        // fire Ctrl+K/Ctrl+W here and in window-level handlers mid-composition. xterm already ignores
-        // keyCode 229 while composing, so swallowing the chord loses no input.
-        e.stopImmediatePropagation()
-        return
-      }
       const shortcutEvent = imeProcessEnter
         ? {
             key: 'Enter',
