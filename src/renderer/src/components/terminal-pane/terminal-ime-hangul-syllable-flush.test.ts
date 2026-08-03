@@ -14,6 +14,7 @@ function nextEventLoop(): Promise<void> {
 }
 
 function openTerminal(TerminalType: typeof EsmTerminal): {
+  compositionView: HTMLElement
   emitted: string[]
   textarea: HTMLTextAreaElement
 } {
@@ -25,9 +26,13 @@ function openTerminal(TerminalType: typeof EsmTerminal): {
   if (!terminal.textarea) {
     throw new Error('xterm textarea was not created')
   }
+  const compositionView = container.querySelector<HTMLElement>('.composition-view')
+  if (!compositionView) {
+    throw new Error('xterm composition view was not created')
+  }
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
-  return { emitted, textarea: terminal.textarea }
+  return { compositionView, emitted, textarea: terminal.textarea }
 }
 
 function composition(
@@ -122,6 +127,21 @@ describe.each([
     await nextEventLoop()
 
     expect(emitted.join('')).toBe('한글')
+  })
+
+  it('shows 가나다 before the final macOS composition commits', async () => {
+    const { compositionView, emitted, textarea } = openTerminal(TerminalType)
+    composeSyllable(textarea, '', ['ㄱ', '가'])
+    composition(textarea, 'compositionend', '가')
+    composeSyllable(textarea, '가', ['ㄴ', '나'])
+    await nextEventLoop()
+    composition(textarea, 'compositionend', '나')
+    composeSyllable(textarea, '가나', ['ㄷ', '다'])
+    await nextEventLoop()
+
+    expect(emitted.join('')).toBe('가나')
+    expect(compositionView.classList.contains('active')).toBe(true)
+    expect(compositionView.textContent).toContain('다')
   })
 
   it('does not double-send after an IBus insertText commit', async () => {
