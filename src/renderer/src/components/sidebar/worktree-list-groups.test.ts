@@ -2709,6 +2709,58 @@ describe('project groups', () => {
     expect(billingApi.displayName).toBe('api')
   })
 
+  it("names a cross-host twin's project header by the user's host label", () => {
+    // Byte-identical paths can only be split by host, and the SSH id is generated,
+    // so the header must read the user's host name rather than 'ssh-1754190000000-a1b2'.
+    const localApp: Repo = { ...repo, id: 'repo-local-app', path: '/srv/app', displayName: 'app' }
+    const remoteApp: Repo = {
+      ...repo,
+      id: 'repo-remote-app',
+      path: '/srv/app',
+      displayName: 'app',
+      connectionId: 'ssh-1754190000000-a1b2'
+    }
+    const repos = new Map([
+      [localApp.id, localApp],
+      [remoteApp.id, remoteApp]
+    ])
+    const worktrees = [
+      { ...worktree, id: 'wt-local-app', repoId: localApp.id },
+      { ...worktree, id: 'wt-remote-app', repoId: remoteApp.id }
+    ]
+
+    const rows = buildRows(
+      'repo',
+      worktrees,
+      repos,
+      null,
+      new Set(),
+      new Map([
+        [localApp.id, 0],
+        [remoteApp.id, 1]
+      ]),
+      undefined,
+      'manual',
+      {},
+      new Map(worktrees.map((entry) => [entry.id, entry])),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [],
+      new Map([['ssh:ssh-1754190000000-a1b2', 'My Server']])
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.label)).toEqual([
+      'app',
+      'app (My Server)'
+    ])
+  })
+
   it('disambiguates duplicate repo basenames inside each Project Group scope', () => {
     const group: ProjectGroup = {
       id: 'group-1',

@@ -1,6 +1,14 @@
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getExecutionHostLabel,
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 
-type RepoDisplayLabelItem = {
+/** User-facing host names keyed by execution-host id; see useExecutionHostDisplayLabels. */
+type HostLabelLookup = ReadonlyMap<string, string>
+
+export type RepoDisplayLabelItem = {
   path: string
   displayName: string
   connectionId?: string | null
@@ -36,8 +44,45 @@ function hasDuplicateLabels(labels: readonly string[]): boolean {
   return new Set(labels).size !== labels.length
 }
 
+// Why: the local host label is hardcoded English in shared/, so only remote
+// hosts are safe to render here. Remote ids are generated ('ssh:ssh-1754-a1b2'),
+// so the caller's lookup of the user's host name is what makes this readable.
+function hostQualifier(
+  item: RepoDisplayLabelItem,
+  hostLabelById: HostLabelLookup | undefined
+): string {
+  const hostId = getRepoExecutionHostId(item)
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
+    return ''
+  }
+  return ` (${hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)})`
+}
+
+// Why: byte-identical paths on different hosts can never be split by adding
+// parent segments, so name the host for the entries that still tie.
+function qualifyRemainingTiesByHost(
+  items: readonly RepoDisplayLabelItem[],
+  labels: readonly string[],
+  hostLabelById: HostLabelLookup | undefined
+): string[] {
+  if (!hasDuplicateLabels(labels)) {
+    return [...labels]
+  }
+  const counts = new Map<string, number>()
+  for (const label of labels) {
+    counts.set(label, (counts.get(label) ?? 0) + 1)
+  }
+  return labels.map((label, index) => {
+    const item = items[index]
+    return item && (counts.get(label) ?? 0) > 1
+      ? `${label}${hostQualifier(item, hostLabelById)}`
+      : label
+  })
+}
+
 export function getRepoDisplayLabelsByPath(
-  items: readonly RepoDisplayLabelItem[]
+  items: readonly RepoDisplayLabelItem[],
+  hostLabelById?: HostLabelLookup
 ): Map<string, string> {
   const labels = new Map<string, string>()
   const itemsByName = new Map<string, RepoDisplayLabelItem[]>()
@@ -54,17 +99,31 @@ export function getRepoDisplayLabelsByPath(
     if (collidingItems.length < 2) {
       continue
     }
+    // Why: drive the expansion off distinct paths only — cross-host repos sharing
+    // one path can never be separated by depth and would otherwise drag every
+    // label in the group out to its full path before the host qualifier runs.
+    const itemsByPath = new Map<string, RepoDisplayLabelItem>()
+    for (const item of collidingItems) {
+      const path = normalizePathSegments(item.path).join('/')
+      if (!itemsByPath.has(path)) {
+        itemsByPath.set(path, item)
+      }
+    }
+    const distinctItems = [...itemsByPath.values()]
     const maxDepth = Math.max(
-      ...collidingItems.map((item) => normalizePathSegments(item.path).length)
+      ...distinctItems.map((item) => normalizePathSegments(item.path).length)
     )
     let depth = 1
-    let nextLabels = collidingItems.map((item) => labelForDepth(item, depth))
-    while (depth < maxDepth && hasDuplicateLabels(nextLabels)) {
+    while (
+      depth < maxDepth &&
+      hasDuplicateLabels(distinctItems.map((i) => labelForDepth(i, depth)))
+    ) {
       depth += 1
-      nextLabels = collidingItems.map((item) => labelForDepth(item, depth))
     }
+    const nextLabels = collidingItems.map((item) => labelForDepth(item, depth))
+    const finalLabels = qualifyRemainingTiesByHost(collidingItems, nextLabels, hostLabelById)
     collidingItems.forEach((item, index) => {
-      labels.set(getRepoDisplayLabelKey(item), nextLabels[index] ?? item.displayName)
+      labels.set(getRepoDisplayLabelKey(item), finalLabels[index] ?? item.displayName)
     })
   }
 

@@ -11,6 +11,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+import { useRepoDisplayLabel } from '@/hooks/repo-display-label-lookup'
 import { searchRepos } from '@/lib/repo-search'
 import type { Repo } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
@@ -69,6 +70,9 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
     () => searchRepos(availableRepos, query),
     [availableRepos, query]
   )
+  // Why: derive over every repo so a label doesn't collapse back to the ambiguous
+  // name once its same-named twin moves into the selected pills.
+  const getRepoLabel = useRepoDisplayLabel(repos)
 
   const handleSelectRepo = useCallback(
     (repoId: string) => {
@@ -146,7 +150,11 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
         onValueChange={setHighlightedRepoId}
         className="bg-transparent"
       >
-        <SelectedProjectPills selectedRepos={selectedRepos} onRemoveProject={handleRemoveProject} />
+        <SelectedProjectPills
+          selectedRepos={selectedRepos}
+          getRepoLabel={getRepoLabel}
+          onRemoveProject={handleRemoveProject}
+        />
         <CommandInput
           autoFocus
           placeholder={
@@ -183,13 +191,16 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
             <CommandItem
               key={repo.id}
               value={repo.id}
+              // Why keep displayName, not the disambiguated label: projectCommandFilter
+              // ranks by match offset, so a prepended parent segment would demote an
+              // exact name match below unrelated repos.
               keywords={[repo.displayName, repo.path]}
               onSelect={() => handleSelectRepo(repo.id)}
               className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
             >
               <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                 <RepoBadgeLabel
-                  name={repo.displayName}
+                  name={getRepoLabel(repo)}
                   color={repo.badgeColor}
                   className="max-w-full"
                 />
@@ -213,9 +224,11 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
 
 function SelectedProjectPills({
   selectedRepos,
+  getRepoLabel,
   onRemoveProject
 }: {
   selectedRepos: Repo[]
+  getRepoLabel: (repo: Repo) => string
   onRemoveProject: (repoId: string) => void
 }) {
   if (selectedRepos.length === 0) {
@@ -224,35 +237,38 @@ function SelectedProjectPills({
 
   return (
     <div className="scrollbar-sleek mx-1 mb-1 flex max-h-16 flex-wrap gap-1 overflow-y-auto rounded-[7px] border border-border/70 bg-muted/25 p-1">
-      {selectedRepos.map((repo) => (
-        <Badge
-          key={repo.id}
-          variant="outline"
-          className="h-5 max-w-full gap-1 border-border/70 bg-background px-1.5 py-0 text-[11px] font-medium"
-        >
-          <RepoBadgeLabel
-            name={repo.displayName}
-            color={repo.badgeColor}
-            className="max-w-[8rem]"
-            badgeClassName="size-1.5"
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={translate(
-              'auto.components.sidebar.SidebarRepositoryFilterSection.f10ca29601',
-              'Remove {{value0}} filter',
-              { value0: repo.displayName }
-            )}
-            className="-mr-1 size-4 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onRemoveProject(repo.id)}
+      {selectedRepos.map((repo) => {
+        const label = getRepoLabel(repo)
+        return (
+          <Badge
+            key={repo.id}
+            variant="outline"
+            className="h-5 max-w-full gap-1 border-border/70 bg-background px-1.5 py-0 text-[11px] font-medium"
           >
-            <X className="size-2.5" strokeWidth={2.5} />
-          </Button>
-        </Badge>
-      ))}
+            <RepoBadgeLabel
+              name={label}
+              color={repo.badgeColor}
+              className="max-w-[8rem]"
+              badgeClassName="size-1.5"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={translate(
+                'auto.components.sidebar.SidebarRepositoryFilterSection.f10ca29601',
+                'Remove {{value0}} filter',
+                { value0: label }
+              )}
+              className="-mr-1 size-4 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onRemoveProject(repo.id)}
+            >
+              <X className="size-2.5" strokeWidth={2.5} />
+            </Button>
+          </Badge>
+        )
+      })}
     </div>
   )
 }

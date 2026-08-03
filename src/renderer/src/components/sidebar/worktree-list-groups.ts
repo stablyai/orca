@@ -864,14 +864,17 @@ function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
   return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
 }
 
-function withRepoSectionDisplayLabels(entries: readonly OrderedGroupEntry[]): OrderedGroupEntry[] {
+function withRepoSectionDisplayLabels(
+  entries: readonly OrderedGroupEntry[],
+  hostLabelById: ReadonlyMap<string, string> | undefined
+): OrderedGroupEntry[] {
   const repos = entries
     .map((entry) => entry[1].repo)
     .filter((repo): repo is Repo => repo !== undefined)
   if (repos.length < 2) {
     return [...entries]
   }
-  const labelsByPath = getRepoDisplayLabelsByPath(repos)
+  const labelsByPath = getRepoDisplayLabelsByPath(repos, hostLabelById)
   return entries.map(([key, group]) => [
     key,
     group.repo
@@ -1364,7 +1367,9 @@ export function buildRows(
 
   if (groupBy !== 'repo' || projectGroups.length === 0) {
     appendOrderedGroups(
-      groupBy === 'repo' ? withRepoSectionDisplayLabels(orderedGroups) : orderedGroups
+      groupBy === 'repo'
+        ? withRepoSectionDisplayLabels(orderedGroups, hostLabelById)
+        : orderedGroups
     )
     return result
   }
@@ -1461,7 +1466,7 @@ export function buildRows(
           groupDepth: depth + 1
         })
       }
-      appendOrderedGroups(withRepoSectionDisplayLabels(repoEntries), depth + 1)
+      appendOrderedGroups(withRepoSectionDisplayLabels(repoEntries, hostLabelById), depth + 1)
       for (const childGroup of childGroups) {
         appendProjectGroup(childGroup, depth + 1)
       }
@@ -1483,7 +1488,7 @@ export function buildRows(
     remainingRepoEntries.push(...entries)
   }
   appendOrderedGroups(
-    withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries)),
+    withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries), hostLabelById),
     0
   )
 
