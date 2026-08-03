@@ -37074,9 +37074,11 @@ describe('OrcaRuntimeService', () => {
         handle === workerHandle
           ? {
               id: 'ctx-1',
+              run_id: 'run-worker',
               task_id: 'task-1',
               assignee_handle: workerHandle,
-              status: 'dispatched'
+              status: 'dispatched',
+              last_heartbeat_at: new Date().toISOString()
             }
           : undefined
       ),
@@ -37084,6 +37086,7 @@ describe('OrcaRuntimeService', () => {
         handle === workerHandle
           ? {
               id: 'ctx-done',
+              run_id: 'run-done',
               task_id: 'task-done',
               assignee_handle: workerHandle,
               status: 'completed',
@@ -37099,7 +37102,7 @@ describe('OrcaRuntimeService', () => {
         created_by_terminal_handle: coordinatorHandle
       })),
       getActiveCoordinatorRun: vi.fn(() => ({
-        id: 'run-1',
+        id: 'run-unrelated',
         coordinator_handle: coordinatorHandle
       }))
     } as never)
@@ -37151,7 +37154,7 @@ describe('OrcaRuntimeService', () => {
       parentPaneKey: coordinatorPaneKey,
       parentTerminalHandle: coordinatorHandle,
       coordinatorHandle,
-      orchestrationRunId: 'run-1'
+      orchestrationRunId: 'run-worker'
     })
   })
 
@@ -37169,6 +37172,7 @@ describe('OrcaRuntimeService', () => {
         handle === workerHandle
           ? {
               id: 'ctx-done',
+              run_id: 'run-done',
               task_id: 'task-done',
               assignee_handle: workerHandle,
               status: 'completed',
@@ -37240,6 +37244,7 @@ describe('OrcaRuntimeService', () => {
         handle === workerHandle
           ? {
               id: 'ctx-done',
+              run_id: 'run-done',
               task_id: 'task-done',
               assignee_handle: workerHandle,
               status: 'completed',
@@ -37301,6 +37306,7 @@ describe('OrcaRuntimeService', () => {
         getActiveDispatchForTerminal: vi.fn(() => undefined),
         getLatestDispatchForTerminal: vi.fn(() => ({
           id: 'ctx-settled',
+          run_id: 'run-settled',
           task_id: 'task-settled',
           assignee_handle: workerHandle,
           status: dispatchStatus,
@@ -37351,6 +37357,7 @@ describe('OrcaRuntimeService', () => {
         handle === workerHandle
           ? {
               id: 'ctx-stale',
+              run_id: 'run-stale',
               task_id: 'task-stale',
               assignee_handle: workerHandle,
               status: 'completed',

@@ -29660,10 +29660,8 @@ export class OrcaRuntimeService {
             displayName: task.display_name
           })
         : { taskTitle: '', displayName: '' }
-    const activeRun =
-      dispatch.status === 'pending' || dispatch.status === 'dispatched'
-        ? db?.getActiveCoordinatorRun?.()
-        : undefined
+    const dispatchIsActive = dispatch.status === 'pending' || dispatch.status === 'dispatched'
+    const activeRun = dispatchIsActive ? db?.getActiveCoordinatorRun?.() : undefined
     const parentTerminalHandle =
       task?.created_by_terminal_handle ??
       (activeRun?.coordinator_handle && activeRun.coordinator_handle !== handle
@@ -29682,7 +29680,7 @@ export class OrcaRuntimeService {
       ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
       ...(parentPaneKey ? { parentPaneKey } : {}),
       ...(activeRun?.coordinator_handle ? { coordinatorHandle: activeRun.coordinator_handle } : {}),
-      ...(activeRun?.id ? { orchestrationRunId: activeRun.id } : {})
+      ...(dispatchIsActive ? { orchestrationRunId: dispatch.run_id } : {})
     }
   }
 
