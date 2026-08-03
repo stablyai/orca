@@ -173,6 +173,8 @@ async function fetchPipelineJobs(
  * Counts the added/removed lines in a single GitLab MR file's unified diff,
  * feeding the +N/-N shown in the MR file list. `---`/`+++` are file headers
  * only before the first `@@` hunk; every `+`/`-` line inside a hunk is content.
+ * Requires hunk headers: a diff with no `@@` counts zero, so do not reuse this
+ * for header-less agent-tool diffs (see `diffFromText` in shared/native-chat-diff).
  *
  * @internal - exposed for tests only.
  */
