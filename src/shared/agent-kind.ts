@@ -48,7 +48,8 @@ const TUI_AGENT_KIND_BY_AGENT = {
   grok: 'grok',
   devin: 'devin',
   ante: 'ante',
-  trae: 'trae'
+  trae: 'trae',
+  reasonix: 'reasonix'
 } satisfies Record<TuiAgent, ConcreteAgentKind>
 
 // Why: `satisfies Record<TuiAgent, …>` makes the lookup exhaustive at compile

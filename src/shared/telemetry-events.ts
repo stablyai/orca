@@ -102,6 +102,7 @@ export const AGENT_KIND_VALUES = [
   'devin',
   'ante',
   'trae',
+  'reasonix',
   'other'
 ] as const
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
