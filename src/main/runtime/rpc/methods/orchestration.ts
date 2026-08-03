@@ -1267,9 +1267,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const assigneePaneKey =
         dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined
       const processIncarnation =
-        dispatchAuthority?.processIncarnation ??
-        runtime.getTerminalProcessIncarnation(to) ??
-        undefined
+        dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
+          ? dispatchAuthority.processIncarnation
+          : undefined
       if (params.inject && (!assigneePaneKey || !processIncarnation)) {
         throw new OrchestrationError(
           'stable_pane_required',
@@ -1282,7 +1282,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         params.task,
         to,
         assigneePaneKey,
-        dispatchAuthority?.launchTokenHash ?? undefined
+        dispatchAuthority?.launchTokenHash ?? undefined,
+        processIncarnation
       )
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({

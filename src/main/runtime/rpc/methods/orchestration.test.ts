@@ -1908,6 +1908,16 @@ describe('orchestration RPC methods', () => {
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((candidate) =>
         candidate === handle ? `tab_worker:${handle}` : coordinatorPaneKey
       )
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((candidate) =>
+        candidate === handle
+          ? ({
+              terminalHandle: handle,
+              paneKey: `tab_worker:${handle}`,
+              processIncarnation: `runtime_test:${handle}:1`,
+              launchTokenHash: null
+            } as never)
+          : null
+      )
     }
 
     it('dispatches a task to a terminal', async () => {
@@ -1939,7 +1949,7 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContextById(result.dispatch.id)?.assignee_pane_key).toBe('tab_w:leaf_w')
     })
 
-    it('commits the target process launch token on a manual dispatch', async () => {
+    it('commits authenticated process authority on a manual dispatch', async () => {
       setup()
       vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
         runtimeId: runtime.getRuntimeId(),
@@ -1958,9 +1968,24 @@ describe('orchestration RPC methods', () => {
         to: 'term_a'
       })) as { dispatch: { id: string } }
 
-      expect(db.getDispatchContextById(result.dispatch.id)?.launch_token_hash).toBe(
-        'launch-token-hash'
-      )
+      expect(db.getDispatchContextById(result.dispatch.id)).toMatchObject({
+        assignee_pane_key: 'tab_w:leaf_w',
+        process_incarnation: 'runtime_test:term_a:1',
+        launch_token_hash: 'launch-token-hash'
+      })
+    })
+
+    it('does not infer manual process authority from an unauthenticated handle', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a'
+      })) as { dispatch: { id: string } }
+
+      expect(runtime.getTerminalProcessIncarnation('term_a')).toBe('runtime_test:term_a:1')
+      expect(db.getDispatchContextById(result.dispatch.id)?.process_incarnation).toBeNull()
     })
 
     it('rejects dispatch for a pending task', async () => {

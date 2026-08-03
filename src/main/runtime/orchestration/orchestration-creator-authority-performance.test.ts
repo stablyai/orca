@@ -45,7 +45,7 @@ describe('creator authority lookup performance', () => {
     const taskDetails = taskPlan.map((row) => row.detail).join(' | ')
     const paneDetails = panePlan.map((row) => row.detail).join(' | ')
 
-    expect(taskDetails).toContain('idx_dispatch_assignee_handle')
+    expect(taskDetails).toContain('idx_dispatch_active_assignee_handle')
     expect(taskDetails).not.toMatch(/SCAN (?:runs|rebound)/)
     expect(paneDetails).toContain('idx_dispatch_assignee_pane_leaf')
   })
@@ -95,4 +95,62 @@ describe('creator authority lookup performance', () => {
 
     expect(elapsedMs).toBeLessThan(200)
   })
+
+  it.each([20_000, 50_000])(
+    'keeps active creator lookup bounded with %i retained same-handle Dispatches',
+    (retainedDispatchCount) => {
+      db = new OrchestrationDb(':memory:')
+      const run = db.createRun({
+        objective: 'owner',
+        coordinatorHandle: 'term-coordinator',
+        coordinatorPaneKey: 'tab-coordinator:22222222-2222-4222-8222-222222222222'
+      })
+      sqliteFor(db)
+        .prepare(
+          `WITH RECURSIVE dispatch_numbers(value) AS (
+             VALUES (1) UNION ALL SELECT value + 1 FROM dispatch_numbers WHERE value < ?
+           )
+           INSERT INTO dispatch_contexts (
+             id, run_id, task_id, assignee_handle, status, completed_at
+           )
+           SELECT printf('retained_ctx_%05d', value), ?, printf('retained_task_%05d', value),
+                  'term-creator', 'completed', datetime('now')
+           FROM dispatch_numbers`
+        )
+        .run(retainedDispatchCount, run.id)
+      const creatorTask = db.createTask({ spec: 'creator', runId: run.id })
+      const creatorDispatch = db.createDispatchContext(
+        creatorTask.id,
+        'term-creator',
+        CREATOR_PANE,
+        undefined,
+        CREATOR_PROCESS
+      )
+      const workerTask = db.createTask({
+        spec: 'worker',
+        runId: run.id,
+        createdByTerminalHandle: 'term-creator',
+        createdByPaneKey: CREATOR_PANE,
+        createdByProcessIncarnation: CREATOR_PROCESS,
+        createdByRunGeneration: run.consumer_generation
+      })
+
+      for (let index = 0; index < 10; index += 1) {
+        db.getTask(workerTask.id, run.id)
+        db.getActiveDispatchForTerminal('term-creator')
+      }
+      const startedAt = performance.now()
+      for (let index = 0; index < 300; index += 1) {
+        expect(db.getTask(workerTask.id, run.id)?.creator_dispatch_id).toBe(creatorDispatch.id)
+        expect(db.getActiveDispatchForTerminal('term-creator')?.id).toBe(creatorDispatch.id)
+      }
+      const elapsedMs = performance.now() - startedAt
+
+      const competingTask = db.createTask({ spec: 'competing creator', runId: run.id })
+      expect(() => db!.createDispatchContext(competingTask.id, 'term-creator')).toThrow(
+        `Terminal term-creator already has an active dispatch (${creatorDispatch.id}`
+      )
+      expect(elapsedMs).toBeLessThan(200)
+    }
+  )
 })
