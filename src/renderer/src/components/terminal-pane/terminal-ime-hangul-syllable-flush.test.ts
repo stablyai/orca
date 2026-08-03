@@ -12,21 +12,24 @@ function nextEventLoop(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, 0))
 }
 
+// Disposed in afterEach so a failed assertion cannot leak xterm timers into the next test.
+const openTerminals: EsmTerminal[] = []
+
 function openTerminal(TerminalType: typeof EsmTerminal): {
   emitted: string[]
-  terminal: EsmTerminal
   textarea: HTMLTextAreaElement
 } {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const terminal = new TerminalType()
+  openTerminals.push(terminal)
   terminal.open(container)
   if (!terminal.textarea) {
     throw new Error('xterm textarea was not created')
   }
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
-  return { emitted, terminal, textarea: terminal.textarea }
+  return { emitted, textarea: terminal.textarea }
 }
 
 function composition(
@@ -76,6 +79,9 @@ describe.each([
   })
 
   afterEach(() => {
+    while (openTerminals.length > 0) {
+      openTerminals.pop()?.dispose()
+    }
     vi.useRealTimers()
     vi.restoreAllMocks()
     document.body.replaceChildren()
@@ -84,7 +90,7 @@ describe.each([
   it('flushes syllable N before syllable N+1 finishes composing', async () => {
     // macOS Hangul commits a syllable at the next syllable's compositionstart and sends no
     // insertText in between, so withholding here lags the terminal a full syllable behind.
-    const { emitted, terminal, textarea } = openTerminal(TerminalType)
+    const { emitted, textarea } = openTerminal(TerminalType)
     composeSyllable(textarea, '', ['ㅎ', '하', '한'])
     composition(textarea, 'compositionend', '한')
 
@@ -93,13 +99,12 @@ describe.each([
     await nextEventLoop()
 
     expect(emitted.join('')).toBe('한')
-    terminal.dispose()
   })
 
   it('preserves Korean final-consonant transfer', async () => {
     // A trailing consonant moves into the next syllable, so the textarea slice up to the next
     // compositionstart is authoritative over the '앙' that compositionend reported.
-    const { emitted, terminal, textarea } = openTerminal(TerminalType)
+    const { emitted, textarea } = openTerminal(TerminalType)
     composeSyllable(textarea, '', ['ㅇ', '아', '앙'])
     composition(textarea, 'compositionend', '앙')
 
@@ -117,12 +122,11 @@ describe.each([
 
     expect(emitted.join('')).toBe('아아')
     expect(emitted.join('')).not.toContain('앙')
-    terminal.dispose()
   })
 
   it('emits 한글 exactly once', async () => {
     // The full two-syllable word must reach the PTY once, with no syllable resent at the boundary.
-    const { emitted, terminal, textarea } = openTerminal(TerminalType)
+    const { emitted, textarea } = openTerminal(TerminalType)
     composeSyllable(textarea, '', ['ㅎ', '하', '한'])
     composition(textarea, 'compositionend', '한')
     composeSyllable(textarea, '한', ['ㄱ', '그', '글'])
@@ -130,13 +134,12 @@ describe.each([
     await nextEventLoop()
 
     expect(emitted.join('')).toBe('한글')
-    terminal.dispose()
   })
 
   it('does not double-send when an insertText input event follows compositionend', async () => {
     // IBus clears the preedit and re-inserts the commit as insertText before the next
     // compositionstart, so that insertText already owns the flush.
-    const { emitted, terminal, textarea } = openTerminal(TerminalType)
+    const { emitted, textarea } = openTerminal(TerminalType)
     textarea.setSelectionRange(0, 0)
     composition(textarea, 'compositionstart')
     keydown(textarea, 'Process', 'KeyG', 229)
@@ -159,6 +162,5 @@ describe.each([
     await nextEventLoop()
 
     expect(emitted.join('')).toBe('한')
-    terminal.dispose()
   })
 })
