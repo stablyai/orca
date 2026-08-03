@@ -99,6 +99,20 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
           archive: null
         }
       }
+      if (retained.disposition === 'release_committed') {
+        const unknown = retained.resource.release_state === 'unknown'
+        return {
+          dispatchId: params.dispatch,
+          state: unknown ? ('release_unknown' as const) : ('release_pending' as const),
+          processAction: 'none' as const,
+          archive: archiveSummary(retained.resource),
+          ...(retained.resource.release_error
+            ? { lastError: retained.resource.release_error }
+            : {}),
+          recovery:
+            'Terminal release was already committed and could not be changed to retained; inspect worker-show before taking further action.'
+        }
+      }
       return {
         dispatchId: params.dispatch,
         state: 'retained' as const,

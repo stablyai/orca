@@ -426,6 +426,8 @@ export class OrchestrationDb {
         ON worker_terminal_resources(owner_dispatch_id);
       CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_handle
         ON worker_terminal_resources(terminal_handle);
+      CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_pane
+        ON worker_terminal_resources(pane_key);
       CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_release
         ON worker_terminal_resources(release_state);
 
@@ -5741,7 +5743,11 @@ export class OrchestrationDb {
       this.db
         .prepare(
           `UPDATE worker_terminal_resources
-           SET release_state = 'requested', retained_reason = NULL,
+           SET release_state = CASE
+                 WHEN release_state = 'releasing' THEN 'releasing'
+                 ELSE 'requested'
+               END,
+               retained_reason = NULL,
                release_requested_at = COALESCE(release_requested_at, datetime('now')),
                release_error = NULL, updated_at = datetime('now')
            WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested', 'releasing', 'unknown')`
@@ -5768,7 +5774,8 @@ export class OrchestrationDb {
         `UPDATE worker_terminal_resources
          SET release_state = 'releasing', archive_source = ?, archive_status = ?,
              updated_at = datetime('now')
-         WHERE id = ? AND release_state IN ('requested', 'releasing')`
+         WHERE id = ? AND ownership_state = 'owned'
+           AND release_state IN ('requested', 'releasing')`
       )
       .run(params.archiveSource, params.archiveStatus, params.resourceId)
     return this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
@@ -5839,6 +5846,7 @@ export class OrchestrationDb {
   ):
     | { disposition: 'retained'; resource: WorkerTerminalResourceRow }
     | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
+    | { disposition: 'release_committed'; resource: WorkerTerminalResourceRow }
     | { disposition: 'no_owned_resource'; resource: null } {
     const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
     if (!resource) {
@@ -5852,30 +5860,48 @@ export class OrchestrationDb {
         `UPDATE worker_terminal_resources
          SET release_state = 'retained', retained_reason = 'user_requested',
              updated_at = datetime('now')
-         WHERE id = ? AND release_state IN ('not_requested', 'retained')`
+         WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested')`
       )
       .run(resource.id)
+    const updated = this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
+    if (updated.release_state !== 'retained') {
+      return { disposition: 'release_committed', resource: updated }
+    }
     return {
       disposition: 'retained',
-      resource: this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
+      resource: updated
     }
   }
 
   // Real user input relinquishes orchestration ownership durably; programmatic prompt delivery,
   // query auto-replies, resize, and output never reach this path.
   markWorkerTerminalUserOwned(paneKey: string): number {
+    const updateExact = this.db.prepare(
+      `UPDATE worker_terminal_resources
+       SET ownership_state = 'user_owned', release_state = 'retained',
+           retained_reason = 'user_takeover', updated_at = datetime('now')
+       WHERE pane_key = ? AND ownership_state = 'owned'
+         AND release_state IN ('not_requested', 'retained', 'requested')`
+    )
+    const exactChanges = Number(updateExact.run(paneKey).changes)
+    if (exactChanges > 0) {
+      return exactChanges
+    }
     const candidates = this.db
       .prepare(
         `SELECT id, pane_key FROM worker_terminal_resources
-          WHERE ownership_state = 'owned' AND release_state IN ('not_requested', 'retained')
+          WHERE ownership_state = 'owned'
+            AND release_state IN ('not_requested', 'retained', 'requested')
             AND pane_key IS NOT NULL`
       )
       .all() as { id: string; pane_key: string }[]
     const update = this.db.prepare(
       `UPDATE worker_terminal_resources
-       SET ownership_state = 'user_owned', retained_reason = 'user_takeover',
+       SET ownership_state = 'user_owned', release_state = 'retained',
+           retained_reason = 'user_takeover',
            updated_at = datetime('now')
-       WHERE id = ?`
+       WHERE id = ? AND ownership_state = 'owned'
+         AND release_state IN ('not_requested', 'retained', 'requested')`
     )
     let changed = 0
     for (const candidate of candidates) {

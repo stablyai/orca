@@ -261,6 +261,9 @@ describe('orchestration skill guidance', () => {
     )
     expect(workerLoop).toContain('Release is post-completion cleanup, not cancellation')
     expect(workerLoop).toContain('orca orchestration worker-retain --dispatch <dispatch_id> --json')
+    expect(workerLoop).toContain(
+      'the same Dispatch can be passed to `worker-release`, which clears the requested retention'
+    )
     expect(agentGuidance).toContain(
       'Coordinators must account for every settled worker terminal before waiting again or ending ' +
         'the turn'

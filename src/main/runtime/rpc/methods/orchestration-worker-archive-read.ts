@@ -70,7 +70,8 @@ async function readPinnedTranscript(
     pin.agent,
     pin.providerSessionKey,
     pin.providerSessionId,
-    pin.transcriptPath ?? ''
+    pin.transcriptPath ?? '',
+    String(pin.endOffset)
   ])
   if (cursor && cursor.source !== 'transcript') {
     throw sourceChanged()
@@ -83,6 +84,7 @@ async function readPinnedTranscript(
     sessionId: pin.providerSessionId,
     transcriptPath: pin.transcriptPath ?? undefined,
     offset: cursor?.position,
+    endOffset: pin.endOffset,
     limit: args.limit
   })
   if (!transcript.ok) {
@@ -131,7 +133,7 @@ function readArchivedTerminalTail(
   if (cursor && cursor.source !== 'terminal') {
     throw sourceChanged()
   }
-  if (cursor && cursor.sourceIdentity !== null && cursor.sourceIdentity !== sourceIdentity) {
+  if (cursor && (cursor.legacy || cursor.sourceIdentity !== sourceIdentity)) {
     throw sourceChanged()
   }
   const start = Math.min(cursor?.position ?? 0, content.lines.length)

@@ -88,7 +88,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'orca orchestration worker-retain --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: [
-      'Records a durable user-requested exception, so later release calls leave the terminal running.',
+      'Records a durable user-requested exception; a later explicit worker-release clears it and releases the terminal.',
       'Performs no process or filesystem action.'
     ]
   },

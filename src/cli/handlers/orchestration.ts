@@ -988,6 +988,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       'orchestration.workerRetain',
       { dispatch: getRequiredStringFlag(flags, 'dispatch') }
     )
+    if (result.result.state === 'release_unknown') {
+      process.exitCode = 1
+    }
     printResult(result, json, formatWorkerRelease)
   },
 

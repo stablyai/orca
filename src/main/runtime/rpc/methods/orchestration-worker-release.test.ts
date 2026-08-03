@@ -5,6 +5,14 @@ import { OrchestrationDb } from '../../orchestration/db'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { reconcileRequestedWorkerTerminalReleases } from '../../orchestration/worker-terminal-release-reconciliation'
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+  return { promise, resolve }
+}
+
 describe('orchestration worker release', () => {
   let db: OrchestrationDb
   let dbOpen = false
@@ -224,12 +232,88 @@ describe('orchestration worker release', () => {
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('user_owned')
   })
 
+  it('lets user takeover cancel a release while output capture is pending', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    const pendingRead = deferred<Awaited<ReturnType<OrcaRuntimeService['readTerminal']>>>()
+    vi.mocked(runtime.readTerminal).mockReturnValue(pendingRead.promise)
+
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(runtime.readTerminal).toHaveBeenCalledTimes(1))
+    const changed = (await call('orchestration.workerTerminalUserInput', {
+      paneKey: workerPaneKey
+    })) as { changed: number }
+    expect(changed.changed).toBe(1)
+    pendingRead.resolve({
+      handle: 'term_worker',
+      status: 'running',
+      tail: ['captured before takeover'],
+      truncated: false,
+      nextCursor: '1'
+    })
+
+    await expect(release).resolves.toMatchObject({ state: 'retained', reason: 'user_takeover' })
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('lets an explicit retain cancel a release while output capture is pending', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    const pendingRead = deferred<Awaited<ReturnType<OrcaRuntimeService['readTerminal']>>>()
+    vi.mocked(runtime.readTerminal).mockReturnValue(pendingRead.promise)
+
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(runtime.readTerminal).toHaveBeenCalledTimes(1))
+    await expect(
+      call('orchestration.workerRetain', { dispatch: dispatchId })
+    ).resolves.toMatchObject({ state: 'retained', reason: 'user_requested' })
+    pendingRead.resolve({
+      handle: 'term_worker',
+      status: 'running',
+      tail: ['captured before retention'],
+      truncated: false,
+      nextCursor: '1'
+    })
+
+    await expect(release).resolves.toMatchObject({ state: 'retained', reason: 'user_requested' })
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('does not claim retention succeeded after terminal close was committed', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    const pendingClose = deferred<Awaited<ReturnType<OrcaRuntimeService['closeTerminal']>>>()
+    vi.mocked(runtime.closeTerminal).mockReturnValue(pendingClose.promise)
+
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(runtime.closeTerminal).toHaveBeenCalledTimes(1))
+    await expect(
+      call('orchestration.workerRetain', { dispatch: dispatchId })
+    ).resolves.toMatchObject({ state: 'release_pending' })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('releasing')
+    pendingClose.resolve({ handle: 'term_worker', tabId: 'tab-worker', ptyKilled: true })
+
+    await expect(release).resolves.toMatchObject({ state: 'released' })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
+  })
+
   it('never marks takeover for panes without an owned resource', async () => {
     setup()
     const changed = (await call('orchestration.workerTerminalUserInput', {
       paneKey: 'tab_other:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
     })) as { changed: number }
     expect(changed.changed).toBe(0)
+  })
+
+  it('preserves takeover across a reminted tab key for the same pane leaf', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    const changed = (await call('orchestration.workerTerminalUserInput', {
+      paneKey: 'tab_reminted:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    })) as { changed: number }
+
+    expect(changed.changed).toBe(1)
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('user_owned')
   })
 
   it('retains when the exact process identity changed instead of closing', async () => {
@@ -243,6 +327,32 @@ describe('orchestration worker release', () => {
       reason?: string
     }
     expect(receipt).toMatchObject({ state: 'retained', reason: 'identity_unproven' })
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('re-proves process identity after archive capture before closing', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    const pendingRead = deferred<Awaited<ReturnType<OrcaRuntimeService['readTerminal']>>>()
+    vi.mocked(runtime.readTerminal).mockReturnValue(pendingRead.promise)
+
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(runtime.readTerminal).toHaveBeenCalledTimes(1))
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
+      handle === 'term_worker' ? 'runtime_test:term_worker:2' : null
+    )
+    pendingRead.resolve({
+      handle: 'term_worker',
+      status: 'running',
+      tail: ['output from the old process'],
+      truncated: false,
+      nextCursor: '1'
+    })
+
+    await expect(release).resolves.toMatchObject({
+      state: 'retained',
+      reason: 'identity_unproven'
+    })
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
@@ -317,6 +427,35 @@ describe('orchestration worker release', () => {
     })
   })
 
+  it('keeps a bounded tail when one terminal line exceeds the archive budget', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    const suffix = 'meaningful-tail'
+    vi.mocked(runtime.readTerminal).mockResolvedValue({
+      handle: 'term_worker',
+      status: 'running',
+      tail: [`${'x'.repeat(300_000)}${suffix}`],
+      truncated: false,
+      nextCursor: '1'
+    })
+
+    const release = (await call('orchestration.workerRelease', { dispatch: dispatchId })) as {
+      archive: { status: string | null } | null
+    }
+    const read = (await call('orchestration.workerRead', { dispatch: dispatchId })) as {
+      terminal: { tail: string[]; truncated: boolean }
+      warnings: string[]
+    }
+
+    expect(release.archive?.status).toBe('captured')
+    expect(read.terminal.tail).toHaveLength(1)
+    expect(read.terminal.tail[0]).toMatch(new RegExp(`${suffix}$`))
+    expect(read.terminal.truncated).toBe(true)
+    expect(read.warnings).not.toContain(
+      'The live terminal buffer was empty at release; structured transcript output was unavailable.'
+    )
+  })
+
   it('serves the frozen redacted archive through worker-read after release, with cursors', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
@@ -349,6 +488,47 @@ describe('orchestration worker release', () => {
     expect(page2.cursor).toBeNull()
     // The live terminal is never consulted after release.
     expect(runtime.readTerminal).not.toHaveBeenCalled()
+  })
+
+  it('rejects a legacy live-terminal cursor after output moves to the archive', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    await call('orchestration.workerRelease', { dispatch: dispatchId })
+
+    await expect(
+      call('orchestration.workerRead', { dispatch: dispatchId, cursor: 1 })
+    ).rejects.toThrow(/source changed/i)
+  })
+
+  it('recovers archive metadata when a prior attempt committed only the archive row', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    const requested = db.requestWorkerTerminalRelease(dispatchId)
+    expect(requested.disposition).toBe('requested')
+    if (requested.disposition !== 'requested') {
+      throw new Error('release request was not recorded')
+    }
+    db.storeWorkerTerminalArchive({
+      dispatchId,
+      resourceId: requested.resource.id,
+      kind: 'terminal_tail',
+      content: JSON.stringify({
+        lines: ['archive survived the interrupted attempt'],
+        truncated: false,
+        terminalStatus: 'running',
+        warnings: []
+      })
+    })
+
+    const release = (await call('orchestration.workerRelease', { dispatch: dispatchId })) as {
+      archive: { source: string | null; status: string | null } | null
+    }
+
+    expect(release.archive).toEqual({ source: 'terminal', status: 'captured' })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      archive_source: 'terminal',
+      archive_status: 'captured'
+    })
   })
 
   it('transfers ownership on exact reuse and fences release through the old Dispatch', async () => {
@@ -424,6 +604,23 @@ describe('orchestration worker release', () => {
     })
   })
 
+  it('reports abandoned workers as retained instead of reclaimable', async () => {
+    setup()
+    const { dispatchId } = await startWorker()
+    await call('orchestration.workerAbandon', { dispatch: dispatchId })
+
+    const listed = (await call('orchestration.workerList', { run: activeRunId })) as {
+      workers: { dispatchId: string; terminalState: string | null }[]
+    }
+
+    expect(listed.workers).toContainEqual(
+      expect.objectContaining({ dispatchId, terminalState: 'retained' })
+    )
+    await expect(call('orchestration.workerRelease', { dispatch: dispatchId })).rejects.toThrow(
+      /only a succeeded or failed worker can release/
+    )
+  })
+
   it('worker-show exposes the terminal resource', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
@@ -470,6 +667,26 @@ describe('orchestration worker release', () => {
     const result = await reconcileRequestedWorkerTerminalReleases(runtime)
     expect(result.attempted).toBe(0)
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('coalesces overlapping reconciliation passes and closes each resource once', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    expect(db.requestWorkerTerminalRelease(dispatchId).disposition).toBe('requested')
+    const pendingClose = deferred<Awaited<ReturnType<OrcaRuntimeService['closeTerminal']>>>()
+    vi.mocked(runtime.closeTerminal).mockReturnValue(pendingClose.promise)
+
+    const first = reconcileRequestedWorkerTerminalReleases(runtime)
+    await vi.waitFor(() => expect(runtime.closeTerminal).toHaveBeenCalledTimes(1))
+    const second = reconcileRequestedWorkerTerminalReleases(runtime)
+    expect(second).toBe(first)
+    pendingClose.resolve({ handle: 'term_worker', tabId: 'tab-worker', ptyKilled: true })
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ attempted: 1, released: 1 }),
+      expect.objectContaining({ attempted: 1, released: 1 })
+    ])
+    expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
   })
 
   it('keeps live terminals bounded across 50 settled workers while controls survive', async () => {

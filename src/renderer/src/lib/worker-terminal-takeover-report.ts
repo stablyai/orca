@@ -5,6 +5,7 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 // of latching forever.
 const REPORT_INTERVAL_MS = 30_000
 const REPORT_GATE_PRUNE_SIZE = 256
+const REPORT_RETRY_DELAY_MS = 250
 
 const lastReportByPaneKey = new Map<string, number>()
 
@@ -16,7 +17,8 @@ export function reportWorkerTerminalUserInput(
   runtimeEnvironmentId: string | null
 ): void {
   const now = Date.now()
-  const last = lastReportByPaneKey.get(paneKey)
+  const gateKey = JSON.stringify([runtimeEnvironmentId, paneKey])
+  const last = lastReportByPaneKey.get(gateKey)
   if (last !== undefined && now - last < REPORT_INTERVAL_MS) {
     return
   }
@@ -27,13 +29,33 @@ export function reportWorkerTerminalUserInput(
       }
     }
   }
-  lastReportByPaneKey.set(paneKey, now)
-  void callRuntimeRpc(
+  lastReportByPaneKey.set(gateKey, now)
+  void sendTakeoverReport(paneKey, runtimeEnvironmentId).catch(() => {
+    if (lastReportByPaneKey.get(gateKey) === now) {
+      lastReportByPaneKey.delete(gateKey)
+    }
+  })
+}
+
+async function sendTakeoverReport(
+  paneKey: string,
+  runtimeEnvironmentId: string | null
+): Promise<void> {
+  const target =
     runtimeEnvironmentId !== null
-      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
-      : { kind: 'local' },
-    'orchestration.workerTerminalUserInput',
-    { paneKey },
-    { suppressFeatureInteraction: true, reuseRecentCompatibilityFailure: true }
-  ).catch(() => undefined)
+      ? ({ kind: 'environment', environmentId: runtimeEnvironmentId } as const)
+      : ({ kind: 'local' } as const)
+  const report = () =>
+    callRuntimeRpc(
+      target,
+      'orchestration.workerTerminalUserInput',
+      { paneKey },
+      { suppressFeatureInteraction: true, reuseRecentCompatibilityFailure: true }
+    )
+  try {
+    await report()
+  } catch {
+    await new Promise<void>((resolve) => setTimeout(resolve, REPORT_RETRY_DELAY_MS))
+    await report()
+  }
 }

@@ -127,8 +127,8 @@ export function deriveWorkerTerminalListState(params: {
   if (resource.ownership_state !== 'owned' || resource.release_state === 'retained') {
     return 'retained'
   }
-  if (!WORKER_SETTLED_STATES.includes(params.workerState)) {
-    return 'active'
+  if (WORKER_RELEASABLE_STATES.includes(params.workerState)) {
+    return 'reclaimable'
   }
-  return 'reclaimable'
+  return WORKER_SETTLED_STATES.includes(params.workerState) ? 'retained' : 'active'
 }

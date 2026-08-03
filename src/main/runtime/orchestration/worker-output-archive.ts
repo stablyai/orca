@@ -14,6 +14,7 @@ export type WorkerTranscriptPinArchive = {
   transcriptPath: string | null
   processIncarnation: string
   observedAfter: number
+  endOffset?: number
 }
 
 export type WorkerTerminalTailArchive = {
@@ -54,7 +55,8 @@ export async function captureWorkerOutputArchive(args: {
           providerSessionId: session.providerSession.id,
           transcriptPath: session.providerSession.transcriptPath ?? null,
           processIncarnation: session.processIncarnation,
-          observedAfter: args.attachedAtMs
+          observedAfter: args.attachedAtMs,
+          endOffset: probe.nextOffset
         }
       }
     }
@@ -103,6 +105,9 @@ function boundArchiveLines(lines: string[]): { lines: string[]; truncated: boole
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const cost = lines[index].length + 1
     if (cost > budget) {
+      if (kept.length === 0 && budget > 1) {
+        kept.unshift(lines[index].slice(-(budget - 1)))
+      }
       break
     }
     kept.unshift(lines[index])
