@@ -72,6 +72,7 @@ import {
   type TerminalOutputSourceRange
 } from '../../../../shared/terminal-output-source-range'
 import type { RemoteTerminalSourceRangeReplacementReservation } from '../../remote-terminal-source-range-consumer'
+import { withTerminalCloseAttribution } from '../terminal-close-attribution'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
@@ -1499,15 +1500,27 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.close',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      close: await runtime.closeTerminal(params.terminal)
+    handler: async (params, context) => ({
+      close: await withTerminalCloseAttribution(
+        'terminal.close',
+        context,
+        'terminal',
+        params.terminal,
+        () => context.runtime.closeTerminal(params.terminal)
+      )
     })
   }),
   defineMethod({
     name: 'terminal.closeTab',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      close: await runtime.closeTerminalTab(params.terminal)
+    handler: async (params, context) => ({
+      close: await withTerminalCloseAttribution(
+        'terminal.closeTab',
+        context,
+        'terminal-tab',
+        params.terminal,
+        () => context.runtime.closeTerminalTab(params.terminal)
+      )
     })
   }),
   defineMethod({
