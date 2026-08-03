@@ -36,6 +36,13 @@ export function resolveHostedReviewAuthInstruction(provider: HostedReviewProvide
   return 'Run gh auth login'
 }
 
+export function resolveUnavailableCreateReviewLookupNoticeMessage(
+  provider: HostedReviewProvider
+): string {
+  const copy = localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
+  return `Create ${copy.shortLabel} failed: Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`
+}
+
 export function resolveBlockedCreateReviewNoticeMessage(
   eligibility: HostedReviewCreationEligibility | null | undefined
 ): string | null {
@@ -43,6 +50,9 @@ export function resolveBlockedCreateReviewNoticeMessage(
     return null
   }
   const reason = eligibility.blockedReason
+  if (eligibility.reviewLookupOutcome === 'unavailable' && reason === null) {
+    return resolveUnavailableCreateReviewLookupNoticeMessage(eligibility.provider)
+  }
   if (!canClickBlockedCreateReviewReason(reason)) {
     return null
   }

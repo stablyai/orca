@@ -112,7 +112,8 @@ describe('remote runtime terminal data subscriptions', () => {
     expect(subscribePayload?.capabilities).toEqual({
       ackOutput: 1,
       ackOutputSourceRanges: 1,
-      desktopViewportClaims: 1
+      desktopViewportClaims: 1,
+      outputPause: 1
     })
 
     callbacks?.onBinary?.(

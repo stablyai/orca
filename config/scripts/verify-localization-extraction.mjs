@@ -82,13 +82,17 @@ async function extractToTemporaryCatalog(root, tempDir) {
   const outputPattern = path.join(tempDir, '{{language}}.json')
   // Why: extraction output is evidence for this check, not another committed
   // catalog that feature authors must keep synchronized.
-  await execFileAsync(process.execPath, [cliPath, 'extract', '--sync-primary', '--quiet'], {
-    cwd: root,
-    env: {
-      ...process.env,
-      ORCA_I18N_EXTRACTION_OUTPUT: outputPattern.split(path.sep).join('/')
+  await execFileAsync(
+    process.execPath,
+    [cliPath, '--config', 'config/i18next.config.ts', 'extract', '--sync-primary', '--quiet'],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        ORCA_I18N_EXTRACTION_OUTPUT: outputPattern.split(path.sep).join('/')
+      }
     }
-  })
+  )
   return JSON.parse(await fs.readFile(path.join(tempDir, 'en.json'), 'utf8'))
 }
 

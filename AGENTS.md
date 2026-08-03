@@ -5,7 +5,7 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 # Style
 ## Concise/Brief Non-obviosu comments ONLY
   * DO NOT: be verbose, explain the obvious, walk through the code ("WHY not HOW")
-  * DO: BE CONCISE. 1 LINE if possible
+  * BE CONCISE. 1 LINE if possible
 
 ## Lint Rules: Do Not Disable Max Lines
 

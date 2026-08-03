@@ -2,7 +2,6 @@
 // 13-byte framing header matching VS Code's PersistentProtocol wire format.
 // See design-ssh-support.md § JSON-RPC Protocol Specification.
 
-import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../shared/ssh-types'
 import {
   FrameDecoder,
   FrameDecoderContinuationError,
@@ -12,7 +11,7 @@ import {
   FRAME_DECODER_MAX_BYTES_PER_TURN,
   FRAME_DECODER_MAX_TURN_MS,
   FRAME_DECODER_MAX_RETAINED_BYTES
-} from './relay-frame-decoder'
+} from '../../shared/relay-frame-decoder'
 
 export {
   FrameDecoder,
@@ -24,7 +23,7 @@ export {
   FRAME_DECODER_MAX_TURN_MS,
   FRAME_DECODER_MAX_RETAINED_BYTES
 }
-export type { DecodedFrame, FrameDecoderOptions } from './relay-frame-decoder'
+export type { DecodedFrame, FrameDecoderOptions } from '../../shared/relay-frame-decoder'
 
 export const RELAY_VERSION = '0.1.0'
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`
@@ -40,9 +39,6 @@ export const MessageType = {
 /** Keepalive/timeout (VS Code ProtocolConstants). */
 export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
-
-/** Reconnection grace period (default, overridable by relay --grace-time). */
-export const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 
 // ── Relay error codes ───────────────────────────────────────────────
 

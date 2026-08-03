@@ -974,7 +974,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
   })
 
-  it('clears WebGL texture atlases when the active visible terminal document becomes visible', () => {
+  it('preserves WebGL texture atlases when the active terminal document becomes visible', () => {
     let visibilityState: DocumentVisibilityState = 'hidden'
     const documentListeners = new Map<string, EventListenerOrEventListenerObject>()
     vi.stubGlobal('document', {
@@ -1024,6 +1024,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       throw new Error('expected visibilitychange listener')
     }
     manager.resetWebglTextureAtlases.mockClear()
+    manager.scheduleRevealPresent.mockClear()
     siblingManager.resetWebglTextureAtlases.mockClear()
     listener(new Event('visibilitychange'))
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
@@ -1032,8 +1033,9 @@ describe('useTerminalPaneGlobalEffects', () => {
     visibilityState = 'visible'
     listener(new Event('visibilitychange'))
 
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(siblingManager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(siblingManager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealPresent).toHaveBeenCalledTimes(1)
   })
 
   it('registers document visibility recovery for visible inactive terminals but not hidden ones', () => {

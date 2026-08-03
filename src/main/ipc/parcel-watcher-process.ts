@@ -21,9 +21,6 @@ export type {
 } from './parcel-watcher-process-protocol'
 
 const sharedWatcherProcessSupervisor = new WatcherProcessSupervisor()
-// Why: the canary pauses during legitimate crawls, so production callers need
-// a separate liveness fuse once a child reports that it owns native setup.
-export const WATCHER_PROCESS_SUBSCRIBE_TIMEOUT_MS = 60_000
 // Why: healthy roots share one child; only fault quarantine scales to four,
 // containing a failed shard without paying that RSS cost during normal use.
 const runtimeWatcherProcessPool = new RuntimeWatcherProcessPool()

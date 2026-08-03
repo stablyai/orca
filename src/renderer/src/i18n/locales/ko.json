@@ -802,8 +802,8 @@
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
       },
       "useMacosTccPromptNotice": {
-        "title": "반복되는 macOS 파일 접근 권한 요청 줄이기",
-        "description": "에이전트와 터미널 도구의 파일 접근은 macOS에서 Orca의 접근으로 표시됩니다. 전체 디스크 접근 권한을 허용하면 이러한 요청을 줄일 수 있습니다.",
+        "title": "“Orca에서 접근하려고 합니다…” 권한 요청이 표시되나요?",
+        "description": "Orca에서 실행 중인 에이전트나 터미널 도구가 보호된 파일에 접근하려고 하면 macOS 권한 메시지가 표시될 수 있습니다. 이러한 요청을 줄이려면 설정에서 전체 디스크 접근 권한을 허용하세요.",
         "openSettings": "설정 열기",
         "dismiss": "다시 표시하지 않기"
       }
@@ -869,11 +869,6 @@
         "83ac703dda": "담당자",
         "00ccdf9b5a": "상태",
         "2aa9acdf34": "GitHub에서 라벨 편집",
-        "d23bbb6416": "{{value0}} 건너뜀",
-        "18f80e1329": "{{value0}} 보류 중",
-        "b1ac991806": "{{value0}} 실패",
-        "checksNeedActionChip": "{{value0}}개 조치 필요",
-        "311d0cee55": "{{value0}} 통과",
         "e52bed9264": "아직 보고된 체크가 없습니다.",
         "90020cc1f3": "이 PR에는 아직 보고된 체크가 없습니다.",
         "ecffebc251": "체크를 찾을 수 없습니다.",
@@ -1363,11 +1358,6 @@
         "bc215fea4d": "+ 라벨",
         "b936cc51a4": "닫힘",
         "7b8f6bf6d8": "열림",
-        "e6ad0a8d06": "{{value0}} 건너뛰었습니다",
-        "88267924d5": "{{value0}} 보류 중",
-        "ae2a34c7b8": "{{value0}} 실패",
-        "checksNeedActionChip": "{{value0}}개 조치 필요",
-        "7c5035931a": "{{value0}} 통과",
         "a18d01cda3": "아직 보고된 체크가 없습니다.",
         "3912daf310": "이 PR에는 아직 보고된 체크가 없습니다.",
         "45877f5089": "체크를 찾을 수 없습니다.",
@@ -1866,7 +1856,10 @@
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
         "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
-        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
+        "loadPageUnreachable": "{{value0}} 페이지는 GitHub 검색이 반환할 수 있는 범위를 벗어났습니다.",
+        "loadPageFailed": "GitHub에서 {{value0}} 페이지를 불러오지 못했습니다.",
+        "loadPageNoMoreResults": "{{value0}} 페이지에 더 이상 결과가 없습니다."
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -5681,7 +5674,7 @@
           "e7bb06007c": "LAN",
           "4a73f5217a": "다른 로컬 앱을 제어하는 ​​스크립트를 위한 Apple 이벤트.",
           "e119f0d66b": "자동화",
-          "7ca17b62c8": "Orca가 실행하는 에이전트가 다른 앱의 데이터를 읽으면, macOS는 터미널 명령을 실행하는 프로세스인 Orca를 표시합니다. 이러한 요청을 줄이려면 Orca와 Orca Helper에 이 권한을 허용하세요. 그런 다음 Orca를 종료하고, 남아 있는 Orca Helper 프로세스도 모두 종료한 후 Orca를 다시 여세요.",
+          "7ca17b62c8": "Orca가 실행하는 에이전트가 다른 앱의 데이터를 읽으면, macOS는 터미널 명령을 실행하는 프로세스인 Orca를 표시합니다. 이러한 요청을 줄이려면 Orca에 이 권한을 허용하세요. 그런 다음 Orca를 종료했다가 다시 여세요.",
           "c566bca278": "전체 디스크 접근 권한",
           "9f35980756": "키 입력 주입, 창 제어 및 UI 자동화 도구입니다.",
           "5b2f22ca2d": "접근성",
@@ -7054,7 +7047,12 @@
           "4a342f44c1": "고급 연결",
           "e9609ddca6": "프록시, 점프 호스트, 연결 재사용",
           "8c922dffba": "더 빠른 설정을 위해 SSH 연결 재사용",
-          "53e9aabfc0": "사용 가능한 경우 OpenSSH 멀티플렉싱을 사용합니다. 사용자 지정 SSH 제한이 있는 호스트에서는 끄세요."
+          "53e9aabfc0": "사용 가능한 경우 OpenSSH 멀티플렉싱을 사용합니다. 사용자 지정 SSH 제한이 있는 호스트에서는 끄세요.",
+          "editTitle": "SSH 호스트 편집",
+          "addTitle": "SSH 호스트 추가",
+          "editDescription": "이 머신의 연결 세부 정보를 업데이트합니다. 변경 사항은 다음 연결 시 적용됩니다.",
+          "addDescription": "SSH로 로그인할 수 있는 영구 머신을 추가합니다.",
+          "editingPrefix": "편집 중"
         },
         "TasksPane": {
           "f71d8a9dd3": "작업 제공자",
@@ -8158,8 +8156,8 @@
             "4497e2e2bb": "리치 Markdown을 편집하는 동안 브라우저 맞춤법 밑줄과 제안을 표시합니다.",
             "e61157e926": "편집기 자동 줄 바꿈",
             "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다.",
-            "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamily": "편집기 글꼴",
+            "editorFontFamilyDesc": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다."
           }
         },
         "git": {
@@ -9211,7 +9209,8 @@
           }
         },
         "computerUseSummary": {
-          "permissionsRequired": "agents가 앱 창을 조작하려면 먼저 {{value0}} 권한{{value1}}이 필요합니다.",
+          "permissionsRequired_one": "agents가 앱 창을 조작하려면 먼저 1 권한이 필요합니다.",
+          "permissionsRequired_other": "agents가 앱 창을 조작하려면 먼저 {{value0}} 권한이 필요합니다.",
           "checkingTitle": "Computer Use 액세스 확인 중입니다.",
           "checkingDescription": "Orca가 Computer Use 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다.",
           "unavailableTitle": "Computer Use를 사용할 수 없습니다.",
@@ -9619,9 +9618,9 @@
           "notice": "Orca Relay is in beta."
         },
         "EditorFontFamilySetting": {
-          "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
-          "placeholder": "Same as terminal font"
+          "title": "편집기 글꼴",
+          "description": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다.",
+          "placeholder": "터미널 글꼴과 동일"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -11100,6 +11099,7 @@
             "transcriptsSkipped": "대화 기록 {{count}}개 건너뜀",
             "noAgentSessionsFound": "agent 세션을 찾을 수 없습니다",
             "noSessionsMatchFilters": "현재 필터와 일치하는 세션이 없습니다",
+            "noAgentsSelected": "선택된 에이전트가 없습니다",
             "sessionId": "세션 ID",
             "logPath": "로그 경로",
             "agents": "에이전트",
@@ -11125,6 +11125,8 @@
             "viewOptionsAriaLabel": "세션 기록 보기 옵션",
             "viewOptions": "보기 옵션",
             "agents": "에이전트",
+            "selectAllAgents": "모두 선택",
+            "clearAgents": "모두 해제",
             "sort": "정렬",
             "lastUpdated": "마지막 업데이트",
             "created": "생성됨",
@@ -11198,7 +11200,19 @@
             "recoverableEmptyOpenLogHint": "로그를 열어 복구하세요.",
             "emptyConversationDetail": "이 세션에는 저장된 대화가 없어 재개할 수 없습니다.",
             "queuedMessages": "대기 중인 메시지 {{value0}}개",
-            "subagentTranscripts": "서브에이전트 대화 기록 {{value0}}개"
+            "subagentTranscripts": "서브에이전트 대화 기록 {{value0}}개",
+            "prompt": "프롬프트",
+            "firstPrompt": "첫 프롬프트",
+            "recentPrompt": "최근 프롬프트",
+            "firstPromptCopied": "첫 프롬프트를 복사했습니다",
+            "recentPromptCopied": "최근 프롬프트를 복사했습니다",
+            "copyFirstPrompt": "첫 프롬프트 복사",
+            "copyRecentPrompt": "최근 프롬프트 복사",
+            "copyPrompt": "프롬프트 복사",
+            "copied": "복사됨",
+            "copy": "복사",
+            "noFirstPromptAvailable": "첫 프롬프트를 사용할 수 없습니다",
+            "loadingFirstPrompt": "첫 프롬프트를 불러오는 중…"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} 세션 재개",
@@ -14267,6 +14281,12 @@
           },
           "undo": "실행 취소",
           "widthOption": "{{value0}} px"
+        },
+        "grab": {
+          "errorNotReady": "이 페이지에서는 아직 요소를 선택할 수 없습니다.",
+          "errorNotAuthorized": "브라우저 접근이 거부되었습니다.",
+          "errorAlreadyActive": "요소 선택이 이미 활성화되어 있습니다.",
+          "errorInjectionFailed": "이 페이지에서 요소 선택을 시작할 수 없습니다."
         }
       },
       "pluginCatalog": {
@@ -14283,6 +14303,13 @@
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
         }
+      },
+      "pr-check-counts": {
+        "passingChip": "{{value0}} 통과",
+        "failingChip": "{{value0}} 실패",
+        "pendingChip": "{{value0}} 보류 중",
+        "needsActionChip": "{{value0}}개 조치 필요",
+        "unresolvedChip": "{{value0}}개 미해결"
       }
     },
     "i18n": {

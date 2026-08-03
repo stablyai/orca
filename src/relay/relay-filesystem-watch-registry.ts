@@ -223,7 +223,7 @@ export class RelayFilesystemWatchRegistry {
             emitOverflow()
             return
           }
-          emitRelayWatcherEvents(this.dispatcher, state.closed, events)
+          emitRelayWatcherEvents(this.dispatcher, state.rootPath, state.closed, events)
         },
         RELAY_WATCH_OPTIONS,
         {

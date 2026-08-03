@@ -35,7 +35,8 @@ export {
   disposeParkedTerminalWatchersForPtyIds,
   disposeParkedTerminalWatchersForWorktree,
   getParkedTerminalWatcherTabIds,
-  pruneParkedTerminalWatchers
+  pruneParkedTerminalWatchers,
+  terminalWatcherLiveWorkspaceIds
 } from './terminal-parked-watcher-registry'
 export type { ParkedTerminalPaneCapture } from './terminal-parked-watcher-registry'
 export {

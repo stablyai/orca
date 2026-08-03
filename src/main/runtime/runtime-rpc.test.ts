@@ -3419,6 +3419,47 @@ describe('OrcaRuntimeRpcServer', () => {
     )
   })
 
+  it('rejects unpaired terminal creates before runtime dispatch', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const createMobileSessionTerminal = vi.fn()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const replies: Record<string, unknown>[] = []
+    const send = async (id: string, deviceToken?: string): Promise<void> => {
+      await server['handleWebSocketMessage'](
+        JSON.stringify({
+          id,
+          method: 'session.tabs.createTerminal',
+          ...(deviceToken ? { deviceToken } : {}),
+          params: { worktree: 'id:wt-1' }
+        }),
+        (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+        () => {}
+      )
+    }
+
+    await send('req_missing')
+    await send('req_invalid', 'invalid-token')
+
+    expect(replies).toEqual([
+      expect.objectContaining({
+        id: 'req_missing',
+        error: expect.objectContaining({ code: 'unauthorized' }),
+        ok: false
+      }),
+      expect.objectContaining({
+        id: 'req_invalid',
+        error: expect.objectContaining({ code: 'unauthorized' }),
+        ok: false
+      })
+    ])
+    expect(createMobileSessionTerminal).not.toHaveBeenCalled()
+  })
+
   it('allows runtime-scoped WebSocket tokens to use the full RPC surface', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })

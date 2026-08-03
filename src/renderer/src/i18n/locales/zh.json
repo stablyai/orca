@@ -802,8 +802,8 @@
         "pasteTooLarge": "粘贴内容过大。"
       },
       "useMacosTccPromptNotice": {
-        "title": "减少重复出现的 macOS 文件访问权限提示",
-        "description": "macOS 会将代理和终端工具的文件访问归因于 Orca。授予“完全磁盘访问权限”可减少此类提示。",
+        "title": "看到“Orca 想要访问…”提示？",
+        "description": "当 Orca 中运行的代理或终端工具尝试访问受保护的文件时，macOS 可能会显示权限信息。请在“设置”中授予“完全磁盘访问权限”，以减少此类提示。",
         "openSettings": "打开设置",
         "dismiss": "不再显示"
       }
@@ -869,11 +869,6 @@
         "83ac703dda": "负责人",
         "00ccdf9b5a": "状态",
         "2aa9acdf34": "在 GitHub 上编辑标签",
-        "d23bbb6416": "{{value0}} 已跳过",
-        "18f80e1329": "{{value0}} 待处理",
-        "b1ac991806": "{{value0}} 失败",
-        "checksNeedActionChip": "{{value0}} 个需要操作",
-        "311d0cee55": "{{value0}} 通过",
         "e52bed9264": "尚未报告任何 CI 检查",
         "90020cc1f3": "此PR尚未报告检查。",
         "ecffebc251": "未找到检查",
@@ -1363,11 +1358,6 @@
         "bc215fea4d": "+ 标签",
         "b936cc51a4": "已关闭",
         "7b8f6bf6d8": "进行中",
-        "e6ad0a8d06": "{{value0}} 已跳过",
-        "88267924d5": "{{value0}} 待处理",
-        "ae2a34c7b8": "{{value0}} 失败",
-        "checksNeedActionChip": "{{value0}} 个需要操作",
-        "7c5035931a": "{{value0}} 通过",
         "a18d01cda3": "尚未报告任何 CI 检查",
         "3912daf310": "此PR尚未报告检查。",
         "45877f5089": "未找到检查",
@@ -1866,7 +1856,10 @@
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
         "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
-        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
+        "loadPageUnreachable": "第 {{value0}} 页超出了 GitHub 搜索可返回的范围。",
+        "loadPageFailed": "无法从 GitHub 加载第 {{value0}} 页。",
+        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -2498,7 +2491,9 @@
             "selectedForDeletionCount": "已选择删除：{{value0}}",
             "deleteButtonCount": "删除 {{value0}}",
             "archivedStatus": "已归档",
-            "readyStatus": "就绪"
+            "readyStatus": "就绪",
+            "f637f63882": "资源管理器统计到 {{value0}} 个，此列表找到 {{value1}} 个。该计数仅依据 Orca 的活动记录，而此次扫描还会检查每个工作区的 git 历史，并跳过未连接的远程主机。",
+            "74f6c16279": "返回"
           },
           "backgroundRemoval": {
             "removed": "已删除工作区：{{value0}}",
@@ -2545,6 +2540,16 @@
             "dirtyFilesBlocker": "已更改文件",
             "unknownBaseBlocker": "无法验证未推送提交",
             "dismissedBlocker": "已忽略"
+          },
+          "workspace": {
+            "cleanup": {
+              "candidate": {
+                "row": {
+                  "b5d2b33e47": "正在删除…",
+                  "e1135728e3": "已加入删除队列"
+                }
+              }
+            }
           }
         }
       },
@@ -5681,7 +5686,7 @@
           "e7bb06007c": "局域网",
           "4a73f5217a": "用于控制其他本地应用程序的脚本的 Apple 事件。",
           "e119f0d66b": "自动化",
-          "7ca17b62c8": "当 Orca 运行的代理读取其他应用的数据时，macOS 会显示 Orca，因为 Orca 是执行终端命令的进程。请为 Orca 和 Orca Helper 授予此权限，以减少此类提示。然后退出 Orca，结束所有仍在运行的 Orca Helper 进程，再重新打开 Orca。",
+          "7ca17b62c8": "当 Orca 运行的代理读取其他应用的数据时，macOS 会显示 Orca，因为 Orca 是执行终端命令的进程。请为 Orca 授予此权限，以减少此类提示。然后退出并重新打开 Orca。",
           "c566bca278": "完全磁盘访问权限",
           "9f35980756": "击键注入、窗口控制和 UI 自动化工具。",
           "5b2f22ca2d": "无障碍",
@@ -7054,7 +7059,12 @@
           "4a342f44c1": "高级连接",
           "e9609ddca6": "代理、跳板主机和连接复用",
           "8c922dffba": "复用 SSH 连接以加快设置",
-          "53e9aabfc0": "可用时使用 OpenSSH 多路复用。对于有自定义 SSH 限制的主机，请关闭此项。"
+          "53e9aabfc0": "可用时使用 OpenSSH 多路复用。对于有自定义 SSH 限制的主机，请关闭此项。",
+          "editTitle": "编辑 SSH 主机",
+          "addTitle": "添加 SSH 主机",
+          "editDescription": "更新此机器的连接详情。更改将在下次连接时生效。",
+          "addDescription": "添加一台可通过 SSH 登录的持久机器。",
+          "editingPrefix": "正在编辑"
         },
         "TasksPane": {
           "f71d8a9dd3": "任务提供者",
@@ -8158,8 +8168,8 @@
             "4497e2e2bb": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。",
             "e61157e926": "编辑器自动换行",
             "005be5c699": "在文件编辑器中自动换行长行，而无需水平滚动。",
-            "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamily": "编辑器字体",
+            "editorFontFamilyDesc": "文件编辑器和差异视图使用的字体。留空则跟随终端字体。"
           }
         },
         "git": {
@@ -9211,7 +9221,8 @@
           }
         },
         "computerUseSummary": {
-          "permissionsRequired": "在智能体可操作应用窗口前需要 {{value0}} 项权限{{value1}}。",
+          "permissionsRequired_one": "在智能体可操作应用窗口前需要 1 项权限。",
+          "permissionsRequired_other": "在智能体可操作应用窗口前需要 {{value0}} 项权限。",
           "checkingTitle": "正在检查计算机控制访问权限。",
           "checkingDescription": "Orca 正在检查计算机控制助手的 macOS 隐私权限。",
           "unavailableTitle": "计算机控制不可用。",
@@ -9619,9 +9630,9 @@
           "notice": "Orca Relay is in beta."
         },
         "EditorFontFamilySetting": {
-          "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
-          "placeholder": "Same as terminal font"
+          "title": "编辑器字体",
+          "description": "文件编辑器和差异视图使用的字体。留空则跟随终端字体。",
+          "placeholder": "与终端字体相同"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -11100,6 +11111,7 @@
             "transcriptsSkipped": "跳过了 {{count}} 个记录",
             "noAgentSessionsFound": "未找到智能体会话",
             "noSessionsMatchFilters": "没有会话符合当前筛选条件",
+            "noAgentsSelected": "未选择任何智能体",
             "sessionId": "会话 ID",
             "logPath": "日志路径",
             "agents": "智能体",
@@ -11125,6 +11137,8 @@
             "viewOptionsAriaLabel": "会话历史查看选项",
             "viewOptions": "查看选项",
             "agents": "智能体",
+            "selectAllAgents": "选择全部",
+            "clearAgents": "清除",
             "sort": "排序",
             "lastUpdated": "最后更新",
             "created": "创建时间",
@@ -11198,7 +11212,19 @@
             "recoverableEmptyOpenLogHint": "打开日志以恢复它们。",
             "emptyConversationDetail": "此会话没有已保存的对话，无法恢复。",
             "queuedMessages": "{{value0}} 条排队消息",
-            "subagentTranscripts": "{{value0}} 个子智能体记录"
+            "subagentTranscripts": "{{value0}} 个子智能体记录",
+            "prompt": "提示",
+            "firstPrompt": "首次提示",
+            "recentPrompt": "最近提示",
+            "firstPromptCopied": "已复制首次提示",
+            "recentPromptCopied": "已复制最近提示",
+            "copyFirstPrompt": "复制首次提示",
+            "copyRecentPrompt": "复制最近提示",
+            "copyPrompt": "复制提示",
+            "copied": "已复制",
+            "copy": "复制",
+            "noFirstPromptAvailable": "没有可用的首次提示",
+            "loadingFirstPrompt": "正在加载首次提示…"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",
@@ -13572,10 +13598,10 @@
           "2dc9ee84d0": "3小时",
           "521f77cd58": "1小时",
           "e5ad263ae5": "30分钟",
-          "529dc6c0b7": "没有恩典",
+          "529dc6c0b7": "无宽限期",
           "3d70c185c8": "如果 Orca 或执行主机在计划时间不可用，Orca 会在该窗口内变得可用时运行一次错过的事件。较旧的错过运行将被跳过。",
-          "3df53d554a": "错过运行恩典帮助",
-          "fc089e5fde": "优雅"
+          "3df53d554a": "错过运行宽限期帮助",
+          "fc089e5fde": "宽限期"
         },
         "AutomationPrecheckFields": {
           "d2a2ac89ac": "10分钟",
@@ -14267,6 +14293,12 @@
           },
           "undo": "撤销",
           "widthOption": "{{value0}} px"
+        },
+        "grab": {
+          "errorNotReady": "此页面尚未准备好进行元素选择。",
+          "errorNotAuthorized": "浏览器访问被拒绝。",
+          "errorAlreadyActive": "元素选择已处于活动状态。",
+          "errorInjectionFailed": "无法在此页面上启动元素选择。"
         }
       },
       "pluginCatalog": {
@@ -14283,6 +14315,13 @@
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
         }
+      },
+      "pr-check-counts": {
+        "passingChip": "{{value0}} 通过",
+        "failingChip": "{{value0}} 失败",
+        "pendingChip": "{{value0}} 待处理",
+        "needsActionChip": "{{value0}} 个需要操作",
+        "unresolvedChip": "{{value0}} 个未解决"
       }
     },
     "i18n": {

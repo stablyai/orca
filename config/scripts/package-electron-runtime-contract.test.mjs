@@ -487,7 +487,7 @@ describe('Electron runtime package contract', () => {
     expect(uploadStep.with.path).toBe('${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}')
   })
 
-  it('keeps terminal rendering regressions in the fast golden E2E gate', () => {
+  it('keeps terminal rendering regressions in the manual golden E2E workflow', () => {
     const packageScripts = packageJson.scripts
     const goldenWorkflow = parse(
       readFileSync(join(projectDir, '.github/workflows/golden-e2e-experiment.yml'), 'utf8')
@@ -511,7 +511,6 @@ describe('Electron runtime package contract', () => {
 
       return steps.find((step) => step.name === `Run golden E2E tests on ${label}`)
     })
-    const pullRequestPaths = goldenWorkflow.on.pull_request.paths
     const releaseGoldenJob = releaseWorkflow.jobs['terminal-rendering-golden']
     const releaseEvidenceJob = releaseWorkflow.jobs['terminal-rendering-release-evidence']
     const releaseBuildNeeds = releaseWorkflow.jobs.build.needs
@@ -540,11 +539,8 @@ describe('Electron runtime package contract', () => {
     for (const runStep of goldenRunSteps) {
       expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
     }
-    expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
-    expect(pullRequestPaths).toContain('tests/e2e/terminal-webgl-atlas-budget.spec.ts')
-    expect(pullRequestPaths).toContain('config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch')
-    expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
-    expect(pullRequestPaths).toContain('src/renderer/src/lib/pane-manager/**')
+    expect(goldenWorkflow.on.pull_request).toBeUndefined()
+    expect(goldenWorkflow.on.workflow_dispatch).toBeDefined()
     expect(releaseBuildNeeds).not.toContain('terminal-rendering-golden')
     expect(releaseBuildNeeds).not.toContain('terminal-rendering-release-evidence')
     expect(publishReleaseNeeds).toContain('terminal-rendering-golden')

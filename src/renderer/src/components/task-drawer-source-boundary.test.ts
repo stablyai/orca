@@ -20,12 +20,12 @@ describe('task drawer source boundaries', () => {
   it('threads GitHub task source context through detail mutations', () => {
     const source = componentSource('GitHubItemDialog.tsx')
     const issueUpdate = sourceBetween(
-      source,
+      componentSource('github/github-work-item-edit-mutations.ts'),
       'async function runIssueUpdate',
       'async function runWorkItemBodyUpdate'
     )
     const commentUpdate = sourceBetween(
-      source,
+      componentSource('github/github-work-item-comment-mutations.ts'),
       'function addIssueCommentForRepo',
       'function addPRReviewCommentForRepo'
     )

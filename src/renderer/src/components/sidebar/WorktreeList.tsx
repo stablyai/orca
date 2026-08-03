@@ -4196,10 +4196,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   projectGroupPathStatus.reason === 'ambiguous-connection')
               const projectGroupDepth = row.projectGroupDepth ?? 0
               const isHeaderCollapsed = collapsedGroups.has(row.key)
-              // Why: repo/project and status headers share compact section chrome; flat "All" stays a simple label.
+              // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
               const showHeaderCollapseAffordance =
                 row.count > 0 &&
-                (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null)
+                (isRepoHeader ||
+                  isProjectGroupHeader ||
+                  headerWorkspaceStatus !== null ||
+                  isPinnedHeader)
               // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
               const headerPaddingLeft =
                 isRepoHeader || isProjectGroupHeader

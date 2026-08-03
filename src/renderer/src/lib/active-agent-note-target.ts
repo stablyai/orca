@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react'
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
-import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   getSettingsForWorktreeRuntimeOwner,
@@ -78,48 +76,6 @@ export function getActiveTerminalNoteTarget(
 
   const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
   return leafId ? { tabId, leafId } : null
-}
-
-export function useCanSendNotesToActiveTerminal(worktreeId: string): boolean {
-  const canSendFromRendererState = useAppStore(
-    (state) => getActiveAgentNoteTarget(state, worktreeId) !== null
-  )
-  const probeKey = useAppStore(
-    (state) => getActiveAgentRuntimeProbeDescriptor(state, worktreeId)?.key ?? null
-  )
-  const [runtimeProbe, setRuntimeProbe] = useState<{ key: string; canSend: boolean } | null>(null)
-
-  useEffect(() => {
-    if (canSendFromRendererState || !probeKey) {
-      return
-    }
-    const probeDescriptor = getActiveAgentRuntimeProbeDescriptor(useAppStore.getState(), worktreeId)
-    if (!probeDescriptor || probeDescriptor.key !== probeKey) {
-      return
-    }
-
-    let cancelled = false
-    void probeActiveAgentNoteTarget(probeDescriptor)
-      .then((canSend) => {
-        if (!cancelled) {
-          setRuntimeProbe({ key: probeKey, canSend })
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRuntimeProbe({ key: probeKey, canSend: false })
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [canSendFromRendererState, probeKey, worktreeId])
-
-  return (
-    canSendFromRendererState ||
-    (runtimeProbe !== null && runtimeProbe.key === probeKey && runtimeProbe.canSend)
-  )
 }
 
 export function getActiveAgentNoteTarget(

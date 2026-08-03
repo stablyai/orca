@@ -1,9 +1,9 @@
+import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand,
-  realHomeCodexResumeEnvDeletion,
-  type AiVaultSession
-} from '../../../shared/ai-vault-types'
+  realHomeCodexResumeEnvDeletion
+} from '../../../shared/ai-vault-resume-command'
 import {
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,

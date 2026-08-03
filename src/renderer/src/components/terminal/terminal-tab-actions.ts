@@ -1,7 +1,5 @@
 import { useAppStore } from '@/store'
-import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import {
-  activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab,
   isWebRuntimeSessionActive,
   toHostSessionTabId
@@ -225,39 +223,4 @@ export function closeTerminalTab(
       : {})
   })
   options?.onClosed?.()
-}
-
-export function activateTerminalTab(tabId: string): void {
-  const s = useAppStore.getState()
-  const owningWorktreeId =
-    Object.entries(s.tabsByWorktree).find(([, worktreeTabs]) =>
-      worktreeTabs.some((tab) => tab.id === tabId)
-    )?.[0] ?? null
-  const worktreeRoute = resolveTerminalWorktreeRoute(s, owningWorktreeId)
-  if (!worktreeRoute) {
-    return
-  }
-  const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
-  if (owningWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    // Why: activation needs to update the host's active tab as well as the
-    // local optimistic state, otherwise the next host snapshot snaps back.
-    void activateWebRuntimeSessionTab({
-      worktreeId: owningWorktreeId,
-      tabId,
-      environmentId: runtimeEnvironmentId
-    })
-  }
-  s.setActiveTab(tabId)
-  s.setActiveTabType('terminal')
-}
-
-export function toggleTerminalPaneExpand(tabId: string): void {
-  useAppStore.getState().setActiveTab(tabId)
-  requestAnimationFrame(() => {
-    window.dispatchEvent(
-      new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, {
-        detail: { tabId }
-      })
-    )
-  })
 }

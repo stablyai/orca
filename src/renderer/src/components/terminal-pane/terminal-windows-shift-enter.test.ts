@@ -14,6 +14,15 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'droid' })).toBe('alt-enter')
   })
 
+  it('uses CSI-u only for trusted Pi process evidence', () => {
+    expect(
+      resolveWindowsShiftEnterEncoding({
+        foreground: { agent: 'pi', routingTrusted: true, shellForeground: false }
+      })
+    ).toBe('csi-u')
+    expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'pi' })).toBe('alt-enter')
+  })
+
   it('does not let hook or OSC-derived status forge Droid input routing', () => {
     const state = {
       paneForegroundAgentByPaneKey: {},

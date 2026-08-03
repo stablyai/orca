@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, TicketCheck, X } from 'lucide-react'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
@@ -16,6 +16,7 @@ import {
   ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { cn } from '@/lib/utils'
 import {
   buildSkillCommandForRuntime,
@@ -45,8 +46,11 @@ import {
   readLocalDismissed,
   type LinearAgentSkillPromptSettings
 } from './linear-agent-skill-runtime'
-import { LinearAgentSkillSetupDialog } from './LinearAgentSkillSetupDialog'
 import { translate } from '@/i18n/i18n'
+
+const LinearAgentSkillSetupDialog = lazyWithRetry(() => import('./LinearAgentSkillSetupDialog'), {
+  reloadKey: 'linear-agent-skill-setup-dialog'
+})
 
 export const _linearAgentSkillSetupPromptInternalsForTests = {
   resetSessionReminders(): void {
@@ -278,69 +282,71 @@ export function LinearAgentSkillSetupPrompt({
     return null
   }
 
-  const setupDialog = (
-    <LinearAgentSkillSetupDialog
-      open={setupDialogOpen}
-      showSuccess={showSuccessModal}
-      successDescription={successDescription}
-      missingLabel={missingLabel}
-      command={command}
-      installedCommand={installedCommand}
-      terminalShellOverride={terminalShellOverride}
-      installed={skill.installed}
-      loading={showCheckingModal || cliLoading || skill.loading}
-      error={skill.error}
-      getPrerequisiteStatus={
-        agentRuntime.runtime === 'wsl'
-          ? () => window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
-          : undefined
-      }
-      onBeforeOpenTerminal={async () => {
-        const requestIdentity = setupCheckIdentity
-        const writeIfCurrent = (write: () => void): void => {
-          writeCliStatusForIdentity(requestIdentity, write)
-        }
-        const nextStatus =
+  const setupDialog = setupDialogOpen ? (
+    <Suspense fallback={null}>
+      <LinearAgentSkillSetupDialog
+        open
+        showSuccess={showSuccessModal}
+        successDescription={successDescription}
+        missingLabel={missingLabel}
+        command={command}
+        installedCommand={installedCommand}
+        terminalShellOverride={terminalShellOverride}
+        installed={skill.installed}
+        loading={showCheckingModal || cliLoading || skill.loading}
+        error={skill.error}
+        getPrerequisiteStatus={
           agentRuntime.runtime === 'wsl'
-            ? await ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
-            : await ensureOrcaCliAvailableForAgentSkillTerminal({
-                onStatusChange: (nextCliStatus) => {
-                  writeIfCurrent(() => setCliStatus(nextCliStatus))
-                }
-              })
-        if (agentRuntime.runtime === 'wsl') {
-          writeIfCurrent(() => setCliStatus(nextStatus))
+            ? () => window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
+            : undefined
         }
-      }}
-      onRecheck={async () => {
-        if (surface === 'modal') {
-          setActiveSetupCheckIdentity(setupCheckIdentity)
-          setSetupCheckResult('checking')
-          await Promise.all([refreshCliStatus(), skill.refresh()])
-          return
-        }
-        await refreshCliStatus()
-        await skill.refresh()
-      }}
-      onOpenChange={(open) => {
-        if (open) {
-          setSetupDialogOpen(true)
-          return
-        }
-        if (showSuccessModal) {
-          closeSuccessModal()
-          return
-        }
-        if (surface === 'modal') {
-          snoozeForSession()
-          return
-        }
-        setSetupDialogOpen(false)
-      }}
-      onDismissPermanently={dismissPermanently}
-      onDone={closeSuccessModal}
-    />
-  )
+        onBeforeOpenTerminal={async () => {
+          const requestIdentity = setupCheckIdentity
+          const writeIfCurrent = (write: () => void): void => {
+            writeCliStatusForIdentity(requestIdentity, write)
+          }
+          const nextStatus =
+            agentRuntime.runtime === 'wsl'
+              ? await ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
+              : await ensureOrcaCliAvailableForAgentSkillTerminal({
+                  onStatusChange: (nextCliStatus) => {
+                    writeIfCurrent(() => setCliStatus(nextCliStatus))
+                  }
+                })
+          if (agentRuntime.runtime === 'wsl') {
+            writeIfCurrent(() => setCliStatus(nextStatus))
+          }
+        }}
+        onRecheck={async () => {
+          if (surface === 'modal') {
+            setActiveSetupCheckIdentity(setupCheckIdentity)
+            setSetupCheckResult('checking')
+            await Promise.all([refreshCliStatus(), skill.refresh()])
+            return
+          }
+          await refreshCliStatus()
+          await skill.refresh()
+        }}
+        onOpenChange={(open) => {
+          if (open) {
+            setSetupDialogOpen(true)
+            return
+          }
+          if (showSuccessModal) {
+            closeSuccessModal()
+            return
+          }
+          if (surface === 'modal') {
+            snoozeForSession()
+            return
+          }
+          setSetupDialogOpen(false)
+        }}
+        onDismissPermanently={dismissPermanently}
+        onDone={closeSuccessModal}
+      />
+    </Suspense>
+  ) : null
 
   if (surface === 'modal') {
     return setupDialog

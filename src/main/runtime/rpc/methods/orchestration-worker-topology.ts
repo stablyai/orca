@@ -59,7 +59,10 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
-    command: args.agent,
+    // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
+    // desktop app while its CLI is `cursor-agent`. Let the runtime build the
+    // configured launcher instead of executing the raw id.
+    startupAgent: args.agent,
     title: `worker-${args.taskId}`,
     // Why: dispatching a worker is background work; it must not pull the sidebar
     // to the worker's workspace while the user is reading somewhere else.
