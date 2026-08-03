@@ -7,6 +7,7 @@ import { DaemonServer } from './daemon-server'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
   checkDaemonHealth,
+  E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV,
   getProcessStartedAtMs,
   healthCheckDaemon,
   killStaleDaemon,
@@ -127,6 +128,25 @@ describe('daemon health', () => {
     await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
   })
 
+  it('returns unreachable when the e2e force-health-failure env is set', async () => {
+    // Why: prove the e2e seam short-circuits even when a real daemon would
+    // otherwise pass — not the already-covered missing-socket path.
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+    vi.stubEnv(E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV, '1')
+    try {
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
+      await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      await server.shutdown()
+    }
+  })
+
   it('classifies a hello-rejected daemon as rejected, not unreachable', async () => {
     // Why: 'rejected' means the daemon answered and refused adoption — the
     // launcher may replace it. 'unreachable' also covers a wedged-but-live
@@ -178,7 +198,10 @@ describe('parseDaemonPidFile', () => {
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
   })
 
@@ -193,7 +216,25 @@ describe('parseDaemonPidFile', () => {
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
       entryPath: '/repo/out/main/daemon-entry.js',
-      appVersion: '1.2.3'
+      appVersion: '1.2.3',
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
+    })
+  })
+
+  it('preserves exact-incarnation launch and Linux process identity', () => {
+    const serialized = serializeDaemonPidFile({
+      pid: 12345,
+      startedAtMs: 1_700_000_000_000,
+      launchNonce: 'launch-a',
+      linuxStartTicks: '4242',
+      bootId: 'boot-a'
+    })
+    expect(parseDaemonPidFile(serialized)).toMatchObject({
+      launchNonce: 'launch-a',
+      linuxStartTicks: '4242',
+      bootId: 'boot-a'
     })
   })
 
@@ -204,7 +245,10 @@ describe('parseDaemonPidFile', () => {
       pid: 9999,
       startedAtMs: null,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
   })
 
@@ -216,13 +260,19 @@ describe('parseDaemonPidFile', () => {
       pid: 12345,
       startedAtMs: null,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
     expect(parseDaemonPidFile('  12345\n')).toEqual({
       pid: 12345,
       startedAtMs: null,
       entryPath: null,
-      appVersion: null
+      appVersion: null,
+      launchNonce: null,
+      linuxStartTicks: null,
+      bootId: null
     })
   })
 

@@ -1,11 +1,16 @@
 /* eslint-disable max-lines -- Why: this file is the single security boundary for the bundled CLI — transport setup, auth-token enforcement, admission control, keepalive framing, and orphan-socket sweeping all co-locate deliberately so a reviewer can audit the boundary in one sitting. Splitting this across files would scatter the invariants without reducing complexity. */
 // Why: the single security boundary for the bundled CLI — auth-token enforcement, metadata publication, transport orchestration.
 import { randomBytes } from 'node:crypto'
-import { opendirSync, rmSync } from 'node:fs'
+import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { writeRuntimeMetadata } from './runtime-metadata'
+import {
+  RUNTIME_METADATA_OWNERSHIP_POLL_MS,
+  watchRuntimeMetadataOwnership,
+  type RuntimeMetadataOwnershipWatch
+} from './runtime-metadata-ownership-watch'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { errorResponse } from './rpc/errors'
@@ -25,6 +30,10 @@ import {
 import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import {
+  mobileRelayMintFailureFromUnknown,
+  type MobileRelayMintFailure
+} from '../../shared/mobile-relay-mint-failure'
+import {
   RelayRevokeOutbox,
   type RelayDeviceBinding,
   type RelayRevokeOutboxItem
@@ -41,7 +50,6 @@ import {
   decodeTerminalStreamFrame,
   type TerminalStreamFrame
 } from '../../shared/terminal-stream-protocol'
-import { parseRemoteRuntimeJsonText } from '../../shared/remote-runtime-request-frames'
 
 const DEFAULT_WS_PORT = 6768
 
@@ -55,10 +63,11 @@ type OrcaRuntimeRpcServerOptions = {
   // Why: true when the caller pinned a port (`orca serve --port`) so bind order prefers it over a stale STA-1511 fallback (#8535).
   preferPinnedWsPort?: boolean
   webClientRoot?: string
-  // Why: test-only overrides for the admission constants below; production uses the defaults.
+  // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
   longPollCap?: number
-  shortRequestCap?: number
+  // Why: test-only override for the ownership reclaim cadence.
+  metadataOwnershipPollMs?: number
 }
 
 export type PairingOfferUnavailableReason =
@@ -66,12 +75,27 @@ export type PairingOfferUnavailableReason =
   | 'device_registry_unavailable'
   | 'e2ee_key_unavailable'
   | 'invalid_advertised_endpoint'
+  | 'relay_mint_failed'
 
 export type PairingOfferUnavailable = {
   available: false
   reason: PairingOfferUnavailableReason
   guidance: string
+  /** Present when an Anywhere mint refused to silently fall back to LAN-only. */
+  relayFailure?: MobileRelayMintFailure
 }
+
+type MobilePairingOfferAvailable = {
+  available: true
+  pairingUrl: string
+  endpoint: string
+  deviceId: string
+  webClientUrl: string | null
+  /** Mode the offer actually encodes. */
+  connectionMode: MobilePairingConnectionMode
+}
+
+type MobilePairingOffer = PairingOfferUnavailable | MobilePairingOfferAvailable
 
 type PairingIdentityInitialization =
   | { ok: true; deviceRegistry: DeviceRegistry; e2eeKeypair: E2EEKeypair }
@@ -116,8 +140,12 @@ const KEEPALIVE_INTERVAL_MS = 10_000
 
 // Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
 const LONG_POLL_CAP = 16
-// Why: multiplexed sockets otherwise let one peer retain an unbounded number of active request graphs.
-const SHORT_REQUEST_CAP = 64
+
+// Why: orchestration.ask blocks on a human/agent reply for minutes, an order of
+// magnitude longer than terminal.wait or check --wait, so a fleet of asking
+// workers would otherwise hold every slot and starve the mobile/web/CLI/relay
+// clients sharing this runtime. Reserve half the budget for the other classes.
+const ASK_LONG_POLL_SHARE = 0.5
 
 function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   const url = new URL(endpoint)
@@ -138,8 +166,10 @@ function webClientPathForEndpoint(pathname: string): string {
 
 const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.list',
+  'accounts.consumeCodexResetCredit',
   'accounts.selectClaude',
   'accounts.selectCodex',
+  'accounts.selectCodexForTarget',
   'accounts.subscribe',
   'accounts.unsubscribe',
   'aiVault.listSessions',
@@ -396,16 +426,27 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'worktree.sleep'
 ])
 
+// Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
+type LongPollClass = 'ask' | 'wait'
+
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
-function isLongPollRequest(request: RpcRequest): boolean {
+function longPollClassOf(request: RpcRequest): LongPollClass | null {
   if (request.method === 'terminal.wait') {
-    return true
+    return 'wait'
+  }
+  // Why: orchestration.ask blocks unconditionally (default 600 s) holding the
+  // RPC open until a reply lands or the deadline passes, so it needs the same
+  // keepalive as check --wait or the 30 s socket idle timer tears it down. It
+  // also relies on the abort signal (only wired for long-polls) to release the
+  // waiter when the asking client disconnects.
+  if (request.method === 'orchestration.ask') {
+    return 'ask'
   }
   if (request.method === 'orchestration.check') {
     const params = request.params as { wait?: unknown } | undefined
-    return params?.wait === true
+    return params?.wait === true ? 'wait' : null
   }
-  return false
+  return null
 }
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
@@ -435,7 +476,8 @@ export class OrcaRuntimeRpcServer {
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly longPollCap: number
-  private readonly shortRequestCap: number
+  private readonly metadataOwnershipPollMs: number
+  private readonly askLongPollCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
@@ -443,8 +485,17 @@ export class OrcaRuntimeRpcServer {
   private tlsFingerprint: string | null = null
   private activeTransports: RpcTransport[] = []
   private transports: RuntimeTransportMetadata[] = []
+  private metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
   private mobileSocketWiring: MobileSocketWiring | null = null
   private mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
+  private mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
+  private mobileRelayPairingOfferInFlight: {
+    generation: number
+    address: string | null
+    rotate: boolean
+    request: Promise<MobilePairingOffer>
+  } | null = null
+  private mobilePairingOfferGeneration = 0
   private onUnpairedDeviceAuthFailure: (() => void) | null = null
   private unpairedDeviceAuthThrottle: UnpairedDeviceAuthThrottle | null = null
   private readonly binaryStreamHandlers = new Map<
@@ -457,7 +508,8 @@ export class OrcaRuntimeRpcServer {
   >()
   // Why: separate from server.maxConnections — count only long-running dispatches, not short RPCs. See §3.1 + §7 risk #2.
   private activeLongPolls = 0
-  private activeShortRequests = 0
+  // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
+  private activeAskLongPolls = 0
 
   constructor({
     runtime,
@@ -470,7 +522,7 @@ export class OrcaRuntimeRpcServer {
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
-    shortRequestCap = SHORT_REQUEST_CAP
+    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
     this.dispatcher = new RpcDispatcher({ runtime })
@@ -483,7 +535,9 @@ export class OrcaRuntimeRpcServer {
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
-    this.shortRequestCap = shortRequestCap
+    this.metadataOwnershipPollMs = metadataOwnershipPollMs
+    // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
+    this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
   }
 
@@ -525,7 +579,9 @@ export class OrcaRuntimeRpcServer {
         current.relayBinding.ownerIdentityKey !== binding.ownerIdentityKey)
     ) {
       // Why: switching the owning account/host must not strand the old cloud credential family, even if that account is offline.
-      this.queueRelayDeviceRevoke(current.relayBinding)
+      if (!this.queueRelayDeviceRevoke(current.relayBinding)) {
+        return false
+      }
     }
     const updated = this.deviceRegistry?.setRelayBinding(deviceId, binding) ?? false
     if (updated) {
@@ -549,7 +605,9 @@ export class OrcaRuntimeRpcServer {
       return false
     }
     if (device.relayBinding) {
-      this.queueRelayDeviceRevoke(device.relayBinding)
+      if (!this.queueRelayDeviceRevoke(device.relayBinding)) {
+        return false
+      }
     }
     if (!this.deviceRegistry?.removeDevice(deviceId)) {
       return false
@@ -645,18 +703,57 @@ export class OrcaRuntimeRpcServer {
     connectionMode?: MobilePairingConnectionMode
     name?: string
     rotate?: boolean
-  }): Promise<
-    | PairingOfferUnavailable
-    | {
-        available: true
-        pairingUrl: string
-        endpoint: string
-        deviceId: string
-        webClientUrl: string | null
-        /** Mode the offer actually encodes — 'local-only' when an automatic request degraded (Relay couldn't attach). */
-        connectionMode: MobilePairingConnectionMode
+  }): Promise<MobilePairingOffer> {
+    if (args.connectionMode === 'local-only') {
+      this.mobilePairingOfferGeneration += 1
+      return this.createMobilePairingOfferSerial(args, this.mobilePairingOfferGeneration)
+    }
+    const address = args.address ?? null
+    const rotate = args.rotate === true
+    const inFlight = this.mobileRelayPairingOfferInFlight
+    if (
+      inFlight?.generation === this.mobilePairingOfferGeneration &&
+      inFlight.address === address &&
+      (inFlight.rotate || !rotate)
+    ) {
+      return inFlight.request
+    }
+    // Why: every request that is not coalesced above supersedes the older one, rotating or not.
+    const generation = ++this.mobilePairingOfferGeneration
+    const request = this.mobileRelayPairingOfferQueue.then(() =>
+      generation === this.mobilePairingOfferGeneration
+        ? this.createMobilePairingOfferSerial(args, generation)
+        : this.relayPairingRequestSuperseded()
+    )
+    this.mobileRelayPairingOfferQueue = request.then(
+      () => undefined,
+      () => undefined
+    )
+    this.mobileRelayPairingOfferInFlight = { generation, address, rotate, request }
+    void request.then(
+      () => {
+        if (this.mobileRelayPairingOfferInFlight?.request === request) {
+          this.mobileRelayPairingOfferInFlight = null
+        }
+      },
+      () => {
+        if (this.mobileRelayPairingOfferInFlight?.request === request) {
+          this.mobileRelayPairingOfferInFlight = null
+        }
       }
-  > {
+    )
+    return request
+  }
+
+  private async createMobilePairingOfferSerial(
+    args: {
+      address?: string | null
+      connectionMode?: MobilePairingConnectionMode
+      name?: string
+      rotate?: boolean
+    },
+    generation: number
+  ): Promise<MobilePairingOffer> {
     // Why: the renderer is outside the trust boundary, so only an explicit local-only value may suppress Relay provisioning.
     const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
     const pending = this.deviceRegistry?.getPendingDevice('mobile')
@@ -667,7 +764,12 @@ export class OrcaRuntimeRpcServer {
     if (args.rotate || switchingPendingMode) {
       if (pending?.relayBinding) {
         // Why: record the durable cloud revoke before rotating the local token so an old relay invite can't outlive the QR.
-        this.queueRelayDeviceRevoke(pending.relayBinding)
+        if (!this.queueRelayDeviceRevoke(pending.relayBinding)) {
+          return pairingUnavailable(
+            'device_registry_unavailable',
+            'Could not persist Relay cleanup before rotating the pairing code.'
+          )
+        }
       }
     }
     const direct = this.createPairingOffer({
@@ -678,42 +780,178 @@ export class OrcaRuntimeRpcServer {
     if (!direct.available) {
       return direct
     }
-    this.deviceRegistry?.setMobilePairingConnectionMode(direct.deviceId, connectionMode)
-    if (connectionMode === 'local-only' || !this.mobileRelayPairingProvider) {
+    const createdNewPendingDevice = pending?.deviceId !== direct.deviceId
+    let connectionModeStored = false
+    try {
+      connectionModeStored =
+        this.deviceRegistry?.setMobilePairingConnectionMode(direct.deviceId, connectionMode) ??
+        false
+    } catch (error) {
+      console.error('[runtime] Failed to persist the pairing connection mode:', error)
+    }
+    // Why: the mode is part of the credential — a QR whose policy was never stored must not pair under the default one.
+    if (!connectionModeStored) {
+      if (createdNewPendingDevice) {
+        this.discardPendingMobilePairingDevice(direct.deviceId)
+      }
+      return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
+    }
+    // Why: explicit LAN path never needs Relay; mint the direct-only offer as selected.
+    if (connectionMode === 'local-only') {
       return { ...direct, connectionMode: 'local-only' }
+    }
+    // Why: Anywhere must not silently ship a LAN-only QR under the Relay label.
+    // Fail closed, drop the unused pending credential, and let the UI offer Use LAN.
+    const refuseAutomaticWithoutRelay = (
+      relayFailure: MobileRelayMintFailure
+    ): PairingOfferUnavailable => {
+      if (createdNewPendingDevice) {
+        this.discardPendingMobilePairingDevice(direct.deviceId)
+      }
+      return {
+        available: false,
+        reason: 'relay_mint_failed',
+        guidance:
+          'Orca Relay could not create a pairing invite. Use LAN (Tailscale or same Wi‑Fi) or retry Relay.',
+        relayFailure
+      }
+    }
+    const relayProvider = this.mobileRelayPairingProvider
+    if (!relayProvider) {
+      return refuseAutomaticWithoutRelay({
+        code: 'relay_provider_unavailable',
+        stage: 'provider_missing',
+        message: 'Orca Relay is not available on this desktop'
+      })
     }
     const device = this.deviceRegistry?.getDevice(direct.deviceId)
     const publicKeyB64 = this.getE2EEPublicKey()
     if (!device || !publicKeyB64) {
-      return { ...direct, connectionMode: 'local-only' }
+      return refuseAutomaticWithoutRelay({
+        code: 'e2ee_key_unavailable',
+        stage: 'e2ee_missing',
+        message: 'E2EE public key unavailable for Relay pairing'
+      })
+    }
+    let relayPairing: Awaited<ReturnType<MobileRelayPairingProvider['createPairingRelay']>>
+    try {
+      relayPairing = await relayProvider.createPairingRelay(device.deviceId)
+    } catch (error) {
+      // Why: the raw provider error can carry request metadata or credentials — log only the validated code.
+      const relayFailure = mobileRelayMintFailureFromUnknown({
+        stage: 'create_pairing_relay',
+        error,
+        fallbackCode: 'relay_mint_failed',
+        fallbackMessage: 'Relay pairing invite request failed'
+      })
+      console.warn(`[runtime] Failed to create Relay pairing invite: ${relayFailure.code}`)
+      return refuseAutomaticWithoutRelay(relayFailure)
+    }
+    const currentDevice = this.deviceRegistry?.getDevice(device.deviceId)
+    if (
+      generation !== this.mobilePairingOfferGeneration ||
+      relayProvider !== this.mobileRelayPairingProvider ||
+      currentDevice?.token !== device.token ||
+      this.deviceRegistry?.getMobilePairingConnectionMode(device.deviceId) !== 'automatic'
+    ) {
+      this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
+      if (createdNewPendingDevice) {
+        this.discardPendingMobilePairingDevice(direct.deviceId)
+      }
+      return this.relayPairingRequestSuperseded()
     }
     try {
-      const relayPairing = await this.mobileRelayPairingProvider.createPairingRelay(device.deviceId)
-      if (!this.deviceRegistry?.setRelayBinding(device.deviceId, relayPairing.binding)) {
-        return { ...direct, connectionMode: 'local-only' }
-      }
-      this.mobileRelayPairingProvider.onDemandStateChanged?.()
-      return {
-        ...direct,
-        connectionMode: 'automatic',
-        pairingUrl: encodePairingOffer({
-          v: PAIRING_OFFER_VERSION,
-          endpoint: direct.endpoint,
-          deviceToken: device.token,
-          publicKeyB64,
-          scope: 'mobile',
-          relay: relayPairing.relay
+      if (!this.setMobileRelayBinding(device.deviceId, relayPairing.binding)) {
+        this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
+        return refuseAutomaticWithoutRelay({
+          code: 'relay_binding_failed',
+          stage: 'binding_failed',
+          message: 'Could not store Relay binding for the pairing device'
         })
       }
-    } catch {
-      // Why: relay is additive — a transient outage must still yield the valid LAN/Tailscale pairing offer.
-      return { ...direct, connectionMode: 'local-only' }
+    } catch (error) {
+      console.warn('[runtime] Failed to persist Relay pairing binding:', error)
+      this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
+      return refuseAutomaticWithoutRelay({
+        code: 'relay_binding_failed',
+        stage: 'binding_failed',
+        message: 'Could not store Relay binding for the pairing device'
+      })
+    }
+    return {
+      ...direct,
+      connectionMode: 'automatic',
+      pairingUrl: encodePairingOffer({
+        v: PAIRING_OFFER_VERSION,
+        endpoint: direct.endpoint,
+        deviceToken: device.token,
+        publicKeyB64,
+        scope: 'mobile',
+        relay: relayPairing.relay
+      })
     }
   }
 
-  private queueRelayDeviceRevoke(binding: RelayDeviceBinding): void {
-    const item = this.relayRevokeOutbox.enqueue(binding)
-    this.mobileRelayPairingProvider?.onDeviceRevokeQueued(item)
+  private relayPairingRequestSuperseded(): PairingOfferUnavailable {
+    return {
+      available: false,
+      reason: 'relay_mint_failed',
+      guidance: 'The Relay pairing request was replaced by a newer connection choice.',
+      relayFailure: {
+        code: 'relay_request_superseded',
+        stage: 'binding_failed',
+        message: 'Relay pairing request superseded'
+      }
+    }
+  }
+
+  /** Drop a never-scanned mobile pending credential after a failed Anywhere mint. */
+  private discardPendingMobilePairingDevice(deviceId: string): void {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    if (!device || device.scope !== 'mobile' || device.lastSeenAt !== 0) {
+      return
+    }
+    if (device.relayBinding) {
+      if (!this.queueRelayDeviceRevoke(device.relayBinding)) {
+        return
+      }
+    }
+    try {
+      this.deviceRegistry?.removeDevice(deviceId)
+    } catch (error) {
+      console.error('[runtime] Failed to drop an unused mobile pairing credential:', error)
+    }
+  }
+
+  /**
+   * Why: the outbox is the only durable cleanup record for a minted invite. When it can't be
+   * written, keep the binding on the device so cleanup keeps a reference instead of orphaning it.
+   */
+  private queueOrRetainRelayDeviceRevoke(deviceId: string, binding: RelayDeviceBinding): void {
+    if (this.queueRelayDeviceRevoke(binding)) {
+      return
+    }
+    try {
+      this.deviceRegistry?.setRelayBinding(deviceId, binding)
+    } catch (error) {
+      console.error('[runtime] Failed to retain an unrevoked Relay binding:', error)
+    }
+  }
+
+  private queueRelayDeviceRevoke(binding: RelayDeviceBinding): boolean {
+    let item: RelayRevokeOutboxItem
+    try {
+      item = this.relayRevokeOutbox.enqueue(binding)
+    } catch (error) {
+      console.error('[runtime] Failed to persist Relay device cleanup:', error)
+      return false
+    }
+    try {
+      this.mobileRelayPairingProvider?.onDeviceRevokeQueued(item)
+    } catch (error) {
+      console.warn('[runtime] Failed to notify Relay cleanup worker:', error)
+    }
+    return true
   }
 
   private registerBinaryStreamHandler(
@@ -870,7 +1108,7 @@ export class OrcaRuntimeRpcServer {
           // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
           let id = 'unknown'
           try {
-            const parsed = parseRemoteRuntimeJsonText(msg) as { id?: unknown }
+            const parsed = JSON.parse(msg) as { id?: unknown }
             if (typeof parsed.id === 'string' && parsed.id.length > 0) {
               id = parsed.id
             }
@@ -987,12 +1225,38 @@ export class OrcaRuntimeRpcServer {
       await Promise.all(activeTransports.map((t) => t.stop().catch(() => {}))).catch(() => {})
       throw error
     }
+
+    this.metadataOwnershipWatch = watchRuntimeMetadataOwnership({
+      userDataPath: this.userDataPath,
+      ownedPid: this.pid,
+      ownedRuntimeId: this.runtime.getRuntimeId(),
+      pollIntervalMs: this.metadataOwnershipPollMs,
+      republish: () => {
+        // Why: never advertise endpoints we already tore down.
+        if (this.activeTransports.length === 0) {
+          return
+        }
+        this.writeMetadata()
+      },
+      onReclaim: (previous) => {
+        console.warn(
+          `[runtime] Reclaimed orca-runtime.json from a dead runtime (pid ${previous?.pid ?? 'none'}); republished pid ${this.pid}.`
+        )
+      }
+    })
+  }
+
+  /** Why: test-only seam — runs one ownership check instead of waiting out the poll interval. */
+  checkRuntimeMetadataOwnership(): void {
+    this.metadataOwnershipWatch?.check()
   }
 
   async stop(): Promise<void> {
     const transports = this.activeTransports
     this.activeTransports = []
     this.transports = []
+    this.metadataOwnershipWatch?.stop()
+    this.metadataOwnershipWatch = null
     this.mobileSocketWiring = null
     if (transports.length === 0) {
       return
@@ -1017,28 +1281,15 @@ export class OrcaRuntimeRpcServer {
     }
     const request = parsed.request
 
-    // Why: long-polls and short work have separate budgets so waits cannot starve ordinary RPCs.
-    const longPoll = isLongPollRequest(request)
-    if (longPoll && this.activeLongPolls >= this.longPollCap) {
-      return this.buildError(
-        request.id,
-        'runtime_busy',
-        'long-poll capacity reached; retry with backoff'
-      )
-    }
-    if (!longPoll && this.activeShortRequests >= this.shortRequestCap) {
-      return this.buildError(
-        request.id,
-        'runtime_busy',
-        'short-request capacity reached; retry with backoff'
-      )
+    // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
+    const longPoll = longPollClassOf(request)
+    const rejection = this.admitLongPoll(longPoll)
+    if (rejection) {
+      return this.buildError(request.id, 'runtime_busy', rejection)
     }
     if (longPoll) {
-      this.activeLongPolls += 1
       // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
       context?.startKeepalive()
-    } else {
-      this.activeShortRequests += 1
     }
 
     try {
@@ -1046,18 +1297,44 @@ export class OrcaRuntimeRpcServer {
         signal: longPoll ? context?.signal : undefined
       })
     } finally {
-      if (longPoll) {
-        this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
-      } else {
-        this.activeShortRequests = Math.max(0, this.activeShortRequests - 1)
-      }
+      this.releaseLongPoll(longPoll)
+    }
+  }
+
+  // Why: one fence for both transports — the total cap protects short RPCs, the ask
+  // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
+  // Returns the rejection message, or null once the slot is reserved.
+  private admitLongPoll(longPoll: LongPollClass | null): string | null {
+    if (!longPoll) {
+      return null
+    }
+    if (this.activeLongPolls >= this.longPollCap) {
+      return 'long-poll capacity reached; retry with backoff'
+    }
+    if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
+      return 'orchestration.ask capacity reached; retry with backoff'
+    }
+    this.activeLongPolls += 1
+    if (longPoll === 'ask') {
+      this.activeAskLongPolls += 1
+    }
+    return null
+  }
+
+  private releaseLongPoll(longPoll: LongPollClass | null): void {
+    if (!longPoll) {
+      return
+    }
+    this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
+    if (longPoll === 'ask') {
+      this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
     }
   }
 
   private parseAndAuth(rawMessage: string): { request: RpcRequest } | { error: RpcResponse } {
     let request: RpcRequest
     try {
-      request = parseRemoteRuntimeJsonText(rawMessage) as RpcRequest
+      request = JSON.parse(rawMessage) as RpcRequest
     } catch {
       return { error: this.buildError('unknown', 'bad_request', 'Invalid JSON request') }
     }
@@ -1090,7 +1367,7 @@ export class OrcaRuntimeRpcServer {
   ): Promise<void> {
     let request: RpcRequest
     try {
-      request = parseRemoteRuntimeJsonText(rawMessage) as RpcRequest
+      request = JSON.parse(rawMessage) as RpcRequest
     } catch {
       reply(JSON.stringify(this.buildError('unknown', 'bad_request', 'Invalid JSON request')))
       return
@@ -1142,38 +1419,14 @@ export class OrcaRuntimeRpcServer {
       wsTransport.setClientId(ws, token)
     }
 
-    const longPoll = isLongPollRequest(request)
-    if (longPoll && this.activeLongPolls >= this.longPollCap) {
-      reply(
-        JSON.stringify(
-          this.buildError(
-            request.id,
-            'runtime_busy',
-            'long-poll capacity reached; retry with backoff'
-          )
-        )
-      )
-      return
-    }
-    if (!longPoll && this.activeShortRequests >= this.shortRequestCap) {
-      reply(
-        JSON.stringify(
-          this.buildError(
-            request.id,
-            'runtime_busy',
-            'short-request capacity reached; retry with backoff'
-          )
-        )
-      )
+    const longPoll = longPollClassOf(request)
+    const rejection = this.admitLongPoll(longPoll)
+    if (rejection) {
+      reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))
       return
     }
 
     const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
-    if (longPoll) {
-      this.activeLongPolls += 1
-    } else {
-      this.activeShortRequests += 1
-    }
 
     // Why: older pairings may lack scope metadata, so stamp the authenticated scope onto status.get.
     const replyForRequest =
@@ -1213,6 +1466,7 @@ export class OrcaRuntimeRpcServer {
         pairedDeviceId: device.deviceId,
         // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.
         clientKind: device.scope,
+        clientCapabilities: authenticatedSocket?.clientCapabilities,
         pairing: pairingContext,
         signal: abortRegistration?.signal,
         sendBinary,
@@ -1221,11 +1475,7 @@ export class OrcaRuntimeRpcServer {
       })
     } finally {
       abortRegistration?.dispose()
-      if (longPoll) {
-        this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
-      } else {
-        this.activeShortRequests = Math.max(0, this.activeShortRequests - 1)
-      }
+      this.releaseLongPoll(longPoll)
     }
   }
 
@@ -1249,49 +1499,37 @@ export class OrcaRuntimeRpcServer {
 export const RUNTIME_SOCKET_NAME_REGEX = /^o-(\d+)-[A-Za-z0-9_-]+\.sock$/
 
 export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number): void {
-  let directory: ReturnType<typeof opendirSync>
+  let entries: string[]
   try {
-    directory = opendirSync(userDataPath)
+    entries = readdirSync(userDataPath)
   } catch {
     // Why: first-launch userData may not exist yet; nothing to sweep.
     return
   }
-  try {
-    while (true) {
-      const entry = directory.readSync()
-      if (!entry) {
-        break
-      }
-      const match = RUNTIME_SOCKET_NAME_REGEX.exec(entry.name)
-      if (!match) {
-        continue
-      }
-      const pid = Number(match[1])
-      if (!Number.isFinite(pid)) {
-        continue
-      }
-      // Why: never delete our own socket — a bug here would rmSync one we're about to bind.
-      if (pid === ownPid) {
-        continue
-      }
-      try {
-        // Why: signal 0 is the POSIX liveness probe (sends nothing); ESRCH = dead pid, EPERM = foreign owner (left alone).
-        process.kill(pid, 0)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
-          try {
-            rmSync(join(userDataPath, entry.name), { force: true })
-          } catch {
-            // Why: best-effort sweep; a later start() or OS reboot cleans any socket we can't unlink.
-          }
+  for (const entry of entries) {
+    const match = RUNTIME_SOCKET_NAME_REGEX.exec(entry)
+    if (!match) {
+      continue
+    }
+    const pid = Number(match[1])
+    if (!Number.isFinite(pid)) {
+      continue
+    }
+    // Why: never delete our own socket — a bug here would rmSync one we're about to bind.
+    if (pid === ownPid) {
+      continue
+    }
+    try {
+      // Why: signal 0 is the POSIX liveness probe (sends nothing); ESRCH = dead pid, EPERM = foreign owner (left alone).
+      process.kill(pid, 0)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+        try {
+          rmSync(join(userDataPath, entry), { force: true })
+        } catch {
+          // Why: best-effort sweep; a later start() or OS reboot cleans any socket we can't unlink.
         }
       }
-    }
-  } finally {
-    try {
-      directory.closeSync()
-    } catch {
-      // Best-effort sweep cleanup.
     }
   }
 }

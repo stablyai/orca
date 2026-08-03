@@ -20,7 +20,6 @@ import {
 } from './terminal-view-attribute-responder'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
-import { normalizeTerminalSize } from '../../shared/terminal-size-limits'
 
 export type HeadlessEmulatorOptions = {
   cols: number
@@ -70,7 +69,6 @@ export class HeadlessEmulator {
   private partialEscapeTail = ''
 
   constructor(opts: HeadlessEmulatorOptions) {
-    const size = normalizeTerminalSize(opts.cols, opts.rows)
     this.pathFlavor = opts.pathFlavor
     this.remotePosixFileUriAuthority = opts.remotePosixFileUriAuthority === true
     this.oscText = new TerminalOscCwdTitleScanner({
@@ -79,8 +77,8 @@ export class HeadlessEmulator {
       wslDistro: opts.wslDistro
     })
     this.terminal = new Terminal({
-      cols: size.cols,
-      rows: size.rows,
+      cols: opts.cols,
+      rows: opts.rows,
       scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
       allowProposedApi: true,
       logLevel: 'off',
@@ -226,8 +224,7 @@ export class HeadlessEmulator {
       return
     }
     this.restoredOscLinks = []
-    const size = normalizeTerminalSize(cols, rows)
-    this.terminal.resize(size.cols, size.rows)
+    this.terminal.resize(cols, rows)
   }
 
   // Why: these dims proxy the child's real size, so they stay stale on a dropped resize the renderer must detect.
@@ -297,6 +294,16 @@ export class HeadlessEmulator {
     const buffer = this.terminal.buffer.active
     const lines: string[] = []
     for (let row = buffer.viewportY; row < buffer.viewportY + this.terminal.rows; row += 1) {
+      lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
+    }
+    return lines
+  }
+
+  getBufferTailLines(limit: number): string[] {
+    const buffer = this.terminal.buffer.active
+    const start = Math.max(0, buffer.length - Math.max(0, Math.floor(limit)))
+    const lines: string[] = []
+    for (let row = start; row < buffer.length; row += 1) {
       lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
     }
     return lines

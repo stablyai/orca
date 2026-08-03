@@ -3,7 +3,7 @@
 // of re-reading the whole transcript corpus (issue #9210: 6.7 GB / 109 s cold
 // scans). Disabled unless the composition root calls init; every failure mode
 // degrades to today's cold-scan behavior.
-import { mkdir, opendir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   seedSessionParseCache,
@@ -11,9 +11,6 @@ import {
   type PersistedSessionParseCacheEntry,
   type SessionParseStats
 } from './session-scanner-parse-cache'
-import { serializeSessionParseCachePayload } from './session-parse-cache-payload'
-import { withAiVaultWholeJsonFile } from './session-whole-json-reader'
-import { parseAiVaultJsonText } from './session-scanner-values'
 
 // Bump when the persisted entry layout changes; a mismatched file is discarded whole.
 const SCHEMA_VERSION = 1
@@ -101,12 +98,11 @@ export async function flushSessionParseCachePersistForTests(): Promise<void> {
 async function loadPersistedEntries(current: SessionParseCachePersistenceOptions): Promise<void> {
   await sweepOrphanedTempFiles(current.filePath)
   try {
-    await withAiVaultWholeJsonFile(current.filePath, (content) => {
-      const entries = parsePersistedFile(parseAiVaultJsonText(content), current.appVersion)
-      if (entries) {
-        seedSessionParseCache(entries)
-      }
-    })
+    const raw = await readFile(current.filePath, 'utf-8')
+    const entries = parsePersistedFile(JSON.parse(raw), current.appVersion)
+    if (entries) {
+      seedSessionParseCache(entries)
+    }
   } catch {
     // Why: a missing/corrupt/foreign cache file must never fail the scan;
     // worst case is exactly today's cold scan.
@@ -119,12 +115,12 @@ async function loadPersistedEntries(current: SessionParseCachePersistenceOptions
 async function sweepOrphanedTempFiles(filePath: string): Promise<void> {
   const directory = dirname(filePath)
   try {
-    const entries = await opendir(directory)
-    for await (const entry of entries) {
-      if (entry.name.startsWith('session-parse-cache-') && entry.name.endsWith('.tmp')) {
-        await rm(join(directory, entry.name), { force: true }).catch(() => {})
-      }
-    }
+    const names = await readdir(directory)
+    await Promise.all(
+      names
+        .filter((name) => name.startsWith('session-parse-cache-') && name.endsWith('.tmp'))
+        .map((name) => rm(join(directory, name), { force: true }).catch(() => {}))
+    )
   } catch {
     // Directory missing or unreadable — nothing to sweep.
   }
@@ -194,7 +190,7 @@ async function persistSnapshot(current: SessionParseCachePersistenceOptions): Pr
   const directory = dirname(current.filePath)
   const tempPath = join(directory, `session-parse-cache-${process.pid}-${Date.now()}.tmp`)
   try {
-    const payload = serializeSessionParseCachePayload({
+    const payload = JSON.stringify({
       schemaVersion: SCHEMA_VERSION,
       appVersion: current.appVersion,
       entries: snapshotSessionParseCacheForPersistence()

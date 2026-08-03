@@ -12,7 +12,9 @@ function createMockTransport(): MultiplexerTransport & {
   const written: Buffer[] = []
 
   return {
-    write: (data: Buffer) => written.push(data),
+    write: (data: Buffer) => {
+      written.push(data)
+    },
     onData: (cb) => dataCallbacks.push(cb),
     onClose: (cb) => closeCallbacks.push(cb),
     dataCallbacks,
@@ -69,6 +71,7 @@ type MuxInternals = {
   disposeHandlers: unknown[]
   lastReceivedAt: number
   unackedTimestamps: Map<number, number>
+  writerSaturated: boolean
 }
 
 function getMuxInternals(instance: SshChannelMultiplexer): MuxInternals {
@@ -121,6 +124,28 @@ describe('SshChannelMultiplexer', () => {
       transport.dataCallbacks[0](response)
 
       await expect(promise).rejects.toThrow('PTY allocation failed')
+    })
+
+    it('runs beforeResolve before an adjacent notification in the same decoder turn', async () => {
+      const order: string[] = []
+      mux.onNotification(() => order.push('notification'))
+      const promise = mux.request(
+        'pty.attach',
+        { id: 'pty-1' },
+        {
+          beforeResolve: () => order.push('beforeResolve')
+        }
+      )
+
+      transport.dataCallbacks[0](
+        Buffer.concat([
+          makeResponseFrame(1, { incarnationId: 'incarnation-1' }, 1),
+          makeNotificationFrame('pty.data', { id: 'pty-1', data: 'first' }, 2)
+        ])
+      )
+
+      expect(order).toEqual(['beforeResolve', 'notification'])
+      await expect(promise).resolves.toEqual({ incarnationId: 'incarnation-1' })
     })
 
     it('times out after 30s with no response', async () => {
@@ -328,6 +353,43 @@ describe('SshChannelMultiplexer', () => {
       vi.advanceTimersByTime(25_000)
       expect(mux.isDisposed()).toBe(true)
     })
+
+    it('suppresses false death while locally saturated and rebases both clocks on drain', () => {
+      mux.dispose()
+      let drain = (): void => {}
+      const written: Buffer[] = []
+      const saturatedTransport: MultiplexerTransport = {
+        write: (data) => {
+          written.push(data)
+          return false
+        },
+        supportsWriteSettlement: true,
+        onDrain: (callback) => {
+          drain = callback
+        },
+        onData: vi.fn(),
+        onClose: vi.fn()
+      }
+      mux = new SshChannelMultiplexer(saturatedTransport)
+
+      vi.advanceTimersByTime(5_000)
+      expect(getMuxInternals(mux).writerSaturated).toBe(true)
+      vi.advanceTimersByTime(25_000)
+      expect(mux.isDisposed()).toBe(false)
+      expect(written).toHaveLength(1)
+
+      drain()
+      const resumedAt = Date.now()
+      const internals = getMuxInternals(mux)
+      expect(internals.writerSaturated).toBe(false)
+      expect(internals.lastReceivedAt).toBe(resumedAt)
+      expect(new Set(internals.unackedTimestamps.values())).toEqual(new Set([resumedAt]))
+
+      vi.advanceTimersByTime(20_000)
+      expect(mux.isDisposed()).toBe(false)
+      vi.advanceTimersByTime(5_000)
+      expect(mux.isDisposed()).toBe(true)
+    })
   })
 
   describe('wake guard (timer pause across system sleep, #7773)', () => {
@@ -469,25 +531,6 @@ describe('SshChannelMultiplexer', () => {
       expect(internals.notificationHandlers).toHaveLength(0)
       expect(internals.methodNotificationHandlers.size).toBe(0)
       expect(internals.disposeHandlers).toHaveLength(0)
-    })
-
-    it('invokes every dispose handler when handlers unsubscribe themselves', () => {
-      const called: string[] = []
-      let unsubscribeFirst = (): void => {}
-      let unsubscribeSecond = (): void => {}
-      unsubscribeFirst = mux.onDispose(() => {
-        called.push('first')
-        unsubscribeFirst()
-      })
-      unsubscribeSecond = mux.onDispose(() => {
-        called.push('second')
-        unsubscribeSecond()
-      })
-
-      mux.dispose('connection_lost')
-
-      expect(called).toEqual(['first', 'second'])
-      expect(getMuxInternals(mux).disposeHandlers).toHaveLength(0)
     })
 
     it('does not retain handlers registered after dispose', () => {

@@ -8,12 +8,10 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
-  truncateSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { GENERATED_NODE_MANAGED_FILE_MAX_BYTES } from '../generated-node-bounded-file-reader'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
@@ -26,10 +24,6 @@ vi.mock('electron', () => ({
 }))
 
 import { OpenCodeHookService, _internals } from './hook-service'
-import {
-  OPENCODE_OVERLAY_MANIFEST_FILE,
-  OPENCODE_OVERLAY_MANIFEST_MAX_BYTES
-} from './config-overlay-manifest'
 
 const { isUsableId, toSafeDirName } = _internals
 
@@ -38,10 +32,23 @@ describe('OpenCode hook plugin source', () => {
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain('async function isChildSession(client, sessionID)')
-    expect(source).toContain('const sessions = await client.session.list();')
-    expect(source).toContain('const isChild = !!session?.parentID;')
-    expect(source).toContain('if (sessionID && (await isChildSession(client, sessionID))) {')
-    expect(source).toContain('return true;')
+    expect(source).toContain('walkSessionParents(client, sessionID, controller.signal)')
+    expect(source).toContain('currentSessionID = session.parentID;')
+    expect(source).toContain('rememberSessionRoot(id, currentSessionID)')
+    expect(source).toContain('{ path: { id: sessionID }, signal }')
+    expect(source).toContain('[{ sessionID }, { signal }]')
+    expect(source.indexOf('[{ sessionID }, { signal }]')).toBeLessThan(
+      source.indexOf('{ path: { id: sessionID }, signal }')
+    )
+    expect(source).toContain('return client.session.list({}, { signal });')
+    expect(source).toContain('return client.session.list({ signal });')
+    expect(source).toContain('return rootSessionID === null ? null : rootSessionID !== sessionID;')
+    expect(source).toContain(
+      'if (sessionID && (await isChildSession(client, sessionID)) !== false) {'
+    )
+    expect(source).toContain(
+      'if (sessionID && (await isChildSession(client, sessionID)) !== false) {\n      return;\n    }'
+    )
   })
 
   it('still accepts an optional opaque plugin context instead of destructuring', () => {
@@ -71,11 +78,6 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain('const coords = resolveHookCoords();')
     expect(source).toContain('`http://127.0.0.1:${coords.port}/hook/opencode`')
     expect(source).toContain('"X-Orca-Agent-Hook-Token": coords.token')
-    expect(source).toContain(
-      `function readOrcaManagedFileWithinLimit(fs, path, maxBytes = ${GENERATED_NODE_MANAGED_FILE_MAX_BYTES})`
-    )
-    expect(source).toContain('readOrcaManagedFileWithinLimit(fs, path)')
-    expect(source).not.toContain('fs.readFileSync')
   })
 
   it('caches the parsed endpoint file on mtime+size+inode to skip re-reads per post', () => {
@@ -97,20 +99,27 @@ describe('OpenCode hook plugin source', () => {
     // Why: forward question.asked too (not just permission.asked), else the pane stays "working" while the agent idles on a human reply.
     const source = _internals.getOpenCodePluginSource()
 
-    expect(source).toContain('if (event.type === "question.asked")')
-    expect(source).toContain('await post("AskUserQuestion", event.properties || {});')
+    expect(source).toContain('event.type === "question.asked"')
+    expect(source).toContain(
+      'event.type === "permission.asked" ? "PermissionRequest" : "AskUserQuestion"'
+    )
+    expect(source).toContain('await setAttention(')
   })
 
   it('forwards sessionID on status and message posts for resume metadata', () => {
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain(
-      'await post("MessagePart", { role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID });'
+      '{ role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID },'
     )
     expect(source).toContain('messageID: pending.messageID,')
     expect(source).toContain('sessionID: pending.sessionID,')
-    expect(source).toContain('await setStatus("busy", { sessionID });')
-    expect(source.match(/await setStatus\("idle", \{ sessionID \}\);/g) ?? []).toHaveLength(2)
+    expect(source).toContain(
+      'await setStatus("busy", { sessionID: busyOwner.sessionID }, busyOwner.factoryID);'
+    )
+    expect(source).toContain(
+      'await setStatus("idle", { sessionID: preferredSessionID }, fallbackFactoryID);'
+    )
   })
 
   it('guards endpoint-file parse warnings with a process-lifetime latch', () => {
@@ -365,81 +374,6 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
     expect(overlayPlugin).not.toBe(userOrcaSentinel)
     expectUserConfigIntact()
   })
-
-  it('does not mirror or overwrite a user file named like the internal manifest', () => {
-    const userManifest = join(userConfigDir, OPENCODE_OVERLAY_MANIFEST_FILE)
-    writeFileSync(userManifest, 'USER MANIFEST SENTINEL')
-
-    const env = new OpenCodeHookService().buildPtyEnv(ptyId, userConfigDir)
-    const overlayManifest = join(env.OPENCODE_CONFIG_DIR!, OPENCODE_OVERLAY_MANIFEST_FILE)
-
-    expect(readFileSync(userManifest, 'utf8')).toBe('USER MANIFEST SENTINEL')
-    expect(lstatSync(overlayManifest).isSymbolicLink()).toBe(false)
-    expect(JSON.parse(readFileSync(overlayManifest, 'utf8'))).toMatchObject({
-      topLevelEntries: expect.arrayContaining(['auth.json', 'opencode.json'])
-    })
-  })
-
-  it('falls back before mutation when a retained manifest exceeds its byte limit', () => {
-    const service = new OpenCodeHookService()
-    const first = service.buildPtyEnv(ptyId, userConfigDir)
-    const overlayDir = first.OPENCODE_CONFIG_DIR!
-    const overlayManifest = join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE)
-    truncateSync(overlayManifest, OPENCODE_OVERLAY_MANIFEST_MAX_BYTES + 1)
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    expect(service.buildPtyEnv(ptyId, userConfigDir)).toEqual({
-      OPENCODE_CONFIG_DIR: userConfigDir
-    })
-    expect(readFileSync(join(overlayDir, 'auth.json'), 'utf8')).toBe('user-auth-token')
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[opencode-hooks] config overlay exceeded its memory limit; using the original OPENCODE_CONFIG_DIR without Orca status integration'
-    )
-    expectUserConfigIntact()
-  })
-
-  it('ignores forged manifest traversal entries during cleanup', () => {
-    const overlayDir = join(
-      userDataDir,
-      'opencode-config-overlays',
-      toSafeDirName(`source:${userConfigDir}`)
-    )
-    mkdirSync(overlayDir, { recursive: true })
-    const outsideMarker = join(userDataDir, 'outside-manifest-marker')
-    writeFileSync(outsideMarker, 'keep')
-    writeFileSync(
-      join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE),
-      JSON.stringify({ topLevelEntries: ['../outside-manifest-marker'] })
-    )
-
-    const env = new OpenCodeHookService().buildPtyEnv(ptyId, userConfigDir)
-
-    expect(env.OPENCODE_CONFIG_DIR).toBe(overlayDir)
-    expect(readFileSync(outsideMarker, 'utf8')).toBe('keep')
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'replaces a stale manifest symlink without writing through to the user file',
-    () => {
-      const userManifest = join(userConfigDir, OPENCODE_OVERLAY_MANIFEST_FILE)
-      writeFileSync(userManifest, 'USER MANIFEST SENTINEL')
-      const overlayDir = join(
-        userDataDir,
-        'opencode-config-overlays',
-        toSafeDirName(`source:${userConfigDir}`)
-      )
-      mkdirSync(overlayDir, { recursive: true })
-      symlinkSync(userManifest, join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE), 'file')
-
-      const env = new OpenCodeHookService().buildPtyEnv(ptyId, userConfigDir)
-
-      expect(env.OPENCODE_CONFIG_DIR).toBe(overlayDir)
-      expect(readFileSync(userManifest, 'utf8')).toBe('USER MANIFEST SENTINEL')
-      expect(lstatSync(join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE)).isSymbolicLink()).toBe(
-        false
-      )
-    }
-  )
 
   it.skipIf(process.platform === 'win32')(
     'does not write through a symlinked plugins/ directory into the user filesystem',

@@ -13,7 +13,7 @@ import {
   isTerminalLinkifierHoverActive,
   resetTerminalLinkifierHoverState
 } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
-import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
+import { focusActivePane } from './pane-helpers'
 import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
@@ -143,6 +143,8 @@ export function recoverVisibleTerminalWindowWake({
 }: RecoverVisibleTerminalWindowWakeArgs): void {
   // Why: macOS screensaver/display wake can leave xterm visible but with a
   // stale renderer/input surface; Orca's own hidden-state resume never runs.
+  // Why: backlog writes can expose transient viewport geometry while parsing.
+  syncTerminalViewportIntents(manager)
   for (const pane of manager.getPanes()) {
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: WINDOW_WAKE_FLUSH_CHARS })
@@ -154,12 +156,11 @@ export function recoverVisibleTerminalWindowWake({
       resetTerminalLinkifierHoverState(pane.terminal)
     }
   }
-  syncTerminalViewportIntents(manager)
   manager.resumeRendering()
+  // Why: wake re-attaches WebGL — same transient cell-metric wobble guard as the heavy resume.
+  manager.fitAllRevealedPanes()
   if (isActive) {
-    fitAndFocusPanes(manager)
-  } else {
-    fitPanes(manager)
+    focusActivePane(manager)
   }
   enforceTerminalViewportIntents(manager)
   if (clearGlyphAtlases) {
@@ -192,19 +193,18 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: VISIBLE_RESUME_FLUSH_CHARS })
   }
-  syncTerminalViewportIntents(manager)
+  // Intent was latched by the caller before queued writes can expose transient geometry.
   // Resume WebGL immediately so the terminal shows its last-known state
   // on the first painted frame. macOS context creation is ~5 ms; on
   // Windows (ANGLE -> D3D11) it can be 100-500 ms but a deferred resume
   // would paint a stretched DOM-fallback flash, which is worse UX.
   manager.resumeRendering()
-  // Single fit on resume. Background bytes have been pushed into xterm
-  // above, so this fit only absorbs container dimension changes that
-  // happened while hidden (e.g. sidebar toggle on another worktree).
+  // Why: resumeRendering just re-attached WebGL, whose cell metrics briefly differ
+  // from the DOM renderer's; a raw fit here reflows on a transient one-column-off
+  // grid and garbles diff-painting inline TUIs (grok minimize→restore).
+  manager.fitAllRevealedPanes()
   if (isActive) {
-    fitAndFocusPanes(manager)
-  } else {
-    fitPanes(manager)
+    focusActivePane(manager)
   }
 }
 

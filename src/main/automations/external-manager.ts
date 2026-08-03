@@ -2,6 +2,7 @@
  * and lifecycle routing share provider/target validation and remote relay fallbacks. */
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type {
@@ -14,8 +15,6 @@ import type {
   ExternalAutomationRunsPage,
   ExternalAutomationUpdateInput
 } from '../../shared/automations-types'
-import { readExternalAutomationJobsFile } from '../../shared/external-automation-jobs-file'
-import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer } from '../ipc/ssh'
@@ -33,8 +32,6 @@ const OPENCLAW_JOBS_FILE = join(homedir(), '.openclaw', 'cron', 'jobs.json')
 const EXTERNAL_JOB_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/
 const LOCAL_COMMAND_LOOKUP_TIMEOUT_MS = 5_000
 const LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS = 30_000
-const HERMES_JOB_RUN_COUNT_CONCURRENCY = 4
-const REMOTE_AUTOMATION_MANAGER_FETCH_CONCURRENCY = 4
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -133,30 +130,39 @@ async function readLocalHermesJobs(): Promise<unknown[]> {
   if (!existsSync(HERMES_JOBS_FILE)) {
     return []
   }
-  const jobs = await readExternalAutomationJobsFile(HERMES_JOBS_FILE, { allowRootArray: true })
-  return mapWithConcurrency(jobs, HERMES_JOB_RUN_COUNT_CONCURRENCY, async (job) => {
-    if (!isRecord(job)) {
-      return job
-    }
-    const jobId = typeof job.id === 'string' ? job.id : null
-    if (!jobId) {
-      return job
-    }
-    const runsPage = await readHermesCronOutputRunsPage(jobId, { page: 1, pageSize: 0 })
-    return {
-      ...job,
-      run_count: runsPage.total,
-      ...(runsPage.totalSaturated ? { run_count_saturated: true } : {}),
-      runs: []
-    }
-  })
+  const content = await readFile(HERMES_JOBS_FILE, 'utf-8')
+  const parsed = JSON.parse(content) as unknown
+  const jobs = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.jobs)
+      ? parsed.jobs
+      : []
+  return Promise.all(
+    jobs.map(async (job) => {
+      if (!isRecord(job)) {
+        return job
+      }
+      const jobId = typeof job.id === 'string' ? job.id : null
+      if (!jobId) {
+        return job
+      }
+      const runsPage = await readHermesCronOutputRunsPage(jobId, { page: 1, pageSize: 0 })
+      return {
+        ...job,
+        run_count: runsPage.total,
+        runs: []
+      }
+    })
+  )
 }
 
 async function readLocalOpenClawJobs(): Promise<unknown[]> {
   if (!existsSync(OPENCLAW_JOBS_FILE)) {
     return []
   }
-  return readExternalAutomationJobsFile(OPENCLAW_JOBS_FILE, { allowRootArray: false })
+  const content = await readFile(OPENCLAW_JOBS_FILE, 'utf-8')
+  const parsed = JSON.parse(content) as unknown
+  return isRecord(parsed) && Array.isArray(parsed.jobs) ? parsed.jobs : []
 }
 
 async function listLocalHermesManager(): Promise<ExternalAutomationManager | null> {
@@ -294,22 +300,16 @@ async function listRemoteManager(
 export async function listExternalAutomationManagers(
   store: Store
 ): Promise<ExternalAutomationManager[]> {
-  const remoteManagerRequests = store
-    .getSshTargets()
-    // Why: runtime-owned hidden targets are excluded from SSH/run-target surfaces.
-    .filter((target) => !isRuntimeOwnedSshTarget(target))
-    .flatMap((target) => [
-      { provider: 'hermes' as const, target },
-      { provider: 'openclaw' as const, target }
-    ])
   const [localHermes, localOpenClaw, remote] = await Promise.all([
     listLocalHermesManager(),
     listLocalOpenClawManager(),
-    mapWithConcurrency(
-      remoteManagerRequests,
-      REMOTE_AUTOMATION_MANAGER_FETCH_CONCURRENCY,
-      ({ provider, target }) =>
-        provider === 'hermes' ? listRemoteHermesManager(target) : listRemoteOpenClawManager(target)
+    Promise.all(
+      store
+        .getSshTargets()
+        // Why: runtime-owned hidden targets are excluded from SSH/run-target
+        // surfaces; don't probe them for external automations either.
+        .filter((target) => !isRuntimeOwnedSshTarget(target))
+        .flatMap((target) => [listRemoteHermesManager(target), listRemoteOpenClawManager(target)])
     )
   ])
   return [
@@ -351,7 +351,6 @@ export async function listExternalAutomationRuns(
       page,
       pageSize,
       total: result.total,
-      ...(result.totalSaturated ? { totalSaturated: true } : {}),
       runs: mapHermesJobs(input.managerId, [{ id: input.jobId, runs: result.runs }])[0]?.runs ?? []
     }
   }
@@ -364,7 +363,7 @@ export async function listExternalAutomationRuns(
     jobId: input.jobId,
     page,
     pageSize
-  })) as { total?: number; totalSaturated?: boolean; runs?: unknown[] }
+  })) as { total?: number; runs?: unknown[] }
   return {
     managerId: input.managerId,
     provider: input.provider,
@@ -373,7 +372,6 @@ export async function listExternalAutomationRuns(
     page,
     pageSize,
     total: typeof result.total === 'number' && Number.isFinite(result.total) ? result.total : 0,
-    ...(result.totalSaturated === true ? { totalSaturated: true } : {}),
     runs:
       mapHermesJobs(input.managerId, [{ id: input.jobId, runs: result.runs ?? [] }])[0]?.runs ?? []
   }

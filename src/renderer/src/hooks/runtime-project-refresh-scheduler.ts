@@ -1,4 +1,4 @@
-import { measureUtf8ByteLength } from '../../../shared/utf8-byte-limits'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 export type RuntimeProjectRefreshSchedulerDeps = {
   refresh: (environmentId: string) => Promise<void>
@@ -6,8 +6,6 @@ export type RuntimeProjectRefreshSchedulerDeps = {
   minIntervalMs?: number
   now?: () => number
   onError?: (error: unknown) => void
-  maxEntries?: number
-  maxEnvironmentIdBytes?: number
 }
 
 export type RuntimeProjectRefreshScheduler = {
@@ -20,13 +18,50 @@ type RefreshEntry = {
   lastStartedAt: number
   pending: boolean
   timer: ReturnType<typeof setTimeout> | null
-  expiryTimer: ReturnType<typeof setTimeout> | null
 }
 
 const DEFAULT_DEBOUNCE_MS = 250
 const DEFAULT_MIN_INTERVAL_MS = 5_000
-export const RUNTIME_PROJECT_REFRESH_MAX_ENTRIES = 256
-export const RUNTIME_PROJECT_REFRESH_MAX_ENVIRONMENT_ID_BYTES = 16 * 1024
+const DEFAULT_REFRESH_CONCURRENCY = 5
+
+export async function refreshRuntimeProjectWorktrees(
+  environmentId: string,
+  repos: readonly { id: string }[],
+  fetchWorktrees: (
+    repoId: string,
+    options: { executionHostId: ExecutionHostId }
+  ) => Promise<unknown>,
+  concurrency = DEFAULT_REFRESH_CONCURRENCY
+): Promise<void> {
+  let nextIndex = 0
+  const failures: { repoId: string; error: unknown }[] = []
+  const workerCount = Math.min(concurrency, repos.length)
+  const executionHostId = toRuntimeExecutionHostId(environmentId)
+
+  // Why: one coalesced event can represent many repos; bound probes without dropping host identity.
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < repos.length) {
+        const index = nextIndex
+        nextIndex += 1
+        const repoId = repos[index].id
+        try {
+          await fetchWorktrees(repoId, { executionHostId })
+        } catch (error) {
+          failures.push({ repoId, error })
+        }
+      }
+    })
+  )
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((failure) => failure.error),
+      `Failed to refresh ${failures.length} runtime project worktree(s): ${failures
+        .map((failure) => failure.repoId)
+        .join(', ')}`
+    )
+  }
+}
 
 export function createRuntimeProjectRefreshScheduler(
   deps: RuntimeProjectRefreshSchedulerDeps
@@ -34,84 +69,27 @@ export function createRuntimeProjectRefreshScheduler(
   const debounceMs = deps.debounceMs ?? DEFAULT_DEBOUNCE_MS
   const minIntervalMs = deps.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS
   const now = deps.now ?? Date.now
-  const maxEntries = deps.maxEntries ?? RUNTIME_PROJECT_REFRESH_MAX_ENTRIES
-  const maxEnvironmentIdBytes =
-    deps.maxEnvironmentIdBytes ?? RUNTIME_PROJECT_REFRESH_MAX_ENVIRONMENT_ID_BYTES
   const entries = new Map<string, RefreshEntry>()
   let stopped = false
 
-  const clearExpiryTimer = (entry: RefreshEntry): void => {
-    if (entry.expiryTimer) {
-      clearTimeout(entry.expiryTimer)
-      entry.expiryTimer = null
-    }
-  }
-
-  const evictIdleEntry = (): boolean => {
-    for (const [environmentId, entry] of entries) {
-      if (entry.inFlight || entry.pending || entry.timer) {
-        continue
-      }
-      clearExpiryTimer(entry)
-      entries.delete(environmentId)
-      return true
-    }
-    return false
-  }
-
-  const getEntry = (environmentId: string): RefreshEntry | null => {
+  const getEntry = (environmentId: string): RefreshEntry => {
     let entry = entries.get(environmentId)
-    if (entry) {
-      entries.delete(environmentId)
+    if (!entry) {
+      entry = {
+        inFlight: false,
+        lastStartedAt: 0,
+        pending: false,
+        timer: null
+      }
       entries.set(environmentId, entry)
-      clearExpiryTimer(entry)
-      return entry
     }
-    if (entries.size >= maxEntries && !evictIdleEntry()) {
-      return null
-    }
-    entry = {
-      inFlight: false,
-      lastStartedAt: 0,
-      pending: false,
-      timer: null,
-      expiryTimer: null
-    }
-    entries.set(environmentId, entry)
     return entry
-  }
-
-  const expireWhenThrottleWindowEnds = (environmentId: string, entry: RefreshEntry): void => {
-    if (stopped || entry.inFlight || entry.pending || entry.timer) {
-      return
-    }
-    clearExpiryTimer(entry)
-    const elapsed = entry.lastStartedAt > 0 ? now() - entry.lastStartedAt : minIntervalMs
-    const delay = Math.max(0, minIntervalMs - elapsed)
-    if (delay === 0) {
-      if (entries.get(environmentId) === entry) {
-        entries.delete(environmentId)
-      }
-      return
-    }
-    entry.expiryTimer = setTimeout(() => {
-      entry.expiryTimer = null
-      if (
-        entries.get(environmentId) === entry &&
-        !entry.inFlight &&
-        !entry.pending &&
-        !entry.timer
-      ) {
-        entries.delete(environmentId)
-      }
-    }, delay)
   }
 
   const schedule = (environmentId: string, entry: RefreshEntry): void => {
     if (stopped || entry.inFlight || entry.timer) {
       return
     }
-    clearExpiryTimer(entry)
     const elapsed = entry.lastStartedAt > 0 ? now() - entry.lastStartedAt : minIntervalMs
     const throttleDelay = Math.max(0, minIntervalMs - elapsed)
     const delay = Math.max(debounceMs, throttleDelay)
@@ -138,27 +116,16 @@ export function createRuntimeProjectRefreshScheduler(
         // Why: runtime repo events can be noisy while a remote server is merely
         // connected; keep discovery live without letting it drive the renderer.
         schedule(environmentId, entry)
-      } else {
-        expireWhenThrottleWindowEnds(environmentId, entry)
       }
     }
   }
 
   const request = (environmentId: string): void => {
-    if (
-      stopped ||
-      measureUtf8ByteLength(environmentId, { stopAfterBytes: maxEnvironmentIdBytes }).exceededLimit
-    ) {
-      return
-    }
     const trimmedEnvironmentId = environmentId.trim()
-    if (!trimmedEnvironmentId) {
+    if (!trimmedEnvironmentId || stopped) {
       return
     }
     const entry = getEntry(trimmedEnvironmentId)
-    if (!entry) {
-      return
-    }
     entry.pending = true
     schedule(trimmedEnvironmentId, entry)
   }
@@ -169,7 +136,6 @@ export function createRuntimeProjectRefreshScheduler(
       if (entry.timer) {
         clearTimeout(entry.timer)
       }
-      clearExpiryTimer(entry)
     }
     entries.clear()
   }

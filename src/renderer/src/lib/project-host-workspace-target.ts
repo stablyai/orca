@@ -130,9 +130,17 @@ export function resolveWorkspaceCreationTarget(
     if (!isReadySetup(setup)) {
       return { status: 'unavailable', reason: 'setup-not-ready' }
     }
-    const target = createTarget(setup, repoById)
-    if (target) {
-      return { status: 'ready', target }
+    // Why: a project resolves to one setup per host, and the run-target picker shows only the first.
+    // A stale draft can still name a same-host duplicate from a legacy profile; canonicalize to the
+    // same setup the picker displays so the shown path is the path the workspace is created in.
+    const canonical =
+      findReadySetupTarget(
+        setups,
+        repoById,
+        (entry) => entry.projectId === setup.projectId && entry.hostId === setup.hostId
+      ) ?? createTarget(setup, repoById)
+    if (canonical) {
+      return { status: 'ready', target: canonical }
     }
     return { status: 'unavailable', reason: 'setup-not-found' }
   }

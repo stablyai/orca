@@ -1,5 +1,5 @@
+import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { findSpeechModelBpeVocabFile } from './speech-model-directory-scanner'
 
 // Why: different models name their ONNX files differently (e.g.
 // encoder.int8.onnx vs tiny-encoder.onnx vs encoder-epoch-99-avg-1.onnx).
@@ -26,9 +26,17 @@ export function resolveTokens(files: string[], modelDir: string): string {
   return join(modelDir, match)
 }
 
-// Why: BPE models need a vocab file for hotwords token matching. The file
-// ships in the model archive but isn't listed in the manifest. We discover
-// it at runtime to avoid breaking existing downloads.
+// Why: BPE models need a vocab file for hotwords token matching, but older caches may omit it.
+function discoverBpeVocab(modelDir: string): string | undefined {
+  try {
+    const entries = readdirSync(modelDir)
+    const vocabFile = entries.find((f) => f.endsWith('.vocab'))
+    return vocabFile ? join(modelDir, vocabFile) : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export type HotwordsConfig = {
   decodingMethod: string
   hotwordsFile?: string
@@ -49,7 +57,7 @@ export function buildHotwordsConfig(opts: {
 
   const unit = opts.modelingUnit
   if (unit?.includes('bpe')) {
-    const bpeVocab = findSpeechModelBpeVocabFile(opts.modelDir)
+    const bpeVocab = discoverBpeVocab(opts.modelDir)
     if (!bpeVocab) {
       return { decodingMethod: 'greedy_search' }
     }

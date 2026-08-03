@@ -1,5 +1,5 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type {
+  AiVaultAgent,
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSessionPreviewMessage
@@ -87,8 +87,6 @@ export type ResumableParseFinalizeOptions = {
 export type ResumableSessionParseState = {
   consumeLine(line: string): void
   clone(): ResumableSessionParseState
-  // The cache budget must include fold state that persistence intentionally omits.
-  retainedUtf8Bytes(): number
   // Refresh per-scan file metadata (mtime display string) without re-parsing.
   touchFile(file: FileWithMtime): void
   finalize(
@@ -112,6 +110,10 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // True once an older message fell out of the newest-N preview window, so the
+  // earliest preview turn is no longer the session's opening ask.
+  previewMessagesTruncated: boolean
+  firstUserPrompt: string | null
   lastUserPrompt: string | null
   // Recoverable signal for a zero-turn transcript (see AiVaultSession).
   queuedMessageCount: number

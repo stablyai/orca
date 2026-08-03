@@ -34,7 +34,6 @@ import {
   waitForSystemSshForwardStop
 } from './system-ssh-forward-process'
 import type { SshTarget } from '../../shared/ssh-types'
-import { SYSTEM_SSH_OUTPUT_TAIL_MAX_BYTES } from './system-ssh-output-tail'
 
 const SYSTEM_SSH_PATH =
   process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
@@ -138,7 +137,7 @@ describe('system SSH forward process', () => {
     expect(standaloneControlIdx).toBe(-1)
     expectNoOrcaControlMasterArgs(args)
     expect(args).toContain('127.0.0.1:5173:127.0.0.1:3000')
-    expect(args[terminatorIdx + 1]).toBe('deploy@fdpass-host')
+    expect(args[terminatorIdx + 1]).toBe('fdpass-host')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
       expect.any(Array),
@@ -193,7 +192,7 @@ describe('system SSH forward process', () => {
     const args = spawnMock.mock.calls[0][1] as string[]
     expect(args.indexOf('-S')).toBe(-1)
     expectNoOrcaControlMasterArgs(args)
-    expect(args).toContain('deploy@workbox')
+    expect(args).toContain('workbox')
   })
 
   it('preserves manual target port and identity options in the forwarded ssh command', () => {
@@ -246,22 +245,6 @@ describe('system SSH forward process', () => {
     child.emit('exit', 255)
 
     await expect(pending).rejects.toThrow('bind: Address already in use')
-  })
-
-  it('keeps only a bounded stderr tail while waiting for forward startup', async () => {
-    vi.useFakeTimers()
-    const child = createFakeProcess()
-    connectMock.mockReturnValue(createFakeSocket())
-
-    const pending = waitForSystemSshForwardStartup(child as never, 3000)
-    child.stderr.emit(
-      'data',
-      Buffer.from(`HEAD${'x'.repeat(SYSTEM_SSH_OUTPUT_TAIL_MAX_BYTES)}TAIL`)
-    )
-    child.emit('exit', 255)
-
-    await expect(pending).rejects.toThrow('TAIL')
-    await expect(pending).rejects.not.toThrow('HEAD')
   })
 
   it('rejects startup when the ssh process emits an error', async () => {

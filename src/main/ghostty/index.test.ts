@@ -1,36 +1,22 @@
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/types'
-import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
-import type * as GhosttyParser from './parser'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { statMock, readNodeFileWithinLimitMock, parseGhosttyConfigMock } = vi.hoisted(() => ({
+const { statMock, readFileMock } = vi.hoisted(() => ({
   statMock: vi.fn(),
-  readNodeFileWithinLimitMock: vi.fn(),
-  parseGhosttyConfigMock: vi.fn()
+  readFileMock: vi.fn()
 }))
 
 vi.mock('fs/promises', () => ({
-  stat: statMock
+  stat: statMock,
+  readFile: readFileMock
 }))
-
-vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => ({
-  ...(await importOriginal<typeof BoundedFileReader>()),
-  readNodeFileWithinLimit: readNodeFileWithinLimitMock
-}))
-
-vi.mock('./parser', async (importOriginal) => {
-  const actual = await importOriginal<typeof GhosttyParser>()
-  parseGhosttyConfigMock.mockImplementation(actual.parseGhosttyConfig)
-  return { ...actual, parseGhosttyConfig: parseGhosttyConfigMock }
-})
 
 vi.mock('os', () => ({
   platform: vi.fn(() => 'darwin'),
   homedir: vi.fn(() => '/Users/alice')
 }))
 
-import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
 import { previewGhosttyImport } from './index'
 
 const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
@@ -50,13 +36,6 @@ function createStore(settings: Record<string, unknown> = {}): Store {
   } as Store
 }
 
-function fileRead(content: string, size = Buffer.byteLength(content)) {
-  return {
-    buffer: Buffer.from(content),
-    stats: { isFile: () => true, size }
-  }
-}
-
 describe('previewGhosttyImport', () => {
   it('returns found false when no config exists', async () => {
     statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
@@ -73,13 +52,11 @@ describe('previewGhosttyImport', () => {
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readNodeFileWithinLimitMock.mockResolvedValue(
-      fileRead(`
+    readFileMock.mockResolvedValue(`
 font-family = JetBrains Mono
 font-size = 14
 background = #1a1a1a
 `)
-    )
 
     const result = await previewGhosttyImport(
       createStore({
@@ -111,12 +88,12 @@ background = #1a1a1a
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readNodeFileWithinLimitMock.mockImplementation(async (p: string) => {
+    readFileMock.mockImplementation(async (p: string) => {
       if (p === '/Users/alice/.config/ghostty/config.ghostty') {
-        return fileRead('font-size = 22\nbackground = #1a1a1a\n')
+        return 'font-size = 22\nbackground = #1a1a1a\n'
       }
       if (p === '/Users/alice/.config/ghostty/config') {
-        return fileRead('font-family = JetBrains Mono\nfont-size = 18\n')
+        return 'font-family = JetBrains Mono\nfont-size = 18\n'
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
@@ -144,7 +121,7 @@ background = #1a1a1a
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readNodeFileWithinLimitMock.mockResolvedValue(fileRead('font-family = Menlo\nfont-size = 12\n'))
+    readFileMock.mockResolvedValue('font-family = Menlo\nfont-size = 12\n')
 
     const result = await previewGhosttyImport(
       createStore({
@@ -165,9 +142,7 @@ background = #1a1a1a
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readNodeFileWithinLimitMock.mockResolvedValue(
-      fileRead('background = #1a1a1a\nforeground = #e0e0e0\n')
-    )
+    readFileMock.mockResolvedValue('background = #1a1a1a\nforeground = #e0e0e0\n')
 
     const result = await previewGhosttyImport(
       createStore({
@@ -187,9 +162,7 @@ background = #1a1a1a
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readNodeFileWithinLimitMock.mockResolvedValue(
-      fileRead('background = #1a1a1a\nforeground = #e0e0e0\n')
-    )
+    readFileMock.mockResolvedValue('background = #1a1a1a\nforeground = #e0e0e0\n')
 
     const result = await previewGhosttyImport(
       createStore({
@@ -219,7 +192,7 @@ background = #1a1a1a
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
-    readNodeFileWithinLimitMock.mockResolvedValue(fileRead('font-family = JetBrains Mono\n'))
+    readFileMock.mockResolvedValue('font-family = JetBrains Mono\n')
 
     // Why: Replace timer globals temporarily to detect any polling setup.
     const originalSetInterval = globalThis.setInterval
@@ -238,45 +211,5 @@ background = #1a1a1a
     expect(watchFileMock).not.toHaveBeenCalled()
     expect(setIntervalMock).not.toHaveBeenCalled()
     expect(setTimeoutMock).not.toHaveBeenCalled()
-  })
-
-  it('accepts a config at the exact byte limit', async () => {
-    const configPath = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
-    statMock.mockImplementation(async (p: string) => {
-      if (p === configPath) {
-        return { isFile: () => true, size: 1_000_000 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readNodeFileWithinLimitMock.mockResolvedValue(fileRead('font-size = 14\n', 1_000_000))
-
-    const result = await previewGhosttyImport(createStore())
-
-    expect(result.found).toBe(true)
-    expect(result.diff).toEqual({ terminalFontSize: 14 })
-    expect(readNodeFileWithinLimitMock).toHaveBeenCalledWith(configPath, 1_000_000)
-  })
-
-  it('rejects config growth beyond the limit before parsing', async () => {
-    const configPath = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
-    statMock.mockImplementation(async (p: string) => {
-      if (p === configPath) {
-        return { isFile: () => true, size: 128 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readNodeFileWithinLimitMock.mockRejectedValue(
-      new NodeFileReadTooLargeError(1_000_001, 1_000_000)
-    )
-
-    const result = await previewGhosttyImport(createStore())
-
-    expect(result).toMatchObject({
-      found: false,
-      diff: {},
-      unsupportedKeys: [],
-      error: 'Config file is too large to import (1000001 bytes, limit 1000000).'
-    })
-    expect(parseGhosttyConfigMock).not.toHaveBeenCalled()
   })
 })

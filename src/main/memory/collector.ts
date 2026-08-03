@@ -27,17 +27,13 @@ import {
   iterateProcessOutputLines
 } from '../../shared/process-output-field-scanner'
 import { app } from 'electron'
-import type {
-  AppMemory,
-  MemorySnapshot,
-  HostMemory,
-  SessionMemory,
-  WorktreeMemory
-} from '../../shared/types'
+import type { AppMemory, MemorySnapshot, SessionMemory, WorktreeMemory } from '../../shared/types'
 import type { Store } from '../persistence'
 import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
 import { listRegisteredPtys } from './pty-registry'
 import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
+import { collectHostMemory, fallbackHostMemory } from './host-memory'
+import { getProcessMemoryMetric } from './process-memory-metric'
 
 export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
 
@@ -95,26 +91,13 @@ function clampNumber(value: unknown): number {
   return Math.max(0, value)
 }
 
-function hostMetrics(): HostMemory {
-  const total = clampNumber(os.totalmem())
-  const free = clampNumber(os.freemem())
-  const used = Math.max(0, total - free)
-  return {
-    totalMemory: total,
-    freeMemory: free,
-    usedMemory: used,
-    memoryUsagePercent: total > 0 ? (used / total) * 100 : 0,
-    cpuCoreCount: Math.max(1, os.cpus().length),
-    loadAverage1m: clampNumber(os.loadavg()[0])
-  }
-}
-
 function emptySnapshot(): MemorySnapshot {
   const zero = { cpu: 0, memory: 0 }
   return {
     app: { ...zero, main: zero, renderer: zero, other: zero, history: [] },
     worktrees: [],
-    host: hostMetrics(),
+    host: fallbackHostMemory(),
+    processMemoryMetric: getProcessMemoryMetric(),
     totalCpu: 0,
     totalMemory: 0,
     collectedAt: Date.now()
@@ -126,7 +109,6 @@ function emptySnapshot(): MemorySnapshot {
 const APP_HISTORY_KEY = '__app__'
 const HISTORY_CAPACITY = 60
 const HISTORY_STALE_MS = 10 * 60 * 1000
-export const MEMORY_HISTORY_MAX_WORKTREES = 1024
 
 type HistoryRing = {
   samples: number[]
@@ -139,39 +121,18 @@ function pushHistorySample(key: string, memoryBytes: number, now: number): void 
   let ring = historyByKey.get(key)
   if (!ring) {
     ring = { samples: [], touchedAt: now }
+    historyByKey.set(key, ring)
   }
   ring.samples.push(memoryBytes)
   if (ring.samples.length > HISTORY_CAPACITY) {
     ring.samples.shift()
   }
   ring.touchedAt = now
-  // Why: worktree ids can churn faster than the stale TTL in a long-lived
-  // main process; recency ordering gives the history cache a hard ceiling.
-  historyByKey.delete(key)
-  historyByKey.set(key, ring)
-  trimWorktreeHistory()
 }
 
-function trimWorktreeHistory(): void {
-  const appEntryCount = historyByKey.has(APP_HISTORY_KEY) ? 1 : 0
-  while (historyByKey.size - appEntryCount > MEMORY_HISTORY_MAX_WORKTREES) {
-    let oldestWorktreeKey: string | undefined
-    for (const key of historyByKey.keys()) {
-      if (key !== APP_HISTORY_KEY) {
-        oldestWorktreeKey = key
-        break
-      }
-    }
-    if (oldestWorktreeKey === undefined) {
-      break
-    }
-    historyByKey.delete(oldestWorktreeKey)
-  }
-}
-
-function readHistory(key: string, currentSample?: number): number[] {
+function readHistory(key: string): number[] {
   const ring = historyByKey.get(key)
-  return ring ? [...ring.samples] : currentSample === undefined ? [] : [currentSample]
+  return ring ? [...ring.samples] : []
 }
 
 function sweepStaleHistory(now: number): void {
@@ -180,11 +141,6 @@ function sweepStaleHistory(now: number): void {
       historyByKey.delete(key)
     }
   }
-}
-
-/** @internal — test-only */
-export function getMemoryHistoryWorktreeCountForTests(): number {
-  return historyByKey.size - (historyByKey.has(APP_HISTORY_KEY) ? 1 : 0)
 }
 
 // ─── Host process enumeration ───────────────────────────────────────
@@ -379,7 +335,7 @@ function makeEmptyBucket(
 // ─── Main collection path ───────────────────────────────────────────
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
-  const processIndex = await enumerateProcesses()
+  const [processIndex, host] = await Promise.all([enumerateProcesses(), collectHostMemory()])
   const appBuckets = bucketElectronMetrics(processIndex)
   const ptys = listRegisteredPtys()
 
@@ -460,9 +416,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
 
   const worktrees: WorktreeMemory[] = bucketList.map((b) => ({
     ...b,
-    // Why: an over-cap active worktree still gets its current point even when
-    // an older retained ring had to be evicted during this same snapshot.
-    history: readHistory(b.worktreeId, b.memory)
+    history: readHistory(b.worktreeId)
   }))
 
   let sessionCpuTotal = 0
@@ -475,7 +429,8 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   return {
     app: { ...appBuckets, history: readHistory(APP_HISTORY_KEY) },
     worktrees,
-    host: hostMetrics(),
+    host,
+    processMemoryMetric: getProcessMemoryMetric(),
     totalCpu: appBuckets.cpu + sessionCpuTotal,
     totalMemory: appBuckets.memory + sessionMemoryTotal,
     collectedAt: now

@@ -1,23 +1,24 @@
 import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
-import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
-import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
+import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
-
-const MAX_RUNTIME_RESPONSE_LINE_BYTES = 64 * 1024 * 1024
-export const CLI_RUNTIME_JSON_STRUCTURE_LIMITS = {
-  structuralTokens: 1_000_000,
-  nestingDepth: 128
-} as const
+import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  envelope?: RuntimeOrchestrationEnvelope
 ): Promise<RuntimeRpcResponse<TResult>> {
+  if (!isSafeTimerDelayMs(timeoutMs)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
+    )
+  }
   return await new Promise((resolve, reject) => {
     const transport = findTransport(metadata, 'unix', 'named-pipe')
     if (!transport) {
@@ -30,7 +31,7 @@ export async function sendRequest<TResult>(
       return
     }
     const socket = createConnection(transport.endpoint)
-    const buffer = new GrowingByteBuffer()
+    let buffer = ''
     let settled = false
     const requestId = randomUUID()
 
@@ -56,16 +57,15 @@ export async function sendRequest<TResult>(
       }
       settled = true
       clearTimeout(timeout)
-      buffer.clear()
+      socket.end()
       if (result.ok === false) {
-        socket.destroy()
         reject(result.error)
       } else {
-        socket.end()
         resolve(result.response)
       }
     }
 
+    socket.setEncoding('utf8')
     socket.once('error', () => {
       finish({
         ok: false,
@@ -88,39 +88,24 @@ export async function sendRequest<TResult>(
         )
       })
     })
-    socket.on('data', (chunk: Buffer) => {
-      if (settled) {
-        return
-      }
-      buffer.append(chunk)
+    socket.on('data', (chunk: string) => {
+      buffer += chunk
       // Why: the server may interleave `{"_keepalive":true}\n` frames with the
       // final success/failure frame to keep both idle timers alive during a
       // long-poll (see design doc §3.1). Read frames in a loop until we see a
       // terminal frame. Each keepalive refreshes the client-side timer so a
       // 10 min wait doesn't trip the 60 s default ceiling.
-      let newlineIndex = buffer.indexOfByte(0x0a)
+      let newlineIndex = buffer.indexOf('\n')
       while (newlineIndex !== -1 && !settled) {
-        const lineBytes = newlineIndex
-        if (lineBytes > MAX_RUNTIME_RESPONSE_LINE_BYTES) {
-          finish({
-            ok: false,
-            error: new RuntimeClientError(
-              'invalid_runtime_response',
-              `The Orca runtime response exceeded the ${MAX_RUNTIME_RESPONSE_LINE_BYTES} byte frame limit.`
-            )
-          })
-          return
-        }
-        const line = buffer.takePrefixString(lineBytes)
-        buffer.discardPrefix(1)
+        const line = buffer.slice(0, newlineIndex)
+        buffer = buffer.slice(newlineIndex + 1)
         if (line.trim().length === 0) {
-          newlineIndex = buffer.indexOfByte(0x0a)
+          newlineIndex = buffer.indexOf('\n')
           continue
         }
 
         let raw: unknown
         try {
-          assertJsonTextStructureWithinLimits(line, CLI_RUNTIME_JSON_STRUCTURE_LIMITS)
           raw = JSON.parse(line)
         } catch {
           finish({
@@ -139,7 +124,7 @@ export async function sendRequest<TResult>(
         // major). See §7 risk #9.
         if (isKeepaliveFrame(raw)) {
           timeout.refresh()
-          newlineIndex = buffer.indexOfByte(0x0a)
+          newlineIndex = buffer.indexOf('\n')
           continue
         }
 
@@ -165,7 +150,7 @@ export async function sendRequest<TResult>(
         const frame = parsed.data
         if ('_keepalive' in frame) {
           timeout.refresh()
-          newlineIndex = buffer.indexOfByte(0x0a)
+          newlineIndex = buffer.indexOf('\n')
           continue
         }
 
@@ -193,15 +178,6 @@ export async function sendRequest<TResult>(
         finish({ ok: true, response })
         return
       }
-      if (buffer.byteLength > MAX_RUNTIME_RESPONSE_LINE_BYTES) {
-        finish({
-          ok: false,
-          error: new RuntimeClientError(
-            'invalid_runtime_response',
-            `The Orca runtime response exceeded the ${MAX_RUNTIME_RESPONSE_LINE_BYTES} byte frame limit.`
-          )
-        })
-      }
     })
     socket.on('connect', () => {
       socket.write(
@@ -209,7 +185,12 @@ export async function sendRequest<TResult>(
           id: requestId,
           authToken: metadata.authToken,
           method,
-          params
+          params,
+          orchestrationCapability: envelope?.orchestrationCapability,
+          orchestrationContractVersion: envelope?.orchestrationContractVersion,
+          orchestrationRequestId: envelope?.orchestrationRequestId,
+          compatibilityInvocationId: envelope?.compatibilityInvocationId,
+          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
         })}\n`
       )
     })

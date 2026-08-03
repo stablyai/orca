@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: local/remote generation, cancellation, and
    env propagation share subprocess mocks; splitting would obscure the
    cross-path invariants these tests protect. */
-import { exec, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,26 +16,26 @@ import {
   generateBranchNameFromContext,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
-  MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS,
   resolveCommitMessageSettings,
   trimGeneratedCommitMessage
 } from './commit-message-text-generation'
+
+const { terminateWindowsProcessTreeMock } = vi.hoisted(() => ({
+  terminateWindowsProcessTreeMock: vi.fn(async () => {})
+}))
+
+vi.mock('../windows-process-tree-kill', () => ({
+  terminateWindowsProcessTree: terminateWindowsProcessTreeMock
+}))
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
   return {
     ...actual,
-    exec: vi.fn((_command, callback) => {
-      if (typeof callback === 'function') {
-        callback(null, '', '')
-      }
-      return new actual.ChildProcess()
-    }),
     spawn: vi.fn(actual.spawn)
   }
 })
 
-const execMock = vi.mocked(exec)
 const spawnMock = vi.mocked(spawn)
 
 type MockDiscoveryChild = EventEmitter & {
@@ -72,7 +72,7 @@ function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
 
 function expectChildTerminated(child: { pid: number; kill: ReturnType<typeof vi.fn> }): void {
   if (process.platform === 'win32') {
-    expect(execMock).toHaveBeenCalledWith(`taskkill /pid ${child.pid} /T /F`, expect.any(Function))
+    expect(terminateWindowsProcessTreeMock).toHaveBeenCalledWith(child.pid)
     expect(child.kill).not.toHaveBeenCalled()
     return
   }
@@ -80,7 +80,8 @@ function expectChildTerminated(child: { pid: number; kill: ReturnType<typeof vi.
 }
 
 beforeEach(() => {
-  execMock.mockClear()
+  terminateWindowsProcessTreeMock.mockClear()
+  terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
   spawnMock.mockClear()
 })
 
@@ -480,119 +481,6 @@ describe('discoverCommitMessageModelsLocal', () => {
     })
   })
 
-  it('shares one child process for concurrent identical model discovery', async () => {
-    const children: MockDiscoveryChild[] = []
-    spawnMock.mockImplementation(() => {
-      const child = createMockDiscoveryChild()
-      children.push(child)
-      return child as never
-    })
-
-    const first = discoverCommitMessageModelsLocal('cursor', { TOKEN: 'secret' })
-    const second = discoverCommitMessageModelsLocal('cursor', { TOKEN: 'secret' })
-
-    expect(spawnMock).toHaveBeenCalledTimes(1)
-    children[0]!.stdout.emit('data', Buffer.from('auto - Auto\n'))
-    children[0]!.emit('close', 0)
-
-    const [firstResult, secondResult] = await Promise.all([first, second])
-    expect(firstResult).toMatchObject({ success: true, defaultModelId: 'auto' })
-    expect(secondResult).toEqual(firstResult)
-
-    const retry = discoverCommitMessageModelsLocal('cursor', { TOKEN: 'secret' })
-    expect(spawnMock).toHaveBeenCalledTimes(2)
-    children[1]!.stdout.emit('data', Buffer.from('auto - Auto\n'))
-    children[1]!.emit('close', 0)
-    await expect(retry).resolves.toEqual(firstResult)
-  })
-
-  it('keeps different agent parsers isolated when discovery commands match', async () => {
-    const children: MockDiscoveryChild[] = []
-    spawnMock.mockImplementation(() => {
-      const child = createMockDiscoveryChild()
-      children.push(child)
-      return child as never
-    })
-
-    const cursor = discoverCommitMessageModelsLocal('cursor', undefined, 'custom-discovery')
-    const pi = discoverCommitMessageModelsLocal('pi', undefined, 'custom-discovery')
-
-    expect(children).toHaveLength(2)
-    children[0]!.stdout.emit('data', Buffer.from('auto - Auto\n'))
-    children[0]!.emit('close', 0)
-    children[1]!.stderr.emit(
-      'data',
-      Buffer.from(
-        [
-          'provider        model                   context  max-out  thinking  images',
-          'github-copilot  gpt-5.4-mini            400K     128K     yes       yes'
-        ].join('\n')
-      )
-    )
-    children[1]!.emit('close', 0)
-
-    await expect(cursor).resolves.toMatchObject({ success: true, defaultModelId: 'auto' })
-    await expect(pi).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'github-copilot/gpt-5.4-mini'
-    })
-  })
-
-  it('shares the local process cap across discovery and generation, then releases on close', async () => {
-    const children: MockDiscoveryChild[] = []
-    spawnMock.mockImplementation(() => {
-      const child = createMockDiscoveryChild()
-      child.pid += children.length
-      children.push(child)
-      return child as never
-    })
-    const active = Array.from({ length: MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS }, (_, index) =>
-      discoverCommitMessageModelsLocal('cursor', undefined, undefined, {
-        cwd: `/repo-${index}`
-      })
-    )
-
-    expect(children).toHaveLength(MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS)
-    await expect(
-      discoverCommitMessageModelsLocal('cursor', undefined, undefined, {
-        cwd: '/repo-overflow'
-      })
-    ).resolves.toEqual({
-      success: false,
-      error:
-        'Too many local AI generations are already running. Wait for one to finish and try again.'
-    })
-    await expect(
-      generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' },
-        { agentId: 'custom', model: '', customAgentCommand: 'agent' },
-        { kind: 'local', cwd: '/generation-overflow' }
-      )
-    ).resolves.toEqual({
-      success: false,
-      error:
-        'Too many local AI generations are already running. Wait for one to finish and try again.'
-    })
-    expect(spawnMock).toHaveBeenCalledTimes(MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS)
-
-    children[0]!.stdout.emit('data', Buffer.from('auto - Auto\n'))
-    children[0]!.emit('close', 0)
-    await active[0]
-
-    const retry = discoverCommitMessageModelsLocal('cursor', undefined, undefined, {
-      cwd: '/repo-overflow'
-    })
-    expect(children).toHaveLength(MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS + 1)
-
-    for (const child of children.slice(1)) {
-      child.stdout.emit('data', Buffer.from('auto - Auto\n'))
-      child.emit('close', 0)
-    }
-    await expect(Promise.all([...active, retry])).resolves.toHaveLength(
-      MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS + 1
-    )
-  })
-
   it('settles and detaches model discovery when timeout kill is ignored', async () => {
     vi.useFakeTimers()
     const child = createMockDiscoveryChild()
@@ -612,9 +500,41 @@ describe('discoverCommitMessageModelsLocal', () => {
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
-      expect(child.listenerCount('close')).toBe(1)
-      child.emit('close', null)
       expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the Codex home locked after a discovery timeout until the child closes', async () => {
+    vi.useFakeTimers()
+    const firstChild = createMockDiscoveryChild()
+    const secondChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const env = { CODEX_HOME: '/managed/codex-discovery-home' }
+
+    try {
+      const first = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(0)
+      const second = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      await expect(first).resolves.toMatchObject({
+        success: false,
+        error: 'Codex model discovery timed out after 60s.'
+      })
+      expectChildTerminated(firstChild)
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+
+      firstChild.emit('close', null)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+      secondChild.stdout.emit(
+        'data',
+        Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
+      )
+      secondChild.emit('close', 0)
+      await expect(second).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
     } finally {
       vi.useRealTimers()
     }
@@ -636,8 +556,6 @@ describe('discoverCommitMessageModelsLocal', () => {
     expect(child.stdout.listenerCount('data')).toBe(0)
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
-    expect(child.listenerCount('close')).toBe(1)
-    child.emit('close', null)
     expect(child.listenerCount('close')).toBe(0)
   })
 })
@@ -1259,36 +1177,6 @@ describe('generateCommitMessageFromContext', () => {
     expectChildTerminated(child)
   })
 
-  it('preserves local agent output delivered as 100,000 one-byte fragments', async () => {
-    const child = createMockDiscoveryChild()
-    spawnMock.mockReturnValue(child as never)
-    const pending = generateCommitMessageFromContext(
-      {
-        branch: 'main',
-        stagedSummary: 'M\tREADME.md',
-        stagedPatch: '+hello'
-      },
-      {
-        agentId: 'custom',
-        model: '',
-        customAgentCommand: 'agent'
-      },
-      { kind: 'local', cwd: '/fragmented-repo' }
-    )
-
-    for (let index = 0; index < 100_000; index += 1) {
-      child.stdout.emit('data', Buffer.from(' '))
-    }
-    child.stdout.emit('data', Buffer.from('Update README\n'))
-    child.emit('close', 0)
-
-    await expect(pending).resolves.toEqual({
-      success: true,
-      message: 'Update README',
-      agentLabel: 'agent'
-    })
-  })
-
   it('passes prepared provider environment to local agent subprocesses', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
     const child = {
@@ -1484,207 +1372,6 @@ describe('generateCommitMessageFromContext', () => {
 
     cancelGeneratePullRequestFieldsLocal('/repo')
     expect(children[1]?.kill).not.toHaveBeenCalled()
-  })
-
-  it('cancels the previous process before replacing one local lane', async () => {
-    const children: {
-      kill: ReturnType<typeof vi.fn>
-      listeners: Map<string, (value: unknown) => void>
-    }[] = []
-    spawnMock.mockImplementation(() => {
-      const listeners = new Map<string, (value: unknown) => void>()
-      const child = {
-        pid: 123 + children.length,
-        kill: vi.fn(),
-        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-        stdin: { end: vi.fn() },
-        on: vi.fn((event, callback) => listeners.set(event, callback))
-      }
-      children.push({ kill: child.kill, listeners })
-      return child as never
-    })
-    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
-    const params = { agentId: 'custom' as const, model: '', customAgentCommand: 'agent' }
-    const target = { kind: 'local' as const, cwd: '/same-repo' }
-
-    const first = generateCommitMessageFromContext(context, params, target)
-    const second = generateCommitMessageFromContext(context, params, target)
-
-    expectChildTerminated({ pid: 123, kill: children[0]!.kill })
-    expect(children).toHaveLength(2)
-    children[0]?.listeners.get('close')?.(null)
-    children[1]?.listeners.get('stdout:data')?.(Buffer.from('Update README\n'))
-    children[1]?.listeners.get('close')?.(0)
-    await expect(first).resolves.toMatchObject({ success: false, canceled: true })
-    await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
-  })
-
-  it('caps concurrent local text-generation child processes', async () => {
-    const children: Map<string, (value: unknown) => void>[] = []
-    spawnMock.mockImplementation(() => {
-      const listeners = new Map<string, (value: unknown) => void>()
-      const child = {
-        pid: 200 + children.length,
-        kill: vi.fn(),
-        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-        stdin: { end: vi.fn() },
-        on: vi.fn((event, callback) => listeners.set(event, callback))
-      }
-      children.push(listeners)
-      return child as never
-    })
-    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
-    const params = { agentId: 'custom' as const, model: '', customAgentCommand: 'agent' }
-    const active = Array.from({ length: MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS }, (_, index) =>
-      generateCommitMessageFromContext(context, params, {
-        kind: 'local',
-        cwd: `/repo-${index}`
-      })
-    )
-
-    await expect(
-      generateCommitMessageFromContext(context, params, {
-        kind: 'local',
-        cwd: '/repo-overflow'
-      })
-    ).resolves.toEqual({
-      success: false,
-      error:
-        'Too many local AI generations are already running. Wait for one to finish and try again.'
-    })
-    expect(spawnMock).toHaveBeenCalledTimes(MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS)
-
-    for (const listeners of children) {
-      listeners.get('stdout:data')?.(Buffer.from('Update README\n'))
-      listeners.get('close')?.(0)
-    }
-    await expect(Promise.all(active)).resolves.toHaveLength(MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS)
-  })
-
-  it('waits for a full-capacity lane to close before spawning its replacement', async () => {
-    const children: {
-      pid: number
-      kill: ReturnType<typeof vi.fn>
-      listeners: Map<string, (value: unknown) => void>
-      closed: boolean
-    }[] = []
-    spawnMock.mockImplementation(() => {
-      const listeners = new Map<string, (value: unknown) => void>()
-      const child = {
-        pid: 300 + children.length,
-        kill: vi.fn(),
-        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-        stdin: { end: vi.fn() },
-        on: vi.fn((event, callback) => listeners.set(event, callback))
-      }
-      children.push({ pid: child.pid, kill: child.kill, listeners, closed: false })
-      return child as never
-    })
-    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
-    const params = { agentId: 'custom' as const, model: '', customAgentCommand: 'agent' }
-    const active = Array.from({ length: MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS }, (_, index) =>
-      generateCommitMessageFromContext(context, params, {
-        kind: 'local',
-        cwd: `/full-repo-${index}`
-      })
-    )
-
-    const replacement = generateCommitMessageFromContext(context, params, {
-      kind: 'local',
-      cwd: '/full-repo-0'
-    })
-
-    expectChildTerminated(children[0]!)
-    expect(children).toHaveLength(MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS)
-    expect(children.filter((child) => !child.closed)).toHaveLength(
-      MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS
-    )
-
-    children[0]!.closed = true
-    children[0]!.listeners.get('close')?.(null)
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(children).toHaveLength(MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS + 1)
-    expect(children.filter((child) => !child.closed)).toHaveLength(
-      MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS
-    )
-
-    for (const child of children.slice(1)) {
-      child.listeners.get('stdout:data')?.(Buffer.from('Update README\n'))
-      child.closed = true
-      child.listeners.get('close')?.(0)
-    }
-    await expect(active[0]).resolves.toMatchObject({ success: false, canceled: true })
-    await expect(Promise.all([...active.slice(1), replacement])).resolves.toHaveLength(
-      MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS
-    )
-  })
-
-  it('cancels and supersedes replacements queued behind a full lane', async () => {
-    const children: {
-      pid: number
-      kill: ReturnType<typeof vi.fn>
-      listeners: Map<string, (value: unknown) => void>
-    }[] = []
-    spawnMock.mockImplementation(() => {
-      const listeners = new Map<string, (value: unknown) => void>()
-      const child = {
-        pid: 400 + children.length,
-        kill: vi.fn(),
-        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-        stdin: { end: vi.fn() },
-        on: vi.fn((event, callback) => listeners.set(event, callback))
-      }
-      children.push({ pid: child.pid, kill: child.kill, listeners })
-      return child as never
-    })
-    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
-    const params = { agentId: 'custom' as const, model: '', customAgentCommand: 'agent' }
-    const active = Array.from({ length: MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS }, (_, index) =>
-      generateCommitMessageFromContext(context, params, {
-        kind: 'local',
-        cwd: `/queued-repo-${index}`
-      })
-    )
-
-    const superseded = generateCommitMessageFromContext(context, params, {
-      kind: 'local',
-      cwd: '/queued-repo-0'
-    })
-    const canceled = generateCommitMessageFromContext(context, params, {
-      kind: 'local',
-      cwd: '/queued-repo-0'
-    })
-
-    await expect(superseded).resolves.toMatchObject({ success: false, canceled: true })
-    expect(children).toHaveLength(MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS)
-    cancelGenerateCommitMessageLocal('/queued-repo-0')
-    await expect(canceled).resolves.toMatchObject({ success: false, canceled: true })
-
-    const replacement = generateCommitMessageFromContext(context, params, {
-      kind: 'local',
-      cwd: '/queued-repo-0'
-    })
-    expect(children).toHaveLength(MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS)
-
-    children[0]!.listeners.get('close')?.(null)
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(children).toHaveLength(MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS + 1)
-
-    for (const child of children.slice(1)) {
-      child.listeners.get('stdout:data')?.(Buffer.from('Update README\n'))
-      child.listeners.get('close')?.(0)
-    }
-    await expect(active[0]).resolves.toMatchObject({ success: false, canceled: true })
-    await expect(Promise.all([...active.slice(1), replacement])).resolves.toHaveLength(
-      MAX_CONCURRENT_LOCAL_TEXT_GENERATIONS
-    )
   })
 
   it('keeps local pull-request cancellation from stopping commit-message generation', async () => {
@@ -1961,11 +1648,133 @@ describe('generateCommitMessageFromContext', () => {
       expect(listeners.has('stdout:data')).toBe(false)
       expect(listeners.has('stderr:data')).toBe(false)
       expect(listeners.has('error')).toBe(false)
-      expect(listeners.has('close')).toBe(true)
-      listeners.get('close')?.(null)
+      expect(listeners.has('close')).toBe(false)
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('publishes Codex cancellation immediately but holds its home lock until close', async () => {
+    const firstChild = createMockDiscoveryChild()
+    const secondChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const env = { CODEX_HOME: '/managed/codex-generation-home' }
+    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
+    const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
+
+    const first = generateCommitMessageFromContext(context, params, {
+      kind: 'local',
+      cwd: '/repo',
+      env
+    })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    cancelGenerateCommitMessageLocal('/repo')
+
+    await expect(first).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true
+    })
+    expectChildTerminated(firstChild)
+
+    const second = generateCommitMessageFromContext(context, params, {
+      kind: 'local',
+      cwd: '/repo-2',
+      env
+    })
+    await Promise.resolve()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+
+    firstChild.emit('close', null)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    secondChild.stdout.emit('data', Buffer.from('Update README\n'))
+    secondChild.emit('close', 0)
+    await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
+  })
+
+  it('holds the Codex home lock until Windows tree termination and wrapper close', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    let finishTreeKill!: () => void
+    terminateWindowsProcessTreeMock.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishTreeKill = resolve
+      })
+    )
+    const firstChild = createMockDiscoveryChild()
+    const secondChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    const env = { CODEX_HOME: 'C:\\managed\\codex-generation-home' }
+    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
+    const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
+
+    try {
+      const first = generateCommitMessageFromContext(context, params, {
+        kind: 'local',
+        cwd: 'C:\\repo',
+        env
+      })
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+      cancelGenerateCommitMessageLocal('C:\\repo')
+      await expect(first).resolves.toMatchObject({ canceled: true })
+
+      const second = generateCommitMessageFromContext(context, params, {
+        kind: 'local',
+        cwd: 'C:\\repo-2',
+        env
+      })
+      firstChild.emit('close', null)
+      await Promise.resolve()
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+
+      finishTreeKill()
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+      secondChild.stdout.emit('data', Buffer.from('Update README\n'))
+      secondChild.emit('close', 0)
+      await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('cancels Codex generation promptly while it is queued behind the home lock', async () => {
+    const discoveryChild = createMockDiscoveryChild()
+    const laterChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(discoveryChild as never).mockReturnValueOnce(laterChild as never)
+    const env = { CODEX_HOME: '/managed/codex-queued-home' }
+    const blocker = discoverCommitMessageModelsLocal('codex', env)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+
+    const queued = generateCommitMessageFromContext(
+      { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' },
+      { agentId: 'codex', model: 'gpt-5.5' },
+      { kind: 'local', cwd: '/queued-repo', env }
+    )
+    cancelGenerateCommitMessageLocal('/queued-repo')
+
+    await expect(queued).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+
+    discoveryChild.stdout.emit(
+      'data',
+      Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
+    )
+    discoveryChild.emit('close', 0)
+    await expect(blocker).resolves.toMatchObject({ success: true })
+
+    const later = generateCommitMessageFromContext(
+      { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+later' },
+      { agentId: 'codex', model: 'gpt-5.5' },
+      { kind: 'local', cwd: '/later-repo', env }
+    )
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    laterChild.stdout.emit('data', Buffer.from('Update later\n'))
+    laterChild.emit('close', 0)
+    await expect(later).resolves.toMatchObject({ success: true, message: 'Update later' })
   })
 
   it('routes Windows batch-script agent commands through cmd.exe', async () => {
@@ -2235,6 +2044,168 @@ describe('generateBranchNameFromContext', () => {
     expect(prompt).not.toContain('Additional user prompt:')
     expect(prompt).toContain('Generate a short git branch name')
     expect(prompt).toContain('Output ONLY the branch name on a single line')
+  })
+})
+
+describe('linkedIssue template substitution', () => {
+  const COMMIT_CONTEXT = {
+    branch: 'feature/login',
+    stagedSummary: 'M src/login.ts',
+    stagedPatch: 'diff --git a/src/login.ts b/src/login.ts'
+  }
+  const PULL_REQUEST_CONTEXT = {
+    branch: 'feature/login',
+    base: 'main',
+    branchChangedByPreparation: false,
+    currentTitle: 'Fix login',
+    currentBody: '',
+    currentDraft: false,
+    commitSummary: 'a1b2c3d Fix login',
+    changeSummary: 'src/login.ts | 4 ++--',
+    patch: 'diff --git a/src/login.ts b/src/login.ts'
+  }
+
+  function capturingTarget(capture: (prompt: string) => void): {
+    kind: 'remote'
+    cwd: string
+    missingBinaryLocation: string
+    execute: (plan: { stdinPayload: string | null }) => Promise<{
+      stdout: string
+      stderr: string
+      exitCode: number
+      timedOut: boolean
+    }>
+  } {
+    return {
+      kind: 'remote',
+      cwd: '/repo',
+      missingBinaryLocation: 'remote PATH',
+      execute: async (plan) => {
+        capture(plan.stdinPayload ?? '')
+        return {
+          stdout: '{"base":"main","title":"Fix login","body":"body","draft":false}',
+          stderr: '',
+          exitCode: 0,
+          timedOut: false
+        }
+      }
+    }
+  }
+
+  const templateParams = {
+    agentId: 'custom' as const,
+    model: '',
+    customAgentCommand: 'agent',
+    commandInputTemplate: '{basePrompt}\n\nFixes #{linkedIssue}'
+  }
+
+  it('substitutes the linked issue into the commit-message prompt', async () => {
+    let prompt = ''
+    await generateCommitMessageFromContext(
+      { ...COMMIT_CONTEXT, linkedIssue: 42 },
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #42')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('renders an empty commit-message issue for null and omitted fields', async () => {
+    for (const context of [{ ...COMMIT_CONTEXT, linkedIssue: null }, COMMIT_CONTEXT]) {
+      let prompt = ''
+      await generateCommitMessageFromContext(
+        context,
+        templateParams,
+        capturingTarget((value) => {
+          prompt = value
+        })
+      )
+
+      expect(prompt).toContain('Fixes #')
+      expect(prompt).not.toContain('{linkedIssue}')
+    }
+  })
+
+  // Why: a fixture-unique sentinel — a short number like 42 also appears in the
+  // character counts that truncateDiffForPrompt/limitSection emit, so growing any
+  // fixture past its limit would fail these guards for reasons unrelated to leakage.
+  const BUILT_IN_PROMPT_SENTINEL_ISSUE = 987654
+  const builtInPromptParams = {
+    agentId: 'custom' as const,
+    model: '',
+    customAgentCommand: 'agent'
+  }
+
+  it('leaves the built-in commit prompt free of issue guidance', async () => {
+    let prompt = ''
+    await generateCommitMessageFromContext(
+      { ...COMMIT_CONTEXT, linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE },
+      builtInPromptParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).not.toContain(String(BUILT_IN_PROMPT_SENTINEL_ISSUE))
+    expect(prompt).not.toContain('linkedIssue')
+  })
+
+  it('leaves the built-in pull-request prompt free of issue guidance', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      { ...PULL_REQUEST_CONTEXT, linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE },
+      builtInPromptParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).not.toContain(String(BUILT_IN_PROMPT_SENTINEL_ISSUE))
+    expect(prompt).not.toContain('linkedIssue')
+  })
+
+  it('substitutes the linked issue into the pull-request prompt', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      { ...PULL_REQUEST_CONTEXT, linkedIssue: 7 },
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #7')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('renders an empty pull-request issue when none resolves', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      PULL_REQUEST_CONTEXT,
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('leaves a hand-typed linkedIssue literal in branch-name templates', async () => {
+    let prompt = ''
+    await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      { ...templateParams, commandInputTemplate: '{basePrompt}\n\nIssue {linkedIssue}' },
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Issue {linkedIssue}')
   })
 })
 

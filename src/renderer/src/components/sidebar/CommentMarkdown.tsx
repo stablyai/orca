@@ -185,6 +185,7 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   githubRepo?: GitHubRepoReference | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
+  expandImages?: boolean
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -199,6 +200,7 @@ const CommentMarkdown = React.memo(
       githubRepo,
       onLinkClick,
       allowFileUriLinks = false,
+      expandImages = false,
       ...rest
     },
     ref
@@ -207,12 +209,14 @@ const CommentMarkdown = React.memo(
       if (!onLinkClick) {
         return variant === 'document'
           ? documentCommentMarkdownComponents
-          : compactCommentMarkdownComponents
+          : expandImages
+            ? createCompactCommentMarkdownComponents(undefined, true)
+            : compactCommentMarkdownComponents
       }
       return variant === 'document'
         ? createDocumentCommentMarkdownComponents(onLinkClick)
-        : createCompactCommentMarkdownComponents(onLinkClick)
-    }, [variant, onLinkClick])
+        : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
+    }, [expandImages, variant, onLinkClick])
     const activeRemarkPlugins = React.useMemo(
       () => (githubRepo ? [...remarkPlugins, remarkGitHubReferences(githubRepo)] : remarkPlugins),
       [githubRepo]

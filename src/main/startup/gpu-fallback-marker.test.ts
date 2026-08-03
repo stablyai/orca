@@ -1,10 +1,9 @@
-import { existsSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   GPU_FALLBACK_MARKER_FILE,
-  MAX_GPU_FALLBACK_MARKER_FILE_BYTES,
   clearGpuFallbackMarker,
   readActiveGpuFallbackMarker,
   readGpuFallbackMarker,
@@ -80,6 +79,21 @@ describe('gpu-fallback-marker', () => {
     expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
   })
 
+  // Why: enableMainProcessGpuFeatures() is skipped while GPU fallback is active, and that function
+  // carries the macOS disable-skia-graphite fix. A marker that survived on darwin would silently
+  // strip the fix from the Macs it targets, so pin the platform gate for darwin specifically.
+  it('clears an active marker on macOS so the Graphite fix is never skipped', () => {
+    writeGpuFallbackMarker(userDataPath, { engagedAt: 1, crashesInWindow: 4 }, environment)
+
+    expect(
+      readActiveGpuFallbackMarker(userDataPath, {
+        ...environment,
+        platform: 'darwin'
+      })
+    ).toBeNull()
+    expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
+  })
+
   it('clears a corrupt or wrong-version marker', () => {
     writeFileSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE), '{ not json')
     expect(readGpuFallbackMarker(userDataPath)).toBeNull()
@@ -99,14 +113,5 @@ describe('gpu-fallback-marker', () => {
     writeGpuFallbackMarker(userDataPath, { engagedAt: 1, crashesInWindow: 4 }, environment)
     clearGpuFallbackMarker(userDataPath)
     expect(readGpuFallbackMarker(userDataPath)).toBeNull()
-  })
-
-  it('clears an oversized sparse marker without loading it', () => {
-    const path = join(userDataPath, GPU_FALLBACK_MARKER_FILE)
-    writeFileSync(path, '{"schemeVersion":2}')
-    truncateSync(path, MAX_GPU_FALLBACK_MARKER_FILE_BYTES + 1)
-
-    expect(readActiveGpuFallbackMarker(userDataPath, environment)).toBeNull()
-    expect(existsSync(path)).toBe(false)
   })
 })

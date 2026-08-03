@@ -14,6 +14,55 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('preserves external SSH file ownership across session parsing', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        wt: [
+          {
+            filePath: '/tmp/external.png',
+            relativePath: '/tmp/external.png',
+            worktreeId: 'wt',
+            language: 'png',
+            externalSshTargetId: 'ssh-1'
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.openFilesByWorktree?.wt?.[0]?.externalSshTargetId).toBe('ssh-1')
+    }
+  })
+
+  it('rejects blank external SSH file ownership', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        wt: [
+          {
+            filePath: '/tmp/external.png',
+            relativePath: '/tmp/external.png',
+            worktreeId: 'wt',
+            language: 'png',
+            externalSshTargetId: '   '
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(false)
+  })
+
   it('accepts a fully populated session with optional fields', () => {
     const result = parseWorkspaceSession({
       activeRepoId: 'repo1',

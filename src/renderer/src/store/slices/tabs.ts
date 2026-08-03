@@ -27,7 +27,11 @@ import {
 } from './tab-group-state'
 import { isPaneColumnSplitDropNoOp } from './pane-column-split-drop-no-op'
 import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydration'
-import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
+import {
+  buildOrphanTerminalCleanupPatch,
+  getOrphanTerminalIds,
+  terminalTabHasReconnectablePty
+} from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -36,8 +40,23 @@ import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
 } from '@/lib/workspace-session-hydration-keys'
+import {
+  buildValidWorktreeIdsForSessionHydration,
+  collectPersistedWorktreeIdsForSessionHydration
+} from './degraded-repo-worktree-validity'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
+
+function replaceWorkspaceRecordKeys<T>(
+  current: Record<string, T>,
+  hydrated: Record<string, T>,
+  workspaceKeys: ReadonlySet<string>
+): Record<string, T> {
+  return {
+    ...Object.fromEntries(Object.entries(current).filter(([key]) => !workspaceKeys.has(key))),
+    ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => workspaceKeys.has(key)))
+  }
+}
 
 export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
@@ -101,7 +120,7 @@ export type TabsSlice = {
     entityId: string,
     contentType?: TabContentType
   ) => Tab | null
-  activateTab: (tabId: string, opts?: { preservePreview?: boolean }) => void
+  activateTab: (tabId: string, opts?: { preservePreview?: boolean; worktreeId?: string }) => void
   closeUnifiedTab: (
     tabId: string,
     opts?: { recordInteraction?: boolean; terminalRetirementHandled?: boolean }
@@ -127,6 +146,7 @@ export type TabsSlice = {
   unpinTab: (tabId: string) => void
   closeOtherTabs: (tabId: string) => string[]
   closeTabsToRight: (tabId: string) => string[]
+  closeTabsToLeft: (tabId: string) => string[]
   ensureWorktreeRootGroup: (worktreeId: string) => string
   focusGroup: (worktreeId: string, groupId: string) => void
   closeEmptyGroup: (worktreeId: string, groupId: string) => boolean
@@ -806,7 +826,17 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   activateTab: (tabId, opts) => {
     set((state) => {
-      const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      const scopedWorktreeId = opts?.worktreeId
+      let found: ReturnType<typeof findTabAndWorktree>
+      if (scopedWorktreeId !== undefined) {
+        const scopedTabs = Object.hasOwn(state.unifiedTabsByWorktree, scopedWorktreeId)
+          ? state.unifiedTabsByWorktree[scopedWorktreeId]
+          : []
+        const scopedTab = scopedTabs.find((tab) => tab.id === tabId)
+        found = scopedTab ? { tab: scopedTab, worktreeId: scopedWorktreeId } : null
+      } else {
+        found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      }
       if (!found) {
         return {}
       }
@@ -954,6 +984,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ? {
               activeWorktreeId: null,
               activeWorkspaceKey: null,
+              activeWorkspaceExecutionHostId: null,
               activeTabId: null,
               activeBrowserTabId: null,
               activeFileId: null,
@@ -1212,6 +1243,34 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     }
     const closableIds = group.tabOrder
       .slice(index + 1)
+      .filter(
+        (id) =>
+          !(state.unifiedTabsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === id)
+            ?.isPinned
+      )
+    for (const id of closableIds) {
+      get().closeUnifiedTab(id)
+    }
+    return closableIds
+  },
+
+  closeTabsToLeft: (tabId) => {
+    const state = get()
+    const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+    if (!found) {
+      return []
+    }
+    const { tab, worktreeId } = found
+    const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
+    if (!group) {
+      return []
+    }
+    const index = group.tabOrder.indexOf(tabId)
+    if (index === -1) {
+      return []
+    }
+    const closableIds = group.tabOrder
+      .slice(0, index)
       .filter(
         (id) =>
           !(state.unifiedTabsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === id)
@@ -1759,9 +1818,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (unifiedTerminalEntityIds.has(tab.id)) {
         return false
       }
-      // Why: migration filter — tab.ptyId (preserved sessionId) keeps slept tabs in the sweep for wake reattach; NOT a liveness check (use ptyIdsByTabId).
-      const livePtyIds = state.ptyIdsByTabId[tab.id] ?? []
-      return livePtyIds.length > 0 || tab.ptyId != null
+      // Why: migration filter — keep any tab still owning a live/reconnecting
+      // PTY (preserved sessionId or a reconnect-map session) so it re-enters the
+      // unified model for wake/reconnect reattach instead of vanishing (#9911).
+      return terminalTabHasReconnectablePty(state, tab.id, tab.ptyId)
     })
     const orphanTerminalIds = getOrphanTerminalIds(state, worktreeId)
     const ensuredGroupState =
@@ -1966,16 +2026,40 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   hydrateTabsSession: (session, options) => {
     const state = get()
-    const validWorktreeIds = new Set(
-      Object.values(state.worktreesByRepo)
-        .flat()
-        .map((w) => w.id)
-    )
+    const persistedWorktreeIds = collectPersistedWorktreeIdsForSessionHydration(session)
+    const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(state, persistedWorktreeIds)
     validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
     for (const workspace of state.folderWorkspaces) {
       validWorktreeIds.add(folderWorkspaceKey(workspace.id))
     }
     addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
-    set(buildHydratedTabState(session, validWorktreeIds))
+    const hydrated = buildHydratedTabState(session, validWorktreeIds)
+    if (!options?.replaceWorkspaceKeys) {
+      set(hydrated)
+      return
+    }
+    const replaceWorkspaceKeys = new Set(options.replaceWorkspaceKeys)
+    set((current) => ({
+      unifiedTabsByWorktree: replaceWorkspaceRecordKeys(
+        current.unifiedTabsByWorktree,
+        hydrated.unifiedTabsByWorktree,
+        replaceWorkspaceKeys
+      ),
+      groupsByWorktree: replaceWorkspaceRecordKeys(
+        current.groupsByWorktree,
+        hydrated.groupsByWorktree,
+        replaceWorkspaceKeys
+      ),
+      activeGroupIdByWorktree: replaceWorkspaceRecordKeys(
+        current.activeGroupIdByWorktree,
+        hydrated.activeGroupIdByWorktree,
+        replaceWorkspaceKeys
+      ),
+      layoutByWorktree: replaceWorkspaceRecordKeys(
+        current.layoutByWorktree,
+        hydrated.layoutByWorktree,
+        replaceWorkspaceKeys
+      )
+    }))
   }
 })

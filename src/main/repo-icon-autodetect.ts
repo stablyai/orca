@@ -1,13 +1,12 @@
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
 import { faviconUrlFromWebsite, githubAvatarIcon, type RepoIcon } from '../shared/repo-icon'
 import { getRepoSlug, getRepoUpstream } from './github/client'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
 import { detectGitRemoteIdentity } from './repo-git-remote-identity'
+import { detectRepoFileIcon } from './repo-icon-file-detection'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
-import { readNodeFileWithinLimit } from '../shared/node-bounded-file-reader'
-import { detectLocalRepoPngIcon, detectRemoteRepoPngIcon } from './repo-icon-file-detection'
 
 const WEBSITE_HOSTS_TO_SKIP = new Set([
   'github.com',
@@ -17,6 +16,7 @@ const WEBSITE_HOSTS_TO_SKIP = new Set([
   'bitbucket.org',
   'www.bitbucket.org'
 ])
+
 function shouldUseWebsiteFavicon(rawUrl: string): boolean {
   try {
     const url = new URL(rawUrl.includes('://') ? rawUrl : `https://${rawUrl}`)
@@ -45,11 +45,7 @@ async function detectLocalPackageHomepageIcon(repoPath: string): Promise<RepoIco
     if (!info.isFile() || info.size > 128 * 1024) {
       return null
     }
-    const packageRead = await readNodeFileWithinLimit(packageJsonPath, 128 * 1024)
-    if (!packageRead.stats.isFile()) {
-      return null
-    }
-    return packageHomepageIcon(JSON.parse(packageRead.buffer.toString('utf8')))
+    return packageHomepageIcon(JSON.parse(await readFile(packageJsonPath, 'utf8')))
   } catch {
     return null
   }
@@ -67,9 +63,6 @@ async function detectRemotePackageHomepageIcon(
     }
     const result = await fsProvider.readFile(packageJsonPath)
     if (result.isBinary) {
-      return null
-    }
-    if (Buffer.byteLength(result.content, 'utf8') > 128 * 1024) {
       return null
     }
     return packageHomepageIcon(JSON.parse(result.content))
@@ -105,9 +98,7 @@ export async function detectRepoIcon({
 }): Promise<RepoIcon | undefined> {
   try {
     const fsProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-    const fileIcon = fsProvider
-      ? await detectRemoteRepoPngIcon(repoPath, fsProvider)
-      : await detectLocalRepoPngIcon(repoPath)
+    const fileIcon = await detectRepoFileIcon(repoPath, fsProvider)
     if (fileIcon) {
       return fileIcon
     }

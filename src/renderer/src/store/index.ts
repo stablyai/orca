@@ -39,54 +39,79 @@ import { createPinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-conf
 import { createRecentlyClosedTabsSlice } from './slices/recently-closed-tabs'
 import { createOrcaProfilesSlice } from './slices/orca-profiles'
 import { createNewIssueDraftSlice } from './slices/new-issue-draft'
+import { createTaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { e2eConfig } from '@/lib/e2e-config'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import { installStoreListenerCensus } from './store-listener-census'
+import {
+  registerRendererMemoryProfileContributor,
+  summarizeStateCollectionSizes
+} from '@/lib/renderer-memory-profile'
+import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
 
-export const useAppStore = create<AppState>()((...a) => ({
-  ...createRepoSlice(...a),
-  ...createSparsePresetsSlice(...a),
-  ...createWorktreeSlice(...a),
-  ...createTerminalSlice(...a),
-  ...createTabsSlice(...a),
-  ...createUISlice(...a),
-  ...createSettingsSlice(...a),
-  ...createKeybindingsSlice(...a),
-  ...createGitHubSlice(...a),
-  ...createHostedReviewSlice(...a),
-  ...createLinearSlice(...a),
-  ...createPreflightSlice(...a),
-  ...createJiraSlice(...a),
-  ...createEditorSlice(...a),
-  ...createStatsSlice(...a),
-  ...createMemorySlice(...a),
-  ...createWorkspaceSpaceSlice(...a),
-  ...createClaudeUsageSlice(...a),
-  ...createCodexUsageSlice(...a),
-  ...createOpenCodeUsageSlice(...a),
-  ...createBrowserSlice(...a),
-  ...createRateLimitSlice(...a),
-  ...createSshSlice(...a),
-  ...createRuntimeEnvironmentSshSlice(...a),
-  ...createAgentStatusSlice(...a),
-  ...createPaneForegroundAgentSlice(...a),
-  ...createDiffCommentsSlice(...a),
-  ...createDetectedAgentsSlice(...a),
-  ...createRuntimeDetectedAgentsSlice(...a),
-  ...createWorktreeNavHistorySlice(...a),
-  ...createDictationSlice(...a),
-  ...createWorkspaceCleanupSlice(...a),
-  ...createRuntimeStatusSlice(...a),
-  ...createPullRequestGenerationSlice(...a),
-  ...createCommitMessageGenerationSlice(...a),
-  ...createPinnedTabCloseConfirmSlice(...a),
-  ...createRecentlyClosedTabsSlice(...a),
-  ...createOrcaProfilesSlice(...a),
-  ...createNewIssueDraftSlice(...a),
-  ...createRemoteServerUpdatesSlice(...a)
-}))
+export const useAppStore = create<AppState>()((...a) => {
+  // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
+  installStoreListenerCensus(a[2])
+  return {
+    ...createRepoSlice(...a),
+    ...createSparsePresetsSlice(...a),
+    ...createWorktreeSlice(...a),
+    ...createTerminalSlice(...a),
+    ...createTabsSlice(...a),
+    ...createUISlice(...a),
+    ...createSettingsSlice(...a),
+    ...createKeybindingsSlice(...a),
+    ...createGitHubSlice(...a),
+    ...createHostedReviewSlice(...a),
+    ...createLinearSlice(...a),
+    ...createPreflightSlice(...a),
+    ...createJiraSlice(...a),
+    ...createEditorSlice(...a),
+    ...createStatsSlice(...a),
+    ...createMemorySlice(...a),
+    ...createWorkspaceSpaceSlice(...a),
+    ...createClaudeUsageSlice(...a),
+    ...createCodexUsageSlice(...a),
+    ...createOpenCodeUsageSlice(...a),
+    ...createBrowserSlice(...a),
+    ...createRateLimitSlice(...a),
+    ...createSshSlice(...a),
+    ...createRuntimeEnvironmentSshSlice(...a),
+    ...createAgentStatusSlice(...a),
+    ...createPaneForegroundAgentSlice(...a),
+    ...createDiffCommentsSlice(...a),
+    ...createDetectedAgentsSlice(...a),
+    ...createRuntimeDetectedAgentsSlice(...a),
+    ...createWorktreeNavHistorySlice(...a),
+    ...createDictationSlice(...a),
+    ...createWorkspaceCleanupSlice(...a),
+    ...createRuntimeStatusSlice(...a),
+    ...createPullRequestGenerationSlice(...a),
+    ...createCommitMessageGenerationSlice(...a),
+    ...createPinnedTabCloseConfirmSlice(...a),
+    ...createRecentlyClosedTabsSlice(...a),
+    ...createOrcaProfilesSlice(...a),
+    ...createNewIssueDraftSlice(...a),
+    ...createTaskCreationDraftsSlice(...a),
+    ...createRemoteServerUpdatesSlice(...a)
+  }
+})
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
+
+// Why: names the fattest store slices in renderer_memory_highwater breadcrumbs
+// so OOM crash reports identify what grew without a local repro.
+registerRendererMemoryProfileContributor('store', () =>
+  summarizeStateCollectionSizes(useAppStore.getState(), 20)
+)
+
+// Why bytes too: counts miss value-weight growth (97b9e86d leaked ~700MB while
+// its biggest slice grew by 4 entries); sampled KB names what got FAT.
+registerRendererMemoryProfileContributor('storeKB', () =>
+  estimateStateCollectionKB(useAppStore.getState(), 16)
+)
 
 export type { AppState } from './types'
 
@@ -95,5 +120,12 @@ export type { AppState } from './types'
 // to avoid fragile DOM scraping. Harmless — the store is already reachable
 // via React DevTools in any environment.
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
-  ;(window as unknown as Record<string, unknown>).__store = useAppStore
+  const testWindow = window as unknown as Record<string, unknown>
+  testWindow.__store = useAppStore
+  if (e2eConfig.exposeStore) {
+    testWindow.__webRuntimeSessionE2E = {
+      createTerminal: async (args: Parameters<typeof createWebRuntimeSessionTerminal>[0]) =>
+        (await import('@/runtime/web-runtime-session')).createWebRuntimeSessionTerminal(args)
+    }
+  }
 }

@@ -54,7 +54,7 @@ vi.mock('./popup-origin-bar-window', () => ({
   openPopupWithOriginBar: openPopupWithOriginBarMock
 }))
 
-import { MAX_ACTIVE_BROWSER_DOWNLOADS, browserManager } from './browser-manager'
+import { browserManager } from './browser-manager'
 
 describe('browserManager', () => {
   const rendererWebContentsId = 5001
@@ -1512,6 +1512,38 @@ describe('browserManager', () => {
     expect(browserManager.getGuestWebContentsId('browser-destroyed-before-register')).toBeNull()
   })
 
+  it('removes a destroyed primary guest from its tab registration maps', () => {
+    const guest = {
+      id: 306,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-destroyed-after-register',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const destroyedHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'destroyed'
+    )?.[1] as (() => void) | undefined
+    destroyedHandler?.()
+
+    expect(browserManager.getGuestWebContentsId('browser-destroyed-after-register')).toBeNull()
+    const managerState = browserManager as unknown as {
+      tabIdByWebContentsId: Map<number, string>
+    }
+    expect(managerState.tabIdByWebContentsId.has(guest.id)).toBe(false)
+  })
+
   it('fully unregisters stale guests discovered during authorization', () => {
     const guest = {
       id: 305,
@@ -1925,24 +1957,6 @@ describe('browserManager', () => {
         error: null
       })
     )
-  })
-
-  it('cancels excess concurrent downloads before retaining another item', () => {
-    const item = createDownloadItem()
-    const managerState = browserManager as unknown as { downloadsById: Map<string, unknown> }
-    for (let index = 0; index < MAX_ACTIVE_BROWSER_DOWNLOADS; index += 1) {
-      managerState.downloadsById.set(`active-${index}`, {})
-    }
-
-    try {
-      browserManager.handleGuestWillDownload({ guestWebContentsId: 999, item })
-
-      expect(item.cancel).toHaveBeenCalledTimes(1)
-      expect(item.setSavePath).not.toHaveBeenCalled()
-      expect(managerState.downloadsById.size).toBe(MAX_ACTIVE_BROWSER_DOWNLOADS)
-    } finally {
-      managerState.downloadsById.clear()
-    }
   })
 
   it('flushes started and terminal snapshots for downloads that finish before registration', () => {
@@ -2616,7 +2630,8 @@ describe('browserManager', () => {
       }
     )
 
-    expect(keyDownPreventDefault).toHaveBeenCalledTimes(1)
+    // Why: keydown must not preventDefault or Electron drops the commit keyup.
+    expect(keyDownPreventDefault).not.toHaveBeenCalled()
     expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyUp')

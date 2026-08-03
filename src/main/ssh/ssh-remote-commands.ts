@@ -1,6 +1,4 @@
 import type { RemoteHostPlatform } from './ssh-remote-platform'
-import { getRelayBaseDirectoryListingCommand } from './ssh-relay-base-directory-listing'
-import { getWindowsRelayLivenessProbeSource } from './ssh-relay-liveness-probe-source'
 import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { shellEscape } from './ssh-connection-utils'
@@ -65,6 +63,19 @@ export function moveRemoteTreeCommand(
   )
 }
 
+export function promoteRemoteTreeContentsCommand(
+  host: RemoteHostPlatform,
+  sourcePath: string,
+  destinationPath: string
+): string {
+  if (!isWindowsRemoteHost(host)) {
+    return `cp -a ${shellEscape(sourcePath)}/. ${shellEscape(destinationPath)}/ && rm -rf ${shellEscape(sourcePath)}`
+  }
+  return powerShellCommand(
+    `$ErrorActionPreference = 'Stop'; Get-ChildItem -LiteralPath ${powerShellLiteral(sourcePath)} -Force -ErrorAction Stop | Copy-Item -Destination ${powerShellLiteral(destinationPath)} -Recurse -Force -ErrorAction Stop; Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Recurse -Force -ErrorAction Stop`
+  )
+}
+
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
     return `touch ${shellEscape(remotePath)}`
@@ -104,8 +115,27 @@ export function probeRelayInstalledCommand(
   )
 }
 
+export const MAX_RELAY_GC_LISTING_ENTRIES = 64
+
 export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: string): string {
-  return getRelayBaseDirectoryListingCommand(host, baseDir)
+  if (!isWindowsRemoteHost(host)) {
+    const statusPrefix = '__ORCA_RELAY_GC_FIND_STATUS__'
+    return [
+      `base=${shellEscape(baseDir)}; [ -d "$base" ] || exit 0;`,
+      `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name 'relay-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
+      String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /^relay-(v?[0-9]+\.[0-9]+\.[0-9]+(\+[0-9a-f]+)?)(\.gc-tombstone\.[0-9]+\.[0-9]+)?$/ && count < ${MAX_RELAY_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
+    ].join(' ')
+  }
+  return powerShellCommand(
+    [
+      "$ErrorActionPreference = 'Stop'",
+      `$base = ${powerShellLiteral(baseDir)}`,
+      'if (Test-Path -LiteralPath $base -PathType Container) {',
+      "Get-ChildItem -LiteralPath $base -Directory -Filter 'relay-*' -ErrorAction Stop | Where-Object { $_.Name -match '^relay-(v?[0-9]+\\.[0-9]+\\.[0-9]+(\\+[0-9a-f]+)?)(\\.gc-tombstone\\.[0-9]+\\.[0-9]+)?$' } | Select-Object -First " +
+        `${MAX_RELAY_GC_LISTING_ENTRIES} | ForEach-Object { $_.Name }`,
+      '}'
+    ].join('\n')
+  )
 }
 
 export function probeDirectoryExistsCommand(host: RemoteHostPlatform, remotePath: string): string {
@@ -146,7 +176,35 @@ export function relayLivenessProbeCommand(
   if (!windowsOptions) {
     return powerShellCommand("'ALIVE'")
   }
-  const js = getWindowsRelayLivenessProbeSource()
+  const js = [
+    'const fs=require("fs"),path=require("path"),net=require("net");',
+    'const [dir,...seed]=process.argv.slice(1);',
+    'const valid=/^\\\\\\\\[.?]\\\\pipe\\\\orca-relay-[0-9a-f]{20}$/i;',
+    'const pipes=[];',
+    'let markerCount=0;',
+    'for(const p of seed){if(valid.test(p)&&!pipes.includes(p))pipes.push(p)}',
+    'try{for(const name of fs.readdirSync(dir)){',
+    'if(!name.startsWith(".windows-active-pipe-"))continue;',
+    'markerCount++;',
+    'const p=fs.readFileSync(path.join(dir,name),"utf8").trim();',
+    'if(valid.test(p)&&!pipes.includes(p))pipes.push(p)',
+    '}}catch{}',
+    'if(markerCount===0&&pipes.length===0){process.stdout.write("ALIVE");process.exit(0)}',
+    'let i=0;',
+    'function done(ok){process.stdout.write(ok?"ALIVE":"WAITING")}',
+    'function next(){',
+    'const pipe=pipes[i++];',
+    'if(!pipe)return done(false);',
+    'const s=net.connect(pipe);',
+    'let settled=false;',
+    'function finish(ok){if(settled)return;settled=true;s.destroy();if(ok)done(true);else next()}',
+    's.setTimeout(200);',
+    's.on("connect",()=>finish(true));',
+    's.on("timeout",()=>finish(false));',
+    's.on("error",()=>finish(false));',
+    '}',
+    'next();'
+  ].join('')
   return commandWithNodePath(
     host,
     windowsOptions.nodePath,

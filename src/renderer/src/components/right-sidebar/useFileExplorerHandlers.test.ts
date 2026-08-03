@@ -108,7 +108,7 @@ describe('activateFileExplorerNode', () => {
         language: expect.any(String),
         mode: 'edit'
       },
-      { preview: true, suppressActiveRuntimeFallback: false }
+      { preview: true, focusEditor: true, suppressActiveRuntimeFallback: false }
     )
   })
 
@@ -145,7 +145,7 @@ describe('activateFileExplorerNode', () => {
         filePath: '/repo/README.md',
         runtimeEnvironmentId: undefined
       }),
-      { preview: true, suppressActiveRuntimeFallback: true }
+      { preview: true, focusEditor: true, suppressActiveRuntimeFallback: true }
     )
   })
 })

@@ -3,7 +3,6 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript-api'
 import { describe, expect, it, vi } from 'vitest'
 
-import { GENERATED_NODE_MANAGED_FILE_MAX_BYTES } from '../generated-node-bounded-file-reader'
 import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'
 
 type HookContext = {
@@ -29,16 +28,11 @@ type Harness = {
   spawnMock: ReturnType<typeof vi.fn>
   spawnedChildren: FakeCurlChild[]
   fsMock: {
-    closeSync: ReturnType<typeof vi.fn>
     existsSync: ReturnType<typeof vi.fn>
-    openSync: ReturnType<typeof vi.fn>
-    readSync: ReturnType<typeof vi.fn>
     readFileSync: ReturnType<typeof vi.fn>
-    statSync: ReturnType<typeof vi.fn>
   }
   handlers: Record<string, HookHandler>
   processEnv: Record<string, string | undefined>
-  warnMock: ReturnType<typeof vi.fn>
   callHook: (name: string, event?: unknown, context?: HookContext) => Promise<void>
   // Re-invoke the extension factory in the same process (as Pi does on an
   // in-process extension reload), swapping in the freshly registered handlers.
@@ -68,7 +62,6 @@ function createHarness(args: {
   argv?: string[]
   existsSync?: (path: string) => boolean
   readFileSync?: (path: string, encoding: string) => string
-  statSync?: (path: string) => { ino: number; mtimeMs: number; size: number }
   fetchImpl?: (...params: Parameters<typeof fetch>) => Promise<unknown>
 }): Harness {
   const fetchMock = vi.fn(
@@ -91,50 +84,14 @@ function createHarness(args: {
     return child
   })
 
-  const readFileSyncMock = vi.fn(
-    args.readFileSync ??
-      ((path: string) => {
-        throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
-      })
-  )
-  const openFiles = new Map<number, { bytes: Buffer; offset: number }>()
-  let nextDescriptor = 10
   const fsMock = {
     existsSync: vi.fn(args.existsSync ?? (() => false)),
-    readFileSync: readFileSyncMock,
-    statSync: vi.fn(args.statSync ?? (() => ({ ino: 1, mtimeMs: 1, size: 0 }))),
-    openSync: vi.fn((path: string) => {
-      const descriptor = nextDescriptor++
-      openFiles.set(descriptor, {
-        bytes: Buffer.from(String(readFileSyncMock(path, 'utf8')), 'utf8'),
-        offset: 0
-      })
-      return descriptor
-    }),
-    readSync: vi.fn(
-      (
-        descriptor: number,
-        target: Buffer,
-        offset: number,
-        length: number,
-        position: number | null
-      ) => {
-        const opened = openFiles.get(descriptor)
-        if (!opened) {
-          throw new Error(`bad descriptor: ${descriptor}`)
-        }
-        const start = position ?? opened.offset
-        const bytesRead = Math.min(length, Math.max(0, opened.bytes.byteLength - start))
-        opened.bytes.copy(target, offset, start, start + bytesRead)
-        if (position === null) {
-          opened.offset += bytesRead
-        }
-        return bytesRead
-      }
-    ),
-    closeSync: vi.fn((descriptor: number) => {
-      openFiles.delete(descriptor)
-    })
+    readFileSync: vi.fn(
+      args.readFileSync ??
+        ((path: string) => {
+          throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
+        })
+    )
   }
 
   const module = {
@@ -160,7 +117,6 @@ function createHarness(args: {
     argv: args.argv ?? ['node', '/usr/bin/orca']
   }
 
-  const warnMock = vi.fn()
   const context = {
     module,
     exports: module.exports,
@@ -168,7 +124,7 @@ function createHarness(args: {
     process: processMock,
     fetch: fetchMock,
     console: {
-      warn: warnMock,
+      warn: vi.fn(),
       error: vi.fn(),
       log: vi.fn()
     },
@@ -212,7 +168,6 @@ function createHarness(args: {
     fsMock,
     handlers,
     processEnv: processMock.env,
-    warnMock,
     callHook: async (name, event, hookContext) => {
       await handlers[name]?.(event, hookContext)
     },
@@ -226,72 +181,6 @@ function createHarness(args: {
 }
 
 describe('getPiAgentStatusExtensionSource', () => {
-  it('routes every whole-file runtime probe through the emitted bounded reader', () => {
-    const source = getPiAgentStatusExtensionSource('pi')
-
-    expect(source).toContain(
-      `function readOrcaManagedFileWithinLimit(fs: any, path: string, maxBytes = ${GENERATED_NODE_MANAGED_FILE_MAX_BYTES})`
-    )
-    expect(source).not.toContain('readFileSync')
-  })
-
-  it('uses an ordinary endpoint file before the stale process environment', async () => {
-    const endpointPath = '/tmp/orca-endpoint.env'
-    const endpoint =
-      'ORCA_AGENT_HOOK_PORT=9876\nORCA_AGENT_HOOK_TOKEN=fresh-token\nORCA_AGENT_HOOK_ENV=fresh-env\n'
-    const harness = createHarness({
-      kind: 'pi',
-      env: { ORCA_AGENT_HOOK_ENDPOINT: endpointPath },
-      readFileSync: (path) => {
-        if (path === endpointPath) {
-          return endpoint
-        }
-        throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
-      },
-      statSync: () => ({ ino: 1, mtimeMs: 1, size: Buffer.byteLength(endpoint) })
-    })
-
-    await harness.callHook('agent_start')
-
-    expect(harness.fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:9876/hook/pi',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'X-Orca-Agent-Hook-Token': 'fresh-token'
-        })
-      })
-    )
-  })
-
-  it('fails open to process env when the endpoint file exceeds the generated byte cap', async () => {
-    const endpointPath = '/tmp/orca-endpoint.env'
-    const oversized = 'x'.repeat(GENERATED_NODE_MANAGED_FILE_MAX_BYTES + 1)
-    const harness = createHarness({
-      kind: 'pi',
-      env: { ORCA_AGENT_HOOK_ENDPOINT: endpointPath },
-      readFileSync: (path) => {
-        if (path === endpointPath) {
-          return oversized
-        }
-        throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
-      },
-      statSync: () => ({ ino: 1, mtimeMs: 1, size: oversized.length })
-    })
-
-    await harness.callHook('agent_start')
-
-    expect(harness.fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:4321/hook/pi',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'X-Orca-Agent-Hook-Token': 'token-1'
-        })
-      })
-    )
-    expect(harness.warnMock).toHaveBeenCalledOnce()
-    expect(harness.fsMock.closeSync).toHaveBeenCalledOnce()
-  })
-
   it('includes the session id and file path in Pi status posts after session_start', async () => {
     const harness = createHarness({
       kind: 'pi',
@@ -436,19 +325,83 @@ describe('getPiAgentStatusExtensionSource', () => {
     )
   })
 
-  it('routes an OMP executable through /hook/omp', async () => {
-    const harness = createHarness({
-      kind: 'pi',
-      title: 'omp',
-      existsSync: () => false
+  it('tracks persistent OMP sessions and clears ephemeral session ids', async () => {
+    const harness = createHarness({ kind: 'omp' })
+    let sessionId = 'omp-session-8'
+    const sessionManager = { getSessionId: () => sessionId, getSessionFile: () => '/tmp/s' }
+
+    await harness.callHook('agent_start', undefined, { sessionManager })
+    sessionId = 'omp-session-9'
+    await harness.callHook('before_agent_start', { prompt: 'hi' }, { sessionManager })
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    await harness.callHook('agent_end', undefined, {
+      sessionManager: { getSessionId: () => 'omp-ephemeral' }
     })
 
-    await harness.callHook('agent_start')
-
-    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.fetchMock.mock.calls[0]?.[0]).toBe('http://127.0.0.1:4321/hook/omp')
-    expect(harness.spawnMock).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(3))
+    expect(
+      harness.fetchMock.mock.calls.map(([_, init]) => JSON.parse(String(init?.body)).payload)
+    ).toEqual([
+      { hook_event_name: 'agent_start', session_id: 'omp-session-8' },
+      {
+        hook_event_name: 'before_agent_start',
+        prompt: 'hi',
+        session_id: 'omp-session-9'
+      },
+      { hook_event_name: 'agent_end' }
+    ])
   })
+
+  it.each([
+    ['OMP extension', { kind: 'omp' as const }],
+    ['runtime-routed OMP', { kind: 'pi' as const, title: 'omp' }]
+  ])(
+    'keeps queued %s status bound to the session active when it was posted',
+    async (_name, args) => {
+      const finishDeliveries: (() => void)[] = []
+      const harness = createHarness({
+        ...args,
+        fetchImpl: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              finishDeliveries.push(() => resolve({ ok: true }))
+            })
+        )
+      })
+
+      await harness.callHook('agent_start', undefined, {
+        sessionManager: {
+          getSessionId: () => 'omp-session-8',
+          getSessionFile: () => '/tmp/omp-session-8.jsonl'
+        }
+      })
+      await harness.callHook(
+        'message_end',
+        { message: { role: 'assistant', content: 'done' } },
+        {
+          sessionManager: {
+            getSessionId: () => 'omp-session-9',
+            getSessionFile: () => '/tmp/omp-session-9.jsonl'
+          }
+        }
+      )
+      await harness.callHook('message_end', { message: { role: 'user', content: 'next' } }, {})
+
+      finishDeliveries[0]?.()
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+      const body = JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body))
+      expect(body.payload).toEqual({
+        hook_event_name: 'message_end',
+        role: 'assistant',
+        text: 'done',
+        session_id: 'omp-session-9'
+      })
+      expect(body.payload).not.toHaveProperty('session_file')
+      expect(harness.fetchMock.mock.calls[1]?.[0]).toBe('http://127.0.0.1:4321/hook/omp')
+      expect(harness.spawnMock).not.toHaveBeenCalled()
+      finishDeliveries[1]?.()
+    }
+  )
 
   it.each(['pi', 'omp'] as const)(
     'registers no status handlers for a nested %s subagent process',

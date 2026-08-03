@@ -2,9 +2,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
 
-const PNG_1X1_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
-
 describe('CommentMarkdown', () => {
   it('marks compact headings so a parent can opt into block flow', () => {
     const markup = renderToStaticMarkup(
@@ -84,33 +81,36 @@ describe('CommentMarkdown', () => {
 
   it('renders trusted compact markdown images inline', () => {
     const markup = renderToStaticMarkup(
-      <CommentMarkdown content={`See this: ![Image #1](data:image/png;base64,${PNG_1X1_BASE64})`} />
+      <CommentMarkdown content="See this: ![Image #1](data:image/png;base64,abc123)" />
     )
 
     expect(markup).toContain('<img')
     expect(markup).toContain('alt="Image #1"')
-    expect(markup).toContain(`src="data:image/png;base64,${PNG_1X1_BASE64}"`)
+    expect(markup).toContain('src="data:image/png;base64,abc123"')
   })
 
-  it('renders malformed compact raster data as alt text instead of decoding it', () => {
-    const markup = renderToStaticMarkup(
-      <CommentMarkdown content="See this: ![Image #1](data:image/png;base64,abc123)" />
-    )
-
-    expect(markup).not.toContain('<img')
-    expect(markup).toContain('<span>Image #1</span>')
-  })
-
-  it('renders malformed document raster data as alt text instead of decoding it', () => {
+  it('renders document markdown images with an expand control for the lightbox', () => {
+    // Why: document bodies need a large preview without a provider-specific renderer.
     const markup = renderToStaticMarkup(
       <CommentMarkdown
         variant="document"
-        content="See this: ![Image #1](data:image/png;base64,abc123)"
+        content="See this: ![ui.png](data:image/png;base64,abc123)"
       />
     )
 
-    expect(markup).not.toContain('<img')
-    expect(markup).toContain('<span>Image #1</span>')
+    expect(markup).toContain('<img')
+    expect(markup).toContain('src="data:image/png;base64,abc123"')
+    expect(markup).toContain('aria-label="Expand image"')
+    expect(markup).toContain('type="button"')
+  })
+
+  it('adds an expand control to compact images only when requested', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown expandImages content="See this: ![ui.png](data:image/png;base64,abc123)" />
+    )
+
+    expect(markup).toContain('aria-label="Expand image"')
+    expect(markup).toContain('max-h-32')
   })
 
   it('renders bare GitHub user attachment links as document videos', () => {
@@ -233,6 +233,24 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('max-h-32')
     expect(markup).toContain('overflow-x-auto')
     expect(markup).not.toContain('mermaid-block')
+  })
+
+  it('renders headings as block elements with hierarchy in the document variant', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'## Problem to solve\n\nSome body text.'} />
+    )
+
+    expect(markup).toContain('<h2')
+    expect(markup).toContain('Problem to solve')
+  })
+
+  it('flattens headings to inline text in the compact variant', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content={'## Problem to solve\n\nSome body text.'} />
+    )
+
+    expect(markup).not.toContain('<h2')
+    expect(markup).toContain('Problem to solve')
   })
 
   it('contains long PR body markdown inside its available width', () => {

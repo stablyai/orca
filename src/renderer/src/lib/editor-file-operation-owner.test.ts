@@ -5,6 +5,7 @@ import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
 } from './editor-file-operation-owner'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const worktreeId = 'repo::/remote/repo'
 
@@ -37,6 +38,31 @@ beforeEach(() => {
 })
 
 describe('editor file operation owner', () => {
+  it('round-trips the synthetic local owner for floating workspace files', () => {
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      FLOATING_TERMINAL_WORKTREE_ID,
+      null,
+      true
+    )
+
+    expect(
+      getEditorFileOperationContext(
+        useAppStore.getState(),
+        {
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          runtimeEnvironmentId: null,
+          operationProvenance: provenance
+        },
+        '/tmp/orca/floating-workspace'
+      )
+    ).toMatchObject({
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      worktreePath: '/tmp/orca/floating-workspace',
+      expectedExecutionHostId: 'local'
+    })
+  })
+
   it('uses the explicit worktree owner instead of global runtime focus', () => {
     useAppStore.setState({
       worktreesByRepo: {
@@ -166,5 +192,102 @@ describe('editor file operation owner', () => {
     expect(() =>
       assertEditorFileOperationCurrent(useAppStore.getState(), worktreeId, provenance)
     ).toThrow('Reopen the file')
+  })
+
+  it('rejects a restored external SSH file after its target changes', () => {
+    useAppStore.setState({
+      repos: [{ id: 'repo', connectionId: 'ssh-replacement' } as never],
+      worktreesByRepo: {
+        repo: [{ id: worktreeId, repoId: 'repo', path: '/remote/repo' } as never]
+      },
+      sshConnectionStates: new Map([
+        [
+          'ssh-replacement',
+          {
+            targetId: 'ssh-replacement',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 1
+          }
+        ]
+      ])
+    })
+
+    expect(() =>
+      getEditorFileOperationContext(
+        useAppStore.getState(),
+        { worktreeId, externalSshTargetId: 'ssh-original' },
+        '/remote/repo'
+      )
+    ).toThrow('Reopen the file')
+  })
+
+  describe('folder workspaces', () => {
+    const folderWorkspaceId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const folderKey = `folder:${folderWorkspaceId}`
+
+    beforeEach(() => {
+      useAppStore.setState({
+        folderWorkspaces: [
+          { id: folderWorkspaceId, projectGroupId: 'group-1', connectionId: null } as never
+        ],
+        projectGroups: [{ id: 'group-1', connectionId: null, executionHostId: null } as never],
+        restoredRuntimeHostIdByWorkspaceSessionKey: {}
+      })
+    })
+
+    it('round-trips capture and assert for a local folder workspace (#10251)', () => {
+      const provenance = captureEditorFileOperationProvenance(
+        useAppStore.getState(),
+        folderKey,
+        undefined,
+        false
+      )
+      expect(provenance.generation.route).toEqual({
+        executionHostId: 'local',
+        runtimeEnvironmentId: null
+      })
+      expect(
+        assertEditorFileOperationCurrent(useAppStore.getState(), folderKey, provenance)
+      ).toEqual(provenance.generation.route)
+    })
+
+    it('uses the folder root when a legacy caller passes an empty worktree path', () => {
+      useAppStore.setState({
+        folderWorkspaces: [
+          {
+            id: folderWorkspaceId,
+            projectGroupId: 'group-1',
+            connectionId: null,
+            folderPath: '/workspace/folder'
+          } as never
+        ]
+      })
+      const context = getEditorFileOperationContext(
+        useAppStore.getState(),
+        { worktreeId: folderKey },
+        ''
+      )
+
+      expect(context.worktreePath).toBe('/workspace/folder')
+    })
+
+    it('fails closed when folder ownership changes between capture and assert', () => {
+      const provenance = captureEditorFileOperationProvenance(
+        useAppStore.getState(),
+        folderKey,
+        undefined,
+        false
+      )
+      useAppStore.setState({
+        projectGroups: [
+          { id: 'group-1', connectionId: null, executionHostId: 'runtime:hub-a' } as never
+        ]
+      })
+      expect(() =>
+        assertEditorFileOperationCurrent(useAppStore.getState(), folderKey, provenance)
+      ).toThrow('Reopen the file')
+    })
   })
 })

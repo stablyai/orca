@@ -4,12 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { writeFileSync, chmodSync } from 'node:fs'
 import { StringDecoder } from 'node:string_decoder'
-import {
-  DAEMON_HANDSHAKE_MAX_LINE_BYTES,
-  encodeBoundedNdjson,
-  encodeNdjson,
-  createNdjsonParser
-} from './ndjson'
+import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import {
@@ -41,27 +36,7 @@ import {
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
-import {
-  DAEMON_CONTROL_SOCKET_MAX_BUFFERED_BYTES,
-  DAEMON_HANDSHAKE_TIMEOUT_MS,
-  DAEMON_MAX_ACTIVE_REQUEST_BYTES,
-  DAEMON_MAX_ACTIVE_REQUEST_BYTES_PER_CLIENT,
-  DAEMON_MAX_ACTIVE_REQUESTS,
-  DAEMON_MAX_ACTIVE_REQUESTS_PER_CLIENT,
-  DAEMON_MAX_CONTROL_CLIENTS,
-  DAEMON_MAX_STREAM_ATTACHMENTS,
-  DAEMON_MAX_TRANSPORT_SOCKETS,
-  daemonHelloAdmissionError,
-  daemonRequestAdmissionError,
-  getBoundedDaemonRequestId
-} from './daemon-admission-limits'
-import {
-  DAEMON_CONTROL_PROCESS_MAX_BUFFERED_BYTES,
-  DAEMON_MAX_ACTIVE_RESPONSE_BYTES,
-  DAEMON_MAX_ACTIVE_RESPONSE_BYTES_PER_CLIENT,
-  DAEMON_MAX_RESPONSE_BYTES,
-  daemonResponseReservationBytes
-} from './daemon-response-admission'
+import { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
 
 export type DaemonServerOptions = {
   socketPath: string
@@ -103,9 +78,6 @@ type ConnectedClient = {
   controlSocket: Socket
   streamSocket: Socket | null
   authenticatedPairEstablished: boolean
-  activeRequestCount: number
-  activeRequestBytes: number
-  activeResponseBytes: number
 }
 
 type PendingPtySpawnPreparation = {
@@ -138,9 +110,6 @@ export class DaemonServer {
   private preparePtySpawn: () => Promise<void>
   private log: DaemonFileLog
   private transportSockets = new Set<Socket>()
-  private activeRequestCount = 0
-  private activeRequestBytes = 0
-  private activeResponseBytes = 0
   private createOrAttachInFlight = 0
   private idleShutdownState: 'running' | 'idle-shutdown-pending' | 'shutting-down' = 'running'
   private initialAdoptionTimer: unknown | null = null
@@ -184,6 +153,7 @@ export class DaemonServer {
   private streamClientIdBySessionId = new Map<string, string>()
   private lastInputAtBySessionId = new Map<string, number>()
   private pendingPtySpawnPreparations = new Map<string, Set<PendingPtySpawnPreparation>>()
+  private historySeedTransfers = new TerminalHistorySeedTransferRegistry()
   private stopStreamBacklogProbe: () => void = () => {}
 
   // Why: bypass batching within this window so keystroke echo/redraws skip the daemon's fixed batch delay.
@@ -304,6 +274,7 @@ export class DaemonServer {
       })
     }
     this.streamDataBatcher.clear()
+    this.historySeedTransfers.dispose()
     this.pendingShutdownReplies.clear()
 
     for (const [, client] of this.clients) {
@@ -336,7 +307,6 @@ export class DaemonServer {
     return (
       this.transportSockets.size === 0 &&
       this.clients.size === 0 &&
-      this.activeRequestCount === 0 &&
       this.createOrAttachInFlight === 0 &&
       this.host.listSessions().length === 0
     )
@@ -415,12 +385,6 @@ export class DaemonServer {
   }
 
   private handleConnection(socket: Socket): void {
-    socket.on('error', () => socket.destroy())
-    if (this.transportSockets.size >= DAEMON_MAX_TRANSPORT_SOCKETS) {
-      socket.destroy()
-      return
-    }
-
     this.cancelInitialAdoptionTimer()
     this.transportSockets.add(socket)
     const removeTransport = (): void => {
@@ -428,6 +392,7 @@ export class DaemonServer {
       this.reevaluateIdleShutdown()
     }
     socket.once('close', removeTransport)
+    socket.on('error', () => socket.destroy())
 
     if (this.idleShutdownState !== 'running') {
       // Why: a connection accepted just before close() gets an explicit retry signal instead of dying mid-auth.
@@ -441,67 +406,45 @@ export class DaemonServer {
       )
       return
     }
-
-    let handshakeComplete = false
-    const handshakeTimer = setTimeout(() => socket.destroy(), DAEMON_HANDSHAKE_TIMEOUT_MS)
-    handshakeTimer.unref()
-    socket.once('close', () => clearTimeout(handshakeTimer))
     // Why: keep UTF-8 sequences intact across socket chunks before NDJSON parsing.
     const decoder = new StringDecoder('utf8')
     const parser = createNdjsonParser(
-      (msg) => {
-        if (handshakeComplete) {
-          return
-        }
-        handshakeComplete = true
-        clearTimeout(handshakeTimer)
-        this.handleFirstMessage(socket, msg)
-      },
+      (msg) => this.handleFirstMessage(socket, msg, parser),
       () => {
         socket.destroy()
-      },
-      { maxLineBytes: DAEMON_HANDSHAKE_MAX_LINE_BYTES }
+      }
     )
 
     socket.on('data', (chunk) => parser.feed(decoder.write(chunk)))
   }
 
-  private handleFirstMessage(socket: Socket, msg: unknown): void {
-    const helloError = daemonHelloAdmissionError(msg)
-    if (helloError) {
-      this.log.log('client-hello-rejected', { reason: 'invalid-hello' })
-      this.rejectHello(socket, helloError)
+  private handleFirstMessage(
+    socket: Socket,
+    msg: unknown,
+    _parser: ReturnType<typeof createNdjsonParser>
+  ): void {
+    const hello = msg as HelloMessage
+    if (hello.type !== 'hello') {
+      this.log.log('client-hello-rejected', { reason: 'expected-hello' })
+      socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Expected hello' }))
+      socket.destroy()
       return
     }
-    const hello = msg as HelloMessage
 
     if (hello.version !== this.protocolVersion) {
       this.log.log('client-hello-rejected', {
         reason: 'protocol-mismatch',
         clientVersion: hello.version
       })
-      this.rejectHello(socket, 'Protocol version mismatch')
+      socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Protocol version mismatch' }))
+      socket.destroy()
       return
     }
 
     if (hello.token !== this.token) {
       this.log.log('client-hello-rejected', { reason: 'invalid-token', role: hello.role })
-      this.rejectHello(socket, 'Invalid token')
-      return
-    }
-
-    const previous = hello.role === 'control' ? this.clients.get(hello.clientId) : undefined
-    const streamClient = hello.role === 'stream' ? this.clients.get(hello.clientId) : undefined
-    if (hello.role === 'control' && !previous && this.clients.size >= DAEMON_MAX_CONTROL_CLIENTS) {
-      this.rejectHello(socket, 'Daemon control-client capacity exceeded; reconnect', true)
-      return
-    }
-    if (
-      streamClient &&
-      streamClient.streamSocket === null &&
-      this.streamAttachmentCount() >= DAEMON_MAX_STREAM_ATTACHMENTS
-    ) {
-      this.rejectHello(socket, 'Daemon stream-attachment capacity exceeded; reconnect', true)
+      socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Invalid token' }))
+      socket.destroy()
       return
     }
 
@@ -523,69 +466,48 @@ export class DaemonServer {
     )
 
     if (hello.role === 'control') {
+      const previous = this.clients.get(hello.clientId)
       const client: ConnectedClient = {
         clientId: hello.clientId,
         controlSocket: socket,
         streamSocket: null,
-        authenticatedPairEstablished: false,
-        activeRequestCount: 0,
-        activeRequestBytes: 0,
-        activeResponseBytes: 0
+        authenticatedPairEstablished: false
       }
       this.clients.set(hello.clientId, client)
       this.setupControlSocket(socket, hello.clientId)
       if (previous) {
         // Why: reconnect reuses clientId before stale close fires; cancel the old owner's preflight at handoff.
         this.cancelPendingPtySpawnPreparationsForClient(hello.clientId)
+        this.historySeedTransfers.clearOwner(hello.clientId)
         this.recordFullyAuthenticatedDisconnect(previous.authenticatedPairEstablished)
         // Why: tear down the old sockets after installing the new owner so a stale close can't delete the replacement.
         previous.streamSocket?.destroy()
         previous.controlSocket.destroy()
       }
-    } else if (streamClient) {
-      this.setupStreamSocket(socket, streamClient)
-      streamClient.authenticatedPairEstablished = true
+    } else if (hello.role === 'stream') {
+      const client = this.clients.get(hello.clientId)
+      if (!client) {
+        // Why: a stream socket is meaningless without its control socket; drop the orphan.
+        socket.destroy()
+        return
+      }
+      this.setupStreamSocket(socket, client)
+      client.authenticatedPairEstablished = true
       // Why: one-shot health probes authenticate only a control socket; they are not fresh app activity.
       this.onAuthenticatedClientPair()
       // A complete app connection (unlike a probe) re-owns the endpoint and cancels pending retirement.
       this.initialAdoptionDeadlineMs = null
       this.retirementRequested = false
       this.cancelInitialAdoptionTimer()
-    } else {
-      // Why: preserve the legacy authenticated handshake before dropping a stream with no owner.
-      socket.destroy()
     }
-  }
-
-  private rejectHello(socket: Socket, error: string, retryable = false): void {
-    socket.end(
-      encodeNdjson({
-        type: 'hello',
-        ok: false,
-        error,
-        ...(retryable ? { retryable: true } : {})
-      }),
-      () => socket.destroy()
-    )
-  }
-
-  private streamAttachmentCount(): number {
-    let count = 0
-    for (const client of this.clients.values()) {
-      if (client.streamSocket) {
-        count += 1
-      }
-    }
-    return count
   }
 
   private setupControlSocket(socket: Socket, clientId: string): void {
     // Why: decode as a UTF-8 stream so emoji/Unicode split across chunks isn't corrupted.
     const decoder = new StringDecoder('utf8')
     const parser = createNdjsonParser(
-      (msg, lineBytes) => this.dispatchRequest(socket, clientId, msg, lineBytes ?? 0),
-      () => socket.destroy(),
-      { includeLineBytes: true }
+      (msg) => this.handleRequest(socket, clientId, msg as DaemonRequest),
+      () => {} // Ignore parse errors
     )
 
     // Remove the initial data listener and replace with the RPC parser
@@ -600,6 +522,7 @@ export class DaemonServer {
       // Why: a client that disconnects mid-preflight would otherwise still create
       // its daemon PTY, orphaning a durable, unattached session — cancel its preps (F4).
       this.cancelPendingPtySpawnPreparationsForClient(clientId)
+      this.historySeedTransfers.clearOwner(clientId)
       const wasFullyAuthenticated = client.authenticatedPairEstablished
       this.streamDataBatcher.clear(clientId)
       client.streamSocket?.destroy()
@@ -651,86 +574,6 @@ export class DaemonServer {
     }
   }
 
-  private dispatchRequest(
-    socket: Socket,
-    clientId: string,
-    value: unknown,
-    lineBytes: number
-  ): void {
-    const client = this.clients.get(clientId)
-    if (!client || client.controlSocket !== socket) {
-      return
-    }
-
-    const requestId = getBoundedDaemonRequestId(value)
-    const admissionError = daemonRequestAdmissionError(value)
-    if (admissionError) {
-      this.writeRequestError(socket, requestId, admissionError)
-      return
-    }
-    const request = value as DaemonRequest
-    const responseReservationBytes = daemonResponseReservationBytes(request)
-    if (
-      client.activeRequestCount >= DAEMON_MAX_ACTIVE_REQUESTS_PER_CLIENT ||
-      this.activeRequestCount >= DAEMON_MAX_ACTIVE_REQUESTS ||
-      client.activeRequestBytes + lineBytes > DAEMON_MAX_ACTIVE_REQUEST_BYTES_PER_CLIENT ||
-      this.activeRequestBytes + lineBytes > DAEMON_MAX_ACTIVE_REQUEST_BYTES ||
-      client.activeResponseBytes + responseReservationBytes >
-        DAEMON_MAX_ACTIVE_RESPONSE_BYTES_PER_CLIENT ||
-      this.activeResponseBytes + responseReservationBytes > DAEMON_MAX_ACTIVE_RESPONSE_BYTES
-    ) {
-      this.writeRequestError(socket, request.id, 'Daemon request capacity exceeded; retry')
-      return
-    }
-
-    client.activeRequestCount += 1
-    client.activeRequestBytes += lineBytes
-    this.activeRequestCount += 1
-    this.activeRequestBytes += lineBytes
-    client.activeResponseBytes += responseReservationBytes
-    this.activeResponseBytes += responseReservationBytes
-    void this.handleRequest(socket, clientId, request).finally(() => {
-      client.activeRequestCount -= 1
-      client.activeRequestBytes -= lineBytes
-      this.activeRequestCount -= 1
-      this.activeRequestBytes -= lineBytes
-      client.activeResponseBytes -= responseReservationBytes
-      this.activeResponseBytes -= responseReservationBytes
-      this.reevaluateIdleShutdown()
-    })
-  }
-
-  private writeRequestError(socket: Socket, requestId: string | null, error: string): void {
-    if (!requestId || requestId.startsWith(NOTIFY_PREFIX)) {
-      return
-    }
-    this.writeControlMessage(socket, { id: requestId, ok: false, error })
-  }
-
-  private writeControlMessage(socket: Socket, message: unknown, onFlushed?: () => void): void {
-    const encoded = encodeBoundedNdjson(message, DAEMON_MAX_RESPONSE_BYTES)
-    const encodedBytes = Buffer.byteLength(encoded, 'utf8')
-    if (
-      socket.writableLength + encodedBytes > DAEMON_CONTROL_SOCKET_MAX_BUFFERED_BYTES ||
-      this.controlSocketBufferedBytes() + encodedBytes > DAEMON_CONTROL_PROCESS_MAX_BUFFERED_BYTES
-    ) {
-      socket.destroy()
-      return
-    }
-    socket.write(encoded, onFlushed)
-  }
-
-  private controlSocketBufferedBytes(): number {
-    let total = 0
-    for (const client of this.clients.values()) {
-      total += Math.max(0, client.controlSocket.writableLength)
-      if (total > DAEMON_CONTROL_PROCESS_MAX_BUFFERED_BYTES) {
-        break
-      }
-    }
-    return total
-  }
-
   private async handleRequest(
     socket: Socket,
     clientId: string,
@@ -744,17 +587,19 @@ export class DaemonServer {
         const pendingShutdown = this.pendingShutdownReplies.get(
           this.shutdownReplyKey(clientId, request.id)
         )
-        this.writeControlMessage(socket, { id: request.id, ok: true, payload: result }, () => {
+        socket.write(encodeNdjson({ id: request.id, ok: true, payload: result }), () => {
           pendingShutdown?.start()
         })
       }
     } catch (err) {
       if (!isNotify) {
-        this.writeControlMessage(socket, {
-          id: request.id,
-          ok: false,
-          error: err instanceof Error ? err.message : String(err)
-        })
+        socket.write(
+          encodeNdjson({
+            id: request.id,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err)
+          })
+        )
       }
     }
   }
@@ -843,6 +688,31 @@ export class DaemonServer {
     const client = this.clients.get(clientId)
 
     switch (request.type) {
+      case 'startHistorySeedTransfer': {
+        if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
+          throw new Error('Daemon client connection is incomplete; reconnect')
+        }
+        const transferId = this.historySeedTransfers.start(clientId, request.payload)
+        return { transferId }
+      }
+
+      case 'appendHistorySeedTransfer':
+        this.historySeedTransfers.append(
+          clientId,
+          request.payload.transferId,
+          request.payload.index,
+          request.payload.data
+        )
+        return {}
+
+      case 'finishHistorySeedTransfer':
+        this.historySeedTransfers.finish(clientId, request.payload.transferId)
+        return {}
+
+      case 'abortHistorySeedTransfer':
+        this.historySeedTransfers.abort(clientId, request.payload.transferId)
+        return {}
+
       case 'createOrAttach': {
         if (this.idleShutdownState !== 'running') {
           throw new Error('Daemon temporarily unavailable; reconnect')
@@ -864,6 +734,15 @@ export class DaemonServer {
             throw new Error('agent_session_identity_required')
           }
           await this.preparePtySpawnUnlessCanceled(p.sessionId, clientId)
+          if (p.historySeed !== undefined && p.historySeedTransferId !== undefined) {
+            throw new Error('Multiple terminal history seed sources')
+          }
+          const historySeedChunks =
+            p.historySeedTransferId !== undefined
+              ? this.historySeedTransfers.take(clientId, p.historySeedTransferId)
+              : p.historySeed !== undefined
+                ? [p.historySeed]
+                : undefined
           result = await this.host.createOrAttach({
             sessionId: p.sessionId,
             cols: p.cols,
@@ -879,7 +758,7 @@ export class DaemonServer {
             terminalWindowsWslDistro: p.terminalWindowsWslDistro,
             terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
             shellReadySupported: p.shellReadySupported,
-            historySeed: p.historySeed,
+            historySeedChunks,
             startupIngress: parsePtyStartupIngressIntent(p.startupIngress),
             ...(p.shellReadyTimeoutMs !== undefined
               ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
@@ -919,6 +798,7 @@ export class DaemonServer {
                   sessionIdSuffix: routedSessionId.slice(-10)
                 })
                 this.transientFactRelay.onSessionExit(routedSessionId)
+                this.streamDataBatcher.refreshSessionDroppability(routedSessionId)
                 this.streamClientIdBySessionId.delete(routedSessionId)
                 this.lastInputAtBySessionId.delete(routedSessionId)
                 this.reevaluateIdleShutdown()
@@ -931,6 +811,7 @@ export class DaemonServer {
         }
         routedSessionId = result.agentSessionEnsure?.owner.ptyId ?? p.sessionId
         this.streamClientIdBySessionId.set(routedSessionId, clientId)
+        this.streamDataBatcher.refreshSessionDroppability(routedSessionId)
         // Why an attach-time marker: background resync can precede this attach, so scan suppression must start at the new stream's head.
         if (this.transientFactRelay.isBackgrounded(routedSessionId)) {
           this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
@@ -1005,7 +886,12 @@ export class DaemonServer {
           sessionIdSuffix: sessionId.slice(-10),
           background
         })
-        if (!this.transientFactRelay.setSessionBackground(sessionId, background)) {
+        const backgroundChanged = this.transientFactRelay.setSessionBackground(
+          sessionId,
+          background
+        )
+        this.streamDataBatcher.refreshSessionDroppability(sessionId)
+        if (!backgroundChanged) {
           return {}
         }
         if (background) {
@@ -1021,14 +907,20 @@ export class DaemonServer {
           return {}
         }
         // Reveal intentionally keeps the queued tail: main needs those bytes, and the normal flush/drain delivers them in order ahead of the marker.
-        const scanSeedAnsi = background ? '' : this.host.getPartialEscapeTailAnsi(sessionId)
+        const mode2031State = this.transientFactRelay.getMode2031ReplyScanState(sessionId)
+        const scanSeedAnsi = background
+          ? ''
+          : mode2031State.pendingSubscribe
+            ? mode2031State.tail
+            : this.host.getPartialEscapeTailAnsi(sessionId)
         this.streamDataBatcher.enqueueControlEvent(streamClientId, sessionId, {
           type: 'event',
           event: 'sessionBackgroundMarker',
           sessionId,
           payload: {
             background,
-            ...(scanSeedAnsi.length > 0 ? { scanSeedAnsi } : {})
+            ...(scanSeedAnsi.length > 0 ? { scanSeedAnsi } : {}),
+            ...(mode2031State.pendingSubscribe ? { mode2031PendingSubscribe: true as const } : {})
           }
         })
         return {}
@@ -1090,7 +982,6 @@ export class DaemonServer {
           authenticatedClient !== undefined &&
           authenticatedClient.streamSocket !== null &&
           this.clients.size === 1 &&
-          this.activeRequestCount <= 1 &&
           this.createOrAttachInFlight === 0 &&
           this.host.listSessions().length === 0 &&
           [...this.transportSockets].every(

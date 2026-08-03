@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, lstatMock, readNodeFileWithinLimitMock, rmMock } = vi.hoisted(() => ({
+const { execFileMock, lstatMock, readFileMock, rmMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
   lstatMock: vi.fn(),
-  readNodeFileWithinLimitMock: vi.fn(),
+  readFileMock: vi.fn(),
   rmMock: vi.fn()
 }))
 
@@ -13,11 +13,8 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('node:fs/promises', () => ({
   lstat: lstatMock,
+  readFile: readFileMock,
   rm: rmMock
-}))
-
-vi.mock('../shared/node-bounded-file-reader', () => ({
-  readNodeFileWithinLimit: readNodeFileWithinLimitMock
 }))
 
 import {
@@ -52,7 +49,7 @@ describe('local worktree filesystem runtime access', () => {
   beforeEach(() => {
     execFileMock.mockReset()
     lstatMock.mockReset()
-    readNodeFileWithinLimitMock.mockReset()
+    readFileMock.mockReset()
     rmMock.mockReset()
     completeExecFile()
   })
@@ -64,9 +61,7 @@ describe('local worktree filesystem runtime access', () => {
 
   it('uses host filesystem operations when no WSL distro is selected', async () => {
     lstatMock.mockResolvedValue({ type: 'file' })
-    readNodeFileWithinLimitMock.mockResolvedValue({
-      buffer: Buffer.from('gitdir: ../.git/worktrees/feature')
-    })
+    readFileMock.mockResolvedValue('gitdir: ../.git/worktrees/feature')
 
     const access = getLocalWorktreePathAccess()
     await access.statPath('C:\\repo\\.git')
@@ -74,7 +69,7 @@ describe('local worktree filesystem runtime access', () => {
     await removeLocalWorktreePath('C:\\repo\\feature')
 
     expect(lstatMock).toHaveBeenCalledWith('C:\\repo\\.git')
-    expect(readNodeFileWithinLimitMock).toHaveBeenCalledWith('C:\\repo\\.git', 64 * 1024)
+    expect(readFileMock).toHaveBeenCalledWith('C:\\repo\\.git', 'utf8')
     expect(rmMock).toHaveBeenCalledWith(
       toHostRemovalPath('C:\\repo\\feature'),
       expect.objectContaining({
@@ -170,25 +165,12 @@ describe('local worktree filesystem runtime access', () => {
         expect.objectContaining({ encoding: 'utf8' }),
         expect.any(Function)
       )
-      const readArgs = execFileMock.mock.calls[1]?.[1] as string[]
-      expect(readArgs.at(-1)).toContain('head -c 65537 --')
       const removeArgs = execFileMock.mock.calls[2]?.[1] as string[]
       expect(removeArgs.at(-1)).toContain('rm -rf --')
       expect(removeArgs.at(-1)).toContain(
         String.raw`rm -rf -- '\''/mnt/c/Users/me/repo feature'\''`
       )
       expect(rmMock).not.toHaveBeenCalled()
-    })
-  })
-
-  it('rejects oversized WSL Git pointer output', async () => {
-    await withPlatform('win32', async () => {
-      completeExecFile('x'.repeat(64 * 1024 + 1))
-      const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
-
-      await expect(access.readPath('/home/me/repo/.git')).rejects.toThrow(
-        'Worktree Git pointer exceeds the safe read limit'
-      )
     })
   })
 

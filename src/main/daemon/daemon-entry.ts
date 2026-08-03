@@ -6,6 +6,7 @@
  * Signals readiness to parent via IPC: { type: 'ready' }
  * Shuts down cleanly on SIGTERM.
  */
+import { readFileSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
 import { warmWindowsConptyOnce } from './windows-conpty-warmup'
@@ -16,9 +17,9 @@ import {
   prepareMacosTccLoginShell,
   probeMacosLoginSessionAlive
 } from '../providers/macos-tcc-login-shell'
-import { readDaemonLoginSessionProbeVerdict } from './daemon-login-session-probe-verdict'
 import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
+import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -176,7 +177,13 @@ async function main(): Promise<void> {
   // 'alive' → accepted/healthy, 'dead' → rejected/unhealthy, 'hang' →
   // timeout-inconclusive/unhealthy (the fail-safe path), else inconclusive.
   const e2eProbeFile = process.env.ORCA_E2E_LOGIN_SESSION_PROBE_FILE
-  const readE2eVerdict = (): string => readDaemonLoginSessionProbeVerdict(e2eProbeFile as string)
+  const readE2eVerdict = (): string => {
+    try {
+      return readFileSync(e2eProbeFile as string, 'utf8').trim()
+    } catch {
+      return ''
+    }
+  }
   deathWatch =
     loginSessionWatch && process.platform === 'darwin'
       ? new MacosLoginSessionDeathWatch({
@@ -203,6 +210,7 @@ async function main(): Promise<void> {
                 timing: {
                   periodicProbeMs: 2_000,
                   rejectionRecheckMs: 500,
+                  minimumRejectionSpanMs: 2_000,
                   ptyExitDebounceMs: 200,
                   clientActivityMinGapMs: 1_000,
                   minProbeGapMs: 100
@@ -249,9 +257,8 @@ async function main(): Promise<void> {
 
   // Signal readiness to parent via IPC (if available)
   if (process.send) {
-    // Why: Windows has no cheap OS query for a child's start time, so the
-    // daemon self-reports it here for the pid file's pid-recycling guard.
-    process.send({ type: 'ready', startedAtMs })
+    const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
+    process.send({ type: 'ready', ...readyIdentity })
   }
   daemonLog.log('ready')
 

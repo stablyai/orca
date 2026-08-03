@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process'
 import { delimiter } from 'node:path'
 import type { ShellHydrationFailureReason } from '../../shared/types'
-import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 
 // Why: GUI-launched Electron on macOS/Linux inherits a minimal PATH from launchd
 // that does not include dirs appended by the user's shell rc files (~/.zshrc,
@@ -17,7 +16,6 @@ import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 
 const DELIMITER = '__ORCA_SHELL_PATH__'
 const SPAWN_TIMEOUT_MS = 5000
-export const MAX_SHELL_PATH_STDOUT_BYTES = 1024 * 1024
 
 // ANSI escape sequences can leak into the captured output when the user's rc
 // files print banners or set colored prompts. Strip them before parsing.
@@ -87,7 +85,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     // and .bashrc/.zshrc are sourced — matches what `which` in Terminal sees.
     const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'`
     let finished = false
-    const stdout = new GrowingByteBuffer()
+    let stdout = ''
     let timer: ReturnType<typeof setTimeout> | null = null
 
     const child = spawn(shell, ['-ilc', command], {
@@ -131,15 +129,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     }, SPAWN_TIMEOUT_MS)
 
     const onStdoutData = (chunk: Buffer): void => {
-      if (chunk.byteLength > MAX_SHELL_PATH_STDOUT_BYTES - stdout.byteLength) {
-        try {
-          child.kill('SIGKILL')
-        } catch {}
-        stdout.clear()
-        finish({ segments: [], ok: false, failureReason: 'empty_path' })
-        return
-      }
-      stdout.append(chunk)
+      stdout += chunk.toString('utf8')
     }
 
     const onError = (): void => {
@@ -147,7 +137,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     }
 
     const onClose = (): void => {
-      const segments = parseCapturedPath(stdout.toString('utf8'))
+      const segments = parseCapturedPath(stdout)
       if (segments.length === 0) {
         finish({ segments: [], ok: false, failureReason: 'empty_path' })
         return

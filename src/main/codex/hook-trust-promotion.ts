@@ -1,7 +1,5 @@
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { MAX_AGENT_STATE_FILE_BYTES, readAgentStateJsonFileSync } from '../agent-state-file-reader'
-import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
 import {
   createManagedCommandMatcher,
   readHooksJson,
@@ -53,7 +51,7 @@ function readHookTrustProvenance(
     return null
   }
   try {
-    const parsed = readAgentStateJsonFileSync(provenancePath)
+    const parsed: unknown = JSON.parse(readFileSync(provenancePath, 'utf-8'))
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
@@ -99,8 +97,7 @@ export function snapshotCodexRuntimeHookTrustProvenance(
       }
     }
     const file: HookTrustProvenanceFile = { version: 1, entries }
-    const { serialized } = stringifyJsonWithinByteLimit(file, MAX_AGENT_STATE_FILE_BYTES - 1, 2)
-    writeFileSync(getProvenancePath(runtimeHomePath), `${serialized}\n`, {
+    writeFileSync(getProvenancePath(runtimeHomePath), `${JSON.stringify(file, null, 2)}\n`, {
       encoding: 'utf-8',
       mode: 0o600
     })

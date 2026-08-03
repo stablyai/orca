@@ -1,9 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, getSshFilesystemProviderMock } = vi.hoisted(() => ({
-  handleMock: vi.fn(),
-  getSshFilesystemProviderMock: vi.fn()
-}))
+const { handleMock, getSshFilesystemProviderMock, providerRegistrationListeners } = vi.hoisted(
+  () => ({
+    handleMock: vi.fn(),
+    getSshFilesystemProviderMock: vi.fn(),
+    providerRegistrationListeners: new Set<(connectionId: string) => void>()
+  })
+)
+
+/** Drive the provider-registration hook the way a relay establish/reconnect would. */
+function emitProviderRegistered(connectionId: string): void {
+  for (const listener of providerRegistrationListeners) {
+    listener(connectionId)
+  }
+}
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -24,13 +34,17 @@ vi.mock('./filesystem-watcher-wsl', () => ({
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
+  getSshFilesystemProvider: getSshFilesystemProviderMock,
+  onSshFilesystemProviderRegistered: (listener: (connectionId: string) => void) => {
+    providerRegistrationListeners.add(listener)
+    return () => providerRegistrationListeners.delete(listener)
+  }
 }))
 
 import {
   closeAllWatchers,
   closeRemoteWatcherForWorktreePath,
-  LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY,
+  forgetRemoteWatcherRemovalSnapshot,
   registerFilesystemWatcherHandlers,
   restoreRemoteWatcherAfterFailedRemoval
 } from './filesystem-watcher'
@@ -44,9 +58,17 @@ import {
   WatcherChildCapacityError
 } from './parcel-watcher-child-registry'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
-import { FILESYSTEM_WATCHER_MAX_CLAIMS_PER_SENDER } from './filesystem-watcher-admission'
+import { WATCH_BATCH_TRAILING_MS } from '../../shared/filesystem-watch-batch-window'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+
+/** Remote fs:changed rides the shared debounce window, so drain it before asserting sends. */
+const emitRemote = async (onEvents: (e: unknown[]) => void, events: unknown[]) => {
+  onEvents(events)
+  await (vi.isFakeTimers()
+    ? vi.advanceTimersByTimeAsync(WATCH_BATCH_TRAILING_MS)
+    : new Promise((resolve) => setTimeout(resolve, WATCH_BATCH_TRAILING_MS + 25)))
+}
 
 describe('registerFilesystemWatcherHandlers', () => {
   const handlers: HandlerMap = {}
@@ -96,99 +118,6 @@ describe('registerFilesystemWatcherHandlers', () => {
     await closeAllWatchers()
   })
 
-  it('rejects pending watcher churn at the sender cap and recovers after unwatch', async () => {
-    vi.useFakeTimers()
-    getSshFilesystemProviderMock.mockReturnValue(undefined)
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    for (let index = 0; index < FILESYSTEM_WATCHER_MAX_CLAIMS_PER_SENDER; index += 1) {
-      await handlers['fs:watchWorktree'](
-        { sender },
-        { worktreePath: `/missing/repo-${index}`, connectionId: 'conn-1' }
-      )
-    }
-    await expect(
-      handlers['fs:watchWorktree'](
-        { sender },
-        { worktreePath: '/missing/overflow', connectionId: 'conn-1' }
-      )
-    ).rejects.toThrow('Filesystem watcher capacity reached')
-
-    handlers['fs:unwatchWorktree'](
-      { sender },
-      { worktreePath: '/missing/repo-0', connectionId: 'conn-1' }
-    )
-    await expect(
-      handlers['fs:watchWorktree'](
-        { sender },
-        { worktreePath: '/missing/recovered', connectionId: 'conn-1' }
-      )
-    ).resolves.toBeUndefined()
-    await closeAllWatchers()
-    warn.mockRestore()
-    vi.useRealTimers()
-  })
-
-  it.each([
-    ['at the limit', LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY],
-    ['above the limit', LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY + 1]
-  ])('bounds event directory stats %s', async (_, count) => {
-    let active = 0
-    let peak = 0
-    let started = 0
-    const releases: (() => void)[] = []
-    vi.mocked(stat).mockImplementation((filePath) => {
-      if (filePath === '/repo') {
-        return Promise.resolve({ isDirectory: () => true } as never)
-      }
-      started++
-      active++
-      peak = Math.max(peak, active)
-      return new Promise((resolve) => {
-        releases.push(() => {
-          active--
-          resolve({ isDirectory: () => false } as never)
-        })
-      })
-    })
-    vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: vi.fn() } as never)
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
-    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/repo' })
-    const onEvents = vi.mocked(subscribeParcelWatcher).mock.calls[0][1] as (
-      error: Error | null,
-      events: { type: 'create'; path: string }[]
-    ) => void
-
-    vi.useFakeTimers()
-    onEvents(
-      null,
-      Array.from({ length: count }, (_, index) => ({
-        type: 'create',
-        path: `/repo/file-${index}`
-      }))
-    )
-    await vi.advanceTimersByTimeAsync(150)
-    expect(started).toBe(Math.min(count, LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY))
-    if (count > LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY) {
-      releases.shift()?.()
-      for (let turn = 0; turn < 5 && started < count; turn++) {
-        await Promise.resolve()
-      }
-      expect(started).toBe(count)
-    }
-    releases.splice(0).forEach((release) => release())
-
-    expect(peak).toBe(Math.min(count, LOCAL_WATCHER_DIRECTORY_STAT_CONCURRENCY))
-    await vi.waitFor(() =>
-      expect(sender.send).toHaveBeenCalledWith(
-        'fs:changed',
-        expect.objectContaining({ events: expect.arrayContaining([expect.any(Object)]) })
-      )
-    )
-    vi.useRealTimers()
-  })
-
   it('automatically retries a WSL watcher when child capacity becomes available', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -198,7 +127,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     const heldReservations = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () =>
       reserveWatcherChild()
     )
-    vi.mocked(createWslWatcher).mockImplementation(async () => {
+    vi.mocked(createWslWatcher).mockImplementation(async (_rootKey, worktreePath) => {
       const release = reserveWatcherChild()
       if (!release) {
         throw new WatcherChildCapacityError()
@@ -206,7 +135,8 @@ describe('registerFilesystemWatcherHandlers', () => {
       return {
         subscription: { unsubscribe: vi.fn(async () => release()) },
         listeners: new Map(),
-        batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 }
+        batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 },
+        rootPath: worktreePath
       }
     })
     const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
@@ -313,7 +243,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       onTerminalError: expect.any(Function)
     })
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendMock).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
       events: [{ path: '/home/me/repo/file.txt', type: 'update' }]
@@ -408,7 +338,7 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     expect(watchMock).toHaveBeenCalledTimes(2)
     const recoveredEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
-    recoveredEvents([{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
+    await emitRemote(recoveredEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(senderOne.send).not.toHaveBeenCalled()
     expect(senderTwo.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
@@ -420,6 +350,195 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(watchMock).toHaveBeenCalledTimes(2)
     warnSpy.mockRestore()
     vi.useRealTimers()
+  })
+
+  it('reinstalls an SSH worktree watch when the provider is re-registered after a reconnect', async () => {
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const staleUnwatch = vi.fn()
+    const watchMock = vi.fn().mockResolvedValue(staleUnwatch)
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+
+    await handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    expect(watchMock).toHaveBeenCalledTimes(1)
+
+    // The reconnect replaces the provider; the watch made on the dead transport can never fire again.
+    emitProviderRegistered('conn-1')
+    await vi.waitFor(() => expect(watchMock).toHaveBeenCalledTimes(2))
+    expect(staleUnwatch).toHaveBeenCalledTimes(1)
+
+    // Events missed while the watch was down are unrecoverable, so consumers are told to resync.
+    await vi.waitFor(() =>
+      expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+        worktreePath: '/home/me/repo',
+        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+      })
+    )
+
+    const reinstalledEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
+    await emitRemote(reinstalledEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
+    expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      worktreePath: '/home/me/repo',
+      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
+    })
+
+    await closeAllWatchers()
+  })
+
+  it('re-arms an SSH watch whose first install found no provider yet', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    // A connect slower than the retry window leaves the renderer subscribed with nothing installed.
+    getSshFilesystemProviderMock.mockReturnValue(undefined)
+
+    await handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+
+    const watchMock = vi.fn().mockResolvedValue(vi.fn())
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+    emitProviderRegistered('conn-1')
+
+    await vi.waitFor(() => expect(watchMock).toHaveBeenCalledTimes(1))
+    warnSpy.mockRestore()
+    await closeAllWatchers()
+  })
+
+  it('resyncs after a reconnect whose reinstall only succeeded on a retry', async () => {
+    vi.useFakeTimers()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    getSshFilesystemProviderMock.mockReturnValue({ watch: vi.fn().mockResolvedValue(vi.fn()) })
+
+    await handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+
+    // The relay is back, but its first fs.watch on the fresh transport still fails.
+    const retryWatchMock = vi.fn().mockResolvedValue(vi.fn())
+    getSshFilesystemProviderMock
+      .mockReturnValueOnce({ watch: vi.fn().mockRejectedValue(new Error('relay not ready')) })
+      .mockReturnValue({ watch: retryWatchMock })
+    sender.send.mockClear()
+    emitProviderRegistered('conn-1')
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(retryWatchMock).toHaveBeenCalledTimes(1)
+    expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      worktreePath: '/home/me/repo',
+      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+    })
+
+    warnSpy.mockRestore()
+    await closeAllWatchers()
+    vi.useRealTimers()
+  })
+
+  it('does not resurrect an SSH watch the renderer already unwatched', async () => {
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const watchMock = vi.fn().mockResolvedValue(vi.fn())
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+
+    await handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    handlers['fs:unwatchWorktree'](
+      { sender },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+
+    emitProviderRegistered('conn-1')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(watchMock).toHaveBeenCalledTimes(1)
+    await closeAllWatchers()
+  })
+
+  it('leaves watches on other connections untouched when one provider re-registers', async () => {
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const watchMock = vi.fn().mockResolvedValue(vi.fn())
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+
+    await handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+
+    emitProviderRegistered('conn-2')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(watchMock).toHaveBeenCalledTimes(1)
+    await closeAllWatchers()
+  })
+
+  it('reinstalls one shared watch when several senders share a re-registered connection', async () => {
+    const senderOne = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const senderTwo = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
+    const watchMock = vi.fn().mockResolvedValue(vi.fn())
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+
+    await handlers['fs:watchWorktree'](
+      { sender: senderOne },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    await handlers['fs:watchWorktree'](
+      { sender: senderTwo },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    expect(watchMock).toHaveBeenCalledTimes(1)
+
+    // Per-listener reinstall must still collapse onto one relay watch, and every listener resyncs.
+    emitProviderRegistered('conn-1')
+    await vi.waitFor(() => expect(senderTwo.send).toHaveBeenCalled())
+    expect(watchMock).toHaveBeenCalledTimes(2)
+    for (const sender of [senderOne, senderTwo]) {
+      expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+        worktreePath: '/home/me/repo',
+        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+      })
+    }
+
+    await closeAllWatchers()
+  })
+
+  it('does not reinstall an SSH watch for a renderer that was destroyed', async () => {
+    let destroyed = false
+    const destroyHandlers: (() => void)[] = []
+    const sender = {
+      isDestroyed: () => destroyed,
+      send: vi.fn(),
+      once: vi.fn((_event: string, handler: () => void) => {
+        destroyHandlers.push(handler)
+      }),
+      id: 1
+    }
+    const watchMock = vi.fn().mockResolvedValue(vi.fn())
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+
+    await handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    expect(destroyHandlers).toHaveLength(1)
+
+    destroyed = true
+    for (const handler of destroyHandlers) {
+      handler()
+    }
+
+    emitProviderRegistered('conn-1')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(watchMock).toHaveBeenCalledTimes(1)
+    await closeAllWatchers()
   })
 
   it('shares SSH worktree watchers across renderer senders until the last unwatch', async () => {
@@ -442,7 +561,7 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     expect(watchMock).toHaveBeenCalledTimes(1)
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendOne).toHaveBeenCalledTimes(1)
     expect(sendTwo).toHaveBeenCalledTimes(1)
 
@@ -511,11 +630,34 @@ describe('registerFilesystemWatcherHandlers', () => {
       events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
     })
     const replacementEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
-    replacementEvents([{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
+    await emitRemote(replacementEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(sender.send).toHaveBeenLastCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
       events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
     })
+  })
+
+  it('does not re-arm an SSH watch for a worktree that was successfully deleted', async () => {
+    const watchMock = vi.fn().mockResolvedValue(vi.fn())
+    const closeWatch = vi.fn().mockResolvedValue(undefined)
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock, closeWatch })
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+
+    await handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+    )
+    await closeRemoteWatcherForWorktreePath('conn-1', '/home/me/repo')
+    forgetRemoteWatcherRemovalSnapshot('conn-1', '/home/me/repo')
+
+    // A reconnect can land before the renderer's unwatch; the path no longer exists on the host.
+    emitProviderRegistered('conn-1')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(watchMock).toHaveBeenCalledTimes(1)
+    expect(sender.send).not.toHaveBeenCalled()
+    await closeAllWatchers()
   })
 
   it('does not restore an SSH listener stopped while deletion is pending', async () => {
@@ -583,7 +725,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       'still watched by another client'
     )
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendOne).toHaveBeenCalledTimes(1)
 
     await handlers['fs:watchWorktree'](
@@ -591,7 +733,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     )
     expect(watchMock).toHaveBeenCalledTimes(1)
-    onEvents([{ path: '/home/me/repo/file-2.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file-2.txt', type: 'update' }])
     expect(sendOne).toHaveBeenCalledTimes(2)
     expect(sendTwo).toHaveBeenCalledTimes(1)
 
@@ -630,7 +772,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     await Promise.all([firstWatch, secondWatch])
 
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendOne).toHaveBeenCalledTimes(1)
     expect(sendTwo).toHaveBeenCalledTimes(1)
 
@@ -676,7 +818,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     await Promise.all([firstWatch, secondWatch])
 
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendOne).toHaveBeenCalledTimes(1)
     expect(sendTwo).not.toHaveBeenCalled()
 
@@ -722,7 +864,7 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     expect(unwatchMock).toHaveBeenCalledTimes(1)
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sender.send).not.toHaveBeenCalled()
   })
 
@@ -753,7 +895,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     await Promise.all([firstWatch, secondWatch])
 
     const onEvents = watchMock.mock.calls[0][1]
-    onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
+    await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(senderOne.send).not.toHaveBeenCalled()
     expect(senderTwo.send).toHaveBeenCalledTimes(1)
 

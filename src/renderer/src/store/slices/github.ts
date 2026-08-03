@@ -4,12 +4,6 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
 import { githubProjectIdentityKey } from '../../../../shared/github-project-identity'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { PR_REFRESH_VISIBLE_CANDIDATE_LIMIT } from '../../../../shared/pr-refresh-memory-limits'
-import {
-  GITHUB_WORK_ITEM_FETCH_CONCURRENCY,
-  GitHubWorkItemRequestSlots
-} from './github-work-item-request-slots'
 import type {
   ClassifiedError,
   GitHubOwnerRepo,
@@ -59,7 +53,10 @@ import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
-import { isGitHubWorkItemsQueryTooLarge } from './github-work-items-query-bounds'
+import {
+  GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN,
+  isGitHubWorkItemsQueryTooLarge
+} from './github-work-items-query-bounds'
 import { classifyGitHubUnavailable } from '../../../../shared/github-api-availability'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { translate } from '@/i18n/i18n'
@@ -661,6 +658,9 @@ const CHECKS_CACHE_TTL = 60_000 // 1 minute — checks change more frequently
 const EMPTY_CHECKS_CACHE_TTL = 10_000
 // Why: the work-item list is a browse surface, not a source of truth, so 60s staleness is fine (SWR keeps it current).
 const WORK_ITEMS_CACHE_TTL = 60_000
+// GitHub's Search API serves the page that starts within its first 1000 results;
+// the next page 422s even when the final reachable page crosses the boundary.
+const GITHUB_SEARCH_RESULT_WINDOW = 1000
 // Why: long-lived (matches repos.ts) so the user has time to read + act on persist failures before the toast vanishes.
 const ERROR_TOAST_DURATION = 60_000
 
@@ -704,15 +704,28 @@ export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
   prRefreshStartedHostedReviewEntries.clear()
 }
 
-// Why: the main-side gate is behind IPC, so renderer fan-out must be bounded before promises retain every request.
-const workItemRequestSlots = new GitHubWorkItemRequestSlots()
+// Why: cap fan-out at the renderer boundary (main-side gate is behind IPC, can't stop a stampede in time); 8 balances responsiveness vs gh rate limits.
+const WORK_ITEM_FETCH_CONCURRENCY = 8
+let workItemFetchInFlight = 0
+const workItemFetchWaiters: (() => void)[] = []
 
-function acquireWorkItemSlot(): Promise<void> {
-  return workItemRequestSlots.acquire()
+async function acquireWorkItemSlot(): Promise<void> {
+  if (workItemFetchInFlight < WORK_ITEM_FETCH_CONCURRENCY) {
+    workItemFetchInFlight += 1
+    return
+  }
+  await new Promise<void>((resolve) => workItemFetchWaiters.push(resolve))
+  // Why: the resolver already claimed the slot on our behalf, so don't re-increment here.
 }
 
 function releaseWorkItemSlot(): void {
-  workItemRequestSlots.release()
+  const next = workItemFetchWaiters.shift()
+  if (next) {
+    // Hand the slot off directly (net count unchanged) so a third caller can't race into the cap between decrement and resolve.
+    next()
+    return
+  }
+  workItemFetchInFlight -= 1
 }
 
 export function workItemsCacheKey(
@@ -1957,7 +1970,11 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     page: number
-  ) => Promise<{ items: GitHubWorkItem[]; failedCount: number }>
+  ) => Promise<{
+    items: GitHubWorkItem[]
+    failedCount: number
+    errorTypes: ClassifiedError['type'][]
+  }>
   /** Count items and derive pages from the largest per-repo result set. */
   countWorkItemsAcrossRepos: (
     repos: {
@@ -2653,10 +2670,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
 
     const request = (async () => {
-      let acquiredSlot = false
+      await acquireWorkItemSlot()
       try {
-        await acquireWorkItemSlot()
-        acquiredSlot = true
         const envelope = await listGitHubWorkItemsForRepo(requestContext, {
           limit,
           query: query || undefined,
@@ -2708,9 +2723,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
         throw err
       } finally {
-        if (acquiredSlot) {
-          releaseWorkItemSlot()
-        }
+        releaseWorkItemSlot()
         inflightWorkItemsRequests.delete(inflightKey)
       }
     })()
@@ -2732,10 +2745,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     let requestFailureCount = 0
     let unavailableFailureCount = 0
     let skippedSourceCount = 0
-    const perProjectResults = await mapWithConcurrency(
-      repos,
-      GITHUB_WORK_ITEM_FETCH_CONCURRENCY,
-      async (r) => {
+    const perProjectResults = await Promise.all(
+      repos.map(async (r) => {
         try {
           return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, {
             ...options,
@@ -2770,7 +2781,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           failedCount += 1
           return [] as GitHubWorkItem[]
         }
-      }
+      })
     )
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
     // Why: only claim global unavailability when every eligible source failed for a reachability reason; skipped SSH repos aren't GitHub sources here.
@@ -2783,31 +2794,28 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, page) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
-      return { items: [], failedCount: 0 }
+      return { items: [], failedCount: 0, errorTypes: [] }
     }
     let failedCount = 0
-    const perProjectResults = await mapWithConcurrency(
-      repos,
-      GITHUB_WORK_ITEM_FETCH_CONCURRENCY,
-      async (r) => {
-        let acquiredSlot = false
+    const errorTypes: ClassifiedError['type'][] = []
+    const perProjectResults = await Promise.all(
+      repos.map(async (r) => {
+        const requestState = get()
+        const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
+        const requestSettings = getGitHubWorkItemSourceSettings(
+          requestState.settings,
+          repo,
+          r.sourceContext
+        )
+        const requestContext = getGitHubWorkItemRequestContext(
+          requestState,
+          requestSettings,
+          r.repoId,
+          r.path,
+          r.sourceContext
+        )
+        await acquireWorkItemSlot()
         try {
-          await acquireWorkItemSlot()
-          acquiredSlot = true
-          const requestState = get()
-          const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
-          const requestSettings = getGitHubWorkItemSourceSettings(
-            requestState.settings,
-            repo,
-            r.sourceContext
-          )
-          const requestContext = getGitHubWorkItemRequestContext(
-            requestState,
-            requestSettings,
-            r.repoId,
-            r.path,
-            r.sourceContext
-          )
           const envelope = await listGitHubWorkItemsForRepo(requestContext, {
             limit: perRepoLimit,
             query: query || undefined,
@@ -2815,9 +2823,28 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           })
           // Why: page-N failures aren't in the per-repo banner (keyed on the initial fetch); log them so pagination failures are observable instead of silently truncating (richer surface deferred, design doc §6).
           if (envelope.errors?.issues) {
+            const { type, message } = envelope.errors.issues
+            // Why: only the 1000-result-window 422 may drive the unreachable
+            // clamp; demote other validation errors so they read as failures.
+            errorTypes.push(
+              type === 'validation_error' &&
+                !GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN.test(message)
+                ? 'unknown'
+                : type
+            )
             console.warn(
               `[workItems] next page ${r.repoId} issues-side partial failure:`,
               envelope.errors.issues
+            )
+          }
+          if (envelope.errors?.prs) {
+            // Why: the window 422 is issue-side only — a PR-side validation
+            // error must never join the unreachable signal.
+            const { type } = envelope.errors.prs
+            errorTypes.push(type === 'validation_error' ? 'unknown' : type)
+            console.warn(
+              `[workItems] next page ${r.repoId} prs-side partial failure:`,
+              envelope.errors.prs
             )
           }
           return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
@@ -2829,14 +2856,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           failedCount += 1
           return [] as GitHubWorkItem[]
         } finally {
-          if (acquiredSlot) {
-            releaseWorkItemSlot()
-          }
+          releaseWorkItemSlot()
         }
-      }
+      })
     )
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
-    return { items: merged, failedCount }
+    return { items: merged, failedCount, errorTypes }
   },
 
   countWorkItemsAcrossRepos: async (repos, query, perRepoLimit) => {
@@ -2844,15 +2869,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return { totalCount: 0, totalPages: 0 }
     }
     const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
-    const counts = await mapWithConcurrency(
-      repos,
-      GITHUB_WORK_ITEM_FETCH_CONCURRENCY,
-      async (r) => {
+    // Why: GitHub 422s pages that start past its 1000-result search window.
+    const maxReachablePages = Math.max(1, Math.ceil(GITHUB_SEARCH_RESULT_WINDOW / normalizedLimit))
+    const counts = await Promise.all(
+      repos.map(async (r) => {
         // Why: same stampede cap as item-fetch — without a slot a 90-repo selection fires 90 concurrent count IPCs before the main-side rate-limit guard sees the first 403.
-        let acquiredSlot = false
+        await acquireWorkItemSlot()
         try {
-          await acquireWorkItemSlot()
-          acquiredSlot = true
           const requestState = get()
           const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
           const requestSettings = getGitHubWorkItemSourceSettings(
@@ -2871,17 +2894,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         } catch {
           return 0
         } finally {
-          if (acquiredSlot) {
-            releaseWorkItemSlot()
-          }
+          releaseWorkItemSlot()
         }
-      }
+      })
     )
     return {
       totalCount: counts.reduce((sum, count) => sum + count, 0),
       // Why: repos advance independently by page, so take the max across repos — a sum/page-width undercounts when one repo owns most results.
       totalPages: counts.reduce(
-        (maxPages, count) => Math.max(maxPages, Math.ceil(count / normalizedLimit)),
+        (maxPages, count) =>
+          Math.max(maxPages, Math.min(Math.ceil(count / normalizedLimit), maxReachablePages)),
         0
       )
     }
@@ -3916,18 +3938,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   reportVisibleGitHubPRRefreshCandidates: (worktreeIds, generation) => {
     const state = get()
+    const candidates = worktreeIds
+      .map((id) => {
+        const worktree = findWorktreeById(state, id)
+        return worktree ? buildPRRefreshCandidate(state, worktree) : null
+      })
+      .filter((candidate): candidate is GitHubPRRefreshCandidate => candidate !== null)
     const localCandidates: GitHubPRRefreshCandidate[] = []
-    let candidateCount = 0
-    for (const id of worktreeIds) {
-      const worktree = findWorktreeById(state, id)
-      if (!worktree) {
-        continue
-      }
-      const candidate = buildPRRefreshCandidate(state, worktree)
-      if (!candidate) {
-        continue
-      }
-      candidateCount += 1
+    for (const candidate of candidates) {
       if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
         void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
           repoId: candidate.repoId,
@@ -3936,11 +3954,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           fallbackPRNumber: candidate.fallbackPRNumber ?? null,
           fallbackPRSource: candidate.fallbackPRSource ?? null
         })
-      } else if (shouldEnqueueLocalPRRefresh(candidate)) {
-        localCandidates.push(candidate)
+        continue
       }
-      if (candidateCount >= PR_REFRESH_VISIBLE_CANDIDATE_LIMIT) {
-        break
+      if (shouldEnqueueLocalPRRefresh(candidate)) {
+        localCandidates.push(candidate)
       }
     }
     const reportVisible = window.api.gh.reportVisiblePRRefreshCandidates

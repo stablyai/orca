@@ -7,6 +7,7 @@ import {
 } from './CombinedDiffFileTree'
 import {
   COMBINED_DIFF_FILE_TREE_QUERY_MAX_BYTES,
+  getCombinedDiffBranchEntriesInTreeOrder,
   getFilteredCombinedDiffFileTreeEntries,
   isCombinedDiffFileTreeQueryTooLarge
 } from './combined-diff-file-tree-model'
@@ -60,9 +61,23 @@ describe('CombinedDiffFileTree navigation mapping', () => {
     )
   })
 
+  it('orders commit entries to match the file tree', () => {
+    const entries: GitBranchChangeEntry[] = [
+      { path: 'src/zebra.ts', status: 'modified' },
+      { path: 'README.md', status: 'modified' },
+      { path: 'src/alpha.ts', status: 'modified' },
+      { path: 'docs/guide.md', status: 'modified' }
+    ]
+
+    expect(
+      getCombinedDiffBranchEntriesInTreeOrder('commit', entries).map((entry) => entry.path)
+    ).toEqual(['docs/guide.md', 'src/alpha.ts', 'src/zebra.ts', 'README.md'])
+  })
+
   it('expands a collapsed target section and scrolls to its index', () => {
     const entry: GitBranchChangeEntry = { path: 'src/view.ts', status: 'modified' }
     const toggleSection = vi.fn()
+    const loadSection = vi.fn()
     const scrollToIndex = vi.fn()
     const index = handleCombinedDiffFileTreeNavigation({
       mode: 'branch',
@@ -73,11 +88,13 @@ describe('CombinedDiffFileTree navigation mapping', () => {
         { key: 'combined-branch:src/view.ts' }
       ]),
       toggleSection,
+      loadSection,
       scrollToIndex
     })
 
     expect(index).toBe(1)
     expect(toggleSection).toHaveBeenCalledWith(1)
+    expect(loadSection).toHaveBeenCalledWith(1)
     expect(scrollToIndex).toHaveBeenCalledWith(1)
   })
 

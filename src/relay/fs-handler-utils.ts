@@ -16,7 +16,6 @@ import {
 } from '../shared/text-search'
 import { IMAGE_FILE_MIME_TYPES } from '../shared/image-file-extensions'
 import type { SearchResult as SharedSearchResult } from '../shared/types'
-import { SearchSubprocessLineAccumulator } from '../shared/search-subprocess-lines'
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -93,7 +92,7 @@ export function searchWithRg(
   return new Promise((resolve) => {
     const rgArgs = buildRgArgs(query, rootPath, opts)
     const acc = createAccumulator()
-    const stdoutLines = new SearchSubprocessLineAccumulator()
+    let buffer = ''
     let resolved = false
 
     // Why: spawn can throw synchronously on invalid options (e.g. bad cwd),
@@ -135,11 +134,12 @@ export function searchWithRg(
       }
     }
 
-    function handleStdoutData(chunk: Buffer): void {
-      if (!stdoutLines.push(chunk, processLine)) {
-        acc.truncated = true
-        child.kill()
-        resolveOnce()
+    function handleStdoutData(chunk: string): void {
+      buffer += chunk
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      for (const line of lines) {
+        processLine(line)
       }
     }
 
@@ -152,13 +152,13 @@ export function searchWithRg(
     }
 
     function handleClose(): void {
-      const trailingLine = stdoutLines.finish()
-      if (trailingLine !== null) {
-        processLine(trailingLine)
+      if (buffer) {
+        processLine(buffer)
       }
       resolveOnce()
     }
 
+    child.stdout!.setEncoding('utf-8')
     child.stdout!.on('data', handleStdoutData)
     child.stderr!.on('data', handleStderrData)
     child.once('error', handleError)

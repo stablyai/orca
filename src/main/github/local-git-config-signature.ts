@@ -1,30 +1,23 @@
-import { stat } from 'node:fs/promises'
-import { createHash } from 'node:crypto'
+import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
-import { measureUtf8ByteLength } from '../../shared/utf8-byte-limits'
+import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import type { GitHubRepoContext } from './github-repository-identity'
-import { cacheIdentityDigest } from '../cache-identity-digest'
 
 type LocalGitConfigPaths = {
   commonConfigPath: string
   worktreeConfigPath: string
 }
 
-const localGitConfigSignatureInFlight = new Map<string, Promise<string | undefined>>()
-const LOCAL_GIT_CONFIG_SIGNATURE_MAX_IN_FLIGHT = 32
-const MAX_GIT_CONFIG_BYTES = 4 * 1024 * 1024
-const MAX_GIT_POINTER_FILE_BYTES = 64 * 1024
-const MAX_INCLUDED_CONFIG_FILES = 256
-const MAX_INCLUDED_CONFIG_DEPTH = 8
-const MAX_INCLUDED_CONFIG_PATH_BYTES = 16 * 1024
-const MAX_INCLUDED_CONFIG_AGGREGATE_PATH_BYTES = 2 * 1024 * 1024
+/**
+ * Why: `stat` on a dead network mount is uninterruptible, and this read runs
+ * *before* the bounded remote probe — unbounded, it reintroduces the hang that
+ * probe timeout removes (P1-D). Abandoning the read only costs the shorter
+ * negative-cache TTL that a missing signature already implies.
+ */
+const CONFIG_SIGNATURE_DEADLINE_MS = 2_000
 
-type ConfigSignatureBudget = {
-  admittedFiles: number
-  pathBytes: number
-}
+const localGitConfigSignatureInFlight: CoalescedProbes<string | undefined> = new Map()
 
 export async function readLocalGitConfigSignature(
   context: GitHubRepoContext
@@ -34,24 +27,37 @@ export async function readLocalGitConfigSignature(
     // runtimes are already separated by cache key and probed through git.
     return undefined
   }
-  const cacheKey = cacheIdentityDigest([context.repoPath])
-  const inFlight = localGitConfigSignatureInFlight.get(cacheKey)
-  if (inFlight) {
-    return inFlight
-  }
+  // Why: the deadline is caller-facing only. Bounding the coalesced probe itself
+  // would drop its map entry after 2s while the read runs on, so every later
+  // call would start another unbounded read instead of joining the one already
+  // out — the coalescing that keeps a wedged mount to one read (P1-D).
+  return withConfigSignatureDeadline(
+    runCoalescedProbe(localGitConfigSignatureInFlight, context.repoPath, () =>
+      readUncachedLocalGitConfigSignature(context.repoPath)
+    )
+  )
+}
 
-  const read = readUncachedLocalGitConfigSignature(context.repoPath)
-  if (localGitConfigSignatureInFlight.size >= LOCAL_GIT_CONFIG_SIGNATURE_MAX_IN_FLIGHT) {
-    return read
-  }
-  localGitConfigSignatureInFlight.set(cacheKey, read)
-  try {
-    return await read
-  } finally {
-    if (localGitConfigSignatureInFlight.get(cacheKey) === read) {
-      localGitConfigSignatureInFlight.delete(cacheKey)
+/** Resolves undefined rather than waiting on a read the filesystem may never finish. */
+function withConfigSignatureDeadline(
+  read: Promise<string | undefined>
+): Promise<string | undefined> {
+  return new Promise((settle) => {
+    const timer = setTimeout(() => settle(undefined), CONFIG_SIGNATURE_DEADLINE_MS)
+    if (typeof timer === 'object' && 'unref' in timer) {
+      timer.unref()
     }
-  }
+    void read.then(
+      (signature) => {
+        clearTimeout(timer)
+        settle(signature)
+      },
+      () => {
+        clearTimeout(timer)
+        settle(undefined)
+      }
+    )
+  })
 }
 
 export function __resetLocalGitConfigSignatureCacheForTests(): void {
@@ -67,54 +73,31 @@ async function readUncachedLocalGitConfigSignature(repoPath: string): Promise<st
     readConfigPathSignatures(configPaths.commonConfigPath),
     readConfigPathSignatures(configPaths.worktreeConfigPath)
   ])
-  const digest = createHash('sha256')
-  for (const signature of signatures.flat()) {
-    digest.update(`${signature.length}:`)
-    digest.update(signature)
-  }
-  return digest.digest('base64url')
+  return signatures.flat().join('\0')
 }
 
 async function readConfigPathSignatures(
   configPath: string,
-  visited = new Set<string>(),
-  budget: ConfigSignatureBudget = { admittedFiles: 0, pathBytes: 0 },
-  depth = 0
+  visited = new Set<string>()
 ): Promise<string[]> {
   if (visited.has(configPath)) {
     return []
   }
-  const measuredPath = measureUtf8ByteLength(configPath, {
-    stopAfterBytes: MAX_INCLUDED_CONFIG_PATH_BYTES
-  })
-  if (
-    measuredPath.exceededLimit ||
-    depth > MAX_INCLUDED_CONFIG_DEPTH ||
-    budget.admittedFiles >= MAX_INCLUDED_CONFIG_FILES ||
-    budget.pathBytes + measuredPath.byteLength > MAX_INCLUDED_CONFIG_AGGREGATE_PATH_BYTES
-  ) {
-    return []
-  }
   visited.add(configPath)
-  budget.admittedFiles += 1
-  budget.pathBytes += measuredPath.byteLength
 
   const ownSignature = await readConfigPathSignature(configPath)
   let configText: string
   try {
-    configText = (await readNodeFileWithinLimit(configPath, MAX_GIT_CONFIG_BYTES)).buffer.toString(
-      'utf8'
-    )
+    configText = await readFile(configPath, 'utf8')
   } catch {
     return [ownSignature]
   }
 
   const includedPaths = parseIncludedConfigPaths(configText, dirname(configPath))
-  const signatures = [ownSignature]
-  for (const includedPath of includedPaths) {
-    signatures.push(...(await readConfigPathSignatures(includedPath, visited, budget, depth + 1)))
-  }
-  return signatures
+  const includedSignatures = await Promise.all(
+    includedPaths.map((includedPath) => readConfigPathSignatures(includedPath, visited))
+  )
+  return [ownSignature, ...includedSignatures.flat()]
 }
 
 async function readConfigPathSignature(configPath: string): Promise<string> {
@@ -145,9 +128,6 @@ function parseIncludedConfigPaths(configText: string, baseDir: string): string[]
     const includePath = parseIncludedConfigPath(line)
     if (includePath) {
       includedPaths.push(resolveIncludedConfigPath(includePath, baseDir))
-      if (includedPaths.length >= MAX_INCLUDED_CONFIG_FILES) {
-        break
-      }
     }
   }
   return includedPaths
@@ -259,9 +239,7 @@ async function resolveLocalGitConfigPaths(repoPath: string): Promise<LocalGitCon
   }
 
   try {
-    const gitFile = (
-      await readNodeFileWithinLimit(dotGitPath, MAX_GIT_POINTER_FILE_BYTES)
-    ).buffer.toString('utf8')
+    const gitFile = await readFile(dotGitPath, 'utf8')
     const match = gitFile.match(/^gitdir:\s*(.+?)\s*$/im)
     if (!match) {
       return null
@@ -269,11 +247,7 @@ async function resolveLocalGitConfigPaths(repoPath: string): Promise<LocalGitCon
     const gitDir = resolve(dirname(dotGitPath), match[1])
     let commonGitDir = gitDir
     try {
-      const commonDir = (
-        await readNodeFileWithinLimit(join(gitDir, 'commondir'), MAX_GIT_POINTER_FILE_BYTES)
-      ).buffer
-        .toString('utf8')
-        .trim()
+      const commonDir = (await readFile(join(gitDir, 'commondir'), 'utf8')).trim()
       if (commonDir) {
         commonGitDir = resolve(gitDir, commonDir)
       }

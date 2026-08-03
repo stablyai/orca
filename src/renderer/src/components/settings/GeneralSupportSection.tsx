@@ -9,7 +9,8 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 
-const ORCA_STARGAZERS_URL = 'https://github.com/stablyai/orca/stargazers'
+// Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
+const ORCA_GITHUB_URL = 'https://github.com/stablyai/orca'
 
 type SupportState =
   | 'loading'
@@ -58,7 +59,7 @@ export function GeneralSupportSection({
   const handleStarClick = async (): Promise<void> => {
     if (starState === 'web-fallback') {
       setStarState('opening-github')
-      await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
+      await window.api.shell.openUrl(ORCA_GITHUB_URL)
       if (mountedRef.current) {
         setStarState('web-fallback')
       }

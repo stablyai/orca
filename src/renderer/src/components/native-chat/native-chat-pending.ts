@@ -4,12 +4,7 @@
 // rule (match on normalized user-message content) is unit-testable without React.
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import {
-  clearBoundedScopeCache,
-  deleteBoundedScopeCacheEntry,
-  getBoundedScopeCacheEntry,
-  setBoundedScopeCacheEntry
-} from './native-chat-composer-scope-cache'
+import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   advancedNativeChatUserContentCounts,
@@ -59,7 +54,7 @@ function pendingSendScopeKey(scope: NativeChatPendingSendScope): string {
 }
 
 export function readPendingSendCache(scope: NativeChatPendingSendScope): NativeChatPendingSend[] {
-  return [...(getBoundedScopeCacheEntry(pendingSendCache, pendingSendScopeKey(scope)) ?? [])]
+  return [...(pendingSendCache.get(pendingSendScopeKey(scope)) ?? [])]
 }
 
 export function writePendingSendCache(
@@ -69,7 +64,7 @@ export function writePendingSendCache(
   const next = pending.slice(-PENDING_SEND_LIMIT)
   const key = pendingSendScopeKey(scope)
   if (next.length === 0) {
-    deleteBoundedScopeCacheEntry(pendingSendCache, key)
+    pendingSendCache.delete(key)
   } else {
     // Why: the empty-drain path above clears keys on the normal confirm flow,
     // but a pane closed with an unconfirmed send (agent crash / early close)
@@ -89,7 +84,7 @@ export function appendPendingSendCache(
 }
 
 export function clearPendingSendCacheForTests(): void {
-  clearBoundedScopeCache(pendingSendCache)
+  pendingSendCache.clear()
   pendingSendCounter = 0
 }
 
@@ -309,7 +304,7 @@ function commandMarkerScopeKey(scope: NativeChatCommandMarkerScope): string {
 export function readCommandMarkerCache(
   scope: NativeChatCommandMarkerScope
 ): NativeChatCommandMarker[] {
-  return [...(getBoundedScopeCacheEntry(commandMarkerCache, commandMarkerScopeKey(scope)) ?? [])]
+  return [...(commandMarkerCache.get(commandMarkerScopeKey(scope)) ?? [])]
 }
 
 export function appendCommandMarkerCache(
@@ -322,7 +317,7 @@ export function appendCommandMarkerCache(
   // Why: native/TUI view switches remount the chat surface, but slash commands
   // are not transcript turns, so their local feedback needs a pane-scoped cache.
   const next = [
-    ...(getBoundedScopeCacheEntry(commandMarkerCache, key) ?? []),
+    ...(commandMarkerCache.get(key) ?? []),
     { id: `${sentAt}-${commandMarkerCounter}`, command, sentAt }
   ].slice(-COMMAND_MARKER_LIMIT)
   // Why: the per-key array is capped at 8, but the KEY (paneKey\0agent\0sessionId,
@@ -334,7 +329,7 @@ export function appendCommandMarkerCache(
 }
 
 export function clearCommandMarkerCacheForTests(): void {
-  clearBoundedScopeCache(commandMarkerCache)
+  commandMarkerCache.clear()
   commandMarkerCounter = 0
 }
 

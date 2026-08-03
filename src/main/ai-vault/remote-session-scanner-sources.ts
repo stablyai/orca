@@ -9,11 +9,9 @@ import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
 import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
-import {
-  parseCopilotSessionContent,
-  parseCursorSessionContent,
-  parseHermesSessionContent
-} from './session-scanner-secondary-parsers'
+import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
+import { parseCursorSessionContent } from './session-scanner-cursor-parser'
+import { parseHermesSessionContent } from './session-scanner-hermes-parser'
 import type { FileWithMtime } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexTitles } from './remote-session-scanner-codex-index'

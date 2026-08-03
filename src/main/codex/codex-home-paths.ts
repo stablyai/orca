@@ -3,21 +3,23 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  readFileSync,
   readlinkSync,
   rmdirSync,
   rmSync,
   statSync,
   symlinkSync,
-  unlinkSync,
-  writeFileSync
+  unlinkSync
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { nodeSourceAndCopyContentsEqualSync } from '../../shared/node-source-copy-content-equality'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { join } from 'node:path'
+import {
+  clearCopiedResourceMarker,
+  markCopiedResource,
+  targetIsOwnedFallbackCopy
+} from './codex-managed-home-resource-copy-marker'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
-const CODEX_RESOURCE_COPY_MARKER_MAX_BYTES = 64 * 1024
 
 const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'skills',
@@ -34,8 +36,13 @@ export function getSystemCodexHomePath(): string {
   return join(homedir(), '.codex')
 }
 
+/** Path only; use when a read-only caller must not materialize the mirror. */
+export function resolveOrcaManagedCodexHomePath(): string {
+  return join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
+}
+
 export function getOrcaManagedCodexHomePath(): string {
-  const managedHomePath = join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
+  const managedHomePath = resolveOrcaManagedCodexHomePath()
   mkdirSync(managedHomePath, { recursive: true })
   return managedHomePath
 }
@@ -126,7 +133,7 @@ function linkSystemCodexResource(
     // rewriting an unchanged file across the UNC boundary on every launch.
     if (
       entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY &&
-      nodeSourceAndCopyContentsEqualSync(sourcePath, targetPath)
+      copiedFileContentsMatch(sourcePath, targetPath)
     ) {
       return
     }
@@ -215,6 +222,19 @@ function pathEntryExists(entryPath: string): boolean {
   }
 }
 
+function copiedFileContentsMatch(sourcePath: string, targetPath: string): boolean {
+  try {
+    // Why: reading a FIFO or device synchronously can block Codex launch.
+    // Follow source symlinks, but only compare two regular files.
+    if (!statSync(sourcePath).isFile() || !lstatSync(targetPath).isFile()) {
+      return false
+    }
+    return readFileSync(sourcePath).equals(readFileSync(targetPath))
+  } catch {
+    return false
+  }
+}
+
 function targetAlreadyPointsToSource(targetPath: string, sourcePath: string): boolean {
   try {
     return (
@@ -235,62 +255,6 @@ function linkTargetsMatch(actualTarget: string, expectedTarget: string): boolean
 
 function normalizeWindowsLinkTarget(linkTarget: string): string {
   return linkTarget.replace(/^\\\\\?\\/, '').toLowerCase()
-}
-
-function getResourceCopyMarkerPath(managedHomePath: string, entryName: string): string {
-  return join(managedHomePath, '.orca-resource-copies', `${entryName}.json`)
-}
-
-function markCopiedResource(managedHomePath: string, entryName: string, sourcePath: string): void {
-  const markerPath = getResourceCopyMarkerPath(managedHomePath, entryName)
-  mkdirSync(dirname(markerPath), { recursive: true })
-  writeFileSync(markerPath, `${JSON.stringify({ sourcePath }, null, 2)}\n`, {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
-}
-
-function readCopiedResourceSourcePath(managedHomePath: string, entryName: string): string | null {
-  try {
-    const parsed: unknown = JSON.parse(
-      readNodeFileSyncWithinLimit(
-        getResourceCopyMarkerPath(managedHomePath, entryName),
-        CODEX_RESOURCE_COPY_MARKER_MAX_BYTES
-      ).buffer.toString('utf8')
-    )
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return null
-    }
-    const sourcePath = 'sourcePath' in parsed ? parsed.sourcePath : null
-    return typeof sourcePath === 'string' ? sourcePath : null
-  } catch {
-    return null
-  }
-}
-
-function clearCopiedResourceMarker(managedHomePath: string, entryName: string): void {
-  // Why: a malformed marker directory must not block Codex launch or prevent
-  // an owned resource from being repaired.
-  rmSync(getResourceCopyMarkerPath(managedHomePath, entryName), {
-    recursive: true,
-    force: true
-  })
-}
-
-function targetIsOwnedFallbackCopy(
-  targetPath: string,
-  managedHomePath: string,
-  entryName: string,
-  sourcePath: string
-): boolean {
-  if (readCopiedResourceSourcePath(managedHomePath, entryName) !== sourcePath) {
-    return false
-  }
-  try {
-    return existsSync(targetPath) && !lstatSync(targetPath).isSymbolicLink()
-  } catch {
-    return false
-  }
 }
 
 function removeCopiedResourceIfOwned(

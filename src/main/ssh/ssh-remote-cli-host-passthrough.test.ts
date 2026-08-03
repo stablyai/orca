@@ -19,6 +19,15 @@ import {
   resolveHostCliKillTimeoutMs,
   runHostOrcaCliPassthrough
 } from './ssh-remote-cli-host-passthrough'
+import { resolveOrchestrationAskClientTimeoutMs } from '../../shared/orchestration-ask-timeout'
+import { remoteCliRequestTimeoutMs } from '../../relay/remote-cli-timeout'
+import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import {
+  ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
+} from '../../shared/orchestration-compatibility-evidence'
 
 type FakeChild = EventEmitter & {
   stdout: EventEmitter
@@ -62,7 +71,12 @@ describe('buildHostCliEnv', () => {
         ORCA_TERMINAL_HANDLE: 'term_remote',
         ORCA_WORKTREE_ID: 'repo::/home/alice/wt',
         ORCA_PANE_KEY: 'pane-9',
+        ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
         ORCA_WORKSPACE_ID: 'ws-1',
+        [ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]: 'wsl',
+        [ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]: 'caller-host',
+        [ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]: 'caller-incarnation',
+        [ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]: 'caller-attachment',
         // Why: these are remote-machine paths and must not leak into the host
         // subprocess (PATH would break host binary lookup; user-data would
         // retarget the CLI at a different local instance).
@@ -70,13 +84,24 @@ describe('buildHostCliEnv', () => {
         ORCA_USER_DATA_PATH: '/remote/user-data'
       },
       userDataPath: '/host/user-data',
-      remoteCwd: '/home/alice/wt/sub'
+      remoteCwd: '/home/alice/wt/sub',
+      runtimeAuthority: {
+        kind: 'ssh',
+        targetId: 'saved-target',
+        connectionIncarnation: 'connection-incarnation',
+        attachmentId: 'runtime-attachment'
+      }
     })
 
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_remote')
     expect(env.ORCA_WORKTREE_ID).toBe('repo::/home/alice/wt')
     expect(env.ORCA_PANE_KEY).toBe('pane-9')
+    expect(env.ORCA_AGENT_LAUNCH_TOKEN).toBe('launch-secret')
     expect(env.ORCA_WORKSPACE_ID).toBe('ws-1')
+    expect(env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]).toBe('ssh')
+    expect(env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]).toBe('saved-target')
+    expect(env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]).toBe('connection-incarnation')
+    expect(env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]).toBe('runtime-attachment')
     expect(env.PATH).toBe('/host/bin')
     expect(env.ORCA_USER_DATA_PATH).toBe('/host/user-data')
     expect(env.ORCA_CLI_CWD).toBe('/home/alice/wt/sub')
@@ -95,6 +120,74 @@ describe('resolveHostCliKillTimeoutMs', () => {
       600_000
     )
     expect(resolveHostCliKillTimeoutMs(['worktree', 'list'])).toBe(600_000)
+  })
+
+  it.each([
+    [[], 720_000],
+    [['--timeout-ms', String(Number.MAX_SAFE_INTEGER)], 1_920_000],
+    [['--timeout-ms', String(Number.MAX_SAFE_INTEGER + 1)], 720_000],
+    [['--timeout-ms', '9007199254740991.1'], 720_000],
+    [['--timeout-ms', '1', '--timeout-ms=1800000'], 1_920_000],
+    [['--timeout-ms=1800000', '--timeout-ms', '1'], 600_000],
+    [['--timeout-ms', '1800000', '--timeout-ms'], 720_000],
+    [['--timeout-ms=1800000', '--timeout-ms='], 720_000],
+    [['--timeout-ms=1800000', '--timeout-ms', 'bad'], 720_000],
+    [['--timeout-ms', 'bad', '--timeout-ms=1800000'], 1_920_000],
+    [['--timeout-ms=bad', '--timeout-ms', '1800000'], 1_920_000]
+  ])('bounds ask child timers with last-wins flags %#', (timeoutArgs, expected) => {
+    expect(resolveHostCliKillTimeoutMs(['orchestration', '--json', 'ask', ...timeoutArgs])).toBe(
+      expected
+    )
+  })
+
+  it('does not apply the ask maximum to other commands', () => {
+    expect(resolveHostCliKillTimeoutMs(['terminal', 'wait', '--timeout-ms', '1800001'])).toBe(
+      1_920_001
+    )
+  })
+
+  it.each(['+1000000', '1000000.0', '1e6'])(
+    'extends non-ask child timers using CLI-compatible integer syntax %s',
+    (raw) => {
+      expect(resolveHostCliKillTimeoutMs(['terminal', 'wait', '--timeout-ms', raw])).toBe(1_120_000)
+    }
+  )
+
+  it.each([
+    'Infinity',
+    '1.5',
+    '-1',
+    'bad',
+    String(Number.MAX_SAFE_INTEGER),
+    String(MAX_TIMER_DELAY_MS - 120_000 + 1)
+  ])('falls back to the default kill timer when a non-ask --timeout-ms %s is unusable', (raw) => {
+    expect(resolveHostCliKillTimeoutMs(['terminal', 'wait', '--timeout-ms', raw])).toBe(600_000)
+  })
+
+  it('keeps the largest non-ask kill timer that stays inside the timer range', () => {
+    expect(
+      resolveHostCliKillTimeoutMs([
+        'terminal',
+        'wait',
+        '--timeout-ms',
+        String(MAX_TIMER_DELAY_MS - 120_000)
+      ])
+    ).toBe(MAX_TIMER_DELAY_MS)
+  })
+
+  it.each<[string[], number | undefined]>([
+    [[], undefined],
+    [['--timeout-ms', '1'], 1],
+    [['--timeout-ms', String(Number.MAX_SAFE_INTEGER)], Number.MAX_SAFE_INTEGER],
+    [['--timeout-ms', String(Number.MAX_SAFE_INTEGER + 1)], undefined]
+  ])('keeps inner, host, and relay ask deadlines ordered %#', (timeoutArgs, parsedTimeout) => {
+    const argv = ['orchestration', 'ask', '--to', 'term_x', ...timeoutArgs]
+    const innerTimeout = resolveOrchestrationAskClientTimeoutMs(parsedTimeout)
+    const hostTimeout = resolveHostCliKillTimeoutMs(argv)
+    const relayTimeout = remoteCliRequestTimeoutMs({ argv })
+
+    expect(innerTimeout).toBeLessThan(hostTimeout)
+    expect(hostTimeout).toBeLessThan(relayTimeout!)
   })
 })
 
@@ -188,6 +281,17 @@ describe('runHostOrcaCliPassthrough', () => {
         { ...BASE_OPTIONS, entryExists: () => false, spawn: spawn as never }
       )
     ).rejects.toBeInstanceOf(HostCliUnavailableError)
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('rejects an invalid injected kill timeout before spawning', async () => {
+    const spawn = vi.fn()
+    await expect(
+      runHostOrcaCliPassthrough(
+        { argv: ['status'], cwd: '/', env: {} },
+        { ...BASE_OPTIONS, spawn: spawn as never, killTimeoutMs: 2_147_483_648 }
+      )
+    ).rejects.toBeInstanceOf(RangeError)
     expect(spawn).not.toHaveBeenCalled()
   })
 

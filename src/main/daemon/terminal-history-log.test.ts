@@ -1,9 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   decodeLogHeader,
   decodeTerminalHistoryLog,
   encodeLogBatch,
-  encodeLogBatchWithinLimit,
   encodeLogHeader,
   LOG_HEADER_BYTES
 } from './terminal-history-log'
@@ -43,16 +42,6 @@ describe('terminal history log codec', () => {
     expect(log!.generation).toBe(7)
     expect(log!.truncatedTail).toBe(false)
     expect(log!.batches).toEqual([{ seq: 3, records }])
-  })
-
-  it('rejects an oversized batch before allocating its encoded buffer', () => {
-    const allocation = vi.spyOn(Buffer, 'allocUnsafe')
-
-    expect(
-      encodeLogBatchWithinLimit(1, [{ kind: 'output', data: 'escaped 🐋 output' }], 12)
-    ).toBeNull()
-    expect(allocation).not.toHaveBeenCalled()
-    allocation.mockRestore()
   })
 
   it('decodes multiple contiguous batches', () => {
@@ -104,6 +93,14 @@ describe('terminal history log codec', () => {
       encodeLogBatch(1, [{ kind: 'output', data: 'x' }]).subarray(9)
     ])
     expect(decodeTerminalHistoryLog(orphanRecord)).toBeNull()
+  })
+
+  it('rejects a clear frame with a payload', () => {
+    const log = buildLog(1, [{ seq: 1, records: [{ kind: 'clear' }] }])
+    const clearFrameOffset = log.length - 5
+    log.writeUInt32LE(1, clearFrameOffset + 1)
+
+    expect(decodeTerminalHistoryLog(Buffer.concat([log, Buffer.from('x')]))).toBeNull()
   })
 
   it('decodes an empty log (header only)', () => {

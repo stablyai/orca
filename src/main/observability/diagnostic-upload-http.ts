@@ -1,7 +1,6 @@
 import { request as httpRequest, type ClientRequest, type IncomingMessage } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { URL } from 'node:url'
-import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 
 export const MAX_RESPONSE_BYTES = 1024 * 1024
 
@@ -41,7 +40,7 @@ function postRaw(
     let settled = false
     let req: ClientRequest | null = null
     let res: IncomingMessage | null = null
-    const responseBody = new GrowingByteBuffer()
+    const chunks: Buffer[] = []
     let responseBytes = 0
     function cleanupListeners(): void {
       req?.off('error', onRequestError)
@@ -55,7 +54,6 @@ function postRaw(
         return
       }
       settled = true
-      responseBody.clear()
       cleanupListeners()
       resolve(value)
     }
@@ -67,7 +65,6 @@ function postRaw(
         return
       }
       settled = true
-      responseBody.clear()
       if (options.destroyRequest) {
         req?.destroy()
       }
@@ -88,11 +85,11 @@ function postRaw(
         })
         return
       }
-      responseBody.append(chunk)
+      chunks.push(chunk)
     }
     function onResponseEnd(): void {
       const status = res?.statusCode ?? 0
-      const text = responseBody.takeString()
+      const text = Buffer.concat(chunks).toString('utf8')
       if (status >= 200 && status < 300) {
         try {
           resolveOnce(text.length > 0 ? JSON.parse(text) : {})

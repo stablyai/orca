@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Dir, Dirent, Stats } from 'node:fs'
+import type { Dirent, Stats } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 
-const { getLegacyCopiedCodexSessionBridgeScanPreferenceMock, opendirMock, statMock } = vi.hoisted(
+const { getLegacyCopiedCodexSessionBridgeScanPreferenceMock, readdirMock, statMock } = vi.hoisted(
   () => ({
     getLegacyCopiedCodexSessionBridgeScanPreferenceMock: vi.fn(),
-    opendirMock: vi.fn<(dirPath: string) => Promise<Dir>>(),
+    readdirMock: vi.fn<(dirPath: string) => Promise<Dirent[]>>(),
     statMock: vi.fn<(filePath: string) => Promise<Stats>>()
   })
 )
@@ -15,7 +15,7 @@ vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
   return {
     ...actual,
-    opendir: opendirMock,
+    readdir: readdirMock,
     stat: statMock
   }
 })
@@ -49,44 +49,26 @@ const largeSessionEntries = Array.from({ length: FILE_COUNT }, (_, index) =>
   dirent(`session-${index}.jsonl`, 'file')
 )
 
-function directory(entries: Dirent[]): Dir {
-  return {
-    async *[Symbol.asyncIterator]() {
-      yield* entries
-    }
-  } as Dir
-}
-
-function generatedFileDirectory(count: number): Dir {
-  return {
-    async *[Symbol.asyncIterator]() {
-      for (let index = 0; index < count; index++) {
-        yield dirent(`session-${index}.jsonl`, 'file')
-      }
-    }
-  } as Dir
-}
-
 describe('listCodexSessionFiles large directories', () => {
   beforeEach(() => {
     getLegacyCopiedCodexSessionBridgeScanPreferenceMock.mockReset()
     getLegacyCopiedCodexSessionBridgeScanPreferenceMock.mockReturnValue(null)
-    opendirMock.mockReset()
+    readdirMock.mockReset()
     statMock.mockReset()
   })
 
   it('keeps nested session scans past the JavaScript spread-argument limit', async () => {
-    opendirMock.mockImplementation(async (dirPath) => {
+    readdirMock.mockImplementation(async (dirPath) => {
       if (dirPath === RUNTIME_SESSIONS_ROOT) {
-        return directory([dirent('bulk', 'directory')])
+        return [dirent('bulk', 'directory')]
       }
       if (dirPath === RUNTIME_BULK_DIR) {
-        return directory(largeSessionEntries)
+        return largeSessionEntries
       }
       if (dirPath === SYSTEM_SESSIONS_ROOT) {
-        return directory([])
+        return []
       }
-      throw new Error(`Unexpected opendir path: ${dirPath}`)
+      throw new Error(`Unexpected readdir path: ${dirPath}`)
     })
     statMock.mockImplementation(async (filePath) => {
       const match = /session-(\d+)\.jsonl$/.exec(filePath.replaceAll('\\', '/'))
@@ -100,25 +82,5 @@ describe('listCodexSessionFiles large directories', () => {
 
     await expect(listCodexSessionFiles()).resolves.toHaveLength(FILE_COUNT)
     expect(getLegacyCopiedCodexSessionBridgeScanPreferenceMock).not.toHaveBeenCalled()
-  })
-
-  it('fails closed instead of silently omitting a rollout past capacity', async () => {
-    opendirMock.mockImplementation(async (dirPath) => {
-      if (dirPath === RUNTIME_SESSIONS_ROOT) {
-        return generatedFileDirectory(200_001)
-      }
-      if (dirPath === SYSTEM_SESSIONS_ROOT) {
-        return directory([])
-      }
-      throw new Error(`Unexpected opendir path: ${dirPath}`)
-    })
-
-    const { listCodexSessionFiles } = await import('./scanner')
-
-    await expect(listCodexSessionFiles()).rejects.toMatchObject({
-      name: 'UsageHistoryScanCapacityError',
-      resource: 'files',
-      limit: 200_000
-    })
   })
 })

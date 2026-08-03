@@ -55,7 +55,6 @@ import {
   closeMR,
   diagnoseAuth,
   getRateLimit,
-  GITLAB_RATE_LIMIT_CACHE_HOST_MAX_BYTES,
   listMergeRequests,
   listWorkItems,
   mergeMR,
@@ -66,6 +65,7 @@ import {
   updateMRReviewers
 } from './client'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
+import { _resetKnownHostsCache } from './gitlab-known-host-probe'
 
 /** Answer the real default-branch resolver probes (#9171 guard). */
 function primeGitDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
@@ -93,6 +93,7 @@ describe('gitlab client — MR operations', () => {
     gitExecFileAsyncMock.mockReset()
     primeGitDefaultBranch()
     __resetRepoDefaultBranchCacheForTests()
+    _resetKnownHostsCache()
     _resetGitLabRateLimitCache()
     getGlabKnownHostsMock.mockResolvedValue(['gitlab.com'])
     resolveIssueSourceMock.mockResolvedValue({
@@ -289,6 +290,39 @@ describe('gitlab client — MR operations', () => {
         allowDefaultWslFallback: false
       })
     })
+
+    it('merges many authenticated hosts with one cache scan', async () => {
+      const hostCount = 256
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: Array.from(
+          { length: hostCount },
+          (_, index) => `Logged in to gitlab-${index}.example.test as user`
+        ).join('\n'),
+        stderr: ''
+      })
+      const originalMap = Array.prototype.map
+      let knownHostCacheScans = 0
+      const mapSpy = vi.spyOn(Array.prototype, 'map').mockImplementation(function (
+        this: unknown[],
+        callback: (value: unknown, index: number, array: unknown[]) => unknown,
+        thisArg?: unknown
+      ): unknown[] {
+        if (this[0] === 'gitlab.com' && this.every((value) => typeof value === 'string')) {
+          knownHostCacheScans += 1
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg])
+      })
+
+      try {
+        await expect(diagnoseAuth()).resolves.toMatchObject({
+          authenticated: true,
+          hosts: expect.any(Array)
+        })
+      } finally {
+        mapSpy.mockRestore()
+      }
+      expect(knownHostCacheScans).toBe(1)
+    })
   })
 
   describe('getRateLimit', () => {
@@ -339,15 +373,6 @@ describe('gitlab client — MR operations', () => {
       }
 
       expect(_getGitLabRateLimitCacheSize()).toBe(64)
-    })
-
-    it('does not retain an oversized host snapshot', async () => {
-      glabApiWithHeadersMock.mockResolvedValue({ body: '{}', headers: {} })
-      await getRateLimit({
-        host: 'h'.repeat(GITLAB_RATE_LIMIT_CACHE_HOST_MAX_BYTES + 1),
-        force: true
-      })
-      expect(_getGitLabRateLimitCacheSize()).toBe(0)
     })
   })
 

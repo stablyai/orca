@@ -1,22 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  AI_VAULT_JSON_STRUCTURE_LIMITS,
+  extractFullFirstUserPromptText,
   extractPreviewContentText,
   normalizeAgentSessionsDir,
+  normalizeFullFirstUserPromptText,
   normalizePreviewText,
-  normalizeTitleText,
-  parseJsonObject
+  normalizeTitleText
 } from './session-scanner-values'
 
 describe('AI Vault session scanner text values', () => {
-  it('rejects structurally amplified JSON before parsing', () => {
-    const parseSpy = vi.spyOn(JSON, 'parse')
-    const amplified = `[${'0,'.repeat(AI_VAULT_JSON_STRUCTURE_LIMITS.structuralTokens)}0]`
-
-    expect(parseJsonObject(amplified)).toBeNull()
-    expect(parseSpy).not.toHaveBeenCalled()
-  })
-
   it('normalizes compact title text without surfacing hidden context blocks', () => {
     expect(
       normalizeTitleText(
@@ -61,6 +53,23 @@ describe('AI Vault session scanner text values', () => {
     const result = normalizePreviewText(`${'a'.repeat(216)}😀tail`)
 
     expect(result).toBe(`${'a'.repeat(216)}...`)
+  })
+
+  it('preserves full first-prompt text including newlines for copy', () => {
+    const body = `First prompt line one\n\nline two ${'word '.repeat(100)}`
+    expect(normalizeFullFirstUserPromptText(body)).toBe(body.trim())
+    expect(extractFullFirstUserPromptText([{ type: 'text', text: body }])).toBe(body.trim())
+  })
+
+  it('reads Codex input_text blocks and ignores tool blocks', () => {
+    const body = `Review the PR\n\n${'detail '.repeat(50).trimEnd()}`
+    expect(extractFullFirstUserPromptText([{ type: 'input_text', text: body }])).toBe(body)
+    expect(
+      extractFullFirstUserPromptText([
+        { type: 'tool_result', content: 'src/main/window.ts was updated' },
+        { type: 'text', text: 'Please continue the editor refactor' }
+      ])
+    ).toBe('Please continue the editor refactor')
   })
 
   it('expands Pi and OMP agent homes to their session directories', () => {

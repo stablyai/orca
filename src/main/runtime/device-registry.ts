@@ -3,28 +3,15 @@
 // compromising one device doesn't expose others. The registry is a simple
 // JSON file with hardened permissions matching the runtime metadata pattern.
 import { randomBytes, randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { JsonStringifyByteLimitError } from '../../shared/node-bounded-json-stringify'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
-import { writeSecureJsonFileWithinLimit } from '../../shared/bounded-secure-json-file'
-import { hardenExistingSecureFile } from '../../shared/secure-file'
+import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 
 export type { DeviceScope }
-
-export const MAX_DEVICE_REGISTRY_FILE_BYTES = 1024 * 1024
-export const MAX_DEVICE_REGISTRY_ENTRIES = 4096
-
-export class DeviceRegistryCapacityError extends Error {
-  constructor() {
-    super('Device registry exceeds its durable capacity')
-    this.name = 'DeviceRegistryCapacityError'
-  }
-}
 
 export type DeviceEntry = {
   deviceId: string
@@ -74,9 +61,6 @@ export class DeviceRegistry {
     name: string,
     scope: DeviceScope
   ): DeviceEntry {
-    if (existingDevices.length >= MAX_DEVICE_REGISTRY_ENTRIES) {
-      throw new DeviceRegistryCapacityError()
-    }
     const entry: DeviceEntry = {
       deviceId: randomUUID(),
       name,
@@ -118,10 +102,12 @@ export class DeviceRegistry {
   }
 
   removeDevice(deviceId: string): boolean {
-    const nextDevices = this.devices.filter((device) => device.deviceId !== deviceId)
+    const nextDevices = this.devices.filter((d) => d.deviceId !== deviceId)
     if (nextDevices.length === this.devices.length) {
       return false
     }
+    // Why: persist before memory swap so a failed write does not drop a device
+    // only in-process while disk still lists it (and vice versa on reload).
     this.save(nextDevices)
     this.devices = nextDevices
     return true
@@ -136,30 +122,30 @@ export class DeviceRegistry {
   }
 
   setRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
-    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
-    if (!device || binding.relayDeviceId !== deviceId) {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    if (index < 0 || binding.relayDeviceId !== deviceId) {
       return false
     }
-    this.save(
-      this.devices.map((candidate) =>
-        candidate === device ? { ...candidate, relayBinding: binding } : candidate
-      )
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, relayBinding: binding } : device
     )
-    device.relayBinding = binding
+    this.save(nextDevices)
+    this.devices = nextDevices
     return true
   }
 
   setMobilePairingConnectionMode(deviceId: string, mode: MobilePairingConnectionMode): boolean {
-    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
-    if (!device || device.scope !== 'mobile') {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    if (index < 0 || this.devices[index]?.scope !== 'mobile') {
       return false
     }
-    this.save(
-      this.devices.map((candidate) =>
-        candidate === device ? { ...candidate, mobilePairingConnectionMode: mode } : candidate
-      )
+    // Why: persist before swapping memory so a failed write does not leave a
+    // mode the UI/runtime believe was stored.
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, mobilePairingConnectionMode: mode } : device
     )
-    device.mobilePairingConnectionMode = mode
+    this.save(nextDevices)
+    this.devices = nextDevices
     return true
   }
 
@@ -182,16 +168,18 @@ export class DeviceRegistry {
   }
 
   updateLastSeen(deviceId: string): void {
-    const device = this.devices.find((d) => d.deviceId === deviceId)
-    if (device) {
-      const lastSeenAt = Date.now()
-      this.save(
-        this.devices.map((candidate) =>
-          candidate === device ? { ...candidate, lastSeenAt } : candidate
-        )
-      )
-      device.lastSeenAt = lastSeenAt
+    const index = this.devices.findIndex((d) => d.deviceId === deviceId)
+    if (index < 0) {
+      return
     }
+    // Why: persist before memory swap so a failed write cannot leave a scanned
+    // device looking never-scanned on disk, where rotation would drop it.
+    const seenAt = Date.now()
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, lastSeenAt: seenAt } : device
+    )
+    this.save(nextDevices)
+    this.devices = nextDevices
   }
 
   private load(): void {
@@ -201,16 +189,8 @@ export class DeviceRegistry {
     }
     try {
       hardenExistingSecureFile(this.registryPath)
-      const parsed: unknown = JSON.parse(
-        readNodeFileSyncWithinLimit(
-          this.registryPath,
-          MAX_DEVICE_REGISTRY_FILE_BYTES
-        ).buffer.toString('utf8')
-      )
-      if (!Array.isArray(parsed) || parsed.length > MAX_DEVICE_REGISTRY_ENTRIES) {
-        throw new DeviceRegistryCapacityError()
-      }
-      this.devices = (parsed as DeviceEntry[]).map((device) => ({
+      const parsed = JSON.parse(readFileSync(this.registryPath, 'utf-8')) as DeviceEntry[]
+      this.devices = parsed.map((device) => ({
         ...device,
         // Why: older registries only existed for phone pairing. Treat missing
         // scope as mobile so legacy device tokens do not gain new CLI powers.
@@ -224,14 +204,7 @@ export class DeviceRegistry {
     }
   }
 
-  private save(devices: DeviceEntry[] = this.devices): void {
-    try {
-      writeSecureJsonFileWithinLimit(this.registryPath, devices, MAX_DEVICE_REGISTRY_FILE_BYTES)
-    } catch (error) {
-      if (error instanceof JsonStringifyByteLimitError) {
-        throw new DeviceRegistryCapacityError()
-      }
-      throw error
-    }
+  private save(devices: DeviceEntry[]): void {
+    writeSecureJsonFile(this.registryPath, devices)
   }
 }

@@ -57,6 +57,22 @@ export type WorkspaceCreateTaskItem =
 
 export type WorkspaceCreateParams = Record<string, unknown>
 
+/**
+ * `worktree.create` fields for launching the picked agent in a fresh session.
+ *
+ * Why: send the agent id so the host resolves launch args (permission flags)
+ * and host-shell quoting, matching the "+" new-tab and CLI paths.
+ */
+export function agentLaunchCreateFields(agentId: TuiAgent | undefined): {
+  startupAgent?: TuiAgent
+  createdWithAgent?: TuiAgent
+} {
+  if (!agentId) {
+    return {}
+  }
+  return { startupAgent: agentId, createdWithAgent: agentId }
+}
+
 export function buildTaskWorkspaceCreateParams(args: {
   item: WorkspaceCreateTaskItem
   targetRepoId: string

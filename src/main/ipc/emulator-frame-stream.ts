@@ -6,94 +6,26 @@ type FrameStreamSession = {
   owner: WebContents
   stream: MjpegFrameStream
   onOwnerDestroyed: () => void
-  nextDeliveryId: number
-  inFlightDeliveryId: number | null
-  pendingFrame: ArrayBuffer | null
-  errorDelivered: boolean
 }
-
-export const EMULATOR_FRAME_STREAM_MAX_SESSIONS_TOTAL = 8
-export const EMULATOR_FRAME_STREAM_MAX_SESSIONS_PER_RENDERER = 2
 
 const sessions = new Map<string, FrameStreamSession>()
 
-function assertFrameStreamCapacity(owner: WebContents): void {
-  let ownerSessionCount = 0
-  for (const session of sessions.values()) {
-    if (session.owner === owner) {
-      ownerSessionCount += 1
-    }
-  }
-  if (ownerSessionCount >= EMULATOR_FRAME_STREAM_MAX_SESSIONS_PER_RENDERER) {
-    throw new Error(
-      `A renderer can have at most ${EMULATOR_FRAME_STREAM_MAX_SESSIONS_PER_RENDERER} active emulator frame streams.`
-    )
-  }
-  if (sessions.size >= EMULATOR_FRAME_STREAM_MAX_SESSIONS_TOTAL) {
-    throw new Error(
-      `Orca can have at most ${EMULATOR_FRAME_STREAM_MAX_SESSIONS_TOTAL} active emulator frame streams.`
-    )
-  }
-}
-
-function stopFrameStream(streamId: string, owner: WebContents): void {
+function stopFrameStream(streamId: string): void {
   const session = sessions.get(streamId)
-  if (!session || session.owner !== owner) {
+  if (!session) {
     return
   }
-  sessions.delete(streamId)
+  session.stream.stop()
   // Why: `.once('destroyed')` self-removes only when that event fires (window
   // close), so an explicit stop must drop it or each show/hide cycle leaks one.
   session.owner.removeListener('destroyed', session.onOwnerDestroyed)
-  session.pendingFrame = null
-  session.stream.stop()
+  sessions.delete(streamId)
 }
 
 function frameToArrayBuffer(frame: Buffer<ArrayBufferLike>): ArrayBuffer {
   const arrayBuffer = new ArrayBuffer(frame.byteLength)
   new Uint8Array(arrayBuffer).set(frame)
   return arrayBuffer
-}
-
-function sendFrame(streamId: string, session: FrameStreamSession, bytes: ArrayBuffer): void {
-  const deliveryId = session.nextDeliveryId
-  session.nextDeliveryId += 1
-  session.inFlightDeliveryId = deliveryId
-  try {
-    session.owner.send('emulator:frameStreamFrame', { streamId, deliveryId, bytes })
-  } catch {
-    stopFrameStream(streamId, session.owner)
-  }
-}
-
-function queueFrame(streamId: string, frame: Buffer<ArrayBufferLike>): void {
-  const session = sessions.get(streamId)
-  if (!session || session.owner.isDestroyed()) {
-    return
-  }
-  const bytes = frameToArrayBuffer(frame)
-  if (session.inFlightDeliveryId !== null) {
-    session.pendingFrame = bytes
-    return
-  }
-  sendFrame(streamId, session, bytes)
-}
-
-function acknowledgeFrame(
-  owner: WebContents,
-  args: { streamId: string; deliveryId: number }
-): void {
-  const session = sessions.get(args.streamId)
-  if (!session || session.owner !== owner || session.inFlightDeliveryId !== args.deliveryId) {
-    return
-  }
-  session.inFlightDeliveryId = null
-  session.errorDelivered = false
-  const pendingFrame = session.pendingFrame
-  session.pendingFrame = null
-  if (pendingFrame) {
-    sendFrame(args.streamId, session, pendingFrame)
-  }
 }
 
 export function registerEmulatorFrameStreamHandlers(): void {
@@ -113,56 +45,31 @@ export function registerEmulatorFrameStreamHandlers(): void {
         args.streamUrl,
         {
           onError: (message) => {
-            const session = sessions.get(streamId)
-            if (!owner.isDestroyed() && session && !session.errorDelivered) {
-              session.errorDelivered = true
-              try {
-                owner.send('emulator:frameStreamError', { streamId, message })
-              } catch {
-                stopFrameStream(streamId, owner)
-              }
+            if (!owner.isDestroyed()) {
+              owner.send('emulator:frameStreamError', { streamId, message })
             }
           },
-          onFrame: (frame) => queueFrame(streamId, frame)
+          onFrame: (frame) => {
+            if (!owner.isDestroyed()) {
+              owner.send('emulator:frameStreamFrame', {
+                streamId,
+                bytes: frameToArrayBuffer(frame)
+              })
+            }
+          }
         },
         args.streamKey
       )
 
-      assertFrameStreamCapacity(owner)
-      const onOwnerDestroyed = (): void => stopFrameStream(streamId, owner)
-      sessions.set(streamId, {
-        owner,
-        stream,
-        onOwnerDestroyed,
-        nextDeliveryId: 1,
-        inFlightDeliveryId: null,
-        pendingFrame: null,
-        errorDelivered: false
-      })
+      const onOwnerDestroyed = (): void => stopFrameStream(streamId)
+      sessions.set(streamId, { owner, stream, onOwnerDestroyed })
       owner.once('destroyed', onOwnerDestroyed)
-      try {
-        stream.start()
-      } catch (error) {
-        stopFrameStream(streamId, owner)
-        throw error
-      }
+      stream.start()
       return { streamId }
     }
   )
 
-  ipcMain.handle('emulator:frameStreamStop', (event, args: { streamId: string }) => {
-    stopFrameStream(args.streamId, event.sender)
+  ipcMain.handle('emulator:frameStreamStop', (_event, args: { streamId: string }) => {
+    stopFrameStream(args.streamId)
   })
-  ipcMain.on(
-    'emulator:frameStreamFrameAck',
-    (event, args: { streamId: string; deliveryId: number }) => {
-      if (
-        typeof args?.streamId === 'string' &&
-        Number.isSafeInteger(args.deliveryId) &&
-        args.deliveryId > 0
-      ) {
-        acknowledgeFrame(event.sender, args)
-      }
-    }
-  )
 }

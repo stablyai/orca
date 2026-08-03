@@ -1,7 +1,18 @@
 import type { GlobalSettings, OrcaHooks } from '../../../shared/types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+
+function getHookInspectionTarget(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  hostId?: ExecutionHostId
+): ReturnType<typeof getActiveRuntimeTarget> {
+  const parsedHost = parseExecutionHostId(hostId)
+  if (parsedHost?.kind === 'runtime') {
+    return { kind: 'environment', environmentId: parsedHost.environmentId }
+  }
+  return parsedHost ? { kind: 'local' } : getActiveRuntimeTarget(settings)
+}
 
 export type HookCheckResult = {
   status?: 'ok' | 'error'
@@ -24,7 +35,7 @@ export async function checkRuntimeHooks(
   repoId: string,
   hostId?: ExecutionHostId
 ): Promise<HookCheckResult> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getHookInspectionTarget(settings, hostId)
   if (target.kind !== 'environment') {
     return window.api.hooks.check({ repoId, ...(hostId ? { hostId } : {}) })
   }
@@ -38,11 +49,12 @@ export async function checkRuntimeHooks(
 
 export async function inspectRuntimeSetupScriptImports(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  repoId: string
+  repoId: string,
+  hostId?: ExecutionHostId
 ): Promise<SetupScriptImportCandidate[]> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getHookInspectionTarget(settings, hostId)
   if (target.kind !== 'environment') {
-    return window.api.hooks.inspectSetupScriptImports({ repoId })
+    return window.api.hooks.inspectSetupScriptImports({ repoId, ...(hostId ? { hostId } : {}) })
   }
   return callRuntimeRpc<SetupScriptImportCandidate[]>(
     target,

@@ -1,11 +1,7 @@
-import { gitExecFileAsync, glabExecFileAsync } from '../git/runner'
+import { glabExecFileAsync } from '../git/runner'
+import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
 import type { IssueSourcePreference } from '../../shared/types'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
-import {
-  buildRepositoryRefCacheKey,
-  RepositoryRefCache
-} from '../source-control/repository-ref-cache'
 import {
   parseGlabAuthStatusHosts,
   rememberGlabKnownHost,
@@ -22,23 +18,14 @@ import {
 export { DEFAULT_GITLAB_HOSTS, parseGitLabProjectRef }
 export type { ProjectRef }
 export {
-  GLAB_KNOWN_HOST_MAX_BYTES,
-  GLAB_KNOWN_HOSTS_CONTEXT_KEYS_MAX_BYTES,
-  GLAB_KNOWN_HOSTS_CONTEXT_KEY_MAX_BYTES,
-  GLAB_KNOWN_HOSTS_CONTEXT_MAX_ENTRIES,
-  GLAB_KNOWN_HOSTS_MAX_BYTES,
-  GLAB_KNOWN_HOSTS_MAX_ENTRIES,
-  GLAB_KNOWN_HOSTS_MAX_IN_FLIGHT,
-  GLAB_KNOWN_HOSTS_OUTPUT_MAX_BYTES,
-  _getKnownHostsCacheState,
   _resetKnownHostsCache,
   getGlabKnownHosts,
-  parseGlabAuthStatusHosts,
-  rememberGlabKnownHost
+  parseGlabAuthStatusHosts
 } from './gitlab-known-host-probe'
 export type { LocalGitExecOptions } from './gitlab-known-host-probe'
 
-const projectRefCache = new RepositoryRefCache<ProjectRef>()
+const PROJECT_REF_CACHE_MAX_ENTRIES = 512
+const projectRefCache = new Map<string, ProjectRef | null>()
 
 /** @internal - exposed for tests only */
 export function _resetProjectRefCache(): void {
@@ -51,6 +38,17 @@ export function _getProjectRefCacheSize(): number {
   return projectRefCache.size
 }
 
+function rememberProjectRefCacheEntry(cacheKey: string, value: ProjectRef | null): void {
+  projectRefCache.set(cacheKey, value)
+  while (projectRefCache.size > PROJECT_REF_CACHE_MAX_ENTRIES) {
+    const oldestKey = projectRefCache.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    projectRefCache.delete(oldestKey)
+  }
+}
+
 export async function getProjectRefForRemote(
   repoPath: string,
   remoteName: string,
@@ -59,13 +57,12 @@ export async function getProjectRefForRemote(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
   const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
-  const cacheKey = buildRepositoryRefCacheKey([runtimeKey, repoPath, remoteName, ...knownHosts])
-  const cached = projectRefCache.get(cacheKey)
-  if (cached.found) {
-    return cached.value
+  const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}\0${knownHosts.join(',')}`
+  if (projectRefCache.has(cacheKey)) {
+    return projectRefCache.get(cacheKey)!
   }
 
-  const probe = () =>
+  return runProjectRefProbeOnce(cacheKey, () =>
     resolveProjectRefForRemote(
       repoPath,
       remoteName,
@@ -74,7 +71,7 @@ export async function getProjectRefForRemote(
       cacheKey,
       localGitOptions
     )
-  return cacheKey === null ? probe() : runProjectRefProbeOnce(cacheKey, probe)
+  )
 }
 
 async function resolveProjectRefForRemote(
@@ -82,23 +79,24 @@ async function resolveProjectRefForRemote(
   remoteName: string,
   knownHosts: readonly string[],
   connectionId: string | null | undefined,
-  cacheKey: string | null,
+  cacheKey: string,
   localGitOptions: LocalGitExecOptions
 ): Promise<ProjectRef | null> {
   try {
-    const sshGitProvider = connectionId ? getSshGitProvider(connectionId) : null
-    if (connectionId && !sshGitProvider) {
+    const stdout = await readRemoteUrl(
+      {
+        repoPath,
+        connectionId,
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+      },
+      remoteName
+    )
+    if (stdout === null) {
       return null
     }
-    const { stdout } = sshGitProvider
-      ? await sshGitProvider.exec(['remote', 'get-url', remoteName], repoPath)
-      : await gitExecFileAsync(['remote', 'get-url', remoteName], {
-          cwd: repoPath,
-          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
-        })
     const result = parseGitLabProjectRef(stdout, knownHosts)
     if (result) {
-      projectRefCache.remember(cacheKey, result, [result.host, result.path])
+      rememberProjectRefCacheEntry(cacheKey, result)
       return result
     }
     const remoteCandidate = parseRemoteProjectRefCandidate(stdout)
@@ -112,18 +110,17 @@ async function resolveProjectRefForRemote(
       ))
     ) {
       rememberGlabKnownHost(remoteCandidate.host, connectionId, localGitOptions)
-      projectRefCache.remember(cacheKey, remoteCandidate, [
-        remoteCandidate.host,
-        remoteCandidate.path
-      ])
+      rememberProjectRefCacheEntry(cacheKey, remoteCandidate)
       return remoteCandidate
     }
-  } catch {
-    if (connectionId) {
+  } catch (error) {
+    // Why: a wedged or killed probe is not evidence the remote is not GitLab —
+    // caching it would misdetect the forge for the life of the process (P1-D).
+    if (connectionId || isTransientGitProbeError(error)) {
       return null
     }
   }
-  projectRefCache.remember(cacheKey, null, [])
+  rememberProjectRefCacheEntry(cacheKey, null)
   return null
 }
 

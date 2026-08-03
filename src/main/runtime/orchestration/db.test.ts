@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { OrchestrationDb } from './db'
+import { LEGACY_RUN_ID, OrchestrationDb } from './db'
 import type { MessageType } from './db'
 
 // Overwrites the datetime('now')-seeded timestamps with explicit fixture values
@@ -473,6 +473,7 @@ describe('OrchestrationDb', () => {
       const after3 = d.failDispatch(ctx3.id, 'timeout')
       expect(after3?.failure_count).toBe(3)
       expect(after3?.status).toBe('circuit_broken')
+      expect([after1, after2, after3].every((dispatch) => dispatch?.completed_at)).toBe(true)
       expect(d.getTask(task.id)?.status).toBe('failed')
     })
 
@@ -942,6 +943,8 @@ describe('OrchestrationDb', () => {
 
       // v1 data preserved
       expect(d.getMessageById('msg_v1')?.subject).toBe('pre-migration')
+      expect(d.getMessageById('msg_v1')?.run_id).toBe(d.getLegacyAdoption()?.adopted_run_id)
+      expect(d.getRun(LEGACY_RUN_ID)).toMatchObject({ legacy: 1 })
     })
 
     it('adds pane-identity columns (v6) and persists them', () => {

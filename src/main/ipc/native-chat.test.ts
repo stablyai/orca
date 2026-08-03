@@ -65,7 +65,7 @@ async function invokeReadSession(args: {
   if (!handler) {
     throw new Error('handler not registered')
   }
-  return handler({ sender: { id: 1 } }, args)
+  return handler({}, args)
 }
 
 describe('nativeChat:readSession handler', () => {
@@ -197,11 +197,6 @@ describe('nativeChat:readSession handler', () => {
           destroyedCb = cb
         }
       },
-      removeListener: (event: string, cb: () => void) => {
-        if (event === 'destroyed' && destroyedCb === cb) {
-          destroyedCb = undefined
-        }
-      },
       send: (channel: string, payload: unknown) => sent.push({ channel, payload })
     }
 
@@ -286,11 +281,6 @@ describe('nativeChat:readSession handler', () => {
       once: (event: string, cb: () => void) => {
         if (event === 'destroyed') {
           destroyedCb = cb
-        }
-      },
-      removeListener: (event: string, cb: () => void) => {
-        if (event === 'destroyed' && destroyedCb === cb) {
-          destroyedCb = undefined
         }
       },
       send: vi.fn()

@@ -35,8 +35,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('./ensure-simulator-tab', () => ({
   ensureSimulatorTab: vi.fn(),
-  getSimulatorTabForWorktree: vi.fn(),
-  isMacOsHost: true
+  getSimulatorTabForWorktree: vi.fn()
 }))
 
 const mockAttachResult = {

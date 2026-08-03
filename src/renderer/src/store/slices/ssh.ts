@@ -11,20 +11,6 @@ import {
   sshConnectionStatesEqual,
   sshTargetLabelsEqual
 } from './ssh-target-cleanup'
-import {
-  admitSshConnectionState,
-  admitSshDetectedPorts,
-  isSshRetainedIdentifier
-} from '../../../../shared/ssh-retained-payload-admission'
-import { OperationGenerationRegistry } from '@/lib/operation-generation-registry'
-import {
-  retainSshCredentialRequest,
-  type SshCredentialRequest,
-  type SshCredentialRequestRetentionNotice
-} from './ssh-credential-request-retention'
-import { admitRemoteWorkspaceSyncStatus } from './remote-workspace-sync-status-admission'
-
-export type { SshCredentialRequest } from './ssh-credential-request-retention'
 
 export type RemoteWorkspaceSyncStatus = {
   phase: 'idle' | 'pulling' | 'pushing' | 'synced' | 'conflict' | 'error' | 'offline'
@@ -33,6 +19,13 @@ export type RemoteWorkspaceSyncStatus = {
   updatedAt?: number
   lastSyncedAt?: number
   message?: string
+}
+
+export type SshCredentialRequest = {
+  requestId: string
+  targetId: string
+  kind: 'passphrase' | 'password'
+  detail: string
 }
 
 export type SshSlice = {
@@ -79,31 +72,14 @@ export type SshSlice = {
   setDetectedPorts: (targetId: string, ports: EnrichedDetectedPort[]) => void
 }
 
-const targetConnectionGenerations = new OperationGenerationRegistry()
-const SSH_CREDENTIAL_RETENTION_REPORT_INTERVAL_MS = 30_000
-let lastSshCredentialRetentionReportAt = Number.NEGATIVE_INFINITY
-let suppressedSshCredentialRetentionReports = 0
-
-function reportSshCredentialRetention(notice: SshCredentialRequestRetentionNotice): void {
-  const now = Date.now()
-  if (now - lastSshCredentialRetentionReportAt < SSH_CREDENTIAL_RETENTION_REPORT_INTERVAL_MS) {
-    suppressedSshCredentialRetentionReports += 1
-    return
-  }
-  console.warn('[ssh-credential-queue] request retention limit applied', {
-    ...notice,
-    suppressedSinceLastReport: suppressedSshCredentialRetentionReports
-  })
-  lastSshCredentialRetentionReportAt = now
-  suppressedSshCredentialRetentionReports = 0
-}
+const targetConnectionGeneration = new Map<string, number>()
 
 export function getLocalSshTargetConnectionGeneration(targetId: string): number {
-  return targetConnectionGenerations.get(targetId)
+  return targetConnectionGeneration.get(targetId) ?? 0
 }
 
 function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
-  targetConnectionGenerations.advance(targetId)
+  targetConnectionGeneration.set(targetId, getLocalSshTargetConnectionGeneration(targetId) + 1)
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
@@ -120,18 +96,14 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
 
   setSshConnectionState: (targetId, state) =>
     set((s) => {
-      const admittedState = admitSshConnectionState(state, targetId)
-      if (!admittedState) {
-        return s
-      }
       const next = new Map(s.sshConnectionStates)
       const previous = next.get(targetId)
-      if (sshConnectionStatesEqual(previous, admittedState)) {
+      if (sshConnectionStatesEqual(previous, state)) {
         return s
       }
       advanceLocalSshTargetConnectionGeneration(targetId)
-      next.set(targetId, admittedState)
-      const didReconnect = previous?.status !== 'connected' && admittedState.status === 'connected'
+      next.set(targetId, state)
+      const didReconnect = previous?.status !== 'connected' && state.status === 'connected'
       let blockedConnections = s.transientClearedAgentStatusConnectionIds
       if (didReconnect && targetId in blockedConnections) {
         blockedConnections = { ...blockedConnections }
@@ -176,24 +148,14 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
       return { remoteWorkspaceHydratedTargetIds: next }
     }),
   setRemoteWorkspaceSyncStatus: (targetId, status) =>
-    set((s) =>
-      isSshRetainedIdentifier(targetId)
-        ? {
-            remoteWorkspaceSyncStatusByTargetId: {
-              ...s.remoteWorkspaceSyncStatusByTargetId,
-              [targetId]: admitRemoteWorkspaceSyncStatus(status)
-            }
-          }
-        : s
-    ),
-  enqueueSshCredentialRequest: (req) =>
-    set((s) => {
-      const retained = retainSshCredentialRequest(s.sshCredentialQueue, req)
-      if (retained.notice) {
-        reportSshCredentialRetention(retained.notice)
+    set((s) => ({
+      remoteWorkspaceSyncStatusByTargetId: {
+        ...s.remoteWorkspaceSyncStatusByTargetId,
+        [targetId]: status
       }
-      return retained.queue === s.sshCredentialQueue ? s : { sshCredentialQueue: retained.queue }
-    }),
+    })),
+  enqueueSshCredentialRequest: (req) =>
+    set((s) => ({ sshCredentialQueue: [...s.sshCredentialQueue, req] })),
   removeSshCredentialRequest: (requestId) =>
     set((s) => ({
       sshCredentialQueue: s.sshCredentialQueue.filter((req) => req.requestId !== requestId)
@@ -218,13 +180,9 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
 
   setDetectedPorts: (targetId, ports) =>
     set((s) => {
-      if (!isSshRetainedIdentifier(targetId)) {
-        return s
-      }
-      const admittedPorts = admitSshDetectedPorts(ports)
       const next = { ...s.detectedPortsByConnection }
-      if (admittedPorts.length > 0) {
-        next[targetId] = admittedPorts
+      if (ports.length > 0) {
+        next[targetId] = ports
       } else {
         delete next[targetId]
       }

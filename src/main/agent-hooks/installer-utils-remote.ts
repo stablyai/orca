@@ -12,16 +12,9 @@
 // See docs/design/agent-status-over-ssh.md §8 (commit #8).
 
 import { randomUUID } from 'node:crypto'
-import type { SFTPWrapper } from 'ssh2'
+import type { SFTPWrapper, FileEntryWithStats } from 'ssh2'
 
-import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
-import {
-  AGENT_HOOK_CONFIG_MAX_BYTES,
-  AGENT_HOOK_MANAGED_SCRIPT_MAX_BYTES
-} from './agent-hook-file-limits'
-import { readAgentHookRemoteTextFile } from './agent-hook-sftp-text-reader'
-import type { HooksConfig } from './installer-utils'
-import { parseHooksJsonText } from './hooks-json-read'
+import { isPlainObject, type HooksConfig } from './installer-utils'
 
 const DEFAULT_REMOTE_CONFIG_MODE = 0o600
 const REMOTE_SFTP_OPERATION_TIMEOUT_MS = 10_000
@@ -38,14 +31,19 @@ export async function readHooksJsonRemote(
 ): Promise<HooksConfig | null> {
   let body: string
   try {
-    body = await readFile(sftp, remotePath, AGENT_HOOK_CONFIG_MAX_BYTES)
+    body = await readFile(sftp, remotePath)
   } catch (err) {
     if (isNoEntryError(err)) {
       return {}
     }
     throw err
   }
-  return parseHooksJsonText(body)
+  try {
+    const parsed = JSON.parse(body)
+    return isPlainObject(parsed) ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 /** Atomically write a JSON config to the remote — write to a tmp path then
@@ -64,14 +62,11 @@ export async function writeHooksJsonRemote(
   // Why: skip the write when on-disk content is identical so repeated
   // install() calls do not bump the file's mtime / inode unnecessarily.
   try {
-    const existing = await readFile(sftp, remotePath, AGENT_HOOK_CONFIG_MAX_BYTES)
+    const existing = await readFile(sftp, remotePath)
     if (existing === serialized) {
       return
     }
-  } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      throw error
-    }
+  } catch {
     // ENOENT or read error — fall through to the write below.
   }
   // Why: tmp + rename so a partial network drop mid-write does not leave a
@@ -103,15 +98,12 @@ export async function writeManagedScriptRemote(
   const dir = dirnamePosix(remotePath)
   await mkdirpRemote(sftp, dir)
   try {
-    const existing = await readFile(sftp, remotePath, AGENT_HOOK_MANAGED_SCRIPT_MAX_BYTES)
+    const existing = await readFile(sftp, remotePath)
     if (existing === content) {
       await chmod(sftp, remotePath, 0o755)
       return
     }
-  } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      throw error
-    }
+  } catch {
     // ENOENT or read error — fall through to the atomic write below.
   }
 
@@ -134,11 +126,10 @@ export async function writeManagedScriptRemote(
 
 export async function readTextFileRemote(
   sftp: SFTPWrapper,
-  remotePath: string,
-  maxBytes = AGENT_HOOK_CONFIG_MAX_BYTES
+  remotePath: string
 ): Promise<string | null> {
   try {
-    return await readFile(sftp, remotePath, maxBytes)
+    return await readFile(sftp, remotePath)
   } catch (err) {
     if (isNoEntryError(err)) {
       return null
@@ -150,20 +141,16 @@ export async function readTextFileRemote(
 export async function writeTextFileRemoteAtomic(
   sftp: SFTPWrapper,
   remotePath: string,
-  content: string,
-  maxExistingBytes = AGENT_HOOK_CONFIG_MAX_BYTES
+  content: string
 ): Promise<void> {
   const dir = dirnamePosix(remotePath)
   await mkdirpRemote(sftp, dir)
   try {
-    const existing = await readFile(sftp, remotePath, maxExistingBytes)
+    const existing = await readFile(sftp, remotePath)
     if (existing === content) {
       return
     }
-  } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      throw error
-    }
+  } catch {
     // ENOENT or read error — fall through to the atomic write below.
   }
 
@@ -224,8 +211,11 @@ function sftpOperation<T>(
   })
 }
 
-async function readFile(sftp: SFTPWrapper, remotePath: string, maxBytes: number): Promise<string> {
-  return readAgentHookRemoteTextFile(sftp, remotePath, maxBytes, REMOTE_SFTP_OPERATION_TIMEOUT_MS)
+async function readFile(sftp: SFTPWrapper, remotePath: string): Promise<string> {
+  const data = await sftpOperation<string | Buffer>(`readFile ${remotePath}`, (callback) => {
+    sftp.readFile(remotePath, 'utf8', callback)
+  })
+  return typeof data === 'string' ? data : data.toString('utf8')
 }
 
 async function writeFile(
@@ -306,6 +296,12 @@ async function chmod(sftp: SFTPWrapper, remotePath: string, mode: number): Promi
   })
 }
 
+async function readdir(sftp: SFTPWrapper, remotePath: string): Promise<FileEntryWithStats[]> {
+  return await sftpOperation<FileEntryWithStats[]>(`readdir ${remotePath}`, (callback) => {
+    sftp.readdir(remotePath, callback)
+  })
+}
+
 async function mkdir(sftp: SFTPWrapper, remotePath: string): Promise<void> {
   await sftpOperation<void>(`mkdir ${remotePath}`, (callback) => {
     sftp.mkdir(remotePath, callback)
@@ -324,7 +320,7 @@ async function mkdirpRemote(sftp: SFTPWrapper, remotePath: string): Promise<void
   for (const seg of segments) {
     current = current === '' ? `/${seg}` : current === '.' ? seg : `${current}/${seg}`
     try {
-      await statMode(sftp, current)
+      await readdir(sftp, current)
     } catch {
       try {
         await mkdir(sftp, current)

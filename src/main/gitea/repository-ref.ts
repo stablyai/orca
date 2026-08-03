@@ -1,9 +1,4 @@
-import { gitExecFileAsync } from '../git/runner'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
-import {
-  buildRepositoryRefCacheKey,
-  RepositoryRefCache
-} from '../source-control/repository-ref-cache'
+import { createRemoteRefProbeCache } from '../git/remote-ref-probe-cache'
 
 export type GiteaRepoRef = {
   host: string
@@ -24,16 +19,16 @@ const KNOWN_NON_GITEA_HOSTS = new Set([
   'dev.azure.com',
   'ssh.dev.azure.com'
 ])
-const repoRefCache = new RepositoryRefCache<GiteaRepoRef>()
+const repoRefProbeCache = createRemoteRefProbeCache(parseGiteaRepoRef)
 
 /** @internal - exposed for tests only */
 export function _resetGiteaRepoRefCache(): void {
-  repoRefCache.clear()
+  repoRefProbeCache.clear()
 }
 
 /** @internal - exposed for tests only */
 export function _getGiteaRepoRefCacheSize(): number {
-  return repoRefCache.size
+  return repoRefProbeCache.size()
 }
 
 function decodeSegment(value: string): string {
@@ -139,39 +134,7 @@ export async function getGiteaRepoRefForRemote(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GiteaRepoRef | null> {
-  const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
-  const cacheKey = buildRepositoryRefCacheKey([runtimeKey, repoPath, remoteName])
-  const cached = repoRefCache.get(cacheKey)
-  if (cached.found) {
-    return cached.value
-  }
-  try {
-    const sshGitProvider = connectionId ? getSshGitProvider(connectionId) : null
-    if (connectionId && !sshGitProvider) {
-      return null
-    }
-    const { stdout } = sshGitProvider
-      ? await sshGitProvider.exec(['remote', 'get-url', remoteName], repoPath)
-      : await gitExecFileAsync(['remote', 'get-url', remoteName], {
-          cwd: repoPath,
-          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
-        })
-    const result = parseGiteaRepoRef(stdout)
-    repoRefCache.remember(
-      cacheKey,
-      result,
-      result ? [result.host, result.owner, result.repo, result.apiBaseUrl, result.webBaseUrl] : []
-    )
-    return result
-  } catch {
-    if (connectionId) {
-      // Why: SSH provider failures are often transient reconnect/tunnel states;
-      // caching them as "not Gitea" would poison the repo for the session.
-      return null
-    }
-    repoRefCache.remember(cacheKey, null, [])
-    return null
-  }
+  return repoRefProbeCache.get(repoPath, remoteName, connectionId, localGitOptions)
 }
 
 export async function getGiteaRepoRef(

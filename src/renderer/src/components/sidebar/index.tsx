@@ -8,12 +8,12 @@ import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
+import { AgentDashboardDrawer } from '@/components/dashboard/AgentDashboardDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
-import { createSingleFlightCoalescer, type SingleFlightCoalescer } from './single-flight-coalescer'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -46,6 +46,7 @@ function Sidebar({
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
+  const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
@@ -74,59 +75,44 @@ function Sidebar({
     document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
   }, [])
 
-  // Fetch worktrees when repos are added/removed
   const repoCount = repos.length
+  const previousRepoCountRef = React.useRef(repoCount)
   useEffect(() => {
-    if (repoCount > 0) {
-      fetchAllWorktrees()
+    const repoCountChanged = previousRepoCountRef.current !== repoCount
+    previousRepoCountRef.current = repoCount
+    // Why: App owns the initial all-host scan; partial startup catalogs must not trigger broad scans or stale-state purges.
+    if (startupWorktreeRefreshCompleted && repoCountChanged && repoCount > 0) {
+      void fetchAllWorktrees()
     }
-  }, [repoCount, fetchAllWorktrees])
-
-  // Why: a runtime host coming online/offline must refresh the sidebar so its
-  // worktrees appear/drop, the same way SSH state changes already refetch. Only
-  // the manual connect button refetched before, so the list went stale until the
-  // user forced a refetch (e.g. via Add Project). React to the set of online
-  // runtime envs (a host has a status entry once it is connected).
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  const fetchWorktreeLineage = useAppStore((s) => s.fetchWorktreeLineage)
-  const onlineRuntimeEnvKey = React.useMemo(
-    () =>
-      // Why: tolerate an absent map — a partial/hydrating store can leave this
-      // undefined, and a thrown selector would crash the whole sidebar render.
-      [...(runtimeStatusByEnvironmentId?.entries() ?? [])]
-        .filter(([, entry]) => Boolean(entry?.status))
-        .map(([id]) => id)
-        .sort()
-        .join(','),
-    [runtimeStatusByEnvironmentId]
-  )
-  const previousOnlineRuntimeEnvKeyRef = React.useRef<string | null>(null)
-  // Coalesce staggered wake reconnects so K hosts can't fire K sidebar remounts and freeze (#8539).
-  const reconnectRefreshRef = React.useRef<SingleFlightCoalescer | null>(null)
-  if (reconnectRefreshRef.current === null) {
-    reconnectRefreshRef.current = createSingleFlightCoalescer(() =>
-      fetchAllWorktrees().then(() => fetchWorktreeLineage())
-    )
-  }
-  useEffect(() => {
-    // Skip the initial value — startup/repoCount effects already fetch. Only
-    // refetch when the online-host set actually changes.
-    if (previousOnlineRuntimeEnvKeyRef.current === null) {
-      previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
-      return
-    }
-    if (previousOnlineRuntimeEnvKeyRef.current === onlineRuntimeEnvKey) {
-      return
-    }
-    previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
-    reconnectRefreshRef.current?.request()
-  }, [onlineRuntimeEnvKey])
+  }, [repoCount, startupWorktreeRefreshCompleted, fetchAllWorktrees])
 
   useEffect(() => {
     if (!sidebarOpen && workspaceBoardRenderedOpen) {
       closeWorkspaceBoard()
     }
   }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
+
+  const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
+  const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
+  useEffect(() => {
+    if (!sidebarOpen && agentDashboardDrawerOpen) {
+      setAgentDashboardDrawerOpen(false)
+    }
+  }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, sidebarOpen])
+  // Why: both companion boards expand into the same space beside the sidebar,
+  // so the most recently opened one dismisses the other.
+  useEffect(() => {
+    if (agentDashboardDrawerOpen) {
+      closeWorkspaceBoard()
+    }
+  }, [agentDashboardDrawerOpen, closeWorkspaceBoard])
+  // Why: a transient drag preview is not the user opening the board, so it must
+  // not evict the dashboard — key on the opened state, not the rendered state.
+  useEffect(() => {
+    if (workspaceBoardOpen) {
+      setAgentDashboardDrawerOpen(false)
+    }
+  }, [setAgentDashboardDrawerOpen, workspaceBoardOpen])
 
   const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
@@ -162,14 +148,16 @@ function Sidebar({
               onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
             />
 
-            <SetupScriptPromptCard />
+            <div className="relative shrink-0">
+              <SetupScriptPromptCard />
 
-            {/* Fixed bottom toolbar */}
-            <SidebarToolbar
-              workspaceBoardOpen={workspaceBoardOpen}
-              workspaceBoardDragPreviewOpen={workspaceBoardDragPreviewOpen}
-              onWorkspaceBoardToggle={toggleWorkspaceBoard}
-            />
+              {/* Fixed bottom toolbar */}
+              <SidebarToolbar
+                workspaceBoardOpen={workspaceBoardOpen}
+                workspaceBoardDragPreviewOpen={workspaceBoardDragPreviewOpen}
+                onWorkspaceBoardToggle={toggleWorkspaceBoard}
+              />
+            </div>
           </>
         )}
 
@@ -227,6 +215,12 @@ function Sidebar({
           preserveOpenForMenu={workspaceBoardMenuOpen}
           onOpenChange={handleWorkspaceBoardOpenChange}
           onMenuOpenChange={setWorkspaceBoardMenuOpen}
+        />
+      ) : null}
+      {sidebarOpen && settings?.experimentalAgentDashboardPopout === true ? (
+        <AgentDashboardDrawer
+          leftSidebarStyle={leftSidebarStyle}
+          statusBarVisible={statusBarVisible}
         />
       ) : null}
     </TooltipProvider>

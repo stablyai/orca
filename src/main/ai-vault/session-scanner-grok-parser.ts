@@ -1,7 +1,8 @@
+import { createReadStream } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
-import { withAiVaultWholeJsonFile } from './session-whole-json-reader'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import {
   addPreviewMessage,
@@ -11,13 +12,22 @@ import {
   updateTimeline
 } from './session-scanner-accumulator'
 import {
+  normalizeFullFirstUserPromptText,
+  shouldCaptureFullFirstUserPrompt
+} from './session-scanner-first-user-prompt'
+import {
+  extractGrokFirstUserPromptText,
+  stripGrokUserQueryEnvelope
+} from './session-scanner-grok-user-text'
+import {
   asRecord,
   extractPreviewContentText,
   extractString,
   normalizePreviewText,
   normalizeTitleText,
   numberValue,
-  parseJsonObject
+  parseJsonObject,
+  sliceAtCodeUnitLimit
 } from './session-scanner-values'
 
 const GROK_USER_QUERY_PREVIEW_SCAN_LIMIT = 4096
@@ -26,29 +36,24 @@ export async function parseGrokSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const accumulator = await withAiVaultWholeJsonFile(file.path, (content) => {
-    const record = parseJsonObject(content)
-    if (!record) {
-      return null
-    }
-    const info = asRecord(record.info)
-    const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
-    const next = createAccumulator({ agent: 'grok', file, sessionId })
-    next.cwd = extractString(info?.cwd)
-    next.title =
-      normalizeTitleText(extractString(record.generated_title) ?? '') ??
-      normalizeTitleText(extractString(record.session_summary) ?? '')
-    next.model = extractString(record.current_model_id)
-    next.branch = extractString(record.head_branch)
-    next.messageCount = numberValue(record.num_chat_messages) || numberValue(record.num_messages)
-    updateTimeline(next, extractString(record.created_at))
-    updateTimeline(next, extractString(record.updated_at))
-    updateTimeline(next, extractString(record.last_active_at))
-    return next
-  })
-  if (!accumulator) {
+  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  if (!record) {
     return null
   }
+  const info = asRecord(record.info)
+  const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
+  const accumulator = createAccumulator({ agent: 'grok', file, sessionId })
+  accumulator.cwd = extractString(info?.cwd)
+  accumulator.title =
+    normalizeTitleText(extractString(record.generated_title) ?? '') ??
+    normalizeTitleText(extractString(record.session_summary) ?? '')
+  accumulator.model = extractString(record.current_model_id)
+  accumulator.branch = extractString(record.head_branch)
+  accumulator.messageCount =
+    numberValue(record.num_chat_messages) || numberValue(record.num_messages)
+  updateTimeline(accumulator, extractString(record.created_at))
+  updateTimeline(accumulator, extractString(record.updated_at))
+  updateTimeline(accumulator, extractString(record.last_active_at))
   await consumeGrokChatHistory(accumulator, dirname(file.path))
   return finalizeSession(accumulator, platform)
 }
@@ -58,7 +63,10 @@ async function consumeGrokChatHistory(
   sessionDir: string
 ): Promise<void> {
   try {
-    const lines = iterateAiVaultJsonlLines(join(sessionDir, 'chat_history.jsonl'))
+    const lines = createInterface({
+      input: createReadStream(join(sessionDir, 'chat_history.jsonl'), { encoding: 'utf-8' }),
+      crlfDelay: Infinity
+    })
 
     for await (const line of lines) {
       const record = parseJsonObject(line)
@@ -69,14 +77,38 @@ async function consumeGrokChatHistory(
       if (role !== 'user' && role !== 'assistant') {
         continue
       }
-      const text = extractGrokContentText(record.content)
+
       if (role === 'user') {
-        accumulator.title ??= normalizeTitleText(text ?? '')
+        // Why: first-prompt copy must be the typed ask inside <user_query>, never
+        // the injected <user_info> bootstrap row.
+        const firstPromptBody = extractGrokFirstUserPromptText(record.content)
+        const text = firstPromptBody
+          ? normalizePreviewText(capGrokPreviewSource(firstPromptBody))
+          : null
+
+        if (firstPromptBody) {
+          accumulator.title ??= normalizeTitleText(firstPromptBody)
+          if (shouldCaptureFullFirstUserPrompt() && !accumulator.firstUserPrompt) {
+            accumulator.firstUserPrompt = normalizeFullFirstUserPromptText(firstPromptBody)
+          }
+        }
+
+        if (text) {
+          addPreviewMessage(accumulator, {
+            role: 'user',
+            text,
+            timestamp: extractString(record.timestamp),
+            seedFirstUserPrompt: false
+          })
+        }
+        continue
       }
+
       addPreviewMessage(accumulator, {
-        role,
-        text,
-        timestamp: extractString(record.timestamp)
+        role: 'assistant',
+        text: extractGrokContentText(record.content),
+        timestamp: extractString(record.timestamp),
+        seedFirstUserPrompt: false
       })
     }
   } catch {
@@ -91,45 +123,11 @@ export function extractGrokContentText(value: unknown): string | null {
   return extractPreviewContentText(value)
 }
 
+function capGrokPreviewSource(text: string): string {
+  return sliceAtCodeUnitLimit(text, GROK_USER_QUERY_PREVIEW_SCAN_LIMIT)
+}
+
 function extractGrokStringContentText(text: string): string | null {
-  const bounds = grokUserQueryEnvelopeBounds(text)
-  if (!bounds) {
-    return normalizePreviewText(text)
-  }
-
-  const boundedEnd = Math.min(bounds.end, bounds.start + GROK_USER_QUERY_PREVIEW_SCAN_LIMIT)
-  return normalizePreviewText(text.slice(bounds.start, boundedEnd)) ?? normalizePreviewText(text)
-}
-
-function grokUserQueryEnvelopeBounds(text: string): { start: number; end: number } | null {
-  const opener = '<user_query>'
-  const startIndex = indexOfAsciiIgnoreCase(text, opener, 0)
-  if (startIndex === -1) {
-    return null
-  }
-  const bodyStartIndex = startIndex + opener.length
-  const endIndex = indexOfAsciiIgnoreCase(text, '</user_query>', bodyStartIndex)
-  if (endIndex === -1) {
-    return null
-  }
-  return { start: bodyStartIndex, end: endIndex }
-}
-
-function indexOfAsciiIgnoreCase(value: string, search: string, fromIndex: number): number {
-  const lastStart = value.length - search.length
-  for (let index = Math.max(0, fromIndex); index <= lastStart; index++) {
-    let matches = true
-    for (let offset = 0; offset < search.length; offset++) {
-      const code = value.charCodeAt(index + offset)
-      const normalizedCode = code >= 65 && code <= 90 ? code + 32 : code
-      if (normalizedCode !== search.charCodeAt(offset)) {
-        matches = false
-        break
-      }
-    }
-    if (matches) {
-      return index
-    }
-  }
-  return -1
+  const unwrapped = stripGrokUserQueryEnvelope(text)
+  return normalizePreviewText(capGrokPreviewSource(unwrapped))
 }

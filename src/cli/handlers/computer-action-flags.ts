@@ -1,12 +1,8 @@
 import {
+  computerUseClickModifiersValidationMessage,
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
 } from '../../shared/computer-use-key-spec'
-import { CLIPBOARD_TEXT_WRITE_MAX_BYTES } from '../../shared/clipboard-text'
-import {
-  NodeReadableTextTooLargeError,
-  readNodeReadableTextWithinLimit
-} from '../../shared/node-readable-text'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalNumberFlag,
@@ -65,16 +61,26 @@ export function getComputerClickActionFlags(flags: Map<string, string | boolean>
   y?: number
   clickCount?: number
   mouseButton?: string
+  modifiers?: string
 } {
+  const rawModifiers = flags.get('modifiers')
+  const modifiers = typeof rawModifiers === 'string' ? rawModifiers : undefined
   const result = {
     elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
     x: getOptionalNumberFlag(flags, 'x'),
     y: getOptionalNumberFlag(flags, 'y'),
     clickCount: getOptionalPositiveIntegerFlag(flags, 'click-count'),
-    mouseButton: getOptionalStringFlag(flags, 'mouse-button')
+    mouseButton: getOptionalStringFlag(flags, 'mouse-button'),
+    modifiers
   }
   validateElementOrCoordinates('Click', result.elementIndex, result.x, result.y)
   validateMouseButton(result.mouseButton)
+  if (modifiers !== undefined) {
+    const message = computerUseClickModifiersValidationMessage(modifiers)
+    if (message) {
+      throw new RuntimeClientError('invalid_argument', message)
+    }
+  }
   return result
 }
 
@@ -194,17 +200,11 @@ async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) {
     throw new RuntimeClientError('invalid_argument', 'stdin payload requested but stdin is a TTY')
   }
-  try {
-    return await readNodeReadableTextWithinLimit(process.stdin, CLIPBOARD_TEXT_WRITE_MAX_BYTES)
-  } catch (error) {
-    if (error instanceof NodeReadableTextTooLargeError) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `stdin payload must be at most ${CLIPBOARD_TEXT_WRITE_MAX_BYTES} bytes`
-      )
-    }
-    throw error
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
   }
+  return Buffer.concat(chunks).toString('utf8')
 }
 
 function getOptionalPositiveNumberFlag(

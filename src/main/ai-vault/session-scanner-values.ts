@@ -1,22 +1,9 @@
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import {
-  assertJsonTextStructureWithinLimits,
-  type JsonTextStructureLimits
-} from '../../shared/json-text-structure-limit'
+import { readFile } from 'node:fs/promises'
+import { asRecord } from './session-scanner-record-value'
 
-export const AI_VAULT_JSON_STRUCTURE_LIMITS: JsonTextStructureLimits = {
-  structuralTokens: 1_000_000,
-  nestingDepth: 256
-}
-
-export function parseAiVaultJsonText(
-  content: string,
-  limits: JsonTextStructureLimits = AI_VAULT_JSON_STRUCTURE_LIMITS
-): unknown {
-  assertJsonTextStructureWithinLimits(content, limits)
-  return JSON.parse(content) as unknown
-}
+export { asRecord }
 
 export function timestampMs(value: unknown): number {
   if (typeof value === 'string') {
@@ -34,17 +21,11 @@ export function parseJsonObject(line: string): Record<string, unknown> | null {
     return null
   }
   try {
-    const parsed = parseAiVaultJsonText(line)
+    const parsed = JSON.parse(line) as unknown
     return asRecord(parsed)
   } catch {
     return null
   }
-}
-
-export function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
 }
 
 export function extractString(value: unknown): string | null {
@@ -74,8 +55,14 @@ export {
   extractMessageText,
   extractPreviewContentText,
   normalizePreviewText,
-  normalizeTitleText
+  normalizeTitleText,
+  sliceAtCodeUnitLimit
 } from './session-scanner-text-normalization'
+export {
+  extractFullFirstUserPromptText,
+  normalizeFullFirstUserPromptText,
+  shouldCaptureFullFirstUserPrompt
+} from './session-scanner-first-user-prompt'
 
 export function extractGitBranch(value: unknown): string | null {
   const git = asRecord(value)
@@ -83,6 +70,16 @@ export function extractGitBranch(value: unknown): string | null {
     return null
   }
   return extractString(git.branch) || extractString(git.current_branch)
+}
+
+export async function readJsonObjectIfExists(
+  filePath: string
+): Promise<Record<string, unknown> | null> {
+  try {
+    return asRecord(JSON.parse(await readFile(filePath, 'utf-8')) as unknown)
+  } catch {
+    return null
+  }
 }
 
 export function arrayValue(value: unknown): unknown[] {

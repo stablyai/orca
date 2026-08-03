@@ -1,5 +1,4 @@
 import { session, type Session } from 'electron'
-import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 
 export const MINIMAX_USAGE_ENDPOINT =
   'https://platform.minimax.io/v1/api/openplatform/coding_plan/remains'
@@ -7,7 +6,6 @@ export const MINIMAX_USAGE_ENDPOINT =
 const MINIMAX_ORIGIN = 'https://platform.minimax.io'
 const MINIMAX_REFERER = 'https://platform.minimax.io/console/usage'
 const MINIMAX_SESSION_PARTITION = 'orca-minimax-rate-limit-fetch'
-export const MINIMAX_COOKIE_WRITE_CONCURRENCY = 8
 const SENSITIVE_COOKIE_NAMES = new Set([
   '_token',
   '_twpid',
@@ -124,10 +122,8 @@ export async function fetchMiniMaxWithSessionCookieJar(args: {
   const cookiePairs = parseCookiePairs(args.cookie)
   try {
     await clearMiniMaxSessionCookieJarForSession(miniMaxSession)
-    const writes = await mapSettledWithConcurrency(
-      cookiePairs,
-      MINIMAX_COOKIE_WRITE_CONCURRENCY,
-      (pair) =>
+    await Promise.all(
+      cookiePairs.map((pair) =>
         miniMaxSession.cookies.set({
           url: MINIMAX_ORIGIN,
           name: pair.name,
@@ -135,13 +131,8 @@ export async function fetchMiniMaxWithSessionCookieJar(args: {
           secure: true,
           path: '/'
         })
+      )
     )
-    const failedWrite = writes.find(
-      (result): result is PromiseRejectedResult => result.status === 'rejected'
-    )
-    if (failedWrite) {
-      throw failedWrite.reason
-    }
     const headers = makeMiniMaxRequestHeaders(args.groupId)
     return {
       response: await miniMaxSession.fetch(args.endpoint, {

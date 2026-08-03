@@ -1,11 +1,3 @@
-import {
-  collectGitHubPrFileLineRange,
-  createGitHubPrFileLineSource,
-  findGitHubPrFileCommonLineEdges,
-  visitGitHubPrFileLineRange,
-  type GitHubPrFileLineSource
-} from './github-pr-file-line-scan'
-
 export type GitHubPrFileDiffLine = {
   key: string
   kind: 'context' | 'added' | 'removed'
@@ -25,6 +17,14 @@ type DiffOperation =
   | { kind: 'added'; newLine: string }
 
 const EXACT_DIFF_CELL_LIMIT = 160_000
+
+function splitContentLines(value: string): string[] {
+  if (!value) {
+    return []
+  }
+  const lines = value.split(/\r?\n/)
+  return lines.at(-1) === '' ? lines.slice(0, -1) : lines
+}
 
 function appendExactLineDiff(
   original: string[],
@@ -79,6 +79,37 @@ function appendExactLineDiff(
   }
 }
 
+function appendMiddleDiff(
+  original: string[],
+  modified: string[],
+  appendOperation: (operation: DiffOperation) => void
+): void {
+  if (original.length === 0) {
+    for (const newLine of modified) {
+      appendOperation({ kind: 'added', newLine })
+    }
+    return
+  }
+  if (modified.length === 0) {
+    for (const oldLine of original) {
+      appendOperation({ kind: 'removed', oldLine })
+    }
+    return
+  }
+  if (original.length * modified.length <= EXACT_DIFF_CELL_LIMIT) {
+    appendExactLineDiff(original, modified, appendOperation)
+    return
+  }
+  // Why: the Tasks diff UI renders a capped preview. Stream fallback rows so a
+  // generated PR file does not allocate thousands of discarded row objects.
+  for (const oldLine of original) {
+    appendOperation({ kind: 'removed', oldLine })
+  }
+  for (const newLine of modified) {
+    appendOperation({ kind: 'added', newLine })
+  }
+}
+
 export function buildGitHubPrFileDiffLines(
   originalContent: string,
   modifiedContent: string
@@ -91,17 +122,42 @@ export function buildGitHubPrFileDiffPreview(
   modifiedContent: string,
   maxLines = Number.POSITIVE_INFINITY
 ): GitHubPrFileDiffPreview {
-  const original = createGitHubPrFileLineSource(originalContent)
-  const modified = createGitHubPrFileLineSource(modifiedContent)
-  const { prefixLineCount, suffixLineCount } = findGitHubPrFileCommonLineEdges(original, modified)
-  const originalMiddleLineCount = original.lineCount - prefixLineCount - suffixLineCount
-  const modifiedMiddleLineCount = modified.lineCount - prefixLineCount - suffixLineCount
+  const originalLines = splitContentLines(originalContent)
+  const modifiedLines = splitContentLines(modifiedContent)
+  let prefixLength = 0
+  while (
+    prefixLength < originalLines.length &&
+    prefixLength < modifiedLines.length &&
+    originalLines[prefixLength] === modifiedLines[prefixLength]
+  ) {
+    prefixLength += 1
+  }
+
+  let suffixLength = 0
+  while (
+    suffixLength < originalLines.length - prefixLength &&
+    suffixLength < modifiedLines.length - prefixLength &&
+    originalLines[originalLines.length - suffixLength - 1] ===
+      modifiedLines[modifiedLines.length - suffixLength - 1]
+  ) {
+    suffixLength += 1
+  }
+
+  const originalMiddle = originalLines.slice(
+    prefixLength,
+    suffixLength === 0 ? originalLines.length : originalLines.length - suffixLength
+  )
+  const modifiedMiddle = modifiedLines.slice(
+    prefixLength,
+    suffixLength === 0 ? modifiedLines.length : modifiedLines.length - suffixLength
+  )
+
   const result: GitHubPrFileDiffLine[] = []
   let oldLineNumber = 1
   let newLineNumber = 1
   let operationIndex = 0
   let totalLineCount = 0
-  const normalizedMaxLines = Number.isNaN(maxLines) ? 0 : Math.max(0, Math.floor(maxLines))
+  const normalizedMaxLines = Math.max(0, Math.floor(maxLines))
   function appendOperation(operation: DiffOperation): void {
     const index = operationIndex
     operationIndex += 1
@@ -143,55 +199,15 @@ export function buildGitHubPrFileDiffPreview(
     newLineNumber += 1
   }
 
-  function skipOperations(kind: DiffOperation['kind'], count: number): void {
-    operationIndex += count
-    totalLineCount += count
-    if (kind === 'context') {
-      oldLineNumber += count
-      newLineNumber += count
-    } else if (kind === 'removed') {
-      oldLineNumber += count
-    } else {
-      newLineNumber += count
-    }
+  for (let i = 0; i < prefixLength; i += 1) {
+    const line = originalLines[i] ?? ''
+    appendOperation({ kind: 'context', oldLine: line, newLine: line })
   }
-
-  function appendLineRange(
-    kind: DiffOperation['kind'],
-    source: GitHubPrFileLineSource,
-    startLine: number,
-    lineCount: number
-  ): void {
-    const retainedLineCount = Math.min(lineCount, Math.max(0, normalizedMaxLines - result.length))
-    visitGitHubPrFileLineRange(source, startLine, retainedLineCount, (line) => {
-      if (kind === 'context') {
-        appendOperation({ kind, oldLine: line, newLine: line })
-      } else if (kind === 'removed') {
-        appendOperation({ kind, oldLine: line })
-      } else {
-        appendOperation({ kind, newLine: line })
-      }
-    })
-    skipOperations(kind, lineCount - retainedLineCount)
+  appendMiddleDiff(originalMiddle, modifiedMiddle, appendOperation)
+  for (let i = originalLines.length - suffixLength; i < originalLines.length; i += 1) {
+    const line = originalLines[i] ?? ''
+    appendOperation({ kind: 'context', oldLine: line, newLine: line })
   }
-
-  appendLineRange('context', original, 0, prefixLineCount)
-  if (originalMiddleLineCount === 0) {
-    appendLineRange('added', modified, prefixLineCount, modifiedMiddleLineCount)
-  } else if (modifiedMiddleLineCount === 0) {
-    appendLineRange('removed', original, prefixLineCount, originalMiddleLineCount)
-  } else if (originalMiddleLineCount * modifiedMiddleLineCount <= EXACT_DIFF_CELL_LIMIT) {
-    appendExactLineDiff(
-      collectGitHubPrFileLineRange(original, prefixLineCount, originalMiddleLineCount),
-      collectGitHubPrFileLineRange(modified, prefixLineCount, modifiedMiddleLineCount),
-      appendOperation
-    )
-  } else {
-    // Why: large generated files need exact counts without retaining discarded preview rows.
-    appendLineRange('removed', original, prefixLineCount, originalMiddleLineCount)
-    appendLineRange('added', modified, prefixLineCount, modifiedMiddleLineCount)
-  }
-  appendLineRange('context', original, original.lineCount - suffixLineCount, suffixLineCount)
 
   return { lines: result, totalLineCount }
 }

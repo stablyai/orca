@@ -4,43 +4,61 @@ import { gitExecFileAsync, ghExecFileAsync } from '../git/runner'
 // Pure error-parsing helpers come from the lightweight module (not `runner`) so
 // tests that mock `../git/runner` still resolve the real implementations.
 import { extractExecError, parseRetryAfterMs } from '../git/exec-error'
-import { IntegrationApiConcurrencyGate } from '../integration-api-concurrency'
 
 // Why: legacy generic execFile wrapper - only used by callers that don't need
 // WSL-aware routing. Repo-scoped callers should use the runner exports below.
 export const execFileAsync = promisify(execFile)
 export { ghExecFileAsync, gitExecFileAsync, extractExecError, parseRetryAfterMs }
-export { classifyGhError, classifyListIssuesError } from './gh-error-classification'
+export {
+  classifyGhError,
+  classifyListIssuesError,
+  classifyListPrsError
+} from './gh-error-classification'
 export {
   _getOwnerRepoCacheSize,
   _resetOwnerRepoCache,
-  getIssueOwnerRepo,
-  getOwnerRepo,
   getOwnerRepoForRemote,
   getRemoteUrlForRepo,
   ghRepoExecOptions,
   githubRepoContext,
   parseGitHubOwnerRepo,
-  parseGitHubRemoteIdentity,
-  resolveIssueSource,
-  resolvePRRepositoryCandidates
+  parseGitHubRemoteIdentity
 } from './github-repository-identity'
 export type {
   GitHubRemoteIdentity,
   GitHubRepoContext,
   LocalGitExecOptions,
-  OwnerRepo,
-  PRRepositoryCandidates,
-  ResolvedIssueSource
+  OwnerRepo
 } from './github-repository-identity'
+export {
+  getIssueOwnerRepo,
+  getOwnerRepo,
+  resolveIssueSource,
+  resolvePRRepositoryCandidates
+} from './github-owner-repo-selection'
+export type { PRRepositoryCandidates, ResolvedIssueSource } from './github-owner-repo-selection'
 
 const MAX_CONCURRENT = 4
-const concurrencyGate = new IntegrationApiConcurrencyGate(MAX_CONCURRENT)
+let running = 0
+const queue: (() => void)[] = []
 
 export function acquire(): Promise<void> {
-  return concurrencyGate.acquire()
+  if (running < MAX_CONCURRENT) {
+    running += 1
+    return Promise.resolve()
+  }
+  return new Promise((resolve) =>
+    queue.push(() => {
+      running += 1
+      resolve()
+    })
+  )
 }
 
 export function release(): void {
-  concurrencyGate.release()
+  running -= 1
+  const next = queue.shift()
+  if (next) {
+    next()
+  }
 }

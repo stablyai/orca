@@ -2,7 +2,6 @@ import type {
   LinearMcpIssueListRequest,
   LinearMcpIssueListResult
 } from '../../shared/linear-agent-access'
-import { runBoundedIntegrationSettledFanout } from '../integration-fanout'
 import { getClients, getStatus, type LinearClientForWorkspace } from './client'
 import { withLinearRead } from './issue-context-client'
 import { linearError } from './issue-context-errors'
@@ -71,7 +70,7 @@ export async function listMcpIssues(
       nextSteps: ['Connect Linear from Orca settings, then retry the issue list.']
     })
   }
-  const { pages, failures, truncated } = await readIssueListWorkspaces(
+  const { pages, failures } = await readIssueListWorkspaces(
     entries,
     request,
     limit,
@@ -79,7 +78,7 @@ export async function listMcpIssues(
     entryFailures
   )
   const issues = pages.flatMap((page) => page.issues)
-  let hasMore = truncated || pages.some((page) => page.hasMore)
+  let hasMore = pages.some((page) => page.hasMore)
 
   issues.sort((left, right) => compareIssues(left, right, orderBy))
   if (issues.length > limit) {
@@ -97,7 +96,7 @@ export async function listMcpIssues(
         : {}),
       orderBy,
       workspaceId: request.workspaceId === 'all' ? 'all' : entries[0].workspace.id,
-      partial: truncated || failures.length > 0,
+      partial: failures.length > 0,
       workspaceErrors: failures.map(({ workspace, code, message }) => ({
         workspace,
         code,
@@ -126,45 +125,31 @@ async function readIssueListWorkspaces(
   limit: number,
   orderBy: 'createdAt' | 'updatedAt',
   initialFailures: WorkspaceReadFailure[]
-): Promise<{
-  pages: WorkspaceIssuePage[]
-  failures: WorkspaceReadFailure[]
-  truncated: boolean
-}> {
+): Promise<{ pages: WorkspaceIssuePage[]; failures: WorkspaceReadFailure[] }> {
   if (request.workspaceId !== 'all') {
     return {
       pages: [await readIssueListWorkspace(entries[0], request, limit, orderBy)],
-      failures: [],
-      truncated: false
+      failures: []
     }
   }
 
-  const fanout = await runBoundedIntegrationSettledFanout(
-    entries,
-    (entry) => readIssueListWorkspace(entry, request, limit, orderBy),
-    (page) => page.issues
+  const settled = await Promise.allSettled(
+    entries.map((entry) => readIssueListWorkspace(entry, request, limit, orderBy))
   )
   const pages: WorkspaceIssuePage[] = []
   const failures = [...initialFailures]
-  for (let index = 0; index < fanout.results.length; index += 1) {
-    const result = fanout.results[index]
+  for (let index = 0; index < settled.length; index += 1) {
+    const result = settled[index]
     if (result.status === 'fulfilled') {
       pages.push(result.value)
       continue
     }
     failures.push(workspaceFailure(entries[index].workspace, result.reason))
   }
-  if (
-    pages.length === 0 &&
-    failures.length === fanout.attemptedCount + initialFailures.length &&
-    !fanout.truncated
-  ) {
+  if (pages.length === 0 && failures.length === entries.length + initialFailures.length) {
     throw failures[0].error
   }
-  if (fanout.truncated) {
-    console.warn('[linear] MCP issue list exceeded its aggregate result budget; truncating.')
-  }
-  return { pages, failures, truncated: fanout.truncated }
+  return { pages, failures }
 }
 
 async function readIssueListWorkspace(
@@ -185,14 +170,12 @@ async function readIssueListWorkspace(
       includeArchived: request.includeArchived ?? false
     })
     const connection = raw.data?.issues
-    const rawIssues = connection?.nodes ?? []
-    const issues = rawIssues.slice(0, limit)
     return {
-      issues: issues.map((issue) => ({
+      issues: (connection?.nodes ?? []).map((issue) => ({
         ...mapIssue(issue),
         workspace: { id: entry.workspace.id, name: entry.workspace.organizationName }
       })),
-      hasMore: rawIssues.length > issues.length || connection?.pageInfo?.hasNextPage === true,
+      hasMore: connection?.pageInfo?.hasNextPage === true,
       nextCursor: connection?.pageInfo?.endCursor ?? undefined
     }
   })

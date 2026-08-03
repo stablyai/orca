@@ -117,16 +117,6 @@ describe('TerminalWebView scroll routing', () => {
     expect(source).not.toContain('writeQueue.shift()')
   })
 
-  it('fails closed when the in-WebView parser backlog reaches its exact bounds', () => {
-    expect(source).toContain('export const TERMINAL_WEBVIEW_WRITE_QUEUE_MAX_UNITS = 1_000_000')
-    expect(source).toContain('export const TERMINAL_WEBVIEW_WRITE_QUEUE_MAX_ENTRIES = 4_096')
-    expect(source).toContain('export const TERMINAL_WEBVIEW_AFTER_DRAIN_MAX_CALLBACKS = 256')
-    expect(source).toContain('writeQueueUnits + units > WRITE_QUEUE_MAX_UNITS')
-    expect(source).toContain('pendingEntries >= WRITE_QUEUE_MAX_ENTRIES')
-    expect(source).toContain('afterDrainCallbacks.length >= AFTER_DRAIN_MAX_CALLBACKS')
-    expect(source).toContain("reportEngineError('terminal write backlog exceeded safe limit'")
-  })
-
   it('bounds native-side pending WebView writes while preserving control messages', () => {
     expect(source).toContain('const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000')
     expect(source).toContain('const MAX_PENDING_WEB_WRITE_MESSAGES = 4096')
@@ -222,10 +212,12 @@ describe('TerminalWebView scroll routing', () => {
       "document.addEventListener('touchend'",
       '}, { capture: true, passive: true });'
     )
-    expect(touchEndBlock).toContain('notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y)')
+    expect(touchEndBlock).toContain(
+      'notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y, true)'
+    )
 
     const tapHandlerBlock = sliceBetween(
-      'function notifyTerminalSurfaceTap(originX, originY)',
+      'function notifyTerminalSurfaceTap(originX, originY, focusKeyboard)',
       "document.addEventListener('touchstart'"
     )
     expect(tapHandlerBlock.indexOf('oscLinkAtViewportPoint')).toBeLessThan(
@@ -239,6 +231,9 @@ describe('TerminalWebView scroll routing', () => {
     )
     expect(tapHandlerBlock).toContain("notify({ type: 'open-url', url: tappedUrl });")
     expect(tapHandlerBlock).toContain("notify({ type: 'terminal-input', bytes: clickInput });")
+    expect(tapHandlerBlock).toContain(
+      'if (focusKeyboard || !isClickMouseTrackingMode(getMouseTrackingMode()))'
+    )
     expect(tapHandlerBlock).toContain("notify({ type: 'terminal-tap' });")
   })
 

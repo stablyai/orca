@@ -1,6 +1,8 @@
 /* eslint-disable max-lines -- Why: this store is the single main-process owner for Claude usage persistence, scan gating, and query semantics. Keeping those policy decisions together avoids split-brain range/scope logic across multiple files. */
 import { app } from 'electron'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
@@ -14,13 +16,10 @@ import type {
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
-import {
-  readUsageProjectionStateFile,
-  writeUsageProjectionStateFileWithRecovery
-} from '../usage-projection-state-file'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { ClaudeUsagePersistedState } from './types'
-import { createWorktreeRefs, getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
+import { createWorktreeRefs } from '../usage/usage-worktree-refs'
+import { getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
 
 // Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
 // caches either lack ownership or used narrower keys and can under/over-count
@@ -62,6 +61,11 @@ const SONNET_LONG_CONTEXT_PRICING = {
 } satisfies Partial<ClaudeModelPricing>
 
 const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
+  'claude-fable-5': { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
+  'claude-opus-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  // Why: Sonnet 5 bills its full 1M window at flat rates, so no long-context tier here.
+  // Why: standard rates, not the $2/$10 introductory rate ending 2026-08-31 — no date dimension.
+  'claude-sonnet-5': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   'claude-opus-4-8': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-7': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-6': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -159,6 +163,12 @@ function normalizeModelForPricing(model: string | null): string | null {
   if (alias) {
     return alias
   }
+  if (hasClaudeModelVersion(lower, 'fable', '5')) {
+    return 'claude-fable-5'
+  }
+  if (hasClaudeModelVersion(lower, 'opus', '5')) {
+    return 'claude-opus-5'
+  }
   if (hasClaudeModelVersion(lower, 'opus', '4-8')) {
     return 'claude-opus-4-8'
   }
@@ -181,6 +191,9 @@ function normalizeModelForPricing(model: string | null): string | null {
     // Why: new Opus 4 point releases now share the current low Opus pricing;
     // avoid overbilling unknown future Claude Code model IDs as legacy Opus 4.
     return 'claude-opus-4-8'
+  }
+  if (hasClaudeModelVersion(lower, 'sonnet', '5')) {
+    return 'claude-sonnet-5'
   }
   if (hasClaudeModelVersion(lower, 'sonnet', '4-6')) {
     return 'claude-sonnet-4-6'
@@ -320,6 +333,9 @@ export class ClaudeUsageStore {
   private state: ClaudeUsagePersistedState
   private readonly store: Store
   private scanPromise: Promise<void> | null = null
+  // Why: the 20 MB usage JSON must not block the Electron main thread; the writer serializes writes
+  // and vetoes superseded renames.
+  private readonly writer = new UsageCacheSnapshotWriter('[claude-usage]', getClaudeUsageFile)
 
   constructor(store: Store) {
     this.store = store
@@ -329,11 +345,10 @@ export class ClaudeUsageStore {
   private load(): ClaudeUsagePersistedState {
     try {
       const usageFile = getClaudeUsageFile()
-      const raw = readUsageProjectionStateFile(usageFile)
-      if (raw === null) {
+      if (!existsSync(usageFile)) {
         return getDefaultState()
       }
-      const parsed = JSON.parse(raw) as ClaudeUsagePersistedState
+      const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as ClaudeUsagePersistedState
       if (parsed.schemaVersion !== SCHEMA_VERSION) {
         // Why: scanner semantics affect persisted totals, so old Claude caches
         // must be rebuilt after parser/source changes instead of reused briefly.
@@ -365,19 +380,19 @@ export class ClaudeUsageStore {
     }
   }
 
-  private writeToDisk(): void {
-    const usageFile = getClaudeUsageFile()
-    this.state = writeUsageProjectionStateFileWithRecovery(usageFile, this.state, (error) => {
-      const reset = getDefaultState()
-      reset.scanState.enabled = this.state.scanState.enabled
-      reset.scanState.lastScanError = error.message
-      return reset
-    })
+  private writeToDisk(): Promise<void> {
+    // Pretty-print preserved: humans inspect this analytics cache on disk.
+    return this.writer.write(() => JSON.stringify(this.state, null, 2))
+  }
+
+  /** Await queued cache writes so quit does not drop the final snapshot. */
+  flush(): Promise<void> {
+    return this.writer.flush()
   }
 
   async setEnabled(enabled: boolean): Promise<ClaudeUsageScanState> {
     this.state.scanState.enabled = enabled
-    this.writeToDisk()
+    await this.writeToDisk()
     return this.getScanState()
   }
 
@@ -427,8 +442,11 @@ export class ClaudeUsageStore {
 
     this.state.scanState.lastScanStartedAt = Date.now()
     this.state.scanState.lastScanError = null
-    this.writeToDisk()
 
+    // Why no write here: persisting scan-start would rewrite the whole multi-MB cache before a single
+    // result changed. The completion/failure write below persists the same fields.
+
+    // Why: assign scanPromise before any await so concurrent refresh shares one scan.
     this.scanPromise = (async () => {
       try {
         const repos = this.store.getRepos()
@@ -444,10 +462,12 @@ export class ClaudeUsageStore {
         this.state.worktreeFingerprint = worktreeFingerprint
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null
-        this.writeToDisk()
+        // Why swallow: persistence is a cache concern. A disk failure must not turn a good scan into
+        // a scan error and reject refresh() for every query caller; writeToDisk already logs it.
+        await this.writeToDisk().catch(() => {})
       } catch (error) {
         this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        this.writeToDisk()
+        await this.writeToDisk().catch(() => {})
       } finally {
         this.scanPromise = null
       }

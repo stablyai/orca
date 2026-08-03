@@ -6,11 +6,6 @@ import type {
   LinearWorkspaceError,
   LinearWorkspaceSelection
 } from '../../shared/types'
-import {
-  boundedIntegrationErrorLog,
-  boundedIntegrationErrorMessage
-} from '../integration-error-message'
-import { runBoundedIntegrationFanout } from '../integration-fanout'
 import { acquire, release, getClients, isAuthError, clearToken } from './client'
 import {
   fetchAllTeamLabels,
@@ -27,12 +22,11 @@ export async function listTeams(
     return []
   }
 
-  const fanout = await runBoundedIntegrationFanout(
-    entries,
-    async (entry) => {
+  const results = await Promise.all(
+    entries.map(async (entry) => {
       await acquire()
       try {
-        return await fetchAllTeamsForWorkspace(entry)
+        return fetchAllTeamsForWorkspace(entry)
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
@@ -40,21 +34,15 @@ export async function listTeams(
             throw error
           }
         } else {
-          console.warn('[linear] listTeams failed:', boundedIntegrationErrorLog(error))
+          console.warn('[linear] listTeams failed:', error)
         }
         return []
       } finally {
         release()
       }
-    },
-    (teams) => teams
+    })
   )
-  if (fanout.truncated) {
-    console.warn(
-      '[linear] Cross-workspace teams exceeded their aggregate result budget; truncating.'
-    )
-  }
-  return fanout.results.flat().sort((a, b) => a.name.localeCompare(b.name))
+  return results.flat().sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export async function listTeamsOrThrow(
@@ -65,9 +53,8 @@ export async function listTeamsOrThrow(
     return []
   }
 
-  const fanout = await runBoundedIntegrationFanout(
-    entries,
-    async (entry) => {
+  const results = await Promise.all(
+    entries.map(async (entry) => {
       await acquire()
       try {
         return await fetchAllTeamsForWorkspace(entry)
@@ -79,15 +66,9 @@ export async function listTeamsOrThrow(
       } finally {
         release()
       }
-    },
-    (teams) => teams
+    })
   )
-  if (fanout.truncated) {
-    console.warn(
-      '[linear] Cross-workspace teams exceeded their aggregate result budget; truncating.'
-    )
-  }
-  return fanout.results.flat().sort((a, b) => a.name.localeCompare(b.name))
+  return results.flat().sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export async function listTeamsForAgent(
@@ -98,9 +79,8 @@ export async function listTeamsForAgent(
     return { teams: [], errors: [] }
   }
 
-  const fanout = await runBoundedIntegrationFanout(
-    entries,
-    async (entry) => {
+  const results = await Promise.all(
+    entries.map(async (entry) => {
       await acquire()
       try {
         return { teams: await fetchAllTeamsForWorkspace(entry), error: null }
@@ -114,23 +94,17 @@ export async function listTeamsForAgent(
             workspaceId: entry.workspace.id,
             workspaceName: entry.workspace.organizationName,
             type: isAuthError(error) ? 'auth' : 'unknown',
-            message: boundedIntegrationErrorMessage(error)
+            message: error instanceof Error ? error.message : String(error)
           } satisfies LinearWorkspaceError
         }
       } finally {
         release()
       }
-    },
-    (result) => [...result.teams, ...(result.error ? [result.error] : [])]
+    })
   )
-  if (fanout.truncated) {
-    console.warn('[linear] Agent team list exceeded its aggregate result budget; truncating.')
-  }
   return {
-    teams: fanout.results
-      .flatMap((result) => result.teams)
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    errors: fanout.results.flatMap((result) => (result.error ? [result.error] : []))
+    teams: results.flatMap((result) => result.teams).sort((a, b) => a.name.localeCompare(b.name)),
+    errors: results.flatMap((result) => (result.error ? [result.error] : []))
   }
 }
 
@@ -152,7 +126,7 @@ export async function getTeamStates(
       clearToken(entry.workspace.id)
       throw error
     }
-    console.warn('[linear] getTeamStates failed:', boundedIntegrationErrorLog(error))
+    console.warn('[linear] getTeamStates failed:', error)
     return []
   } finally {
     release()
@@ -200,7 +174,7 @@ export async function getTeamLabels(
       clearToken(entry.workspace.id)
       throw error
     }
-    console.warn('[linear] getTeamLabels failed:', boundedIntegrationErrorLog(error))
+    console.warn('[linear] getTeamLabels failed:', error)
     return []
   } finally {
     release()
@@ -248,7 +222,7 @@ export async function getTeamMembers(
       clearToken(entry.workspace.id)
       throw error
     }
-    console.warn('[linear] getTeamMembers failed:', boundedIntegrationErrorLog(error))
+    console.warn('[linear] getTeamMembers failed:', error)
     return []
   } finally {
     release()

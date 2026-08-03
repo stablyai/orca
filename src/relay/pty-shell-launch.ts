@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
@@ -7,7 +7,6 @@ import {
   getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock
 } from '../main/shell-templates'
-import { readNodeFileSyncWithinLimit } from '../shared/node-bounded-file-reader'
 
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
@@ -247,10 +246,7 @@ trap '__orca_osc133_preexec' DEBUG
     mkdirSync(dirname(path), { recursive: true })
     let existing: string | null = null
     try {
-      existing = readNodeFileSyncWithinLimit(
-        path,
-        Buffer.byteLength(content, 'utf8')
-      ).buffer.toString('utf8')
+      existing = readFileSync(path, 'utf8')
     } catch {
       existing = null
     }

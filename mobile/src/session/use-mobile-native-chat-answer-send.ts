@@ -9,7 +9,11 @@ import {
   type AskAnswerSelection,
   type AskPrompt
 } from './mobile-native-chat-ask'
-import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import {
+  openMobileNativeChatSendBudget,
+  sendMobileNativeChatMessageWithOutcome
+} from './mobile-native-chat-send'
+import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
@@ -103,6 +107,12 @@ export function useMobileNativeChatAnswerSend(args: {
       cancelPending()
       const generation = generationRef.current
       let sawUnknownOutcome = false
+      let sawAcceptedGroup = false
+      // One budget for the whole answer instead of a fresh timeout per keystroke
+      // group, which let an N-group selector hold the card for N × the send timeout.
+      // It bounds transport time only: each deliberate pacing wait is credited back
+      // below, so a long multi-question answer still gets a full budget to write in.
+      let deadline = openMobileNativeChatSendBudget()
       const sendTerminal = async (body: string, enter: boolean): Promise<boolean> => {
         const activeRoute = activeRouteRef.current
         if (
@@ -119,12 +129,16 @@ export function useMobileNativeChatAnswerSend(args: {
           terminal: handle,
           text: body,
           enter,
+          deadline,
           ...(deviceTokenRef.current
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
             : {})
         })
         if (outcome === 'unknown') {
           sawUnknownOutcome = true
+        }
+        if (outcome === 'accepted') {
+          sawAcceptedGroup = true
         }
         return outcome === 'accepted'
       }
@@ -143,11 +157,16 @@ export function useMobileNativeChatAnswerSend(args: {
         if (generationRef.current === generation) {
           // Why: keystrokes that may have landed (ack lost / path cutover) must
           // not read as a definite failure — a blind resend could double-step
-          // the selector.
+          // the selector. An earlier group that WAS accepted is the same hazard
+          // in definite form: a multi-question answer whose shared budget ran out
+          // mid-sequence left the remote selector half-stepped, and telling the
+          // user nothing was sent invites a retry on top of the advanced state.
           onSendError(
-            sawUnknownOutcome
-              ? 'Answer unconfirmed — check chat before retrying'
-              : 'Answer not sent'
+            sawAcceptedGroup
+              ? 'Answer partly sent — check chat before retrying'
+              : sawUnknownOutcome
+                ? 'Answer unconfirmed — check chat before retrying'
+                : 'Answer not sent'
           )
         }
         return false
@@ -155,6 +174,30 @@ export function useMobileNativeChatAnswerSend(args: {
       // Grok commits pasted labels; Claude and Codex need their selector-specific
       // keystrokes paced so each step renders before the next lands.
       if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
+        // This shape pastes the label into the composer and commits it, so an
+        // orphaned image paste would be submitted along with the answer (#10228).
+        // The selector shapes below deliberately skip the heal: their keys are
+        // `enter: false` for an active overlay, and a single-select answer is a
+        // bare option digit that cannot submit the line at all, so clearing there
+        // would consume the marker still protecting the next real message.
+        // Desktop splits it identically — use-native-chat-interactive-send.ts
+        // routes only the pasted-label shape through the clearing sender.
+        if (
+          !(await healMobileNativeChatStaleInput({
+            client,
+            terminal: handle,
+            deviceToken: deviceTokenRef.current,
+            deadline
+          }))
+        ) {
+          if (generationRef.current === generation) {
+            onSendError('Answer not sent')
+          }
+          return false
+        }
+        if (generationRef.current !== generation) {
+          return false
+        }
         return (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
       }
       const groups =
@@ -170,8 +213,12 @@ export function useMobileNativeChatAnswerSend(args: {
         if (!(await sendTerminal(body, false))) {
           return fail()
         }
-        if (index < groups.length - 1 && !(await wait(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))) {
-          return false
+        if (index < groups.length - 1) {
+          if (!(await wait(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))) {
+            return false
+          }
+          // Pacing is deliberate, not transport latency — don't charge it to the budget.
+          deadline += MOBILE_NATIVE_CHAT_QUESTION_STEP_MS
         }
       }
       return groups.length > 0

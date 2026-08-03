@@ -1,20 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  encodeBoundedNdjson,
   encodeNdjson,
   createNdjsonParser,
   NDJSON_MAX_LINE_BYTES,
-  NDJSON_MAX_STRUCTURAL_TOKENS
+  NdjsonLineTooLongError
 } from './ndjson'
 
 describe('encodeNdjson', () => {
-  it('bounds response serialization while preserving admitted wire bytes', () => {
-    expect(encodeBoundedNdjson({ ok: true }, 12)).toBe('{"ok":true}\n')
-    expect(() => encodeBoundedNdjson({ value: 'x'.repeat(100) }, 32)).toThrow(
-      'JSON output exceeds 31 bytes'
-    )
-  })
-
   it('encodes an object as a JSON line ending with newline', () => {
     const result = encodeNdjson({ type: 'hello', version: 1 })
     expect(result).toBe('{"type":"hello","version":1}\n')
@@ -25,6 +17,20 @@ describe('encodeNdjson', () => {
     const result = encodeNdjson(msg)
     expect(result.endsWith('\n')).toBe(true)
     expect(JSON.parse(result.trim())).toEqual(msg)
+  })
+
+  it('accepts the exact line-byte limit and rejects one byte more', () => {
+    const emptyBytes = Buffer.byteLength(JSON.stringify({ data: '' }), 'utf8')
+    expect(encodeNdjson({ data: 'abc' }, emptyBytes + 3)).toBe('{"data":"abc"}\n')
+    expect(() => encodeNdjson({ data: 'abcd' }, emptyBytes + 3)).toThrow(NdjsonLineTooLongError)
+  })
+
+  // Why: the cap is UTF-8 bytes, not characters — a code-unit count would let a 4-byte emoji slip past.
+  it('measures multibyte payloads in UTF-8 bytes, not characters', () => {
+    const emptyBytes = Buffer.byteLength(JSON.stringify({ data: '' }), 'utf8')
+    expect(encodeNdjson({ data: '🐙' }, emptyBytes + 4)).toBe('{"data":"🐙"}\n')
+    expect(() => encodeNdjson({ data: '🐙' }, emptyBytes + 3)).toThrow(NdjsonLineTooLongError)
+    expect(() => encodeNdjson({ data: 'é' }, emptyBytes + 1)).toThrow(NdjsonLineTooLongError)
   })
 })
 
@@ -43,32 +49,6 @@ describe('createNdjsonParser', () => {
     expect(onMessage).toHaveBeenCalledOnce()
     expect(onMessage).toHaveBeenCalledWith({ type: 'hello' })
     expect(onError).not.toHaveBeenCalled()
-  })
-
-  it('optionally reports each parsed line byte length without re-serializing it', () => {
-    const onMessage = vi.fn()
-    const parser = createNdjsonParser(onMessage, undefined, { includeLineBytes: true })
-
-    parser.feed('{"text":"é"}\n')
-
-    expect(onMessage).toHaveBeenCalledWith({ text: 'é' }, Buffer.byteLength('{"text":"é"}'))
-  })
-
-  it('rejects structurally amplified lines before parsing', () => {
-    const onMessage = vi.fn()
-    const onError = vi.fn()
-    const parser = createNdjsonParser(onMessage, onError)
-    const parseSpy = vi.spyOn(JSON, 'parse')
-    try {
-      parser.feed(`{"values":[${'0,'.repeat(NDJSON_MAX_STRUCTURAL_TOKENS)}0]}\n`)
-      expect(onMessage).not.toHaveBeenCalled()
-      expect(onError).toHaveBeenCalledWith(
-        expect.objectContaining({ message: expect.stringContaining('JSON structure exceeds') })
-      )
-      expect(parseSpy).not.toHaveBeenCalled()
-    } finally {
-      parseSpy.mockRestore()
-    }
   })
 
   it('parses multiple messages in a single chunk', () => {
@@ -93,20 +73,6 @@ describe('createNdjsonParser', () => {
     parser.feed('lo","version":1}\n')
     expect(onMessage).toHaveBeenCalledOnce()
     expect(onMessage).toHaveBeenCalledWith({ type: 'hello', version: 1 })
-  })
-
-  it('parses a line delivered in more than 100,000 one-character fragments', () => {
-    const onMessage = vi.fn()
-    const parser = createNdjsonParser(onMessage, undefined, { includeLineBytes: true })
-    const message = { value: 'x'.repeat(100_000) }
-    const line = JSON.stringify(message)
-
-    for (const character of line) {
-      parser.feed(character)
-    }
-    parser.feed('\n')
-
-    expect(onMessage).toHaveBeenCalledWith(message, Buffer.byteLength(line))
   })
 
   it('handles a chunk that ends mid-line followed by more data', () => {

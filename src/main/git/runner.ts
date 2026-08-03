@@ -33,7 +33,6 @@ import {
   appendGitConfigEnv,
   gitCredentialPromptGuardEnv
 } from '../../shared/git-credential-prompt-env'
-import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
 import {
   buildWslLoginShellCommand,
@@ -165,8 +164,15 @@ function resolveHostGitHubCli(command: 'gh', args: string[]): ResolvedCommand {
   }
 }
 
+let defaultWslDistroOverride: string | null = null
+
+// Why: allow host commands fallback to route through the user's pinned WSL distro when host execution fails.
+export function setDefaultWslDistroOverride(distro: string | null): void {
+  defaultWslDistroOverride = distro
+}
+
 function resolveDefaultWslCli(command: 'gh' | 'glab', args: string[]): ResolvedCommand | null {
-  const distro = getDefaultWslDistro()
+  const distro = defaultWslDistroOverride ?? getDefaultWslDistro()
   return distro ? resolveCommand(command, args, undefined, distro) : null
 }
 
@@ -250,7 +256,7 @@ function resolveCommand(
 
 // ─── Git-specific runners ───────────────────────────────────────────
 
-// Why: execFile disables its cap when maxBuffer is undefined; unbounded output over V8's string max crashes main uncatchably — keep in sync with relay MAX_GIT_BUFFER.
+// Why: cap execFile output to prevent an uncatchable V8 string overflow; match relay MAX_GIT_BUFFER.
 export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
 
 type GitExecOptions = {
@@ -272,6 +278,7 @@ type CommandExecOptions = {
   timeout?: number
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
+  wslDistro?: string
 }
 
 function isMissingCommandError(error: unknown): boolean {
@@ -498,7 +505,6 @@ async function spawnCommandCapture(
   args: string[],
   options: CommandExecOptions
 ): Promise<{ stdout: string; stderr: string }> {
-  const maxBuffer = options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER
   const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, args)
   return new Promise((resolve, reject) => {
     if (options.signal?.aborted) {
@@ -506,8 +512,10 @@ async function spawnCommandCapture(
       return
     }
     let settled = false
-    const stdout = new GrowingByteBuffer()
-    const stderr = new GrowingByteBuffer()
+    let stdout = ''
+    let stderr = ''
+    let stdoutBytes = 0
+    let stderrBytes = 0
     const spawnStartedAt = performance.now()
     const child = spawn(spawnCmd, spawnArgs, {
       cwd: options.cwd,
@@ -538,15 +546,11 @@ async function spawnCommandCapture(
       }
       settled = true
       cleanupListeners()
-      const stdoutText = stdout.toString(options.encoding ?? 'utf-8')
-      const stderrText = stderr.toString(options.encoding ?? 'utf-8')
-      stdout.clear()
-      stderr.clear()
       if (error) {
-        reject(Object.assign(error, { stdout: stdoutText, stderr: stderrText }))
+        reject(Object.assign(error, { stdout, stderr }))
         return
       }
-      resolve({ stdout: stdoutText, stderr: stderrText })
+      resolve({ stdout, stderr })
     }
     timer = options.timeout
       ? setTimeout(() => {
@@ -556,20 +560,22 @@ async function spawnCommandCapture(
       : null
     options.signal?.addEventListener('abort', onAbort, { once: true })
     function onStdoutData(chunk: Buffer): void {
-      if (stdout.byteLength + chunk.byteLength > maxBuffer) {
+      stdoutBytes += chunk.byteLength
+      if (options.maxBuffer && stdoutBytes > options.maxBuffer) {
         void killSpawnedCommandTree(child)
         finish(new Error(`${command} stdout exceeded maxBuffer.`))
         return
       }
-      stdout.append(chunk)
+      stdout += chunk.toString(options.encoding ?? 'utf-8')
     }
     function onStderrData(chunk: Buffer): void {
-      if (stderr.byteLength + chunk.byteLength > maxBuffer) {
+      stderrBytes += chunk.byteLength
+      if (options.maxBuffer && stderrBytes > options.maxBuffer) {
         void killSpawnedCommandTree(child)
         finish(new Error(`${command} stderr exceeded maxBuffer.`))
         return
       }
-      stderr.append(chunk)
+      stderr += chunk.toString(options.encoding ?? 'utf-8')
     }
     function onError(error: Error): void {
       finish(error)
@@ -874,23 +880,24 @@ export async function commandExecFileAsync(
   args: string[],
   options: CommandExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
-  const resolved = resolveCommand(command, args, options.cwd)
+  const { wslDistro, ...execOptions } = options
+  const resolved = resolveCommand(command, args, options.cwd, wslDistro)
   const binary =
     resolved.wsl === null ? resolveWindowsCommand(resolved.binary, options.env) : resolved.binary
   if (isWindowsBatchScript(binary)) {
     return spawnCommandCapture(binary, resolved.args, {
-      ...options,
+      ...execOptions,
       cwd: resolved.cwd
     })
   }
   try {
     const { stdout, stderr } = await execFileCapture(binary, resolved.args, {
       cwd: resolved.cwd,
-      encoding: options.encoding ?? 'utf-8',
-      maxBuffer: options.maxBuffer,
-      timeout: options.timeout,
-      env: options.env,
-      signal: options.signal
+      encoding: execOptions.encoding ?? 'utf-8',
+      maxBuffer: execOptions.maxBuffer,
+      timeout: execOptions.timeout,
+      env: execOptions.env,
+      signal: execOptions.signal
     })
     return { stdout: stdout as string, stderr: stderr as string }
   } catch (error) {
@@ -899,7 +906,7 @@ export async function commandExecFileAsync(
         resolveWindowsCommand(`${resolved.binary}.cmd`, options.env),
         resolved.args,
         {
-          ...options,
+          ...execOptions,
           cwd: resolved.cwd
         }
       )
@@ -974,9 +981,11 @@ export async function gitStreamStdout(
       let settled = false
       let stoppedEarly = false
       let stdoutBytes = 0
-      const stderr = new GrowingByteBuffer()
+      let stderr = ''
+      let stderrBytes = 0
       // Why: decode statefully so a multibyte UTF-8 char split across chunks isn't corrupted into replacement chars.
       const stdoutDecoder = new StringDecoder('utf8')
+      const stderrDecoder = new StringDecoder('utf8')
 
       const cleanup = (): void => {
         child.stdout?.off('data', onStdoutData)
@@ -986,6 +995,7 @@ export async function gitStreamStdout(
         options.signal?.removeEventListener('abort', onAbort)
         // Flush any bytes the decoders were holding for an incomplete sequence.
         stdoutDecoder.end()
+        stderrDecoder.end()
       }
       const finish = (error: Error | null): void => {
         if (settled) {
@@ -993,10 +1003,8 @@ export async function gitStreamStdout(
         }
         settled = true
         cleanup()
-        const stderrText = stderr.toString()
-        stderr.clear()
         if (error) {
-          reject(Object.assign(error, { stderr: stderrText }))
+          reject(Object.assign(error, { stderr }))
           return
         }
         resolve({ stoppedEarly })
@@ -1030,12 +1038,13 @@ export async function gitStreamStdout(
         }
       }
       function onStderrData(chunk: Buffer): void {
-        if (stderr.byteLength + chunk.byteLength > maxBuffer) {
+        stderrBytes += chunk.byteLength
+        if (stderrBytes > maxBuffer) {
           void killSpawnedCommandTree(child)
           finish(new Error('git stderr exceeded maxBuffer.'))
           return
         }
-        stderr.append(chunk)
+        stderr += stderrDecoder.write(chunk)
       }
       function onError(error: Error): void {
         finish(error)
@@ -1045,7 +1054,7 @@ export async function gitStreamStdout(
           finish(null)
           return
         }
-        finish(new Error(`git exited with ${code}: ${stderr.toString()}`))
+        finish(new Error(`git exited with ${code}: ${stderr}`))
       }
       function onAbort(): void {
         if (!child.pid) {

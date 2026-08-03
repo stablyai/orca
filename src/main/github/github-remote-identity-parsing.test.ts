@@ -1,22 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  GITHUB_REMOTE_REPO_MAX_BYTES,
-  GITHUB_REMOTE_URL_MAX_BYTES,
+  effectiveGitHubRemoteHost,
+  gitHubSshConfigHostAlias,
   parseGitHubOwnerRepo,
-  parseGitHubRemoteIdentity
+  parseGitHubOwnerRepoWithResolvedSshHostname,
+  parseGitHubRemoteIdentity,
+  remoteUrlUsesSshTransport
 } from './github-remote-identity-parsing'
 
 describe('parseGitHubRemoteIdentity', () => {
-  it('rejects oversized remote URLs and identity fields before retention', () => {
-    expect(parseGitHubRemoteIdentity('x'.repeat(GITHUB_REMOTE_URL_MAX_BYTES + 1))).toBeNull()
-    expect(
-      parseGitHubRemoteIdentity(
-        `git@github.com:owner/${'r'.repeat(GITHUB_REMOTE_REPO_MAX_BYTES + 1)}.git`
-      )
-    ).toBeNull()
-  })
-
   it('parses a plain github.com https remote', () => {
     expect(parseGitHubRemoteIdentity('https://github.com/team/orca.git')).toEqual({
       host: 'github.com',
@@ -119,5 +112,79 @@ describe('parseGitHubOwnerRepo', () => {
       owner: 'team',
       repo: 'orca'
     })
+  })
+
+  it('returns null for an SSH Host alias remote without HostName resolution', () => {
+    expect(parseGitHubOwnerRepo('git@github-work:team/orca.git')).toBeNull()
+    expect(parseGitHubOwnerRepo('git@github.com-work:team/orca.git')).toBeNull()
+    expect(parseGitHubOwnerRepo('ssh://git@github-work/team/orca.git')).toBeNull()
+  })
+})
+
+describe('SSH Host alias identity (#10284)', () => {
+  it('detects SCP and ssh:// remotes as SSH transport', () => {
+    expect(remoteUrlUsesSshTransport('git@github-work:team/orca.git')).toBe(true)
+    expect(remoteUrlUsesSshTransport('ssh://git@github-work/team/orca.git')).toBe(true)
+    expect(remoteUrlUsesSshTransport('git+ssh://git@github-work/team/orca.git')).toBe(true)
+    expect(remoteUrlUsesSshTransport('https://github.com/team/orca.git')).toBe(false)
+  })
+
+  it('exposes Host aliases that need ssh -G expansion', () => {
+    expect(gitHubSshConfigHostAlias('git@github-work:team/orca.git')).toBe('github-work')
+    expect(gitHubSshConfigHostAlias('git@github.com-work:team/orca.git')).toBe('github.com-work')
+    expect(gitHubSshConfigHostAlias('ssh://git@github-work/team/orca.git')).toBe('github-work')
+    expect(gitHubSshConfigHostAlias('git@github.com:team/orca.git')).toBeNull()
+    expect(gitHubSshConfigHostAlias('https://github.com/team/orca.git')).toBeNull()
+  })
+
+  it('preserves SSH Host alias case for OpenSSH Host matching', () => {
+    expect(gitHubSshConfigHostAlias('git@GitHub-Work:team/orca.git')).toBe('GitHub-Work')
+    expect(gitHubSshConfigHostAlias('ssh://git@GitHub-Work/team/orca.git')).toBe('GitHub-Work')
+    expect(gitHubSshConfigHostAlias('git+ssh://git@GitHub-Work/team/orca.git')).toBe('GitHub-Work')
+  })
+
+  it('returns owner/repo when resolved HostName is github.com', () => {
+    expect(
+      parseGitHubOwnerRepoWithResolvedSshHostname('git@github-work:team/orca.git', 'github.com')
+    ).toEqual({ owner: 'team', repo: 'orca' })
+  })
+
+  it('returns owner/repo when resolved HostName is ssh.github.com (SSH-over-HTTPS)', () => {
+    expect(
+      parseGitHubOwnerRepoWithResolvedSshHostname('git@github-work:team/orca.git', 'ssh.github.com')
+    ).toEqual({ owner: 'team', repo: 'orca' })
+  })
+
+  it('keeps owner/repo for literal github.com even if resolved host is unused', () => {
+    expect(
+      parseGitHubOwnerRepoWithResolvedSshHostname('git@github.com:team/orca.git', null)
+    ).toEqual({ owner: 'team', repo: 'orca' })
+  })
+
+  it('returns null when resolved HostName is a non-GitHub forge', () => {
+    expect(
+      parseGitHubOwnerRepoWithResolvedSshHostname('git@gitlab-work:team/orca.git', 'gitlab.com')
+    ).toBeNull()
+  })
+
+  it('does not apply SSH HostName resolution to HTTPS remotes', () => {
+    expect(
+      parseGitHubOwnerRepoWithResolvedSshHostname('https://github-work/team/orca.git', 'github.com')
+    ).toBeNull()
+  })
+
+  it('returns null when SSH resolution is missing', () => {
+    expect(
+      parseGitHubOwnerRepoWithResolvedSshHostname('git@github-work:team/orca.git', null)
+    ).toBeNull()
+    expect(
+      parseGitHubOwnerRepoWithResolvedSshHostname('git@github-work:team/orca.git', '   ')
+    ).toBeNull()
+  })
+
+  it('normalizes effective host for enterprise routing after HostName expansion', () => {
+    expect(effectiveGitHubRemoteHost('github-work', 'ssh.github.com')).toBe('github.com')
+    expect(effectiveGitHubRemoteHost('ghe-work', 'ghe.acme.com')).toBe('ghe.acme.com')
+    expect(effectiveGitHubRemoteHost('github.com', null)).toBe('github.com')
   })
 })

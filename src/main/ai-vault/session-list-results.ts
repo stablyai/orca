@@ -1,14 +1,17 @@
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultScanIssue,
+  AiVaultSession
+} from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { sessionSortTime } from './session-scanner-accumulator'
-import { boundAiVaultListResult } from './session-list-retention'
 
 export function aiVaultScanIssueResult(args: {
   executionHostId?: ExecutionHostId
   path: string
   message: string
 }): AiVaultListResult {
-  return boundAiVaultListResult({
+  return {
     sessions: [],
     issues: [
       {
@@ -19,7 +22,7 @@ export function aiVaultScanIssueResult(args: {
       }
     ],
     scannedAt: new Date().toISOString()
-  })
+  }
 }
 
 // Why: the serving-side scan is host-local and cached once for every caller
@@ -30,9 +33,8 @@ export function restampAiVaultListResult(
   result: AiVaultListResult,
   executionHostId: ExecutionHostId
 ): AiVaultListResult {
-  const retained = boundAiVaultListResult(result)
-  return boundAiVaultListResult({
-    sessions: retained.sessions.map((session) =>
+  return {
+    sessions: result.sessions.map((session) =>
       session.executionHostId === executionHostId
         ? session
         : {
@@ -41,9 +43,9 @@ export function restampAiVaultListResult(
             id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
           }
     ),
-    issues: retained.issues.map((issue) => ({ ...issue, executionHostId })),
-    scannedAt: retained.scannedAt
-  })
+    issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
+    scannedAt: result.scannedAt
+  }
 }
 
 export function mergeAiVaultListResults(
@@ -51,22 +53,19 @@ export function mergeAiVaultListResults(
   rawLimit: number | undefined
 ): AiVaultListResult {
   const limit = rawLimit && rawLimit > 0 ? Math.floor(rawLimit) : 1000
-  let merged: AiVaultListResult = { sessions: [], issues: [], scannedAt: new Date().toISOString() }
-  for (let index = 0; index < results.length; index += 1) {
-    const rawResult = results[index]
-    const result = boundAiVaultListResult(rawResult)
-    const byId = new Map<string, AiVaultSession>()
-    for (const session of [...merged.sessions, ...result.sessions]) {
+  const byId = new Map<string, AiVaultSession>()
+  const issues: AiVaultScanIssue[] = []
+  for (const result of results) {
+    for (const session of result.sessions) {
       byId.set(session.id, session)
     }
-    const sessions = [...byId.values()].sort(
-      (left, right) => sessionSortTime(right) - sessionSortTime(left)
-    )
-    merged = boundAiVaultListResult({
-      sessions: index === results.length - 1 ? sessions.slice(0, limit) : sessions,
-      issues: [...merged.issues, ...result.issues],
-      scannedAt: new Date().toISOString()
-    })
+    issues.push(...result.issues)
   }
-  return merged
+  return {
+    sessions: [...byId.values()]
+      .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
+      .slice(0, limit),
+    issues,
+    scannedAt: new Date().toISOString()
+  }
 }

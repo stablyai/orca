@@ -1,6 +1,8 @@
 /* eslint-disable max-lines -- Why: this store owns Codex analytics persistence, scan policy, and renderer query semantics. Keeping them together prevents the Codex range/scope rules from drifting away from the scanner’s event model. */
 import { app } from 'electron'
 import { join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -14,18 +16,12 @@ import type {
 } from '../../shared/codex-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
-import {
-  readUsageProjectionStateFile,
-  writeUsageProjectionStateFileWithRecovery
-} from '../usage-projection-state-file'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { CodexUsagePersistedState } from './types'
-import { createWorktreeRefs, scanCodexUsageFiles } from './scanner'
+import { createWorktreeRefs } from '../usage/usage-worktree-refs'
+import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
 
-// Why: v5 keys Codex ownership on raw token_count identity without session id
-// so forks that rewrite session_meta still match. Older caches used session-
-// scoped keys and can double-count after fork/resume (#8006).
-const SCHEMA_VERSION = 5
+const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
 const STALE_MS = 5 * 60_000
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
@@ -93,6 +89,30 @@ const MODEL_PRICING: Record<string, CodexModelPricing> = {
     inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
     cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
     outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+  },
+  'gpt-5.6-sol': {
+    input: 5,
+    cachedInput: 0.5,
+    output: 30,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+  },
+  'gpt-5.6-terra': {
+    input: 2.5,
+    cachedInput: 0.25,
+    output: 15,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 5 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.5 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 22.5 }]
+  },
+  'gpt-5.6-luna': {
+    input: 1,
+    cachedInput: 0.1,
+    output: 6,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 2 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.2 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 9 }]
   }
 }
 
@@ -231,6 +251,21 @@ function normalizeModelForPricing(model: string | null): string | null {
   if (normalized === 'gpt-5.5' || normalized.startsWith('gpt-5.5-')) {
     return 'gpt-5.5'
   }
+  if (normalized === 'gpt-5.6-sol' || normalized.startsWith('gpt-5.6-sol-')) {
+    return 'gpt-5.6-sol'
+  }
+  if (normalized === 'gpt-5.6-terra' || normalized.startsWith('gpt-5.6-terra-')) {
+    return 'gpt-5.6-terra'
+  }
+  if (normalized === 'gpt-5.6-luna' || normalized.startsWith('gpt-5.6-luna-')) {
+    return 'gpt-5.6-luna'
+  }
+  // Why: OpenAI routes the bare `gpt-5.6` alias to Sol. Match it exactly — a
+  // `gpt-5.6-` prefix match would swallow the tier IDs above and any future
+  // cheaper variant.
+  if (normalized === 'gpt-5.6') {
+    return 'gpt-5.6-sol'
+  }
   return null
 }
 
@@ -330,6 +365,9 @@ export class CodexUsageStore {
   private state: CodexUsagePersistedState
   private readonly store: Store
   private scanPromise: Promise<void> | null = null
+  // Why: the 60 MB usage JSON must not block the Electron main thread; the writer serializes writes
+  // and vetoes superseded renames.
+  private readonly writer = new UsageCacheSnapshotWriter('[codex-usage]', getCodexUsageFile)
 
   constructor(store: Store) {
     this.store = store
@@ -339,11 +377,10 @@ export class CodexUsageStore {
   private load(): CodexUsagePersistedState {
     try {
       const usageFile = getCodexUsageFile()
-      const raw = readUsageProjectionStateFile(usageFile)
-      if (raw === null) {
+      if (!existsSync(usageFile)) {
         return getDefaultState()
       }
-      const parsed = JSON.parse(raw) as CodexUsagePersistedState
+      const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as CodexUsagePersistedState
       return normalizePersistedState({
         ...getDefaultState(),
         ...parsed,
@@ -358,19 +395,19 @@ export class CodexUsageStore {
     }
   }
 
-  private writeToDisk(): void {
-    const usageFile = getCodexUsageFile()
-    this.state = writeUsageProjectionStateFileWithRecovery(usageFile, this.state, (error) => {
-      const reset = getDefaultState()
-      reset.scanState.enabled = this.state.scanState.enabled
-      reset.scanState.lastScanError = error.message
-      return reset
-    })
+  private writeToDisk(): Promise<void> {
+    // Compact: this cache reaches 60 MB, and pretty-printing it costs main-thread time per scan.
+    return this.writer.write(() => JSON.stringify(this.state))
+  }
+
+  /** Await queued cache writes so quit does not drop the final snapshot. */
+  flush(): Promise<void> {
+    return this.writer.flush()
   }
 
   async setEnabled(enabled: boolean): Promise<CodexUsageScanState> {
     this.state.scanState.enabled = enabled
-    this.writeToDisk()
+    await this.writeToDisk()
     return this.getScanState()
   }
 
@@ -420,14 +457,15 @@ export class CodexUsageStore {
 
     this.state.scanState.lastScanStartedAt = Date.now()
     this.state.scanState.lastScanError = null
-    // Why: start-only writes rewrite the full usage cache before scan results change.
+    // Why no write here: persisting scan-start would rewrite the whole multi-MB cache before a single
+    // result changed. The completion/failure write below persists the same fields.
 
     this.scanPromise = (async () => {
       try {
         const repos = this.store.getRepos()
         const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
         const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
-        const result = await scanCodexUsageFiles(
+        const result = await codexUsageProvider.scan(
           createWorktreeRefs(repos, worktreesByRepo),
           this.state.worktreeFingerprint === worktreeFingerprint ? this.state.processedFiles : []
         )
@@ -437,10 +475,12 @@ export class CodexUsageStore {
         this.state.worktreeFingerprint = worktreeFingerprint
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null
-        this.writeToDisk()
+        // Why swallow: persistence is a cache concern. A disk failure must not turn a good scan into
+        // a scan error and reject refresh() for every query caller; writeToDisk already logs it.
+        await this.writeToDisk().catch(() => {})
       } catch (error) {
         this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        this.writeToDisk()
+        await this.writeToDisk().catch(() => {})
       } finally {
         this.scanPromise = null
       }

@@ -1,5 +1,4 @@
 import type { RawGiteaPullRequest } from './pull-request-mappers'
-import { measureUtf8ByteLength } from '../../shared/utf8-byte-limits'
 
 export type GiteaPullRequestPageFetcher = (page: number) => Promise<RawGiteaPullRequest[] | null>
 
@@ -17,11 +16,7 @@ const SCAN_TTL_MS = 30_000
 const FAILED_SCAN_RETRY_MS = 3_000
 // Why: each entry can retain hundreds of full PR payloads, so TTL alone is not
 // enough protection when many repositories are opened during one app session.
-export const GITEA_SCAN_CACHE_MAX_ENTRIES = 32
-export const GITEA_SCAN_MAX_IN_FLIGHT = 32
-export const GITEA_SCAN_REPO_KEY_MAX_BYTES = 4 * 1024
-export const GITEA_SCAN_CACHE_ENTRY_MAX_PULL_REQUESTS = 250
-export const GITEA_SCAN_CACHE_ENTRY_MAX_BYTES = 512 * 1024
+const MAX_SCAN_CACHE_ENTRIES = 32
 
 const scanCache = new Map<string, GiteaPullRequestScanEntry>()
 const inFlightScans = new Map<string, Promise<RawGiteaPullRequest[]>>()
@@ -46,9 +41,6 @@ function rememberScanCacheEntry(
   ttlMs: number
 ): void {
   removeScanCacheEntry(repoKey)
-  if (!isRetainablePullRequestListing(pullRequests)) {
-    return
-  }
   let entry!: GiteaPullRequestScanEntry
   const expirationTimer = setTimeout(() => removeScanCacheEntry(repoKey, entry), ttlMs)
   expirationTimer.unref()
@@ -58,72 +50,13 @@ function rememberScanCacheEntry(
     pullRequests
   }
   scanCache.set(repoKey, entry)
-  while (scanCache.size > GITEA_SCAN_CACHE_MAX_ENTRIES) {
+  while (scanCache.size > MAX_SCAN_CACHE_ENTRIES) {
     const oldestKey = scanCache.keys().next().value
     if (oldestKey === undefined) {
       break
     }
     removeScanCacheEntry(oldestKey)
   }
-}
-
-function isRetainableRepoKey(repoKey: string): boolean {
-  return !measureUtf8ByteLength(repoKey, {
-    stopAfterBytes: GITEA_SCAN_REPO_KEY_MAX_BYTES
-  }).exceededLimit
-}
-
-function isRetainablePullRequestListing(pullRequests: RawGiteaPullRequest[]): boolean {
-  if (pullRequests.length > GITEA_SCAN_CACHE_ENTRY_MAX_PULL_REQUESTS) {
-    return false
-  }
-  let remainingBytes = GITEA_SCAN_CACHE_ENTRY_MAX_BYTES - pullRequests.length * 128
-  if (remainingBytes < 0) {
-    return false
-  }
-  for (const pullRequest of pullRequests) {
-    const values = [
-      pullRequest.title,
-      pullRequest.state,
-      pullRequest.html_url,
-      pullRequest.updated_at,
-      pullRequest.head?.ref,
-      pullRequest.head?.label,
-      pullRequest.head?.sha
-    ]
-    for (const value of values) {
-      if (typeof value !== 'string') {
-        continue
-      }
-      const measured = measureUtf8ByteLength(value, { stopAfterBytes: remainingBytes })
-      if (measured.exceededLimit) {
-        return false
-      }
-      remainingBytes -= measured.byteLength
-    }
-  }
-  return true
-}
-
-async function collectPullRequests(
-  fetchPage: GiteaPullRequestPageFetcher,
-  pageLimit: number,
-  maxPages: number
-): Promise<{ completed: boolean; pullRequests: RawGiteaPullRequest[] }> {
-  const pullRequests: RawGiteaPullRequest[] = []
-  let completed = true
-  for (let page = 1; page <= maxPages; page++) {
-    const list = await fetchPage(page)
-    if (!list) {
-      completed = false
-      break
-    }
-    pullRequests.push(...list)
-    if (list.length < pageLimit) {
-      break
-    }
-  }
-  return { completed, pullRequests }
 }
 
 function reusableScanCacheEntry(repoKey: string): GiteaPullRequestScanEntry | null {
@@ -156,9 +89,6 @@ export async function scanGiteaPullRequests(
   pageLimit: number,
   maxPages: number
 ): Promise<RawGiteaPullRequest[]> {
-  if (!isRetainableRepoKey(repoKey)) {
-    return (await collectPullRequests(fetchPage, pageLimit, maxPages)).pullRequests
-  }
   const cached = reusableScanCacheEntry(repoKey)
   if (cached) {
     return cached.pullRequests
@@ -167,13 +97,22 @@ export async function scanGiteaPullRequests(
   if (running) {
     return running
   }
-  if (inFlightScans.size >= GITEA_SCAN_MAX_IN_FLIGHT) {
-    return (await collectPullRequests(fetchPage, pageLimit, maxPages)).pullRequests
-  }
   const generation = scanGenerations.get(repoKey) ?? 0
   activeScanCounts.set(repoKey, (activeScanCounts.get(repoKey) ?? 0) + 1)
   const scan = (async () => {
-    const { completed, pullRequests } = await collectPullRequests(fetchPage, pageLimit, maxPages)
+    const pullRequests: RawGiteaPullRequest[] = []
+    let completed = true
+    for (let page = 1; page <= maxPages; page++) {
+      const list = await fetchPage(page)
+      if (!list) {
+        completed = false
+        break
+      }
+      pullRequests.push(...list)
+      if (list.length < pageLimit) {
+        break
+      }
+    }
     if ((scanGenerations.get(repoKey) ?? 0) === generation) {
       rememberScanCacheEntry(repoKey, pullRequests, completed ? SCAN_TTL_MS : FAILED_SCAN_RETRY_MS)
     }
@@ -219,18 +158,4 @@ export function _resetGiteaPullRequestScanCache(): void {
 
 export function _getGiteaPullRequestScanCacheSize(): number {
   return scanCache.size
-}
-
-export function _getGiteaPullRequestScanState(): {
-  cached: number
-  inFlight: number
-  active: number
-  generations: number
-} {
-  return {
-    cached: scanCache.size,
-    inFlight: inFlightScans.size,
-    active: activeScanCounts.size,
-    generations: scanGenerations.size
-  }
 }

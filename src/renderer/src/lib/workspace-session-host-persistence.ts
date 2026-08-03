@@ -8,11 +8,6 @@ import {
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import {
-  forEachWithConcurrency,
-  mapSettledWithConcurrency,
-  mapWithConcurrency
-} from '../../../shared/map-with-concurrency'
-import {
   mergeWorkspaceSessionsFromHosts,
   splitWorkspaceSessionByHost,
   type HostSessionSlices,
@@ -26,7 +21,11 @@ import {
 export type HostPersistenceState = {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   projectGroups?: readonly { id: string; executionHostId?: string | null }[]
-  folderWorkspaces?: readonly { id: string; projectGroupId: string }[]
+  folderWorkspaces?: readonly {
+    id: string
+    projectGroupId: string
+    executionHostId?: ExecutionHostId | null
+  }[]
   worktreesByRepo: Record<string, readonly WorkspaceRuntimeOwnerProjection[]>
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
 }
@@ -51,8 +50,6 @@ export type WorkspaceSessionHostSnapshot = {
   state: WorkspaceSessionState
   hostId?: ExecutionHostId
 }
-
-export const WORKSPACE_SESSION_HOST_IO_CONCURRENCY = 4
 
 const WORKSPACE_SESSION_KEYED_FIELDS = [
   'tabsByWorktree',
@@ -152,7 +149,7 @@ function getFolderWorkspaceRuntimeHostId(
   const group = workspace
     ? state.projectGroups?.find((entry) => entry.id === workspace.projectGroupId)
     : null
-  const parsed = parseExecutionHostId(group?.executionHostId)
+  const parsed = parseExecutionHostId(workspace?.executionHostId ?? group?.executionHostId)
   if (parsed) {
     return parsed.kind === 'runtime' ? parsed.id : LOCAL_EXECUTION_HOST_ID
   }
@@ -232,16 +229,12 @@ export function patchWorkspaceSessionByHost(
   )
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
   const localWrite = api.patch(local)
-  void forEachWithConcurrency(
-    nonLocalEntries(slices),
-    WORKSPACE_SESSION_HOST_IO_CONCURRENCY,
-    async ([hostId, slice]) => {
-      // Why: a failed runtime-partition write must not reject the local chain.
-      await api.patch(slice as WorkspaceSessionPatch, hostId).catch((err) => {
-        console.warn(`[session] host partition patch failed for ${hostId}:`, err)
-      })
-    }
-  )
+  for (const [hostId, slice] of nonLocalEntries(slices)) {
+    // Why: a failed runtime-partition write must not reject the local chain.
+    void api.patch(slice as WorkspaceSessionPatch, hostId).catch((err) => {
+      console.warn(`[session] host partition patch failed for ${hostId}:`, err)
+    })
+  }
   return localWrite
 }
 
@@ -253,19 +246,12 @@ export async function persistWorkspaceSessionByHost(
   payload: WorkspaceSessionState,
   state: HostPersistenceState
 ): Promise<void> {
-  const snapshots = buildWorkspaceSessionHostSnapshots(payload, state)
-  const writes = await mapSettledWithConcurrency(
-    snapshots,
-    WORKSPACE_SESSION_HOST_IO_CONCURRENCY,
-    ({ state: snapshot, hostId }) =>
-      hostId === undefined ? api.set(snapshot) : api.set(snapshot, hostId)
-  )
-  const failedWrite = writes.find(
-    (result): result is PromiseRejectedResult => result.status === 'rejected'
-  )
-  if (failedWrite) {
-    throw failedWrite.reason
+  const slices = splitWorkspaceSessionByHost(payload, buildHostIdByWorktreeId(state))
+  const writes: Promise<void>[] = [api.set(slices[LOCAL_EXECUTION_HOST_ID] ?? payload)]
+  for (const [hostId, slice] of nonLocalEntries(slices)) {
+    writes.push(api.set(slice, hostId))
   }
+  await Promise.all(writes)
   await api.flush()
 }
 
@@ -336,16 +322,14 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
     ...listKnownRuntimeHostIds(repos),
     ...additionalRuntimeHostIds
   ])
-  await mapWithConcurrency(
-    [...runtimeHostIds],
-    WORKSPACE_SESSION_HOST_IO_CONCURRENCY,
-    async (hostId) => {
+  await Promise.all(
+    [...runtimeHostIds].map(async (hostId) => {
       try {
         slices[hostId] = await api.get(hostId)
       } catch (err) {
         console.warn(`[session] skipping unreadable host partition ${hostId}:`, err)
       }
-    }
+    })
   )
   return {
     session: mergeWorkspaceSessionsFromHosts(slices),

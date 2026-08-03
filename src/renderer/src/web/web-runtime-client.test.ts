@@ -11,18 +11,7 @@ import {
   encryptBytes as encryptSharedBytes
 } from '../../../shared/e2ee-crypto'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-
-type TestSubscriptionCallbacks = {
-  onResponse: (response: RuntimeRpcResponse<unknown>) => void
-}
-
-type SubscribePreparedForTest = (
-  method: string,
-  preparedInput: unknown,
-  releaseRetainedBytes: () => void,
-  callbacks: TestSubscriptionCallbacks,
-  options?: unknown
-) => Promise<{ unsubscribe: () => void; sendBinary: (bytes: Uint8Array) => void }>
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 const fakeSockets: FakeWebSocket[] = []
 
@@ -63,6 +52,39 @@ describe('WebRuntimeClient', () => {
     vi.unstubAllGlobals()
   })
 
+  it('advertises explicit close intent support in encrypted authentication', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const call = client.call('status.get', {})
+    const socket = fakeSockets[0]!
+    socket.readyState = FakeWebSocket.OPEN
+    socket.onopen?.()
+
+    expect(JSON.parse(String(socket.send.mock.calls[0]?.[0]))).toEqual({
+      type: 'e2ee_hello',
+      publicKeyB64: expect.any(String)
+    })
+    socket.onmessage?.({ data: JSON.stringify({ type: 'e2ee_ready' }) })
+    const sharedKey = (
+      client as unknown as {
+        sharedKey: Uint8Array
+      }
+    ).sharedKey
+    const auth = decrypt(String(socket.send.mock.calls[1]?.[0]), sharedKey)
+    expect(JSON.parse(auth!)).toEqual({
+      type: 'e2ee_auth',
+      deviceToken: 'token',
+      clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+    })
+
+    client.close()
+    await expect(call).rejects.toThrow('Remote Orca runtime connection closed.')
+  })
+
   it('closes child subscription clients when the owning client closes', () => {
     const client = new WebRuntimeClient({
       v: 2,
@@ -101,31 +123,6 @@ describe('WebRuntimeClient', () => {
     client.close({ notifySubscriptions: false })
 
     expect(child.close).toHaveBeenCalledWith({ notifySubscriptions: false })
-  })
-
-  it('closes the socket when handshake JSON exceeds the nesting cap', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
-    const socket = fakeSockets[0]!
-    const internals = client as unknown as {
-      state: 'handshaking'
-      sharedKey: Uint8Array
-      handleSocketMessage: (rawData: unknown, sourceWs?: WebSocket) => Promise<void>
-    }
-    internals.state = 'handshaking'
-    internals.sharedKey = new Uint8Array(32)
-
-    await internals.handleSocketMessage(
-      `${'['.repeat(129)}0${']'.repeat(129)}`,
-      socket as unknown as WebSocket
-    )
-
-    expect(socket.close).toHaveBeenCalledOnce()
-    client.close()
   })
 
   it('does not report locally closed subscriptions as remote closes', () => {
@@ -295,24 +292,23 @@ describe('WebRuntimeClient', () => {
     const handle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     const internals = client as unknown as {
       childClients: Set<WebRuntimeClient>
-      subscribePreparedOnCurrentConnection: SubscribePreparedForTest
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
     }
-    const subscribePrepared = vi
-      .spyOn(internals, 'subscribePreparedOnCurrentConnection')
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
       .mockResolvedValue(handle)
     const onResponse = vi.fn()
 
     const subscription = await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse })
 
-    expect(subscribePrepared).toHaveBeenCalledWith(
+    expect(subscribeOnCurrentConnection).toHaveBeenCalledWith(
       'files.watch',
-      expect.objectContaining({ paramsByteLength: 19, worktree: 'wt-1' }),
-      expect.any(Function),
+      { worktree: 'wt-1' },
       expect.objectContaining({ onResponse: expect.any(Function) }),
       undefined
     )
     expect(internals.childClients.size).toBe(0)
-    subscribePrepared.mock.calls[0]?.[3].onResponse({
+    subscribeOnCurrentConnection.mock.calls[0]?.[2].onResponse({
       id: 'watch',
       ok: true,
       streaming: true,
@@ -335,10 +331,10 @@ describe('WebRuntimeClient', () => {
     })
     const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     const internals = client as unknown as {
-      subscribePreparedOnCurrentConnection: SubscribePreparedForTest
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
     }
-    const subscribePrepared = vi
-      .spyOn(internals, 'subscribePreparedOnCurrentConnection')
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
       .mockResolvedValue(localHandle)
     const unwatch = vi.spyOn(client, 'call').mockImplementation(() => {
       expect(localHandle.unsubscribe).not.toHaveBeenCalled()
@@ -352,7 +348,7 @@ describe('WebRuntimeClient', () => {
     const onResponse = vi.fn()
 
     const subscription = await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse })
-    const wrappedCallbacks = subscribePrepared.mock.calls[0]?.[3]
+    const wrappedCallbacks = subscribeOnCurrentConnection.mock.calls[0]?.[2]
     wrappedCallbacks?.onResponse({
       id: 'watch',
       ok: true,
@@ -382,10 +378,10 @@ describe('WebRuntimeClient', () => {
     })
     const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     const internals = client as unknown as {
-      subscribePreparedOnCurrentConnection: SubscribePreparedForTest
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
     }
-    const subscribePrepared = vi
-      .spyOn(internals, 'subscribePreparedOnCurrentConnection')
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
       .mockResolvedValue(localHandle)
     const unwatch = vi
       .spyOn(client, 'call')
@@ -408,7 +404,7 @@ describe('WebRuntimeClient', () => {
         { worktree: 'wt-1' },
         { onResponse: vi.fn() }
       )
-      const wrappedCallbacks = subscribePrepared.mock.calls[0]?.[3]
+      const wrappedCallbacks = subscribeOnCurrentConnection.mock.calls[0]?.[2]
       wrappedCallbacks?.onResponse({
         id: 'watch',
         ok: true,
@@ -434,7 +430,7 @@ describe('WebRuntimeClient', () => {
       await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse: vi.fn() })
       expect(unwatch).toHaveBeenCalledTimes(2)
       expect(localHandle.unsubscribe).toHaveBeenCalledTimes(1)
-      expect(subscribePrepared).toHaveBeenCalledTimes(2)
+      expect(subscribeOnCurrentConnection).toHaveBeenCalledTimes(2)
     } finally {
       client.close()
       warn.mockRestore()
@@ -453,10 +449,10 @@ describe('WebRuntimeClient', () => {
       sendBinary: vi.fn()
     }))
     const internals = client as unknown as {
-      subscribePreparedOnCurrentConnection: SubscribePreparedForTest
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
     }
-    const subscribePrepared = vi
-      .spyOn(internals, 'subscribePreparedOnCurrentConnection')
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
       .mockResolvedValueOnce(handles[0])
       .mockResolvedValueOnce(handles[1])
       .mockResolvedValueOnce(handles[2])
@@ -483,7 +479,7 @@ describe('WebRuntimeClient', () => {
         { onResponse: vi.fn() }
       )
       for (const [index, subscriptionId] of ['watch-a', 'watch-b'].entries()) {
-        subscribePrepared.mock.calls[index]?.[3].onResponse({
+        subscribeOnCurrentConnection.mock.calls[index]?.[2].onResponse({
           id: subscriptionId,
           ok: true,
           streaming: true,
@@ -500,7 +496,7 @@ describe('WebRuntimeClient', () => {
       expect(unwatch).toHaveBeenCalledTimes(4)
       expect(handles[0].unsubscribe).toHaveBeenCalledTimes(1)
       expect(handles[1].unsubscribe).toHaveBeenCalledTimes(1)
-      expect(subscribePrepared).toHaveBeenCalledTimes(3)
+      expect(subscribeOnCurrentConnection).toHaveBeenCalledTimes(3)
     } finally {
       client.close()
       warn.mockRestore()
@@ -516,10 +512,10 @@ describe('WebRuntimeClient', () => {
     })
     const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     const internals = client as unknown as {
-      subscribePreparedOnCurrentConnection: SubscribePreparedForTest
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
     }
-    const subscribePrepared = vi
-      .spyOn(internals, 'subscribePreparedOnCurrentConnection')
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
       .mockResolvedValue(localHandle)
     const unwatch = vi.spyOn(client, 'call').mockResolvedValue({
       id: 'unwatch',
@@ -530,7 +526,7 @@ describe('WebRuntimeClient', () => {
     const onResponse = vi.fn()
 
     const subscription = await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse })
-    const wrappedCallbacks = subscribePrepared.mock.calls[0]?.[3]
+    const wrappedCallbacks = subscribeOnCurrentConnection.mock.calls[0]?.[2]
 
     subscription.unsubscribe()
     expect(unwatch).not.toHaveBeenCalled()
@@ -570,10 +566,10 @@ describe('WebRuntimeClient', () => {
     })
     const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     const internals = client as unknown as {
-      subscribePreparedOnCurrentConnection: SubscribePreparedForTest
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
     }
-    const subscribePrepared = vi
-      .spyOn(internals, 'subscribePreparedOnCurrentConnection')
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
       .mockResolvedValue(localHandle)
     const unwatch = vi.spyOn(client, 'call').mockResolvedValue({
       id: 'unwatch',
@@ -596,7 +592,7 @@ describe('WebRuntimeClient', () => {
       await vi.advanceTimersByTimeAsync(300_000)
       expect(localHandle.unsubscribe).not.toHaveBeenCalled()
 
-      const wrappedCallbacks = subscribePrepared.mock.calls[0]?.[3]
+      const wrappedCallbacks = subscribeOnCurrentConnection.mock.calls[0]?.[2]
       wrappedCallbacks?.onResponse({
         id: 'watch',
         ok: true,
@@ -731,11 +727,6 @@ describe('WebRuntimeClient', () => {
     const internals = client as unknown as {
       waitForConnected: (timeoutMs?: number) => Promise<void>
       sendEncrypted: (message: unknown) => boolean
-      sendEncryptedSerialized: (serialized: string) => {
-        accepted: boolean
-        queued: boolean
-        cancel: () => boolean
-      }
       subscribeOnCurrentConnection: (
         method: string,
         params: unknown,
@@ -744,11 +735,6 @@ describe('WebRuntimeClient', () => {
       ) => Promise<{ unsubscribe: () => void }>
     }
     vi.spyOn(internals, 'waitForConnected').mockResolvedValue(undefined)
-    vi.spyOn(internals, 'sendEncryptedSerialized').mockReturnValue({
-      accepted: true,
-      queued: false,
-      cancel: () => false
-    })
     const sent: unknown[] = []
     vi.spyOn(internals, 'sendEncrypted').mockImplementation((message) => {
       sent.push(message)

@@ -17,8 +17,6 @@ import {
   clampLinearIssueDepth
 } from '../../shared/linear-agent-access'
 import { extractLinearInlineMedia } from '../../shared/linear-inline-media'
-import { boundedIntegrationErrorMessage } from '../integration-error-message'
-import { IntegrationPaginationBudget } from '../integration-pagination-budget'
 import type { ResolvedIssue } from './issue-context-client'
 import { getRequiredEntry, withLinearRead } from './issue-context-client'
 import { getPublicFileUrlClient } from './client'
@@ -71,7 +69,7 @@ export async function readOptionalIncludes(
       includeErrors.push({
         include,
         code: includeErrorCode(error),
-        message: boundedIntegrationErrorMessage(error)
+        message: error instanceof Error ? error.message : String(error)
       })
     }
   }
@@ -177,7 +175,6 @@ async function readChildren(
   let returned = 0
   let capReached = false
   let depthReached = false
-  const budget = new IntegrationPaginationBudget()
 
   const readLevel = async (issueId: string, level: number): Promise<LinearIssueChildNode[]> => {
     if (level > depth || returned >= LINEAR_CHILDREN_NODE_CAP) {
@@ -185,20 +182,16 @@ async function readChildren(
       return []
     }
     const remaining = LINEAR_CHILDREN_NODE_CAP - returned
-    const response = await readConnectionPages(
-      remaining,
-      async (page) => {
-        return await withLinearRead(entry, async () => {
-          const client = getPublicFileUrlClient(entry)
-          const raw = await client.client.rawRequest<RawChildrenResponse, Record<string, unknown>>(
-            CHILDREN_QUERY,
-            { id: issueId, ...page }
-          )
-          return raw.data?.issue?.children ?? null
-        })
-      },
-      budget
-    )
+    const response = await readConnectionPages(remaining, async (page) => {
+      return await withLinearRead(entry, async () => {
+        const client = getPublicFileUrlClient(entry)
+        const raw = await client.client.rawRequest<RawChildrenResponse, Record<string, unknown>>(
+          CHILDREN_QUERY,
+          { id: issueId, ...page }
+        )
+        return raw.data?.issue?.children ?? null
+      })
+    })
     const nodes = response.nodes
     if (response.hasMore || nodes.length > remaining) {
       capReached = true

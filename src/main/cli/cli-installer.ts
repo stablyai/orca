@@ -2,16 +2,22 @@
 import { app } from 'electron'
 import { execFile } from 'node:child_process'
 import { constants, existsSync } from 'node:fs'
-import { access, lstat, mkdir, readlink, stat, symlink, unlink, writeFile } from 'node:fs/promises'
+import {
+  access,
+  lstat,
+  mkdir,
+  readFile,
+  readlink,
+  stat,
+  symlink,
+  unlink,
+  writeFile
+} from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-install-types'
-import { nodeFileContentsEqual } from '../../shared/node-file-content-equality'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
+import { expandWindowsEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
 import {
   invalidateWindowsUserPathRegistryCache,
@@ -27,7 +33,6 @@ const LINUX_COMMAND_NAME = 'orca-ide'
 const LEGACY_LINUX_COMMAND_NAME = 'orca'
 const DEV_LAUNCHER_DIR = ['cli', 'bin']
 const WINDOWS_PATH_WRITE_TIMEOUT_MS = 5_000
-export const CLI_LAUNCHER_INSPECTION_MAX_BYTES = 64 * 1024
 
 type CliInstallerOptions = {
   platform?: NodeJS.Platform
@@ -496,18 +501,19 @@ export class CliInstaller {
         })
       }
 
+      const currentContent = await readFile(commandPath, 'utf8')
       const expectedContent = buildAppImageCliWrapper(appImagePath)
-      const matches = await nodeFileContentsEqual(commandPath, expectedContent)
       return this.buildStatus({
         commandPath,
         launcherPath: appImagePath,
         installMethod: 'wrapper',
         supported: true,
-        state: matches ? 'installed' : 'stale',
+        state: currentContent === expectedContent ? 'installed' : 'stale',
         currentTarget: appImagePath,
-        detail: matches
-          ? `Registered at ${commandPath}.`
-          : `${commandPath} points to a different launcher.`
+        detail:
+          currentContent === expectedContent
+            ? `Registered at ${commandPath}.`
+            : `${commandPath} points to a different launcher.`
       })
     } catch (error) {
       if (isMissingError(error)) {
@@ -533,7 +539,8 @@ export class CliInstaller {
       const stats = await lstat(commandPath)
       if (!stats.isSymbolicLink()) {
         if (stats.isFile()) {
-          const managedTarget = await readManagedUnixLauncherTarget(commandPath)
+          const currentContent = await readFile(commandPath, 'utf8')
+          const managedTarget = extractManagedUnixLauncherTarget(currentContent)
           if (managedTarget) {
             return this.buildStatus({
               commandPath,
@@ -648,7 +655,7 @@ export class CliInstaller {
   private isWindowsPackagedBundledCommand(
     commandPath: string | null,
     launcherPath: string | null
-  ): commandPath is string {
+  ): boolean {
     return (
       this.platform === 'win32' &&
       this.isPackaged &&
@@ -688,18 +695,19 @@ export class CliInstaller {
         })
       }
 
+      const currentContent = await readFile(commandPath, 'utf8')
       const expectedContent = buildWindowsForwarder(launcherPath)
-      const matches = await nodeFileContentsEqual(commandPath, expectedContent)
       return this.buildStatus({
         commandPath,
         launcherPath,
         installMethod: 'wrapper',
         supported: true,
-        state: matches ? 'installed' : 'stale',
+        state: currentContent === expectedContent ? 'installed' : 'stale',
         currentTarget: launcherPath,
-        detail: matches
-          ? `Registered at ${commandPath}.`
-          : `${commandPath} points to a different launcher.`
+        detail:
+          currentContent === expectedContent
+            ? `Registered at ${commandPath}.`
+            : `${commandPath} points to a different launcher.`
       })
     } catch (error) {
       if (isMissingError(error)) {
@@ -1006,20 +1014,6 @@ function extractManagedUnixLauncherTarget(content: string): string | null {
     : null
 }
 
-async function readManagedUnixLauncherTarget(filePath: string): Promise<string | null> {
-  try {
-    const contents = (
-      await readNodeFileWithinLimit(filePath, CLI_LAUNCHER_INSPECTION_MAX_BYTES)
-    ).buffer.toString('utf8')
-    return extractManagedUnixLauncherTarget(contents)
-  } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      return null
-    }
-    throw error
-  }
-}
-
 function extractShellAssignment(content: string, name: string): string | null {
   const match = new RegExp(`^${name}=('([^']*)'|"([^"]*)"|([^\\n]+))$`, 'm').exec(content)
   if (!match) {
@@ -1092,13 +1086,6 @@ function normalizeWindowsPath(
     .replaceAll('/', '\\')
     .replace(/\\+$/, '')
     .toLowerCase()
-}
-
-function expandWindowsEnvironmentVariables(value: string, env: NodeJS.ProcessEnv): string {
-  return value.replace(/%([^%]+)%/g, (match, rawName: string) => {
-    const envKey = Object.keys(env).find((key) => key.toLowerCase() === rawName.toLowerCase())
-    return envKey && env[envKey] ? env[envKey] : match
-  })
 }
 
 function escapeWindowsBatchValue(value: string): string {

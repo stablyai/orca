@@ -5,8 +5,7 @@ const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
 export function enqueueRuntimeCall<T>(
   selector: string,
   method: string,
-  run: () => Promise<T>,
-  retainedBytes = 0
+  run: () => Promise<T>
 ): Promise<T> {
-  return runtimeCallQueuePool.enqueue(selector, method, run, retainedBytes)
+  return runtimeCallQueuePool.enqueue(selector, method, run)
 }

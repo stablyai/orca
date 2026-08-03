@@ -64,7 +64,16 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
 const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   agentArgs: z.string(),
-  agentEnv: sleepingAgentLaunchEnvSchema
+  agentEnv: sleepingAgentLaunchEnvSchema,
+  // Why: AI Vault can scan arbitrary OMP roots, so cold restore must retain
+  // the exact provider resume locator instead of reconstructing its store.
+  ompResumeFilePath: z
+    .string()
+    .trim()
+    .min(1)
+    .max(32 * 1024)
+    .refine((value) => !hasUnsafeLaunchEnvChars(value))
+    .optional()
 })
 
 export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
@@ -88,7 +97,8 @@ const sleepingAgentSessionRecordSchema = z
     interrupted: z.boolean().optional(),
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
-    origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()
+    origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
+    automaticResumeBlockedBy: z.enum(['legacy-orchestration-worker']).optional()
   })
   .refine(
     (record) => getAgentResumeArgv(record.agent, record.providerSession) !== null,

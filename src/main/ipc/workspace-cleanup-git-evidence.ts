@@ -7,6 +7,7 @@ import {
   WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
   withWorkspaceCleanupTimeout
 } from './workspace-cleanup-scan-primitives'
+import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 
 export type WorkspaceCleanupGitEvidence = {
   clean: boolean | null
@@ -34,13 +35,17 @@ export async function readWorkspaceCleanupGitEvidence(
   const blockers: WorkspaceCleanupBlocker[] = []
   let status: GitStatusResult
   const checkedAt = Date.now()
+  const sharedLinkPaths = repo.connectionId ? [] : getWorktreeSharedLinkPaths(repo)
 
   try {
     status = await withWorkspaceCleanupTimeout(
       (signal) =>
         repo.connectionId
           ? provider!.getStatus(worktree.path, { signal })
-          : getStatus(worktree.path, { signal }),
+          : getStatus(worktree.path, {
+              signal,
+              ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+            }),
       WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
       'Timed out reading git status.'
     )

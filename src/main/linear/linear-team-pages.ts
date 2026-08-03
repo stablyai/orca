@@ -1,9 +1,5 @@
 import type { LinearLabel, LinearMember, LinearTeam, LinearWorkflowState } from '../../shared/types'
 import { buildLinearTeamUrl } from '../../shared/linear-links'
-import {
-  IntegrationPaginationBudget,
-  IntegrationPaginationLimitError
-} from '../integration-pagination-budget'
 import type { LinearClientForWorkspace } from './client'
 
 const TEAM_PAGE_SIZE = 100
@@ -36,26 +32,13 @@ type TeamStateNode = {
   position: number
 }
 
-async function fetchBoundedConnection<TNode>(
-  page: LinearConnectionPage<TNode>
-): Promise<LinearConnectionPage<TNode>> {
-  const budget = new IntegrationPaginationBudget()
-  while (true) {
-    budget.assertCumulativePage(page.nodes)
-    if (!page.pageInfo.hasNextPage) {
-      return page
-    }
-    if (!budget.canRequestPage) {
-      throw new IntegrationPaginationLimitError()
-    }
-    await page.fetchNext()
-  }
-}
-
 export async function fetchAllTeamsForWorkspace(
   entry: LinearClientForWorkspace
 ): Promise<LinearTeam[]> {
-  const page = await fetchBoundedConnection(await entry.client.teams({ first: TEAM_PAGE_SIZE }))
+  let page = await entry.client.teams({ first: TEAM_PAGE_SIZE })
+  while (page.pageInfo.hasNextPage) {
+    await page.fetchNext()
+  }
   return page.nodes.map((t) => ({
     id: t.id,
     workspaceId: entry.workspace.id,
@@ -73,7 +56,10 @@ export async function fetchAllTeamsForWorkspace(
 export async function fetchAllTeamStates(team: {
   states: (variables?: { first?: number }) => Promise<LinearConnectionPage<TeamStateNode>>
 }): Promise<LinearWorkflowState[]> {
-  const states = await fetchBoundedConnection(await team.states({ first: TEAM_PAGE_SIZE }))
+  const states = await team.states({ first: TEAM_PAGE_SIZE })
+  while (states.pageInfo.hasNextPage) {
+    await states.fetchNext()
+  }
   return states.nodes
     .map((s) => ({
       id: s.id,
@@ -88,14 +74,20 @@ export async function fetchAllTeamStates(team: {
 export async function fetchAllTeamLabels(team: {
   labels: (variables?: { first?: number }) => Promise<LinearConnectionPage<TeamLabelNode>>
 }): Promise<LinearLabel[]> {
-  const labels = await fetchBoundedConnection(await team.labels({ first: TEAM_PAGE_SIZE }))
+  const labels = await team.labels({ first: TEAM_PAGE_SIZE })
+  while (labels.pageInfo.hasNextPage) {
+    await labels.fetchNext()
+  }
   return labels.nodes.map((l) => ({ id: l.id, name: l.name, color: l.color }))
 }
 
 export async function fetchAllTeamMembers(team: {
   members: (variables?: { first?: number }) => Promise<LinearConnectionPage<TeamMemberNode>>
 }): Promise<LinearMember[]> {
-  const members = await fetchBoundedConnection(await team.members({ first: TEAM_PAGE_SIZE }))
+  const members = await team.members({ first: TEAM_PAGE_SIZE })
+  while (members.pageInfo.hasNextPage) {
+    await members.fetchNext()
+  }
   return members.nodes.map((m) => ({
     id: m.id,
     displayName: m.displayName,

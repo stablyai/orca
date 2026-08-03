@@ -28,6 +28,7 @@ import {
 import { readFileViaStream } from '../main/ssh/ssh-filesystem-stream-reader'
 
 import { RelayDispatcher } from './dispatcher'
+import type { SinkWriteSettlement } from './dispatcher'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
 import { STREAM_CHUNK_SIZE } from './protocol'
@@ -36,16 +37,6 @@ import { STREAM_CHUNK_SIZE } from './protocol'
 const FRAMED_CHUNK_BYTES = Math.ceil((STREAM_CHUNK_SIZE * 4) / 3) + 512
 // Node pipe/socket sinks report saturation via write() === false past the HWM.
 const SINK_HIGH_WATER_MARK = 64 * 1024
-
-function randomPngBytes(size: number): Buffer {
-  const content = randomBytes(size)
-  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(content)
-  content.writeUInt32BE(13, 8)
-  content.write('IHDR', 12, 'ascii')
-  content.writeUInt32BE(1, 16)
-  content.writeUInt32BE(1, 20)
-  return content
-}
 
 async function waitUntil(
   predicate: () => boolean,
@@ -105,7 +96,10 @@ function createHarness(opts: { congested: boolean }): Harness {
     onClose: () => {}
   }
 
-  const outQueue: Buffer[] = []
+  const outQueue: {
+    data: Buffer
+    settle: (result: SinkWriteSettlement) => void
+  }[] = []
   let queuedBytes = 0
   const drainWaiters = new Set<() => void>()
   const fireDrainIfIdle = (): void => {
@@ -119,8 +113,8 @@ function createHarness(opts: { congested: boolean }): Harness {
   }
 
   const dispatcher = new RelayDispatcher(
-    (data: Buffer) => {
-      outQueue.push(data)
+    (data: Buffer, settle) => {
+      outQueue.push({ data, settle })
       queuedBytes += data.length
       if (!opts.congested) {
         return true
@@ -128,6 +122,9 @@ function createHarness(opts: { congested: boolean }): Harness {
       return queuedBytes < SINK_HIGH_WATER_MARK
     },
     {
+      supportsWriteCallback: true,
+      writableLength: () => queuedBytes,
+      writableHighWaterMark: () => SINK_HIGH_WATER_MARK,
       waitWriteDrain: (cb: () => void) => {
         drainWaiters.add(cb)
         fireDrainIfIdle()
@@ -138,11 +135,12 @@ function createHarness(opts: { congested: boolean }): Harness {
 
   const deliverAll = (): void => {
     while (outQueue.length > 0) {
-      const buf = outQueue.shift()!
-      queuedBytes -= buf.length
+      const { data, settle } = outQueue.shift()!
+      queuedBytes -= data.length
       for (const cb of clientDataCallbacks) {
-        cb(buf)
+        cb(data)
       }
+      settle({ ok: true })
     }
     fireDrainIfIdle()
   }
@@ -192,7 +190,7 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
     const harness = createHarness({ congested: true })
     try {
       const filePath = path.join(tmpDir, 'big.png')
-      const original = randomPngBytes(3 * 1024 * 1024) // 12 chunks
+      const original = randomBytes(3 * 1024 * 1024) // 12 chunks
       writeFileSync(filePath, original)
 
       // Relay-side fake PTY: echoes input back immediately, mirroring
@@ -217,7 +215,7 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
 
       // The echo must not sit behind an unbounded chunk backlog: at most one
       // in-flight bulk frame (the write that saturated the sink) plus slack.
-      expect(queuedBytesAheadOfEcho).toBeLessThan(2 * FRAMED_CHUNK_BYTES)
+      expect(queuedBytesAheadOfEcho).toBeLessThan(FRAMED_CHUNK_BYTES)
 
       // Un-congest: the stream must still complete with intact content.
       harness.startAutoDeliver()
@@ -232,17 +230,11 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
     const harness = createHarness({ congested: false })
     try {
       const filePath = path.join(tmpDir, 'big.png')
-      writeFileSync(filePath, randomPngBytes(3 * 1024 * 1024)) // 12 chunks
+      writeFileSync(filePath, randomBytes(3 * 1024 * 1024)) // 12 chunks
 
       const receivedSeqs: number[] = []
-      let acknowledgeChunks = false
-      let streamId: number | null = null
       harness.mux.onNotificationByMethod('fs.streamChunk', (params) => {
-        const seq = params.seq as number
-        receivedSeqs.push(seq)
-        if (acknowledgeChunks && streamId !== null) {
-          harness.mux.notify('fs.streamAck', { streamId, seq })
-        }
+        receivedSeqs.push(params.seq as number)
       })
       let streamEnded = false
       harness.mux.onNotificationByMethod('fs.streamEnd', () => {
@@ -256,7 +248,6 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
         filePath,
         flowControl: 'ack'
       })) as { streamId: number }
-      streamId = metadata.streamId
 
       await waitUntil(() => receivedSeqs.length > 0, 'first chunk received')
       await waitUntilSettled(() => receivedSeqs.length)
@@ -267,9 +258,8 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
       expect(streamEnded).toBe(false)
 
       // Acking releases the window and the stream completes.
-      acknowledgeChunks = true
       const totalChunks = 12
-      for (const seq of receivedSeqs) {
+      for (let seq = 0; seq < totalChunks; seq += 1) {
         harness.mux.notify('fs.streamAck', { streamId: metadata.streamId, seq })
       }
       await waitUntil(() => streamEnded, 'stream completed after acks')
@@ -283,7 +273,7 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
     const harness = createHarness({ congested: false })
     try {
       const filePath = path.join(tmpDir, 'legacy.png')
-      const original = randomPngBytes(1024 * 1024 + 12345)
+      const original = randomBytes(1024 * 1024 + 12345)
       writeFileSync(filePath, original)
 
       const chunks = new Map<number, Buffer>()

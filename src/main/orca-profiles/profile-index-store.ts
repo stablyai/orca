@@ -1,8 +1,13 @@
-import { copyFileSync, existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync
+} from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
-import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
 import type { GlobalSettings } from '../../shared/types'
 import {
   createDefaultLocalOrcaProfile,
@@ -43,8 +48,6 @@ export type ActiveOrcaProfileState = {
   dataFile: string
   profileDirectory: string
 }
-
-export const MAX_ORCA_PROFILE_INDEX_FILE_BYTES = 1024 * 1024
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -102,13 +105,7 @@ function sanitizeProfileName(value: unknown): string {
 
 function readProfileIndexFile(indexPath: string): OrcaProfileIndex | null {
   try {
-    return normalizeProfileIndex(
-      JSON.parse(
-        readNodeFileSyncWithinLimit(indexPath, MAX_ORCA_PROFILE_INDEX_FILE_BYTES).buffer.toString(
-          'utf8'
-        )
-      )
-    )
+    return normalizeProfileIndex(JSON.parse(readFileSync(indexPath, 'utf-8')))
   } catch {
     return null
   }
@@ -121,10 +118,6 @@ export function readProfileIndex(indexPath: string): OrcaProfileIndex | null {
 }
 
 export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): void {
-  const serialized = stringifyJsonWithinByteLimit(
-    index,
-    MAX_ORCA_PROFILE_INDEX_FILE_BYTES
-  ).serialized
   mkdirSync(dirname(indexPath), { recursive: true })
   // Why: only a still-parseable current index may refresh the backup;
   // copying a corrupt file over the backup would destroy the recovery copy.
@@ -136,7 +129,7 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
     }
   }
   const tmpPath = `${indexPath}.tmp`
-  writeFileSync(tmpPath, serialized, 'utf-8')
+  writeFileSync(tmpPath, JSON.stringify(index, null, 2), 'utf-8')
   renameSync(tmpPath, indexPath)
 }
 

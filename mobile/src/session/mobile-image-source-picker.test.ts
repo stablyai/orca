@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-image'
 
 vi.mock('expo-image-picker', () => ({
@@ -20,10 +20,11 @@ const granted = { granted: true } as Awaited<
 const denied = { granted: false } as typeof granted
 
 function fileFactory(
-  chunks: Uint8Array[],
+  bytes: Uint8Array,
   options?: { fileSize?: number; handleSize?: number | null; readError?: Error }
 ) {
   const close = vi.fn()
+  const chunks = [bytes]
   const readBytes = vi.fn(() => {
     if (options?.readError) {
       throw options.readError
@@ -31,32 +32,39 @@ function fileFactory(
     return chunks.shift() ?? new Uint8Array()
   })
   const open = vi.fn(() => ({
-    size: options?.handleSize ?? options?.fileSize ?? 0,
+    size: options?.handleSize ?? options?.fileSize ?? bytes.length,
     readBytes,
     close
   }))
-  const createFile = vi.fn(() => ({ size: options?.fileSize ?? 0, open }))
-  return { close, createFile, open, readBytes }
+  const createFile = vi.fn(() => ({ size: options?.fileSize ?? bytes.length, open }))
+  return { close, createFile, open }
 }
 
 describe('pickMobileImage', () => {
-  it('returns base64 from the photo library', async () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('reads a photo URI without relying on React Native fetch', async () => {
     const bytes = new Uint8Array([0, 1, 2, 3])
-    const file = fileFactory([bytes])
+    const file = fileFactory(bytes)
     const launchLibrary = vi.fn().mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///x.jpg', fileSize: bytes.length }]
     })
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('Network request failed'))
     const result = await pickMobileImage('library', {
       requestLibraryPermission: vi.fn().mockResolvedValue(granted),
       launchLibrary,
       createFile: file.createFile
     })
 
-    expect(result).toEqual({ base64: Buffer.from(bytes).toString('base64') })
-    expect(launchLibrary).toHaveBeenCalledWith(
-      expect.objectContaining({ base64: false, allowsMultipleSelection: false })
-    )
+    expect(result).toEqual({
+      base64: Buffer.from(bytes).toString('base64'),
+      uri: 'file:///x.jpg'
+    })
+    expect(launchLibrary).toHaveBeenCalledWith(expect.objectContaining({ base64: false }))
+    expect(fetchSpy).not.toHaveBeenCalled()
     expect(file.close).toHaveBeenCalledTimes(1)
   })
 
@@ -80,21 +88,20 @@ describe('pickMobileImage', () => {
 
   it('reads a picked file URI into base64 for the files source', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4])
-    const file = fileFactory([bytes])
-    const launchFiles = vi.fn().mockResolvedValue({
-      canceled: false,
-      assets: [{ uri: 'file:///doc.png', size: bytes.length }]
-    })
+    const file = fileFactory(bytes)
 
     const result = await pickMobileImage('files', {
-      launchFiles,
+      launchFiles: vi.fn().mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///doc.png', size: bytes.length }]
+      }),
       createFile: file.createFile
     })
 
-    expect(result).toEqual({ base64: Buffer.from(bytes).toString('base64') })
-    expect(launchFiles).toHaveBeenCalledWith(
-      expect.objectContaining({ copyToCacheDirectory: true })
-    )
+    expect(result).toEqual({
+      base64: Buffer.from(bytes).toString('base64'),
+      uri: 'file:///doc.png'
+    })
     expect(file.close).toHaveBeenCalledTimes(1)
   })
 
@@ -106,8 +113,8 @@ describe('pickMobileImage', () => {
     expect(result).toBeNull()
   })
 
-  it('rejects a declared oversized asset before opening it', async () => {
-    const file = fileFactory([], { fileSize: 1 })
+  it('rejects an oversized asset before opening it', async () => {
+    const file = fileFactory(new Uint8Array([1]))
     await expect(
       pickMobileImage('files', {
         launchFiles: vi.fn().mockResolvedValue({
@@ -121,30 +128,8 @@ describe('pickMobileImage', () => {
     expect(file.open).not.toHaveBeenCalled()
   })
 
-  it('does not let stale size metadata bypass the bounded read', async () => {
-    const close = vi.fn()
-    const readBytes = vi.fn((length: number) => new Uint8Array(length))
-    const createFile = vi.fn(() => ({
-      size: 1,
-      open: () => ({ size: 1, readBytes, close })
-    }))
-
-    await expect(
-      pickMobileImage('library', {
-        requestLibraryPermission: vi.fn().mockResolvedValue(granted),
-        launchLibrary: vi.fn().mockResolvedValue({
-          canceled: false,
-          assets: [{ uri: 'file:///grew.png', fileSize: 1 }]
-        }),
-        createFile
-      })
-    ).rejects.toThrow('Clipboard image is too large')
-    expect(readBytes).toHaveBeenLastCalledWith(1)
-    expect(close).toHaveBeenCalledTimes(1)
-  })
-
-  it('closes the file handle when a read fails', async () => {
-    const file = fileFactory([], { fileSize: 4, readError: new Error('read failed') })
+  it('closes the file handle when reading fails', async () => {
+    const file = fileFactory(new Uint8Array(), { fileSize: 4, readError: new Error('read failed') })
     await expect(
       pickMobileImage('files', {
         launchFiles: vi.fn().mockResolvedValue({
@@ -154,20 +139,6 @@ describe('pickMobileImage', () => {
         createFile: file.createFile
       })
     ).rejects.toThrow('read failed')
-    expect(file.close).toHaveBeenCalledTimes(1)
-  })
-
-  it('preserves bytes across chunk boundaries that are not base64 aligned', async () => {
-    const chunks = [new Uint8Array([1]), new Uint8Array([2, 3]), new Uint8Array([4, 5])]
-    const file = fileFactory([...chunks], { fileSize: 5, handleSize: 5 })
-    const result = await pickMobileImage('files', {
-      launchFiles: vi.fn().mockResolvedValue({
-        canceled: false,
-        assets: [{ uri: 'file:///chunked.png', size: 5 }]
-      }),
-      createFile: file.createFile
-    })
-    expect(result).toEqual({ base64: Buffer.from([1, 2, 3, 4, 5]).toString('base64') })
     expect(file.close).toHaveBeenCalledTimes(1)
   })
 })

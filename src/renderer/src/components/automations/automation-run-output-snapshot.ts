@@ -1,6 +1,5 @@
 /* eslint-disable no-control-regex -- terminal snapshots normalize ANSI/control output. */
 import type { AutomationRunOutputSnapshot } from '../../../../shared/automations-types'
-import { appendCompactedStringChunk } from '../../../../shared/string-chunk-compaction'
 
 const MAX_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
 
@@ -64,7 +63,7 @@ export function createAutomationRunOutputSnapshotBuffer(): AutomationRunOutputSn
       if (!chunk) {
         return
       }
-      appendCompactedStringChunk(chunks, chunk)
+      chunks.push(chunk)
       totalChars += chunk.length
       let overflowChars = totalChars - MAX_OUTPUT_SNAPSHOT_CHARS
       while (overflowChars > 0 && chunks.length > 0) {

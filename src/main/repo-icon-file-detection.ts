@@ -1,24 +1,38 @@
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
+import { buildImageDataUri } from '../shared/image-data-uri'
 import { MAX_REPO_ICON_UPLOAD_BYTES, type RepoIcon } from '../shared/repo-icon'
-import { assertRasterImagePreviewWithinLimits } from '../shared/raster-image-preview-limits'
-import { readNodeFileWithinLimit } from '../shared/node-bounded-file-reader'
 import type { IFilesystemProvider } from './providers/types'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
 
-const REPO_ICON_FILE_CANDIDATES = [
-  'favicon.png',
-  'public/favicon.png',
-  'app/favicon.png',
-  'app/icon.png',
-  'src/favicon.png',
-  'src/app/icon.png',
-  'assets/favicon.png',
-  'assets/icon.png',
-  'static/favicon.png',
-  'logo.png',
-  'public/logo.png'
-]
+// Why: conventional locations only — keep the list short so add-repo stays
+// snappy. Support bounded raster images only.
+const REPO_ICON_FILE_STEMS = [
+  'favicon',
+  'public/favicon',
+  'app/favicon',
+  'app/icon',
+  'src/favicon',
+  'src/app/icon',
+  'assets/favicon',
+  'assets/icon',
+  'static/favicon',
+  'logo',
+  'public/logo',
+  // Why: CLI tools and branded assets often use public/icon.* (issue #7902).
+  'public/icon',
+  // Why: Tauri's default bundle icon path (issue #7902).
+  'src-tauri/icons/icon',
+  'app-icon',
+  'icon'
+] as const
+
+const REPO_ICON_FILE_EXTENSIONS = ['.png', '.webp'] as const
+const REPO_ICON_FILE_PROBE_CONCURRENCY = 6
+
+export const REPO_ICON_FILE_CANDIDATES = REPO_ICON_FILE_STEMS.flatMap((stem) =>
+  REPO_ICON_FILE_EXTENSIONS.map((extension) => `${stem}${extension}`)
+)
 
 const REPO_ICON_SOURCE_FILE_CANDIDATES = [
   'index.html',
@@ -38,36 +52,86 @@ const LINK_ICON_HTML_RE =
   /<link\b(?=[^>]*\brel=["'](?:icon|shortcut icon)["'])(?=[^>]*\bhref=["']([^"'?]+))[^>]*>/i
 const LINK_ICON_OBJECT_RE =
   /(?=[^}]*\brel\s*:\s*["'](?:icon|shortcut icon)["'])(?=[^}]*\bhref\s*:\s*["']([^"'?]+))[^}]*/i
-const PNG_SIGNATURE = Buffer.from('89504e470d0a1a0a', 'hex')
+
+type DetectedImageFormat = {
+  mimeType: 'image/png' | 'image/webp'
+}
 
 function isPngBuffer(buffer: Buffer): boolean {
-  return buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+  return (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  )
+}
+
+function isWebpBuffer(buffer: Buffer): boolean {
+  // Why: RIFF container with WEBP fourcc — enough to reject non-images without
+  // a full decoder; the sidebar only needs a valid data URL for <img>.
+  return (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer[8] === 0x57 &&
+    buffer[9] === 0x45 &&
+    buffer[10] === 0x42 &&
+    buffer[11] === 0x50
+  )
+}
+
+function detectImageFormat(buffer: Buffer): DetectedImageFormat | null {
+  if (isPngBuffer(buffer)) {
+    return { mimeType: 'image/png' }
+  }
+  if (isWebpBuffer(buffer)) {
+    return { mimeType: 'image/webp' }
+  }
+  return null
 }
 
 function extractIconHref(source: string): string | null {
   return source.match(LINK_ICON_HTML_RE)?.[1] ?? source.match(LINK_ICON_OBJECT_RE)?.[1] ?? null
 }
 
-async function readLocalPngIcon(repoPath: string, relativePath: string): Promise<RepoIcon | null> {
-  const filePath = joinWorktreeRelativePath(repoPath, relativePath)
-  const info = await stat(filePath)
-  if (!info.isFile() || info.size > MAX_REPO_ICON_UPLOAD_BYTES) {
+function repoIconFromImageBuffer(buffer: Buffer, relativePath: string): RepoIcon | null {
+  const format = detectImageFormat(buffer)
+  if (!format) {
     return null
   }
-  const { buffer, stats } = await readNodeFileWithinLimit(filePath, MAX_REPO_ICON_UPLOAD_BYTES)
-  if (!stats.isFile() || !isPngBuffer(buffer)) {
+  const src = buildImageDataUri(format.mimeType, buffer.toString('base64'))
+  if (!src) {
     return null
   }
-  assertRasterImagePreviewWithinLimits(buffer, 'image/png')
   return {
     type: 'image',
-    src: `data:image/png;base64,${buffer.toString('base64')}`,
+    src,
     source: 'file',
     label: relativePath
   }
 }
 
-async function readRemotePngIcon(
+async function readLocalImageIcon(
+  repoPath: string,
+  relativePath: string
+): Promise<RepoIcon | null> {
+  const filePath = joinWorktreeRelativePath(repoPath, relativePath)
+  const info = await stat(filePath)
+  if (!info.isFile() || info.size > MAX_REPO_ICON_UPLOAD_BYTES) {
+    return null
+  }
+  const buffer = await readFile(filePath)
+  return repoIconFromImageBuffer(buffer, relativePath)
+}
+
+async function readRemoteImageIcon(
   repoPath: string,
   fsProvider: IFilesystemProvider,
   relativePath: string
@@ -78,35 +142,50 @@ async function readRemotePngIcon(
     return null
   }
   const result = await fsProvider.readFile(filePath)
-  if (!result.isBinary || result.mimeType !== 'image/png' || !result.content) {
+  if (!result.content) {
     return null
   }
-  if (result.content.length > Math.ceil((MAX_REPO_ICON_UPLOAD_BYTES * 4) / 3) + 4) {
-    return null
-  }
-  const buffer = Buffer.from(result.content, 'base64')
-  if (buffer.byteLength > MAX_REPO_ICON_UPLOAD_BYTES || !isPngBuffer(buffer)) {
-    return null
-  }
-  assertRasterImagePreviewWithinLimits(buffer, 'image/png')
-  return {
-    type: 'image',
-    src: `data:image/png;base64,${buffer.toString('base64')}`,
-    source: 'file',
-    label: relativePath
-  }
+  // Why: detect the binary format after decoding remote file content.
+  const buffer = result.isBinary
+    ? Buffer.from(result.content, 'base64')
+    : Buffer.from(result.content, 'utf8')
+  return repoIconFromImageBuffer(buffer, relativePath)
 }
 
-export async function detectLocalRepoPngIcon(repoPath: string): Promise<RepoIcon | null> {
-  for (const relativePath of REPO_ICON_FILE_CANDIDATES) {
-    try {
-      const icon = await readLocalPngIcon(repoPath, relativePath)
-      if (icon) {
-        return icon
-      }
-    } catch {
-      // Try the next conventional icon path.
+async function detectConventionalImageIcon(
+  readIcon: (relativePath: string) => Promise<RepoIcon | null>
+): Promise<RepoIcon | null> {
+  // Why: SSH stats are network round trips; bounded batches avoid making the
+  // expanded candidate list serial without flooding the remote filesystem.
+  for (
+    let offset = 0;
+    offset < REPO_ICON_FILE_CANDIDATES.length;
+    offset += REPO_ICON_FILE_PROBE_CONCURRENCY
+  ) {
+    const batch = REPO_ICON_FILE_CANDIDATES.slice(offset, offset + REPO_ICON_FILE_PROBE_CONCURRENCY)
+    const icons = await Promise.all(
+      batch.map(async (relativePath) => {
+        try {
+          return await readIcon(relativePath)
+        } catch {
+          return null
+        }
+      })
+    )
+    const icon = icons.find((candidate): candidate is RepoIcon => candidate !== null)
+    if (icon) {
+      return icon
     }
+  }
+  return null
+}
+
+async function detectLocalImageIcon(repoPath: string): Promise<RepoIcon | null> {
+  const conventionalIcon = await detectConventionalImageIcon((relativePath) =>
+    readLocalImageIcon(repoPath, relativePath)
+  )
+  if (conventionalIcon) {
+    return conventionalIcon
   }
   for (const sourceFile of REPO_ICON_SOURCE_FILE_CANDIDATES) {
     try {
@@ -115,17 +194,14 @@ export async function detectLocalRepoPngIcon(repoPath: string): Promise<RepoIcon
       if (!sourceInfo.isFile() || sourceInfo.size > MAX_REPO_ICON_SOURCE_BYTES) {
         continue
       }
-      const sourceRead = await readNodeFileWithinLimit(sourcePath, MAX_REPO_ICON_SOURCE_BYTES)
-      if (!sourceRead.stats.isFile()) {
-        continue
-      }
-      const href = extractIconHref(sourceRead.buffer.toString('utf8'))
+      const source = await readFile(sourcePath, 'utf8')
+      const href = extractIconHref(source)
       if (!href) {
         continue
       }
       for (const relativePath of iconHrefCandidates(href, sourceFile)) {
         try {
-          const icon = await readLocalPngIcon(repoPath, relativePath)
+          const icon = await readLocalImageIcon(repoPath, relativePath)
           if (icon) {
             return icon
           }
@@ -140,19 +216,15 @@ export async function detectLocalRepoPngIcon(repoPath: string): Promise<RepoIcon
   return null
 }
 
-export async function detectRemoteRepoPngIcon(
+async function detectRemoteImageIcon(
   repoPath: string,
   fsProvider: IFilesystemProvider
 ): Promise<RepoIcon | null> {
-  for (const relativePath of REPO_ICON_FILE_CANDIDATES) {
-    try {
-      const icon = await readRemotePngIcon(repoPath, fsProvider, relativePath)
-      if (icon) {
-        return icon
-      }
-    } catch {
-      // Try the next conventional icon path.
-    }
+  const conventionalIcon = await detectConventionalImageIcon((relativePath) =>
+    readRemoteImageIcon(repoPath, fsProvider, relativePath)
+  )
+  if (conventionalIcon) {
+    return conventionalIcon
   }
   for (const sourceFile of REPO_ICON_SOURCE_FILE_CANDIDATES) {
     try {
@@ -162,10 +234,7 @@ export async function detectRemoteRepoPngIcon(
         continue
       }
       const result = await fsProvider.readFile(sourcePath)
-      if (
-        result.isBinary ||
-        Buffer.byteLength(result.content, 'utf8') > MAX_REPO_ICON_SOURCE_BYTES
-      ) {
+      if (result.isBinary) {
         continue
       }
       const href = extractIconHref(result.content)
@@ -174,7 +243,7 @@ export async function detectRemoteRepoPngIcon(
       }
       for (const relativePath of iconHrefCandidates(href, sourceFile)) {
         try {
-          const icon = await readRemotePngIcon(repoPath, fsProvider, relativePath)
+          const icon = await readRemoteImageIcon(repoPath, fsProvider, relativePath)
           if (icon) {
             return icon
           }
@@ -187,4 +256,11 @@ export async function detectRemoteRepoPngIcon(
     }
   }
   return null
+}
+
+export function detectRepoFileIcon(
+  repoPath: string,
+  fsProvider?: IFilesystemProvider
+): Promise<RepoIcon | null> {
+  return fsProvider ? detectRemoteImageIcon(repoPath, fsProvider) : detectLocalImageIcon(repoPath)
 }

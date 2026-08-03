@@ -8,16 +8,25 @@ import {
 import type { MacNativeTextInputSourceFeatures } from './terminal-ime-input-source'
 
 const CJK_FEATURES = {
+  forwardHangulJamo: false,
+  forwardAsciiPunctuation: true,
+  forwardShortTextReplacements: false
+} satisfies MacNativeTextInputSourceFeatures
+
+const KOREAN_FEATURES = {
+  forwardHangulJamo: true,
   forwardAsciiPunctuation: true,
   forwardShortTextReplacements: false
 } satisfies MacNativeTextInputSourceFeatures
 
 const VIETNAMESE_FEATURES = {
+  forwardHangulJamo: false,
   forwardAsciiPunctuation: false,
   forwardShortTextReplacements: true
 } satisfies MacNativeTextInputSourceFeatures
 
 const DISABLED_FEATURES = {
+  forwardHangulJamo: false,
   forwardAsciiPunctuation: false,
   forwardShortTextReplacements: false
 } satisfies MacNativeTextInputSourceFeatures
@@ -62,6 +71,35 @@ describe('isImeNativeTextKeydownCandidate', () => {
     expect(
       isImeNativeTextKeydownCandidate(
         keyEvent({ key: '，', code: 'Comma' }),
+        false,
+        DISABLED_FEATURES
+      )
+    ).toBe(true)
+  })
+
+  it('returns initial Korean jamo keydowns to the native IME', () => {
+    for (const key of ['ㅎ', 'ㅏ', 'ㄴ', 'ᄀ', 'ﾡ']) {
+      expect(isImeNativeTextKeydownCandidate(keyEvent({ key }), false, KOREAN_FEATURES)).toBe(true)
+      expect(isImeNativeTextKeydownCandidate(keyEvent({ key }), false, CJK_FEATURES)).toBe(false)
+    }
+  })
+
+  it('keeps Korean jamo modifier chords in terminal shortcut handling', () => {
+    expect(
+      isImeNativeTextKeydownCandidate(
+        keyEvent({ key: 'ㅎ', metaKey: true }),
+        false,
+        KOREAN_FEATURES
+      )
+    ).toBe(false)
+  })
+
+  // Why: macOS Korean sources emit ₩ from Backquote, and a DefaultKeyBinding.dict
+  // entry can rewrite it to ` — but only in the keypress/input events.
+  it('accepts the Korean won-sign key even when the input source probe is stale', () => {
+    expect(
+      isImeNativeTextKeydownCandidate(
+        keyEvent({ key: '₩', code: 'Backquote', keyCode: 192 }),
         false,
         DISABLED_FEATURES
       )
@@ -262,6 +300,40 @@ describe('installTerminalImeNativeTextForwarder', () => {
     dispatchInsertText(textarea, '。')
 
     expect(sendInput).toHaveBeenCalledExactlyOnceWith('。')
+  })
+
+  it('forwards the key binding substitution for the Korean won-sign key', () => {
+    const sendInput = vi.fn()
+    const forwarder = installTerminalImeNativeTextForwarder({
+      terminalElement: element,
+      isComposing: () => false,
+      sendInput,
+      getInputSourceFeatures: () => CJK_FEATURES
+    })
+
+    expect(forwarder.claimKeyEvent(keyEvent({ key: '₩', code: 'Backquote', keyCode: 192 }))).toBe(
+      true
+    )
+    dispatchInsertText(textarea, '`')
+
+    expect(sendInput).toHaveBeenCalledExactlyOnceWith('`')
+  })
+
+  it('forwards the won sign unchanged when no key binding remaps it', () => {
+    const sendInput = vi.fn()
+    const forwarder = installTerminalImeNativeTextForwarder({
+      terminalElement: element,
+      isComposing: () => false,
+      sendInput,
+      getInputSourceFeatures: () => CJK_FEATURES
+    })
+
+    expect(forwarder.claimKeyEvent(keyEvent({ key: '₩', code: 'Backquote', keyCode: 192 }))).toBe(
+      true
+    )
+    dispatchInsertText(textarea, '₩')
+
+    expect(sendInput).toHaveBeenCalledExactlyOnceWith('₩')
   })
 
   it('forwards a plain ASCII symbol unchanged when the IME does not convert it', () => {

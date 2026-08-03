@@ -1,10 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerSshBrowseHandler, type RemoteDirEntry } from './ssh-browse'
-import {
-  FILESYSTEM_DIRECTORY_LIMIT_MESSAGE,
-  FILESYSTEM_DIRECTORY_MAX_RETAINED_BYTES
-} from '../../shared/filesystem-directory-listing-limit'
+import { registerSshBrowseHandler } from './ssh-browse'
 
 const { handleMock, removeHandlerMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -66,6 +62,7 @@ describe('registerSshBrowseHandler', () => {
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: '/home/user',
+      pathFlavor: 'posix',
       entries: [
         { name: 'src', isDirectory: true },
         { name: 'notes file.txt', isDirectory: false },
@@ -79,68 +76,6 @@ describe('registerSshBrowseHandler', () => {
     expect(channel.listenerCount('error')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
-  })
-
-  it('closes and rejects a remote listing that exceeds the shared byte limit', async () => {
-    const channel = Object.assign(createMockChannel(), { close: vi.fn() })
-    const exec = vi.fn().mockResolvedValue(channel)
-    const getConnectionManager = () => ({ getConnection: () => ({ exec }) })
-    registerSshBrowseHandler(getConnectionManager as never)
-
-    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
-    await Promise.resolve()
-    channel.emit('data', Buffer.alloc(FILESYSTEM_DIRECTORY_MAX_RETAINED_BYTES + 1, 0x78))
-
-    await expect(resultPromise).rejects.toThrow(FILESYSTEM_DIRECTORY_LIMIT_MESSAGE)
-    expect(channel.close).toHaveBeenCalledOnce()
-    expect(channel.listenerCount('data')).toBe(0)
-    expect(channel.stderr.listenerCount('data')).toBe(0)
-  })
-
-  it('retains tens of thousands of tiny stdout chunks without quadratic copying', async () => {
-    const channel = createMockChannel()
-    const exec = vi.fn().mockResolvedValue(channel)
-    const getConnectionManager = () => ({ getConnection: () => ({ exec }) })
-    registerSshBrowseHandler(getConnectionManager as never)
-
-    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
-    await Promise.resolve()
-    channel.emit('data', Buffer.from('/home/user\n'))
-    for (let index = 0; index < 65_000; index += 1) {
-      channel.emit('data', Buffer.from(`f${String(index).padStart(5, '0')}\n`))
-    }
-    channel.emit('exit', 0)
-    channel.emit('close')
-
-    const result = (await resultPromise) as {
-      resolvedPath: string
-      entries: RemoteDirEntry[]
-    }
-    expect(result.resolvedPath).toBe('/home/user')
-    expect(result.entries).toHaveLength(65_000)
-    expect(result.entries[0]).toEqual({ name: 'f00000', isDirectory: false })
-    expect(result.entries.at(-1)).toEqual({ name: 'f64999', isDirectory: false })
-  })
-
-  it('decodes a filename whose UTF-8 bytes span stdout chunks', async () => {
-    const channel = createMockChannel()
-    const exec = vi.fn().mockResolvedValue(channel)
-    const getConnectionManager = () => ({ getConnection: () => ({ exec }) })
-    registerSshBrowseHandler(getConnectionManager as never)
-
-    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
-    await Promise.resolve()
-    const output = Buffer.from('/home/user\nemoji-🙂.txt\n')
-    const emojiOffset = output.indexOf(Buffer.from('🙂'))
-    channel.emit('data', output.subarray(0, emojiOffset + 1))
-    channel.emit('data', output.subarray(emojiOffset + 1))
-    channel.emit('exit', 0)
-    channel.emit('close')
-
-    await expect(resultPromise).resolves.toEqual({
-      resolvedPath: '/home/user',
-      entries: [{ name: 'emoji-🙂.txt', isDirectory: false }]
-    })
   })
 
   it('escapes remote browse paths before invoking command ls', async () => {
@@ -159,6 +94,7 @@ describe('registerSshBrowseHandler', () => {
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: "/tmp/it's here",
+      pathFlavor: 'posix',
       entries: []
     })
     expect(exec).toHaveBeenCalledWith("cd '/tmp/it'\\''s here' && pwd && command ls -1Ap")
@@ -194,6 +130,7 @@ describe('registerSshBrowseHandler', () => {
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: 'C:/Users/alice',
+      pathFlavor: 'win32',
       entries: [
         { name: 'Desktop', isDirectory: true },
         { name: 'notes.txt', isDirectory: false }
@@ -214,6 +151,40 @@ describe('registerSshBrowseHandler', () => {
     // resolvedPath must be emitted with forward slashes so the renderer's
     // parentPath/joinPath (which only split on `/`) keep working on Windows.
     expect(script).toContain("Write-Output ($resolved -replace '\\\\', '/')")
+  })
+
+  it('lists Windows drive roots when an SSH picker browses the host root', async () => {
+    const posixChannel = createMockChannel()
+    const windowsChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/' })
+    await Promise.resolve()
+    posixChannel.stderr.emit('data', Buffer.from('"exec" is not recognized'))
+    posixChannel.emit('exit', 1)
+    posixChannel.emit('close')
+    await vi.waitFor(() => {
+      expect(windowsChannel.listenerCount('close')).toBe(1)
+    })
+    windowsChannel.emit('data', Buffer.from('/\r\nC:\\/\r\nM:\\/\r\n'))
+    windowsChannel.emit('exit', 0)
+    windowsChannel.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: '/',
+      pathFlavor: 'win32',
+      entries: [
+        { name: 'C:\\', isDirectory: true },
+        { name: 'M:\\', isDirectory: true }
+      ]
+    })
+    const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
+    expect(script).toContain('Get-PSDrive -PSProvider FileSystem')
+    expect(script).not.toContain('Set-Location')
   })
 
   it('falls back for a non-English cmd.exe reject (exit 1, localized stderr)', async () => {
@@ -248,6 +219,7 @@ describe('registerSshBrowseHandler', () => {
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: 'C:/Users',
+      pathFlavor: 'win32',
       entries: [{ name: 'Admin', isDirectory: true }]
     })
     expect(exec).toHaveBeenCalledTimes(2)
@@ -279,6 +251,7 @@ describe('registerSshBrowseHandler', () => {
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: "C:/O'Brien",
+      pathFlavor: 'win32',
       entries: []
     })
     const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
@@ -307,7 +280,11 @@ describe('registerSshBrowseHandler', () => {
     windowsChannel.emit('exit', 0)
     windowsChannel.emit('close')
 
-    await expect(resultPromise).resolves.toEqual({ resolvedPath: 'C:/Users/alice', entries: [] })
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: 'C:/Users/alice',
+      entries: [],
+      pathFlavor: 'win32'
+    })
     const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
     // ~ must expand to $HOME, not be passed literally to Set-Location.
     expect(script).toContain('$dir = $HOME')
@@ -345,7 +322,11 @@ describe('registerSshBrowseHandler', () => {
       windowsChannel.emit('exit', 0)
       windowsChannel.emit('close')
 
-      await expect(resultPromise).resolves.toEqual({ resolvedPath: 'C:/Users', entries: [] })
+      await expect(resultPromise).resolves.toEqual({
+        resolvedPath: 'C:/Users',
+        entries: [],
+        pathFlavor: 'win32'
+      })
       const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
       expect(script).toContain(expected)
     }

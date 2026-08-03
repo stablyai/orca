@@ -1,10 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { opendir, rename, unlink, writeFile } from 'node:fs/promises'
+import { readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
 import {
   CLAIMED_OWNER_PATTERN,
-  MANAGED_HOOK_LOCK_DIRECTORY_BUFFER_SIZE,
   claimedOwnerFileName,
   claimRecordFileName,
   hasCode,
@@ -12,7 +10,6 @@ import {
   ownerFileName,
   parseClaim,
   parseOwner,
-  readManagedHookLockRecord,
   removeFileIfPresent,
   type ManagedHookLockClaim,
   type ManagedHookLockOwner
@@ -36,21 +33,13 @@ async function findClaimedOwner(
   lockParent: string,
   ownerToken: string
 ): Promise<{ claimToken: string; path: string } | null | undefined> {
-  const directory = await opendir(lockParent, {
-    bufferSize: MANAGED_HOOK_LOCK_DIRECTORY_BUFFER_SIZE
+  const matches = (await readdir(lockParent)).flatMap((entry) => {
+    const match = CLAIMED_OWNER_PATTERN.exec(entry)
+    return match?.[1] === ownerToken && match[2]
+      ? [{ claimToken: match[2], path: join(lockParent, entry) }]
+      : []
   })
-  let claimedOwner: { claimToken: string; path: string } | null = null
-  for await (const entry of directory) {
-    const match = CLAIMED_OWNER_PATTERN.exec(entry.name)
-    if (match?.[1] !== ownerToken || !match[2]) {
-      continue
-    }
-    if (claimedOwner) {
-      return undefined
-    }
-    claimedOwner = { claimToken: match[2], path: join(lockParent, entry.name) }
-  }
-  return claimedOwner
+  return matches.length === 1 ? matches[0] : matches.length === 0 ? null : undefined
 }
 
 async function resolveClaimSource(
@@ -64,13 +53,10 @@ async function resolveClaimSource(
 > {
   const ownerPath = join(lockParent, ownerFileName(owner.token))
   try {
-    return parseOwner(await readManagedHookLockRecord(ownerPath), owner.token)
+    return parseOwner(await readFile(ownerPath, 'utf8'), owner.token)
       ? { kind: 'ready', sourcePath: ownerPath }
       : { kind: 'unverifiable' }
   } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      return { kind: 'unverifiable' }
-    }
     if (!hasCode(error, 'ENOENT')) {
       throw error
     }
@@ -87,12 +73,12 @@ async function resolveClaimSource(
   let priorClaim: ManagedHookLockClaim | null
   try {
     priorClaim = parseClaim(
-      await readManagedHookLockRecord(priorClaimRecordPath),
+      await readFile(priorClaimRecordPath, 'utf8'),
       owner.token,
       claimedOwner.claimToken
     )
   } catch (error) {
-    if (hasCode(error, 'ENOENT') || error instanceof NodeFileReadTooLargeError) {
+    if (hasCode(error, 'ENOENT')) {
       return { kind: 'unverifiable' }
     }
     throw error

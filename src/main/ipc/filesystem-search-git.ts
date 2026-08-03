@@ -8,7 +8,6 @@ import {
   SEARCH_TIMEOUT_MS
 } from '../../shared/text-search'
 import { gitSpawn } from '../git/runner'
-import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
 
 /**
  * Fallback text search using git grep. Used when rg is not available.
@@ -27,7 +26,7 @@ export function searchWithGitGrep(
     const gitArgs = buildGitGrepArgs(args.query, args)
     const matchRegex = buildSubmatchRegex(args.query, args)
     const acc = createAccumulator()
-    const stdoutLines = new SearchSubprocessLineAccumulator()
+    let stdoutBuffer = ''
     let done = false
 
     const child = gitSpawn(gitArgs, {
@@ -59,11 +58,12 @@ export function searchWithGitGrep(
       }
     }
 
-    function handleStdoutData(chunk: Buffer): void {
-      if (!stdoutLines.push(chunk, processLine)) {
-        acc.truncated = true
-        child.kill()
-        resolveOnce()
+    function handleStdoutData(chunk: string): void {
+      stdoutBuffer += chunk
+      const lines = stdoutBuffer.split('\n')
+      stdoutBuffer = lines.pop() ?? ''
+      for (const l of lines) {
+        processLine(l)
       }
     }
 
@@ -76,13 +76,13 @@ export function searchWithGitGrep(
     }
 
     function handleClose(): void {
-      const trailingLine = stdoutLines.finish()
-      if (trailingLine !== null) {
-        processLine(trailingLine)
+      if (stdoutBuffer) {
+        processLine(stdoutBuffer)
       }
       resolveOnce()
     }
 
+    child.stdout!.setEncoding('utf-8')
     child.stdout!.on('data', handleStdoutData)
     child.stderr!.on('data', handleStderrData)
     child.once('error', handleError)

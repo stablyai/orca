@@ -86,7 +86,7 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(screen.getByText(/This terminal is waiting for devbox/)).toBeInTheDocument()
     expect(screen.getByRole('status')).toBeInTheDocument()
     const banner = container.querySelector('[data-terminal-ssh-reconnect-banner="disconnected"]')
-    expect(banner).toHaveClass('inset-x-3', 'bottom-3')
+    expect(banner).toHaveClass('inset-x-3', 'bottom-3', 'z-40')
     expect(banner).not.toHaveClass('inset-0', 'bg-background/75')
     await user.click(screen.getByRole('button', { name: 'Connect' }))
 

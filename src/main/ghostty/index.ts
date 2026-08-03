@@ -1,9 +1,6 @@
+import { readFile, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
 import type { GlobalSettings, GhosttyImportPreview } from '../../shared/types'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
 import type { Store } from '../persistence'
 import { findGhosttyConfigPaths } from './discovery'
 import { parseGhosttyConfig } from './parser'
@@ -113,25 +110,17 @@ export async function previewGhosttyImport(store: Store): Promise<GhosttyImportP
   for (const configPath of configPaths) {
     let content: string
     try {
-      const result = await readNodeFileWithinLimit(configPath, MAX_CONFIG_BYTES)
-      if (!result.stats.isFile()) {
+      const info = await stat(configPath)
+      if (info.size > MAX_CONFIG_BYTES) {
         return {
           found: false,
           diff: {},
           unsupportedKeys: [],
-          error: 'Could not read config: Config path is not a file'
+          error: `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
         }
       }
-      content = result.buffer.toString('utf8')
+      content = await readFile(configPath, 'utf-8')
     } catch (err) {
-      if (err instanceof NodeFileReadTooLargeError) {
-        return {
-          found: false,
-          diff: {},
-          unsupportedKeys: [],
-          error: `Config file is too large to import (${err.observedBytes} bytes, limit ${MAX_CONFIG_BYTES}).`
-        }
-      }
       const message = err instanceof Error ? err.message : 'Could not read config file'
       return {
         found: false,

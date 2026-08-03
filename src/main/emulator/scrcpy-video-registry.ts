@@ -8,13 +8,8 @@ import type { ScrcpyVideoMeta } from './android/scrcpy-video-frame-parser'
 
 // scrcpy keyframes ~every 10s; high-motion content can otherwise buffer
 // hundreds of deltas. Cap the replayed GOP so memory stays bounded and a
-// late subscriber isn't flooded. An overloaded GOP is shed as a unit because
-// dropping an interior delta would make the retained suffix undecodable.
-export const SCRCPY_VIDEO_MAX_GOP_FRAMES = 120
-export const SCRCPY_VIDEO_MAX_REPLAY_BYTES_PER_DEVICE = 32 * 1024 * 1024
-export const SCRCPY_VIDEO_MAX_REPLAY_BYTES_TOTAL = 128 * 1024 * 1024
-export const SCRCPY_VIDEO_MAX_REGISTRY_ENTRIES = 16
-export const SCRCPY_VIDEO_MAX_SUBSCRIBERS = 8
+// late subscriber isn't flooded — always keep the keyframe at index 0.
+const MAX_GOP_FRAMES = 120
 
 export type ScrcpyVideoFrameMessage = {
   config: boolean
@@ -35,27 +30,13 @@ type RegistryEntry = {
   gop: ScrcpyVideoFrameMessage[]
   subscribers: Set<ScrcpyVideoSubscriber>
   close: () => void
-  retainedBytes: number
 }
 
 class ScrcpyVideoRegistry {
   private readonly entries = new Map<string, RegistryEntry>()
-  private retainedBytes = 0
-  private subscriberCount = 0
 
   register(deviceId: string, close: () => void): void {
-    if (!this.entries.has(deviceId) && this.entries.size >= SCRCPY_VIDEO_MAX_REGISTRY_ENTRIES) {
-      throw new Error(
-        `Orca can have at most ${SCRCPY_VIDEO_MAX_REGISTRY_ENTRIES} active scrcpy video streams.`
-      )
-    }
-    this.stop(deviceId)
-    this.entries.set(deviceId, {
-      subscribers: new Set(),
-      gop: [],
-      close,
-      retainedBytes: 0
-    })
+    this.entries.set(deviceId, { subscribers: new Set(), gop: [], close })
   }
 
   pushMeta(deviceId: string, meta: ScrcpyVideoMeta): void {
@@ -75,21 +56,20 @@ class ScrcpyVideoRegistry {
       return
     }
     if (frame.config) {
-      this.replaceConfig(entry, frame)
+      entry.config = frame
     } else if (frame.keyFrame) {
       // A keyframe starts a fresh decodeable GOP; buffer it + the following
       // deltas so a late subscriber can decode immediately on replay.
-      this.clearGop(entry)
-      entry.gop.push(frame)
-      this.adjustRetainedBytes(entry, frame.bytes.byteLength)
+      entry.gop = [frame]
     } else if (entry.gop.length > 0) {
       // Only buffer deltas once a keyframe anchors the GOP (a delta alone is
       // undecodable); deltas before the first keyframe are still sent live below.
       entry.gop.push(frame)
-      this.adjustRetainedBytes(entry, frame.bytes.byteLength)
+      // Drop the oldest delta (never index 0, the keyframe) so replay stays decodable.
+      if (entry.gop.length > MAX_GOP_FRAMES) {
+        entry.gop.splice(1, 1)
+      }
     }
-    this.trimEntryReplay(entry)
-    this.trimAggregateReplay(deviceId)
     for (const subscriber of entry.subscribers) {
       subscriber({ type: 'frame', frame })
     }
@@ -102,11 +82,6 @@ class ScrcpyVideoRegistry {
     if (!entry) {
       return () => {}
     }
-    if (this.subscriberCount >= SCRCPY_VIDEO_MAX_SUBSCRIBERS) {
-      throw new Error(
-        `Orca can have at most ${SCRCPY_VIDEO_MAX_SUBSCRIBERS} scrcpy video subscribers.`
-      )
-    }
     if (entry.meta) {
       subscriber({ type: 'meta', meta: entry.meta })
     }
@@ -117,16 +92,8 @@ class ScrcpyVideoRegistry {
     for (const frame of entry.gop) {
       subscriber({ type: 'frame', frame })
     }
-    if (this.entries.get(deviceId) !== entry) {
-      return () => {}
-    }
     entry.subscribers.add(subscriber)
-    this.subscriberCount += 1
-    return () => {
-      if (entry.subscribers.delete(subscriber)) {
-        this.subscriberCount -= 1
-      }
-    }
+    return () => entry.subscribers.delete(subscriber)
   }
 
   stop(deviceId: string): void {
@@ -134,89 +101,13 @@ class ScrcpyVideoRegistry {
     if (!entry) {
       return
     }
-    this.entries.delete(deviceId)
-    this.subscriberCount -= entry.subscribers.size
-    entry.subscribers.clear()
-    this.clearGop(entry)
-    this.clearConfig(entry)
     entry.close()
+    entry.subscribers.clear()
+    this.entries.delete(deviceId)
   }
 
   has(deviceId: string): boolean {
     return this.entries.has(deviceId)
-  }
-
-  private adjustRetainedBytes(entry: RegistryEntry, delta: number): void {
-    entry.retainedBytes += delta
-    this.retainedBytes += delta
-  }
-
-  private replaceConfig(entry: RegistryEntry, frame: ScrcpyVideoFrameMessage): void {
-    this.clearConfig(entry)
-    entry.config = frame
-    this.adjustRetainedBytes(entry, frame.bytes.byteLength)
-  }
-
-  private clearConfig(entry: RegistryEntry): void {
-    if (!entry.config) {
-      return
-    }
-    this.adjustRetainedBytes(entry, -entry.config.bytes.byteLength)
-    entry.config = undefined
-  }
-
-  private clearGop(entry: RegistryEntry): void {
-    for (const frame of entry.gop) {
-      this.adjustRetainedBytes(entry, -frame.bytes.byteLength)
-    }
-    entry.gop = []
-  }
-
-  private trimEntryReplay(entry: RegistryEntry): void {
-    if (
-      entry.gop.length > SCRCPY_VIDEO_MAX_GOP_FRAMES ||
-      entry.retainedBytes > SCRCPY_VIDEO_MAX_REPLAY_BYTES_PER_DEVICE
-    ) {
-      this.clearGop(entry)
-    }
-    if (entry.retainedBytes > SCRCPY_VIDEO_MAX_REPLAY_BYTES_PER_DEVICE) {
-      this.clearConfig(entry)
-    }
-  }
-
-  private trimAggregateReplay(preferredDeviceId: string): void {
-    if (this.retainedBytes <= SCRCPY_VIDEO_MAX_REPLAY_BYTES_TOTAL) {
-      return
-    }
-    const preferred = this.entries.get(preferredDeviceId)
-
-    for (const [deviceId, entry] of this.entries) {
-      if (deviceId === preferredDeviceId) {
-        continue
-      }
-      if (this.retainedBytes > SCRCPY_VIDEO_MAX_REPLAY_BYTES_TOTAL && entry.gop.length > 0) {
-        this.clearGop(entry)
-      }
-    }
-    if (
-      preferred &&
-      this.retainedBytes > SCRCPY_VIDEO_MAX_REPLAY_BYTES_TOTAL &&
-      preferred.gop.length > 0
-    ) {
-      this.clearGop(preferred)
-    }
-    for (const [deviceId, entry] of this.entries) {
-      if (this.retainedBytes <= SCRCPY_VIDEO_MAX_REPLAY_BYTES_TOTAL) {
-        break
-      }
-      if (deviceId === preferredDeviceId) {
-        continue
-      }
-      this.clearConfig(entry)
-    }
-    if (preferred && this.retainedBytes > SCRCPY_VIDEO_MAX_REPLAY_BYTES_TOTAL) {
-      this.clearConfig(preferred)
-    }
   }
 }
 

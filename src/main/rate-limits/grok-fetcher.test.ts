@@ -11,11 +11,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('node:fs', () => ({
-  existsSync: () => authState.file !== null
-}))
-
-vi.mock('../integration-credential-file', () => ({
-  readIntegrationCredentialFileSyncText: () => {
+  existsSync: () => authState.file !== null,
+  readFileSync: () => {
     if (authState.readError) {
       throw authState.readError
     }

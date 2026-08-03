@@ -2,7 +2,6 @@ import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-envi
 import type { WebPairingOffer } from './web-pairing'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
-import { parseWebLocalStorageJson, stringifyWebLocalStorageJson } from './web-local-storage-json'
 
 export type StoredWebRuntimeEnvironment = Omit<PublicKnownRuntimeEnvironment, 'endpoints'> & {
   compatibleEnvironmentIds?: string[]
@@ -24,7 +23,7 @@ export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment |
     return null
   }
   try {
-    const parsed = parseWebLocalStorageJson<StoredWebRuntimeEnvironment>(raw)
+    const parsed = JSON.parse(raw) as StoredWebRuntimeEnvironment
     if (
       !parsed.id ||
       !parsed.name ||
@@ -49,7 +48,7 @@ export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment |
 }
 
 export function saveStoredWebRuntimeEnvironment(environment: StoredWebRuntimeEnvironment): void {
-  window.localStorage.setItem(ENVIRONMENT_STORAGE_KEY, stringifyWebLocalStorageJson(environment))
+  window.localStorage.setItem(ENVIRONMENT_STORAGE_KEY, JSON.stringify(environment))
 }
 
 export function clearStoredWebRuntimeEnvironment(): void {
@@ -60,6 +59,7 @@ export function createStoredWebRuntimeEnvironment(args: {
   name: string
   offer: WebPairingOffer
   previousEnvironment?: StoredWebRuntimeEnvironment | null
+  connectionDependency?: 'ssh-tunnel'
 }): StoredWebRuntimeEnvironment {
   const id = `web-${createBrowserUuid()}`
   const now = Date.now()
@@ -71,6 +71,7 @@ export function createStoredWebRuntimeEnvironment(args: {
     updatedAt: now,
     lastUsedAt: null,
     runtimeId: null,
+    ...(args.connectionDependency ? { connectionDependency: args.connectionDependency } : {}),
     ...(compatibleEnvironmentIds.length > 0 ? { compatibleEnvironmentIds } : {}),
     preferredEndpointId: `ws-${id}`,
     endpoints: [

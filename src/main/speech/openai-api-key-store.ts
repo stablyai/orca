@@ -1,8 +1,7 @@
 import { safeStorage } from 'electron'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { readIntegrationCredentialFileSync } from '../integration-credential-file'
 
 type StoredOpenAiKey = {
   encryptedKeyBase64: string
@@ -32,9 +31,7 @@ function readLegacyJsonStoredOpenAiKey(): StoredOpenAiKey | null {
     return null
   }
   try {
-    const parsed = JSON.parse(
-      readIntegrationCredentialFileSync(keyPath).toString('utf8')
-    ) as Partial<StoredOpenAiKey>
+    const parsed = JSON.parse(readFileSync(keyPath, 'utf8')) as Partial<StoredOpenAiKey>
     if (typeof parsed.encryptedKeyBase64 !== 'string' || parsed.encryptedKeyBase64 === '') {
       return null
     }
@@ -79,7 +76,7 @@ export function readOpenAiSpeechApiKey(): string {
     throw new Error('OpenAI API key is not configured')
   }
   try {
-    const raw = readIntegrationCredentialFileSync(keyPath)
+    const raw = readFileSync(keyPath)
     const legacyJson = readLegacyJsonStoredOpenAiKey()
     if (legacyJson) {
       cachedOpenAiSpeechApiKey = safeStorage.decryptString(

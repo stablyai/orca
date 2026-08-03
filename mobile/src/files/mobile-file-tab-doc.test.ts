@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import { resolveMobileFileTabDoc } from './mobile-file-tab-doc'
 
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l8sm7wAAAABJRU5ErkJggg=='
+
 function ok(result: unknown): RpcResponse {
   return { id: 'x', ok: true, result, _meta: { runtimeId: 'r' } }
 }
@@ -31,16 +34,6 @@ function clientOf(byMethod: Record<string, RpcResponse>): {
 
 const WT = { worktreeId: 'wt1' }
 
-function pngBase64(width = 1): string {
-  const bytes = Buffer.alloc(24)
-  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
-  bytes.writeUInt32BE(13, 8)
-  bytes.write('IHDR', 12, 'ascii')
-  bytes.writeUInt32BE(width, 16)
-  bytes.writeUInt32BE(1, 20)
-  return bytes.toString('base64')
-}
-
 describe('resolveMobileFileTabDoc', () => {
   it('renders a staged text diff', async () => {
     const client = clientOf({
@@ -56,12 +49,11 @@ describe('resolveMobileFileTabDoc', () => {
   })
 
   it('renders an unstaged image diff from the modified bytes', async () => {
-    const modifiedContent = pngBase64()
     const client = clientOf({
       'git.diff': ok({
         kind: 'binary',
-        originalContent: 'b2xk',
-        modifiedContent,
+        originalContent: PNG_BASE64,
+        modifiedContent: PNG_BASE64,
         modifiedIsBinary: true,
         isImage: true,
         mimeType: 'image/png'
@@ -75,7 +67,7 @@ describe('resolveMobileFileTabDoc', () => {
     expect(doc).toEqual({
       status: 'ready',
       kind: 'image',
-      dataUri: `data:image/png;base64,${modifiedContent}`
+      dataUri: `data:image/png;base64,${PNG_BASE64}`
     })
   })
 
@@ -103,15 +95,14 @@ describe('resolveMobileFileTabDoc', () => {
   })
 
   it('renders a live image preview via files.readPreview', async () => {
-    const content = pngBase64()
     const client = clientOf({
-      'files.readPreview': ok({ content, isImage: true, mimeType: 'image/png' })
+      'files.readPreview': ok({ content: PNG_BASE64, isImage: true, mimeType: 'image/png' })
     })
     const doc = await resolveMobileFileTabDoc(client, { ...WT, relativePath: 'logo.png' })
     expect(doc).toEqual({
       status: 'ready',
       kind: 'image',
-      dataUri: `data:image/png;base64,${content}`
+      dataUri: `data:image/png;base64,${PNG_BASE64}`
     })
     expect(client.calls).toEqual(['files.readPreview'])
   })

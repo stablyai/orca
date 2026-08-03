@@ -7,7 +7,6 @@ import { useAppStore } from '@/store'
 import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from './agent-hibernation-planner'
 import {
   resetAgentHibernationCoordinatorForTests,
-  RUNTIME_LIVENESS_READ_CONCURRENCY,
   runAgentHibernationTick,
   startAgentHibernationCoordinator
 } from './agent-hibernation-coordinator'
@@ -184,61 +183,6 @@ afterEach(() => {
 })
 
 describe('agent sleep coordinator', () => {
-  it.each([
-    ['at the limit', RUNTIME_LIVENESS_READ_CONCURRENCY],
-    ['above the limit', RUNTIME_LIVENESS_READ_CONCURRENCY + 1]
-  ])('bounds runtime liveness reads %s', async (_, count) => {
-    const worktrees = Array.from({ length: count }, (_, index) => ({
-      id: `repo::/worktree-${index}`,
-      repoId: 'repo',
-      hostId: `runtime:env-${index}`
-    }))
-    useAppStore.setState({
-      tabsByWorktree: Object.fromEntries(worktrees.map((worktree) => [worktree.id, []])),
-      worktreesByRepo: { repo: worktrees } as never,
-      repos: [],
-      settings: { experimentalAgentHibernation: true } as never
-    })
-    let active = 0
-    let peak = 0
-    let started = 0
-    const releases: (() => void)[] = []
-    mockRuntimeEnvironmentCall.mockImplementation((args: { method: string }) => {
-      const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
-      if (compatible) {
-        return Promise.resolve(compatible)
-      }
-      if (args.method === 'terminal.list') {
-        started++
-        active++
-        peak = Math.max(peak, active)
-        return new Promise((resolve) => {
-          releases.push(() => {
-            active--
-            resolve({
-              id: 'terminal-list',
-              ok: true,
-              result: runtimeListResult([]),
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          })
-        })
-      }
-      return Promise.resolve({ id: 'default', ok: true, result: {} })
-    })
-
-    const tick = runAgentHibernationTick()
-    await vi.waitFor(() => expect(started).toBe(Math.min(count, RUNTIME_LIVENESS_READ_CONCURRENCY)))
-    if (count > RUNTIME_LIVENESS_READ_CONCURRENCY) {
-      releases.shift()?.()
-      await vi.waitFor(() => expect(started).toBe(count))
-    }
-    releases.splice(0).forEach((release) => release())
-    await tick
-
-    expect(peak).toBe(Math.min(count, RUNTIME_LIVENESS_READ_CONCURRENCY))
-  })
-
   it('hibernates an eligible background worktree after two stable ticks', async () => {
     vi.useFakeTimers()
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
@@ -407,6 +351,35 @@ describe('agent sleep coordinator', () => {
     })
 
     await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('rechecks dispatch settlement before shutdown', async () => {
+    vi.useFakeTimers()
+    const completed = {
+      ...entry(),
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'completed' as const
+      }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      agentStatusByPaneKey: { [completed.paneKey]: completed }
+    })
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [completed.paneKey]: {
+          ...completed,
+          orchestration: { ...completed.orchestration, dispatchStatus: 'dispatched' }
+        }
+      }
+    })
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(shutdown).not.toHaveBeenCalled()

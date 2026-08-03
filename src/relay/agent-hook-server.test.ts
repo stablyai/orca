@@ -2,11 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  endpointDirForRelaySocket,
-  MAX_RELAY_AGENT_HOOK_STATUS_CACHE_PANES,
-  RelayAgentHookServer
-} from './agent-hook-server'
+import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
 import * as agentHookListener from '../shared/agent-hook-listener'
@@ -69,10 +65,41 @@ describe('RelayAgentHookServer', () => {
       expect(envelope.connectionId).toBeNull()
       expect(envelope.payload.state).toBe('working')
       expect(envelope.payload.prompt).toBe('hi')
+      expect(envelope.claudeRunningNonAgentTask).toBe(false)
       // Why: the relay forwards body env/version so Orca's warn-once
       // protocol diagnostics and remote-location marker survive the wire.
       expect(envelope.env).toBe('remote')
       expect(envelope.version).toBe('1')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('forwards Claude background-work evidence with the normalized status', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'Stop',
+            background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }]
+          }
+        })
+      })
+
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        claudeRunningNonAgentTask: true,
+        payload: { state: 'working', agentType: 'claude' }
+      })
     } finally {
       server.stop()
     }
@@ -395,8 +422,10 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
-  it('caps the replay cache, evicting the least-recently-updated', async () => {
-    const CAP = MAX_RELAY_AGENT_HOOK_STATUS_CACHE_PANES
+  it('caps the replay cache at 256 panes, evicting the least-recently-updated', async () => {
+    // Mirrors the server's private MAX_CACHED_PANES. The WSL relay never gets a
+    // per-pane teardown signal, so the cache is recency-capped instead.
+    const CAP = 256
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()

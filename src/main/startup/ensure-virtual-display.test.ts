@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { spawnMock, spawnSyncMock, existsSyncMock, boundedReadMock, rmSyncMock, appMock } =
+const { spawnMock, spawnSyncMock, existsSyncMock, readFileSyncMock, rmSyncMock, appMock } =
   vi.hoisted(() => ({
     spawnMock: vi.fn(),
     spawnSyncMock: vi.fn(),
     existsSyncMock: vi.fn(),
-    boundedReadMock: vi.fn(),
+    readFileSyncMock: vi.fn(),
     rmSyncMock: vi.fn(),
     appMock: {
       disableHardwareAcceleration: vi.fn(),
@@ -17,10 +17,8 @@ const { spawnMock, spawnSyncMock, existsSyncMock, boundedReadMock, rmSyncMock, a
 vi.mock('child_process', () => ({ spawn: spawnMock, spawnSync: spawnSyncMock }))
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
+  readFileSync: readFileSyncMock,
   rmSync: rmSyncMock
-}))
-vi.mock('../../shared/node-bounded-file-reader', () => ({
-  readNodeFileSyncWithinLimit: boundedReadMock
 }))
 vi.mock('electron', () => ({ app: appMock }))
 
@@ -36,7 +34,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     spawnMock.mockReset()
     spawnSyncMock.mockReset()
     existsSyncMock.mockReset()
-    boundedReadMock.mockReset()
+    readFileSyncMock.mockReset()
     rmSyncMock.mockReset()
     appMock.disableHardwareAcceleration.mockReset()
     appMock.commandLine.appendSwitch.mockReset()
@@ -117,7 +115,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     setPlatform('linux')
     spawnSyncMock.mockReturnValue({ status: 0 })
     existsSyncMock.mockReturnValue(true) // :99 socket + lock present
-    boundedReadMock.mockReturnValue({ buffer: Buffer.from('4321\n') }) // lock holds a PID
+    readFileSyncMock.mockReturnValue('4321\n') // lock holds a PID
     const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true as never) // PID alive
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
@@ -133,7 +131,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     setPlatform('linux')
     spawnSyncMock.mockReturnValue({ status: 0 })
     existsSyncMock.mockReturnValue(true) // orphan socket + lock present
-    boundedReadMock.mockReturnValue({ buffer: Buffer.from('9999\n') })
+    readFileSyncMock.mockReturnValue('9999\n')
     // PID is gone: process.kill throws ESRCH.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw new Error('ESRCH')

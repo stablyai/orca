@@ -1,10 +1,6 @@
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
@@ -113,20 +109,8 @@ export async function previewWarpThemeImport(
           })
           continue
         }
-        const result = await readNodeFileWithinLimit(file.path, MAX_THEME_FILE_BYTES)
-        if (!result.stats.isFile()) {
-          skippedFiles.push({ label: file.label, reason: 'Not a file.' })
-          continue
-        }
-        content = result.buffer.toString('utf8')
-      } catch (error) {
-        if (error instanceof NodeFileReadTooLargeError) {
-          skippedFiles.push({
-            label: file.label,
-            reason: `File is too large to import (${error.observedBytes} bytes, limit ${MAX_THEME_FILE_BYTES}).`
-          })
-          continue
-        }
+        content = await readFile(file.path, 'utf-8')
+      } catch {
         skippedFiles.push({
           label: file.label,
           reason: sanitizeReadError('Could not read file.')

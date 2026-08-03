@@ -1,24 +1,22 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { execFileMock, webContentsFromIdMock, existsSyncMock, readScreenshotFileMock, stdinWrites } =
+const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
   vi.hoisted(() => ({
     execFileMock: vi.fn(),
     webContentsFromIdMock: vi.fn(),
     existsSyncMock: vi.fn(() => false),
-    readScreenshotFileMock: vi.fn(() => Buffer.from('')),
+    readFileSyncMock: vi.fn(() => Buffer.from('')),
     stdinWrites: [] as string[]
   }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
+  readFileSync: readFileSyncMock,
   accessSync: vi.fn(),
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
-}))
-vi.mock('./browser-screenshot-file-reader', () => ({
-  readBrowserScreenshotFile: readScreenshotFileMock
 }))
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
 vi.mock('electron', () => {
@@ -55,21 +53,17 @@ vi.mock('./cdp-bridge', () => ({
 
 import {
   AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES,
-  AGENT_BROWSER_MAX_QUEUED_COMMANDS_PER_SESSION,
   AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES,
   AgentBrowserBridge
 } from './agent-browser-bridge'
 import type { BrowserManager } from './browser-manager'
 import {
-  BROWSER_SCREENSHOT_MAX_DIMENSION_PX,
-  BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR
-} from './browser-screenshot-limits'
-import { CDP_PDF_MAX_RETAINED_BYTES, CDP_PDF_MEMORY_LIMIT_ERROR } from './cdp-print-to-pdf'
-import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
   CLIPBOARD_TEXT_WRITE_MAX_BYTES,
   CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
 } from '../../shared/clipboard-text'
+
+type ExecFileCallback = (error: unknown, stdout?: string, stderr?: string) => void
 
 // Why: the bridge resolves webContents via dynamic require('electron').webContents.fromId
 // inside a try/catch. Override the private method to inject our mock.
@@ -124,31 +118,37 @@ function mockWebContents(id: number, url = 'https://example.com', title = 'Examp
 }
 
 function succeedWith(data: unknown): void {
-  execFileMock.mockImplementation((_bin: string, _args: string[], _opts: unknown, cb: Function) => {
-    cb(null, JSON.stringify({ success: true, data }), '')
-    return {
-      stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
+  execFileMock.mockImplementation(
+    (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
+      cb(null, JSON.stringify({ success: true, data }), '')
+      return {
+        stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
+      }
     }
-  })
+  )
 }
 
 function succeedForContentEditable(data: unknown = { ok: true }): void {
-  execFileMock.mockImplementation((_bin: string, args: string[], _opts: unknown, cb: Function) => {
-    const result =
-      args.includes('get') && args.includes('attr') && args.includes('contenteditable')
-        ? { value: 'true' }
-        : data
-    cb(null, JSON.stringify({ success: true, data: result }), '')
-    return {
-      stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
+  execFileMock.mockImplementation(
+    (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+      const result =
+        args.includes('get') && args.includes('attr') && args.includes('contenteditable')
+          ? { value: 'true' }
+          : data
+      cb(null, JSON.stringify({ success: true, data: result }), '')
+      return {
+        stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
+      }
     }
-  })
+  )
 }
 
 function failWith(error: string): void {
-  execFileMock.mockImplementation((_bin: string, _args: string[], _opts: unknown, cb: Function) => {
-    cb(null, JSON.stringify({ success: false, error }), '')
-  })
+  execFileMock.mockImplementation(
+    (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
+      cb(null, JSON.stringify({ success: false, error }), '')
+    }
+  )
 }
 
 class TestEvent {
@@ -306,7 +306,7 @@ describe('AgentBrowserBridge', () => {
     stdinWrites.length = 0
     CdpWsProxyMock.instances.length = 0
     existsSyncMock.mockReturnValue(false)
-    readScreenshotFileMock.mockReturnValue(Buffer.from(''))
+    readFileSyncMock.mockReturnValue(Buffer.from(''))
     const wc = mockWebContents(100)
     webContentsFromIdMock.mockReturnValue(wc)
     bridge = new AgentBrowserBridge(mockBrowserManager())
@@ -360,7 +360,7 @@ describe('AgentBrowserBridge', () => {
     try {
       const closeKill = vi.fn()
       execFileMock.mockImplementation(
-        (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
           if (args.includes('close')) {
             return { kill: closeKill }
           }
@@ -453,7 +453,7 @@ describe('AgentBrowserBridge', () => {
     let releaseSnapshot: (() => void) | null = null
     const activeChild = { kill: vi.fn() }
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('snapshot')) {
           releaseSnapshot = () => {
             cb(null, JSON.stringify({ success: false, error: CDP_DISCOVERY_FAILURE }), '')
@@ -494,7 +494,7 @@ describe('AgentBrowserBridge', () => {
 
   it('handles malformed JSON from agent-browser', async () => {
     execFileMock.mockImplementation(
-      (_bin: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
         cb(null, 'not json at all', '')
       }
     )
@@ -756,7 +756,7 @@ describe('AgentBrowserBridge', () => {
     const commandCalls: string[][] = []
 
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         commandCalls.push(args)
         cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
       }
@@ -769,68 +769,6 @@ describe('AgentBrowserBridge', () => {
     const snapshotIdx = commandCalls.findIndex((a) => a.includes('snapshot'))
     const clickIdx = commandCalls.findIndex((a) => a.includes('click'))
     expect(snapshotIdx).toBeLessThan(clickIdx)
-  })
-
-  it('rejects overload instead of retaining an unbounded per-session command queue', async () => {
-    let releaseFirst!: () => void
-    const firstTurn = new Promise<void>((resolve) => {
-      releaseFirst = resolve
-    })
-    const internals = bridge as unknown as {
-      enqueueTargetedCommand: <T>(
-        worktreeId: string | undefined,
-        browserPageId: string | undefined,
-        execute: () => Promise<T>,
-        options: { ensureSession: boolean; ensureVisible: boolean }
-      ) => Promise<T>
-    }
-    const enqueue = (execute: () => Promise<void>) =>
-      internals.enqueueTargetedCommand(undefined, undefined, execute, {
-        ensureSession: false,
-        ensureVisible: false
-      })
-
-    const active = enqueue(() => firstTurn)
-    await vi.waitFor(() =>
-      expect((bridge as unknown as { processingQueues: Set<string> }).processingQueues.size).toBe(1)
-    )
-    const queued = Array.from({ length: AGENT_BROWSER_MAX_QUEUED_COMMANDS_PER_SESSION }, () =>
-      enqueue(async () => {})
-    )
-
-    await expect(enqueue(async () => {})).rejects.toMatchObject({ code: 'browser_busy' })
-    releaseFirst()
-    await expect(Promise.all([active, ...queued])).resolves.toHaveLength(
-      AGENT_BROWSER_MAX_QUEUED_COMMANDS_PER_SESSION + 1
-    )
-  })
-
-  it('bounds callers waiting for hung browser session setup before they reach the queue', async () => {
-    let releaseSetup!: () => void
-    const setup = new Promise<void>((resolve) => {
-      releaseSetup = resolve
-    })
-    const internals = bridge as unknown as {
-      ensureSession: () => Promise<void>
-      enqueueTargetedCommand: <T>(
-        worktreeId: string | undefined,
-        browserPageId: string | undefined,
-        execute: () => Promise<T>,
-        options: { ensureVisible: boolean }
-      ) => Promise<T>
-    }
-    internals.ensureSession = vi.fn(() => setup)
-    const enqueue = () =>
-      internals.enqueueTargetedCommand(undefined, undefined, async () => {}, {
-        ensureVisible: false
-      })
-    const pending = Array.from({ length: AGENT_BROWSER_MAX_QUEUED_COMMANDS_PER_SESSION }, enqueue)
-
-    await expect(enqueue()).rejects.toMatchObject({ code: 'browser_busy' })
-    releaseSetup()
-    await expect(Promise.all(pending)).resolves.toHaveLength(
-      AGENT_BROWSER_MAX_QUEUED_COMMANDS_PER_SESSION
-    )
   })
 
   it('acquires an automation visibility lease while running snapshot commands', async () => {
@@ -852,7 +790,7 @@ describe('AgentBrowserBridge', () => {
 
     let releaseSnapshot: (() => void) | null = null
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
           return
@@ -947,7 +885,7 @@ describe('AgentBrowserBridge', () => {
 
     const commandCalls: string[][] = []
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         commandCalls.push(args)
         cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
       }
@@ -1082,7 +1020,7 @@ describe('AgentBrowserBridge', () => {
       )
       existsSyncMock.mockReturnValue(true)
       const screenshotBytes = Buffer.from('serialized-screenshot')
-      readScreenshotFileMock.mockReturnValue(screenshotBytes)
+      readFileSyncMock.mockReturnValue(screenshotBytes)
 
       const b = new AgentBrowserBridge(
         mockBrowserManager(tabs, worktrees, {
@@ -1094,7 +1032,7 @@ describe('AgentBrowserBridge', () => {
 
       let releaseFirstScreenshot: (() => void) | null = null
       execFileMock.mockImplementation(
-        (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
           if (args.includes('close')) {
             cb(null, JSON.stringify({ success: true, data: null }), '')
             return
@@ -1154,22 +1092,6 @@ describe('AgentBrowserBridge', () => {
     }
   })
 
-  it('rejects an oversized screenshot file before reading or base64-copying it', () => {
-    existsSyncMock.mockReturnValue(true)
-    readScreenshotFileMock.mockImplementation(() => {
-      throw new Error(BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR)
-    })
-
-    expect(() =>
-      (
-        bridge as unknown as {
-          readScreenshotFromResult: (raw: unknown, format?: string) => unknown
-        }
-      ).readScreenshotFromResult({ path: '/tmp/oversized.png' }, 'png')
-    ).toThrow(BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR)
-    expect(readScreenshotFileMock).toHaveBeenCalledWith('/tmp/oversized.png')
-  })
-
   it('captures full-page screenshots directly through CDP using CSS layout bounds', async () => {
     vi.useFakeTimers()
     try {
@@ -1189,7 +1111,7 @@ describe('AgentBrowserBridge', () => {
       webContentsFromIdMock.mockReturnValue(wc)
 
       execFileMock.mockImplementation(
-        (_bin: string, _args: string[], _opts: unknown, cb: Function) => {
+        (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
           cb(null, JSON.stringify({ success: true, data: null }), '')
         }
       )
@@ -1217,95 +1139,13 @@ describe('AgentBrowserBridge', () => {
     }
   })
 
-  it('reports oversized full-page geometry with a stable browser error code', async () => {
-    vi.useFakeTimers()
-    try {
-      const wc = mockWebContents(100)
-      wc.debugger.sendCommand.mockResolvedValueOnce({
-        cssContentSize: { width: BROWSER_SCREENSHOT_MAX_DIMENSION_PX + 1, height: 1 }
-      })
-      webContentsFromIdMock.mockReturnValue(wc)
-
-      const screenshotPromise = bridge.fullPageScreenshot('png')
-      const rejection = expect(screenshotPromise).rejects.toMatchObject({
-        code: 'browser_screenshot_too_large',
-        message: BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR
-      })
-      await vi.advanceTimersByTimeAsync(500)
-
-      await rejection
-      expect(wc.debugger.sendCommand).toHaveBeenCalledOnce()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('rejects a direct PDF before making an oversized base64 copy', async () => {
-    succeedWith(null)
-    const toString = vi.fn()
-    const wc = {
-      ...mockWebContents(100),
-      printToPDF: vi.fn(async () => ({
-        length: CDP_PDF_MAX_RETAINED_BYTES + 1,
-        toString
-      }))
-    }
-    webContentsFromIdMock.mockReturnValue(wc)
-
-    await expect(bridge.pdf()).rejects.toThrow(CDP_PDF_MEMORY_LIMIT_ERROR)
-    expect(toString).not.toHaveBeenCalled()
-  })
-
-  it('shares one native PDF print cap across browser sessions', async () => {
-    const tabs = new Map([
-      ['tab-1', 1],
-      ['tab-2', 2],
-      ['tab-3', 3]
-    ])
-    const worktrees = new Map([
-      ['tab-1', 'wt-1'],
-      ['tab-2', 'wt-2'],
-      ['tab-3', 'wt-3']
-    ])
-    const resolvers: ((buffer: Buffer) => void)[] = []
-    const webContentsById = new Map(
-      [1, 2, 3].map((id) => [
-        id,
-        {
-          ...mockWebContents(id),
-          printToPDF: vi.fn(
-            () =>
-              new Promise<Buffer>((resolve) => {
-                resolvers.push(resolve)
-              })
-          )
-        }
-      ])
-    )
-    webContentsFromIdMock.mockImplementation((id: number) => webContentsById.get(id) ?? null)
-    succeedWith(null)
-    const boundedBridge = new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
-    boundedBridge.setActiveTab(1, 'wt-1')
-    boundedBridge.setActiveTab(2, 'wt-2')
-    boundedBridge.setActiveTab(3, 'wt-3')
-
-    const active = [boundedBridge.pdf('wt-1'), boundedBridge.pdf('wt-2')]
-    await vi.waitFor(() => expect(resolvers).toHaveLength(2))
-    await expect(boundedBridge.pdf('wt-3')).rejects.toMatchObject({ code: 'browser_busy' })
-
-    for (const resolve of resolvers) {
-      resolve(Buffer.from('%PDF-bounded'))
-    }
-    await expect(Promise.all(active)).resolves.toHaveLength(2)
-  })
-
   // ── Timeout escalation ──
 
   it('destroys session after 3 consecutive timeouts', async () => {
     const killedError = Object.assign(new Error('timeout'), { killed: true })
 
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
           return
@@ -1335,7 +1175,7 @@ describe('AgentBrowserBridge', () => {
     const commandCalls: string[][] = []
     let releaseDestroyClose: (() => void) | null = null
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         commandCalls.push(args)
         if (args.includes('close')) {
           if (!releaseDestroyClose) {
@@ -1380,7 +1220,7 @@ describe('AgentBrowserBridge', () => {
     const commandCalls: string[][] = []
     let releaseStaleClose: (() => void) | null = null
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         commandCalls.push(args)
         if (args.includes('close') && !releaseStaleClose) {
           releaseStaleClose = () => {
@@ -1438,7 +1278,7 @@ describe('AgentBrowserBridge', () => {
     }
 
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('snapshot')) {
           resolveRunningCommand = () => cb(killedError, '', '')
           return activeChild
@@ -1522,7 +1362,7 @@ describe('AgentBrowserBridge', () => {
 
     const commandCalls: string[][] = []
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         commandCalls.push(args)
         cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
       }
@@ -1558,7 +1398,7 @@ describe('AgentBrowserBridge', () => {
 
     const commandCalls: string[][] = []
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         commandCalls.push(args)
         cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
       }
@@ -1745,7 +1585,7 @@ describe('AgentBrowserBridge', () => {
 
     let releaseSnapshot: (() => void) | null = null
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
           return
@@ -2043,7 +1883,7 @@ describe('AgentBrowserBridge', () => {
       let helperSessionIsStale = false
 
       execFileMock.mockImplementation(
-        (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
           if (args.includes('close')) {
             cb(null, JSON.stringify({ success: true, data: null }), '')
           } else if (args.includes('snapshot')) {
@@ -2690,19 +2530,6 @@ describe('AgentBrowserBridge', () => {
     expect(viewportCall).toBeUndefined()
   })
 
-  it('rejects an oversized viewport before asking Chromium to allocate it', async () => {
-    const wc = mockWebContents(100)
-    webContentsFromIdMock.mockReturnValue(wc)
-
-    await expect(
-      bridge.setViewport(BROWSER_SCREENSHOT_MAX_DIMENSION_PX + 1, 1, 1)
-    ).rejects.toMatchObject({
-      code: 'browser_screenshot_too_large',
-      message: BROWSER_SCREENSHOT_MEMORY_LIMIT_ERROR
-    })
-    expect(wc.debugger.sendCommand).not.toHaveBeenCalled()
-  })
-
   it('normalizes selector wait state=visible to the default supported semantics', async () => {
     succeedWith({ selector: 'h1', waited: 'selector' })
 
@@ -2730,7 +2557,7 @@ describe('AgentBrowserBridge', () => {
   it('returns browser_timeout for timed conditional waits without recycling the session', async () => {
     const killedError = Object.assign(new Error('timeout'), { killed: true })
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('wait')) {
           cb(killedError, '', '')
           return
@@ -2754,7 +2581,7 @@ describe('AgentBrowserBridge', () => {
 
   it('passes stderr through as error message on execFile failure', async () => {
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
           return
@@ -2767,7 +2594,7 @@ describe('AgentBrowserBridge', () => {
 
   it('falls back to error.message when stderr is empty', async () => {
     execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
           return
@@ -2782,7 +2609,7 @@ describe('AgentBrowserBridge', () => {
 
   it('returns browser_error with truncated output for malformed JSON', async () => {
     execFileMock.mockImplementation(
-      (_bin: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
         cb(null, 'Error: not json output', '')
       }
     )

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app } from 'electron'
@@ -11,17 +11,12 @@ import {
   ORCA_PI_PREFILL_EXTENSION_FILE,
   getPiPrefillExtensionSource
 } from './prefill-extension-source'
-export { ORCA_OMP_PREFILL_ENV_VAR, ORCA_PI_PREFILL_ENV_VAR } from './prefill-extension-source'
 import { ORCA_PI_EXTENSION_FILE, getPiTitlebarExtensionSource } from './titlebar-extension-source'
 import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,
   safeRemoveOverlay
 } from '../pty/overlay-mirror'
 import { migrateLegacyOmpOverlayState } from './legacy-omp-overlay-migration'
-import {
-  isManagedPiExtensionFile,
-  withOrcaManagedPiExtensionMarker
-} from './managed-extension-ownership'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
 // Why: the Pi test suite imports `isSafeDescendCandidate` from this module's
@@ -31,6 +26,7 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 
 const PI_AGENT_SUBDIR = 'agent'
+const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
 
 type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
@@ -67,6 +63,12 @@ function toSafeOverlayDirName(ptyId: string): string {
   return createHash('sha256').update(ptyId).digest('hex').slice(0, 32)
 }
 
+function withOrcaManagedExtensionMarker(source: string): string {
+  return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
+    ? source
+    : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
+}
+
 export class PiTitlebarExtensionService {
   private getOverlayRoot(kind: PiAgentKind): string {
     return join(app.getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
@@ -95,8 +97,16 @@ export class PiTitlebarExtensionService {
     safeRemoveOverlay(overlayDir, this.getOverlayRoot(kind))
   }
 
+  private canOverwriteManagedExtension(path: string): boolean {
+    try {
+      return readFileSync(path, 'utf8').includes(ORCA_MANAGED_EXTENSION_MARKER)
+    } catch {
+      return true
+    }
+  }
+
   private writeManagedExtension(path: string, source: string): ManagedExtensionWriteResult {
-    if (existsSync(path) && !isManagedPiExtensionFile(path)) {
+    if (existsSync(path) && !this.canOverwriteManagedExtension(path)) {
       return 'skipped-user-owned'
     }
 
@@ -133,14 +143,14 @@ export class PiTitlebarExtensionService {
 
     this.writeManagedExtension(
       join(extensionsDir, ORCA_PI_EXTENSION_FILE),
-      withOrcaManagedPiExtensionMarker(getPiTitlebarExtensionSource())
+      withOrcaManagedExtensionMarker(getPiTitlebarExtensionSource())
     )
     this.writeManagedExtension(
       join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE),
-      withOrcaManagedPiExtensionMarker(getPiPrefillExtensionSource(kind))
+      withOrcaManagedExtensionMarker(getPiPrefillExtensionSource(kind))
     )
     const statusExtensionPath = join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
-    const statusSource = withOrcaManagedPiExtensionMarker(getPiAgentStatusExtensionSource(kind))
+    const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
     const statusResult = this.writeManagedExtension(statusExtensionPath, statusSource)
 
     return {
@@ -158,7 +168,8 @@ export class PiTitlebarExtensionService {
   buildPtyEnv(
     ptyId: string,
     existingAgentDir: string | undefined,
-    kind: PiAgentKind
+    kind: PiAgentKind,
+    options?: { materializeDefaultHome?: boolean }
   ): Record<string, string> {
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind)
     try {
@@ -167,6 +178,20 @@ export class PiTitlebarExtensionService {
     } catch {
       // Why: old per-PTY overlay cleanup is best-effort; a locked stale
       // directory should not prevent the terminal from starting.
+    }
+
+    // Why: bare shells used to mkdir ~/.<agent>/agent for every terminal so a
+    // later typed `pi`/`omp` got hooks. That recreates deleted unused agent
+    // homes on every open (#10196). Only materialize the default home when the
+    // caller opts in (explicit agent launch) or the dir already exists.
+    const materializeDefaultHome = options?.materializeDefaultHome !== false
+    if (!existsSync(sourceAgentDir) && !materializeDefaultHome) {
+      if (kind === 'omp') {
+        const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
+        const statusExtensionPath = this.writeOmpFallbackStatusExtension(statusSource)
+        return statusExtensionPath ? { ORCA_OMP_STATUS_EXTENSION: statusExtensionPath } : {}
+      }
+      return {}
     }
 
     if (kind === 'omp') {

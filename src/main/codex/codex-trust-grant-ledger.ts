@@ -1,7 +1,5 @@
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { MAX_AGENT_STATE_FILE_BYTES, readAgentStateJsonFileSync } from '../agent-state-file-reader'
-import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import { normalizeCodexProjectPathForLookup } from './config-toml-trust'
 
@@ -48,7 +46,7 @@ function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
     return empty
   }
   try {
-    const parsed = readAgentStateJsonFileSync(ledgerPath)
+    const parsed: unknown = JSON.parse(readFileSync(ledgerPath, 'utf-8'))
     if (
       !parsed ||
       typeof parsed !== 'object' ||
@@ -71,8 +69,7 @@ function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
 
 function persistLedgerFile(ledgerPath: string, file: CodexTrustGrantLedgerFile): void {
   mkdirSync(dirname(ledgerPath), { recursive: true, mode: 0o700 })
-  const { serialized } = stringifyJsonWithinByteLimit(file, MAX_AGENT_STATE_FILE_BYTES - 1, 2)
-  writeFileSync(ledgerPath, `${serialized}\n`, {
+  writeFileSync(ledgerPath, `${JSON.stringify(file, null, 2)}\n`, {
     encoding: 'utf-8',
     mode: 0o600
   })

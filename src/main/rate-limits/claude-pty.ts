@@ -13,7 +13,6 @@ import {
   getHiddenRateLimitWslCwdSetupCommands,
   resolveHiddenRateLimitPtyCwd
 } from './hidden-rate-limit-pty-cwd'
-import { appendRateLimitPtyOutputTail } from './rate-limit-pty-output-tail'
 
 const PTY_TIMEOUT_MS = 25_000
 const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
@@ -442,10 +441,13 @@ export async function fetchViaPty(options?: {
     }, STARTUP_DELAY_MS)
 
     const onDataDisposable = term.onData((data) => {
-      const appended = appendRateLimitPtyOutputTail(output, data, MAX_OUTPUT_LENGTH)
-      output = appended.output
+      output += data
+      // Why: prevent memory exhaustion if the CLI process floods output
+      if (output.length > MAX_OUTPUT_LENGTH) {
+        output = output.slice(-MAX_OUTPUT_LENGTH)
+      }
 
-      const cleanChunk = stripTerminalControlSequences(appended.scannedChunk)
+      const cleanChunk = stripTerminalControlSequences(data)
 
       // Why: the Claude CLI may prompt for first-run setup (trust files,
       // workspace directory). Auto-accept so we can reach /usage.

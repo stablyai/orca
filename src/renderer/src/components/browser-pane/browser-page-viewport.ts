@@ -65,11 +65,16 @@ export function ensureBrowserPageViewport(
   browserPageId: string,
   workspaceTabId: string
 ): BrowserPageViewport | null {
+  const root = slotViewportRoots.get(workspaceTabId)
   const existing = browserPageViewports.get(browserPageId)
   if (existing) {
-    return existing
+    if (!root || existing.shell.parentElement === root) {
+      return existing
+    }
+    // Why: a remounted slot strands this shell after Electron destroys its detached guest (STA-3228).
+    existing.shell.remove()
+    browserPageViewports.delete(browserPageId)
   }
-  const root = slotViewportRoots.get(workspaceTabId)
   if (!root) {
     return null
   }

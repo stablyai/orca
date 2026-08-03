@@ -10,7 +10,6 @@ import {
   MAX_PREVIEWABLE_BINARY_SIZE,
   MAX_TEXT_FILE_SIZE
 } from './fs-handler-utils'
-import { assertRasterImagePreviewWithinLimits } from '../shared/raster-image-preview-limits'
 
 type TerminalArtifactStat = {
   size: number
@@ -44,14 +43,7 @@ export async function readVerifiedTerminalArtifact(params: Record<string, unknow
     )
     const buffer = await readBoundedFileFromHandle(handle, sizeLimit)
     if (mimeType) {
-      const imageDimensions = assertRasterImagePreviewWithinLimits(buffer, mimeType)
-      return {
-        content: buffer.toString('base64'),
-        isBinary: true,
-        isImage: true,
-        mimeType,
-        ...(imageDimensions ? { imageDimensions } : {})
-      }
+      return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
     }
     if (isBinaryBuffer(buffer)) {
       return { content: '', isBinary: true }

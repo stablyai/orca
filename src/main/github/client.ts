@@ -27,6 +27,7 @@ import {
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
+import { summarizeProviderChecks } from '../../shared/provider-check-summary'
 import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
 import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
@@ -34,7 +35,7 @@ import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
   sortWorkItemsByNumber
 } from '../../shared/work-items'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { sliceCheckLogTail } from './check-job-log-tail-slice'
@@ -43,6 +44,8 @@ import {
   safePRRefreshErrorMessage
 } from './pr-refresh-error-classification'
 import { getPRConflictSummary } from './conflict-summary'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import { splitRemoteBranchName } from '../../shared/git-effective-upstream'
 import {
   execFileAsync,
@@ -52,6 +55,7 @@ import {
   release,
   classifyGhError,
   classifyListIssuesError,
+  classifyListPrsError,
   ghRepoExecOptions,
   githubRepoContext,
   getRemoteUrlForRepo,
@@ -72,12 +76,8 @@ import {
 } from '../source-control/hosted-review-git-options'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
-import { readHostedReviewTemplate } from '../source-control/pull-request-template'
-import { cacheIdentityDigest } from '../cache-identity-digest'
-import { measureUtf8ByteLength } from '../../shared/utf8-byte-limits'
 import {
   getGitHubApiRepositoryForRemote,
-  getIssueGitHubApiRepository,
   getOriginGitHubApiRepository,
   githubHostExecOptions,
   githubRepositorySlugArg,
@@ -196,6 +196,52 @@ async function assertRateLimitBudget(
   }
 }
 
+// Why: a branch lookup prefers REST but can fall back to `gh pr list` and
+// `gh pr view`, so both buckets are guarded and charged. Mirrors the PR refresh
+// coordinator's own estimate.
+const PR_BRANCH_LOOKUP_BUCKETS = ['core', 'graphql'] as const
+
+/**
+ * Rate-limit floor for GitHub PR lookups that do not run through the PR refresh
+ * coordinator's queue (#11532).
+ *
+ * The coordinator guards and paces its own background refreshes, but
+ * `hostedReview:forBranch` polls the same lookup straight from the renderer.
+ * Ungated, the two paths together could spend the user's entire hourly quota —
+ * which is per user and shared with their own `gh` and CLI agents.
+ * Returns the reset time when the caller must not spend, else `null`.
+ */
+export async function getGitHubPRLookupRateLimitBlock(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<{ resetAt: number } | null> {
+  const executionOptions = ghRepoExecOptions(
+    githubRepoContext(repoPath, connectionId, localGitOptions)
+  )
+  // Why: identity resolution runs local git, which can fail for reasons that
+  // have nothing to do with the budget; let the lookup itself classify those.
+  const repository = await getOriginGitHubApiRepository(
+    repoPath,
+    connectionId,
+    executionOptions
+  ).catch(() => null)
+  if (repository === null) {
+    return null
+  }
+  if (spendsSharedGitHubComQuota(repository, executionOptions)) {
+    // Why: the probe only warms the snapshot and is exempt from limits, so a
+    // failure must fail open rather than block the lookup (#7553).
+    await getRateLimit().catch(() => undefined)
+  }
+  // Why: retrying at the earlier reset would fail again on the bucket that has
+  // not reset yet, so the latest blocked reset is the only honest retry time.
+  const resets = PR_BRANCH_LOOKUP_BUCKETS.map((bucket) =>
+    repositoryRateLimitGuard(repository, bucket, executionOptions)
+  ).flatMap((guard) => (guard.blocked ? [guard.resetAt] : []))
+  return resets.length > 0 ? { resetAt: Math.max(...resets) } : null
+}
+
 function prRefreshUpstreamError(
   err: unknown
 ): Extract<PRRefreshOutcome, { kind: 'upstream-error' }> {
@@ -284,16 +330,35 @@ export type PullRequestPushTarget = {
   maintainerCanModify?: boolean
 }
 
+// Why: only an explicit `origin` preference is origin-only; `upstream`/`auto`/
+// undefined keep the multi-candidate probe ordered upstream-first, matching
+// resolvePrWorkItemSource list semantics.
+async function resolvePullRequestLookupCandidates(
+  repoPath: string,
+  preference: IssueSourcePreference | undefined,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<GitHubApiRepository[]> {
+  if (preference === 'origin') {
+    const origin = await getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions)
+    return origin ? [origin] : []
+  }
+  return (await resolveGitHubApiRepositoryCandidates(repoPath, connectionId, localGitOptions))
+    .candidates
+}
+
 export async function getPullRequestPushTarget(
   repoPath: string,
   prNumber: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
 ): Promise<PullRequestPushTarget | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(context)
-  const { candidates } = await resolveGitHubApiRepositoryCandidates(
+  const candidates = await resolvePullRequestLookupCandidates(
     repoPath,
+    preference,
     connectionId,
     localGitOptions
   )
@@ -639,42 +704,19 @@ function checkRollupEntries(value: unknown): unknown[] {
 }
 
 function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['checksSummary'] {
-  const entries = checkRollupEntries(value)
-  if (entries.length === 0) {
-    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0 }
-  }
-  let passed = 0
-  let failed = 0
-  let pending = 0
-  for (const entry of entries) {
-    if (typeof entry !== 'object' || entry === null) {
-      pending += 1
-      continue
-    }
-    const raw = entry as Record<string, unknown>
-    const conclusion = String(raw.conclusion ?? raw.state ?? '').toUpperCase()
-    const status = String(raw.status ?? '').toUpperCase()
-    if (['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(conclusion)) {
-      passed += 1
-    } else if (
-      ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(
-        conclusion
-      )
-    ) {
-      failed += 1
-    } else if (status === 'COMPLETED' && conclusion) {
-      failed += 1
-    } else {
-      pending += 1
-    }
-  }
-  return {
-    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : 'success',
-    total: entries.length,
-    passed,
-    failed,
-    pending
-  }
+  return summarizeProviderChecks(
+    checkRollupEntries(value).map((entry) => {
+      if (typeof entry !== 'object' || entry === null) {
+        return { status: '', conclusion: '' }
+      }
+      const raw = entry as Record<string, unknown>
+      // Why: StatusContext reports `state` and carries no `status`; CheckRun reports both.
+      return {
+        status: String(raw.status ?? ''),
+        conclusion: String(raw.conclusion ?? raw.state ?? '')
+      }
+    })
+  )
 }
 
 function mapPullRequestWorkItem(
@@ -955,14 +997,19 @@ async function fetchPullRequestWorkItemFromCandidates(
   repoPath: string,
   number: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
 ): Promise<MainWorkItem | null> {
-  const { candidates } = await resolveGitHubApiRepositoryCandidates(
+  const candidates = await resolvePullRequestLookupCandidates(
     repoPath,
+    preference,
     connectionId,
     localGitOptions
   )
   if (candidates.length === 0) {
+    if (preference === 'origin') {
+      return null
+    }
     return fetchPullRequestWorkItem(repoPath, null, number, connectionId, localGitOptions)
   }
   for (const candidate of candidates) {
@@ -1076,10 +1123,11 @@ function buildWorkItemListRequest(args: {
   return { args: out, offset: (page - 1) * limit }
 }
 
-// Why: shared shape so listWorkItems can lift the issue-side error (#1076 silent wrongness) into the IPC envelope; PR errors out of scope (§6).
+// Why: shared shape so listWorkItems can lift per-side errors (#1076 silent wrongness) into the IPC envelope — a swallowed side reads as end-of-data to pagination (#11485).
 type PartialWorkItemsResult = {
   items: MainWorkItem[]
   issuesError?: ClassifiedError
+  prsError?: ClassifiedError
 }
 
 function assertSshRepoHasResolvedGitHubSource(args: {
@@ -1110,8 +1158,10 @@ async function resolvePrWorkItemSource(
     getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions),
     getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
   ])
-  const source =
-    preference === 'upstream' ? (upstreamCandidate ?? originCandidate) : originCandidate
+  // Why: fork-contribution PRs live on the upstream repo (the fork's own PR
+  // list is almost always empty), so 'auto' resolves upstream-first exactly
+  // like the issue side. Only an explicit 'origin' pick pins PRs to the fork.
+  const source = preference === 'origin' ? originCandidate : (upstreamCandidate ?? originCandidate)
   return { source, originCandidate, upstreamCandidate }
 }
 
@@ -1231,6 +1281,7 @@ async function listQueriedWorkItems(
   let successfulRequestCount = 0
   let nonAvailabilityFailureCount = 0
   let availabilityError: unknown
+  let prsError: ClassifiedError | undefined
 
   // Why: surface the issue-side error separately for the IPC envelope; PR-side keeps prior swallow-and-log (parent doc §6).
   const issueFetch = (async (): Promise<PartialWorkItemsResult> => {
@@ -1302,6 +1353,7 @@ async function listQueriedWorkItems(
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
       const stderr = err instanceof Error ? err.message : String(err)
+      prsError = classifyListPrsError(stderr)
       if (classifyGitHubUnavailable(stderr)) {
         availabilityError ??= err
       } else {
@@ -1318,7 +1370,8 @@ async function listQueriedWorkItems(
   }
   return {
     items: sortWorkItemsByNumber([...issueResult.items, ...prItems]).slice(0, limit),
-    issuesError: issueResult.issuesError
+    issuesError: issueResult.issuesError,
+    prsError
   }
 }
 
@@ -1376,7 +1429,13 @@ export async function listWorkItems(
           localGitOptions
         )
 
-    const errors = partial.issuesError ? { issues: partial.issuesError } : undefined
+    const errors =
+      partial.issuesError || partial.prsError
+        ? {
+            ...(partial.issuesError ? { issues: partial.issuesError } : {}),
+            ...(partial.prsError ? { prs: partial.prsError } : {})
+          }
+        : undefined
     return {
       items: partial.items,
       sources: {
@@ -1774,6 +1833,41 @@ async function findOpenPRByHeadBase(args: {
   return { number: list[0].number, url: list[0].url }
 }
 
+async function readPullRequestTemplate(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<string> {
+  const relativeCandidates = [
+    '.github/pull_request_template.md',
+    '.github/PULL_REQUEST_TEMPLATE.md',
+    'pull_request_template.md',
+    'PULL_REQUEST_TEMPLATE.md',
+    'docs/pull_request_template.md',
+    'docs/PULL_REQUEST_TEMPLATE.md'
+  ]
+  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
+  if (connectionId && !remoteProvider) {
+    return ''
+  }
+  for (const relativeCandidate of relativeCandidates) {
+    try {
+      if (remoteProvider) {
+        const result = await remoteProvider.readFile(
+          joinWorktreeRelativePath(repoPath, relativeCandidate)
+        )
+        if (result.isBinary) {
+          continue
+        }
+        return result.content
+      }
+      return await readFile(join(repoPath, relativeCandidate), 'utf8')
+    } catch {
+      // Try the next conventional PR template path.
+    }
+  }
+  return ''
+}
+
 export async function createGitHubPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
@@ -1828,7 +1922,7 @@ export async function createGitHubPullRequest(
   try {
     const body =
       input.useTemplate && !input.body?.trim()
-        ? await readHostedReviewTemplate(repoPath, connectionId, 'github')
+        ? await readPullRequestTemplate(repoPath, connectionId)
         : (input.body ?? '')
     await writeFile(bodyPath, body, 'utf8')
     const createArgs = [
@@ -1917,38 +2011,55 @@ export async function getWorkItem(
   number: number,
   type?: 'issue' | 'pr',
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
 ): Promise<MainWorkItem | null> {
   await acquire()
   try {
+    // Why: listWorkItems uses resolveIssueGitHubApiRepositorySource; open-by-number
+    // must share that preference so origin/upstream toggles cannot disagree.
     if (type === 'issue') {
-      return await fetchIssueWorkItem(
+      const { source } = await resolveIssueGitHubApiRepositorySource(
         repoPath,
-        await getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
-        number,
+        preference,
         connectionId,
         localGitOptions
       )
+      // Why: explicit origin with no origin identity must not bare-lookup ambient gh
+      // (same fail-closed rule as origin-pinned PR candidate resolution).
+      if (!source && preference === 'origin') {
+        return null
+      }
+      return await fetchIssueWorkItem(repoPath, source, number, connectionId, localGitOptions)
     }
     if (type === 'pr') {
       return await fetchPullRequestWorkItemFromCandidates(
         repoPath,
         number,
         connectionId,
-        localGitOptions
+        localGitOptions,
+        preference
       )
     }
 
     try {
-      const issue = await fetchIssueWorkItem(
+      const { source } = await resolveIssueGitHubApiRepositorySource(
         repoPath,
-        await getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
-        number,
+        preference,
         connectionId,
         localGitOptions
       )
-      if (issue) {
-        return issue
+      if (source || preference !== 'origin') {
+        const issue = await fetchIssueWorkItem(
+          repoPath,
+          source,
+          number,
+          connectionId,
+          localGitOptions
+        )
+        if (issue) {
+          return issue
+        }
       }
     } catch (err) {
       // Why: only fall through to PR #N on a genuine 404; re-throw transient errors so a flake can't surface an unrelated PR.
@@ -1961,7 +2072,8 @@ export async function getWorkItem(
       repoPath,
       number,
       connectionId,
-      localGitOptions
+      localGitOptions,
+      preference
     )
   } catch {
     return null
@@ -2182,7 +2294,7 @@ async function detectRepositoryMergeMetadata(
   branchName: string | undefined,
   ghOptions: GhExecOptions
 ): Promise<GitHubRepositoryMergeMetadata> {
-  const cacheKey = cacheIdentityDigest([githubRepoIdentityKey(ownerRepo), branchName ?? '__repo__'])
+  const cacheKey = `${githubRepoIdentityKey(ownerRepo)}:${branchName ?? '__repo__'}`
   pruneRepositoryMergeMetadataCache()
   const cached = repositoryMergeMetadataCache.get(cacheKey)
   if (cached) {
@@ -2356,16 +2468,11 @@ type TrackedUpstreamBranch = {
 
 const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
 const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 512
-export const TRACKED_UPSTREAM_SNAPSHOT_MAX_IN_FLIGHT = 32
-export const TRACKED_UPSTREAM_SNAPSHOT_MAX_BRANCHES = 4096
-export const TRACKED_UPSTREAM_SNAPSHOT_MAX_BYTES = 2 * 1024 * 1024
-export const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_BYTES = 32 * 1024 * 1024
 
 type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
   gitConfigSignature?: string
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
-  retainedBytes: number
 }
 
 type TrackedUpstreamSnapshotProbeResult = {
@@ -2373,7 +2480,6 @@ type TrackedUpstreamSnapshotProbeResult = {
   gitConfigSignature?: string
   probeFailed: boolean
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
-  retainedBytes: number
 }
 
 const trackedUpstreamSnapshotCache = new Map<string, TrackedUpstreamSnapshotCacheEntry>()
@@ -2382,16 +2488,6 @@ const trackedUpstreamSnapshotInFlight = new Map<
   Promise<TrackedUpstreamSnapshotProbeResult>
 >()
 const trackedUpstreamSnapshotGenerations = new Map<string, symbol>()
-let trackedUpstreamSnapshotCacheBytes = 0
-
-function deleteTrackedUpstreamSnapshot(cacheKey: string): void {
-  const cached = trackedUpstreamSnapshotCache.get(cacheKey)
-  if (!cached) {
-    return
-  }
-  trackedUpstreamSnapshotCacheBytes -= cached.retainedBytes
-  trackedUpstreamSnapshotCache.delete(cacheKey)
-}
 
 function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
   const generation = Symbol()
@@ -2409,19 +2505,16 @@ function finishTrackedUpstreamSnapshotProbe(cacheKey: string, generation: symbol
 function pruneTrackedUpstreamSnapshotCache(now: number): void {
   for (const [cacheKey, cached] of trackedUpstreamSnapshotCache) {
     if (cached.expiresAt <= now) {
-      deleteTrackedUpstreamSnapshot(cacheKey)
+      trackedUpstreamSnapshotCache.delete(cacheKey)
     }
   }
   // Why: workspace/runtime churn can create unbounded unique keys within one TTL window, so expiry sweeping alone isn't a memory bound.
-  while (
-    trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES ||
-    trackedUpstreamSnapshotCacheBytes > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_BYTES
-  ) {
+  while (trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES) {
     const oldestKey = trackedUpstreamSnapshotCache.keys().next().value
     if (oldestKey === undefined) {
       break
     }
-    deleteTrackedUpstreamSnapshot(oldestKey)
+    trackedUpstreamSnapshotCache.delete(oldestKey)
   }
 }
 
@@ -2441,7 +2534,6 @@ export function __resetTrackedUpstreamBranchCacheForTests(): void {
   trackedUpstreamSnapshotCache.clear()
   trackedUpstreamSnapshotInFlight.clear()
   trackedUpstreamSnapshotGenerations.clear()
-  trackedUpstreamSnapshotCacheBytes = 0
 }
 
 function parseTrackedUpstreamBranch(upstreamRef: string): TrackedUpstreamBranch | null {
@@ -2449,10 +2541,7 @@ function parseTrackedUpstreamBranch(upstreamRef: string): TrackedUpstreamBranch 
   if (!parsed) {
     return null
   }
-  return {
-    remoteName: parsed.remoteName.replace(/$/u, ''),
-    branchName: parsed.branchName.replace(/$/u, '')
-  }
+  return parsed
 }
 
 function shouldRetryTrackedUpstreamBranch(
@@ -2493,10 +2582,10 @@ async function getTrackedUpstreamBranch(
     ) {
       return cached.upstreamsByBranchName.get(branchName) ?? null
     }
-    deleteTrackedUpstreamSnapshot(cacheKey)
+    trackedUpstreamSnapshotCache.delete(cacheKey)
   }
   if (cached) {
-    deleteTrackedUpstreamSnapshot(cacheKey)
+    trackedUpstreamSnapshotCache.delete(cacheKey)
   }
 
   const inFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
@@ -2513,31 +2602,18 @@ async function getTrackedUpstreamBranch(
     }
   }
 
-  if (trackedUpstreamSnapshotInFlight.size >= TRACKED_UPSTREAM_SNAPSHOT_MAX_IN_FLIGHT) {
-    const result = await probeTrackedUpstreamSnapshot(
-      repoPath,
-      connectionId,
-      localGitOptions,
-      branchName
-    )
-    return result.upstreamsByBranchName.get(branchName) ?? null
-  }
-
   // Why: PR polling asks about hundreds of branches at once; read all upstreams in one git process per repo/runtime, not one probe per branch.
   const probeGeneration = beginTrackedUpstreamSnapshotProbe(cacheKey)
-  const probe = probeTrackedUpstreamSnapshot(repoPath, connectionId, localGitOptions, branchName)
+  const probe = probeTrackedUpstreamSnapshot(repoPath, connectionId, localGitOptions)
   trackedUpstreamSnapshotInFlight.set(cacheKey, probe)
   try {
     const result = await probe
     if (result.cacheable && trackedUpstreamSnapshotGenerations.get(cacheKey) === probeGeneration) {
-      deleteTrackedUpstreamSnapshot(cacheKey)
       trackedUpstreamSnapshotCache.set(cacheKey, {
         ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
-        retainedBytes: result.retainedBytes,
         expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
-      trackedUpstreamSnapshotCacheBytes += result.retainedBytes
       pruneTrackedUpstreamSnapshotCache(Date.now())
     }
     if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
@@ -2558,8 +2634,7 @@ async function getTrackedUpstreamBranch(
 async function probeTrackedUpstreamSnapshot(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: { wslDistro?: string } = {},
-  requestedBranchName?: string
+  localGitOptions: { wslDistro?: string } = {}
 ): Promise<TrackedUpstreamSnapshotProbeResult> {
   const startingGitConfigSignature = await readLocalGitConfigSignature({
     repoPath,
@@ -2569,10 +2644,8 @@ async function probeTrackedUpstreamSnapshot(
   const { probeFailed, upstreamsByBranchName } = await probeTrackedUpstreamBranches(
     repoPath,
     connectionId,
-    localGitOptions,
-    requestedBranchName
+    localGitOptions
   )
-  const retainedBytes = measureTrackedUpstreamSnapshotBytes(upstreamsByBranchName)
   const endingGitConfigSignature = await readLocalGitConfigSignature({
     repoPath,
     connectionId: connectionId ?? null,
@@ -2588,8 +2661,7 @@ async function probeTrackedUpstreamSnapshot(
     cacheable: !configSignatureChanged && !probeFailed,
     probeFailed,
     ...(gitConfigSignature ? { gitConfigSignature } : {}),
-    upstreamsByBranchName,
-    retainedBytes
+    upstreamsByBranchName
   }
 }
 
@@ -2632,14 +2704,13 @@ function getTrackedUpstreamBranchCacheKey(
   const runtimeKey = connectionId
     ? `ssh:${connectionId}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
-  return cacheIdentityDigest([runtimeKey, repoPath])
+  return [runtimeKey, repoPath].join('\0')
 }
 
 async function probeTrackedUpstreamBranches(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: { wslDistro?: string } = {},
-  requestedBranchName?: string
+  localGitOptions: { wslDistro?: string } = {}
 ): Promise<{
   probeFailed: boolean
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
@@ -2655,104 +2726,27 @@ async function probeTrackedUpstreamBranches(
         })
     return {
       probeFailed: false,
-      upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout, requestedBranchName)
+      upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)
     }
   } catch {
     return { probeFailed: true, upstreamsByBranchName: new Map() }
   }
 }
 
-function parseTrackedUpstreamBranches(
-  stdout: string,
-  requestedBranchName?: string
-): Map<string, TrackedUpstreamBranch | null> {
+function parseTrackedUpstreamBranches(stdout: string): Map<string, TrackedUpstreamBranch | null> {
   const upstreamsByBranchName = new Map<string, TrackedUpstreamBranch | null>()
-  let retainedBytes = 0
-  let lineStart = 0
-  while (lineStart <= stdout.length) {
-    const newline = stdout.indexOf('\n', lineStart)
-    const lineEnd = newline === -1 ? stdout.length : newline
-    const line = stdout.slice(
-      lineStart,
-      lineEnd > lineStart && stdout[lineEnd - 1] === '\r' ? lineEnd - 1 : lineEnd
-    )
-    lineStart = newline === -1 ? stdout.length + 1 : newline + 1
+  for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
       continue
     }
-    const separator = line.indexOf('\0')
-    const branchName = separator === -1 ? line : line.slice(0, separator)
-    const upstreamRef = separator === -1 ? '' : line.slice(separator + 1)
-    const localBranchName = branchName.startsWith('refs/heads/')
-      ? branchName.slice('refs/heads/'.length)
-      : branchName
+    const [branchName, upstreamRef] = line.split('\0')
+    const localBranchName = branchName?.replace(/^refs\/heads\//, '')
     if (!localBranchName) {
       continue
     }
-    const parsedUpstream = parseTrackedUpstreamRef(upstreamRef)
-    const entryBytes = measureTrackedUpstreamEntryBytes(localBranchName, parsedUpstream)
-    if (entryBytes === null) {
-      continue
-    }
-    const isRequested = localBranchName === requestedBranchName
-    while (
-      isRequested &&
-      upstreamsByBranchName.size > 0 &&
-      (upstreamsByBranchName.size >= TRACKED_UPSTREAM_SNAPSHOT_MAX_BRANCHES ||
-        retainedBytes + entryBytes > TRACKED_UPSTREAM_SNAPSHOT_MAX_BYTES)
-    ) {
-      const oldest = upstreamsByBranchName.keys().next().value
-      if (oldest === undefined) {
-        break
-      }
-      retainedBytes -=
-        measureTrackedUpstreamEntryBytes(oldest, upstreamsByBranchName.get(oldest) ?? null) ?? 0
-      upstreamsByBranchName.delete(oldest)
-    }
-    if (
-      upstreamsByBranchName.size >= TRACKED_UPSTREAM_SNAPSHOT_MAX_BRANCHES ||
-      retainedBytes + entryBytes > TRACKED_UPSTREAM_SNAPSHOT_MAX_BYTES
-    ) {
-      continue
-    }
-    upstreamsByBranchName.set(localBranchName.replace(/$/u, ''), parsedUpstream)
-    retainedBytes += entryBytes
+    upstreamsByBranchName.set(localBranchName, parseTrackedUpstreamRef(upstreamRef ?? ''))
   }
   return upstreamsByBranchName
-}
-
-export function _parseTrackedUpstreamBranchesForTests(
-  stdout: string,
-  requestedBranchName?: string
-): Map<string, TrackedUpstreamBranch | null> {
-  return parseTrackedUpstreamBranches(stdout, requestedBranchName)
-}
-
-function measureTrackedUpstreamEntryBytes(
-  branchName: string,
-  upstream: TrackedUpstreamBranch | null
-): number | null {
-  let remainingBytes = TRACKED_UPSTREAM_SNAPSHOT_MAX_BYTES - 64
-  let bytes = 64
-  for (const value of [branchName, upstream?.remoteName ?? '', upstream?.branchName ?? '']) {
-    const measured = measureUtf8ByteLength(value, { stopAfterBytes: remainingBytes })
-    if (measured.exceededLimit) {
-      return null
-    }
-    remainingBytes -= measured.byteLength
-    bytes += measured.byteLength
-  }
-  return bytes <= TRACKED_UPSTREAM_SNAPSHOT_MAX_BYTES ? bytes : null
-}
-
-function measureTrackedUpstreamSnapshotBytes(
-  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
-): number {
-  let bytes = 0
-  for (const [branchName, upstream] of upstreamsByBranchName) {
-    bytes += measureTrackedUpstreamEntryBytes(branchName, upstream) ?? 0
-  }
-  return bytes
 }
 
 function parseTrackedUpstreamRef(upstreamRef: string): TrackedUpstreamBranch | null {
@@ -3018,6 +3012,13 @@ export async function getPRForBranchOutcome(
     // here can honor process GH_REPO/GH_HOST and return an unrelated PR.
     if (connectionId && candidates.length === 0) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
+    }
+    // Why (#11532): account every lookup, not just the coordinator's queue —
+    // `hostedReview:forBranch` reaches this directly from renderer polling and
+    // was spending the shared quota invisibly. headRepo is `origin`, the same
+    // identity the coordinator guards on.
+    for (const bucket of PR_BRANCH_LOOKUP_BUCKETS) {
+      noteRepositoryRateLimitSpend(headRepo ?? candidates[0], bucket, 1, ghOptions)
     }
     let data: PullRequestLookupData | null = null
     let dataRepo: OwnerRepo | null = null
@@ -3871,9 +3872,7 @@ async function attachFailedJobLogTails(
   // Why: cap log fetches so failed-job details stay a bounded follow-up, not a burst of hosted log downloads.
   for (const job of failedJobs) {
     const jobCacheKey = getCheckJobLogTailCacheKey(job)
-    const cacheKey = jobCacheKey
-      ? cacheIdentityDigest([githubRepoIdentityKey(ownerRepo), jobCacheKey])
-      : null
+    const cacheKey = jobCacheKey ? `${githubRepoIdentityKey(ownerRepo)}:${jobCacheKey}` : null
     if (!cacheKey) {
       continue
     }

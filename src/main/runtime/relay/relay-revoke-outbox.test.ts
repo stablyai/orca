@@ -1,18 +1,29 @@
-import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import {
-  MAX_RELAY_REVOKE_OUTBOX_FILE_BYTES,
-  MAX_RELAY_REVOKE_OUTBOX_ITEMS,
-  RelayRevokeOutbox,
-  RelayRevokeOutboxCapacityError,
-  type RelayRevokeOutboxItem
-} from './relay-revoke-outbox'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as SecureFileModule from '../../../shared/secure-file'
+import { RelayRevokeOutbox } from './relay-revoke-outbox'
+
+const secureFileMocks = vi.hoisted(() => ({ failWrites: false }))
+
+vi.mock('../../../shared/secure-file', async (importOriginal) => {
+  const actual = await importOriginal<typeof SecureFileModule>()
+  return {
+    ...actual,
+    writeSecureJsonFile: (targetPath: string, value: unknown) => {
+      if (secureFileMocks.failWrites) {
+        throw new Error('disk full')
+      }
+      actual.writeSecureJsonFile(targetPath, value)
+    }
+  }
+})
 
 describe('RelayRevokeOutbox', () => {
   const paths: string[] = []
   afterEach(() => {
+    secureFileMocks.failWrites = false
     for (const path of paths.splice(0)) {
       rmSync(path, { recursive: true, force: true })
     }
@@ -36,69 +47,39 @@ describe('RelayRevokeOutbox', () => {
     ).toEqual([])
   })
 
-  it('treats an oversized sparse outbox file as unavailable', () => {
-    const path = mkdtempSync(join(tmpdir(), 'orca-relay-revoke-bound-'))
+  it('does not retain an enqueue that failed to reach disk', () => {
+    const path = mkdtempSync(join(tmpdir(), 'orca-relay-revoke-'))
     paths.push(path)
-    const outboxPath = join(path, 'mobile-relay-revoke-outbox.json')
-    writeFileSync(outboxPath, '[]')
-    truncateSync(outboxPath, MAX_RELAY_REVOKE_OUTBOX_FILE_BYTES + 1)
-
-    expect(new RelayRevokeOutbox(path).pendingFor('owner', 'host')).toEqual([])
-  })
-
-  it('fails closed instead of dropping revocations beyond the retained-item bound', () => {
-    const path = mkdtempSync(join(tmpdir(), 'orca-relay-revoke-count-'))
-    paths.push(path)
-    const items: RelayRevokeOutboxItem[] = Array.from(
-      { length: MAX_RELAY_REVOKE_OUTBOX_ITEMS + 1 },
-      (_, index) => ({
-        reqId: `request-${index}`,
-        relayHostId: 'host',
-        relayDeviceId: `device-${index}`,
-        ownerIdentityKey: 'owner',
-        createdAt: index
-      })
-    )
-    writeFileSync(join(path, 'mobile-relay-revoke-outbox.json'), JSON.stringify(items))
-
-    expect(() => new RelayRevokeOutbox(path)).toThrow(RelayRevokeOutboxCapacityError)
-  })
-
-  it('keeps idempotent revokes usable at capacity and rejects only a new revoke', () => {
-    const path = mkdtempSync(join(tmpdir(), 'orca-relay-revoke-capacity-'))
-    paths.push(path)
-    const items: RelayRevokeOutboxItem[] = Array.from(
-      { length: MAX_RELAY_REVOKE_OUTBOX_ITEMS },
-      (_, index) => ({
-        reqId: `request-${index}`,
-        relayHostId: 'host',
-        relayDeviceId: `device-${index}`,
-        ownerIdentityKey: 'owner',
-        createdAt: index
-      })
-    )
-    writeFileSync(join(path, 'mobile-relay-revoke-outbox.json'), JSON.stringify(items))
+    const binding = {
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      relayDeviceId: 'device-1',
+      ownerIdentityKey: 'user-1\0profile-1\0org-1'
+    }
     const outbox = new RelayRevokeOutbox(path)
+    secureFileMocks.failWrites = true
+    expect(() => outbox.enqueue(binding)).toThrow('disk full')
 
-    expect(outbox.enqueue(items[0]!).reqId).toBe(items[0]!.reqId)
-    expect(() =>
-      outbox.enqueue({ relayHostId: 'host', relayDeviceId: 'new', ownerIdentityKey: 'owner' })
-    ).toThrow(RelayRevokeOutboxCapacityError)
+    secureFileMocks.failWrites = false
+    const persisted = outbox.enqueue(binding)
+    expect(
+      new RelayRevokeOutbox(path).pendingFor(binding.ownerIdentityKey, binding.relayHostId)
+    ).toEqual([persisted])
   })
 
-  it('rejects a byte-oversized revoke without publishing partial in-memory state', () => {
-    const path = mkdtempSync(join(tmpdir(), 'orca-relay-revoke-byte-capacity-'))
+  it('does not remove an item in memory when the durable removal fails', () => {
+    const path = mkdtempSync(join(tmpdir(), 'orca-relay-revoke-'))
     paths.push(path)
+    const binding = {
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      relayDeviceId: 'device-1',
+      ownerIdentityKey: 'user-1\0profile-1\0org-1'
+    }
     const outbox = new RelayRevokeOutbox(path)
+    const item = outbox.enqueue(binding)
+    secureFileMocks.failWrites = true
+    expect(() => outbox.remove(item.reqId)).toThrow('disk full')
 
-    expect(() =>
-      outbox.enqueue({
-        relayHostId: 'host',
-        relayDeviceId: 'device',
-        ownerIdentityKey: 'x'.repeat(MAX_RELAY_REVOKE_OUTBOX_FILE_BYTES)
-      })
-    ).toThrow(RelayRevokeOutboxCapacityError)
-    expect(outbox.pendingFor('owner', 'host')).toEqual([])
-    expect(new RelayRevokeOutbox(path).pendingFor('owner', 'host')).toEqual([])
+    secureFileMocks.failWrites = false
+    expect(outbox.pendingFor(binding.ownerIdentityKey, binding.relayHostId)).toEqual([item])
   })
 })

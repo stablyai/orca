@@ -1,17 +1,10 @@
 import { exec } from 'node:child_process'
-import { access, opendir, realpath } from 'node:fs/promises'
+import { access, readdir, readFile, realpath } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 
 const execAsync = promisify(exec)
-const MAX_BINARY_LOOKUP_OUTPUT_BYTES = 64 * 1024
-export const MAX_GEMINI_CLI_OAUTH_SOURCE_BYTES = 32 * 1024 * 1024
-export const MAX_GEMINI_CLI_PACKAGE_JSON_BYTES = 1024 * 1024
-export const MAX_GEMINI_CLI_BUNDLE_ENTRIES = 4_096
-export const MAX_GEMINI_CLI_BUNDLE_FILES = 512
-export const MAX_GEMINI_CLI_BUNDLE_BYTES = 128 * 1024 * 1024
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -28,13 +21,8 @@ const OAUTH2_SUBPATH = path.join('dist', 'src', 'code_assist', 'oauth2.js')
 async function resolveGeminiBinary(): Promise<string | null> {
   const whichCmd = process.platform === 'win32' ? 'where gemini' : 'which gemini'
   try {
-    const { stdout } = await execAsync(whichCmd, {
-      encoding: 'utf-8',
-      maxBuffer: MAX_BINARY_LOOKUP_OUTPUT_BYTES
-    })
-    const trimmedOutput = stdout.trim()
-    const firstLineEnd = trimmedOutput.search(/\r?\n/)
-    const fromPath = trimmedOutput.slice(0, firstLineEnd === -1 ? undefined : firstLineEnd)
+    const { stdout } = await execAsync(whichCmd, { encoding: 'utf-8' })
+    const fromPath = stdout.trim().split(/\r?\n/)[0]
     if (fromPath && (await fileExists(fromPath))) {
       return fromPath
     }
@@ -81,33 +69,15 @@ function parseOAuthCredentials(content: string): { clientId: string; clientSecre
   return null
 }
 
-type GeminiOAuthSourceRead = {
-  credentials: { clientId: string; clientSecret: string } | null
-  bytesRead: number
-}
-
-async function readOAuthSource(
-  filePath: string,
-  maxBytes = MAX_GEMINI_CLI_OAUTH_SOURCE_BYTES
-): Promise<GeminiOAuthSourceRead | null> {
+async function tryReadCredentials(
+  filePath: string
+): Promise<{ clientId: string; clientSecret: string } | null> {
   try {
-    const { buffer } = await readNodeFileWithinLimit(
-      filePath,
-      Math.min(MAX_GEMINI_CLI_OAUTH_SOURCE_BYTES, maxBytes)
-    )
-    return {
-      credentials: parseOAuthCredentials(buffer.toString('utf8')),
-      bytesRead: buffer.length
-    }
+    const content = await readFile(filePath, 'utf-8')
+    return parseOAuthCredentials(content)
   } catch {
     return null
   }
-}
-
-export async function readGeminiOAuthCredentialsFile(
-  filePath: string
-): Promise<{ clientId: string; clientSecret: string } | null> {
-  return (await readOAuthSource(filePath))?.credentials ?? null
 }
 
 // Why: these are the known stable layouts for every major Gemini CLI install method.
@@ -161,7 +131,7 @@ async function extractFromKnownPaths(
   ]
 
   for (const candidate of candidates) {
-    const creds = await readGeminiOAuthCredentialsFile(path.normalize(candidate))
+    const creds = await tryReadCredentials(path.normalize(candidate))
     if (creds) {
       return creds
     }
@@ -173,79 +143,50 @@ async function extractFromKnownPaths(
 // Why: newer Gemini CLI versions (>=0.38) ship everything bundled into hash-named
 // chunks with no oauth2.js source file. Scanning the bundle dir for the credential
 // constants is the only reliable fallback for those installs.
-export async function extractGeminiOAuthCredentialsFromBundleDir(
+async function extractFromBundleDir(
   geminiCliPackageRoot: string
 ): Promise<{ clientId: string; clientSecret: string } | null> {
   const bundleDir = path.join(geminiCliPackageRoot, 'bundle')
-  let directory: Awaited<ReturnType<typeof opendir>>
+  if (!(await fileExists(bundleDir))) {
+    return null
+  }
+
+  let entries: string[]
   try {
-    directory = await opendir(bundleDir, { bufferSize: 32 })
+    entries = (await readdir(bundleDir)).filter((f) => f.endsWith('.js'))
   } catch {
     return null
   }
 
-  let inspectedEntries = 0
-  let inspectedFiles = 0
-  let inspectedBytes = 0
-  try {
-    while (
-      inspectedEntries < MAX_GEMINI_CLI_BUNDLE_ENTRIES &&
-      inspectedFiles < MAX_GEMINI_CLI_BUNDLE_FILES
-    ) {
-      const entry = await directory.read()
-      if (!entry) {
-        return null
-      }
-      inspectedEntries += 1
-      if (!entry.name.endsWith('.js')) {
-        continue
-      }
-      inspectedFiles += 1
-      const remainingBytes = MAX_GEMINI_CLI_BUNDLE_BYTES - inspectedBytes
-      if (remainingBytes === 0) {
-        return null
-      }
-      const source = await readOAuthSource(path.join(bundleDir, entry.name), remainingBytes)
-      if (!source) {
-        continue
-      }
-      if (source.bytesRead > MAX_GEMINI_CLI_BUNDLE_BYTES - inspectedBytes) {
-        return null
-      }
-      inspectedBytes += source.bytesRead
-      if (source.credentials) {
-        return source.credentials
-      }
-    }
-    return null
-  } catch {
-    return null
-  } finally {
-    try {
-      await directory.close()
-    } catch {
-      // Cleanup failure must not mask credential discovery.
+  for (const entry of entries) {
+    const creds = await tryReadCredentials(path.join(bundleDir, entry))
+    if (creds) {
+      return creds
     }
   }
+
+  return null
 }
 
 // Resolves the gemini-cli package root directory by walking up the directory
 // tree from the real binary path, looking for package.json with the right name,
 // or the global Node layout under lib/node_modules.
-export async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | null> {
+async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | null> {
   const MAX_ASCENTS = 8
   let current = path.dirname(realGeminiPath)
 
   for (let i = 0; i <= MAX_ASCENTS; i++) {
     const pkgJson = path.join(current, 'package.json')
-    try {
-      const { buffer } = await readNodeFileWithinLimit(pkgJson, MAX_GEMINI_CLI_PACKAGE_JSON_BYTES)
-      const pkg = JSON.parse(buffer.toString('utf8')) as { name?: string }
-      if (pkg.name === '@google/gemini-cli') {
-        return current
+    if (await fileExists(pkgJson)) {
+      try {
+        const raw = await readFile(pkgJson, 'utf-8')
+        const pkg = JSON.parse(raw) as { name?: string }
+        if (pkg.name === '@google/gemini-cli') {
+          return current
+        }
+      } catch {
+        // malformed package.json — keep walking
       }
-    } catch {
-      // Missing, malformed, or oversized package.json — keep walking.
     }
 
     // Global Node layout: <current>/lib/node_modules/@google/gemini-cli
@@ -304,14 +245,14 @@ export async function extractOAuthClientCredentials(): Promise<{
   const packageRoot = await findGeminiPackageRoot(realPath)
   if (packageRoot) {
     const fromSource =
-      (await readGeminiOAuthCredentialsFile(
+      (await tryReadCredentials(
         path.join(packageRoot, 'node_modules', '@google', 'gemini-cli-core', OAUTH2_SUBPATH)
-      )) ?? (await readGeminiOAuthCredentialsFile(path.join(packageRoot, OAUTH2_SUBPATH)))
+      )) ?? (await tryReadCredentials(path.join(packageRoot, OAUTH2_SUBPATH)))
     if (fromSource) {
       return fromSource
     }
 
-    const fromBundle = await extractGeminiOAuthCredentialsFromBundleDir(packageRoot)
+    const fromBundle = await extractFromBundleDir(packageRoot)
     if (fromBundle) {
       return fromBundle
     }

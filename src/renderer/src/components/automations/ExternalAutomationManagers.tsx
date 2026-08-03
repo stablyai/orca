@@ -241,8 +241,7 @@ export function ExternalAutomationManagers({
                       </div>
                       {manager.provider === 'hermes' ? (
                         <div className="mt-1 truncate text-xs text-muted-foreground">
-                          {job.runCount}
-                          {job.runCountSaturated ? '+' : ''}{' '}
+                          {job.runCount}{' '}
                           {job.runCount === 1
                             ? translate(
                                 'auto.components.automations.ExternalAutomationManagers.8e9165af08',

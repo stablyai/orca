@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
@@ -26,6 +27,15 @@ afterEach(() => {
 })
 
 describe('file explorer operation generations', () => {
+  it('routes floating workspace file mutations to the local host', () => {
+    const owner = getFileExplorerOperationOwner(FLOATING_TERMINAL_WORKTREE_ID)
+    const guard = captureFileExplorerOperationGuard(FLOATING_TERMINAL_WORKTREE_ID, owner)
+
+    expect(owner).toEqual({ kind: 'local' })
+    expect(guard.route.expectedExecutionHostId).toBe('local')
+    expect(() => guard.assertCurrent()).not.toThrow()
+  })
+
   it('invalidates a nested SSH mutation when that target reconnects', () => {
     useAppStore.setState({
       repos: [],

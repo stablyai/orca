@@ -11,3 +11,6 @@ const NATIVE_DEPS_REPAIR_BUDGET_MS = 2 * NATIVE_DEPS_COMMAND_TIMEOUT_MS
 // finalize commands around install + rebuild. Keep the outer bound above that
 // valid worst path while remaining below the 20-minute stale-lock threshold.
 export const RELAY_DEPLOY_TIMEOUT_MS = NATIVE_DEPS_REPAIR_BUDGET_MS + 7 * 60_000
+
+// Lets an aborted SSH transfer report whether its channel and local resources actually settled.
+export const RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS = 5_000

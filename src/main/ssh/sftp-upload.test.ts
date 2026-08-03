@@ -1,11 +1,11 @@
-import { mkdtemp, mkdir, realpath, symlink, writeFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { SFTPWrapper } from 'ssh2'
 import { removeDirectorySftp, uploadBuffer, uploadDirectory, uploadFile } from './sftp-upload'
-import { SSH_DIRECTORY_TRANSFER_LIMITS } from './ssh-directory-transfer-budget'
 
 function createWritable(): Writable {
   return new Writable({
@@ -19,13 +19,9 @@ function createSftpMock(): SFTPWrapper {
   return {
     mkdir: vi.fn((_path: string, cb: (err?: Error | null) => void) => cb(null)),
     createWriteStream: vi.fn(() => createWritable()),
-    opendir: vi.fn((path: string, cb: (err: Error | undefined, handle: Buffer) => void) =>
-      cb(undefined, Buffer.from(path))
+    readdir: vi.fn((_path: string, cb: (err?: Error | null, entries?: unknown[]) => void) =>
+      cb(null, [])
     ),
-    readdir: vi.fn((_handle: Buffer, cb: (err?: Error | null, entries?: unknown[]) => void) =>
-      cb(Object.assign(new Error('EOF'), { code: 1 }), [])
-    ),
-    close: vi.fn((_handle: Buffer, cb: (err?: Error | null) => void) => cb(null)),
     unlink: vi.fn((_path: string, cb: (err?: Error | null) => void) => cb(null)),
     rmdir: vi.fn((_path: string, cb: (err?: Error | null) => void) => cb(null))
   } as unknown as SFTPWrapper
@@ -99,23 +95,6 @@ describe('sftp-upload', () => {
     expect(sftp.createWriteStream).not.toHaveBeenCalled()
   })
 
-  it('rejects excessive depth before creating remote entries', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
-    let nested = localDir
-    for (let depth = 0; depth <= SSH_DIRECTORY_TRANSFER_LIMITS.maximumDepth; depth += 1) {
-      nested = join(nested, 'd')
-      await mkdir(nested)
-    }
-    const sftp = createSftpMock()
-
-    await expect(
-      uploadDirectory(sftp, localDir, '/remote/assets', await realpath(localDir))
-    ).rejects.toMatchObject({ reason: 'depth' })
-
-    expect(sftp.mkdir).not.toHaveBeenCalled()
-    expect(sftp.createWriteStream).not.toHaveBeenCalled()
-  })
-
   it('does not create the remote file when the local source is a symlink', async () => {
     const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
     const targetPath = join(localDir, process.platform === 'win32' ? 'target-dir' : 'target.txt')
@@ -136,16 +115,66 @@ describe('sftp-upload', () => {
     expect(sftp.createWriteStream).not.toHaveBeenCalled()
   })
 
+  it('joins local file-descriptor teardown when a live upload is aborted', async () => {
+    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-abort-'))
+    const localPath = join(localDir, 'relay.js')
+    const controller = new AbortController()
+    const blockedWrite = new Writable({
+      write() {}
+    })
+    const sftp = createSftpMock()
+    vi.mocked(sftp.createWriteStream).mockReturnValue(blockedWrite as never)
+    try {
+      await writeFile(localPath, Buffer.alloc(1024 * 1024, 7))
+      const upload = uploadFile(sftp, localPath, '/remote/relay.js', {
+        signal: controller.signal
+      })
+      await vi.waitFor(() => expect(sftp.createWriteStream).toHaveBeenCalledTimes(1))
+
+      controller.abort()
+
+      await expect(upload).rejects.toMatchObject({ name: 'AbortError' })
+      if (process.platform !== 'win32') {
+        const descriptorProbe = spawnSync(
+          'lsof',
+          ['-a', '-p', String(process.pid), '--', localPath],
+          { encoding: 'utf8' }
+        )
+        if (!descriptorProbe.error) {
+          expect(descriptorProbe.stdout).not.toContain(localPath)
+        }
+      }
+    } finally {
+      await rm(localDir, { recursive: true, force: true })
+    }
+  })
+
+  it('joins the local read when the remote write fails', async () => {
+    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-failure-'))
+    const localPath = join(localDir, 'relay.js')
+    const sftp = createSftpMock()
+    vi.mocked(sftp.createWriteStream).mockReturnValue(
+      new Writable({
+        write(_chunk, _encoding, callback) {
+          callback(new Error('remote write failed'))
+        }
+      }) as never
+    )
+    try {
+      await writeFile(localPath, Buffer.alloc(1024 * 1024, 7))
+
+      await expect(uploadFile(sftp, localPath, '/remote/relay.js')).rejects.toThrow(
+        'remote write failed'
+      )
+    } finally {
+      await rm(localDir, { recursive: true, force: true })
+    }
+  })
+
   it('removes remote directory contents before removing the directory', async () => {
     const sftp = createSftpMock()
-    const readPaths = new Set<string>()
-    vi.mocked(sftp.readdir).mockImplementation((handle, cb) => {
-      const pathString = String(handle)
-      if (readPaths.has(pathString)) {
-        cb(Object.assign(new Error('EOF'), { code: 1 }), [] as never)
-        return
-      }
-      readPaths.add(pathString)
+    vi.mocked(sftp.readdir).mockImplementation((remotePath, cb) => {
+      const pathString = String(remotePath)
       if (pathString === '/remote/assets') {
         cb(undefined, [
           { filename: '.', attrs: { isDirectory: () => true } },
@@ -172,6 +201,5 @@ describe('sftp-upload', () => {
     expect(sftp.rmdir).toHaveBeenNthCalledWith(1, '/remote/assets/nested', expect.any(Function))
     expect(sftp.unlink).toHaveBeenNthCalledWith(2, '/remote/assets/logo.png', expect.any(Function))
     expect(sftp.rmdir).toHaveBeenNthCalledWith(2, '/remote/assets', expect.any(Function))
-    expect(sftp.close).toHaveBeenCalledTimes(2)
   })
 })

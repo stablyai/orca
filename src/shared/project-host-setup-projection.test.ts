@@ -3,7 +3,9 @@ import {
   projectHostSetupProjectionFromRepos,
   getProjectHostSetupsForProject,
   getProjectHostSetupWorktreeMeta,
-  isGitHubBackedRepo
+  isGitHubBackedRepo,
+  getProjectIdForProviderIdentity,
+  isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
 import type { Repo } from './types'
 
@@ -506,5 +508,54 @@ describe('isGitHubBackedRepo', () => {
 
   it('is false for a plain local repo with no provider signal', () => {
     expect(isGitHubBackedRepo(repo({ id: 'r', path: '/r', displayName: 'r' }))).toBe(false)
+  })
+})
+
+describe('getProjectIdForProviderIdentity', () => {
+  it('uses the same normalized identity key as project projection', () => {
+    expect(
+      getProjectIdForProviderIdentity({ provider: 'github', owner: 'PyTorch', repo: 'PyTorch' })
+    ).toBe('github:pytorch/pytorch')
+    expect(
+      getProjectIdForProviderIdentity({
+        provider: 'github',
+        owner: 'Acme',
+        repo: 'Orca',
+        host: 'GITHUB.ACME.TEST:8443'
+      })
+    ).toBe('github:github.acme.test:8443/acme/orca')
+  })
+})
+
+describe('isProjectRemoteIdentityPending', () => {
+  const base = { id: 'r', path: '/r', displayName: 'r' } as const
+
+  it('is true while the background remote probe has not answered', () => {
+    expect(isProjectRemoteIdentityPending(repo({ ...base }))).toBe(true)
+    expect(isProjectRemoteIdentityPending(repo({ ...base, connectionId: 'builder' }))).toBe(true)
+  })
+
+  it('is false once the probe settles on no usable remote', () => {
+    expect(isProjectRemoteIdentityPending(repo({ ...base, gitRemoteIdentity: null }))).toBe(false)
+  })
+
+  it('is false once any provider-neutral identity resolves', () => {
+    expect(
+      isProjectRemoteIdentityPending(
+        repo({
+          ...base,
+          gitRemoteIdentity: {
+            canonicalKey: 'gitlab.example.com/team/orca',
+            remoteName: 'origin',
+            remoteUrl: 'git@gitlab.example.com:team/orca.git'
+          }
+        })
+      )
+    ).toBe(false)
+    expect(
+      isProjectRemoteIdentityPending(
+        repo({ ...base, upstream: { owner: 'stablyai', repo: 'orca' } })
+      )
+    ).toBe(false)
   })
 })

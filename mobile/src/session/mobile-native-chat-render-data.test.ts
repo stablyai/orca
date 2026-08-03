@@ -63,6 +63,55 @@ describe('buildMobileNativeChatData', () => {
     expect(last.blocks).toEqual([{ type: 'text', text: 'queued' }])
   })
 
+  it('renders a pending send with images as text followed by image-ref thumbnails', () => {
+    const { data } = buildMobileNativeChatData({
+      messages: [],
+      pending: [{ id: 'p1', text: 'look', images: ['file:///a.jpg', 'file:///b.jpg'] }]
+    })
+    const last = data[data.length - 1]
+    expect(last.role).toBe('user')
+    expect(last.blocks).toEqual([
+      { type: 'text', text: 'look' },
+      { type: 'image-ref', url: 'file:///a.jpg' },
+      { type: 'image-ref', url: 'file:///b.jpg' }
+    ])
+  })
+
+  it('renders an image-only pending send (no text) as just the thumbnail', () => {
+    const { data } = buildMobileNativeChatData({
+      messages: [],
+      pending: [{ id: 'p1', text: '', images: ['file:///a.jpg'] }]
+    })
+    expect(data[data.length - 1].blocks).toEqual([{ type: 'image-ref', url: 'file:///a.jpg' }])
+  })
+
+  it('folds transcript image marker turns into image-ref blocks (desktop parity)', () => {
+    // Claude records an attached image as `[Image: source: /path]` + an
+    // `[Image #1] `-prefixed caption turn; the fold must merge them into one
+    // user turn with an image-ref block instead of showing raw marker text.
+    const { data } = buildMobileNativeChatData({
+      messages: [
+        user('u1', '[Image: source: /tmp/a.png]'),
+        user('u2', '[Image #1] look at this'),
+        assistant('a1', 'nice photo')
+      ],
+      pending: []
+    })
+    const merged = data.find((message) => message.role === 'user')
+    expect(merged?.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'text', text: 'look at this' }
+    ])
+  })
+
+  it('renders a lone image marker turn (no caption) as an image-ref block', () => {
+    const { data } = buildMobileNativeChatData({
+      messages: [user('u1', '[Image: source: /tmp/a.png]')],
+      pending: []
+    })
+    expect(data[0]?.blocks).toEqual([{ type: 'image-ref', path: '/tmp/a.png' }])
+  })
+
   it('adds a synthetic streaming bubble while the partial text leads the transcript', () => {
     const { streaming, data } = buildMobileNativeChatData({
       messages: [user('u1', 'hi')],

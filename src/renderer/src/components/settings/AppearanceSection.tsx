@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type AppearanceSectionProps = {
-  /** Stable id used for the accordion toggle + aria wiring. */
+  /** Stable id used for the section toggle + aria wiring. */
   id: string
   icon: React.ReactNode
   title: React.ReactNode
@@ -11,12 +11,15 @@ type AppearanceSectionProps = {
   summary: React.ReactNode
   open: boolean
   onToggle: () => void
+  /** Why: search force-opens matching sections; disable collapse so toggles
+   *  do not silently rewrite open-state that only applies after search clears. */
+  toggleDisabled?: boolean
   children: React.ReactNode
 }
 
-/** Compact summary row that expands its section inline. The parent owns the
- *  open state so opening one row can collapse the previously open one
- *  (accordion behavior) and search can force a section open. */
+/** Compact summary row that expands its section inline. The parent owns open
+ *  state so sections can stay independently collapsible and search can force
+ *  a section open. */
 export function AppearanceSection({
   id,
   icon,
@@ -24,6 +27,7 @@ export function AppearanceSection({
   summary,
   open,
   onToggle,
+  toggleDisabled = false,
   children
 }: AppearanceSectionProps): React.JSX.Element {
   const contentId = `appearance-section-${id}`
@@ -39,7 +43,8 @@ export function AppearanceSection({
         aria-expanded={open}
         aria-controls={contentId}
         onClick={onToggle}
-        className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        disabled={toggleDisabled}
+        className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default disabled:hover:bg-transparent"
       >
         <span className="grid size-8 shrink-0 place-items-center rounded-md bg-secondary text-foreground [&_svg]:size-4">
           {icon}

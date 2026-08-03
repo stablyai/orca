@@ -1,24 +1,22 @@
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
-import { JsonRpcErrorCode } from './relay-protocol'
+import { STREAM_CHUNK_SIZE, JsonRpcErrorCode, RelayErrorCode } from './relay-protocol'
 import type { FileReadResult } from '../providers/types'
-import {
-  PreMetadataStreamFrameBuffer,
-  STREAM_READER_INACTIVITY_TIMEOUT_MS,
-  defaultSshPreMetadataStreamBudget,
-  defaultSshStreamAssemblyBudget,
-  type SshPreMetadataStreamBudget,
-  type SshStreamAssemblyBudget,
-  createStreamInactivityDeadline
-} from './ssh-stream-reader-memory'
-import {
-  createFileStreamSetup,
-  type FileStreamAssembler,
-  StreamProtocolError
-} from './ssh-file-stream-assembler'
 
-export { StreamProtocolError } from './ssh-file-stream-assembler'
-
+const RESULT_ENCODING_BASE64 = 'base64'
 const SENTINEL_STREAM_ID = -1
+
+const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
+const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
+
+type StreamMetadataResponse = {
+  streamId?: number
+  totalSize: number
+  isBinary: boolean
+  isImage?: boolean
+  mimeType?: string
+  resultEncoding?: 'base64' | 'utf-8'
+  empty?: boolean
+}
 
 export function isMethodNotFoundError(err: unknown): boolean {
   if (!err || typeof err !== 'object') {
@@ -28,12 +26,16 @@ export function isMethodNotFoundError(err: unknown): boolean {
   return code === JsonRpcErrorCode.MethodNotFound
 }
 
+export class StreamProtocolError extends Error {
+  readonly code = RelayErrorCode.StreamProtocolError
+  constructor(message: string) {
+    super(message)
+  }
+}
+
 export async function readFileViaStream(
   mux: SshChannelMultiplexer,
-  filePath: string,
-  options?: { inactivityTimeoutMs?: number },
-  assemblyBudget: SshStreamAssemblyBudget = defaultSshStreamAssemblyBudget,
-  preMetadataBudget: SshPreMetadataStreamBudget = defaultSshPreMetadataStreamBudget
+  filePath: string
 ): Promise<FileReadResult> {
   // Why: subscribe BEFORE awaiting the metadata response so a chunk arriving
   // immediately after the response cannot beat the listener registration.
@@ -53,32 +55,34 @@ export async function readFileViaStream(
   }
 
   return new Promise<FileReadResult>((resolve, reject) => {
-    let assembler: FileStreamAssembler | null = null
+    let buffer: Buffer | null = null
+    let resultEncoding: 'base64' | 'utf-8' = RESULT_ENCODING_BASE64
+    let isBinary = false
+    let isImage: boolean | undefined
+    let mimeType: string | undefined
+    let totalSize = 0
+    let expectedSeq = 0
+    let receivedChunks = 0
+    let totalChunks = 0
+    let bytesReceived = 0
     let settled = false
 
     // Why: chunk/end/error frames may arrive in the same dispatch tick as the
     // metadata response. Queue them until streamIdRef is set, then drain.
-    const pending = new PreMetadataStreamFrameBuffer(preMetadataBudget)
+    type PendingFrame =
+      | { kind: 'chunk'; params: Record<string, unknown> }
+      | { kind: 'end'; params: Record<string, unknown> }
+      | { kind: 'error'; params: Record<string, unknown> }
+    const pending: PendingFrame[] = []
     let metadataReady = false
 
-    const inactivityMs = options?.inactivityTimeoutMs ?? STREAM_READER_INACTIVITY_TIMEOUT_MS
-    const inactivity = createStreamInactivityDeadline(inactivityMs, () => {
-      fail(new StreamProtocolError(`File stream stalled (>${inactivityMs}ms without data)`))
-    })
-
-    const cancelStreamId = (streamId: number): void => {
-      if (!mux.isDisposed()) {
+    const cancel = (): void => {
+      if (streamIdRef.current !== SENTINEL_STREAM_ID && !mux.isDisposed()) {
         try {
-          mux.notify('fs.cancelStream', { streamId })
+          mux.notify('fs.cancelStream', { streamId: streamIdRef.current })
         } catch {
           // Best-effort
         }
-      }
-    }
-
-    const cancel = (): void => {
-      if (streamIdRef.current !== SENTINEL_STREAM_ID) {
-        cancelStreamId(streamIdRef.current)
       }
     }
 
@@ -87,10 +91,6 @@ export async function readFileViaStream(
         return
       }
       settled = true
-      inactivity.clear()
-      pending.clear()
-      assembler?.release()
-      assembler = null
       cancel()
       cleanup()
       reject(err)
@@ -101,8 +101,6 @@ export async function readFileViaStream(
         return
       }
       settled = true
-      inactivity.clear()
-      pending.clear()
       cleanup()
       resolve(value)
     }
@@ -115,26 +113,45 @@ export async function readFileViaStream(
       if (id !== streamIdRef.current) {
         return
       }
-      if (!assembler) {
+      const seq = params.seq as number
+      const data = params.data as string
+      if (typeof seq !== 'number' || typeof data !== 'string') {
+        fail(new StreamProtocolError(`Malformed chunk for stream ${id}`))
+        return
+      }
+      if (seq !== expectedSeq) {
+        fail(
+          new StreamProtocolError(
+            `Out-of-order chunk for stream ${id}: expected ${expectedSeq}, got ${seq}`
+          )
+        )
+        return
+      }
+      const offset = seq * STREAM_CHUNK_SIZE
+      const decoded = Buffer.from(data, 'base64')
+      // Why: a short chunk would leave the pre-allocated buffer zero-filled and
+      // resolve as silently-corrupt data; validate each chunk's exact length.
+      const expectedLength = Math.min(STREAM_CHUNK_SIZE, totalSize - offset)
+      if (decoded.length !== expectedLength) {
+        fail(
+          new StreamProtocolError(
+            `Chunk length mismatch for stream ${id}: seq=${seq} expected=${expectedLength} got=${decoded.length}`
+          )
+        )
+        return
+      }
+      if (!buffer) {
         fail(new StreamProtocolError(`Chunk arrived before metadata for stream ${id}`))
         return
       }
-      let seq: number
-      try {
-        seq = assembler.acceptChunk(params, id)
-      } catch (error) {
-        fail(error as Error)
-        return
-      }
-      inactivity.reset()
+      decoded.copy(buffer, offset)
+      expectedSeq += 1
+      receivedChunks += 1
+      bytesReceived += decoded.length
       // Why: credit-based flow control — the relay caps unacked chunks so bulk
       // stream frames cannot queue unbounded ahead of interactive pty.data
       // frames on the shared SSH channel. Old relays ignore this notification.
-      try {
-        mux.notify('fs.streamAck', { streamId: id, seq })
-      } catch {
-        // Disposal can race the write; teardown will settle the reader.
-      }
+      mux.notify('fs.streamAck', { streamId: id, seq })
     }
 
     const handleEnd = (params: Record<string, unknown>): void => {
@@ -145,15 +162,38 @@ export async function readFileViaStream(
       if (id !== streamIdRef.current) {
         return
       }
-      if (!assembler) {
+      if (receivedChunks !== totalChunks) {
+        fail(
+          new StreamProtocolError(
+            `Chunk count mismatch for stream ${id}: expected ${totalChunks}, received ${receivedChunks}`
+          )
+        )
+        return
+      }
+      // Why: redundant given the per-chunk length + count checks, but kept as a
+      // last-line invariant guard; never resolve with fewer bytes than declared.
+      if (bytesReceived !== totalSize) {
+        fail(
+          new StreamProtocolError(
+            `Byte count mismatch for stream ${id}: expected ${totalSize}, received ${bytesReceived}`
+          )
+        )
+        return
+      }
+      if (!buffer) {
         fail(new StreamProtocolError(`Stream end before metadata for stream ${id}`))
         return
       }
-      try {
-        succeed(assembler.finish(id))
-      } catch (error) {
-        fail(error as Error)
-      }
+      const content =
+        resultEncoding === RESULT_ENCODING_BASE64
+          ? buffer.toString('base64')
+          : buffer.toString('utf-8')
+      succeed({
+        content,
+        isBinary,
+        ...(isImage !== undefined ? { isImage } : {}),
+        ...(mimeType !== undefined ? { mimeType } : {})
+      })
     }
 
     const handleStreamError = (params: Record<string, unknown>): void => {
@@ -173,10 +213,7 @@ export async function readFileViaStream(
 
     const drainPending = (): void => {
       while (!settled && pending.length > 0) {
-        const frame = pending.shift()
-        if (!frame) {
-          break
-        }
+        const frame = pending.shift()!
         if (frame.kind === 'chunk') {
           handleChunk(frame.params)
         } else if (frame.kind === 'end') {
@@ -187,18 +224,10 @@ export async function readFileViaStream(
       }
     }
 
-    const pushPending = (
-      kind: 'chunk' | 'end' | 'error',
-      params: Record<string, unknown>
-    ): void => {
-      // Why: the stream id is unknown here; overload drops must not let one foreign frame fail every reader.
-      pending.push({ kind, params })
-    }
-
     unsubscribers.push(
       mux.onNotificationByMethod('fs.streamChunk', (params) => {
         if (!metadataReady) {
-          pushPending('chunk', params)
+          pending.push({ kind: 'chunk', params })
           return
         }
         handleChunk(params)
@@ -207,7 +236,7 @@ export async function readFileViaStream(
     unsubscribers.push(
       mux.onNotificationByMethod('fs.streamEnd', (params) => {
         if (!metadataReady) {
-          pushPending('end', params)
+          pending.push({ kind: 'end', params })
           return
         }
         handleEnd(params)
@@ -216,7 +245,7 @@ export async function readFileViaStream(
     unsubscribers.push(
       mux.onNotificationByMethod('fs.streamError', (params) => {
         if (!metadataReady) {
-          pushPending('error', params)
+          pending.push({ kind: 'error', params })
           return
         }
         handleStreamError(params)
@@ -240,31 +269,51 @@ export async function readFileViaStream(
       .request('fs.readFileStream', { filePath, flowControl: 'ack' })
       .then((rawMetadata) => {
         if (settled) {
-          const streamId = (rawMetadata as { streamId?: unknown } | null)?.streamId
-          if (typeof streamId === 'number') {
-            cancelStreamId(streamId)
-          }
           return
         }
-        let setup
+        const metadata = rawMetadata as StreamMetadataResponse
+        isBinary = metadata.isBinary
+        isImage = metadata.isImage
+        mimeType = metadata.mimeType
+        resultEncoding = metadata.resultEncoding ?? RESULT_ENCODING_BASE64
+
+        if (metadata.empty) {
+          succeed({
+            content: '',
+            isBinary: metadata.isBinary,
+            ...(metadata.isImage !== undefined ? { isImage: metadata.isImage } : {}),
+            ...(metadata.mimeType !== undefined ? { mimeType: metadata.mimeType } : {})
+          })
+          return
+        }
+
+        if (typeof metadata.streamId !== 'number') {
+          fail(new StreamProtocolError('Metadata missing streamId for non-empty stream'))
+          return
+        }
+
+        const cap = metadata.isBinary ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+        if (metadata.totalSize < 0 || metadata.totalSize > cap) {
+          streamIdRef.current = metadata.streamId
+          fail(
+            new StreamProtocolError(
+              `Reported totalSize ${metadata.totalSize} exceeds client cap ${cap}`
+            )
+          )
+          return
+        }
+
+        totalSize = metadata.totalSize
+        totalChunks = totalSize === 0 ? 0 : Math.ceil(totalSize / STREAM_CHUNK_SIZE)
         try {
-          setup = createFileStreamSetup(rawMetadata, assemblyBudget)
-        } catch (error) {
-          const streamId = (rawMetadata as { streamId?: unknown } | null)?.streamId
-          if (typeof streamId === 'number') {
-            streamIdRef.current = streamId
-          }
-          fail(error as Error)
+          buffer = Buffer.alloc(totalSize)
+        } catch (err) {
+          streamIdRef.current = metadata.streamId
+          fail(new Error(`Failed to allocate ${totalSize} bytes: ${(err as Error).message}`))
           return
         }
-        if (setup.kind === 'empty') {
-          succeed(setup.result)
-          return
-        }
-        streamIdRef.current = setup.streamId
-        assembler = setup.assembler
+        streamIdRef.current = metadata.streamId
         metadataReady = true
-        inactivity.reset()
         drainPending()
       })
       .catch((err) => {

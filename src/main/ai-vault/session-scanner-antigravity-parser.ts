@@ -1,5 +1,6 @@
+import { createReadStream } from 'node:fs'
+import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { iterateAiVaultJsonlLines } from './session-jsonl-line-reader'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   accumulatorFoldResumeState,
@@ -24,7 +25,10 @@ export async function parseAntigravitySessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const lines = iterateAiVaultJsonlLines(file.path)
+  const lines = createInterface({
+    input: createReadStream(file.path, { encoding: 'utf-8' }),
+    crlfDelay: Infinity
+  })
   return parseAntigravitySessionLines({ file, lines, platform })
 }
 

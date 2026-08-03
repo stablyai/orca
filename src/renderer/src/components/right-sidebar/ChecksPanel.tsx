@@ -28,6 +28,7 @@ import { openHttpLink } from '@/lib/http-link-routing'
 import { Button } from '@/components/ui/button'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
+  getTerminalUrlOrcaBrowserHint,
   getTerminalUrlSystemBrowserHint,
   isMacPlatform
 } from '../terminal-pane/terminal-link-open-hints'
@@ -88,7 +89,7 @@ import { normalizeGlobalWindowsRuntimeDefault } from '../../../../shared/project
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
 import { toast } from 'sonner'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { type ChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
 import { selectReviewCacheEntry } from './review-cache-entry-selection'
 import {
@@ -134,7 +135,11 @@ import {
   shouldPollChecksPanelRuntimeSshStatus,
   type ChecksPanelGitStatusSnapshot
 } from './checks-panel-git-status-snapshot'
-import { resolveChecksPanelPRRefreshRequest } from './checks-panel-pr-refresh-request'
+import {
+  getChecksPanelForegroundReviewEvidenceKey,
+  resolveChecksPanelPRRefreshRequest,
+  resolveChecksPanelReviewEvidenceProvider
+} from './checks-panel-pr-refresh-request'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -167,7 +172,11 @@ import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullR
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
 import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
-import { openChecksPanelHostedReviewUrl } from './checks-panel-hosted-review-click-routing'
+import {
+  openChecksPanelHostedReviewUrl,
+  resolveChecksPanelHostedReviewModifierDestination,
+  type ChecksPanelHostedReviewModifierDestination
+} from './checks-panel-hosted-review-click-routing'
 import { ChecksPanelUpdatedAtMetadata } from './checks-panel-updated-at-metadata'
 import {
   clearPullRequestGenerationRequiresPushBeforeCreate,
@@ -246,7 +255,7 @@ type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
   isRefreshing: boolean
   canUnlinkPullRequest: boolean
-  showSystemBrowserHint: boolean
+  modifierHintDestination: ChecksPanelHostedReviewModifierDestination
   onRefresh: () => void
   onOpenReview: (event: React.MouseEvent<HTMLButtonElement>) => void
   onUnlinkPullRequest: () => void
@@ -257,7 +266,7 @@ export function ChecksPanelReviewHeader({
   review,
   isRefreshing,
   canUnlinkPullRequest,
-  showSystemBrowserHint,
+  modifierHintDestination,
   onRefresh,
   onOpenReview,
   onUnlinkPullRequest,
@@ -272,9 +281,13 @@ export function ChecksPanelReviewHeader({
     'Open on {{value0}}',
     { value0: reviewHostLabel }
   )
-  const title = showSystemBrowserHint
-    ? `${openTitle}. ${getTerminalUrlSystemBrowserHint()}`
-    : openTitle
+  const modifierHint =
+    modifierHintDestination === 'system-browser'
+      ? getTerminalUrlSystemBrowserHint()
+      : modifierHintDestination === 'orca'
+        ? getTerminalUrlOrcaBrowserHint()
+        : null
+  const title = modifierHint ? `${openTitle}. ${modifierHint}` : openTitle
 
   return (
     <div className="flex items-center gap-2">
@@ -525,6 +538,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const prevChecksRef = useRef<string>('')
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
   const panelVisibleSinceRef = useRef<number | null>(null)
+  const foregroundedUnrenderedReviewKeyRef = useRef<string | null>(null)
   commentsRef.current = comments
   const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
   const allocatePullRequestGenerationRequestId = useAppStore(
@@ -954,6 +968,32 @@ export default function ChecksPanel(): React.JSX.Element {
     eligibilityReview: hostedReviewCreation?.review ?? null
   })
   const checksPanelReviewLookup = checksPanelReviewLookupResult.state
+  const hasUnrenderedReviewEvidence =
+    checksPanelReviewLookup === 'positive_unresolved' ||
+    (checksPanelReviewLookup !== 'found' &&
+      hostedReviewCreation?.blockedReason === 'existing_review')
+  const unrenderedReviewEvidenceIdentity =
+    linkedReviewNumber ??
+    hostedReview?.number ??
+    hostedReviewCreation?.review?.number ??
+    checksPanelReviewLookupResult.openReviewUrl ??
+    'unknown'
+  const unrenderedReviewEvidenceProvider = resolveChecksPanelReviewEvidenceProvider({
+    linkedGitHubPR: linkedPR,
+    linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR,
+    eligibilityProvider: hostedReviewCreation?.provider,
+    cachedProvider: hostedReview?.provider
+  })
+  const foregroundReviewEvidenceKey = getChecksPanelForegroundReviewEvidenceKey({
+    refreshContextKey,
+    reviewEvidenceIdentity: unrenderedReviewEvidenceIdentity,
+    reviewEvidenceProvider: unrenderedReviewEvidenceProvider,
+    hasUnrenderedReviewEvidence,
+    isGitHubReviewContext
+  })
   // Confirmed readiness from the last eligibility snapshot, not live canCreate (which would be circular and flap during transient failures).
   const hardErrorObservedAt =
     isGitHubReviewContext && hardRefreshError && hardRefreshError.contextKey === panelContextKey
@@ -1347,6 +1387,9 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [agentComposerState?.commentResolution, stateRequestKey])
 
   useEffect(() => {
+    if (foregroundReviewEvidenceKey === null || !isPanelVisible) {
+      foregroundedUnrenderedReviewKeyRef.current = null
+    }
     if (isPanelVisible && repo && !isFolder && branch) {
       void fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
@@ -1357,15 +1400,25 @@ export default function ChecksPanel(): React.JSX.Element {
         linkedBitbucketPR,
         linkedAzureDevOpsPR,
         linkedGiteaPR,
-        staleWhileRevalidate: true
+        staleWhileRevalidate: true,
+        // Why: this panel only ever renders the selected worktree, so it earns
+        // the host's fast re-check tier (#11532).
+        active: true
       })
       // Why: the gh-based refresh coordinator is GitHub-only; running it elsewhere gave a spurious gh_unavailable error hiding a valid composer.
       if (activeWorktreeId && isGitHubReviewContext) {
         const refreshRequest = resolveChecksPanelPRRefreshRequest({
           cachedHasPR: prCachedHasPR,
           cachedFetchedAt: prFetchedAt ?? null,
-          panelVisibleSince: panelVisibleSinceRef.current
+          panelVisibleSince: panelVisibleSinceRef.current,
+          hasUnrenderedReviewEvidence: foregroundReviewEvidenceKey !== null,
+          hasRequestedForegroundRefresh:
+            foregroundReviewEvidenceKey !== null &&
+            foregroundedUnrenderedReviewKeyRef.current === foregroundReviewEvidenceKey
         })
+        if (refreshRequest.reason === 'active' && foregroundReviewEvidenceKey !== null) {
+          foregroundedUnrenderedReviewKeyRef.current = foregroundReviewEvidenceKey
+        }
         enqueueGitHubPRRefresh(activeWorktreeId, refreshRequest.reason, refreshRequest.priority)
       }
     }
@@ -1375,6 +1428,7 @@ export default function ChecksPanel(): React.JSX.Element {
     enqueueGitHubPRRefresh,
     fallbackGitHubPRNumber,
     fetchHostedReviewForBranch,
+    foregroundReviewEvidenceKey,
     isFolder,
     isGitHubReviewContext,
     isPanelVisible,
@@ -3955,11 +4009,10 @@ export default function ChecksPanel(): React.JSX.Element {
   const reviewShortLabel = activeReview.provider === 'gitlab' ? 'MR' : 'PR'
   const shouldShowReviewTriageStrip =
     activeConflictReview !== null || getBrokenChecks(checks).length > 0
-  // Why: mirror openHttpLink's routing inputs so the hint only appears when a plain click would open inside Orca.
-  const showHostedReviewSystemBrowserHint =
-    Boolean(activeWorktreeId) &&
-    settings?.openLinksInApp === true &&
-    !settings.activeRuntimeEnvironmentId
+  const hostedReviewModifierHintDestination = resolveChecksPanelHostedReviewModifierDestination(
+    settings,
+    Boolean(activeWorktreeId)
+  )
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {/* Why: surface a background-refresh failure over stale cached PR data so a GitHub outage doesn't look like a normal panel. GitHub-only. */}
@@ -3978,7 +4031,7 @@ export default function ChecksPanel(): React.JSX.Element {
           review={activeReview}
           isRefreshing={isRefreshing}
           canUnlinkPullRequest={linkedPR !== null}
-          showSystemBrowserHint={showHostedReviewSystemBrowserHint}
+          modifierHintDestination={hostedReviewModifierHintDestination}
           onRefresh={() => void handleRefresh()}
           onOpenReview={handleOpenPR}
           onUnlinkPullRequest={handleUnlinkPullRequest}

@@ -1,5 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
+import {
+  createRuntimeProjectRefreshScheduler,
+  refreshRuntimeProjectWorktrees
+} from './runtime-project-refresh-scheduler'
+
+describe('refreshRuntimeProjectWorktrees', () => {
+  it('pins same-ID repo refreshes to the event runtime', async () => {
+    const fetchWorktrees = vi.fn().mockResolvedValue(true)
+
+    await refreshRuntimeProjectWorktrees(
+      'env-1',
+      [{ id: 'same-repo' }, { id: 'same-repo' }],
+      fetchWorktrees
+    )
+
+    expect(fetchWorktrees).toHaveBeenCalledTimes(2)
+    expect(fetchWorktrees).toHaveBeenNthCalledWith(1, 'same-repo', {
+      executionHostId: 'runtime:env-1'
+    })
+    expect(fetchWorktrees).toHaveBeenNthCalledWith(2, 'same-repo', {
+      executionHostId: 'runtime:env-1'
+    })
+  })
+})
 
 describe('createRuntimeProjectRefreshScheduler', () => {
   beforeEach(() => {
@@ -101,59 +124,5 @@ describe('createRuntimeProjectRefreshScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(refresh).not.toHaveBeenCalled()
-  })
-
-  it('bounds environment records while refreshes are stalled', async () => {
-    const refresh = vi.fn(() => new Promise<void>(() => {}))
-    const scheduler = createRuntimeProjectRefreshScheduler({
-      refresh,
-      debounceMs: 100,
-      minIntervalMs: 1_000,
-      maxEntries: 1
-    })
-
-    scheduler.request('env-1')
-    scheduler.request('env-2')
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(refresh).toHaveBeenCalledTimes(1)
-    expect(refresh).toHaveBeenCalledWith('env-1')
-    scheduler.stop()
-  })
-
-  it('recovers capacity by evicting an idle environment record', async () => {
-    const refresh = vi.fn().mockResolvedValue(undefined)
-    const scheduler = createRuntimeProjectRefreshScheduler({
-      refresh,
-      debounceMs: 100,
-      minIntervalMs: 1_000,
-      maxEntries: 1
-    })
-
-    scheduler.request('env-1')
-    await vi.advanceTimersByTimeAsync(100)
-    scheduler.request('env-2')
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(refresh.mock.calls).toEqual([['env-1'], ['env-2']])
-    scheduler.stop()
-  })
-
-  it('admits exact-limit environment ids and ignores oversized ids', async () => {
-    const refresh = vi.fn().mockResolvedValue(undefined)
-    const scheduler = createRuntimeProjectRefreshScheduler({
-      refresh,
-      debounceMs: 100,
-      minIntervalMs: 1_000,
-      maxEnvironmentIdBytes: 4
-    })
-
-    scheduler.request('🐋')
-    scheduler.request('🐋x')
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(refresh).toHaveBeenCalledTimes(1)
-    expect(refresh).toHaveBeenCalledWith('🐋')
-    scheduler.stop()
   })
 })

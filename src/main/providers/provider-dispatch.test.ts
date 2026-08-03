@@ -56,7 +56,6 @@ vi.mock('../pi/titlebar-extension-service', () => ({
 
 import {
   deletePtyOwnership,
-  MAX_REGISTERED_SSH_PTY_PROVIDERS,
   registerPtyHandlers,
   registerSshPtyProvider,
   setPtyOwnership,
@@ -142,12 +141,20 @@ describe('PTY provider dispatch', () => {
     })) as { id: string }
 
     expect(result.id).toBe('ssh-pty-1')
-    expect(mockSshProvider.spawn).toHaveBeenCalledWith({
-      cols: 80,
-      rows: 24,
-      cwd: undefined,
-      env: undefined
-    })
+    // Why: the relay host can be launched from a Claude session too, so the stamps are
+    // stripped on the SSH path as well. Compared as a set — envToDelete is consumed by
+    // membership only, so a reordering of the merge sources must not fail this.
+    const sshSpawnArgs = vi.mocked(mockSshProvider.spawn).mock.calls.at(-1)![0]
+    expect([...(sshSpawnArgs.envToDelete ?? [])].sort()).toEqual(
+      [
+        'CLAUDE_CODE_CHILD_SESSION',
+        'CLAUDE_CODE_SESSION_ID',
+        'CLAUDE_CODE_BRIDGE_SESSION_ID'
+      ].sort()
+    )
+    expect(mockSshProvider.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ cols: 80, rows: 24, cwd: undefined, env: undefined })
+    )
 
     unregisterSshPtyProvider('conn-123')
   })
@@ -177,28 +184,6 @@ describe('PTY provider dispatch', () => {
         connectionId: 'conn-456'
       })
     ).rejects.toThrow('No PTY provider for connection "conn-456"')
-  })
-
-  it('fails closed when the process-wide SSH provider registry is saturated', () => {
-    const ids = Array.from(
-      { length: MAX_REGISTERED_SSH_PTY_PROVIDERS },
-      (_, index) => `capacity-${index}`
-    )
-    try {
-      for (const id of ids) {
-        registerSshPtyProvider(id, createMockProvider(id))
-      }
-
-      expect(() =>
-        registerSshPtyProvider('capacity-overflow', createMockProvider('overflow'))
-      ).toThrow('ssh_pty_provider_capacity')
-      expect(() => registerSshPtyProvider(ids[0], createMockProvider('replacement'))).not.toThrow()
-    } finally {
-      for (const id of ids) {
-        unregisterSshPtyProvider(id)
-      }
-      unregisterSshPtyProvider('capacity-overflow')
-    }
   })
 
   it('keeps same relay PTY ids distinct across SSH targets', () => {

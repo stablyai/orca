@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 import { getIcaclsExePath, resolveCurrentWindowsIdentity } from '../win32-utils'
 
 /**
@@ -33,7 +32,6 @@ import { getIcaclsExePath, resolveCurrentWindowsIdentity } from '../win32-utils'
 
 export const WINDOWS_ACL_GRANT_MARKER_FILE = 'windows-acl-grant.json'
 export const WINDOWS_ACL_GRANT_SCHEME_VERSION = 1
-export const WINDOWS_ACL_GRANT_MARKER_MAX_BYTES = 8 * 1024
 
 const GRANT_TIMEOUT_MS = 120_000
 
@@ -60,10 +58,7 @@ type EnsureOptions = {
 function readMarker(userDataPath: string): WindowsAclGrantMarker | null {
   try {
     const parsed = JSON.parse(
-      readNodeFileSyncWithinLimit(
-        join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE),
-        WINDOWS_ACL_GRANT_MARKER_MAX_BYTES
-      ).buffer.toString('utf8')
+      readFileSync(join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE), 'utf-8')
     ) as Partial<WindowsAclGrantMarker>
     if (
       parsed.schemeVersion === WINDOWS_ACL_GRANT_SCHEME_VERSION &&

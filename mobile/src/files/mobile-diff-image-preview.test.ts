@@ -1,49 +1,39 @@
 import { describe, expect, it } from 'vitest'
 import { mobileDiffImageDataUri } from './mobile-diff-image-preview'
 
-function pngBase64(width = 1): string {
-  const bytes = Buffer.alloc(24)
-  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
-  bytes.writeUInt32BE(13, 8)
-  bytes.write('IHDR', 12, 'ascii')
-  bytes.writeUInt32BE(width, 16)
-  bytes.writeUInt32BE(1, 20)
-  return bytes.toString('base64')
-}
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l8sm7wAAAABJRU5ErkJggg=='
 
 describe('mobileDiffImageDataUri', () => {
   it('renders a modified image diff from the post-change bytes', () => {
-    const modifiedContent = pngBase64(2)
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
-        originalContent: 'b2xk',
-        modifiedContent,
+        originalContent: PNG_BASE64,
+        modifiedContent: PNG_BASE64,
         isImage: true,
         mimeType: 'image/png'
       })
-    ).toBe(`data:image/png;base64,${modifiedContent}`)
+    ).toBe(`data:image/png;base64,${PNG_BASE64}`)
   })
 
   it('renders an added image diff (no original) from the modified bytes', () => {
-    const modifiedContent = pngBase64()
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
         originalContent: '',
-        modifiedContent,
+        modifiedContent: PNG_BASE64,
         isImage: true,
         mimeType: 'image/png'
       })
-    ).toBe(`data:image/png;base64,${modifiedContent}`)
+    ).toBe(`data:image/png;base64,${PNG_BASE64}`)
   })
 
   it('falls back to the original bytes for a proven deletion (modifiedDeleted)', () => {
-    const originalContent = pngBase64()
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
-        originalContent,
+        originalContent: PNG_BASE64,
         originalIsBinary: true,
         modifiedContent: '',
         modifiedIsBinary: false,
@@ -51,7 +41,7 @@ describe('mobileDiffImageDataUri', () => {
         isImage: true,
         mimeType: 'image/png'
       })
-    ).toBe(`data:image/png;base64,${originalContent}`)
+    ).toBe(`data:image/png;base64,${PNG_BASE64}`)
   })
 
   // The reviewer's read-failure case: a relay/SSH read returns an empty modified

@@ -4,6 +4,7 @@
  */
 import * as path from 'node:path'
 import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
 import type { GitExec } from './git-handler-ops'
 import type { RelayGitStreamExec } from './git-stdout-stream'
@@ -23,16 +24,11 @@ import {
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
 } from '../shared/git-status-line-stats-cache'
-import { readNodeFileWithinLimit } from '../shared/node-bounded-file-reader'
-
-const MAX_GIT_POINTER_FILE_BYTES = 64 * 1024
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
   try {
-    const contents = (
-      await readNodeFileWithinLimit(dotGitPath, MAX_GIT_POINTER_FILE_BYTES)
-    ).buffer.toString('utf-8')
+    const contents = await readFile(dotGitPath, 'utf-8')
     const match = contents.match(/^gitdir:\s*(.+)\s*$/m)
     if (match) {
       return path.resolve(worktreePath, match[1])
@@ -137,7 +133,7 @@ export async function getStatusOp(
         const branchName = getShortBranchName(branch)
         if (branchName) {
           try {
-            // Why: this probe coalesces across concurrent status reads, so one request's abort must not reject the shared in-flight promise.
+            // Why: one request's abort must not reject this shared status probe.
             upstreamStatus = await readOrProbeNoEffectiveUpstreamStatus(
               { worktreePath, branchName, upstreamName: upstreamStatus?.upstreamName },
               (args) => git(args, worktreePath),
@@ -175,7 +171,7 @@ export async function getStatusOp(
     // not a git repo or git not available
   }
 
-  // Why: skip line-stats when the limit was hit — numstat over a huge change set would reintroduce the cost the limit avoids.
+  // Why: skip numstat after the limit to avoid reintroducing its cost.
   if (!didHitLimit) {
     await reuseOrRecomputeGitStatusLineStats({
       cacheKey: lineStatsCacheKey,

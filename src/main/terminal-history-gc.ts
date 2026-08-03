@@ -1,305 +1,154 @@
-import { existsSync, opendirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { readNodeFileSyncWithinLimit } from '../shared/node-bounded-file-reader'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import {
+  getHistoryRoot,
+  listWslHistoryRoots,
+  PENDING_DELETE_DIR_NAME
+} from './terminal-history-paths'
+import {
+  schedulePendingHistoryTreeRemovals,
+  scheduleWorktreeHistoryTreeDeletion
+} from './terminal-history-deletion'
 
-export const TERMINAL_HISTORY_GC_MAX_DISCOVERY_ENTRIES = 100_000
-export const TERMINAL_HISTORY_GC_MAX_WSL_DISTROS = 256
-export const TERMINAL_HISTORY_GC_MAX_FILES_PER_WORKTREE = 64
-export const TERMINAL_HISTORY_GC_META_MAX_BYTES = 64 * 1024
-
-export type TerminalHistoryGcLimits = {
-  maxDiscoveryEntries: number
-  maxFilesPerWorktree: number
-  maxMetaBytes: number
-  maxWslDistros: number
-}
-
-export type TerminalHistoryGcSummary = {
-  capacityExceeded: boolean
-  orphaned: number
-  pruned: number
-  totalDirs: number
-  totalSizeKB: number
-}
-
-const DEFAULT_LIMITS: TerminalHistoryGcLimits = {
-  maxDiscoveryEntries: TERMINAL_HISTORY_GC_MAX_DISCOVERY_ENTRIES,
-  maxFilesPerWorktree: TERMINAL_HISTORY_GC_MAX_FILES_PER_WORKTREE,
-  maxMetaBytes: TERMINAL_HISTORY_GC_META_MAX_BYTES,
-  maxWslDistros: TERMINAL_HISTORY_GC_MAX_WSL_DISTROS
-}
-
-// Why: the live-worktree snapshot can predate a newly created history directory.
+// Why 5 minutes: GC runs ~10s after startup, and the live-worktree snapshot is
+// taken just before. A worktree created between the snapshot and GC execution
+// won't appear in liveWorktreeIds, so without an age guard GC would delete its
+// freshly-created history directory (TOCTOU race). 5 minutes is generous enough
+// to cover any realistic snapshot-to-scan delay.
 const GC_MIN_AGE_MS = 5 * 60 * 1000
 
-class TerminalHistoryGcCapacityError extends Error {
-  constructor(
-    readonly resource: 'discovery entries' | 'WSL distros',
-    readonly limit: number
-  ) {
-    super(`Terminal history GC exceeded ${limit} ${resource}`)
-    this.name = 'TerminalHistoryGcCapacityError'
-  }
-}
+let scheduledHistoryGcTimer: ReturnType<typeof setTimeout> | null = null
+let historyGcRunning = false
 
-class TerminalHistoryGcBudget {
-  private discoveryEntries = 0
-  private wslDistros = 0
-
-  constructor(readonly limits: TerminalHistoryGcLimits) {}
-
-  claimDiscoveryEntry(): void {
-    this.discoveryEntries += 1
-    if (this.discoveryEntries > this.limits.maxDiscoveryEntries) {
-      throw new TerminalHistoryGcCapacityError('discovery entries', this.limits.maxDiscoveryEntries)
-    }
-  }
-
-  claimWslDistro(): void {
-    this.wslDistros += 1
-    if (this.wslDistros > this.limits.maxWslDistros) {
-      throw new TerminalHistoryGcCapacityError('WSL distros', this.limits.maxWslDistros)
-    }
-  }
-}
-
-type MutableTerminalHistoryGcSummary = Omit<TerminalHistoryGcSummary, 'capacityExceeded'>
-
-export function runTerminalHistoryGarbageCollection(options: {
-  mainRoot: string
-  wslRoot: string
-  liveWorktreeIds: Set<string>
-  limits?: Partial<TerminalHistoryGcLimits>
-}): TerminalHistoryGcSummary {
-  const limits = resolveTerminalHistoryGcLimits(options.limits)
-  const budget = new TerminalHistoryGcBudget(limits)
-  const summary: TerminalHistoryGcSummary = {
-    capacityExceeded: false,
-    orphaned: 0,
-    pruned: 0,
-    totalDirs: 0,
-    totalSizeKB: 0
-  }
-
-  try {
-    scanTerminalHistoryRoot(options.mainRoot, options.liveWorktreeIds, budget, limits, summary)
-    scanWslHistoryRoots(options.wslRoot, options.liveWorktreeIds, budget, limits, summary)
-  } catch (error) {
-    if (!(error instanceof TerminalHistoryGcCapacityError)) {
-      throw error
-    }
-    summary.capacityExceeded = true
-    console.warn(`[pty:history:gc] ${error.message}; remaining history will be scanned next run`)
-  }
-  return summary
-}
-
-export function deleteWslWorktreeHistoryDirectories(options: {
-  wslRoot: string
-  worktreeHash: string
-  limits?: Partial<TerminalHistoryGcLimits>
-}): void {
-  if (!existsSync(options.wslRoot)) {
-    return
-  }
-  const limits = resolveTerminalHistoryGcLimits(options.limits)
-  const budget = new TerminalHistoryGcBudget(limits)
-  try {
-    forEachDirectoryEntry(options.wslRoot, (distro) => {
-      budget.claimDiscoveryEntry()
-      const distroRoot = join(options.wslRoot, distro)
-      if (!statSync(distroRoot).isDirectory()) {
-        return
-      }
-      budget.claimWslDistro()
-      const historyPath = join(distroRoot, options.worktreeHash)
-      if (existsSync(historyPath)) {
-        rmSync(historyPath, { recursive: true, force: true })
-      }
-    })
-  } catch (error) {
-    if (error instanceof TerminalHistoryGcCapacityError) {
-      console.warn(`[pty:history] ${error.message}; WSL cleanup stopped at the limit`)
-      return
-    }
-    throw error
-  }
-}
-
-function scanWslHistoryRoots(
-  wslRoot: string,
-  liveWorktreeIds: Set<string>,
-  budget: TerminalHistoryGcBudget,
-  limits: TerminalHistoryGcLimits,
-  summary: TerminalHistoryGcSummary
-): void {
-  if (!existsSync(wslRoot)) {
-    return
-  }
-  try {
-    forEachDirectoryEntry(wslRoot, (distro) => {
-      budget.claimDiscoveryEntry()
-      const distroRoot = join(wslRoot, distro)
-      try {
-        if (!statSync(distroRoot).isDirectory()) {
-          return
-        }
-        budget.claimWslDistro()
-        scanTerminalHistoryRoot(distroRoot, liveWorktreeIds, budget, limits, summary)
-      } catch (error) {
-        if (error instanceof TerminalHistoryGcCapacityError) {
-          throw error
-        }
-        // One unavailable distro must not discard the main-root GC result.
-      }
-    })
-  } catch (error) {
-    if (error instanceof TerminalHistoryGcCapacityError) {
-      throw error
-    }
-    // WSL history is optional and may disappear while distributions stop.
-  }
-}
-
-function scanTerminalHistoryRoot(
+/** Scan a single history root directory, pruning orphaned entries.
+ *  Returns { totalDirs, orphaned, pruned, totalSizeKB }. */
+function gcScanRoot(
   root: string,
-  liveWorktreeIds: Set<string>,
-  budget: TerminalHistoryGcBudget,
-  limits: TerminalHistoryGcLimits,
-  summary: MutableTerminalHistoryGcSummary
-): void {
+  liveWorktreeIds: Set<string>
+): { totalDirs: number; orphaned: number; pruned: number; totalSizeKB: number } {
+  const result = { totalDirs: 0, orphaned: 0, pruned: 0, totalSizeKB: 0 }
   if (!existsSync(root)) {
-    return
+    return result
   }
+
   const now = Date.now()
 
-  forEachDirectoryEntry(root, (entry) => {
-    budget.claimDiscoveryEntry()
+  for (const entry of readdirSync(root)) {
+    // Why: pending-delete is a tombstone queue drained asynchronously, not a live worktree hash.
+    if (entry === PENDING_DELETE_DIR_NAME) {
+      continue
+    }
     const entryPath = join(root, entry)
     try {
-      if (!statSync(entryPath).isDirectory()) {
-        return
+      const stat = statSync(entryPath)
+      if (!stat.isDirectory()) {
+        continue
       }
-      summary.totalDirs += 1
-      const sizeEstimate = estimateHistoryDirectorySize(entryPath, budget, limits)
-      summary.totalSizeKB += sizeEstimate.totalSizeKB
-      if (!sizeEstimate.complete) {
-        return
+      result.totalDirs++
+
+      // Estimate directory size from meta.json + history files.
+      try {
+        for (const file of readdirSync(entryPath)) {
+          result.totalSizeKB += Math.ceil(statSync(join(entryPath, file)).size / 1024)
+        }
+      } catch {
+        // Skip size estimation on error.
       }
 
-      const meta = readTerminalHistoryMetadata(join(entryPath, 'meta.json'), limits.maxMetaBytes)
-      if (!meta || liveWorktreeIds.has(meta.worktreeId)) {
-        return
+      const metaPath = join(entryPath, 'meta.json')
+      if (!existsSync(metaPath)) {
+        // No meta.json — can't determine ownership, skip.
+        continue
       }
-      if (meta.createdAt) {
-        const ageMs = now - new Date(meta.createdAt).getTime()
-        if (ageMs < GC_MIN_AGE_MS) {
-          return
+
+      const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as {
+        worktreeId?: string
+        createdAt?: string
+      }
+      if (!meta.worktreeId) {
+        continue
+      }
+
+      if (!liveWorktreeIds.has(meta.worktreeId)) {
+        // Why: avoid a TOCTOU race where a worktree is created after the
+        // live-ID snapshot but before GC runs. Directories younger than
+        // GC_MIN_AGE_MS are presumed still live and skipped.
+        if (meta.createdAt) {
+          const ageMs = now - new Date(meta.createdAt).getTime()
+          if (ageMs < GC_MIN_AGE_MS) {
+            continue
+          }
+        }
+
+        result.orphaned++
+        // Why: a large orphaned tree recursive-rm'd here would stall the main process ~10s after
+        // launch — the same freeze the explicit-delete path already tombstones its way out of.
+        if (scheduleWorktreeHistoryTreeDeletion(entryPath, root)) {
+          result.pruned++
+          console.log(`[pty:history:gc] Pruned orphaned history: ${meta.worktreeId}`)
         }
       }
-
-      summary.orphaned += 1
-      rmSync(entryPath, { recursive: true, force: true })
-      summary.pruned += 1
-      console.log(`[pty:history:gc] Pruned orphaned history: ${meta.worktreeId}`)
-    } catch (error) {
-      if (error instanceof TerminalHistoryGcCapacityError) {
-        throw error
-      }
-      // One corrupt or concurrently removed history directory must not stop GC.
-    }
-  })
-}
-
-function estimateHistoryDirectorySize(
-  directoryPath: string,
-  budget: TerminalHistoryGcBudget,
-  limits: TerminalHistoryGcLimits
-): { complete: boolean; totalSizeKB: number } {
-  let complete = true
-  let fileCount = 0
-  let totalSizeKB = 0
-  try {
-    forEachDirectoryEntry(directoryPath, (file) => {
-      budget.claimDiscoveryEntry()
-      fileCount += 1
-      if (fileCount > limits.maxFilesPerWorktree) {
-        complete = false
-        return false
-      }
-      const fileStat = statSync(join(directoryPath, file))
-      if (fileStat.isDirectory()) {
-        complete = false
-        return false
-      }
-      totalSizeKB += Math.ceil(fileStat.size / 1024)
-      return undefined
-    })
-  } catch (error) {
-    if (error instanceof TerminalHistoryGcCapacityError) {
-      throw error
-    }
-    complete = false
-  }
-  return { complete, totalSizeKB }
-}
-
-function readTerminalHistoryMetadata(
-  metaPath: string,
-  maxBytes: number
-): { worktreeId: string; createdAt?: string } | null {
-  if (!existsSync(metaPath)) {
-    return null
-  }
-  try {
-    const parsed = JSON.parse(
-      readNodeFileSyncWithinLimit(metaPath, maxBytes).buffer.toString('utf8')
-    ) as unknown
-    if (
-      parsed === null ||
-      typeof parsed !== 'object' ||
-      !('worktreeId' in parsed) ||
-      typeof parsed.worktreeId !== 'string' ||
-      parsed.worktreeId.length === 0
-    ) {
-      return null
-    }
-    const createdAt =
-      'createdAt' in parsed && typeof parsed.createdAt === 'string' ? parsed.createdAt : undefined
-    return { worktreeId: parsed.worktreeId, ...(createdAt ? { createdAt } : {}) }
-  } catch {
-    return null
-  }
-}
-
-function forEachDirectoryEntry(
-  directoryPath: string,
-  visit: (entryName: string) => false | void
-): void {
-  const directory = opendirSync(directoryPath)
-  try {
-    for (let entry = directory.readSync(); entry !== null; entry = directory.readSync()) {
-      if (visit(entry.name) === false) {
-        return
-      }
-    }
-  } finally {
-    try {
-      directory.closeSync()
     } catch {
-      // The OS may have already closed a failed directory stream.
+      // Skip individual entries that fail.
     }
+  }
+  return result
+}
+
+/** Run background GC to prune history directories for worktrees that are no
+ *  longer in Orca's known live-worktree set. */
+export function runHistoryGc(liveWorktreeIds: Set<string>): void {
+  try {
+    // Why: finish tombstones left by quit mid-rm before scanning live worktree hashes.
+    schedulePendingHistoryTreeRemovals(getHistoryRoot())
+    const main = gcScanRoot(getHistoryRoot(), liveWorktreeIds)
+
+    // Also scan WSL history directories (each distro has its own subdirectory).
+    const wslTotals = { totalDirs: 0, orphaned: 0, pruned: 0, totalSizeKB: 0 }
+    for (const distroRoot of listWslHistoryRoots()) {
+      schedulePendingHistoryTreeRemovals(distroRoot)
+      const r = gcScanRoot(distroRoot, liveWorktreeIds)
+      wslTotals.totalDirs += r.totalDirs
+      wslTotals.orphaned += r.orphaned
+      wslTotals.pruned += r.pruned
+      wslTotals.totalSizeKB += r.totalSizeKB
+    }
+
+    const totalDirs = main.totalDirs + wslTotals.totalDirs
+    const orphaned = main.orphaned + wslTotals.orphaned
+    const pruned = main.pruned + wslTotals.pruned
+    const totalSizeKB = main.totalSizeKB + wslTotals.totalSizeKB
+
+    console.log(
+      `[pty:history:gc] totalDirs=${totalDirs} orphaned=${orphaned} pruned=${pruned} totalSizeKB=${totalSizeKB}`
+    )
+  } catch (err) {
+    console.warn(`[pty:history:gc] GC failed: ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
-function resolveTerminalHistoryGcLimits(
-  overrides: Partial<TerminalHistoryGcLimits> = {}
-): TerminalHistoryGcLimits {
-  const limits = { ...DEFAULT_LIMITS, ...overrides }
-  for (const [name, value] of Object.entries(limits)) {
-    if (!Number.isSafeInteger(value) || value < 0) {
-      throw new RangeError(`${name} must be a non-negative safe integer`)
-    }
+/** Schedule GC after a delay so it runs after workspace hydration completes.
+ *  `getLiveWorktreeIds` should use already-known IDs, not probe repo paths. */
+export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>): void {
+  // Why: main-window services can reattach during reload/reactivation; one
+  // pending/running disk GC is enough and avoids duplicate startup I/O.
+  if (scheduledHistoryGcTimer !== null || historyGcRunning) {
+    return
   }
-  return limits
+  // Why 10s: avoids competing with startup-critical I/O while still running
+  // early enough to clean up before the user notices disk usage (§7.6).
+  scheduledHistoryGcTimer = setTimeout(async () => {
+    scheduledHistoryGcTimer = null
+    historyGcRunning = true
+    try {
+      const liveIds = await getLiveWorktreeIds()
+      runHistoryGc(liveIds)
+    } catch (err) {
+      console.warn(
+        `[pty:history:gc] Failed to enumerate live worktrees for GC: ${err instanceof Error ? err.message : String(err)}`
+      )
+    } finally {
+      historyGcRunning = false
+    }
+  }, 10_000)
 }

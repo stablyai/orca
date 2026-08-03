@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
-import {
-  GitResponseStreamRegistry,
-  MAX_CONCURRENT_GIT_RESPONSE_STREAMS
-} from './git-response-stream'
+import { GitResponseStreamRegistry } from './git-response-stream'
 import { GIT_RESPONSE_CHUNK_SIZE, STREAM_ACK_WINDOW_CHUNKS } from './protocol'
 
 async function flushPump(): Promise<void> {
@@ -40,17 +37,7 @@ describe('GitResponseStreamRegistry client ownership', () => {
     await flushPump()
     expect(notifyBulk).toHaveBeenCalledTimes(STREAM_ACK_WINDOW_CHUNKS)
 
-    registry.recordAck(streamId, 10_000, ownerClientId)
-    await flushPump()
-    expect(notifyBulk).toHaveBeenCalledTimes(STREAM_ACK_WINDOW_CHUNKS)
-
     registry.recordAck(streamId, 10_000, ownerClientId + 1)
-    await flushPump()
-    expect(notifyBulk).toHaveBeenCalledTimes(STREAM_ACK_WINDOW_CHUNKS)
-
-    for (const invalidSeq of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
-      registry.recordAck(streamId, invalidSeq, ownerClientId)
-    }
     await flushPump()
     expect(notifyBulk).toHaveBeenCalledTimes(STREAM_ACK_WINDOW_CHUNKS)
 
@@ -79,114 +66,49 @@ describe('GitResponseStreamRegistry client ownership', () => {
     expect(notifyBulk.mock.calls[1]?.[0]).toBe('git.responseError')
   })
 
-  it('caps parked streams and defers base64 expansion until the pump runs', () => {
-    const dispatcher = {
-      notifyBulk: vi.fn().mockResolvedValue(undefined),
-      notify: vi.fn()
-    } as unknown as RelayDispatcher
-    const registry = new GitResponseStreamRegistry()
-    registries.push(registry)
-    const payload = Buffer.from('payload')
-    const toStringSpy = vi.spyOn(Buffer.prototype, 'toString')
-
-    try {
-      for (let index = 0; index < MAX_CONCURRENT_GIT_RESPONSE_STREAMS; index += 1) {
-        registry.startStream(payload, dispatcher, {
-          clientId: 7,
-          isStale: () => false
-        })
-      }
-
-      expect(toStringSpy.mock.calls.some(([encoding]) => encoding === 'base64')).toBe(false)
-      expect(() =>
-        registry.startStream(payload, dispatcher, {
-          clientId: 7,
-          isStale: () => false
-        })
-      ).toThrow(`Too many concurrent git response streams`)
-    } finally {
-      toStringSpy.mockRestore()
-    }
-  })
-
-  it('caps aggregate bytes retained by concurrent parked responses', () => {
-    const dispatcher = {
-      notifyBulk: vi.fn().mockResolvedValue(undefined),
-      notify: vi.fn()
-    } as unknown as RelayDispatcher
-    const registry = new GitResponseStreamRegistry(10)
-    registries.push(registry)
-    const context = { clientId: 7, isStale: () => false }
-
-    registry.startStream(Buffer.alloc(6), dispatcher, context)
-    registry.startStream(Buffer.alloc(4), dispatcher, context)
-
-    expect(() => registry.startStream(Buffer.alloc(1), dispatcher, context)).toThrow(
-      'Concurrent git responses exceed retained-byte limit (10 bytes)'
-    )
-  })
-
-  it('rejects a serialized string before allocating any encoded chunk', () => {
-    const dispatcher = {
-      notifyBulk: vi.fn().mockResolvedValue(undefined),
-      notify: vi.fn()
-    } as unknown as RelayDispatcher
-    const registry = new GitResponseStreamRegistry(0)
-    registries.push(registry)
-    const fromSpy = vi.spyOn(Buffer, 'from')
-
-    try {
-      expect(() =>
-        registry.startStream('serialized response', dispatcher, {
-          clientId: 7,
-          isStale: () => false
-        })
-      ).toThrow('Concurrent git responses exceed retained-byte limit (0 bytes)')
-      expect(fromSpy).not.toHaveBeenCalled()
-    } finally {
-      fromSpy.mockRestore()
-    }
-  })
-
-  it('streams a serialized string without changing its UTF-8 bytes', async () => {
-    const chunks: Buffer[] = []
-    const notifyBulk = vi.fn().mockImplementation((method, params) => {
-      if (method === 'git.responseChunk') {
-        chunks.push(Buffer.from(params.data, 'base64'))
-      }
-      return Promise.resolve()
+  it('uses encoded producer capacity without collapsing chunks during saturation', async () => {
+    let releaseFirst!: () => void
+    const firstWrite = new Promise<void>((resolve) => {
+      releaseFirst = resolve
     })
-    const dispatcher = { notifyBulk, notify: vi.fn() } as unknown as RelayDispatcher
+    const notifyBulk = vi
+      .fn()
+      .mockImplementationOnce(() => firstWrite)
+      .mockResolvedValue(undefined)
+    const producerDataBudget = vi.fn(() => 8)
+    const dispatcher = {
+      notifyBulk,
+      producerDataBudget
+    } as unknown as RelayDispatcher
     const registry = new GitResponseStreamRegistry()
     registries.push(registry)
-    const serialized = JSON.stringify({ text: `boundary-${'🐋'.repeat(40_000)}` })
+    const ownerClientId = 7
 
-    const marker = registry.startStream(serialized, dispatcher, {
-      clientId: 7,
+    const marker = registry.startStream(Buffer.alloc(12), dispatcher, {
+      clientId: ownerClientId,
       isStale: () => false
     })
+    const streamId = marker.__orcaGitResponseStream.streamId
+    await flushPump()
+    expect(notifyBulk).toHaveBeenCalledTimes(1)
+
+    registry.recordAck(streamId, 1_000, ownerClientId)
+    releaseFirst()
     await flushPump()
     await flushPump()
 
-    expect(Buffer.concat(chunks)).toEqual(Buffer.from(serialized, 'utf8'))
-    expect(chunks).toHaveLength(marker.__orcaGitResponseStream.chunkCount)
-    expect(marker.__orcaGitResponseStream.totalBytes).toBe(Buffer.byteLength(serialized, 'utf8'))
-  })
-
-  it('releases aggregate bytes after completion and disposal', async () => {
-    const dispatcher = {
-      notifyBulk: vi.fn().mockResolvedValue(undefined),
-      notify: vi.fn()
-    } as unknown as RelayDispatcher
-    const registry = new GitResponseStreamRegistry(10)
-    registries.push(registry)
-    const context = { clientId: 7, isStale: () => false }
-
-    registry.startStream(Buffer.alloc(10), dispatcher, context)
-    await flushPump()
-    expect(() => registry.startStream(Buffer.alloc(10), dispatcher, context)).not.toThrow()
-
-    registry.disposeAll()
-    expect(() => registry.startStream(Buffer.alloc(10), dispatcher, context)).not.toThrow()
+    expect(producerDataBudget).toHaveBeenCalledExactlyOnceWith(
+      'git.responseChunk',
+      { streamId, seq: 12 },
+      ownerClientId
+    )
+    expect(marker.__orcaGitResponseStream.chunkCount).toBe(2)
+    expect(notifyBulk).toHaveBeenCalledTimes(3)
+    const chunks = notifyBulk.mock.calls
+      .filter(([method]) => method === 'git.responseChunk')
+      .map(([, params]) => params as { data: string })
+    expect(chunks).toHaveLength(2)
+    expect(chunks.every(({ data }) => data.length <= 8)).toBe(true)
+    expect(chunks.map(({ data }) => Buffer.from(data, 'base64').length)).toEqual([6, 6])
   })
 })

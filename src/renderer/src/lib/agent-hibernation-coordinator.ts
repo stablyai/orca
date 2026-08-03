@@ -15,6 +15,7 @@ import {
   getForegroundTerminalTabLastSeenAtById
 } from './foreground-terminal-tabs'
 import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
+import { mergePendingTerminalInputActivity } from './terminal-input-activity-coalescing'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -22,10 +23,8 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../../shared/runtime-types'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
-export const RUNTIME_LIVENESS_READ_CONCURRENCY = 2
 
 type IntervalHandle = ReturnType<typeof setInterval>
 
@@ -74,7 +73,10 @@ function snapshotFromState(
       .map(([ptyId]) => ptyId),
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
-    lastTerminalInputAtByPaneKey: state.lastTerminalInputAtByPaneKey,
+    // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.
+    lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
+      state.lastTerminalInputAtByPaneKey
+    ),
     foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(),
     now
   }
@@ -105,10 +107,8 @@ async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLiv
   const targets = getRuntimeLivenessTargetWorktrees(state)
   const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
   const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
-  await mapWithConcurrency(
-    [...targets],
-    RUNTIME_LIVENESS_READ_CONCURRENCY,
-    async ([worktreeId, runtimeEnvironmentId]) => {
+  await Promise.all(
+    [...targets].map(async ([worktreeId, runtimeEnvironmentId]) => {
       try {
         const result = await callRuntimeRpc<RuntimeTerminalListResult>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },
@@ -138,7 +138,7 @@ async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLiv
         // Why: stale runtime liveness is unsafe for all-or-nothing hibernation;
         // omitting the worktree makes the planner fail closed for this pass.
       }
-    }
+    })
   )
   return { runtimeLivePtyIdsByWorktreeId, runtimeLivenessRequiredWorktreeIds }
 }
@@ -234,10 +234,6 @@ export function stopAgentHibernationCoordinator(): void {
     coordinator.interval = null
   }
   coordinator.confirmationState = {}
-}
-
-export function isAgentHibernationCoordinatorRunning(): boolean {
-  return coordinator.interval !== null
 }
 
 export function resetAgentHibernationCoordinatorForTests(): void {

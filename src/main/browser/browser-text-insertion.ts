@@ -1,4 +1,5 @@
 import { measureClipboardTextByteLength } from '../../shared/clipboard-text'
+import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import type { CdpCommandSender } from './snapshot-engine'
 
 export const BROWSER_TEXT_INSERT_CHUNK_BYTES = 64 * 1024
@@ -71,7 +72,7 @@ export async function insertTextThroughCdp(
     // process responsive between bounded CDP payloads.
     chunk = chunks.next()
     if (options?.yieldBetweenChunks !== false && !chunk.done) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      await yieldToEventLoop()
     }
   }
 }

@@ -136,13 +136,14 @@ export function TerminalSshReconnectOverlay({
     }
   }, [isConnecting, mountedRef, setSshConnectionState, sshOwnerEnvironmentId, targetId])
 
+  // Why: z-40 clears pane-local chrome (focus rim z-30); bg-card is fully opaque so terminal text cannot paint through.
   return (
     <div
-      className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex justify-center"
+      className="pointer-events-none absolute inset-x-3 bottom-3 z-40 flex justify-center"
       data-terminal-ssh-reconnect-banner={status}
     >
       <div
-        className="pointer-events-auto flex w-full max-w-xl items-center gap-3 rounded-md border border-border bg-card/95 px-3 py-3 text-card-foreground shadow-xs backdrop-blur-[1px]"
+        className="pointer-events-auto flex w-full max-w-xl items-center gap-3 rounded-md border border-border bg-card px-3 py-3 text-card-foreground shadow-xs"
         role="status"
         aria-live="polite"
       >

@@ -22,6 +22,8 @@ const terminalHarness = vi.hoisted(() => ({
     reset: ReturnType<typeof vi.fn>
     paste: ReturnType<typeof vi.fn>
     input: ReturnType<typeof vi.fn>
+    scrollToTop: ReturnType<typeof vi.fn>
+    scrollToBottom: ReturnType<typeof vi.fn>
     modes: { bracketedPasteMode: boolean }
     selectionText: string
     customKeyHandler: ((event: KeyboardEvent) => boolean) | null
@@ -31,6 +33,10 @@ const terminalHarness = vi.hoisted(() => ({
 }))
 
 const platformState = vi.hoisted(() => ({ value: 'linux' }))
+const storeState = vi.hoisted(() => ({
+  settings: null,
+  keybindings: {} as Record<string, string[]>
+}))
 
 const imeHarness = vi.hoisted(() => ({
   forwarders: [] as {
@@ -72,6 +78,11 @@ vi.mock('@xterm/xterm', () => ({
       this.onDataListener?.(data)
     })
     element = document.createElement('div')
+    unicode = { activeVersion: '6', versions: ['6', '11'], register: vi.fn() }
+    loadAddon = vi.fn()
+    attachCustomWheelEventHandler = vi.fn()
+    scrollToTop = vi.fn()
+    scrollToBottom = vi.fn()
     getSelection = vi.fn(() => this.selectionText)
     attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
       this.customKeyHandler = handler
@@ -86,7 +97,8 @@ vi.mock('@xterm/xterm', () => ({
     }
   }
 }))
-vi.mock('@/lib/pane-manager/pane-terminal-options', () => ({
+vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOriginal) => ({
+  ...(await importOriginal()),
   buildDefaultTerminalOptions: () => ({})
 }))
 vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
@@ -126,9 +138,8 @@ vi.mock('@/components/terminal-pane/terminal-ime-input-source', () => ({
   }
 }))
 vi.mock('@/store', () => {
-  const state = { settings: null, keybindings: {} }
-  const useAppStore = (selector: (s: typeof state) => unknown): unknown => selector(state)
-  useAppStore.getState = (): typeof state => state
+  const useAppStore = (selector: (s: typeof storeState) => unknown): unknown => selector(storeState)
+  useAppStore.getState = (): typeof storeState => storeState
   return { useAppStore }
 })
 
@@ -142,6 +153,7 @@ describe('AgentTerminalPreview', () => {
   const connect = vi.fn()
   const readClipboardText = vi.fn(async () => 'clip-text')
   const writeClipboardText = vi.fn(async () => {})
+  const writeTerminalClipboardText = vi.fn(async () => {})
   let emitData: ((payload: unknown) => void) | null
   let emitAppMenuPaste: (() => void) | null
 
@@ -149,6 +161,7 @@ describe('AgentTerminalPreview', () => {
     terminalHarness.instances.length = 0
     terminalHarness.userInputListener = null
     platformState.value = 'linux'
+    storeState.keybindings = {}
     imeHarness.forwarders.length = 0
     imeHarness.trackers.length = 0
     imeHarness.claimResult = false
@@ -176,6 +189,7 @@ describe('AgentTerminalPreview', () => {
         ui: {
           readClipboardText,
           writeClipboardText,
+          writeTerminalClipboardText,
           onAppMenuPaste: (listener: () => void) => {
             emitAppMenuPaste = listener
             return vi.fn()
@@ -236,6 +250,7 @@ describe('AgentTerminalPreview', () => {
     )
     expect(handled).toBe(false)
     expect(writeClipboardText).not.toHaveBeenCalled()
+    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
 
     // Unclaimed events still reach the chord handling.
     imeHarness.claimResult = false
@@ -243,7 +258,8 @@ describe('AgentTerminalPreview', () => {
       new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', metaKey: true, shiftKey: true })
     )
     expect(copied).toBe(false)
-    expect(writeClipboardText).toHaveBeenCalledWith('selected text')
+    expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
+    expect(writeClipboardText).not.toHaveBeenCalled()
     expect(imeHarness.inputSourceTrackerRequests).toBe(1)
   })
 
@@ -304,7 +320,8 @@ describe('AgentTerminalPreview', () => {
     expect(handled).toBe(false)
     expect(keyupHandled).toBe(false)
     expect(keydown.defaultPrevented).toBe(true)
-    expect(writeClipboardText).toHaveBeenCalledWith('selected text')
+    expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
+    expect(writeClipboardText).not.toHaveBeenCalled()
   })
 
   it('keeps an empty copy chord from leaking terminal input', async () => {
@@ -317,7 +334,7 @@ describe('AgentTerminalPreview', () => {
       new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true })
     )
     expect(handled).toBe(false)
-    expect(writeClipboardText).not.toHaveBeenCalled()
+    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
   })
 
   it('pastes clipboard text on the app-menu paste signal while the preview owns focus', async () => {
@@ -344,6 +361,175 @@ describe('AgentTerminalPreview', () => {
     await act(async () => emitAppMenuPaste!())
     expect(readClipboardText).not.toHaveBeenCalled()
     expect(terminalHarness.instances[0]!.paste).not.toHaveBeenCalled()
+  })
+
+  it('sends the word-kill byte on Ctrl+Backspace and blocks xterm handling', async () => {
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'Backspace',
+      code: 'Backspace',
+      ctrlKey: true,
+      cancelable: true
+    })
+    const handled = terminal.customKeyHandler!(keydown)
+
+    expect(handled).toBe(false)
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(terminal.input).toHaveBeenCalledWith('\x17')
+    await waitFor(() => expect(input).toHaveBeenCalledWith('pty-1', '\x17'))
+  })
+
+  it('swallows a pane-scoped chord instead of leaking its control byte to the agent', async () => {
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    // Ctrl+Shift+D splits a pane on Linux; xterm would otherwise send Ctrl+D.
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'D',
+      code: 'KeyD',
+      ctrlKey: true,
+      shiftKey: true,
+      cancelable: true
+    })
+    const handled = terminal.customKeyHandler!(keydown)
+
+    expect(handled).toBe(false)
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(terminal.input).not.toHaveBeenCalled()
+    expect(input).not.toHaveBeenCalled()
+  })
+
+  it('keeps a native input-source chord from inserting text into the preview', async () => {
+    storeState.keybindings = { 'terminal.switchInputSource': ['Shift+Space'] }
+    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    expect(terminal.customKeyHandler!(keydown)).toBe(false)
+    expect(keydown.defaultPrevented).toBe(false)
+
+    const keypress = new KeyboardEvent('keypress', {
+      key: ' ',
+      bubbles: true,
+      cancelable: true
+    })
+    window.dispatchEvent(keypress)
+    expect(keypress.defaultPrevented).toBe(true)
+
+    const beforeInput = new InputEvent('beforeinput', {
+      data: ' ',
+      inputType: 'insertText',
+      bubbles: true,
+      cancelable: true
+    })
+    window.dispatchEvent(beforeInput)
+    expect(beforeInput.defaultPrevented).toBe(true)
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true }))
+    const unarmedBeforeInput = new InputEvent('beforeinput', {
+      data: ' ',
+      inputType: 'insertText',
+      bubbles: true,
+      cancelable: true
+    })
+    window.dispatchEvent(unarmedBeforeInput)
+    expect(unarmedBeforeInput.defaultPrevented).toBe(false)
+    expect(terminal.input).not.toHaveBeenCalled()
+    expect(input).not.toHaveBeenCalled()
+
+    view.unmount()
+  })
+
+  it('defers Option chords to xterm once the TUI negotiates kitty keyboard mode', async () => {
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const altBackspace = (): KeyboardEvent =>
+      new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', altKey: true })
+    expect(terminal.customKeyHandler!(altBackspace())).toBe(false)
+    expect(terminal.input).toHaveBeenCalledWith('\x1b\x7f')
+
+    // The agent's TUI pushes kitty flags (CSI > 1 u) on the live stream.
+    act(() => {
+      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[>1u', bytes: 5 })
+    })
+    terminal.input.mockClear()
+
+    expect(terminal.customKeyHandler!(altBackspace())).toBe(true)
+    expect(terminal.input).not.toHaveBeenCalled()
+  })
+
+  // Why: a snapshot carries the TUI's one-time kitty push and the post-snapshot
+  // replay redelivers it. Applying replays with stack semantics would leave the
+  // TUI's single pop on a stale frame, so a plain shell keeps getting
+  // kitty-encoded Option chords.
+  it('does not let a redelivered kitty push outlive the TUI pop', async () => {
+    connect.mockResolvedValueOnce({
+      snapshot: { data: '\x1b[>1u', cols: 80, rows: 24, seq: 1 },
+      replay: ['\x1b[>1u']
+    })
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const altBackspace = (): KeyboardEvent =>
+      new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', altKey: true })
+    expect(terminal.customKeyHandler!(altBackspace())).toBe(true)
+
+    // The TUI exits and pops once on the live stream.
+    act(() => {
+      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[<u', bytes: 4 })
+    })
+
+    expect(terminal.customKeyHandler!(altBackspace())).toBe(false)
+    expect(terminal.input).toHaveBeenCalledWith('\x1b\x7f')
+  })
+
+  it('scrolls the viewport on the macOS scrollback chord', async () => {
+    platformState.value = 'darwin'
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const handled = terminal.customKeyHandler!(
+      new KeyboardEvent('keydown', { key: 'ArrowUp', code: 'ArrowUp', metaKey: true })
+    )
+
+    expect(handled).toBe(false)
+    expect(terminal.scrollToTop).toHaveBeenCalled()
+    expect(terminal.input).not.toHaveBeenCalled()
+  })
+
+  it('leaves an unmodified Backspace to xterm', async () => {
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const handled = terminal.customKeyHandler!(
+      new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', cancelable: true })
+    )
+
+    expect(handled).toBe(true)
+    expect(terminal.input).not.toHaveBeenCalled()
   })
 
   it('leaves plain Ctrl+V to the Edit-menu accelerator but handles the shifted paste chord', async () => {

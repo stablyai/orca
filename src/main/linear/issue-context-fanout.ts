@@ -1,6 +1,5 @@
 import type { LinearErrorCode, LinearWorkspaceCandidate } from '../../shared/linear-agent-access'
 import type { LinearWorkspace } from '../../shared/types'
-import { boundedIntegrationErrorLog } from '../integration-error-message'
 import { getClients, getStatus, type LinearClientForWorkspace } from './client'
 import {
   LinearAgentAccessError,
@@ -36,10 +35,7 @@ export function getFanoutClientEntries(): {
     } catch (error) {
       const failure = workspaceFailure(workspace, toLinearAccessError(error))
       failures.push(failure)
-      console.warn(
-        '[linear] agent workspace credential read failed:',
-        boundedIntegrationErrorLog(error)
-      )
+      console.warn('[linear] agent workspace credential read failed:', error)
     }
   }
   return { entries, failures }

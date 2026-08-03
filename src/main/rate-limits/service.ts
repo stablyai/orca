@@ -1,11 +1,11 @@
 /* eslint-disable max-lines -- Why: centralizes polling, stale-data handling, account-switch fetch semantics, and renderer push coordination in one place */
 import type { BrowserWindow } from 'electron'
-import { randomUUID } from 'node:crypto'
 import type {
   CodexRateLimitResetResult,
   RateLimitState,
   ProviderRateLimits,
-  InactiveAccountUsage
+  InactiveAccountUsage,
+  RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
@@ -90,17 +90,11 @@ const RATE_LIMITED_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
 // Why: statusline posts arrive on every turn; skip renderer pushes for identical windows so streaming sessions don't spam state updates.
 const LIVE_CLAUDE_INGEST_DEDUPE_MS = 30 * 1000
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
+// Why: each inactive Codex probe spawns a real codex process inside that
+// account's live credential home; pace them out instead of bursting every
+// account the moment the switcher opens.
+const INACTIVE_CODEX_PROBE_STAGGER_MS = 2_000
 const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
-export const MAX_ACTIVE_RATE_LIMIT_FETCH_CYCLES = 8
-export const MAX_INACTIVE_RATE_LIMIT_ACCOUNTS = 256
-export const MAX_RATE_LIMIT_ACCOUNT_ID_BYTES = 1024
-
-export class RateLimitFetchCycleCapacityError extends Error {
-  constructor() {
-    super(`Active rate-limit fetch cycles exceed ${MAX_ACTIVE_RATE_LIMIT_FETCH_CYCLES}`)
-    this.name = 'RateLimitFetchCycleCapacityError'
-  }
-}
 
 // Why: inactive account arrays are derived from provider caches on demand in getState()/pushToRenderer().
 type InternalRateLimitState = {
@@ -121,36 +115,6 @@ function normalizePollingInterval(ms: number): number {
   return Math.min(MAX_POLL_MS, Math.max(MIN_POLL_MS, ms))
 }
 
-function boundedInactiveAccounts<T extends { id: string }>(accounts: T[]): T[] {
-  const bounded: T[] = []
-  const inspectedCount = Math.min(accounts.length, MAX_INACTIVE_RATE_LIMIT_ACCOUNTS)
-  for (let index = 0; index < inspectedCount; index += 1) {
-    const account = accounts[index]
-    if (account && Buffer.byteLength(account.id, 'utf8') <= MAX_RATE_LIMIT_ACCOUNT_ID_BYTES) {
-      bounded.push(account)
-    }
-  }
-  return bounded
-}
-
-function hasBoundedInactiveAccount<T extends { id: string }>(
-  accounts: T[],
-  accountId: string
-): boolean {
-  const inspectedCount = Math.min(accounts.length, MAX_INACTIVE_RATE_LIMIT_ACCOUNTS)
-  for (let index = 0; index < inspectedCount; index += 1) {
-    const account = accounts[index]
-    if (
-      account &&
-      Buffer.byteLength(account.id, 'utf8') <= MAX_RATE_LIMIT_ACCOUNT_ID_BYTES &&
-      account.id === accountId
-    ) {
-      return true
-    }
-  }
-  return false
-}
-
 function isSystemDefaultClaudeAuth(
   authPreparation: ClaudeRuntimeAuthPreparation | undefined
 ): boolean {
@@ -167,9 +131,26 @@ function toErrorMessage(error: unknown): string {
 }
 
 function normalizeClaudeConfigDir(dir: string | null | undefined): string | null {
-  // Why: the same dir can arrive with mixed separators (Windows env vs statusline JSON); unify them so attribution compares paths, not spellings. Case is left alone — Linux paths are case-sensitive.
+  // Why: normalize mixed Windows separators for path attribution; preserve Linux case sensitivity.
   const trimmed = dir?.trim().replace(/\\/g, '/').replace(/\/+$/, '')
   return trimmed || null
+}
+
+function delayUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function isSameUsageWindow(
@@ -227,8 +208,7 @@ export class RateLimitService {
   private claudeOnlyFetchQueued = false
   private grokOnlyFetchQueued = false
   private activeFetchAbortControllers = new Set<AbortController>()
-  private fetchIdlePromise: Promise<void> | null = null
-  private resolveFetchIdlePromise: (() => void) | null = null
+  private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
   // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
@@ -419,9 +399,11 @@ export class RateLimitService {
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
+    // Why: weekly-only plans report no session window, so gating on session alone
+    // dropped their snapshot and left the switcher's inline bars empty.
     if (
       outgoingAccountId &&
-      this.state.codex?.session &&
+      (this.state.codex?.session || this.state.codex?.weekly) &&
       this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     ) {
       this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)
@@ -432,7 +414,10 @@ export class RateLimitService {
     this.activeFailureStreakByProvider.codex = 0
     this.inactiveCodexAccountsGeneration += 1
     this.pruneInactiveCodexState()
-    this.lastInactiveCodexFetchAt = 0
+    // Why: the switch must NOT reset the inactive-fetch debounce — re-probing
+    // every inactive account per switch spawns codex in each credential home
+    // and endangers rotating refresh tokens; the switcher shows the cached
+    // snapshot (seeded above for the outgoing account) until the debounce ends.
     // Why: clear the old Codex view immediately, else the previous account's limits show under the newly selected identity until the next poll.
     this.updateState({
       ...this.state,
@@ -456,25 +441,38 @@ export class RateLimitService {
     return this.getState()
   }
 
-  async consumeCodexRateLimitResetCredit(): Promise<CodexRateLimitResetResult> {
-    const codexTarget = this.codexFetchTarget
-    const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
+  async consumeCodexRateLimitResetCredit(options: {
+    idempotencyKey: string
+    target: RateLimitRuntimeTarget
+    codexHomePath: string | null
+  }): Promise<CodexRateLimitResetResult> {
+    const codexTarget = normalizeCodexAccountSelectionTarget(options.target)
+    const codexHomePath = options.codexHomePath
+    const scopedStateBeforeReset = this.getState()
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
     if (missingWslCodexHome) {
-      await this.fetchCodexOnly({ force: true })
+      if (this.isSameCodexTarget(this.codexFetchTarget, codexTarget)) {
+        await this.fetchCodexOnly({ force: true })
+      }
       throw new Error(missingWslCodexHome.error ?? 'Codex home unavailable')
     }
     try {
       const outcome = await consumeCodexRateLimitResetCredit({
         codexHomePath,
-        idempotencyKey: randomUUID()
+        idempotencyKey: options.idempotencyKey
       })
-      await this.fetchCodexOnly({ force: true })
-      return { outcome, state: this.getState() }
+      const state = await this.fetchCodexResetResultState(
+        codexTarget,
+        codexHomePath,
+        scopedStateBeforeReset
+      )
+      return { outcome, state }
     } catch (error) {
-      await this.fetchCodexOnly({ force: true })
+      if (this.isSameCodexTarget(this.codexFetchTarget, codexTarget)) {
+        await this.fetchCodexOnly({ force: true })
+      }
       throw error
     }
   }
@@ -527,6 +525,17 @@ export class RateLimitService {
     return this.getState()
   }
 
+  async refreshAfterClaudeLivePtysDrained(): Promise<void> {
+    // Why: "Waiting for Claude session" can only recover once no live claude
+    // owns the credentials. Refetch on the last PTY exit instead of leaving
+    // the stale terminal error up until the failure backoff elapses.
+    if (!this.state.claude?.usageMetadata?.deferredByLiveClaudeSession) {
+      return
+    }
+    this.activeFailureStreakByProvider.claude = 0
+    await this.fetchClaudeOnly({ force: true })
+  }
+
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
     if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
@@ -535,7 +544,7 @@ export class RateLimitService {
     if (this.inactiveClaudeFetching.size > 0) {
       return
     }
-    const accounts = boundedInactiveAccounts(this.inactiveClaudeAccountsResolver?.() ?? [])
+    const accounts = this.inactiveClaudeAccountsResolver?.() ?? []
     if (accounts.length === 0) {
       return
     }
@@ -612,7 +621,7 @@ export class RateLimitService {
     if (this.inactiveCodexFetching.size > 0) {
       return
     }
-    const accounts = boundedInactiveAccounts(this.inactiveCodexAccountsResolver?.() ?? [])
+    const accounts = this.inactiveCodexAccountsResolver?.() ?? []
     if (accounts.length === 0) {
       return
     }
@@ -626,6 +635,7 @@ export class RateLimitService {
     }
     this.pushToRenderer()
 
+    let staggerNextProbe = false
     try {
       for (const account of accounts) {
         if (
@@ -640,6 +650,23 @@ export class RateLimitService {
           this.pushToRenderer()
           continue
         }
+        if (staggerNextProbe) {
+          await delayUnlessAborted(INACTIVE_CODEX_PROBE_STAGGER_MS, signal)
+          // Why: the account set can change while the stagger delay runs.
+          if (
+            signal.aborted ||
+            fetchGeneration !== this.inactiveCodexAccountsGeneration ||
+            !this.isCurrentInactiveCodexAccount(account.id)
+          ) {
+            this.inactiveCodexFetching.delete(account.id)
+            if (!this.isCurrentInactiveCodexAccount(account.id)) {
+              this.inactiveCodexCache.delete(account.id)
+            }
+            this.pushToRenderer()
+            continue
+          }
+        }
+        staggerNextProbe = true
         try {
           // Why: point fetchCodexRateLimits at the managed home directly, avoiding materializing credentials into the shared runtime location.
           // Why: no PTY fallback — the switcher preview shouldn't spawn hidden PTYs per account (can crash ConPTY on Windows); RPC-only is enough.
@@ -692,18 +719,20 @@ export class RateLimitService {
   }
 
   private isCurrentInactiveClaudeAccount(accountId: string): boolean {
-    return hasBoundedInactiveAccount(this.inactiveClaudeAccountsResolver?.() ?? [], accountId)
+    return (this.inactiveClaudeAccountsResolver?.() ?? []).some(
+      (account) => account.id === accountId
+    )
   }
 
   private isCurrentInactiveCodexAccount(accountId: string): boolean {
-    return hasBoundedInactiveAccount(this.inactiveCodexAccountsResolver?.() ?? [], accountId)
+    return (this.inactiveCodexAccountsResolver?.() ?? []).some(
+      (account) => account.id === accountId
+    )
   }
 
   private pruneInactiveClaudeState(): void {
     const currentIds = new Set(
-      boundedInactiveAccounts(this.inactiveClaudeAccountsResolver?.() ?? []).map(
-        (account) => account.id
-      )
+      (this.inactiveClaudeAccountsResolver?.() ?? []).map((account) => account.id)
     )
     for (const accountId of this.inactiveClaudeCache.keys()) {
       if (!currentIds.has(accountId)) {
@@ -719,9 +748,7 @@ export class RateLimitService {
 
   private pruneInactiveCodexState(): void {
     const currentIds = new Set(
-      boundedInactiveAccounts(this.inactiveCodexAccountsResolver?.() ?? []).map(
-        (account) => account.id
-      )
+      (this.inactiveCodexAccountsResolver?.() ?? []).map((account) => account.id)
     )
     for (const accountId of this.inactiveCodexCache.keys()) {
       if (!currentIds.has(accountId)) {
@@ -1163,10 +1190,9 @@ export class RateLimitService {
       return Promise.resolve()
     }
     // Why: explicit-refresh callers must await the queued follow-up cycle when a poll is in flight, else the UI stops spinning early.
-    this.fetchIdlePromise ??= new Promise((resolve) => {
-      this.resolveFetchIdlePromise = resolve
+    return new Promise((resolve) => {
+      this.fetchIdleResolvers.push(resolve)
     })
-    return this.fetchIdlePromise
   }
 
   private resolveFetchIdleWaiters(): void {
@@ -1179,16 +1205,14 @@ export class RateLimitService {
     ) {
       return
     }
-    const resolve = this.resolveFetchIdlePromise
-    this.fetchIdlePromise = null
-    this.resolveFetchIdlePromise = null
-    resolve?.()
+    const resolvers = this.fetchIdleResolvers
+    this.fetchIdleResolvers = []
+    for (const resolve of resolvers) {
+      resolve()
+    }
   }
 
   private beginFetchCycle(): AbortController {
-    if (this.activeFetchAbortControllers.size >= MAX_ACTIVE_RATE_LIMIT_FETCH_CYCLES) {
-      throw new RateLimitFetchCycleCapacityError()
-    }
     const controller = new AbortController()
     this.activeFetchAbortControllers.add(controller)
     return controller
@@ -1225,10 +1249,11 @@ export class RateLimitService {
   }
 
   private resolveAndClearFetchIdleWaiters(): void {
-    const resolve = this.resolveFetchIdlePromise
-    this.fetchIdlePromise = null
-    this.resolveFetchIdlePromise = null
-    resolve?.()
+    const resolvers = this.fetchIdleResolvers
+    this.fetchIdleResolvers = []
+    for (const resolve of resolvers) {
+      resolve()
+    }
   }
 
   private isSameCodexTarget(
@@ -1267,6 +1292,54 @@ export class RateLimitService {
       error: `WSL Codex home unavailable for ${target.wslDistro ?? 'default distro'}`,
       status: 'error'
     }
+  }
+
+  private async fetchCodexResetResultState(
+    target: NormalizedCodexAccountSelectionTarget,
+    codexHomePath: string | null,
+    stateBeforeReset: RateLimitState
+  ): Promise<RateLimitState> {
+    const controller = this.beginFetchCycle()
+    let fresh: ProviderRateLimits
+    try {
+      fresh = await fetchCodexRateLimits({
+        codexHomePath,
+        allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+        signal: controller.signal
+      })
+    } catch (error) {
+      fresh = {
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: toErrorMessage(error),
+        status: 'error'
+      }
+    } finally {
+      this.finishFetchCycle(controller)
+    }
+
+    const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
+    const currentHomePath = this.codexHomePathResolver?.(target) ?? null
+    const stillActive =
+      this.isSameCodexTarget(this.codexFetchTarget, target) &&
+      this.getCodexProvenance(target, currentHomePath) ===
+        this.getCodexProvenance(target, codexHomePath)
+    if (stillActive) {
+      // Why: this post-redemption read is newer than every Codex fetch that
+      // started before it, so invalidate those results before publishing it.
+      this.codexFetchGeneration += 1
+      this.trackActiveFailureStreak('codex', fresh)
+      this.updateState({
+        ...this.state,
+        codex: this.applyStalePolicy(fresh, this.state.codex)
+      })
+    }
+
+    // Why: the caller must receive the redeemed target even if the global UI
+    // switched targets while the provider mutation was in flight.
+    return { ...stateBeforeReset, codex: scopedCodex, codexTarget: target }
   }
 
   private shouldAllowCodexPtyFallback(): boolean {

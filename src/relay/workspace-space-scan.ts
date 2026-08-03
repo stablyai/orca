@@ -168,15 +168,16 @@ async function scanDirectoryWithDu(
   }
 
   const [entries, duSizes] = await Promise.all([
-    opendir(rootPath).then((directory) =>
-      collectWorkspaceSpaceDirectoryEntries(
+    opendir(rootPath).then(async (directory) => {
+      const admission = await collectWorkspaceSpaceDirectoryEntries(
         directory,
         rootPath,
         (entry) => entry.name,
         createWorkspaceSpaceScanBudget(),
         () => throwIfCancelled(context)
       )
-    ),
+      return admission.entries
+    }),
     readDuDepthOne(rootPath, context)
   ])
   throwIfCancelled(context)

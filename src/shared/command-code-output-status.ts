@@ -9,21 +9,14 @@ import {
   cleanCommandCodePromptCandidate,
   isCommandCodeIdlePromptCandidate
 } from './command-code-prompt-text'
+import { stripTerminalControl } from './terminal-control-stripping'
+
+export { stripTerminalControl } from './terminal-control-stripping'
 
 type CommandCodeOutputStatusDetector = {
   observe: (data: string) => boolean
 }
 
-const ESC = String.fromCharCode(0x1b)
-const BEL = String.fromCharCode(0x07)
-const ANSI_ESCAPE_RE = new RegExp(
-  `${ESC}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~]|\\][^${BEL}]*(?:${BEL}|${ESC}\\\\))`,
-  'g'
-)
-const INCOMPLETE_ANSI_ESCAPE_RE = new RegExp(
-  `${ESC}(?:\\[[0-?]*[ -/]*|\\][^${BEL}${ESC}]*|\\S?)?$`,
-  'g'
-)
 const RECENT_TEXT_LIMIT = 300
 const STATUS_SCAN_TEXT_LIMIT = 4096
 const COMMAND_CODE_STATUS_GLYPH_RE_SOURCE = '[·○◇☆✧⌘✻⎿]'
@@ -120,37 +113,6 @@ const ACTIVE_EXECUTION_STATUS_RE = new RegExp(
 )
 const IDLE_PROMPT_RE = /(?:^|[\r\n])\s*[❯>]\s+Ask your question\.\.\./
 const COMMAND_CODE_BANNER_RE = /\bCommand Code\b/
-
-function stripTerminalControl(data: string): string {
-  if (!terminalControlMayAffectText(data)) {
-    return data
-  }
-  const withoutAnsi = data.replace(ANSI_ESCAPE_RE, '').replace(INCOMPLETE_ANSI_ESCAPE_RE, '')
-  let output = ''
-  for (let index = 0; index < withoutAnsi.length; index += 1) {
-    const code = withoutAnsi.charCodeAt(index)
-    if ((code <= 0x1f && code !== 0x0a && code !== 0x0d) || (code >= 0x7f && code <= 0x9f)) {
-      continue
-    }
-    output += withoutAnsi[index]
-  }
-  return output
-}
-
-function terminalControlMayAffectText(data: string): boolean {
-  for (let index = 0; index < data.length; index += 1) {
-    const code = data.charCodeAt(index)
-    if (
-      code === 0x0d ||
-      code === 0x1b ||
-      (code <= 0x1f && code !== 0x0a) ||
-      (code >= 0x7f && code <= 0x9f)
-    ) {
-      return true
-    }
-  }
-  return false
-}
 
 function cleanPromptCandidate(value: string): string {
   return cleanCommandCodePromptCandidate(stripTerminalControl(value))
@@ -249,11 +211,16 @@ function isIdlePromptText(context: StatusScanContext): boolean {
 
 export function createCommandCodeOutputStatusDetector(args: {
   startupCommand?: string | null
+  /** Continuity seed for a detector created long after launch (parked watchers):
+   *  the banner is off-screen by then, so a turn known to be in flight both arms
+   *  the scrape and carries its prompt into the idle-composer done check. */
+  inFlightTurn?: { prompt: string } | null
   onWorking: (prompt: string) => void
   onDone?: (prompt: string) => void
 }): CommandCodeOutputStatusDetector {
-  let hasSeenCommandCodeUi = isCommandCodeLaunchCommand(args.startupCommand)
-  let lastSubmittedPrompt = ''
+  let hasSeenCommandCodeUi =
+    isCommandCodeLaunchCommand(args.startupCommand) || Boolean(args.inFlightTurn)
+  let lastSubmittedPrompt = args.inFlightTurn?.prompt ?? ''
   let recentRawText = ''
 
   return {

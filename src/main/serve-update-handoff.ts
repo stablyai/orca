@@ -1,13 +1,10 @@
-import { mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { app } from 'electron'
-import { readNodeFileSyncWithinLimit } from '../shared/node-bounded-file-reader'
-import { stringifyJsonWithinByteLimit } from '../shared/node-bounded-json-stringify'
 import {
-  MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES,
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath,
-  parseServeUpdateHandoffJson,
+  parseServeUpdateHandoffState,
   type ServeSupervisorMessage,
   type ServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
@@ -46,11 +43,7 @@ export function failServeUpdateHandoff(reason: string): void {
     return
   }
   try {
-    const state = parseServeUpdateHandoffJson(
-      readNodeFileSyncWithinLimit(handoffPath, MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES).buffer.toString(
-        'utf8'
-      )
-    )
+    const state = parseServeUpdateHandoffState(JSON.parse(readFileSync(handoffPath, 'utf8')))
     if (state?.phase !== 'install-requested' || state.servingPid !== process.pid) {
       return
     }
@@ -97,11 +90,7 @@ export function getServeUpdateHandoffFailure(): string | null {
     return null
   }
   try {
-    const state = parseServeUpdateHandoffJson(
-      readNodeFileSyncWithinLimit(handoffPath, MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES).buffer.toString(
-        'utf8'
-      )
-    )
+    const state = parseServeUpdateHandoffState(JSON.parse(readFileSync(handoffPath, 'utf8')))
     if (state?.phase !== 'failed') {
       return null
     }
@@ -118,17 +107,11 @@ export function getServeUpdateHandoffFailure(): string | null {
 function writeHandoffState(path: string, state: ServeUpdateHandoffState): boolean {
   const temporaryPath = `${path}.${process.pid}.tmp`
   try {
-    const { serialized } = stringifyJsonWithinByteLimit(state, MAX_SERVE_UPDATE_HANDOFF_FILE_BYTES)
     mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(temporaryPath, serialized, { mode: 0o600 })
+    writeFileSync(temporaryPath, JSON.stringify(state), { mode: 0o600 })
     renameSync(temporaryPath, path)
     return true
   } catch {
-    try {
-      unlinkSync(temporaryPath)
-    } catch {
-      // The temporary handoff is best-effort state and may not have been created.
-    }
     return false
   }
 }

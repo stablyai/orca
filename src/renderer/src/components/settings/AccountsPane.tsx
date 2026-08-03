@@ -52,10 +52,15 @@ import {
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { getRemoteAccountsPaneScope } from './provider-account-scope'
+import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
-import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
+import {
+  markLiveCodexSessionsForRestart,
+  resolveCodexRestartPromptAccountLabel
+} from '@/lib/codex-session-restart'
 import {
   Dialog,
   DialogContent,
@@ -65,6 +70,8 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
+import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
+import type { CodexConfigSyncStatus } from '../../../../shared/codex-config-sync-types'
 import {
   getProviderAccountActiveIdForView,
   getProviderAccountRuntime,
@@ -75,6 +82,7 @@ import {
 } from './provider-account-visibility'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   emptyClaudeAccountsState,
   emptyCodexAccountsState,
@@ -166,16 +174,6 @@ function getHostRuntimeLabel(): string {
   return navigator.userAgent.includes('Windows')
     ? 'Windows'
     : translate('auto.components.settings.AccountsPane.9baf45d071', 'This device')
-}
-
-function getCodexAccountLabel(
-  state: CodexRateLimitAccountsState,
-  accountId: string | null | undefined
-): string {
-  if (accountId == null) {
-    return 'System default'
-  }
-  return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
 }
 
 // Why: the system-default row has no stored identity, so surface the real
@@ -348,9 +346,14 @@ export function AccountsPane({
   // (see #7973); every list/select/remove below must scope to it, not host/WSL.
   const isRemoteAccountScope = hasRemoteProviderAccountOwner(settings)
   const activeRuntimeEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
-  const remoteServerLabel = isRemoteAccountScope
+  // Why: keep the real name separate from the prose fallback below; the scope
+  // label must not interpolate the fallback.
+  const remoteServerName = isRemoteAccountScope
     ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
-        ?.name ??
+        ?.name ?? null)
+    : null
+  const remoteServerLabel = isRemoteAccountScope
+    ? (remoteServerName ??
       translate('auto.components.settings.AccountsPane.remoteServerFallback', 'the remote server'))
     : null
   const accountRuntime: LocalAccountRuntime = isRemoteAccountScope
@@ -367,6 +370,21 @@ export function AccountsPane({
     localAccountRuntime.runtime === 'host' && !navigator.userAgent.includes('Windows')
       ? `${localAccountRuntime.label.charAt(0).toLocaleLowerCase()}${localAccountRuntime.label.slice(1)}`
       : localAccountRuntime.label
+  // Why: users read the remote-scoped list as their desktop accounts being
+  // deleted (#8186); say they are intact and link the default-runtime control.
+  // The web client has no desktop-owned accounts and cannot select Local
+  // desktop, so promising a switch back would be a dead end there.
+  const remoteAccountScopeNotice =
+    isRemoteAccountScope && !isWebClientLocation() ? (
+      <ProviderHostScopeControl
+        labelPrefix={translate(
+          'auto.components.settings.AccountsPane.accountScopePrefix',
+          'Account scope'
+        )}
+        scope={getRemoteAccountsPaneScope(remoteServerName)}
+        className="text-xs"
+      />
+    ) : null
 
   const [codexAccounts, setCodexAccounts] =
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
@@ -430,6 +448,38 @@ export function AccountsPane({
         authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
       })
     : null
+  // Why: the mirror keeps serving the last synced settings when ~/.codex is
+  // unusable, so without this the user only sees their edits being ignored.
+  const [codexConfigSync, setCodexConfigSync] = useState<CodexConfigSyncStatus | null>(null)
+  useEffect(() => {
+    // Why: the status resolves the host's own ~/.codex and shared runtime home.
+    // A WSL or remote scope mirrors different homes entirely, so showing it there
+    // would name a config file that has nothing to do with the selected runtime.
+    if (isRemoteAccountScope || accountRuntime.runtime !== 'host') {
+      setCodexConfigSync(null)
+      return
+    }
+    let cancelled = false
+    void window.api.codexConfigSync
+      .status()
+      .then((status) => {
+        if (!cancelled) {
+          setCodexConfigSync(status)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCodexConfigSync(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+    // Why: the status resolves whichever home the ACTIVE selection mirrors into
+    // (per-account, shared, or none for the real-home lane), so switching
+    // accounts must refetch or the banner describes the previous account.
+  }, [isRemoteAccountScope, accountRuntime.runtime, activeCodexAccountId, codexAccountsLoaded])
+  const codexConfigSyncWarning = getCodexConfigSyncWarning(codexConfigSync)
   const systemCodexMissingSignIn = activeCodexAuthWarning === 'missing-sign-in'
   const systemCodexNeedsSignIn = activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
   const accountRuntimeUnavailable =
@@ -688,9 +738,39 @@ export function AccountsPane({
           action === `reauth:${nextActiveAccountId}`) ||
         (action.startsWith('remove:') && previousActiveAccountId !== nextActiveAccountId)
       if (shouldPromptRestart) {
+        // Why: `add` creates the managed home against the machine's own distro,
+        // so the slot it wrote is the created account's — not this row's, which
+        // may still say "WSL default". Found by diffing the roster rather than
+        // by the row's active id, which resolves to null once two distro slots
+        // are filled and would send the notice to the wrong lane.
+        const newAccounts =
+          action === 'adding'
+            ? next.accounts.filter(
+                (account) => !codexAccounts.accounts.some((prior) => prior.id === account.id)
+              )
+            : []
+        // Why exactly one: an unloaded prior roster makes every account look new,
+        // and picking one of those would aim the notice at an unrelated lane.
+        // Falling back to the row is the pre-existing behaviour, not a new risk.
+        const addedAccount = newAccounts.length === 1 ? newAccounts[0] : undefined
         void markLiveCodexSessionsForRestart({
-          previousAccountLabel: getCodexAccountLabel(codexAccounts, previousActiveAccountId),
-          nextAccountLabel: getCodexAccountLabel(next, nextActiveAccountId)
+          previousAccountLabel: resolveCodexRestartPromptAccountLabel(
+            codexAccounts.accounts,
+            previousActiveAccountId
+          ),
+          nextAccountLabel: resolveCodexRestartPromptAccountLabel(
+            next.accounts,
+            nextActiveAccountId
+          ),
+          // Why: two accounts can share an email, so the labels alone cannot
+          // tell the store whether this switch lands back on the launch account.
+          previousAccountId: previousActiveAccountId ?? null,
+          nextAccountId: nextActiveAccountId ?? null,
+          // Why: the mutation wrote this row's slot only, so panes on any other
+          // lane still launch under the account they already had.
+          target: addedAccount ? getProviderAccountRuntime(addedAccount) : actionRuntime,
+          // Why: clearing a distro-less WSL row nulls every distro slot at once.
+          clearsEveryWslDistro: action === 'select:system'
         })
       }
     } catch (error) {
@@ -852,6 +932,7 @@ export function AccountsPane({
               ) : null}
             </div>
           </div>
+          {remoteAccountScopeNotice}
 
           <div className="space-y-2">
             <button
@@ -1102,6 +1183,30 @@ export function AccountsPane({
               </span>
             </div>
           ) : null}
+          {codexConfigSyncWarning ? (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                {codexConfigSyncWarning === 'missing-source'
+                  ? translate(
+                      'auto.components.settings.AccountsPane.codexConfigSyncMissingSource',
+                      'Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.',
+                      { value0: codexConfigSync?.systemConfigPath ?? '' }
+                    )
+                  : codexConfigSyncWarning === 'blank-source'
+                    ? translate(
+                        'auto.components.settings.AccountsPane.codexConfigSyncBlankSource',
+                        'Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.',
+                        { value0: codexConfigSync?.systemConfigPath ?? '' }
+                      )
+                    : translate(
+                        'auto.components.settings.AccountsPane.codexConfigSyncUnreadableSource',
+                        "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+                        { value0: codexConfigSync?.systemConfigPath ?? '' }
+                      )}
+              </span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-0.5">
               <Label>
@@ -1150,6 +1255,7 @@ export function AccountsPane({
               {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
             </Button>
           </div>
+          {remoteAccountScopeNotice}
 
           <div className="space-y-2">
             <button

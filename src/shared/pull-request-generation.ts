@@ -16,6 +16,8 @@ export type PullRequestDraftContext = {
   commitSummary: string
   changeSummary: string
   patch: string
+  /** Workspace-linked GitHub issue number. Omitted entirely when none resolves. */
+  linkedIssue?: number | null
 }
 
 export type GeneratedPullRequestFields = {

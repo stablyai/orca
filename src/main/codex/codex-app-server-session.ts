@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 
@@ -118,7 +117,7 @@ export async function runCodexAppServerSession<T>(
     windowsHide: true
   }) as ChildProcessWithoutNullStreams
 
-  const stderrTail = new GrowingByteBuffer()
+  let stderrTail = ''
   let exited = false
   let nextRequestId = 1
   let timedOut = false
@@ -146,15 +145,10 @@ export async function runCodexAppServerSession<T>(
   child.on('close', () => {
     failPending(buildEarlyExitError())
   })
-  // Why: retain raw bytes so split UTF-8 code points decode only after a full line arrives.
-  child.stderr.on('data', (chunk: Buffer) => {
-    if (chunk.byteLength >= STDERR_TAIL_MAX_BYTES) {
-      stderrTail.clear()
-      stderrTail.append(chunk.subarray(chunk.byteLength - STDERR_TAIL_MAX_BYTES))
-      return
-    }
-    stderrTail.append(chunk)
-    stderrTail.retainSuffix(STDERR_TAIL_MAX_BYTES)
+  // Why: JSONL can contain non-ASCII hook paths. Stream decoding must retain a
+  // multibyte character split across pipe chunks or the response becomes invalid JSON.
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+    stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_BYTES)
   })
   // Why: a child can exit between the liveness check and stdin.write(); an
   // EPIPE must reject the RPC instead of becoming an unhandled stream error.
@@ -162,25 +156,21 @@ export async function runCodexAppServerSession<T>(
     failPending(error)
   })
 
-  const stdoutBuffer = new GrowingByteBuffer()
-  child.stdout.on('data', (chunk: Buffer) => {
-    stdoutBuffer.append(chunk)
-    if (stdoutBuffer.byteLength > STDOUT_LINE_MAX_BYTES) {
+  let stdoutBuffer = ''
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+    stdoutBuffer += chunk
+    if (Buffer.byteLength(stdoutBuffer) > STDOUT_LINE_MAX_BYTES) {
       // Why: Windows process-tree termination is asynchronous; stop buffered
       // chunks from spawning another taskkill for the same oversized response.
       child.stdout.destroy()
-      stdoutBuffer.clear()
       killCodexAppServerProcessTree(child)
       failPending(new Error('codex app-server emitted an oversized JSONL response'))
       return
     }
-    while (true) {
-      const newlineIndex = stdoutBuffer.indexOfByte(0x0a)
-      if (newlineIndex === -1) {
-        break
-      }
-      const line = stdoutBuffer.takePrefixString(newlineIndex).trim()
-      stdoutBuffer.discardPrefix(1)
+    let newlineIndex
+    while ((newlineIndex = stdoutBuffer.indexOf('\n')) !== -1) {
+      const line = stdoutBuffer.slice(0, newlineIndex).trim()
+      stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1)
       if (!line) {
         continue
       }
@@ -273,14 +263,13 @@ export async function runCodexAppServerSession<T>(
   }
 
   function buildEarlyExitError(): Error {
-    const stderr = stderrTail.toString()
-    if (stderrIndicatesMissingAppServer(stderr)) {
+    if (stderrIndicatesMissingAppServer(stderrTail)) {
       return new CodexAppServerUnsupportedError(
-        `codex CLI does not support the app-server subcommand: ${stderr.trim().slice(0, 400)}`
+        `codex CLI does not support the app-server subcommand: ${stderrTail.trim().slice(0, 400)}`
       )
     }
     return new Error(
-      `codex app-server exited before completing the session${stderr ? `: ${stderr.trim().slice(0, 400)}` : ''}`
+      `codex app-server exited before completing the session${stderrTail ? `: ${stderrTail.trim().slice(0, 400)}` : ''}`
     )
   }
 
@@ -300,11 +289,10 @@ export async function runCodexAppServerSession<T>(
       error instanceof Error &&
       !(error instanceof CodexAppServerUnsupportedError) &&
       !(error instanceof CodexAppServerTimeoutError) &&
-      stderrIndicatesMissingAppServer(stderrTail.toString())
+      stderrIndicatesMissingAppServer(stderrTail)
     ) {
-      const stderr = stderrTail.toString()
       throw new CodexAppServerUnsupportedError(
-        `codex CLI does not support the app-server subcommand: ${stderr.trim().slice(0, 400)}`
+        `codex CLI does not support the app-server subcommand: ${stderrTail.trim().slice(0, 400)}`
       )
     }
     throw error
@@ -324,7 +312,5 @@ export async function runCodexAppServerSession<T>(
       }
     }
     clearTimeout(deadline)
-    stdoutBuffer.clear()
-    stderrTail.clear()
   }
 }

@@ -11,7 +11,7 @@ const {
   realpathMock,
   copyFileMock,
   openMock,
-  opendirMock,
+  readFileMock,
   readdirMock,
   rmMock,
   unlinkMock
@@ -22,7 +22,7 @@ const {
   realpathMock: vi.fn(),
   copyFileMock: vi.fn(),
   openMock: vi.fn(),
-  opendirMock: vi.fn(),
+  readFileMock: vi.fn(),
   readdirMock: vi.fn(),
   rmMock: vi.fn(),
   unlinkMock: vi.fn()
@@ -40,17 +40,13 @@ vi.mock('fs/promises', () => ({
   writeFile: vi.fn(),
   realpath: realpathMock,
   copyFile: copyFileMock,
-  opendir: opendirMock,
+  readFile: readFileMock,
+  readdir: readdirMock,
   rm: rmMock,
   unlink: unlinkMock
 }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
-import {
-  EXTERNAL_IMPORT_MAX_SOURCE_PATHS,
-  EXTERNAL_IMPORT_MAX_TREE_ENTRIES,
-  REMOTE_IMPORT_MAX_FILE_BYTES
-} from './filesystem-external-import-limits'
 
 const REPO_PATH = path.resolve('/workspace/repo')
 const WORKSPACE_DIR = path.resolve('/workspace')
@@ -64,24 +60,6 @@ const store = {
 
 function enoent(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-}
-
-function streamDirectoryEntries(entries: unknown[]) {
-  return {
-    async *[Symbol.asyncIterator]() {
-      yield* entries
-    }
-  }
-}
-
-function createFileHandleRead(content: Buffer) {
-  return vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
-    const bytesRead = Math.min(length, Math.max(0, content.byteLength - position))
-    if (bytesRead > 0) {
-      content.copy(buffer, offset, position, position + bytesRead)
-    }
-    return { buffer, bytesRead }
-  })
 }
 
 describe('fs:importExternalPaths', () => {
@@ -180,7 +158,7 @@ describe('fs:importExternalPaths', () => {
     realpathMock.mockReset()
     copyFileMock.mockReset()
     openMock.mockReset()
-    opendirMock.mockReset()
+    readFileMock.mockReset()
     readdirMock.mockReset()
     rmMock.mockReset()
     unlinkMock.mockReset()
@@ -194,10 +172,8 @@ describe('fs:importExternalPaths', () => {
     mkdirMock.mockResolvedValue(undefined)
     copyFileMock.mockResolvedValue(undefined)
     mockLocalCopyOpenSuccess()
+    readFileMock.mockResolvedValue(Buffer.from('file-content'))
     readdirMock.mockResolvedValue([])
-    opendirMock.mockImplementation(async (dirPath: string) =>
-      streamDirectoryEntries(await readdirMock(dirPath))
-    )
     rmMock.mockResolvedValue(undefined)
     unlinkMock.mockResolvedValue(undefined)
 
@@ -408,67 +384,6 @@ describe('fs:importExternalPaths', () => {
     expect(copyFileMock).not.toHaveBeenCalled()
   })
 
-  it('stops streaming an oversized local tree before creating its destination', async () => {
-    const sourcePath = '/tmp/dropped/generated'
-    const resolvedSource = path.resolve(sourcePath)
-    let iteratorClosed = false
-    let yieldedEntries = 0
-    lstatMock.mockImplementation(async (candidatePath: string) => {
-      if (candidatePath === resolvedSource) {
-        return {
-          isFile: () => false,
-          isDirectory: () => true,
-          isSymbolicLink: () => false
-        }
-      }
-      throw enoent()
-    })
-    opendirMock.mockResolvedValue({
-      async *[Symbol.asyncIterator]() {
-        try {
-          while (yieldedEntries <= EXTERNAL_IMPORT_MAX_TREE_ENTRIES) {
-            const index = yieldedEntries
-            yieldedEntries += 1
-            yield {
-              name: `entry-${index}`,
-              isDirectory: () => false,
-              isSymbolicLink: () => false,
-              isFile: () => true
-            }
-          }
-        } finally {
-          iteratorClosed = true
-        }
-      }
-    })
-
-    const result = (await handlers.get('fs:importExternalPaths')!(null, {
-      sourcePaths: [sourcePath],
-      destDir
-    })) as { results: { status: string; reason?: string }[] }
-
-    expect(result.results[0]).toMatchObject({
-      status: 'failed',
-      reason: 'External import tree exceeds 100,000 entries'
-    })
-    expect(yieldedEntries).toBe(EXTERNAL_IMPORT_MAX_TREE_ENTRIES + 1)
-    expect(iteratorClosed).toBe(true)
-    expect(mkdirMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects oversized source batches before touching the filesystem', async () => {
-    const sourcePaths = Array.from(
-      { length: EXTERNAL_IMPORT_MAX_SOURCE_PATHS + 1 },
-      (_, index) => `/tmp/dropped/${index}`
-    )
-
-    await expect(
-      handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, { sourcePaths })
-    ).rejects.toThrow('External import accepts at most 256 source paths')
-    expect(lstatMock).not.toHaveBeenCalled()
-    expect(openMock).not.toHaveBeenCalled()
-  })
-
   it('fails and removes output if a local directory entry becomes a symlink after pre-scan', async () => {
     const sourcePath = '/tmp/dropped/mixeddir'
     const resolvedSource = path.resolve(sourcePath)
@@ -566,7 +481,7 @@ describe('fs:importExternalPaths', () => {
     lstatMock.mockImplementation(async (p: string) => {
       if (p === resolvedPath) {
         return {
-          size: 3,
+          size: 4,
           ino: 1,
           dev: 1,
           isFile: () => true,
@@ -577,15 +492,15 @@ describe('fs:importExternalPaths', () => {
       throw enoent()
     })
     const closeMock = vi.fn().mockResolvedValue(undefined)
-    const readFileHandleMock = createFileHandleRead(Buffer.from('png'))
+    const readFileHandleMock = vi.fn().mockResolvedValue(Buffer.from('png'))
     openMock.mockResolvedValue({
       stat: vi.fn().mockResolvedValue({
-        size: 3,
+        size: 4,
         ino: 1,
         dev: 1,
         isFile: () => true
       }),
-      read: readFileHandleMock,
+      readFile: readFileHandleMock,
       close: closeMock
     })
 
@@ -665,7 +580,7 @@ describe('fs:importExternalPaths', () => {
         dev: 1,
         isFile: () => true
       }),
-      read: createFileHandleRead(Buffer.from('icon')),
+      readFile: vi.fn().mockResolvedValue(Buffer.from('icon')),
       close: vi.fn().mockResolvedValue(undefined)
     })
 
@@ -722,10 +637,16 @@ describe('fs:importExternalPaths', () => {
     expect(openMock).not.toHaveBeenCalled()
   })
 
-  it('checks the runtime upload file budget before opening an oversized entry', async () => {
+  it('checks runtime upload directory byte budget before reading a file that exceeds the total cap', async () => {
     const sourcePath = '/tmp/dropped/project'
     const resolvedPath = path.resolve(sourcePath)
-    const oversizedPath = path.join(resolvedPath, 'oversized.bin')
+    const filePaths = ['one.bin', 'two.bin', 'three.bin', 'four.bin', 'overflow.bin'].map((name) =>
+      path.join(resolvedPath, name)
+    )
+    const mib = 1024 * 1024
+    const regularSize = 25 * mib
+    const overflowSize = 1 * mib
+    const readFileMock = vi.fn().mockResolvedValue(Buffer.from('chunk'))
 
     lstatMock.mockImplementation(async (p: string) => {
       if (p === resolvedPath) {
@@ -738,10 +659,12 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
-      if (p === oversizedPath) {
+      const fileIndex = filePaths.indexOf(p)
+      if (fileIndex !== -1) {
+        const size = fileIndex === filePaths.length - 1 ? overflowSize : regularSize
         return {
-          size: REMOTE_IMPORT_MAX_FILE_BYTES + 1,
-          ino: 2,
+          size,
+          ino: fileIndex + 2,
           dev: 1,
           isFile: () => true,
           isDirectory: () => false,
@@ -750,14 +673,30 @@ describe('fs:importExternalPaths', () => {
       }
       throw enoent()
     })
-    readdirMock.mockResolvedValue([
-      {
-        name: path.basename(oversizedPath),
+    readdirMock.mockResolvedValue(
+      filePaths.map((filePath) => ({
+        name: path.basename(filePath),
         isDirectory: () => false,
         isSymbolicLink: () => false,
         isFile: () => true
+      }))
+    )
+    openMock.mockImplementation(async (p: string) => {
+      const fileIndex = filePaths.indexOf(p)
+      if (fileIndex >= 0 && fileIndex < filePaths.length - 1) {
+        return {
+          stat: vi.fn().mockResolvedValue({
+            size: regularSize,
+            ino: fileIndex + 2,
+            dev: 1,
+            isFile: () => true
+          }),
+          readFile: readFileMock,
+          close: vi.fn().mockResolvedValue(undefined)
+        }
       }
-    ])
+      throw new Error(`unexpected open: ${p}`)
+    })
 
     const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
       sourcePaths: [sourcePath]
@@ -765,9 +704,10 @@ describe('fs:importExternalPaths', () => {
 
     expect(result.sources[0]).toMatchObject({
       status: 'failed',
-      reason: "'oversized.bin' is too large for remote import"
+      reason: 'Remote import is too large'
     })
-    expect(openMock).not.toHaveBeenCalled()
+    expect(readFileMock).toHaveBeenCalledTimes(4)
+    expect(openMock).not.toHaveBeenCalledWith(filePaths.at(-1), expect.anything())
   })
 
   it('fails runtime upload staging when a file changes between lstat and open', async () => {
@@ -786,7 +726,7 @@ describe('fs:importExternalPaths', () => {
       }
       throw enoent()
     })
-    const readFileHandleMock = createFileHandleRead(Buffer.from('png'))
+    const readFileHandleMock = vi.fn().mockResolvedValue(Buffer.from('png'))
     openMock.mockResolvedValue({
       stat: vi.fn().mockResolvedValue({
         size: 4,
@@ -794,7 +734,7 @@ describe('fs:importExternalPaths', () => {
         dev: 1,
         isFile: () => true
       }),
-      read: readFileHandleMock,
+      readFile: readFileHandleMock,
       close: vi.fn().mockResolvedValue(undefined)
     })
 

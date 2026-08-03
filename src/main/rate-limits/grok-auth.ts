@@ -1,7 +1,6 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
-import { readIntegrationCredentialFileSyncText } from '../integration-credential-file'
 
 // Why: when GROK_HOME is set, auth.json must be the same path Grok CLI uses.
 export function getGrokHome(): string {
@@ -89,7 +88,7 @@ export function readGrokAuthSession(): GrokAuthReadResult {
     return { status: 'missing' }
   }
   try {
-    const parsed: unknown = JSON.parse(readIntegrationCredentialFileSyncText(path))
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
     if (typeof parsed !== 'object' || parsed === null) {
       return { status: 'error', error: 'Grok auth file is invalid' }
     }
@@ -129,10 +128,6 @@ export function readGrokAuthSession(): GrokAuthReadResult {
       error: getGrokAuthReadError(err)
     }
   }
-}
-
-export function hasGrokAuthSession(): boolean {
-  return readGrokAuthSession().status === 'ok'
 }
 
 const TOKEN_SKEW_MS = 5 * 60 * 1000

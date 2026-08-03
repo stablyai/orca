@@ -199,6 +199,42 @@ describe('buildProjectHostSetupOptions', () => {
     expect(options.map((option) => option.id)).toEqual(['ready'])
   })
 
+  it('collapses duplicate ready setups on one host to the setup creation actually uses', () => {
+    // Why: a linked worktree added as its own project projected a second ready `local` setup for the
+    // same project, which rendered as repeated identical "Local Mac" rows separated only by path.
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('main-checkout'), repo('worktree-a'), repo('worktree-b')],
+      hosts: [host('local')],
+      projectHostSetups: [
+        setup('main', 'project-1', 'local', 'main-checkout', { path: '/Users/dev/projects/orca' }),
+        setup('dup-a', 'project-1', 'local', 'worktree-a', {
+          path: '/Users/dev/worktrees/pr-1908'
+        }),
+        setup('dup-b', 'project-1', 'local', 'worktree-b', { path: '/Users/dev/worktrees/pr-3235' })
+      ]
+    })
+
+    expect(options).toEqual([
+      expect.objectContaining({ id: 'main', kind: 'ready', label: LOCAL_HOST_LABEL })
+    ])
+  })
+
+  it('keeps one ready choice per host when a project is set up on several hosts', () => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo'), repo('local-dup'), repo('remote-repo')],
+      hosts: [host('local'), host('ssh:builder', { label: 'Builder' })],
+      projectHostSetups: [
+        setup('local', 'project-1', 'local', 'local-repo'),
+        setup('local-dup', 'project-1', 'local', 'local-dup'),
+        setup('remote', 'project-1', 'ssh:builder', 'remote-repo')
+      ]
+    })
+
+    expect(options.map((option) => option.id)).toEqual(['local', 'remote'])
+  })
+
   it('includes known hosts that still need project setup', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',

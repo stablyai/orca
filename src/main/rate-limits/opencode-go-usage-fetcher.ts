@@ -8,7 +8,6 @@ import {
   OPENCODE_BASE_URL
 } from './opencode-go-request-session'
 import { parseSubscriptionFromPageText } from './opencode-go-page-scraper'
-import { readFetchResponseTextWithinLimit } from '../lib/fetch-response-body'
 
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
 const API_TIMEOUT_MS = 15_000
@@ -202,7 +201,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
         }
       }
 
-      const workspacesText = await readFetchResponseTextWithinLimit(workspacesRes)
+      const workspacesText = await workspacesRes.text()
       ids = parseWorkspaceIds(workspacesText)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -252,7 +251,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
         continue
       }
 
-      const pageText = await readFetchResponseTextWithinLimit(pageRes)
+      const pageText = await pageRes.text()
       const parsed = parseSubscriptionFromPageText(pageText)
       if (parsed) {
         const monthly =

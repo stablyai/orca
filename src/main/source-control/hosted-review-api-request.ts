@@ -1,8 +1,3 @@
-import {
-  readFetchResponseJsonWithinLimit,
-  readFetchResponseTextWithinLimit
-} from '../lib/fetch-response-body'
-
 export class HostedReviewApiRequestError extends Error {
   readonly status: number | null
   readonly timedOut: boolean
@@ -17,7 +12,7 @@ export class HostedReviewApiRequestError extends Error {
 
 async function readResponseText(response: Response): Promise<string> {
   try {
-    return await readFetchResponseTextWithinLimit(response)
+    return await response.text()
   } catch {
     return ''
   }
@@ -36,7 +31,7 @@ export async function requestHostedReviewJson<T>(
         status: response.status
       })
     }
-    return await readFetchResponseJsonWithinLimit<T>(response)
+    return (await response.json()) as T
   } catch (error) {
     if (error instanceof HostedReviewApiRequestError) {
       throw error

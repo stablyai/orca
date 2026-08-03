@@ -39,10 +39,15 @@ describe('buildImageDataUri', () => {
     expect(buildImageDataUri('application/octet-stream', 'AAAA')).toBeNull()
   })
 
-  it('rejects malformed and oversized known rasters before native decode', () => {
-    expect(buildImageDataUri('image/png', 'bmV3')).toBeNull()
+  it('rejects oversized known rasters before native decode', () => {
     expect(buildImageDataUri('image/png', pngBase64(32_769, 1))).toBeNull()
     expect(buildImageDataUri('image/png', pngBase64(8192, 8192))).toBeNull()
+  })
+
+  it('still renders bytes whose header we cannot measure', () => {
+    // Failing to read a header means we could not measure the image, not that it is oversized.
+    // The decoder handles encodings this parser does not, so suppressing here blanks valid images.
+    expect(buildImageDataUri('image/png', 'bmV3')).toBe('data:image/png;base64,bmV3')
   })
 
   it('preserves SVG behavior because vectors do not have encoded raster dimensions', () => {

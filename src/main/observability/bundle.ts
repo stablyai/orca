@@ -7,13 +7,12 @@
 // upload body-size cap, token-handling discipline).
 
 import { randomBytes } from 'node:crypto'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { readFileSync, statSync } from 'node:fs'
 import { MAX_BUNDLE_BYTES } from './diagnostic-bundle-limits'
 import { listRotatedFiles } from './local-file-sink'
 import { redactValue } from './redactor'
 
 const DEFAULT_LOOKBACK_MINUTES = 30
-const MAX_BUNDLE_SOURCE_FILE_BYTES = 50 * 1024 * 1024
 
 export type CollectBundleOptions = {
   readonly traceFilePath: string
@@ -104,7 +103,12 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
   outer: for (const file of files) {
     let text: string
     try {
-      text = readNodeFileSyncWithinLimit(file, MAX_BUNDLE_SOURCE_FILE_BYTES).buffer.toString('utf8')
+      // stat first: the sink caps at 10 MB/file, so a tampered oversize file could panic-allocate on read.
+      const size = statSync(file).size
+      if (size > 50 * 1024 * 1024) {
+        continue
+      }
+      text = readFileSync(file, 'utf8')
     } catch {
       continue
     }

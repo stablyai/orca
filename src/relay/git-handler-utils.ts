@@ -10,7 +10,6 @@ import * as path from 'node:path'
 import { decodeGitCQuotedPath } from '../shared/git-cquoted-path'
 import { isBinaryBuffer } from '../shared/binary-buffer'
 import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
-import { iterateNulDelimitedFields } from '../shared/nul-delimited-fields'
 export { isUnsupportedWorktreeListZError } from '../shared/git-worktree-command-capabilities'
 
 export function parseBranchStatusChar(char: string): string {
@@ -210,7 +209,7 @@ function splitNulWorktreeList(output: string): string[][] {
   const blocks: string[][] = []
   let currentBlock: string[] = []
 
-  for (const field of iterateNulDelimitedFields(output)) {
+  for (const field of output.split('\0')) {
     if (field) {
       currentBlock.push(field)
       continue

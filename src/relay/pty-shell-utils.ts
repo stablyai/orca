@@ -1,9 +1,8 @@
-import { execFile as execFileCb } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { execFile as execFileCb, execFileSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { win32 as pathWin32 } from 'node:path'
 import { promisify } from 'node:util'
-import { readNodeFileSyncWithinLimit } from '../shared/node-bounded-file-reader'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
@@ -23,15 +22,43 @@ import {
 } from '../main/providers/windows-agent-foreground-process'
 
 const execFile = promisify(execFileCb)
-const MAX_ETC_SHELLS_BYTES = 64 * 1024
+
+const OPENSSH_REGISTRY_KEY = 'HKLM\\SOFTWARE\\OpenSSH'
+let openSshDefaultShell: string | undefined
+
+export function readOpenSshDefaultShell(): string {
+  if (openSshDefaultShell !== undefined) {
+    return openSshDefaultShell
+  }
+
+  try {
+    const output = execFileSync('reg.exe', ['query', OPENSSH_REGISTRY_KEY, '/v', 'DefaultShell'], {
+      encoding: 'utf8',
+      timeout: 3000,
+      windowsHide: true
+    })
+    const match = output.match(/^\s*DefaultShell\s+REG_\w+\s+(.+?)\s*$/im)
+    openSshDefaultShell = match?.[1] ?? ''
+  } catch {
+    openSshDefaultShell = ''
+  }
+
+  return openSshDefaultShell
+}
 
 export function resolveWindowsDefaultShell(
   env: NodeJS.ProcessEnv = process.env,
-  existsPath: (path: string) => boolean = existsSync
+  existsPath: (path: string) => boolean = existsSync,
+  readDefaultShell: () => string = readOpenSshDefaultShell
 ): string {
   const envShell = env.SHELL
   if (envShell && existsPath(envShell)) {
     return envShell
+  }
+
+  const configuredShell = readDefaultShell()
+  if (configuredShell && existsPath(configuredShell)) {
+    return configuredShell
   }
 
   const systemRoot = env.SystemRoot || env.WINDIR || env.windir || 'C:\\Windows'
@@ -313,10 +340,7 @@ export function listShellProfiles(): { name: string; path: string }[] {
   const seen = new Set<string>()
 
   try {
-    const content = readNodeFileSyncWithinLimit(
-      '/etc/shells',
-      MAX_ETC_SHELLS_BYTES
-    ).buffer.toString('utf8')
+    const content = readFileSync('/etc/shells', 'utf-8')
     for (const line of content.split('\n')) {
       const trimmed = line.trim()
       if (!trimmed || trimmed.startsWith('#')) {

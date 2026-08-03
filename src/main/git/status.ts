@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { existsSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import type {
   GitBranchChangeEntry,
@@ -30,8 +31,6 @@ import {
   type GitLineStats
 } from '../../shared/git-uncommitted-line-stats'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
-import { iterateNulDelimitedFields } from '../../shared/nul-delimited-fields'
-import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'
 import {
   gitExecFileAsync,
   gitExecFileAsyncBuffer,
@@ -39,18 +38,21 @@ import {
   gitStreamStdout
 } from './runner'
 import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
+import { findExistingWorktreeSymlinkPaths } from './worktree-symlink-detection'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
+import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
+import { GitStatusReadLeaseOwner } from './git-status-read-lease-owner'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
 import {
   beginGitStatusLineStatsCacheWrite,
@@ -58,18 +60,12 @@ import {
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
 } from '../../shared/git-status-line-stats-cache'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
-const MAX_GIT_POINTER_FILE_BYTES = 64 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
 const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
 const MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES = 512
-export const MAX_EFFECTIVE_UPSTREAM_CACHE_KEY_BYTES = 64 * 1024
 
 type EffectiveUpstreamStatusCacheEntry = {
   expiresAt: number
@@ -78,19 +74,9 @@ type EffectiveUpstreamStatusCacheEntry = {
 
 const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
 export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
-export const MAX_SUBMODULE_PATHS_PER_REPO = 10_000
-export const MAX_SUBMODULE_PATH_CODE_UNITS = 64 * 1024
-export const MAX_SUBMODULE_PATHS_PER_REPO_CODE_UNITS = 4 * 1024 * 1024
-export const MAX_SUBMODULE_PATHS_CACHE_CODE_UNITS = 16 * 1024 * 1024
-const MAX_SUBMODULE_PATHS_CACHE_KEY_BYTES = 64 * 1024
-type SubmodulePathsCacheEntry = {
-  paths: string[]
-  expiresAt: number
-  retainedCodeUnits: number
-}
+type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
 const submodulePathsCache = new Map<string, SubmodulePathsCacheEntry>()
 let submodulePathsCacheGeneration = 0
-let submodulePathsCacheCodeUnits = 0
 
 // Why: cache the upstream name to skip its 4-5-spawn resolution chain each poll; revalidate via one rev-list (issue #7576).
 const RESOLVED_UPSTREAM_NAME_CACHE_TTL_MS = 60_000
@@ -107,12 +93,12 @@ const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatu
 const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
 const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
-const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
+const statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
 
 // Why: clear both diff and status in-flight caches; clearing only diff would let getStatus() join a pre-mutation read.
 export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
-  statusReadsInFlight.clear()
+  statusReadLeaseOwner.invalidate()
   clearGitStatusLineStatsCache()
   clearSubmodulePathsCache()
   resolvedUpstreamNameCache.clear()
@@ -134,17 +120,12 @@ export function clearSubmodulePathsCacheForTests(): void {
 
 function clearSubmodulePathsCache(): void {
   submodulePathsCache.clear()
-  submodulePathsCacheCodeUnits = 0
   // Why: bump the generation so a pre-mutation read can't repopulate the invalidated cache.
   submodulePathsCacheGeneration += 1
 }
 
 export function getSubmodulePathsCacheCountForTests(): number {
   return submodulePathsCache.size
-}
-
-export function getSubmodulePathsCacheCodeUnitsForTests(): number {
-  return submodulePathsCacheCodeUnits
 }
 
 function gitRuntimeOptionsKey(options: GitRuntimeOptions): readonly unknown[] {
@@ -159,30 +140,18 @@ function getSubmodulePathsCacheKey(worktreePath: string, options: GitRuntimeOpti
 function pruneExpiredSubmodulePathsCache(now: number): void {
   for (const [cacheKey, entry] of submodulePathsCache) {
     if (entry.expiresAt <= now) {
-      deleteSubmodulePathsCacheEntry(cacheKey)
+      submodulePathsCache.delete(cacheKey)
     }
   }
 }
 
-function deleteSubmodulePathsCacheEntry(cacheKey: string): void {
-  const entry = submodulePathsCache.get(cacheKey)
-  if (!entry) {
-    return
-  }
-  submodulePathsCache.delete(cacheKey)
-  submodulePathsCacheCodeUnits -= entry.retainedCodeUnits
-}
-
 function trimSubmodulePathsCache(): void {
-  while (
-    submodulePathsCache.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES ||
-    submodulePathsCacheCodeUnits > MAX_SUBMODULE_PATHS_CACHE_CODE_UNITS
-  ) {
+  while (submodulePathsCache.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES) {
     const oldestKey = submodulePathsCache.keys().next().value
     if (oldestKey === undefined) {
       break
     }
-    deleteSubmodulePathsCacheEntry(oldestKey)
+    submodulePathsCache.delete(oldestKey)
   }
 }
 
@@ -192,7 +161,7 @@ function getCachedSubmodulePaths(cacheKey: string, now: number): string[] | null
     return null
   }
   if (cached.expiresAt <= now) {
-    deleteSubmodulePathsCacheEntry(cacheKey)
+    submodulePathsCache.delete(cacheKey)
     return null
   }
   submodulePathsCache.delete(cacheKey)
@@ -201,23 +170,8 @@ function getCachedSubmodulePaths(cacheKey: string, now: number): string[] | null
 }
 
 function rememberSubmodulePaths(cacheKey: string, paths: string[], now: number): void {
-  if (Buffer.byteLength(cacheKey, 'utf8') > MAX_SUBMODULE_PATHS_CACHE_KEY_BYTES) {
-    deleteSubmodulePathsCacheEntry(cacheKey)
-    return
-  }
-  const retainedCodeUnits =
-    cacheKey.length + paths.reduce((total, submodulePath) => total + submodulePath.length, 0)
-  if (retainedCodeUnits > MAX_SUBMODULE_PATHS_CACHE_CODE_UNITS) {
-    deleteSubmodulePathsCacheEntry(cacheKey)
-    return
-  }
-  deleteSubmodulePathsCacheEntry(cacheKey)
-  submodulePathsCache.set(cacheKey, {
-    paths,
-    expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS,
-    retainedCodeUnits
-  })
-  submodulePathsCacheCodeUnits += retainedCodeUnits
+  submodulePathsCache.delete(cacheKey)
+  submodulePathsCache.set(cacheKey, { paths, expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS })
   trimSubmodulePathsCache()
 }
 
@@ -247,6 +201,12 @@ export type GetStatusOptions = GitRuntimeOptions & {
    */
   limit?: number
   bypassEffectiveUpstreamNegativeCache?: boolean
+  /** Paths Orca may have symlinked into this worktree (per-user shared paths
+   *  plus `orca.yaml` shared directories). Untracked entries that are one of
+   *  these *and* really symlinks are dropped: Git cannot ignore them when the
+   *  repo's rule is directory-only (`node_modules/`), but they are Orca's own
+   *  artifacts, not user work. */
+  sharedLinkPaths?: readonly string[]
 }
 
 /**
@@ -257,38 +217,58 @@ export async function getStatus(
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
   gitDiffReadDedupe.clear()
-  if (options.signal) {
-    return runGetStatus(worktreePath, options)
-  }
   // Why: dedupe only concurrent identical reads; after settle, callers must run a fresh read.
   const cacheKey = getStatusReadKey(worktreePath, options)
-  const inFlightStatus = statusReadsInFlight.get(cacheKey)
-  if (inFlightStatus) {
-    return inFlightStatus
-  }
-
-  const statusPromise = runGetStatus(worktreePath, options)
-  statusReadsInFlight.set(cacheKey, statusPromise)
-  try {
-    return await statusPromise
-  } finally {
-    if (statusReadsInFlight.get(cacheKey) === statusPromise) {
-      statusReadsInFlight.delete(cacheKey)
-    }
-  }
+  return statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>
+    runGetStatus(worktreePath, { ...options, signal: sharedSignal })
+  )
 }
 
 function getStatusReadKey(worktreePath: string, options: GetStatusOptions): string {
   // Why: each key part can change the output shape or runtime routing.
   const limit = resolveGitStatusLimit(options.limit)
-  return [
+  return stableInFlightKey([
     worktreePath,
     options.wslDistro ?? '',
     options.includeIgnored === true,
     options.reuseLineStats === true,
     options.bypassEffectiveUpstreamNegativeCache === true,
-    limit
-  ].join('\0')
+    limit,
+    // Why: this changes which entries survive, so it must not share a cache slot.
+    options.sharedLinkPaths ?? []
+  ])
+}
+
+/** Remove untracked entries that are shared symlinks Orca created.
+ *
+ *  Why this can't be left to Git: a directory-only ignore rule (`node_modules/`)
+ *  matches the primary checkout's real directory but never the worktree's
+ *  symlink, so Git reports it untracked forever — a phantom row in the diff and
+ *  a permanently "dirty" worktree.
+ *
+ *  Tight on both axes: an entry must be configured as shared *and* actually be a
+ *  symlink. A regular file the user created at a configured name still shows up,
+ *  and so does a symlink at a path nobody declared shared. Mutates `entries`. */
+async function dropSharedSymlinkUntrackedEntries(
+  worktreePath: string,
+  entries: GitStatusEntry[],
+  sharedLinkPaths: readonly string[]
+): Promise<void> {
+  // Why: a clean tree has no untracked entries, so this costs nothing on the
+  // common status-poll path — no syscall, no config read, no subprocess.
+  if (sharedLinkPaths.length === 0 || !entries.some((entry) => entry.area === 'untracked')) {
+    return
+  }
+  const sharedLinks = new Set(await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths))
+  if (sharedLinks.size === 0) {
+    return
+  }
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index]
+    if (entry.area === 'untracked' && sharedLinks.has(entry.path)) {
+      entries.splice(index, 1)
+    }
+  }
 }
 
 async function runGetStatus(
@@ -362,6 +342,8 @@ async function runGetStatus(
       }
     }
   }
+
+  await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options.sharedLinkPaths ?? [])
 
   if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
     const branchName = getShortBranchName(branch)
@@ -634,10 +616,6 @@ function getEffectiveUpstreamStatusCacheKey(
   return [worktreePath, options.wslDistro ?? 'host', branchName, upstreamName ?? ''].join('\0')
 }
 
-function canRetainEffectiveUpstreamCacheKey(cacheKey: string): boolean {
-  return Buffer.byteLength(cacheKey, 'utf8') <= MAX_EFFECTIVE_UPSTREAM_CACHE_KEY_BYTES
-}
-
 export function clearEffectiveUpstreamNegativeStatusCache(identity: {
   worktreePath: string
   branchName: string
@@ -654,9 +632,6 @@ export function clearEffectiveUpstreamNegativeStatusCache(identity: {
   effectiveUpstreamStatusCache.delete(cacheKey)
   effectiveUpstreamStatusInFlight.delete(cacheKey)
   resolvedUpstreamNameCache.delete(cacheKey)
-  if (!canRetainEffectiveUpstreamCacheKey(cacheKey)) {
-    return
-  }
   effectiveUpstreamStatusWriteGeneration.set(
     cacheKey,
     (effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0) + 1
@@ -722,11 +697,6 @@ function rememberEffectiveUpstreamStatus(
   probedSameNameOriginRef: boolean,
   writeGeneration: number
 ): void {
-  if (!canRetainEffectiveUpstreamCacheKey(cacheKey)) {
-    effectiveUpstreamStatusCache.delete(cacheKey)
-    effectiveUpstreamStatusWriteGeneration.delete(cacheKey)
-    return
-  }
   // Why: hasConfiguredPushTarget gates a write action; re-probe each poll rather than cache a stale positive.
   if (status.hasUpstream || status.hasConfiguredPushTarget) {
     effectiveUpstreamStatusCache.delete(cacheKey)
@@ -763,8 +733,7 @@ async function readOrProbeEffectiveUpstreamStatus(
   options: GitRuntimeOptions = {},
   bypassCache = false
 ): Promise<GitUpstreamStatus> {
-  const cacheable = !bypassCache && canRetainEffectiveUpstreamCacheKey(cacheKey)
-  if (cacheable) {
+  if (!bypassCache) {
     const cached = readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
     if (cached) {
       return cached
@@ -783,7 +752,7 @@ async function readOrProbeEffectiveUpstreamStatus(
     worktreePath,
     branchName,
     options,
-    !cacheable
+    bypassCache
   ).then((result) => {
     rememberEffectiveUpstreamStatus(
       cacheKey,
@@ -794,7 +763,7 @@ async function readOrProbeEffectiveUpstreamStatus(
     )
     return result.status
   })
-  if (cacheable) {
+  if (!bypassCache) {
     effectiveUpstreamStatusInFlight.set(cacheKey, probe)
   }
   try {
@@ -835,11 +804,7 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
     }
   }
   const result = await probeEffectiveUpstreamStatus(worktreePath, branchName, options)
-  if (
-    canRetainEffectiveUpstreamCacheKey(cacheKey) &&
-    result.status.hasUpstream &&
-    result.status.upstreamName
-  ) {
+  if (result.status.hasUpstream && result.status.upstreamName) {
     resolvedUpstreamNameCache.set(cacheKey, {
       upstreamName: result.status.upstreamName,
       expiresAt: Date.now() + RESOLVED_UPSTREAM_NAME_CACHE_TTL_MS
@@ -1039,9 +1004,7 @@ export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
 
   try {
-    const dotGitContents = (
-      await readNodeFileWithinLimit(dotGitPath, MAX_GIT_POINTER_FILE_BYTES)
-    ).buffer.toString('utf-8')
+    const dotGitContents = await readFile(dotGitPath, 'utf-8')
     const match = dotGitContents.match(/^gitdir:\s*(.+)\s*$/m)
     if (match) {
       return path.resolve(worktreePath, match[1])
@@ -1057,37 +1020,6 @@ export async function resolveGitDir(worktreePath: string): Promise<string> {
  * List configured submodule paths (relative, forward-slash) for a worktree, cached
  * briefly. Read from `.gitmodules` to avoid an index-wide `ls-files` scan.
  */
-function parseSubmodulePaths(stdout: string): string[] | null {
-  const paths: string[] = []
-  let retainedCodeUnits = 0
-  for (const line of iterateProcessOutputLines(stdout)) {
-    if (line.length > MAX_SUBMODULE_PATH_CODE_UNITS + 4_096) {
-      return null
-    }
-    const spaceIndex = line.indexOf(' ')
-    const submodulePath =
-      spaceIndex === -1
-        ? ''
-        : line
-            .slice(spaceIndex + 1)
-            .trim()
-            .replace(/\/+$/, '')
-    if (!submodulePath) {
-      continue
-    }
-    if (
-      paths.length >= MAX_SUBMODULE_PATHS_PER_REPO ||
-      submodulePath.length > MAX_SUBMODULE_PATH_CODE_UNITS ||
-      submodulePath.length > MAX_SUBMODULE_PATHS_PER_REPO_CODE_UNITS - retainedCodeUnits
-    ) {
-      return null
-    }
-    paths.push(submodulePath)
-    retainedCodeUnits += submodulePath.length
-  }
-  return paths
-}
-
 export async function listSubmodulePaths(
   worktreePath: string,
   options: GitRuntimeOptions = {}
@@ -1107,7 +1039,18 @@ export async function listSubmodulePaths(
       ['config', '--file', '.gitmodules', '--get-regexp', '^submodule\\..*\\.path$'],
       { ...gitOptionsForWorktree(worktreePath, options), env: gitOptionalLocksDisabledEnv() }
     )
-    paths = parseSubmodulePaths(stdout) ?? []
+    paths = stdout
+      .split(/\r?\n/)
+      .map((line) => {
+        const spaceIndex = line.indexOf(' ')
+        return spaceIndex === -1
+          ? ''
+          : line
+              .slice(spaceIndex + 1)
+              .trim()
+              .replace(/\/+$/, '')
+      })
+      .filter((value) => value.length > 0)
   } catch {
     // No .gitmodules (or git config failure) — treat as a repo without submodules.
     paths = []
@@ -1332,21 +1275,29 @@ async function loadDiff(
   let modifiedDeleted = false
 
   try {
-    const leftBlob = staged
-      ? await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-      : compareAgainstHead
-        ? await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-        : await readUnstagedLeftBlob(worktreePath, filePath, options)
-    originalContent = leftBlob.content
-    originalIsBinary = leftBlob.isBinary
-
     if (staged) {
-      const rightBlob = await readGitBlobAtIndexPath(worktreePath, filePath, options)
+      // Why concurrent: HEAD and the index are independent `git show` spawns.
+      // Only this branch qualifies — the unstaged left read chains index→HEAD.
+      const [leftBlob, rightBlob] = await Promise.all([
+        readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options),
+        readGitBlobAtIndexPath(worktreePath, filePath, options)
+      ])
+      originalContent = leftBlob.content
+      originalIsBinary = leftBlob.isBinary
       modifiedContent = rightBlob.content
       modifiedIsBinary = rightBlob.isBinary
       modifiedDeleted = !rightBlob.exists
     } else {
-      const workingTreeBlob = await readWorkingTreeFile(path.join(worktreePath, filePath))
+      // The left chain (index→HEAD) is sequential within itself, but the working
+      // tree read is a plain fs read that does not depend on it.
+      const [leftBlob, workingTreeBlob] = await Promise.all([
+        compareAgainstHead
+          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
+          : readUnstagedLeftBlob(worktreePath, filePath, options),
+        readWorkingTreeFile(path.join(worktreePath, filePath))
+      ])
+      originalContent = leftBlob.content
+      originalIsBinary = leftBlob.isBinary
       modifiedContent = workingTreeBlob.content
       modifiedIsBinary = workingTreeBlob.isBinary
       modifiedDeleted = !workingTreeBlob.exists
@@ -1384,29 +1335,44 @@ export async function getBranchCompare(
     status: 'loading'
   }
 
-  const compareRef = await resolveCompareRef(worktreePath, options)
+  // The base-ref probe peels to a commit. Only branch refs are guaranteed to store
+  // commits; remote-tracking refs may store annotated tags whose raw oid must be preserved.
+  const reusableProbedOidByRef = new Map<string, string>()
+  const { compareRef, headOidResult, baseOidResult } = await readBranchCompareHead({
+    readCompareRef: () => resolveCompareRef(worktreePath, options),
+    resolveBaseRef: () =>
+      // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
+      resolveWorktreeAddBaseRef(baseRef, async (qualifiedRef) => {
+        const oid = await resolveWorktreeBaseCommitOid(worktreePath, qualifiedRef, options)
+        if (oid !== null && qualifiedRef.startsWith('refs/heads/')) {
+          reusableProbedOidByRef.set(qualifiedRef, oid)
+        }
+        return oid !== null
+      }),
+    readHeadOid: () => resolveRefOid(worktreePath, 'HEAD', options),
+    readBaseOid: (ref) => {
+      const reusableOid = reusableProbedOidByRef.get(ref)
+      return reusableOid === undefined
+        ? resolveRefOid(worktreePath, ref, options)
+        : Promise.resolve(reusableOid)
+    }
+  })
   summary.compareRef = compareRef
-  // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
-  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
-    hasWorktreeBaseCommitRef(worktreePath, qualifiedRef, options)
-  )
 
   let headOid = ''
   let baseOid = ''
-  try {
-    headOid = await resolveRefOid(worktreePath, 'HEAD', options)
+  if (headOidResult.ok) {
+    headOid = headOidResult.oid
     summary.headOid = headOid
-  } catch {
-    try {
-      baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
+  } else {
+    if (baseOidResult.ok) {
+      baseOid = baseOidResult.oid
       summary.baseOid = baseOid
       // Why: an unborn branch (new remote worktree) has no changes yet; a compare error would look broken.
       summary.changedFiles = 0
       summary.commitsAhead = 0
       summary.status = 'ready'
       return { summary, entries: [] }
-    } catch {
-      // Preserve the unborn-head message when even the base is unresolvable.
     }
     summary.status = 'unborn-head'
     summary.errorMessage =
@@ -1414,10 +1380,10 @@ export async function getBranchCompare(
     return { summary, entries: [] }
   }
 
-  try {
-    baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
+  if (baseOidResult.ok) {
+    baseOid = baseOidResult.oid
     summary.baseOid = baseOid
-  } catch {
+  } else {
     summary.status = 'invalid-base'
     summary.errorMessage = `Base ref ${baseRef} could not be resolved in this repository.`
     return { summary, entries: [] }
@@ -1485,8 +1451,12 @@ async function loadBranchDiff(
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
-    const leftBlob = await readGitBlobAtOidPath(worktreePath, args.mergeBase, leftPath, options)
-    const rightBlob = await readGitBlobAtOidPath(worktreePath, args.headOid, args.filePath, options)
+    // Why concurrent: the two sides are independent `git show` spawns, so awaiting
+    // them in series doubles the latency of every diff the review panel opens.
+    const [leftBlob, rightBlob] = await Promise.all([
+      readGitBlobAtOidPath(worktreePath, args.mergeBase, leftPath, options),
+      readGitBlobAtOidPath(worktreePath, args.headOid, args.filePath, options)
+    ])
 
     return buildDiffResult(
       leftBlob.content,
@@ -1598,15 +1568,14 @@ async function loadCommitDiff(
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
-    const leftBlob = args.parentOid
-      ? await readGitBlobAtOidPath(worktreePath, args.parentOid, leftPath, options)
-      : { content: '', isBinary: false }
-    const rightBlob = await readGitBlobAtOidPath(
-      worktreePath,
-      args.commitOid,
-      args.filePath,
-      options
-    )
+    // Why concurrent: the two sides are independent `git show` spawns. A root
+    // commit has no parent to read, so that side resolves without a spawn.
+    const [leftBlob, rightBlob] = await Promise.all([
+      args.parentOid
+        ? readGitBlobAtOidPath(worktreePath, args.parentOid, leftPath, options)
+        : Promise.resolve({ content: '', isBinary: false }),
+      readGitBlobAtOidPath(worktreePath, args.commitOid, args.filePath, options)
+    ])
 
     return buildDiffResult(
       leftBlob.content,
@@ -1858,22 +1827,30 @@ async function readGitBlobAtOidPath(
 }
 
 async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
+  let fileStat
   try {
-    const { buffer, stats: fileStat } = await readNodeFileWithinLimit(filePath, MAX_GIT_SHOW_BYTES)
-    if (!fileStat.isFile()) {
-      return { content: '', isBinary: false, exists: false }
-    }
-    return bufferToBlob(buffer, filePath)
+    fileStat = await stat(filePath)
   } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      return { content: '', isBinary: true, exists: true }
-    }
-    // Why: only ENOENT is a real deletion; other read errors are failures, not absence.
+    // Why: only ENOENT is a real deletion; other stat errors are read failures, not absence.
     return {
       content: '',
       isBinary: false,
       exists: (error as NodeJS.ErrnoException)?.code !== 'ENOENT'
     }
+  }
+  if (!fileStat.isFile()) {
+    return { content: '', isBinary: false, exists: false }
+  }
+  if (fileStat.size > MAX_GIT_SHOW_BYTES) {
+    // Why: mirror git's maxBuffer cap for working-tree reads so readFile can't pull in huge assets.
+    return { content: '', isBinary: true, exists: true }
+  }
+  try {
+    const buffer = await readFile(filePath)
+    return bufferToBlob(buffer, filePath)
+  } catch {
+    // Why: the file exists but could not be read — a read failure, not a deletion.
+    return { content: '', isBinary: false, exists: true }
   }
 }
 
@@ -2149,7 +2126,7 @@ async function listTrackedPathSpecs(
       }
     )
     // Why: a tracked directory can hold enough paths to exceed the JS argument limit.
-    for (const trackedPath of iterateNulDelimitedFields(stdout)) {
+    for (const trackedPath of stdout.split('\0')) {
       if (trackedPath) {
         trackedPaths.push(trackedPath)
       }

@@ -1,3 +1,4 @@
+import { yieldToEventLoop } from '../../../shared/event-loop-yield'
 import { isPrimarySelectionTextControl } from './primary-selection-capture'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
@@ -155,10 +156,6 @@ function insertContentEditableChunk(target: HTMLElement, range: Range, text: str
   selection?.removeAllRanges()
   selection?.addRange(range)
   return range
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
 }
 
 async function pasteLargeTextIntoContentEditable(

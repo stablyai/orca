@@ -2,15 +2,43 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshRelaySession } from './ssh-relay-session'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
-const { muxRequestMock } = vi.hoisted(() => ({ muxRequestMock: vi.fn() }))
+const { acceptOutputExitMock, muxRequestMock } = vi.hoisted(() => ({
+  acceptOutputExitMock: vi.fn().mockResolvedValue(undefined),
+  muxRequestMock: vi.fn()
+}))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+vi.mock('./ssh-pty-consumer-session', () => ({
+  openSshPtyConsumerSession: vi.fn(async (_mux, options) => ({
+    clientInstanceId: options.clientInstanceId,
+    clientGeneration: 1,
+    ownerGeneration: 1,
+    ownerLease: 'test-owner-lease'
+  }))
+}))
+vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
+  acceptSshPtyOutputData: vi.fn().mockResolvedValue(undefined),
+  acceptSshPtyOutputExit: acceptOutputExitMock,
+  allocateSshPtyProviderGeneration: vi.fn(() => 31),
+  beginSshPtyOutputGenerationMigration: vi.fn(() => ({
+    byPty: new Map(),
+    completion: Promise.resolve()
+  })),
+  closeSshPtyOutputGeneration: vi.fn(),
+  getSshPtyAcceptedSourceCheckpoints: vi.fn(() => []),
+  applySshPtySourceCancellationProof: vi.fn(() => true),
+  applySshPtySourceRecoveryCancellationProof: vi.fn(() => true),
+  installSshPtySourceAckPublisher: vi.fn(() => () => {}),
+  installSshPtySourceCancellationPublisher: vi.fn(() => () => {})
+}))
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn().mockResolvedValue('') }))
 vi.mock('./ssh-channel-multiplexer', () => ({
   SshChannelMultiplexer: class MockSshChannelMultiplexer {
     notify = vi.fn()
+    notifyWithSettlement = vi.fn()
     request = muxRequestMock
     onNotification = vi.fn().mockReturnValue(() => {})
+    onNotificationByMethod = vi.fn().mockReturnValue(() => {})
     onRequest = vi.fn().mockReturnValue(() => {})
     onDispose = vi.fn().mockReturnValue(() => {})
     dispose = vi.fn()
@@ -51,11 +79,6 @@ vi.mock('../ipc/pty', () => ({
   isCurrentPtyExit: vi.fn(() => true),
   answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
 }))
-vi.mock('../ipc/pty-renderer-delivery-router', () => ({
-  routeExternalPtyData: vi.fn(),
-  routeExternalPtyReplay: vi.fn(),
-  routeExternalPtyExit: vi.fn()
-}))
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
@@ -68,7 +91,6 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 
 const { registerSshPtyProvider, clearProviderPtyState, deletePtyOwnership, isCurrentPtyExit } =
   await import('../ipc/pty')
-const { routeExternalPtyExit } = await import('../ipc/pty-renderer-delivery-router')
 
 describe('SSH relay PTY incarnation exits', () => {
   beforeEach(() => {
@@ -79,7 +101,7 @@ describe('SSH relay PTY incarnation exits', () => {
   })
 
   it('drops a stale exit before ownership cleanup and propagates a current incarnation', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const runtime = { onPtyData: vi.fn(), onPtyExit: vi.fn() }
     const session = new SshRelaySession(
       'target-1',
@@ -96,28 +118,41 @@ describe('SSH relay PTY incarnation exits', () => {
       id: string
       code: number
       incarnationId: string
+      providerGeneration: number
+      ptyIncarnation: string
     }) => void
     vi.mocked(isCurrentPtyExit).mockReturnValueOnce(false)
 
-    onExit({ id: 'ssh:target-1@@pty-reused', code: 0, incarnationId: 'old-incarnation' })
+    onExit({
+      id: 'ssh:target-1@@pty-reused',
+      code: 0,
+      incarnationId: 'old-incarnation',
+      providerGeneration: 31,
+      ptyIncarnation: 'old-incarnation'
+    })
 
     expect(clearProviderPtyState).not.toHaveBeenCalled()
     expect(deletePtyOwnership).not.toHaveBeenCalled()
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalled()
+    expect(acceptOutputExitMock).not.toHaveBeenCalled()
     expect(runtime.onPtyExit).not.toHaveBeenCalled()
-    expect(routeExternalPtyExit).not.toHaveBeenCalled()
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', expect.anything())
 
-    const currentExit = {
+    onExit({
       id: 'ssh:target-1@@pty-reused',
       code: 7,
-      incarnationId: 'current-incarnation'
-    }
-    onExit(currentExit)
-    expect(runtime.onPtyExit).toHaveBeenCalledWith(
-      'ssh:target-1@@pty-reused',
-      7,
-      'current-incarnation'
+      incarnationId: 'current-incarnation',
+      providerGeneration: 31,
+      ptyIncarnation: 'current-incarnation'
+    })
+    await vi.waitFor(() =>
+      expect(acceptOutputExitMock).toHaveBeenCalledWith({
+        id: 'ssh:target-1@@pty-reused',
+        code: 7,
+        providerGeneration: 31,
+        ptyIncarnation: 'current-incarnation'
+      })
     )
-    expect(routeExternalPtyExit).toHaveBeenCalledWith(currentExit)
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
   })
 })

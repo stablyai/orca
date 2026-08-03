@@ -20,7 +20,7 @@ import {
 import { resolveMacOSComputerUseExecutablePath } from './macos-native-provider-paths'
 import {
   attachMacOSNativeProviderSocketListeners,
-  MacOSNativeProviderLineBuffer,
+  consumeNativeProviderLines,
   startMacOSNativeProviderSocket
 } from './macos-native-provider-transport'
 import { validateComputerProviderActionParams } from './computer-provider-action-validation'
@@ -37,7 +37,7 @@ export class MacOSNativeProviderClient {
   private socketToken: string | null = null
   private nextId = 1
   private pending = new Map<number, PendingNativeRequest>()
-  private readonly socketBuffer = new MacOSNativeProviderLineBuffer()
+  private socketBuffer = ''
   private providerCapabilities: ComputerProviderCapabilities | null = null
   private socketListenerCleanup: (() => void) | null = null
   private socketStartGeneration = 0
@@ -70,16 +70,20 @@ export class MacOSNativeProviderClient {
     this.socketStartPromise = null
     this.socketStartGeneration++
     this.providerCapabilities = null
-    this.socketBuffer.clear()
+    this.socketBuffer = ''
     this.cleanupActiveSocketListeners()
     if (socket && !socket.destroyed) {
       const id = this.nextId++
       socket.write(`${JSON.stringify({ id, method: 'terminate', params: {}, token })}\n`)
       socket.end()
     }
-    this.rejectPending(
-      new RuntimeClientError('accessibility_error', 'native macOS provider shut down')
-    )
+    for (const [id, pending] of this.pending) {
+      clearTimeout(pending.timer)
+      pending.reject(
+        new RuntimeClientError('accessibility_error', 'native macOS provider shut down')
+      )
+      this.pending.delete(id)
+    }
     this.cleanupSocketDirectory()
   }
   private async call(method: NativeMethod, params: unknown): Promise<unknown> {
@@ -195,7 +199,7 @@ export class MacOSNativeProviderClient {
     this.socketToken = started.socketToken
     const socket = started.socket
     socket.setEncoding('utf8')
-    this.socketBuffer.clear()
+    this.socketBuffer = ''
     this.socketListenerCleanup = attachMacOSNativeProviderSocketListeners(socket, {
       data: (chunk) => this.handleSocketData(socket, chunk),
       close: () => this.handleSocketClose(socket),
@@ -210,11 +214,10 @@ export class MacOSNativeProviderClient {
     if (this.socket !== socket) {
       return
     }
-    try {
-      this.socketBuffer.feed(chunk, (line) => this.handleLine(line))
-    } catch (error) {
-      this.handleTransportError(socket, error instanceof Error ? error : new Error(String(error)))
-    }
+    this.socketBuffer += chunk
+    this.socketBuffer = consumeNativeProviderLines(this.socketBuffer, (line) =>
+      this.handleLine(line)
+    )
   }
   private handleLine(line: string): void {
     let response: NativeResponse
@@ -242,7 +245,7 @@ export class MacOSNativeProviderClient {
     }
     this.cleanupActiveSocketListeners()
     this.socket = null
-    this.socketBuffer.clear()
+    this.socketBuffer = ''
     this.cleanupSocketDirectory()
     this.rejectPending(
       new RuntimeClientError('accessibility_error', 'native macOS helper app connection closed')
@@ -256,7 +259,7 @@ export class MacOSNativeProviderClient {
     this.cleanupActiveSocketListeners()
     // Why: an active transport error makes the helper socket unreliable for the next request.
     this.socket = null
-    this.socketBuffer.clear()
+    this.socketBuffer = ''
     if (!socket.destroyed) {
       socket.destroy()
     }
@@ -272,7 +275,7 @@ export class MacOSNativeProviderClient {
     }
     this.cleanupActiveSocketListeners()
     this.socket = null
-    this.socketBuffer.clear()
+    this.socketBuffer = ''
     if (!socket.destroyed) {
       socket.destroy()
     }

@@ -40,6 +40,12 @@ export const scrollTopCache = new Map<string, number>()
 // re-renders on every cursor move.
 export const cursorPositionCache = new Map<string, { lineNumber: number; column: number }>()
 
+// Why: PDFs store a pdf.js location in PDF user space, not a scrollTop — page
+// layout is rebuilt at a scale that depends on container width, so a pixel
+// offset restores to the wrong place at a different zoom or pane width.
+export type PdfViewPosition = { pageNumber: number; top: number; left: number }
+export const pdfViewPositionCache = new Map<string, PdfViewPosition>()
+
 // Why: Diff editors need more than a numeric scroll offset to restore the same
 // working context. Monaco's diff view state also carries cursor/selection state
 // for both sides plus diff model state, which matches VS Code's restore path

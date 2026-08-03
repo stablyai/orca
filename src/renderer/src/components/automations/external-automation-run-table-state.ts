@@ -8,7 +8,6 @@ type ExternalAutomationRunTableJob = {
 type ExternalAutomationRunPageResult = {
   runs: ExternalAutomationRun[]
   totalCount?: number
-  totalCountSaturated?: boolean
 }
 
 export type ExternalAutomationRunTableState = {
@@ -18,7 +17,6 @@ export type ExternalAutomationRunTableState = {
   selectedRunId: string | null
   fetchedRuns: ExternalAutomationRun[] | null
   fetchedTotalCount: number | null
-  fetchedTotalCountSaturated: boolean
   fetchError: string | null
 }
 
@@ -32,7 +30,6 @@ export function createExternalAutomationRunTableState(
     selectedRunId: job.runs[0]?.id ?? null,
     fetchedRuns: null,
     fetchedTotalCount: null,
-    fetchedTotalCountSaturated: false,
     fetchError: null
   }
 }
@@ -73,7 +70,6 @@ export function resolveExternalAutomationFetchedRuns(
     ...resolved,
     fetchedRuns: result.runs,
     fetchedTotalCount: result.totalCount ?? null,
-    fetchedTotalCountSaturated: result.totalCountSaturated === true,
     selectedRunId
   }
 }

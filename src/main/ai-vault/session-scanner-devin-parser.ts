@@ -1,6 +1,6 @@
+import { readFile } from 'node:fs/promises'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { withAiVaultWholeJsonFile } from './session-whole-json-reader'
 import type { FileWithMtime } from './session-scanner-types'
 import {
   addPreviewContent,
@@ -15,8 +15,7 @@ import {
   extractContentText,
   extractString,
   normalizeTitleText,
-  numberValue,
-  parseJsonObject
+  numberValue
 } from './session-scanner-values'
 
 type ParserSessionOptions = {
@@ -28,9 +27,7 @@ export async function parseDevinSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  return withAiVaultWholeJsonFile(file.path, (content) =>
-    parseDevinSessionContent(file, content, platform)
-  )
+  return parseDevinSessionContent(file, await readFile(file.path, 'utf-8'), platform)
 }
 
 export function parseDevinSessionContent(
@@ -39,7 +36,7 @@ export function parseDevinSessionContent(
   platform: NodeJS.Platform = process.platform,
   options: ParserSessionOptions = {}
 ): AiVaultSession | null {
-  const record = parseJsonObject(content)
+  const record = asRecord(JSON.parse(content) as unknown)
   if (!record) {
     return null
   }

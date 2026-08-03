@@ -13,10 +13,10 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshReason,
-  PRRefreshOutcome
+  PRRefreshOutcome,
+  GitHubPRFile
 } from '../../shared/types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import { PR_REFRESH_VISIBLE_CANDIDATE_LIMIT } from '../../shared/pr-refresh-memory-limits'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
@@ -69,7 +69,6 @@ import {
   type PRRefreshValidationDenialReason
 } from '../github/pr-refresh-validation-backoff'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import type { GitHubPRFile } from '../../shared/types'
 import { dispatchWorkItem, type WorkItemArgs } from './github-work-item-args'
 import {
   getProjectViewTable,
@@ -361,9 +360,6 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       const candidates: GitHubPRRefreshCandidate[] = []
       const repos = store.getRepos()
       for (const candidate of args.candidates) {
-        if (candidates.length >= PR_REFRESH_VISIBLE_CANDIDATE_LIMIT) {
-          break
-        }
         const validation = validateAutomaticPRRefreshCandidate(candidate, store, repos)
         if (validation.kind === 'ok') {
           candidates.push(validation.candidate)

@@ -1,10 +1,9 @@
 import { spawn } from 'node:child_process'
 import { constants } from 'node:fs'
-import { lstat, open, opendir } from 'node:fs/promises'
+import { lstat, open, readdir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import type { SshTarget } from '../../shared/ssh-types'
-import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
 import { shellEscape, wrapRemoteCommandForPosixShell } from './ssh-connection-utils'
 import { findSystemSsh } from './system-ssh-binary'
 import {
@@ -24,10 +23,6 @@ import {
   type ProcessResult
 } from './system-ssh-operation-lifecycle'
 import { writeBufferViaSystemSsh } from './system-ssh-file-binary-transfer'
-import {
-  SshDirectoryTransferBudget,
-  WINDOWS_SSH_UPLOAD_PACKAGE_MAX_BYTES
-} from './ssh-directory-transfer-budget'
 
 type SystemSshOperationOptions = SystemSshBuildArgsOptions & {
   signal?: AbortSignal
@@ -118,9 +113,7 @@ async function uploadDirectoryViaSystemSshWindows(
     localDir,
     remoteDir,
     hostPlatform,
-    options.signal,
-    new SshDirectoryTransferBudget(),
-    0
+    options.signal
   )
   await writeWindowsUploadPackageViaSystemSsh(target, entries, options)
 }
@@ -140,42 +133,26 @@ async function collectWindowsUploadEntries(
   localDir: string,
   remoteDir: string,
   hostPlatform: RemoteHostPlatform,
-  signal: AbortSignal | undefined,
-  budget: SshDirectoryTransferBudget,
-  depth: number
+  signal: AbortSignal | undefined
 ): Promise<WindowsUploadEntry[]> {
-  budget.recordPath(remoteDir, depth, { countEntry: depth !== 0 })
   const entries: WindowsUploadEntry[] = [{ kind: 'directory', path: remoteDir }]
-  const directory = await opendir(localDir)
-  try {
-    for await (const entry of directory) {
-      throwIfAborted(signal)
-      const localPath = pathJoin(localDir, entry.name)
-      const remotePath = joinRemotePath(hostPlatform, remoteDir, entry.name)
-      const statResult = await lstat(localPath)
-      if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
-        continue
-      }
-      if (statResult.isDirectory()) {
-        entries.push(
-          ...(await collectWindowsUploadEntries(
-            localPath,
-            remotePath,
-            hostPlatform,
-            signal,
-            budget,
-            depth + 1
-          ))
-        )
-        continue
-      }
-      budget.recordPath(remotePath, depth + 1)
-      budget.recordFile(statResult.size)
-      const buffer = await readLocalUploadFile(localPath, statResult)
-      entries.push({ kind: 'file', path: remotePath, contentsBase64: buffer.toString('base64') })
+  const dirEntries = await readdir(localDir, { withFileTypes: true })
+  for (const entry of dirEntries) {
+    throwIfAborted(signal)
+    const localPath = pathJoin(localDir, entry.name)
+    const remotePath = joinRemotePath(hostPlatform, remoteDir, entry.name)
+    const statResult = await lstat(localPath)
+    if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
+      continue
     }
-  } finally {
-    await directory.close().catch(() => undefined)
+    if (statResult.isDirectory()) {
+      entries.push(
+        ...(await collectWindowsUploadEntries(localPath, remotePath, hostPlatform, signal))
+      )
+      continue
+    }
+    const buffer = await readLocalUploadFile(localPath, statResult)
+    entries.push({ kind: 'file', path: remotePath, contentsBase64: buffer.toString('base64') })
   }
   return entries
 }
@@ -186,10 +163,6 @@ async function writeWindowsUploadPackageViaSystemSsh(
   options: SystemSshOperationOptions
 ): Promise<void> {
   throwIfAborted(options.signal)
-  const serialized = stringifyJsonWithinByteLimit(
-    entries,
-    WINDOWS_SSH_UPLOAD_PACKAGE_MAX_BYTES
-  ).serialized
   const channel = spawnSystemSshCommand(target, makeWindowsUploadPackageCommand(), {
     wrapCommand: false,
     ...getSystemSshBuildArgsFromOperationOptions(options)
@@ -200,7 +173,7 @@ async function writeWindowsUploadPackageViaSystemSsh(
     waitForChannelClose(channel, 'windows relay upload')
   )
   if (!options.signal?.aborted) {
-    channel.stdin.end(serialized)
+    channel.stdin.end(JSON.stringify(entries))
   }
   await closePromise
 }
@@ -220,20 +193,7 @@ async function readLocalUploadFile(
     ) {
       throw new Error(`File changed during upload: ${localPath}`)
     }
-    const buffer = Buffer.allocUnsafe(openedStat.size)
-    let offset = 0
-    while (offset < buffer.length) {
-      const result = await handle.read(buffer, offset, buffer.length - offset, offset)
-      if (result.bytesRead === 0) {
-        throw new Error(`File changed during upload: ${localPath}`)
-      }
-      offset += result.bytesRead
-    }
-    const probe = Buffer.allocUnsafe(1)
-    if ((await handle.read(probe, 0, 1, offset)).bytesRead !== 0) {
-      throw new Error(`File changed during upload: ${localPath}`)
-    }
-    return buffer
+    return await handle.readFile()
   } finally {
     await handle.close()
   }

@@ -8,6 +8,7 @@ import {
   isClaudeAuthSwitchInProgress,
   markClaudePtyExited,
   markClaudePtySpawned,
+  onLiveClaudePtysDrained,
   seedLiveClaudePtysFromPersistence
 } from './live-pty-gate'
 
@@ -75,6 +76,53 @@ describe('Claude live PTY gate', () => {
     confirmSeededClaudeLivePtys([])
 
     expect(hasLiveClaudePtys()).toBe(true)
+  })
+
+  it('notifies drain listeners only when the last live Claude PTY exits', () => {
+    const onDrained = vi.fn()
+    const unsubscribe = onLiveClaudePtysDrained(onDrained)
+    try {
+      markClaudePtySpawned('live-claude-pty')
+      markClaudePtySpawned('seeded-pty-1')
+
+      markClaudePtyExited('live-claude-pty')
+      expect(onDrained).not.toHaveBeenCalled()
+
+      markClaudePtyExited('seeded-pty-1')
+      expect(onDrained).toHaveBeenCalledTimes(1)
+
+      // Why: exits with no live PTYs left must not fire again — the drain
+      // signal marks the 1 -> 0 transition, not every teardown call.
+      markClaudePtyExited('seeded-pty-1')
+      expect(onDrained).toHaveBeenCalledTimes(1)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('notifies drain listeners when seed reconciliation releases the last live id', () => {
+    const onDrained = vi.fn()
+    const unsubscribe = onLiveClaudePtysDrained(onDrained)
+    try {
+      seedLiveClaudePtysFromPersistence(['seeded-pty-1'])
+
+      confirmSeededClaudeLivePtys([])
+
+      expect(onDrained).toHaveBeenCalledTimes(1)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('stops notifying an unsubscribed drain listener', () => {
+    const onDrained = vi.fn()
+    const unsubscribe = onLiveClaudePtysDrained(onDrained)
+    unsubscribe()
+
+    markClaudePtySpawned('live-claude-pty')
+    markClaudePtyExited('live-claude-pty')
+
+    expect(onDrained).not.toHaveBeenCalled()
   })
 
   it('persists spawns and exits when persistence is attached', () => {

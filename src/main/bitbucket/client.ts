@@ -15,7 +15,6 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
-import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
 
 const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
 const REQUEST_TIMEOUT_MS = 5000
@@ -114,7 +113,7 @@ async function requestJson<T>(
       }
       return null
     }
-    return await readFetchResponseJsonWithinLimit<T>(response)
+    return (await response.json()) as T
   } catch (error) {
     if (throwOnFailure) {
       throw error

@@ -1,11 +1,7 @@
 import type { Repo } from '../shared/types'
-import { detectGitRemoteIdentity } from './repo-git-remote-identity'
-import { getRepoLocationCacheKey } from './repo-location-cache-key'
-
-export { REPO_LOCATION_CACHE_KEY_MAX_BYTES } from './repo-location-cache-key'
+import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000
-export const REPO_IDENTITY_NEGATIVE_CACHE_MAX_ENTRIES = 512
 
 type RepoIdentityStore = {
   getRepos(): Repo[]
@@ -20,25 +16,8 @@ type EnrichmentOptions = {
 const inFlightProbesByLocation = new Map<string, Promise<boolean>>()
 const noIdentityRetryAfterByLocation = new Map<string, number>()
 
-function pruneNoIdentityRetryCache(now: number): void {
-  for (const [locationKey, retryAfter] of noIdentityRetryAfterByLocation) {
-    if (retryAfter <= now) {
-      noIdentityRetryAfterByLocation.delete(locationKey)
-    }
-  }
-  while (noIdentityRetryAfterByLocation.size > REPO_IDENTITY_NEGATIVE_CACHE_MAX_ENTRIES) {
-    const oldestLocation = noIdentityRetryAfterByLocation.keys().next().value
-    if (oldestLocation === undefined) {
-      break
-    }
-    noIdentityRetryAfterByLocation.delete(oldestLocation)
-  }
-}
-
-function rememberNoIdentityRetry(locationKey: string, retryAfter: number): void {
-  noIdentityRetryAfterByLocation.delete(locationKey)
-  noIdentityRetryAfterByLocation.set(locationKey, retryAfter)
-  pruneNoIdentityRetryCache(Date.now())
+function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId'>): string {
+  return `${repo.connectionId ?? 'local'}\0${repo.path}`
 }
 
 function getCurrentRepo(store: RepoIdentityStore, id: string): Repo | undefined {
@@ -55,45 +34,53 @@ function isSameUnenrichedRepo(snapshot: Repo, current: Repo | undefined): boolea
   )
 }
 
-async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo): Promise<boolean> {
-  const locationKey = getRepoLocationCacheKey(repo)
-  const now = Date.now()
-  pruneNoIdentityRetryCache(now)
-  const retryAfter = locationKey ? (noIdentityRetryAfterByLocation.get(locationKey) ?? 0) : 0
-  if (retryAfter > now) {
+function writeIdentity(
+  store: RepoIdentityStore,
+  snapshot: Repo,
+  gitRemoteIdentity: Repo['gitRemoteIdentity']
+): boolean {
+  const current = getCurrentRepo(store, snapshot.id)
+  if (!isSameUnenrichedRepo(snapshot, current)) {
     return false
   }
-  const inFlight = locationKey ? inFlightProbesByLocation.get(locationKey) : undefined
+  // Why: the no-remote marker is re-derived on every retry; skip the redundant
+  // write so repo-list consumers do not churn.
+  if (gitRemoteIdentity === null && current?.gitRemoteIdentity === null) {
+    return false
+  }
+  return !!store.updateRepo(snapshot.id, { gitRemoteIdentity })
+}
+
+async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo): Promise<boolean> {
+  const locationKey = getRepoLocationKey(repo)
+  const retryAfter = noIdentityRetryAfterByLocation.get(locationKey) ?? 0
+  if (retryAfter > Date.now()) {
+    return false
+  }
+  const inFlight = inFlightProbesByLocation.get(locationKey)
   if (inFlight) {
     return inFlight
   }
   const probe = (async () => {
-    const identity = await detectGitRemoteIdentity(repo.path, repo.connectionId)
-    if (!identity) {
+    const result = await probeGitRemoteIdentity(repo.path, repo.connectionId)
+    if (result.status !== 'resolved') {
       // Why: repos without a parseable remote are common; cache misses briefly so
       // list calls stay cheap while still allowing recent remote changes to land.
-      if (locationKey) {
-        rememberNoIdentityRetry(locationKey, Date.now() + NO_IDENTITY_RETRY_TTL_MS)
-      }
-      return false
+      noIdentityRetryAfterByLocation.set(locationKey, Date.now() + NO_IDENTITY_RETRY_TTL_MS)
+      // Why: only a probe that actually reached git settles "no usable remote".
+      // An unreachable host leaves the identity unknown so consumers can keep
+      // treating the repo as pending instead of ineligible.
+      return result.status === 'no-remote' ? writeIdentity(store, repo, null) : false
     }
 
-    if (locationKey) {
-      noIdentityRetryAfterByLocation.delete(locationKey)
-    }
-    const current = getCurrentRepo(store, repo.id)
-    if (!isSameUnenrichedRepo(repo, current)) {
-      return false
-    }
-    return !!store.updateRepo(repo.id, { gitRemoteIdentity: identity })
+    noIdentityRetryAfterByLocation.delete(locationKey)
+    return writeIdentity(store, repo, result.identity)
   })().finally(() => {
-    if (locationKey && inFlightProbesByLocation.get(locationKey) === probe) {
+    if (inFlightProbesByLocation.get(locationKey) === probe) {
       inFlightProbesByLocation.delete(locationKey)
     }
   })
-  if (locationKey) {
-    inFlightProbesByLocation.set(locationKey, probe)
-  }
+  inFlightProbesByLocation.set(locationKey, probe)
   return probe
 }
 
@@ -101,6 +88,10 @@ async function enrichMissingRepoGitRemoteIdentitiesInBackground(
   store: RepoIdentityStore,
   options: EnrichmentOptions
 ): Promise<void> {
+  // Why: the settled `null` marker stays a candidate on purpose — a repo that
+  // gains a remote later must still resolve. Do not tighten this to
+  // `=== undefined`; the retry TTL already bounds the cost and `writeIdentity`
+  // skips the redundant rewrite.
   const candidates = store
     .getRepos()
     .filter((repo) => repo.kind !== 'folder' && !repo.gitRemoteIdentity)
@@ -133,8 +124,4 @@ export async function flushRepoGitRemoteIdentityEnrichmentForTests(): Promise<vo
 export function resetRepoGitRemoteIdentityEnrichmentForTests(): void {
   inFlightProbesByLocation.clear()
   noIdentityRetryAfterByLocation.clear()
-}
-
-export function getRepoGitRemoteIdentityNegativeCacheSizeForTests(): number {
-  return noIdentityRetryAfterByLocation.size
 }

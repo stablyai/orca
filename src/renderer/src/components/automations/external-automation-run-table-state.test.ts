@@ -53,7 +53,6 @@ describe('external automation run table state', () => {
       selectedRunId: 'run-2',
       fetchedRuns: null,
       fetchedTotalCount: null,
-      fetchedTotalCountSaturated: false,
       fetchError: null
     })
   })
@@ -84,14 +83,12 @@ describe('external automation run table state', () => {
     expect(
       resolveExternalAutomationFetchedRuns(current, job('job-1', current.sourceRuns), {
         runs: [run('run-1'), run('run-2')],
-        totalCount: 12,
-        totalCountSaturated: true
+        totalCount: 12
       })
     ).toMatchObject({
       selectedRunId: 'run-2',
       fetchedRuns: [run('run-1'), run('run-2')],
-      fetchedTotalCount: 12,
-      fetchedTotalCountSaturated: true
+      fetchedTotalCount: 12
     })
   })
 

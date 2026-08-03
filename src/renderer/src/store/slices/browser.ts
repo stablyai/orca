@@ -24,7 +24,12 @@ import {
 } from '../../../../shared/workspace-session-browser-history'
 import { pickNeighbor } from './tab-group-state'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
-import { pushRecentlyClosedTabKind } from './recently-closed-tabs'
+import {
+  getRecentlyClosedTabPosition,
+  restoreRecentlyClosedTabPosition,
+  pushRecentlyClosedTabKind
+} from './recently-closed-tabs'
+import type { RecentlyClosedTabPosition } from './recently-closed-tabs'
 import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
@@ -52,6 +57,7 @@ import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
 } from '@/lib/workspace-session-hydration-keys'
+import { buildValidWorktreeIdsForSessionHydration } from './degraded-repo-worktree-validity'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
@@ -83,6 +89,7 @@ type BrowserTabPageState = {
 type ClosedBrowserWorkspaceSnapshot = {
   workspace: BrowserWorkspace
   pages: BrowserPage[]
+  position?: RecentlyClosedTabPosition
 }
 
 function sanitizeBrowserPageAnnotation(annotation: BrowserPageAnnotation): BrowserPageAnnotation {
@@ -770,8 +777,13 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
       const nextRecentlyClosedBrowserTabsByWorktree = { ...s.recentlyClosedBrowserTabsByWorktree }
       const existingSnapshots = nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] ?? []
+      const position = getRecentlyClosedTabPosition(s, owningWorktreeId, tabId)
       nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] = [
-        { workspace: closedWorkspace, pages: closedPages },
+        {
+          workspace: closedWorkspace,
+          pages: closedPages,
+          ...(position ? { position } : {})
+        },
         ...existingSnapshots.filter((entry) => entry.workspace.id !== closedWorkspace.id)
       ].slice(0, 10)
       const nextRecentlyClosedTabKindsByWorktree = pushRecentlyClosedTabKind(
@@ -889,8 +901,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         title: snap.title,
         activate: true,
         sessionProfileId,
-        sessionPartition
+        sessionPartition,
+        targetGroupId: entryToRestore.position?.groupId
       })
+      restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, entryToRestore.position)
       return get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ?? null
     }
 
@@ -901,6 +915,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       activate: true,
       sessionProfileId,
       sessionPartition,
+      targetGroupId: entryToRestore.position?.groupId,
       browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId
     })
 
@@ -922,6 +937,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         get().setActiveBrowserPage(restored.id, targetPage.id)
       }
     }
+
+    restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, entryToRestore.position)
 
     return get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ?? null
   },
@@ -1582,10 +1599,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   hydrateBrowserSession: (session, options) => {
     const persistedTabsByWorktree = session.browserTabsByWorktree ?? {}
     const currentState = get()
-    const validWorktreeIdsForCleanup = new Set(
-      Object.values(currentState.worktreesByRepo)
-        .flat()
-        .map((worktree) => worktree.id)
+    const validWorktreeIdsForCleanup = buildValidWorktreeIdsForSessionHydration(
+      currentState,
+      Object.keys(persistedTabsByWorktree)
     )
     validWorktreeIdsForCleanup.add(FLOATING_TERMINAL_WORKTREE_ID)
     for (const workspace of currentState.folderWorkspaces) {
@@ -1610,10 +1626,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const persistedPagesByWorkspace = session.browserPagesByWorkspace ?? {}
       const persistedActiveBrowserTabIdByWorktree = session.activeBrowserTabIdByWorktree ?? {}
       const persistedActiveTabTypeByWorktree = session.activeTabTypeByWorktree ?? {}
-      const validWorktreeIds = new Set(
-        Object.values(s.worktreesByRepo)
-          .flat()
-          .map((worktree) => worktree.id)
+      const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(
+        s,
+        Object.keys(persistedTabsByWorktree)
       )
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
       for (const workspace of s.folderWorkspaces) {
@@ -1645,14 +1660,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               createdAt: tab.createdAt
             } satisfies BrowserPage
           ]
-          const nextPages = persistedPages.map((page) => ({
-            ...page,
-            workspaceId: tab.id,
-            worktreeId,
-            url: normalizeUrl(page.url),
-            loading: false,
-            loadError: page.loadError ?? null
-          }))
+          const nextPages = persistedPages.map((page) => {
+            // Why: in-memory hydration callers can bypass the persistence schema's unknown-key stripping.
+            const { allowWindowClose: _legacyAllowWindowClose, ...persistedPage } =
+              page as typeof page & {
+                allowWindowClose?: boolean
+              }
+            return {
+              ...persistedPage,
+              workspaceId: tab.id,
+              worktreeId,
+              url: normalizeUrl(page.url),
+              loading: false,
+              loadError: page.loadError ?? null
+            }
+          })
           browserPagesByWorkspace[tab.id] = nextPages
           hydratedTabs.push(
             mirrorWorkspaceFromActivePage(

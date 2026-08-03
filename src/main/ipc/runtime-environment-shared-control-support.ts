@@ -49,8 +49,7 @@ export async function supportsSharedControl(
     }
     return false
   })()
-  // Why: the same saved host can be re-paired or point at a different runtime
-  // binary over time; capability support belongs to that pairing/runtime identity.
+  // Why: support belongs to the saved pairing/runtime identity, not its mutable display name.
   sharedControlSupport.set(environment.id, { cacheKey, check })
   try {
     const supported = await check

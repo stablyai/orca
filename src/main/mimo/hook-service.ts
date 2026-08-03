@@ -1,14 +1,9 @@
 import { app } from 'electron'
 import { join } from 'node:path'
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { getOpenCodeFamilyPluginSource } from '../opencode/hook-service'
-import {
-  ConfigOverlayCapacityError,
-  applyConfigOverlayPlan,
-  createConfigOverlayPlan
-} from '../pty/config-overlay-mirroring'
-import { safeRemoveTree } from '../pty/overlay-mirror'
+import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
 
 const ORCA_MIMOCODE_PLUGIN_FILE = 'orca-mimocode-status.js'
 const MIMOCODE_HOOKS_DIR = 'mimocode-hooks'
@@ -29,9 +24,30 @@ function resolveSourceConfigDir(existingHome: string | undefined): string | unde
   return existsSync(xdg) ? xdg : undefined
 }
 
-export class MimoCodeHookService {
-  private warnedOverlayCapacity = false
+function mirrorConfigDir(sourceConfigDir: string, targetConfigDir: string): void {
+  mkdirSync(targetConfigDir, { recursive: true })
+  for (const entry of readdirSync(sourceConfigDir, { withFileTypes: true })) {
+    if (entry.name === 'plugins' && entry.isDirectory()) {
+      const overlayPlugins = join(targetConfigDir, 'plugins')
+      mkdirSync(overlayPlugins, { recursive: true })
+      for (const pluginEntry of readdirSync(join(sourceConfigDir, 'plugins'), {
+        withFileTypes: true
+      })) {
+        if (pluginEntry.name === ORCA_MIMOCODE_PLUGIN_FILE) {
+          continue
+        }
+        mirrorEntry(
+          join(sourceConfigDir, 'plugins', pluginEntry.name),
+          join(overlayPlugins, pluginEntry.name)
+        )
+      }
+      continue
+    }
+    mirrorEntry(join(sourceConfigDir, entry.name), join(targetConfigDir, entry.name))
+  }
+}
 
+export class MimoCodeHookService {
   clearPty(_ptyId: string): void {}
 
   buildPtyEnv(_ptyId: string, existingMimocodeHome?: string): Record<string, string> {
@@ -45,33 +61,16 @@ export class MimoCodeHookService {
       const overlayConfig = join(home, 'config')
       const sourceConfig = resolveSourceConfigDir(existingMimocodeHome)
       if (sourceConfig) {
-        const plan = createConfigOverlayPlan(sourceConfig, {
-          reservedPluginFile: ORCA_MIMOCODE_PLUGIN_FILE
-        })
-        if (!safeRemoveTree(overlayConfig)) {
-          throw new Error('Unable to clear the MiMo config overlay')
-        }
-        mkdirSync(overlayConfig, { recursive: true })
-        applyConfigOverlayPlan(plan, overlayConfig)
+        safeRemoveTree(overlayConfig)
+        mirrorConfigDir(sourceConfig, overlayConfig)
       }
       const pluginsDir = join(home, 'config', 'plugins')
       mkdirSync(pluginsDir, { recursive: true })
-      const pluginPath = join(pluginsDir, ORCA_MIMOCODE_PLUGIN_FILE)
-      try {
-        unlinkSync(pluginPath)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw error
-        }
-      }
-      writeFileSync(pluginPath, getOpenCodeFamilyPluginSource('/hook/mimo-code'))
-    } catch (error) {
-      if (!this.warnedOverlayCapacity && error instanceof ConfigOverlayCapacityError) {
-        this.warnedOverlayCapacity = true
-        console.warn(
-          '[mimocode-hooks] config overlay exceeded its memory limit; using the original MiMo home without Orca status integration'
-        )
-      }
+      writeFileSync(
+        join(pluginsDir, ORCA_MIMOCODE_PLUGIN_FILE),
+        getOpenCodeFamilyPluginSource('/hook/mimo-code')
+      )
+    } catch {
       return existingMimocodeHome ? { MIMOCODE_HOME: existingMimocodeHome } : {}
     }
     return { MIMOCODE_HOME: home }

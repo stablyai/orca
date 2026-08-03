@@ -1,5 +1,4 @@
 import type { PRConflictSummary } from '../../shared/types'
-import { cacheIdentityDigest } from '../cache-identity-digest'
 
 // Why 60s: the hottest coordinator cadences that re-derive a CONFLICTING PR
 // (10s mergeability-pending, 2.5s manual-pending) previously each ran a
@@ -14,7 +13,6 @@ export const CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS = 60_000
 // that stop refreshing can't accumulate entries forever.
 const BASE_OID_CACHE_MAX = 64
 const SUMMARY_CACHE_MAX = 128
-const CONFLICT_SUMMARY_MAX_IN_FLIGHT = 32
 
 export type FreshBaseTipResolution =
   | { kind: 'resolved'; oid: string }
@@ -44,10 +42,11 @@ export function getConflictSummaryGitRuntimeKey(wslDistro: string | undefined): 
   return wslDistro ? `wsl:${wslDistro}` : 'local:host'
 }
 
-// Why digest: keys include arbitrary repo paths and refs; a length-framed
-// digest prevents delimiter aliases without retaining those strings.
+// Why JSON: repo paths and git ref names may contain any printable joiner
+// character (git allows `|` in branch names), so a delimiter-joined key could
+// alias distinct identities onto one cache entry.
 export function buildConflictSummaryCacheKey(...parts: string[]): string {
-  return cacheIdentityDigest(parts)
+  return JSON.stringify(parts)
 }
 
 export function readFreshBaseTipResolution(baseKey: string): FreshBaseTipResolution | null {
@@ -122,14 +121,8 @@ function dedupeInFlight<T>(
   if (existing) {
     return existing
   }
-  if (map.size >= CONFLICT_SUMMARY_MAX_IN_FLIGHT) {
-    return factory()
-  }
-  let promise!: Promise<T>
-  promise = factory().finally(() => {
-    if (map.get(key) === promise) {
-      map.delete(key)
-    }
+  const promise = factory().finally(() => {
+    map.delete(key)
   })
   map.set(key, promise)
   return promise

@@ -2,12 +2,15 @@
 // production wiring. Tests construct the manager with fakes for everything
 // that spawns wsl.exe or touches the live agentHookServer.
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 
 import { agentHookServer } from './server'
+import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
+import { getOpenCodePluginSource } from '../opencode/hook-service'
+import type { PluginSources } from '../../relay/plugin-overlay'
 import {
   isWslDistroRunning,
-  readWslHookRelayBundle,
   resolveWslHookRelayBundle,
   runWslInstallProcess,
   spawnWslRelayProcess
@@ -57,6 +60,9 @@ export type WslHookRelayManagerDeps = {
   waitForSentinel: typeof waitForWslRelaySentinel
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
   installHooks: typeof installRemoteManagedAgentHooks
+  managedHookSettings: () => ManagedHookDetectionSettings
+  /** Plugin source strings shipped to the guest relay so an Orca update needn't redeploy the relay bundle. */
+  pluginSources: () => PluginSources
   warn: (message: string) => void
   transientRetryDelayMs: number
 }
@@ -73,7 +79,7 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     return source ? createHash('sha256').update(source).digest('hex').slice(0, 12) : null
   },
   resolveBundle: resolveWslHookRelayBundle,
-  readBundle: readWslHookRelayBundle,
+  readBundle: (jsPath) => readFileSync(jsPath),
   listDistros: () => listWslDistrosAsync(),
   isDistroRunning: isWslDistroRunning,
   spawnRelay: spawnWslRelayProcess,
@@ -85,6 +91,9 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
       connectionId
     ),
   installHooks: installRemoteManagedAgentHooks,
+  managedHookSettings: () => null,
+  // Why: only OpenCode is in scope for WSL now; the payload shape stays identical to SSH so Pi/OMP are additive later.
+  pluginSources: () => ({ opencodePluginSource: getOpenCodePluginSource() }),
   warn: (message) => console.warn(message),
   transientRetryDelayMs: WSL_RELAY_TRANSIENT_RETRY_DELAY_MS
 }

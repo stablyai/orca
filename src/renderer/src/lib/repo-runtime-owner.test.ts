@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../../../shared/types'
+import type { RepoRuntimeOwnerState } from './repo-runtime-owner'
 import {
   getExplicitRuntimeOwnerEnvironmentId,
   getRepoOwnerRoutedSettings,
   getRuntimeEnvironmentIdForRepo,
-  getSettingsForRepoRuntimeOwner
+  getSettingsForRepoRuntimeOwner,
+  releaseRepoRuntimeOwnerSettingsCache
 } from './repo-runtime-owner'
 
 describe('getRuntimeEnvironmentIdForRepo', () => {
@@ -232,5 +234,98 @@ describe('getRepoOwnerRoutedSettings', () => {
         executionHostId: null
       })
     ).toBeNull()
+  })
+})
+
+describe('getSettingsForRepoRuntimeOwner identity', () => {
+  beforeEach(() => {
+    releaseRepoRuntimeOwnerSettingsCache()
+  })
+
+  type OwnerRepo = NonNullable<RepoRuntimeOwnerState['repos']>[number]
+  const repos: OwnerRepo[] = [
+    { id: 'repo-1', connectionId: null, executionHostId: 'runtime:env-a' }
+  ]
+  const settings = {
+    activeRuntimeEnvironmentId: 'focused',
+    sourceControlViewMode: 'list'
+  } as unknown as GlobalSettings
+
+  // Why identity matters: these run inside useShallow selectors, so a fresh
+  // object per store write costs a full settings-wide compare on every row.
+  it('returns the same reference while settings and repos are unchanged', () => {
+    const state = { repos, settings }
+    expect(getSettingsForRepoRuntimeOwner(state, 'repo-1')).toBe(
+      getSettingsForRepoRuntimeOwner(state, 'repo-1')
+    )
+  })
+
+  it('keeps separate identities per repo id', () => {
+    const state = { repos, settings }
+    const first = getSettingsForRepoRuntimeOwner(state, 'repo-1')
+    const second = getSettingsForRepoRuntimeOwner(state, 'repo-2')
+    expect(first).not.toBe(second)
+    expect(first.activeRuntimeEnvironmentId).toBe('env-a')
+    expect(second.activeRuntimeEnvironmentId).toBe('focused')
+    // Interleaving must not evict either entry.
+    expect(getSettingsForRepoRuntimeOwner(state, 'repo-1')).toBe(first)
+    expect(getSettingsForRepoRuntimeOwner(state, 'repo-2')).toBe(second)
+  })
+
+  it('returns a new value when the settings object changes', () => {
+    const first = getSettingsForRepoRuntimeOwner({ repos, settings }, 'repo-1')
+    const nextSettings = { ...settings, sourceControlViewMode: 'tree' } as unknown as GlobalSettings
+    const second = getSettingsForRepoRuntimeOwner({ repos, settings: nextSettings }, 'repo-1')
+    expect(second).not.toBe(first)
+    expect((second as { sourceControlViewMode?: string }).sourceControlViewMode).toBe('tree')
+  })
+
+  it('returns a new value when the repo owner changes', () => {
+    const first = getSettingsForRepoRuntimeOwner({ repos, settings }, 'repo-1')
+    const movedRepos: OwnerRepo[] = [
+      { id: 'repo-1', connectionId: null, executionHostId: 'runtime:env-b' }
+    ]
+    const second = getSettingsForRepoRuntimeOwner({ repos: movedRepos, settings }, 'repo-1')
+    expect(second).not.toBe(first)
+    expect(second.activeRuntimeEnvironmentId).toBe('env-b')
+  })
+
+  // Why isolate each source: a fixture that changes the repo list AND the
+  // resolved owner together still passes when only one of the two checks
+  // survives, so each gets a case that holds the other constant.
+  it('returns a new value when the repo list changes but the owner does not', () => {
+    const first = getSettingsForRepoRuntimeOwner({ repos, settings }, 'repo-1')
+    // Same owner for repo-1; only the array identity and an unrelated row differ.
+    const grownRepos: OwnerRepo[] = [
+      ...repos,
+      { id: 'repo-9', connectionId: null, executionHostId: 'local' }
+    ]
+    const second = getSettingsForRepoRuntimeOwner({ repos: grownRepos, settings }, 'repo-1')
+    expect(second.activeRuntimeEnvironmentId).toBe('env-a')
+    expect(second).not.toBe(first)
+  })
+
+  it('returns a new value when the owner changes under a stable repo list identity', () => {
+    // Mutate in place so the array reference and settings both stay identical
+    // and only the resolved environment id differs.
+    const mutableRepos: OwnerRepo[] = [
+      { id: 'repo-1', connectionId: null, executionHostId: 'runtime:env-a' }
+    ]
+    const state = { repos: mutableRepos, settings }
+    const first = getSettingsForRepoRuntimeOwner(state, 'repo-1')
+    expect(first.activeRuntimeEnvironmentId).toBe('env-a')
+    mutableRepos[0]!.executionHostId = 'runtime:env-c'
+    const second = getSettingsForRepoRuntimeOwner(state, 'repo-1')
+    expect(second.activeRuntimeEnvironmentId).toBe('env-c')
+    expect(second).not.toBe(first)
+  })
+
+  it('bounds the cache so unbounded repo ids cannot leak', () => {
+    const state = { repos, settings }
+    const first = getSettingsForRepoRuntimeOwner(state, 'repo-evictable')
+    for (let index = 0; index < 300; index += 1) {
+      getSettingsForRepoRuntimeOwner(state, `repo-filler-${index}`)
+    }
+    expect(getSettingsForRepoRuntimeOwner(state, 'repo-evictable')).not.toBe(first)
   })
 })

@@ -13,10 +13,7 @@ import {
   type RemoteServerUpdateEntry,
   type RemoteServerUpdateTransport
 } from '@/runtime/remote-server-update-coordinator'
-import {
-  runRemoteServerCheckBatch,
-  runRemoteServerUpdateBatch
-} from '@/runtime/remote-server-update-batch'
+import { runRemoteServerUpdateBatch } from '@/runtime/remote-server-update-batch'
 
 const MAX_CONCURRENT_REMOTE_SERVER_UPDATES = 2
 
@@ -109,19 +106,21 @@ export const createRemoteServerUpdatesSlice: StateCreator<
       )
       set({ remoteServerUpdates: initial })
       const clientVersion = await window.api.updater.getVersion()
-      await runRemoteServerCheckBatch(environments, async (environment) => {
-        const entry = await inspectRemoteServerUpdate(
-          environment,
-          clientVersion,
-          transport,
-          checkOptions
-        )
-        set((state) => {
-          const next = new Map(state.remoteServerUpdates)
-          next.set(environment.id, entry)
-          return { remoteServerUpdates: next }
+      await Promise.allSettled(
+        environments.map(async (environment) => {
+          const entry = await inspectRemoteServerUpdate(
+            environment,
+            clientVersion,
+            transport,
+            checkOptions
+          )
+          set((state) => {
+            const next = new Map(state.remoteServerUpdates)
+            next.set(environment.id, entry)
+            return { remoteServerUpdates: next }
+          })
         })
-      })
+      )
       set({ remoteServerUpdatesLastCheckedAt: Date.now() })
     } finally {
       set({ remoteServerUpdatesChecking: false })

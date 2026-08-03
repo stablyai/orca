@@ -1,6 +1,5 @@
 import { net } from 'electron'
 import { compareVersions, isValidVersion } from './updater-fallback'
-import { readFetchResponseJsonWithinLimit } from './lib/fetch-response-body'
 
 export type NudgeConfig = {
   id: string
@@ -17,7 +16,7 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
       return null
     }
 
-    const json = await readFetchResponseJsonWithinLimit<unknown>(res)
+    const json: unknown = await res.json()
     if (!json || typeof json !== 'object' || Array.isArray(json)) {
       return null
     }

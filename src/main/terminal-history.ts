@@ -1,22 +1,9 @@
-import { createHash } from 'node:crypto'
 import { join, basename } from 'node:path'
-import { mkdirSync, existsSync, writeFileSync, rmSync } from 'node:fs'
-import { app } from 'electron'
+import { mkdirSync, existsSync, writeFileSync } from 'node:fs'
 import { parseWslPath, toLinuxPath } from './wsl'
-import {
-  deleteWslWorktreeHistoryDirectories,
-  runTerminalHistoryGarbageCollection
-} from './terminal-history-gc'
-
-// ─── Constants ─────────────────────────────────────────────────────
-
-const HISTORY_DIR_NAME = 'terminal-history'
-const HISTORY_DIR_NAME_WSL = 'terminal-history-wsl'
+import { getHistoryRoot, getHistoryRootWsl, hashWorktreeId } from './terminal-history-paths'
 
 type ShellKind = 'zsh' | 'bash' | 'fish' | 'pwsh' | 'powershell' | 'cmd' | 'unknown'
-
-let scheduledHistoryGcTimer: ReturnType<typeof setTimeout> | null = null
-let historyGcRunning = false
 
 // ─── Shell Detection ───────────────────────────────────────────────
 
@@ -46,13 +33,6 @@ export function resolveShellKind(shellPath: string): ShellKind {
   return 'unknown'
 }
 
-// ─── Hash & Path Helpers ───────────────────────────────────────────
-
-/** First 16 hex chars of SHA-256 of the worktreeId. */
-export function hashWorktreeId(worktreeId: string): string {
-  return createHash('sha256').update(worktreeId).digest('hex').slice(0, 16)
-}
-
 /** Map shell kind to the filename used inside the history directory. */
 function historyFilename(shell: ShellKind): string | null {
   switch (shell) {
@@ -71,14 +51,6 @@ function historyFilename(shell: ShellKind): string | null {
 }
 
 // ─── Directory Management ──────────────────────────────────────────
-
-function getHistoryRoot(): string {
-  return join(app.getPath('userData'), HISTORY_DIR_NAME)
-}
-
-function getHistoryRootWsl(distro: string): string {
-  return join(app.getPath('userData'), HISTORY_DIR_NAME_WSL, distro)
-}
 
 /** Ensure the history directory exists for a given worktree hash.
  *  Returns the directory path, or null if creation failed. */
@@ -200,79 +172,4 @@ export function logHistoryInjection(worktreeId: string, result: HistoryInjection
   console.log(
     `[pty:history] worktreeId=${truncatedId} shell=${result.shell} histFile=${result.histFile ?? 'none'}`
   )
-}
-
-// ─── Cleanup ───────────────────────────────────────────────────────
-
-/** Delete the history directory for a removed worktree. Non-fatal. */
-export function deleteWorktreeHistoryDir(worktreeId: string): void {
-  const worktreeHash = hashWorktreeId(worktreeId)
-  const dir = join(getHistoryRoot(), worktreeHash)
-  try {
-    if (existsSync(dir)) {
-      rmSync(dir, { recursive: true, force: true })
-      console.log(`[pty:history] Deleted history for worktree ${worktreeId}`)
-    }
-  } catch (err) {
-    console.warn(
-      `[pty:history] Failed to delete history dir: ${err instanceof Error ? err.message : String(err)}`
-    )
-  }
-
-  // Also clean up WSL directories if any exist.
-  if (process.platform === 'win32') {
-    try {
-      const wslRoot = join(app.getPath('userData'), HISTORY_DIR_NAME_WSL)
-      deleteWslWorktreeHistoryDirectories({ wslRoot, worktreeHash })
-    } catch {
-      // Non-fatal.
-    }
-  }
-}
-
-// ─── Garbage Collection ────────────────────────────────────────────
-
-/** Run background GC to prune history directories for worktrees that are no
- *  longer in Orca's known live-worktree set. */
-export function runHistoryGc(liveWorktreeIds: Set<string>): void {
-  try {
-    const wslRoot = join(app.getPath('userData'), HISTORY_DIR_NAME_WSL)
-    const summary = runTerminalHistoryGarbageCollection({
-      mainRoot: getHistoryRoot(),
-      wslRoot,
-      liveWorktreeIds
-    })
-
-    console.log(
-      `[pty:history:gc] totalDirs=${summary.totalDirs} orphaned=${summary.orphaned} pruned=${summary.pruned} totalSizeKB=${summary.totalSizeKB}`
-    )
-  } catch (err) {
-    console.warn(`[pty:history:gc] GC failed: ${err instanceof Error ? err.message : String(err)}`)
-  }
-}
-
-/** Schedule GC after a delay so it runs after workspace hydration completes.
- *  `getLiveWorktreeIds` should use already-known IDs, not probe repo paths. */
-export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>): void {
-  // Why: main-window services can reattach during reload/reactivation; one
-  // pending/running disk GC is enough and avoids duplicate startup I/O.
-  if (scheduledHistoryGcTimer !== null || historyGcRunning) {
-    return
-  }
-  // Why 10s: avoids competing with startup-critical I/O while still running
-  // early enough to clean up before the user notices disk usage (§7.6).
-  scheduledHistoryGcTimer = setTimeout(async () => {
-    scheduledHistoryGcTimer = null
-    historyGcRunning = true
-    try {
-      const liveIds = await getLiveWorktreeIds()
-      runHistoryGc(liveIds)
-    } catch (err) {
-      console.warn(
-        `[pty:history:gc] Failed to enumerate live worktrees for GC: ${err instanceof Error ? err.message : String(err)}`
-      )
-    } finally {
-      historyGcRunning = false
-    }
-  }, 10_000)
 }

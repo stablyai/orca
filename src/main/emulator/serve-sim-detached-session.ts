@@ -1,11 +1,10 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 import { EmulatorError } from './emulator-errors'
 import type { EmulatorSessionInfo } from './emulator-types'
 
 const MJPEG_STREAM_SUFFIX = '/stream.mjpeg'
-export const SERVE_SIM_STATE_FILE_MAX_BYTES = 8 * 1024
 
 function streamUrlFromServeSimUrl(url: string): string {
   return url.endsWith(MJPEG_STREAM_SUFFIX) ? url : `${url.replace(/\/$/, '')}${MJPEG_STREAM_SUFFIX}`
@@ -43,11 +42,11 @@ export function parseServeSimDetachedSession(raw: unknown, udid: string): Emulat
   }
   try {
     const statePath = join(tmpdir(), 'serve-sim', `server-${info.deviceUdid}.json`)
-    const state = JSON.parse(
-      readNodeFileSyncWithinLimit(statePath, SERVE_SIM_STATE_FILE_MAX_BYTES).buffer.toString('utf8')
-    ) as { pid?: unknown }
-    if (typeof state.pid === 'number') {
-      info.helperPid = state.pid
+    if (existsSync(statePath)) {
+      const state = JSON.parse(readFileSync(statePath, 'utf8')) as { pid?: unknown }
+      if (typeof state.pid === 'number') {
+        info.helperPid = state.pid
+      }
     }
   } catch {}
   return info

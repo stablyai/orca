@@ -1,5 +1,3 @@
-import { parseMobileJsonTextWithinLimits } from './mobile-json-text-admission'
-
 const TERMINAL_STREAM_KIND = 0x74
 const TERMINAL_STREAM_VERSION = 1
 const HEADER_BYTES = 16
@@ -54,13 +52,13 @@ export function decodeTerminalStreamFrame(bytes: Uint8Array): TerminalStreamFram
     opcode,
     streamId: view.getUint32(4, true),
     seq: high * 0x100000000 + low,
-    payload: bytes.subarray(HEADER_BYTES)
+    payload: bytes.slice(HEADER_BYTES)
   }
 }
 
 export function decodeTerminalStreamJson<T>(payload: Uint8Array): T | null {
   try {
-    return parseMobileJsonTextWithinLimits<T>(new TextDecoder().decode(payload))
+    return JSON.parse(new TextDecoder().decode(payload)) as T
   } catch {
     return null
   }

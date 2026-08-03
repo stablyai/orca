@@ -4,10 +4,6 @@
 // stream frames use the raw byte bundle.
 import nacl from 'tweetnacl'
 import * as ExpoCrypto from 'expo-crypto'
-import { MOBILE_INBOUND_MAX_FRAME_BYTES } from './mobile-inbound-frame-queue'
-
-export const MOBILE_E2EE_MAX_FRAME_BASE64_CHARACTERS =
-  Math.ceil(MOBILE_INBOUND_MAX_FRAME_BYTES / 3) * 4
 
 // Why: Hermes (React Native's JS engine) lacks crypto.getRandomValues,
 // which tweetnacl requires. expo-crypto provides a native secure RNG
@@ -43,14 +39,8 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-function base64ToUint8(b64: string, maxDecodedBytes: number): Uint8Array {
-  if (b64.length > Math.ceil(maxDecodedBytes / 3) * 4) {
-    throw new Error('Base64 payload exceeds safe size')
-  }
+function base64ToUint8(b64: string): Uint8Array {
   const binary = atob(b64)
-  if (binary.length > maxDecodedBytes) {
-    throw new Error('Base64 payload exceeds safe size')
-  }
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i)
@@ -59,7 +49,7 @@ function base64ToUint8(b64: string, maxDecodedBytes: number): Uint8Array {
 }
 
 export function publicKeyFromBase64(b64: string): Uint8Array {
-  const key = base64ToUint8(b64, 32)
+  const key = base64ToUint8(b64)
   if (key.length !== 32) {
     throw new Error(
       `Invalid public key: expected 32 bytes, got ${key.length} from "${b64.slice(0, 20)}..."`
@@ -78,10 +68,7 @@ export function encrypt(plaintext: string, sharedKey: Uint8Array): string {
 }
 
 export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null {
-  if (encrypted.length > MOBILE_E2EE_MAX_FRAME_BASE64_CHARACTERS) {
-    throw new Error('Base64 payload exceeds safe size')
-  }
-  const bundle = base64ToUint8(encrypted, MOBILE_INBOUND_MAX_FRAME_BYTES)
+  const bundle = base64ToUint8(encrypted)
   const plaintext = decryptBytes(bundle, sharedKey)
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }

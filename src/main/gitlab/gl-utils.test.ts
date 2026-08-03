@@ -12,15 +12,6 @@ vi.mock('../git/runner', () => ({
 }))
 
 import {
-  GLAB_KNOWN_HOST_MAX_BYTES,
-  GLAB_KNOWN_HOSTS_CONTEXT_KEYS_MAX_BYTES,
-  GLAB_KNOWN_HOSTS_CONTEXT_KEY_MAX_BYTES,
-  GLAB_KNOWN_HOSTS_CONTEXT_MAX_ENTRIES,
-  GLAB_KNOWN_HOSTS_MAX_BYTES,
-  GLAB_KNOWN_HOSTS_MAX_ENTRIES,
-  GLAB_KNOWN_HOSTS_MAX_IN_FLIGHT,
-  GLAB_KNOWN_HOSTS_OUTPUT_MAX_BYTES,
-  _getKnownHostsCacheState,
   _getProjectRefCacheSize,
   _resetKnownHostsCache,
   _resetProjectRefCache,
@@ -32,10 +23,11 @@ import {
   getProjectRefForRemote,
   parseGlabApiResponse,
   parseGlabAuthStatusHosts,
-  rememberGlabKnownHost,
   resolveIssueSource
 } from './gl-utils'
+import { rememberGlabKnownHost, rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 
 describe('gitlab project ref resolution', () => {
   beforeEach(() => {
@@ -59,7 +51,8 @@ describe('gitlab project ref resolution', () => {
       path: 'fork/orca'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -73,7 +66,8 @@ describe('gitlab project ref resolution', () => {
       path: 'stablyai/orca'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -127,11 +121,13 @@ describe('gitlab project ref resolution', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
       cwd: '/repo',
-      wslDistro: 'Ubuntu'
+      wslDistro: 'Ubuntu',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -152,7 +148,8 @@ describe('gitlab project ref resolution', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
 
     await expect(getProjectRefForRemote('/repo', 'upstream')).resolves.toBeNull()
@@ -168,7 +165,9 @@ describe('gitlab project ref resolution', () => {
       path: 'remote/orca'
     })
 
-    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
+    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo', {
+      signal: expect.any(AbortSignal)
+    })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
@@ -264,7 +263,8 @@ describe('resolveIssueSource', () => {
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -444,10 +444,7 @@ describe('getGlabKnownHosts', () => {
     })
 
     await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.example.com'])
-    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], {
-      timeout: 10_000,
-      maxBuffer: GLAB_KNOWN_HOSTS_OUTPUT_MAX_BYTES
-    })
+    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], { timeout: 10_000 })
   })
 
   it('falls back to default when glab auth status fails', async () => {
@@ -508,14 +505,96 @@ describe('getGlabKnownHosts', () => {
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(4)
     expect(glabExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['auth', 'status'], {
       timeout: 10_000,
-      maxBuffer: GLAB_KNOWN_HOSTS_OUTPUT_MAX_BYTES,
       wslDistro: 'Ubuntu'
     })
     expect(glabExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['auth', 'status'], {
       timeout: 10_000,
-      maxBuffer: GLAB_KNOWN_HOSTS_OUTPUT_MAX_BYTES,
       wslDistro: 'Debian'
     })
+  })
+
+  it('preserves a native auth refresh while an older native probe is in flight', async () => {
+    let resolveProbe!: (value: { stdout: string; stderr: string }) => void
+    glabExecFileAsyncMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveProbe = resolve
+        })
+    )
+
+    const staleProbe = getGlabKnownHosts()
+    rememberGlabKnownHost('gitlab.refreshed.test')
+    resolveProbe({ stdout: 'Logged in to gitlab.com as user\n', stderr: '' })
+
+    await expect(staleProbe).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+  })
+
+  it('preserves a native auth refresh when an older native probe fails', async () => {
+    let rejectProbe!: (error: Error) => void
+    glabExecFileAsyncMock.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectProbe = reject
+        })
+    )
+
+    const staleProbe = getGlabKnownHosts()
+    rememberGlabKnownHost('gitlab.refreshed.test')
+    rejectProbe(new Error('stale auth probe failed'))
+
+    await expect(staleProbe).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+  })
+
+  it('keeps a remembered native host out of WSL and SSH caches', async () => {
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'Logged in to native.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to wsl.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to ssh.test as user\n', stderr: '' })
+
+    await Promise.all([
+      getGlabKnownHosts(),
+      getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' }),
+      getGlabKnownHosts('conn-1')
+    ])
+    rememberGlabKnownHost('gitlab.refreshed.test')
+
+    await expect(getGlabKnownHosts()).resolves.toEqual([
+      'gitlab.com',
+      'native.test',
+      'gitlab.refreshed.test'
+    ])
+    await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'gitlab.com',
+      'wsl.test'
+    ])
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual(['gitlab.com', 'ssh.test'])
+  })
+
+  it('batch-normalizes and deduplicates hosts in first-seen order per execution context', async () => {
+    rememberGlabKnownHosts([' Native-B.test ', 'native-a.test', 'NATIVE-B.TEST'])
+    rememberGlabKnownHosts(['WSL-B.test', ' wsl-a.test ', 'wsl-b.test'], undefined, {
+      wslDistro: 'Ubuntu'
+    })
+    rememberGlabKnownHosts(['SSH-B.test', 'ssh-a.test', ' ssh-b.test '], 'conn-batch')
+
+    await expect(getGlabKnownHosts()).resolves.toEqual([
+      'gitlab.com',
+      'native-b.test',
+      'native-a.test'
+    ])
+    await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'gitlab.com',
+      'wsl-b.test',
+      'wsl-a.test'
+    ])
+    await expect(getGlabKnownHosts('conn-batch')).resolves.toEqual([
+      'gitlab.com',
+      'ssh-b.test',
+      'ssh-a.test'
+    ])
+    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('recognizes a self-hosted host on a non-default port', async () => {
@@ -611,145 +690,5 @@ describe('getGlabKnownHosts', () => {
     ])
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
     unregisterSshGitProvider(connectionId)
-  })
-
-  it('keeps the most recently used execution contexts at the cache limit', async () => {
-    glabExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-
-    for (let index = 0; index < GLAB_KNOWN_HOSTS_CONTEXT_MAX_ENTRIES; index += 1) {
-      await getGlabKnownHosts(undefined, { wslDistro: `Distro-${index}` })
-    }
-    expect(_getKnownHostsCacheState().cachedContexts).toBe(GLAB_KNOWN_HOSTS_CONTEXT_MAX_ENTRIES)
-
-    await getGlabKnownHosts(undefined, { wslDistro: 'Distro-0' })
-    await getGlabKnownHosts(undefined, { wslDistro: 'Distro-overflow' })
-    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(GLAB_KNOWN_HOSTS_CONTEXT_MAX_ENTRIES + 1)
-
-    await getGlabKnownHosts(undefined, { wslDistro: 'Distro-1' })
-    await getGlabKnownHosts(undefined, { wslDistro: 'Distro-0' })
-    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(GLAB_KNOWN_HOSTS_CONTEXT_MAX_ENTRIES + 2)
-  })
-
-  it('accepts an exact-limit execution key and skips an oversized context', async () => {
-    glabExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-    const prefixBytes = Buffer.byteLength('wsl:', 'utf8')
-    const exactDistro = 'x'.repeat(GLAB_KNOWN_HOSTS_CONTEXT_KEY_MAX_BYTES - prefixBytes)
-
-    await expect(getGlabKnownHosts(undefined, { wslDistro: exactDistro })).resolves.toEqual([
-      'gitlab.com'
-    ])
-    expect(_getKnownHostsCacheState().cachedContextKeyBytes).toBe(
-      GLAB_KNOWN_HOSTS_CONTEXT_KEY_MAX_BYTES
-    )
-
-    await expect(getGlabKnownHosts(undefined, { wslDistro: `${exactDistro}x` })).resolves.toEqual([
-      'gitlab.com'
-    ])
-    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('evicts old large context keys at the aggregate byte limit', async () => {
-    glabExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-    const prefixBytes = Buffer.byteLength('wsl:', 'utf8')
-    const retainedContexts =
-      GLAB_KNOWN_HOSTS_CONTEXT_KEYS_MAX_BYTES / GLAB_KNOWN_HOSTS_CONTEXT_KEY_MAX_BYTES
-    const distroAt = (index: number): string => {
-      const suffix = String(index).padStart(3, '0')
-      return `${'x'.repeat(GLAB_KNOWN_HOSTS_CONTEXT_KEY_MAX_BYTES - prefixBytes - suffix.length)}${suffix}`
-    }
-
-    for (let index = 0; index <= retainedContexts; index += 1) {
-      await getGlabKnownHosts(undefined, { wslDistro: distroAt(index) })
-    }
-    expect(_getKnownHostsCacheState()).toMatchObject({
-      cachedContexts: retainedContexts,
-      cachedContextKeyBytes: GLAB_KNOWN_HOSTS_CONTEXT_KEYS_MAX_BYTES
-    })
-
-    await getGlabKnownHosts(undefined, { wslDistro: distroAt(0) })
-    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(retainedContexts + 2)
-  })
-
-  it('bounds parsed hosts while retaining the newest values', () => {
-    const hosts = Array.from(
-      { length: GLAB_KNOWN_HOSTS_MAX_ENTRIES + 6 },
-      (_, index) => `gitlab-${index}.example.com`
-    )
-
-    expect(parseGlabAuthStatusHosts(hosts.join('\n'))).toEqual(
-      hosts.slice(-GLAB_KNOWN_HOSTS_MAX_ENTRIES)
-    )
-  })
-
-  it('preserves gitlab.com and the newest remembered hosts at the count limit', async () => {
-    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
-    await getGlabKnownHosts()
-    const customHosts = Array.from(
-      { length: GLAB_KNOWN_HOSTS_MAX_ENTRIES + 6 },
-      (_, index) => `gitlab-${index}.example.com`
-    )
-    for (const host of customHosts) {
-      rememberGlabKnownHost(host)
-    }
-
-    await expect(getGlabKnownHosts()).resolves.toEqual([
-      'gitlab.com',
-      ...customHosts.slice(-(GLAB_KNOWN_HOSTS_MAX_ENTRIES - 1))
-    ])
-  })
-
-  it('accepts an exact-limit host and ignores an oversized host', async () => {
-    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
-    await getGlabKnownHosts()
-    const exactHost = `${'x'.repeat(GLAB_KNOWN_HOST_MAX_BYTES - 5)}.test`
-    const oversizedHost = `${exactHost}x`
-
-    rememberGlabKnownHost(exactHost)
-    rememberGlabKnownHost(oversizedHost)
-
-    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', exactHost])
-  })
-
-  it('bounds aggregate retained host bytes and keeps newest values', async () => {
-    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
-    await getGlabKnownHosts()
-    const customHosts = Array.from({ length: 40 }, (_, index) => {
-      const prefix = String(index).padStart(2, '0')
-      return `${prefix}${'x'.repeat(GLAB_KNOWN_HOST_MAX_BYTES - prefix.length)}`
-    })
-    for (const host of customHosts) {
-      rememberGlabKnownHost(host)
-    }
-
-    const retained = await getGlabKnownHosts()
-    expect(retained).toEqual(['gitlab.com', ...customHosts.slice(-31)])
-    expect(
-      retained.reduce((total, host) => total + Buffer.byteLength(host), 0)
-    ).toBeLessThanOrEqual(GLAB_KNOWN_HOSTS_MAX_BYTES)
-  })
-
-  it('caps distinct in-flight probes and recovers capacity after settlement', async () => {
-    const resolvers: ((value: { stdout: string; stderr: string }) => void)[] = []
-    glabExecFileAsyncMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolvers.push(resolve)
-        })
-    )
-    const probes = Array.from({ length: GLAB_KNOWN_HOSTS_MAX_IN_FLIGHT }, (_, index) =>
-      getGlabKnownHosts(undefined, { wslDistro: `Distro-${index}` })
-    )
-
-    expect(_getKnownHostsCacheState().inFlightContexts).toBe(GLAB_KNOWN_HOSTS_MAX_IN_FLIGHT)
-    await expect(getGlabKnownHosts(undefined, { wslDistro: 'Distro-overflow' })).resolves.toEqual([
-      'gitlab.com'
-    ])
-    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(GLAB_KNOWN_HOSTS_MAX_IN_FLIGHT)
-
-    for (const resolve of resolvers) {
-      resolve({ stdout: '', stderr: '' })
-    }
-    await Promise.all(probes)
-    expect(_getKnownHostsCacheState().inFlightContexts).toBe(0)
   })
 })

@@ -17,15 +17,6 @@ import {
   clampLinearIssueListLimit
 } from '../../shared/linear-issue-read-limits'
 import {
-  boundedIntegrationErrorLog,
-  boundedIntegrationErrorMessage
-} from '../integration-error-message'
-import { runBoundedIntegrationFanout } from '../integration-fanout'
-import {
-  INTEGRATION_PAGINATION_MAX_ITEMS,
-  IntegrationPaginationBudget
-} from '../integration-pagination-budget'
-import {
   acquire,
   clearToken,
   getClients,
@@ -33,7 +24,6 @@ import {
   release,
   type LinearClientForWorkspace
 } from './client'
-import { LinearProjectRequestCoalescer } from './linear-project-request-coalescer'
 
 type LinearRawVariables = Record<string, unknown>
 
@@ -518,7 +508,7 @@ const CUSTOM_VIEW_PROJECTS_QUERY = `
   }
 `
 
-const requestCoalescer = new LinearProjectRequestCoalescer()
+const inFlight = new Map<string, Promise<unknown>>()
 const LINEAR_PROJECT_API_PAGE_SIZE_MAX = 50
 
 function clampLimit(limit = 20): number {
@@ -526,7 +516,17 @@ function clampLimit(limit = 20): number {
 }
 
 function coalesce<T>(key: string, load: () => Promise<T>, force = false): Promise<T> {
-  return requestCoalescer.coalesce(key, load, force)
+  const existing = inFlight.get(key) as Promise<T> | undefined
+  if (existing && !force) {
+    return existing
+  }
+  const promise = load().finally(() => {
+    if (inFlight.get(key) === promise) {
+      inFlight.delete(key)
+    }
+  })
+  inFlight.set(key, promise)
+  return promise
 }
 
 function normalizeConcreteWorkspaceId(workspaceId: unknown): LinearConcreteWorkspaceId {
@@ -547,7 +547,7 @@ function workspaceError(entry: LinearClientForWorkspace, error: unknown): Linear
   }
 
   const record = error as { name?: string; message?: string; status?: number; response?: unknown }
-  const message = boundedIntegrationErrorMessage(record.message || 'Linear request failed.')
+  const message = record.message || 'Linear request failed.'
   const status =
     typeof record.status === 'number'
       ? record.status
@@ -629,15 +629,14 @@ function mapProjectForWorkspace(
     priorityLabel: project.priorityLabel ?? null,
     lead: mapUser(project.lead),
     members: project.members?.nodes
-      ?.slice(0, 10)
       ?.map(mapUser)
       .filter((user): user is LinearProjectMemberSummary => !!user),
-    teams: project.teams?.nodes?.slice(0, 10).map((team) => ({
+    teams: project.teams?.nodes?.map((team) => ({
       id: team.id,
       name: team.name ?? '',
       key: team.key ?? undefined
     })),
-    labels: project.labels?.nodes?.slice(0, 20).map((label) => ({
+    labels: project.labels?.nodes?.map((label) => ({
       id: label.id,
       name: label.name ?? '',
       color: label.color ?? undefined
@@ -662,7 +661,7 @@ function mapProjectDetailForWorkspace(
 ): LinearProjectDetail {
   return {
     ...mapProjectForWorkspace(entry, project),
-    milestones: project.projectMilestones?.nodes?.slice(0, 20).map((milestone) => ({
+    milestones: project.projectMilestones?.nodes?.map((milestone) => ({
       id: milestone.id,
       name: milestone.name ?? '',
       status: milestone.status ?? undefined,
@@ -670,7 +669,6 @@ function mapProjectDetailForWorkspace(
       progress: milestone.progress ?? null
     })),
     resources: project.externalLinks?.nodes
-      ?.slice(0, 20)
       ?.filter((link) => link.url)
       .map((link) => ({
         id: link.id,
@@ -696,7 +694,7 @@ function mapIssueForWorkspace(
   entry: LinearClientForWorkspace,
   issue: LinearIssueNode
 ): LinearIssue {
-  const labelNodes = (issue.labels?.nodes ?? []).slice(0, LINEAR_ISSUE_API_PAGE_SIZE_MAX)
+  const labelNodes = issue.labels?.nodes ?? []
   return {
     id: issue.id,
     identifier: issue.identifier,
@@ -714,9 +712,7 @@ function mapIssueForWorkspace(
       key: issue.team?.key ?? ''
     },
     labels: labelNodes.map((label) => label.name),
-    labelIds:
-      issue.labelIds?.slice(0, INTEGRATION_PAGINATION_MAX_ITEMS) ??
-      labelNodes.map((label) => label.id),
+    labelIds: issue.labelIds ?? labelNodes.map((label) => label.id),
     assignee: mapUser(issue.assignee),
     estimate: issue.estimate ?? null,
     priority: issue.priority,
@@ -781,7 +777,6 @@ async function readIssueConnectionPages(
   }) => Promise<LinearConnection<LinearIssueNode> | null | undefined>
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const items: LinearIssue[] = []
-  const budget = new IntegrationPaginationBudget()
   let after: string | undefined
   let hasMore = false
 
@@ -790,22 +785,12 @@ async function readIssueConnectionPages(
     // Orca reads must follow cursors to show more than one backend page.
     const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit - items.length)
     const connection = await loadConnection(after ? { first, after } : { first })
-    const pageNodes = connection?.nodes ?? []
-    const nodes = pageNodes.slice(0, first)
-    const pageItems = nodes.map((issue) => mapIssueForWorkspace(entry, issue))
-    hasMore = pageNodes.length > nodes.length || Boolean(connection?.pageInfo?.hasNextPage)
-    if (!budget.admitPage(pageItems)) {
-      console.warn('[linear] Project issue list exceeded its retained result budget; truncating.')
-      return { items, hasMore: true }
-    }
-    items.push(...pageItems)
+    const nodes = connection?.nodes ?? []
+    items.push(...nodes.map((issue) => mapIssueForWorkspace(entry, issue)))
+    hasMore = Boolean(connection?.pageInfo?.hasNextPage)
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
-    if (!hasMore || !nextCursor || nextCursor === after || pageNodes.length === 0) {
-      break
-    }
-    if (!budget.canRequestPage) {
-      console.warn('[linear] Project issue list reached its retained result budget; truncating.')
+    if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {
       break
     }
     after = nextCursor
@@ -828,9 +813,8 @@ async function readCollection<T>(
         return { items: [] }
       }
 
-      const fanout = await runBoundedIntegrationFanout(
-        entries,
-        async (entry) => {
+      const results = await Promise.all(
+        entries.map(async (entry) => {
           await acquire()
           try {
             return await load(entry)
@@ -838,7 +822,7 @@ async function readCollection<T>(
             if (isAuthError(error)) {
               clearToken(entry.workspace.id)
             } else {
-              console.warn('[linear] project/view read failed:', boundedIntegrationErrorLog(error))
+              console.warn('[linear] project/view read failed:', error)
             }
             if (shouldFailWholeRequest(workspaceId)) {
               throw error
@@ -847,22 +831,15 @@ async function readCollection<T>(
           } finally {
             release()
           }
-        },
-        (result) => [...result.items, ...(result.errors ?? [])]
+        })
       )
-      if (fanout.truncated) {
-        console.warn(
-          '[linear] Cross-workspace project metadata exceeded its aggregate result budget; truncating.'
-        )
-      }
-      const results = fanout.results
 
       return {
         items: results.flatMap((result) => result.items),
         errors: results.flatMap((result) => result.errors ?? []).length
           ? results.flatMap((result) => result.errors ?? [])
           : undefined,
-        hasMore: fanout.truncated || results.some((result) => result.hasMore)
+        hasMore: results.some((result) => result.hasMore)
       }
     },
     force
@@ -898,11 +875,9 @@ export async function listProjects(
         LinearRawVariables
       >(trimmed ? SEARCH_PROJECTS_QUERY : PROJECTS_QUERY, variables)
       const connection = trimmed ? result.data?.searchProjects : result.data?.projects
-      const rawProjects = connection?.nodes ?? []
-      const projects = rawProjects.slice(0, first)
       return {
-        items: projects.map((project) => mapProjectForWorkspace(entry, project)),
-        hasMore: rawProjects.length > projects.length || !!connection?.pageInfo?.hasNextPage
+        items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
+        hasMore: !!connection?.pageInfo?.hasNextPage
       }
     },
     force
@@ -932,7 +907,6 @@ export async function listProjectsByExactName(
       await acquire()
       try {
         const matches: LinearProjectSummary[] = []
-        const budget = new IntegrationPaginationBudget()
         let after: string | undefined
         while (true) {
           const result = await entry.client.client.rawRequest<
@@ -944,31 +918,17 @@ export async function listProjectsByExactName(
             ...(after ? { after } : {})
           })
           const connection = result.data?.searchProjects
-          const rawNodes = connection?.nodes ?? []
-          const nodes = rawNodes.slice(0, LINEAR_PROJECT_API_PAGE_SIZE_MAX)
-          if (!budget.admitPage(nodes)) {
-            console.warn('[linear] Project search exceeded its retained result budget; truncating.')
-            break
-          }
-          for (const project of nodes) {
+          for (const project of connection?.nodes ?? []) {
             if (project.name.trim().toLowerCase() === normalized) {
               matches.push(mapProjectForWorkspace(entry, project))
             }
           }
-          if (rawNodes.length > nodes.length) {
-            console.warn('[linear] Project search returned more rows than requested; truncating.')
-            break
-          }
           const nextCursor = connection?.pageInfo?.endCursor ?? undefined
-          if (connection?.pageInfo?.hasNextPage === true && !budget.canRequestPage) {
-            console.warn('[linear] Project search reached its retained result budget; truncating.')
-            break
-          }
           if (
             connection?.pageInfo?.hasNextPage !== true ||
             !nextCursor ||
             nextCursor === after ||
-            nodes.length === 0
+            (connection.nodes ?? []).length === 0
           ) {
             break
           }
@@ -1055,7 +1015,7 @@ export async function createProject(
       clearToken(entry.workspace.id)
       throw error
     }
-    const message = boundedIntegrationErrorMessage(error)
+    const message = error instanceof Error ? error.message : String(error)
     return { ok: false, error: message }
   } finally {
     release()
@@ -1113,7 +1073,6 @@ export async function listProjectTeams(
         return []
       }
       const teams: NonNullable<LinearProjectSummary['teams']> = []
-      const budget = new IntegrationPaginationBudget()
       let after: string | undefined
       await acquire()
       try {
@@ -1131,30 +1090,15 @@ export async function listProjectTeams(
             throw new Error('Project was not found')
           }
           const connection = project.teams
-          const rawNodes = connection?.nodes ?? []
-          const nodes = rawNodes.slice(0, LINEAR_PROJECT_API_PAGE_SIZE_MAX)
-          if (!budget.admitPage(nodes)) {
-            console.warn(
-              '[linear] Project teams exceeded their retained result budget; truncating.'
-            )
-            break
-          }
-          for (const team of nodes) {
-            teams.push({
+          const nodes = connection?.nodes ?? []
+          teams.push(
+            ...nodes.map((team) => ({
               id: team.id,
               name: team.name ?? '',
               key: team.key ?? undefined
-            })
-          }
-          if (rawNodes.length > nodes.length) {
-            console.warn('[linear] Project teams returned more rows than requested; truncating.')
-            break
-          }
+            }))
+          )
           const nextCursor = connection?.pageInfo?.endCursor ?? undefined
-          if (connection?.pageInfo?.hasNextPage === true && !budget.canRequestPage) {
-            console.warn('[linear] Project teams reached their retained result budget; truncating.')
-            break
-          }
           if (
             !connection?.pageInfo?.hasNextPage ||
             !nextCursor ||
@@ -1197,13 +1141,11 @@ export async function listCustomViews(
         LinearRawVariables
       >(CUSTOM_VIEWS_QUERY, { first, filter, orderBy: 'updatedAt' })
       const connection = result.data?.customViews
-      const rawViews = connection?.nodes ?? []
-      const views = rawViews.slice(0, first)
       return {
-        items: views
+        items: (connection?.nodes ?? [])
           .map((view) => mapCustomViewForWorkspace(entry, view))
           .filter((view): view is LinearCustomViewSummary => !!view && view.model === model),
-        hasMore: rawViews.length > views.length || !!connection?.pageInfo?.hasNextPage
+        hasMore: !!connection?.pageInfo?.hasNextPage
       }
     },
     force
@@ -1309,11 +1251,9 @@ export async function listCustomViewProjects(
         throw new Error('Custom view does not contain projects')
       }
       const connection = view?.projects
-      const rawProjects = connection?.nodes ?? []
-      const projects = rawProjects.slice(0, first)
       return {
-        items: projects.map((project) => mapProjectForWorkspace(entry, project)),
-        hasMore: rawProjects.length > projects.length || !!connection?.pageInfo?.hasNextPage
+        items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
+        hasMore: !!connection?.pageInfo?.hasNextPage
       }
     },
     force

@@ -1,6 +1,5 @@
 import { net } from 'electron'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
-import { readFetchResponseJsonWithinLimit } from '../lib/fetch-response-body'
 import {
   loadProjectId,
   readAuthJson,
@@ -64,7 +63,7 @@ async function fetchQuota(accessToken: string, projectId: string): Promise<Provi
         status: 'error'
       }
     }
-    const data = await readFetchResponseJsonWithinLimit<unknown>(res)
+    const data = (await res.json()) as unknown
     const buckets = deduplicateBuckets(
       parseQuotaResponse(data).map((b) => ({ ...buildRateLimitBucket(b), modelId: b.modelId }))
     )

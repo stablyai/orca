@@ -1,23 +1,22 @@
-import { existsSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
-import { RuntimeClientError, type RuntimeClient, type RuntimeRpcSuccess } from '../runtime-client'
+import {
+  RuntimeClientError,
+  type RuntimeClient,
+  type RuntimeRpcSuccess,
+  getDefaultUserDataPath
+} from '../runtime-client'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { getDefaultPersistedState } from '../../shared/constants'
-import type { PersistedState } from '../../shared/types'
+import type { GlobalSettings, PersistedState } from '../../shared/types'
 import {
   applyAgentStatusHooksEnabled,
   getManagedAgentHookStatuses
 } from '../../main/agent-hooks/managed-agent-hook-controls'
-import { getDefaultUserDataPath } from '../runtime-client'
-import {
-  ORCA_PERSISTED_STATE_MAX_BYTES,
-  readPersistedStateJsonFileSync,
-  stringifyPrettyPersistedStateWithinLimit
-} from '../../shared/persisted-state-file-bounds'
 
 type AgentHookCommandResult = {
   enabled: boolean
@@ -39,7 +38,7 @@ function readPersistedState(dataPath: string): PersistedState {
     return getDefaultPersistedState(homedir())
   }
   try {
-    const { value: parsed } = readPersistedStateJsonFileSync<unknown>(dataPath)
+    const parsed = JSON.parse(readFileSync(dataPath, 'utf-8'))
     if (!isRecord(parsed)) {
       throw new Error('file does not contain a JSON object')
     }
@@ -57,11 +56,7 @@ function writePersistedState(dataPath: string, state: PersistedState): void {
   const tmpPath = join(dirname(dataPath), `.${Date.now()}-${randomUUID()}.tmp`)
   let renamed = false
   try {
-    const { serialized } = stringifyPrettyPersistedStateWithinLimit(
-      state,
-      ORCA_PERSISTED_STATE_MAX_BYTES - 1
-    )
-    writeFileSync(tmpPath, `${serialized}\n`, 'utf-8')
+    writeFileSync(tmpPath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8')
     renameSync(tmpPath, dataPath)
     renamed = true
   } finally {
@@ -80,7 +75,10 @@ function readEnabledFromDisk(): boolean {
   return state.settings?.agentStatusHooksEnabled !== false
 }
 
-function updateEnabledOnDisk(enabled: boolean): string {
+function updateEnabledOnDisk(enabled: boolean): {
+  settingsPath: string
+  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+} {
   const dataPath = getDataPath()
   const state = readPersistedState(dataPath)
   state.settings = {
@@ -89,7 +87,13 @@ function updateEnabledOnDisk(enabled: boolean): string {
     agentStatusHooksEnabled: enabled
   }
   writePersistedState(dataPath, state)
-  return dataPath
+  return {
+    settingsPath: dataPath,
+    settings: {
+      agentCmdOverrides: state.settings.agentCmdOverrides ?? {},
+      disabledTuiAgents: state.settings.disabledTuiAgents ?? []
+    }
+  }
 }
 
 async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Promise<boolean> {
@@ -139,10 +143,11 @@ async function setAgentHooksEnabled(
   enabled: boolean
 ): Promise<AgentHookCommandResult> {
   const updatedRuntime = await updateRunningRuntime(client, enabled)
-  const settingsPath = updatedRuntime ? getDataPath() : updateEnabledOnDisk(enabled)
+  const offlineUpdate = updatedRuntime ? null : updateEnabledOnDisk(enabled)
+  const settingsPath = offlineUpdate?.settingsPath ?? getDataPath()
   const statuses = updatedRuntime
     ? getManagedAgentHookStatuses()
-    : applyAgentStatusHooksEnabled(enabled)
+    : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings)
   return {
     enabled,
     settingsPath,

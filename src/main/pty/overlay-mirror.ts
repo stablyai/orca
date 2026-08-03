@@ -11,26 +11,12 @@ import {
   cpSync,
   linkSync,
   lstatSync,
-  opendirSync,
+  readdirSync,
   rmdirSync,
   symlinkSync,
   unlinkSync
 } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-
-export const OVERLAY_REMOVE_MAX_ENTRIES = 100_000
-export const OVERLAY_REMOVE_MAX_DEPTH = 256
-
-type OverlayRemoveLimits = {
-  maxEntries: number
-  maxDepth: number
-}
-
-type OverlayRemoveState = {
-  entries: number
-  exhausted: boolean
-  limits: OverlayRemoveLimits
-}
 
 export function mirrorEntry(sourcePath: string, targetPath: string): void {
   // Why: lstatSync (not statSync) so that if the user's source dir contains
@@ -97,122 +83,59 @@ export function isSafeDescendCandidate(stats: {
   return stats.isDirectory()
 }
 
-function resolveRemoveLimit(requested: number | undefined, maximum: number, name: string): number {
-  if (requested === undefined) {
-    return maximum
-  }
-  if (!Number.isSafeInteger(requested) || requested < 0) {
-    throw new RangeError(`${name} must be a non-negative safe integer`)
-  }
-  return Math.min(requested, maximum)
-}
-
-function closeDirectory(directory: ReturnType<typeof opendirSync>): boolean {
-  try {
-    directory.closeSync()
-    return true
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ERR_DIR_CLOSED'
-  }
-}
-
-function removeTreeWithinLimits(path: string, depth: number, state: OverlayRemoveState): boolean {
-  if (state.exhausted) {
-    return false
-  }
-
+// Why: the overlay tree contains symlinks/junctions that point back into the
+// user's real state dir. fs.rmSync with { recursive: true } has repeatedly
+// regressed on Windows when walking NTFS junctions -- it can follow them and
+// delete the *target*, destroying the user's data. Never descend into a
+// symlink/junction here: for any non-real-directory entry we unlink the link
+// itself; only entries that are truly directories on disk are recursed into.
+export function safeRemoveTree(path: string): void {
   let stat
   try {
     stat = lstatSync(path)
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+  } catch {
+    return
   }
 
   // On Windows, lstat on a directory junction can report BOTH
   // isSymbolicLink() === true AND isDirectory() === true, so we MUST check
   // isSymbolicLink first -- otherwise a junction enters the recursive branch
-  // and enumerates the link's target, the exact bug in #1083.
+  // and readdirSync enumerates the link's target, the exact bug in #1083.
   if (!isSafeDescendCandidate(stat)) {
     try {
       unlinkSync(path)
-      return true
     } catch {
       // Best-effort: antivirus/indexers can hold handles briefly on Windows.
       // A leftover link is harmless; the next spawn rebuilds the overlay.
-      return false
     }
+    return
   }
 
-  let directory
+  let entries
   try {
-    directory = opendirSync(path, { bufferSize: 32 })
+    entries = readdirSync(path, { withFileTypes: true })
   } catch {
-    return false
+    return
   }
 
-  let completed = true
-  try {
-    while (!state.exhausted) {
-      const entry = directory.readSync()
-      if (entry === null) {
-        break
-      }
-      if (state.entries >= state.limits.maxEntries) {
-        state.exhausted = true
-        completed = false
-        break
-      }
-      state.entries += 1
-
-      const child = join(path, entry.name)
-      if (isSafeDescendCandidate(entry)) {
-        if (depth >= state.limits.maxDepth) {
-          state.exhausted = true
-          completed = false
-          break
-        }
-        completed = removeTreeWithinLimits(child, depth + 1, state) && completed
-        continue
-      }
-      try {
-        unlinkSync(child)
-      } catch {
-        completed = false
-      }
+  for (const entry of entries) {
+    const child = join(path, entry.name)
+    if (isSafeDescendCandidate(entry)) {
+      safeRemoveTree(child)
+      continue
     }
-  } catch {
-    completed = false
-  } finally {
-    completed = closeDirectory(directory) && completed
+    try {
+      unlinkSync(child)
+    } catch {
+      // Best-effort, see above.
+    }
   }
 
   try {
     rmdirSync(path)
-    return completed
   } catch {
     // Directory may be non-empty if an unlink above failed; harmless.
-    return false
   }
-}
-
-// Why: the overlay tree contains symlinks/junctions that point back into the
-// user's real state dir. Stream a bounded traversal and never descend into a
-// link; a pathological tree is left for a later cleanup instead of growing
-// an unbounded directory array or call stack in Electron's main process.
-export function safeRemoveTree(path: string, requested?: Partial<OverlayRemoveLimits>): boolean {
-  const state: OverlayRemoveState = {
-    entries: 0,
-    exhausted: false,
-    limits: {
-      maxEntries: resolveRemoveLimit(
-        requested?.maxEntries,
-        OVERLAY_REMOVE_MAX_ENTRIES,
-        'maxEntries'
-      ),
-      maxDepth: resolveRemoveLimit(requested?.maxDepth, OVERLAY_REMOVE_MAX_DEPTH, 'maxDepth')
-    }
-  }
-  return removeTreeWithinLimits(path, 0, state)
 }
 
 // Why: last-line guard against an overlay-root constant ever being
@@ -220,7 +143,7 @@ export function safeRemoveTree(path: string, requested?: Partial<OverlayRemoveLi
 // designated overlay root is refused so a misconfiguration cannot turn into
 // an `rm -rf` of arbitrary user data. Logs (rather than throws) so a buggy
 // caller stays visible without crashing the PTY spawn.
-export function safeRemoveOverlay(overlayDir: string, overlayRoot: string): boolean {
+export function safeRemoveOverlay(overlayDir: string, overlayRoot: string): void {
   const resolvedRoot = resolve(overlayRoot)
   const resolvedTarget = resolve(overlayDir)
   const rel = relative(resolvedRoot, resolvedTarget)
@@ -228,7 +151,7 @@ export function safeRemoveOverlay(overlayDir: string, overlayRoot: string): bool
     console.warn(
       `[overlay-mirror] refusing to remove overlay outside root: target=${resolvedTarget} root=${resolvedRoot}`
     )
-    return false
+    return
   }
-  return safeRemoveTree(resolvedTarget)
+  safeRemoveTree(resolvedTarget)
 }

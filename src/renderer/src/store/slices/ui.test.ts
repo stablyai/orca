@@ -23,6 +23,7 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
+import { getRepoHostIdentityForParts } from './repo-host-identity'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
@@ -77,6 +78,7 @@ function createUIStore(): StoreApi<AppState> {
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
     markdownTocPanelWidth: 240,
+    combinedDiffFileTreeWidth: 256,
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     ...createSettingsSearchState(args[0]),
@@ -859,7 +861,9 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('preserves persisted repo filters until repos are loaded', () => {
     const store = createUIStore()
-    const remoteDismissalKey = getSetupScriptPromptDismissalKey('remote-repo')
+    const remoteDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('remote-repo', 'runtime:env-1')
+    )
 
     store.getState().hydratePersistedUI(
       makePersistedUI({
@@ -881,8 +885,12 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('validates persisted repo filters when repos are already loaded', () => {
     const store = createUIStore()
-    const localDismissalKey = getSetupScriptPromptDismissalKey('local-repo')
-    const staleDismissalKey = getSetupScriptPromptDismissalKey('stale-repo')
+    const localDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('local-repo', 'local')
+    )
+    const staleDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('stale-repo', 'local')
+    )
     store.setState({
       repos: [
         { id: 'local-repo', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 1 }
@@ -1226,6 +1234,16 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().markdownTocPanelWidth).toBe(200)
+  })
+
+  it('clamps persisted combined diff file tree widths into the supported range', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeWidth: 100 }))
+    expect(store.getState().combinedDiffFileTreeWidth).toBe(200)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeWidth: 5_000 }))
+    expect(store.getState().combinedDiffFileTreeWidth).toBe(640)
   })
 
   it('preserves right sidebar widths above the former 500px cap', () => {
@@ -1909,6 +1927,28 @@ describe('createUISlice hydratePersistedUI', () => {
 })
 
 describe('createUISlice settings navigation', () => {
+  it('accepts a host-qualified setup guide target', () => {
+    const store = createUIStore()
+    store.getState().openSettingsTarget({ pane: 'setup-guide', repoId: null, hostId: 'ssh:host-1' })
+    expect(store.getState().settingsNavigationTarget).toEqual({
+      pane: 'setup-guide',
+      repoId: null,
+      hostId: 'ssh:host-1'
+    })
+  })
+
+  it('rejects malformed settings targets before storing them', () => {
+    const store = createUIStore()
+    const openSettingsTarget = store.getState().openSettingsTarget as unknown as (
+      target: unknown
+    ) => void
+
+    expect(() =>
+      openSettingsTarget({ pane: 'repo', repoId: 'repo-1', hostId: 'invalid' })
+    ).toThrowError('openSettingsTarget received an invalid navigation target')
+    expect(store.getState().settingsNavigationTarget).toBeNull()
+  })
+
   it('prefetches the restored default task source when provider settings drifted', () => {
     const store = createUIStore()
     const prefetchWorkItems = vi.fn()
@@ -2126,6 +2166,53 @@ describe('createUISlice new workspace draft', () => {
       number: 42,
       title: 'Legacy issue',
       url: 'https://github.com/acme/repo/issues/42'
+    })
+  })
+
+  it('preserves serializable Jira identity and bound source context in drafts', () => {
+    const store = createUIStore()
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'ada@example.com'
+    }
+
+    store.getState().setNewWorkspaceDraft({
+      repoId: 'repo-1',
+      name: 'orca-123-link-jira',
+      prompt: '',
+      note: '',
+      attachments: [],
+      linkedWorkItem: {
+        provider: 'jira',
+        type: 'issue',
+        number: 0,
+        title: 'ORCA-123 Link Jira',
+        url: 'https://company.atlassian.net/browse/ORCA-123',
+        jiraIdentifier: 'ORCA-123'
+      },
+      linkedTaskSourceContext,
+      agent: 'claude',
+      linkedIssue: '',
+      linkedPR: null,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null
+    })
+
+    expect(store.getState().newWorkspaceDraft).toMatchObject({
+      linkedWorkItem: {
+        provider: 'jira',
+        jiraIdentifier: 'ORCA-123'
+      },
+      linkedTaskSourceContext
     })
   })
 })
@@ -3393,5 +3480,35 @@ describe('openDiffNotesSendMenuForActiveWorktree', () => {
 
     store.getState().consumeDiffNotesSendMenuOpenRequest('wt-1')
     expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
+  })
+})
+
+describe('createUISlice clearOsc52ClipboardDefaultOnNotice', () => {
+  it('restores the armed notice from persisted UI', () => {
+    const store = createUIStore()
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(false)
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ osc52ClipboardDefaultOnNoticePending: true }))
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('stops the toast this session even when the persist fails', () => {
+    // Why local-first: the flag is the only thing keeping the toast off screen, and a
+    // rejected ui.set must not leave it re-firing on every render of this session. Losing
+    // the persist just re-arms the notice next launch, which is the safe direction.
+    const setUI = vi.fn(() => Promise.reject(new Error('runtime offline')))
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ osc52ClipboardDefaultOnNoticePending: true }))
+
+    store.getState().clearOsc52ClipboardDefaultOnNotice()
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(false)
+    expect(setUI).toHaveBeenCalledWith({ osc52ClipboardDefaultOnNoticePending: false })
   })
 })

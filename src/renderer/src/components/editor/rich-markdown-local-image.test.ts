@@ -22,7 +22,7 @@ describe('rich markdown local images', () => {
       ...globalThis.window.api,
       fs: {
         readFile: vi.fn().mockResolvedValue({
-          content: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
+          content: 'AA==',
           isBinary: true,
           mimeType: 'image/png'
         })

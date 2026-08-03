@@ -18,9 +18,15 @@ Diagnostics:
 Agent Discovery:
   agent-context             Print the machine-readable command schema for agents
 
+Accounts:
+  account add               Add a managed Claude or Codex account on this Orca host
+  account list              List managed Claude and Codex accounts on this Orca host
+
 Skills:
   skills list               List version-matched skill guides bundled with this Orca CLI
   skills get                Print a version-matched skill guide as Markdown
+  skills install            Install bundled Orca skills globally via the community skills CLI
+  skills update             Update already-installed Orca skills via the community skills CLI
 
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
@@ -85,8 +91,14 @@ Terminals:
   terminal close            Close a terminal pane/session, or its whole tab with --tab
 
 Orchestration:
+  orchestration run-create  Create and bind a lightweight orchestration Run
+  orchestration run-use     Bind this coordinator terminal to an existing Run
+  orchestration run-current Show this terminal's bound Run
+  orchestration run-list    List lightweight orchestration Runs
+  orchestration run-show    Show one lightweight orchestration Run
   orchestration send        Send an inter-agent message
-  orchestration check       Check messages for a terminal
+  orchestration check       Check the bound Run mailbox
+  orchestration ask         Ask the coordinator a blocking question
   orchestration reply       Reply to a message
   orchestration inbox       Show all messages across recipients
   orchestration task-create Create an orchestration task
@@ -94,8 +106,13 @@ Orchestration:
   orchestration task-update Update a task status
   orchestration dispatch    Dispatch a task to a terminal
   orchestration dispatch-show Show dispatch context for a task
-  orchestration run         Start the coordinator loop
-  orchestration run-stop    Stop the active coordinator run
+  orchestration worker-start Start a supervised worker locally or on a connected Orca server
+  orchestration worker-show Inspect one supervised worker
+  orchestration worker-read Read bounded output from one supervised worker
+  orchestration worker-stop Stop one supervised worker
+  orchestration worker-abandon Fence an uncertain worker without claiming it stopped
+  orchestration coordinator-start Start the legacy automatic coordinator loop
+  orchestration coordinator-stop Stop the legacy automatic coordinator loop
   orchestration gate-create Create a decision gate blocking a task
   orchestration gate-resolve Resolve a pending decision gate
   orchestration gate-list   List decision gates
@@ -201,6 +218,8 @@ Common Commands:
   orca status [--json]
   orca diagnostics memory [--json]
   orca agent-context [--json]
+  orca account add [--agent claude|codex] [--json]
+  orca account list [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
@@ -401,6 +420,9 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
+  if (command === 'skills install' && flag === 'agent') {
+    return '--agent <names>        Comma-separated install targets; default is detected agents'
+  }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
   }
@@ -418,6 +440,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   }
   if (command === 'linear list-issues' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+  }
+  if (command === 'orchestration worker-read' && flag === 'cursor') {
+    return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
   }
   if (command === 'linear list-issues' && flag === 'workspace') {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
@@ -467,6 +492,11 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'orchestration task-create' && flag === 'display-name') {
     return '--display-name <text> UI label shown for dispatched worker rows'
   }
+  // Why: the shared --agent help describes launching a TUI agent in a terminal,
+  // which is the wrong meaning here — this selects the account provider.
+  if (command === 'account add' && flag === 'agent') {
+    return '--agent <id>           Account provider: claude or codex (default claude)'
+  }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
   }
@@ -507,8 +537,11 @@ export function formatFlagHelp(flag: string): string {
     json: '--json                 Emit machine-readable JSON',
     key: '--key <key>            Key argument for this command',
     limit: '--limit <n>            Maximum number of rows to return',
+    local: '--local                Target the current project instead of the global install',
+    skill: '--skill <name>         Bundled skill to act on; repeat for several',
     mode: '--mode <mode>          Mode such as edit, diff, or both',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
+    modifiers: '--modifiers <chord>  Modifier keys held only for this click',
     name: '--name <name>          Name for the new worktree or automation',
     'no-parent': '--no-parent            Force no parent lineage for unrelated work',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',

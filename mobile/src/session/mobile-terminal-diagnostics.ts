@@ -1,5 +1,4 @@
 const MOBILE_TERMINAL_DIAGNOSTIC_TAG = '[terminal-diagnostic]'
-export const MOBILE_TERMINAL_DIAGNOSTIC_MAX_TRACKED_HANDLES = 1_024
 
 type MobileTerminalDiagnosticValue = string | number | boolean | null | undefined
 
@@ -91,7 +90,7 @@ export class MobileTerminalDiagnostics {
     if (this.streamGateByHandle.get(handle) === reason) {
       return
     }
-    setBoundedHandleState(this.streamGateByHandle, handle, reason)
+    this.streamGateByHandle.set(handle, reason)
     logMobileTerminalDiagnostic('stream-skipped', {
       handle: shortenMobileTerminalDiagnosticId(handle),
       reason,
@@ -114,7 +113,7 @@ export class MobileTerminalDiagnostics {
     if (this.firstStreamEventSeqByHandle.get(handle) === seq) {
       return
     }
-    setBoundedHandleState(this.firstStreamEventSeqByHandle, handle, seq)
+    this.firstStreamEventSeqByHandle.set(handle, seq)
     logMobileTerminalDiagnostic('stream-first-event', {
       handle: shortenMobileTerminalDiagnosticId(handle),
       seq,
@@ -268,14 +267,6 @@ export class MobileTerminalDiagnostics {
     })
   }
 
-  /** Test-only evidence for process-retained diagnostic dedupe state. */
-  retainedHandleCountsForTests(): { streamGates: number; firstEvents: number } {
-    return {
-      streamGates: this.streamGateByHandle.size,
-      firstEvents: this.firstStreamEventSeqByHandle.size
-    }
-  }
-
   private logTabs(
     event: 'tabs-applied' | 'tabs-fetch-success',
     snapshot: DiagnosticTabsSnapshot,
@@ -296,17 +287,5 @@ export class MobileTerminalDiagnostics {
       activeHandle: shortenMobileTerminalDiagnosticId(activeHandle),
       ...extra
     })
-  }
-}
-
-function setBoundedHandleState<T>(map: Map<string, T>, handle: string, value: T): void {
-  map.delete(handle)
-  map.set(handle, value)
-  while (map.size > MOBILE_TERMINAL_DIAGNOSTIC_MAX_TRACKED_HANDLES) {
-    const oldestHandle = map.keys().next().value
-    if (typeof oldestHandle !== 'string') {
-      return
-    }
-    map.delete(oldestHandle)
   }
 }

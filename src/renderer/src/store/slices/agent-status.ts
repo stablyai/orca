@@ -32,12 +32,14 @@ import {
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { readLastTerminalInputAt } from '@/lib/terminal-input-activity-coalescing'
 import {
   getAgentRowGeneratedTitleText,
   getOrcaDispatchTaskId,
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
 } from '@/lib/agent-row-primary-text'
+import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/pi-compatible-live-recovery-record'
 import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,
@@ -45,7 +47,6 @@ import {
   transferAgentPaneAuthorityAlias
 } from './agent-pane-authority'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
-import { retainTransientAgentStatusClearedConnection } from '@/lib/transient-agent-status-clear-retention'
 
 /** Snapshot of a finished/vanished agent status entry, kept so the dashboard and sidebar hover
  *  keep showing the completion until the user clicks the worktree. `worktreeId` is stamped at
@@ -139,7 +140,10 @@ export type AgentStatusSlice = {
   /** Exact pane authorities retired while sibling panes in the tab stay live. */
   recentlyRetiredAgentStatusPaneKeys: Record<string, true>
 
-  retireAgentPaneAuthority: (paneKey: string) => void
+  retireAgentPaneAuthority: (
+    paneKey: string,
+    options?: { preserveSleepingAgentSession?: boolean }
+  ) => void
   transferAgentPaneAuthority: (args: {
     fromPaneKey: string
     toPaneKey: string
@@ -232,6 +236,7 @@ export type AgentStatusSlice = {
   captureAllSleepingAgentSessions: (mode: AllAgentSessionCaptureMode) => void
   clearSleepingAgentSession: (paneKey: string) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
+  setSleepingAgentAutomaticResumeBlocked: (paneKey: string, blocked: boolean) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
 
@@ -582,7 +587,7 @@ function isValidManualSleepLiveAgentEntry(
   if (entry.interrupted === true || entry.state === 'done') {
     return false
   }
-  const lastInputAt = state.lastTerminalInputAtByPaneKey[entry.paneKey]
+  const lastInputAt = readLastTerminalInputAt(state.lastTerminalInputAtByPaneKey, entry.paneKey)
   if (
     typeof lastInputAt === 'number' &&
     Number.isFinite(lastInputAt) &&
@@ -595,22 +600,6 @@ function isValidManualSleepLiveAgentEntry(
 
 function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
   return entry.state === 'done' && entry.interrupted !== true
-}
-
-function isCompletedPiWithLiveRecoveryRecord(
-  entry: AgentStatusEntry | undefined,
-  record: SleepingAgentSessionRecord | undefined
-): record is SleepingAgentSessionRecord {
-  return Boolean(
-    entry?.state === 'done' &&
-    entry.agentType === 'pi' &&
-    entry.providerSession &&
-    record?.agent === 'pi' &&
-    record.origin === 'live' &&
-    (!entry.worktreeId || entry.worktreeId === record.worktreeId) &&
-    agentProviderSessionsEqual('pi', entry.providerSession, record.providerSession) &&
-    getAgentResumeArgv('pi', record.providerSession)
-  )
 }
 
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
@@ -659,7 +648,8 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       if (
         existing.worktreeId !== worktreeId ||
         existing.origin !== 'live' ||
-        (liveEntry !== undefined && !isCompletedPiWithLiveRecoveryRecord(liveEntry, existing)) ||
+        (liveEntry !== undefined &&
+          !isCompletedPiCompatibleAgentWithLiveRecoveryRecord(liveEntry, existing)) ||
         (allowedPaneKeys && !allowedPaneKeys.has(existing.paneKey)) ||
         !getAgentResumeArgv(existing.agent, existing.providerSession)
       ) {
@@ -825,7 +815,8 @@ function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunc
   return {
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
-    agentEnv: { ...config.agentEnv }
+    agentEnv: { ...config.agentEnv },
+    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
   }
 }
 
@@ -836,7 +827,11 @@ function launchConfigsEqual(
   if (a === undefined || b === undefined) {
     return a === b
   }
-  if (a.agentCommand !== b.agentCommand || a.agentArgs !== b.agentArgs) {
+  if (
+    a.agentCommand !== b.agentCommand ||
+    a.agentArgs !== b.agentArgs ||
+    a.ompResumeFilePath !== b.ompResumeFilePath
+  ) {
     return false
   }
   const aKeys = Object.keys(a.agentEnv)
@@ -1095,6 +1090,7 @@ function orchestrationContextsEqual(
   return (
     a.taskId === b.taskId &&
     a.dispatchId === b.dispatchId &&
+    a.dispatchStatus === b.dispatchStatus &&
     a.taskTitle === b.taskTitle &&
     a.displayName === b.displayName &&
     a.parentTerminalHandle === b.parentTerminalHandle &&
@@ -1232,7 +1228,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     recentlyRetiredAgentStatusPaneKeys: {},
     scheduleAgentStatusFreshness: () => freshness.schedule(),
 
-    retireAgentPaneAuthority: (paneKey) => {
+    retireAgentPaneAuthority: (paneKey, options) => {
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
       const retiredPaneKeys = retireAgentPaneAuthorityAliases(paneKey)
       const retiredPaneKeySet = new Set(retiredPaneKeys)
@@ -1260,10 +1256,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             retiredPaneKeySet
           ),
           retainedAgentsByPaneKey: removePaneKeys(s.retainedAgentsByPaneKey, retiredPaneKeySet),
-          sleepingAgentSessionsByPaneKey: removePaneKeys(
-            s.sleepingAgentSessionsByPaneKey,
-            retiredPaneKeySet
-          ),
+          sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
+            ? s.sleepingAgentSessionsByPaneKey
+            : removePaneKeys(s.sleepingAgentSessionsByPaneKey, retiredPaneKeySet),
           agentLaunchConfigByPaneKey: removePaneKeys(
             s.agentLaunchConfigByPaneKey,
             retiredPaneKeySet
@@ -1318,6 +1313,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           paneKey: to,
           tabId: targetTabId
         })),
+        // Why: retention/sidebar consumers gate on the epoch; a moved live row is a
+        // pane-key change they must observe, not a silent remap.
+        ...(from in s.agentStatusByPaneKey
+          ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
+          : {}),
         runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
           s.runtimeAgentOrchestrationByPaneKey,
           from,
@@ -1574,12 +1574,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           existingProviderSession: existingRecord?.providerSession,
           providerSessionChanged: false
         })
+        const existingRecordMatchesProviderSession =
+          existingRecord?.agent === agent &&
+          agentProviderSessionsEqual(agent, existingRecord.providerSession, providerSession)
         const launchConfig =
           (registryMatches ? registryEntry?.launchConfig : undefined) ??
-          (existingRecord?.agent === agent &&
-          agentProviderSessionsEqual(agent, existingRecord.providerSession, providerSession)
-            ? existingRecord.launchConfig
-            : undefined)
+          (existingRecordMatchesProviderSession ? existingRecord.launchConfig : undefined)
         const record: SleepingAgentSessionRecord = {
           paneKey,
           ...(tabId ? { tabId } : {}),
@@ -1602,6 +1602,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               ? { connectionId: existingRecord.connectionId }
               : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
+          ...(existingRecordMatchesProviderSession &&
+          existingRecord.automaticResumeBlockedBy === 'legacy-orchestration-worker'
+            ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' }
+            : {}),
           origin: 'live'
         }
         removedLiveStatus = existingStatus !== undefined
@@ -1766,10 +1770,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const orchestration =
           payloadMergedOrchestration ?? runtimeMergedOrchestration ?? completedFallbackOrchestration
         // Why: waiting/blocked are still the same resumable turn; child permission hooks omit the root session id.
+        // Completing a turn does not end the provider session either — the TUI stays alive and resumable at its
+        // prompt — so `done` must carry the id through, including done→done (OSC 9999 repaints and reconnect
+        // snapshot replays both re-deliver a metadata-less `done` onto an already-done row). Without that, every
+        // surface keyed on the id — mobile Chat UI transcripts, the resumable recovery anchor below — loses the
+        // session while the agent sits idle, which is precisely when it is read (#10630). Only a new turn
+        // (done→working) still drops it, so a reused pane cannot inherit a finished session.
         const canReuseExistingProviderSession =
           existing?.agentType === identity.agentType &&
-          existing.state !== 'done' &&
-          payload.state !== 'done'
+          (existing.state !== 'done' || payload.state === 'done')
         const providerSession =
           metadata?.providerSession ??
           (canReuseExistingProviderSession ? existing.providerSession : undefined)
@@ -1801,13 +1810,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           ? registryEntry?.launchConfig
           : undefined
         const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
-        const retainsPiRecoveryIdentity =
+        // Why: a completed turn leaves the TUI session alive and resumable at its prompt for any
+        // resumable agent (Claude/Codex/Pi/…), not just Pi — so keep its persisted recovery anchor
+        // even when done. Else a cold restore after an abrupt app death (macOS logout, #9454) drops
+        // the pane to a bare shell instead of `--resume`-ing the agent logged in.
+        const retainsResumableRecoveryIdentity =
           payload.state === 'done' &&
-          identity.agentType === 'pi' &&
+          isResumableTuiAgent(identity.agentType) &&
           providerSession !== undefined &&
-          getAgentResumeArgv('pi', providerSession) !== null
+          getAgentResumeArgv(identity.agentType, providerSession) !== null
         const matchedSleepingLaunchConfig =
-          (payload.state !== 'done' || retainsPiRecoveryIdentity) &&
+          (payload.state !== 'done' || retainsResumableRecoveryIdentity) &&
           existingSleepingRecord?.launchConfig &&
           existingSleepingRecord.agent === identity.agentType &&
           providerSession &&
@@ -1935,14 +1948,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           (entry) => entry.paneKey === paneKey
         )
         const liveRecoveryWorktreeId =
-          entry.state === 'done' && !retainsPiRecoveryIdentity
+          entry.state === 'done' && !retainsResumableRecoveryIdentity
             ? null
             : (entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey))
         const liveRecoveryRecord = liveRecoveryWorktreeId
           ? sleepingRecordFromEntry({
               state: s,
-              // Why: a completed Pi turn leaves the TUI session alive — keep resume identity active without representing done as pending work.
-              entry: retainsPiRecoveryIdentity
+              // Why: a completed resumable-agent turn leaves the TUI session alive — keep resume identity active without representing done as pending work.
+              entry: retainsResumableRecoveryIdentity
                 ? { ...entry, state: 'working', prompt: '', lastAssistantMessage: undefined }
                 : entry,
               worktreeId: liveRecoveryWorktreeId,
@@ -2232,11 +2245,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           next ??= { ...s.agentStatusByPaneKey }
           delete next[paneKey]
         }
-        const retainedClearedConnections = retainTransientAgentStatusClearedConnection(
-          s.transientClearedAgentStatusConnectionIds,
-          connectionId
-        )
-        if (!next && retainedClearedConnections === s.transientClearedAgentStatusConnectionIds) {
+        const wasAlreadyBlocked = connectionId in s.transientClearedAgentStatusConnectionIds
+        if (!next && wasAlreadyBlocked) {
           return s
         }
         removed = next !== null
@@ -2250,7 +2260,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
                 sortEpoch: s.sortEpoch + 1
               }
             : {}),
-          transientClearedAgentStatusConnectionIds: retainedClearedConnections
+          transientClearedAgentStatusConnectionIds: wasAlreadyBlocked
+            ? s.transientClearedAgentStatusConnectionIds
+            : { ...s.transientClearedAgentStatusConnectionIds, [connectionId]: true }
         }
       })
       if (removed) {
@@ -2755,7 +2767,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
           if (entry.state === 'done') {
             const existing = next[entry.paneKey]
-            if (!isCompletedPiWithLiveRecoveryRecord(entry, existing)) {
+            if (!isCompletedPiCompatibleAgentWithLiveRecoveryRecord(entry, existing)) {
               continue
             }
             if (mode === 'periodic') {
@@ -2801,6 +2813,31 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
     clearSleepingAgentSession: (paneKey) => clearSleepingAgentSessionsByPaneKey([paneKey]),
     clearSleepingAgentSessionsByPaneKey,
+    setSleepingAgentAutomaticResumeBlocked: (paneKey, blocked) => {
+      set((s) => {
+        const current = s.sleepingAgentSessionsByPaneKey[paneKey]
+        if (
+          !current ||
+          (blocked
+            ? current.automaticResumeBlockedBy === 'legacy-orchestration-worker'
+            : current.automaticResumeBlockedBy === undefined)
+        ) {
+          return s
+        }
+        const next = { ...current }
+        if (blocked) {
+          next.automaticResumeBlockedBy = 'legacy-orchestration-worker'
+        } else {
+          delete next.automaticResumeBlockedBy
+        }
+        return {
+          sleepingAgentSessionsByPaneKey: {
+            ...s.sleepingAgentSessionsByPaneKey,
+            [paneKey]: next
+          }
+        }
+      })
+    },
 
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {
       set((s) => {
