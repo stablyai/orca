@@ -134,7 +134,7 @@ function model(overrides: Partial<SessionOptionDescriptor> = {}): SessionOptionD
       type: 'select',
       currentValue: 'opus',
       choices: [
-        { value: 'opus', label: 'Opus 4.8' },
+        { value: 'opus', label: 'Opus 5' },
         { value: 'sonnet', label: 'Sonnet 5' }
       ]
     },
@@ -180,17 +180,15 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    expect(screen.getByRole('button', { name: 'Model Opus 4.8' }).textContent).toContain('Opus 4.8')
-    expect(screen.getByRole('button', { name: 'Model Opus 4.8' }).textContent).not.toContain(
-      'Model:'
-    )
+    expect(screen.getByRole('button', { name: 'Model Opus 5' }).textContent).toContain('Opus 5')
+    expect(screen.getByRole('button', { name: 'Model Opus 5' }).textContent).not.toContain('Model:')
     expect(screen.getByRole('button', { name: 'Effort High · Fast' }).textContent).toContain(
       'High · Fast'
     )
     expect(
       screen
         .getByRole('button', { name: 'Effort High · Fast' })
-        .compareDocumentPosition(screen.getByRole('button', { name: 'Model Opus 4.8' })) &
+        .compareDocumentPosition(screen.getByRole('button', { name: 'Model Opus 5' })) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).not.toBe(0)
 
@@ -221,7 +219,7 @@ describe('NativeChatSessionOptionPickers', () => {
     )
     expect(
       screen
-        .getByRole('button', { name: 'Model Opus 4.8' })
+        .getByRole('button', { name: 'Model Opus 5' })
         .parentElement?.getAttribute('data-disabled')
     ).toBe('true')
     expect(

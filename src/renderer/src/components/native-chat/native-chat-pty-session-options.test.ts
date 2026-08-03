@@ -88,7 +88,12 @@ describe('native chat PTY session options', () => {
 
     const effortResult = await surface.setOption('effort', 'high')
     expect(dispatch).toHaveBeenCalledWith('/effort high')
-    expect(effortResult.snapshot.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
+    expect(effortResult.snapshot.map(({ id }) => id)).toEqual([
+      'model',
+      'effort',
+      'context1m',
+      'fastMode'
+    ])
     expect(effortResult.snapshot.find(({ id }) => id === 'effort')).toMatchObject({
       valueSource: 'dispatched',
       kind: { currentValue: 'high' }

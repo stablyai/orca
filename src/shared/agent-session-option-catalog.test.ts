@@ -15,8 +15,20 @@ describe('agent session option catalog', () => {
     const catalog = getAgentSessionOptionCatalog('claude')
     expect(
       catalog?.models.find((model) => model.id === 'opus')?.options.map(({ id }) => id)
-    ).toEqual(['effort', 'fastMode'])
+    ).toEqual(['effort', 'context1m', 'fastMode'])
     expect(catalog?.models.find((model) => model.id === 'haiku')?.options).toEqual([])
+  })
+
+  it('composes the Claude long-context suffix onto the selected model id', () => {
+    expect(
+      resolveAgentSessionOptionLaunch('claude', { model: 'opus', effort: 'high', context1m: true })
+    ).toEqual({
+      args: ['--model', 'opus[1m]', '--effort', 'high'],
+      appliedValues: { model: 'opus', effort: 'high', context1m: true }
+    })
+    expect(
+      resolveAgentSessionOptionLaunch('claude', { model: 'claude-opus-4-6', context1m: false }).args
+    ).toEqual(['--model', 'claude-opus-4-6', '--effort', 'high'])
   })
 
   it('merges discovered labels while preserving cataloged option shapes', () => {

@@ -65,7 +65,24 @@ const CLAUDE_FAST_MODE: CatalogOption = {
   apply: { midSession: { kind: 'toggle-command', command: '/fast' } }
 }
 
+/** Claude spells the long-context variant as a `[1m]` suffix on the model id
+ * rather than a separate model, so it composes instead of doubling the list. */
+const CLAUDE_LONG_CONTEXT: CatalogOption = {
+  id: 'context1m',
+  label: '1M context',
+  category: 'model_config',
+  kind: { type: 'boolean', defaultValue: false },
+  apply: { composedIntoModel: true }
+}
+
+function claudeOpus(extras: readonly CatalogOption[] = []): CatalogOption[] {
+  return [claudeEffort(true), CLAUDE_LONG_CONTEXT, ...extras]
+}
+
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+  // Why: labels double as the match keys for
+  // `readClaudeSessionOptionsFromTerminalScreen`, which recovers the live model
+  // by substring-matching Claude's TUI header. Keep them verbatim header text.
   models: [
     {
       id: 'fable',
@@ -74,8 +91,8 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     },
     {
       id: 'opus',
-      label: 'Opus 4.8',
-      options: [claudeEffort(true), CLAUDE_FAST_MODE]
+      label: 'Opus 5',
+      options: claudeOpus([CLAUDE_FAST_MODE])
     },
     {
       id: 'sonnet',
@@ -87,6 +104,28 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       id: 'haiku',
       label: 'Haiku',
       options: []
+    },
+    // Claude's "More models" submenu. Aliases only cover the latest release of
+    // each family, so previous ones need their full model ids.
+    {
+      id: 'claude-opus-4-8',
+      label: 'Opus 4.8',
+      options: claudeOpus([CLAUDE_FAST_MODE])
+    },
+    {
+      id: 'claude-opus-4-7',
+      label: 'Opus 4.7',
+      options: claudeOpus([CLAUDE_FAST_MODE])
+    },
+    {
+      id: 'claude-opus-4-6',
+      label: 'Opus 4.6',
+      options: claudeOpus()
+    },
+    {
+      id: 'claude-sonnet-4-6',
+      label: 'Sonnet 4.6',
+      options: [claudeEffort(true), CLAUDE_LONG_CONTEXT]
     }
   ],
   modelApply: {
@@ -100,7 +139,8 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       // actual prompt so ordinary model changes stay in native chat.
       detectAgentInteraction: 'claude-model-switch-confirmation'
     }
-  }
+  },
+  composeModelValue: (modelId, values) => (values.context1m === true ? `${modelId}[1m]` : modelId)
 }
 
 const CODEX_EFFORT_CHOICES = [

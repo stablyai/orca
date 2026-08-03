@@ -295,7 +295,7 @@ describe('NativeChatComposer', () => {
 
   it('shows the model already selected in the Claude TUI when chat opens', async () => {
     mocks.getMainBufferSnapshot.mockResolvedValue({
-      data: 'Claude Code v2.1.211\r\nOpus 4.8 with medium effort · API Usage Billing',
+      data: 'Claude Code v2.1.211\r\nOpus 5 with medium effort · API Usage Billing',
       cols: 120,
       rows: 40
     })
@@ -330,7 +330,7 @@ describe('NativeChatComposer', () => {
 
   it('reads Claude state from mounted xterm while its alternate screen is active', async () => {
     mocks.getMainBufferSnapshot.mockResolvedValue({
-      data: 'Claude Code v2.1.211\r\nOpus 4.8 with high effort · stale main buffer',
+      data: 'Claude Code v2.1.211\r\nOpus 5 with high effort · stale main buffer',
       cols: 120,
       rows: 40,
       alternateScreen: true
@@ -398,7 +398,7 @@ describe('NativeChatComposer', () => {
     expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
       ptyId: 'pty-1',
       settings: {},
-      expectedModelLabel: 'Opus 4.8'
+      expectedModelLabel: 'Opus 5'
     })
     expect(onSwitchToTerminal).not.toHaveBeenCalled()
   })
