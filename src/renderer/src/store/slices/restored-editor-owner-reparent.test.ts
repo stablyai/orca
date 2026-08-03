@@ -364,6 +364,72 @@ describe('restored editor owner reparent', () => {
     )
   })
 
+  it('leaves destination tabs and groups byte-identical when activation hits a collision', () => {
+    const sourceId = openRestoredSource()
+    const destinationId = useAppStore.getState().openFile(
+      {
+        filePath: FILE_PATH,
+        relativePath: 'docs/readme.md',
+        worktreeId: TARGET,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+    const destinationTab = useAppStore
+      .getState()
+      .unifiedTabsByWorktree[TARGET]?.find((tab) => tab.entityId === destinationId)
+    expect(destinationTab).toBeDefined()
+    const staleTab = {
+      ...destinationTab!,
+      id: 'stale-target-tab',
+      entityId: 'stale-target-file'
+    }
+    useAppStore.setState((state) => ({
+      activeWorktreeId: SOURCE,
+      activeFileId: sourceId,
+      unifiedTabsByWorktree: {
+        ...state.unifiedTabsByWorktree,
+        [TARGET]: [...(state.unifiedTabsByWorktree[TARGET] ?? []), staleTab]
+      },
+      groupsByWorktree: {
+        ...state.groupsByWorktree,
+        [TARGET]: (state.groupsByWorktree[TARGET] ?? []).map((group) =>
+          group.id === staleTab.groupId
+            ? {
+                ...group,
+                activeTabId: staleTab.id,
+                tabOrder: [...group.tabOrder, staleTab.id],
+                recentTabIds: [...(group.recentTabIds ?? []), staleTab.id]
+              }
+            : group
+        )
+      }
+    }))
+    const state = useAppStore.getState()
+    state.setRestoredEditorOwnerMigrationPending(sourceId, true)
+    const before = useAppStore.getState()
+
+    const result = before.reparentRestoredEditorFileOwner({
+      fileId: sourceId,
+      targetWorktreeId: TARGET,
+      targetRelativePath: 'docs/readme.md',
+      targetExecutionHostId: 'local',
+      targetRuntimeEnvironmentId: null,
+      targetOperationProvenance: captureEditorFileOperationProvenance(before, TARGET, null, true)
+    })
+
+    expect(result).toEqual({ ok: false, reason: 'collision' })
+    const after = useAppStore.getState()
+    expect(after.unifiedTabsByWorktree).toBe(before.unifiedTabsByWorktree)
+    expect(after.groupsByWorktree).toBe(before.groupsByWorktree)
+    expect(after.layoutByWorktree).toBe(before.layoutByWorktree)
+    expect(after.activeGroupIdByWorktree).toBe(before.activeGroupIdByWorktree)
+    expect(after.activeWorktreeId).toBe(SOURCE)
+    expect(after.activeFileId).toBe(sourceId)
+  })
+
   it('moves the watcher projection from source to destination without fanout', () => {
     const oldId = openRestoredSource()
     const before = getEditorExternalWatchTargets(useAppStore.getState())

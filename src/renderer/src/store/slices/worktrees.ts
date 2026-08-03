@@ -22,11 +22,11 @@ import {
   applyWorktreeUpdates,
   withoutErasedRequiredWorktreeFields,
   getRepoIdFromWorktreeId,
-  type ActiveWorktreeStateTransition,
   type DirectSshWorktreeFetchOptions,
   type WorktreeFetchOptions,
   type WorktreeSlice
 } from './worktree-helpers'
+import { projectWorktreeTabModelReconciliation } from './tabs'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
 import { areWorkspaceLinkedItemsEqual } from '../../../../shared/workspace-linked-item'
 import { areTaskSourceContextsEqual } from '../../../../shared/task-source-context'
@@ -5240,6 +5240,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   setActiveWorktree: (worktreeId, executionHostId, options) => {
+    const stateTransition = options?.stateTransition?.(get())
+    if (stateTransition && !stateTransition.activate) {
+      if (Object.keys(stateTransition.patch).length > 0) {
+        set(stateTransition.patch)
+      }
+      return false
+    }
     const workspaceScope = worktreeId ? parseWorkspaceKey(worktreeId) : null
     if (worktreeId && shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
@@ -5248,21 +5255,23 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (get().activeWorktreeId !== worktreeId) {
       moveFocusToRendererBeforeFocusedWebviewHidden()
     }
-    const reconciledActiveTabId = worktreeId
-      ? get().reconcileWorktreeTabModel(worktreeId).activeRenderableTabId
-      : null
     let shouldClearUnread = false
     let shouldPrepareTerminalTabs = false
     let shouldTagTerminalTabs = false
-    let activationCommitted = false
     set((current) => {
-      const stateTransition: ReturnType<ActiveWorktreeStateTransition> | undefined =
-        options?.stateTransition?.(current)
-      if (stateTransition && !stateTransition.activate) {
-        return stateTransition.patch
-      }
-      const s = stateTransition ? ({ ...current, ...stateTransition.patch } as AppState) : current
-      activationCommitted = true
+      const transitioned = stateTransition
+        ? ({ ...current, ...stateTransition.patch } as AppState)
+        : current
+      const reconciliation = worktreeId
+        ? projectWorktreeTabModelReconciliation(transitioned, worktreeId)
+        : null
+      const reconciliationChanged = Boolean(
+        reconciliation && Object.keys(reconciliation.patch).length > 0
+      )
+      const s = reconciliationChanged
+        ? ({ ...transitioned, ...reconciliation.patch } as AppState)
+        : transitioned
+      const reconciledActiveTabId = reconciliation?.activeRenderableTabId ?? null
       if (!worktreeId) {
         return {
           ...stateTransition?.patch,
@@ -5464,6 +5473,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         nextDetectedWorktrees !== s.detectedWorktreesByRepo ||
         nextFolderWorkspaces !== s.folderWorkspaces ||
         nextActiveRepoId !== s.activeRepoId ||
+        reconciliationChanged ||
         stateTransition !== undefined
       if (!hasStateChange) {
         // Why: preserve the root Zustand reference on a no-op re-activation so session persistence/runtime sync don't fan out.
@@ -5472,6 +5482,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
       return {
         ...stateTransition?.patch,
+        ...reconciliation?.patch,
         activeRepoId: nextActiveRepoId,
         activeWorktreeId: worktreeId,
         activeWorkspaceKey: isWorkspaceKey(worktreeId)
@@ -5496,10 +5507,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ...tabsByWorktreeUpdate
       }
     })
-
-    if (!activationCommitted) {
-      return false
-    }
 
     if (worktreeId && shouldPrepareTerminalTabs) {
       const prepareTerminalTabs = (): void => {

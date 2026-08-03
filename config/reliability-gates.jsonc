@@ -26,13 +26,13 @@
       "providers": ["local", "ssh", "paired-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "paired-runtime"],
-      "coverageNotes": "Deterministic store/controller tests cover local, direct-SSH, paired-runtime identity, folder workspaces, queue quiescence, stale route and connection-generation rejection, authoritative active-workspace projection, owner-derived IDs, drafts and editor maps, tab/group placement, exact watch replacement, change/delete/rename correlation, explicit save, autosave, collision refusal, provenance, and restart hot-exit persistence. Live headed/headless paired-runtime and post-establish Electron IPC remain uncollected.",
+      "coverageNotes": "Deterministic store/controller tests cover local, direct-SSH, paired-runtime identity, folder workspaces, queue quiescence, stale route and connection-generation rejection, authoritative active-workspace projection, owner-derived IDs, drafts and editor maps, tab/group placement, exact watch replacement, change/delete/rename correlation, explicit save, autosave, collision refusal without activation reconciliation, provenance, and restart hot-exit persistence. Live headed/headless paired-runtime and post-establish Electron IPC remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/11304",
         "https://github.com/stablyai/orca/pull/11369"
       ],
-      "invariant": "A restored absolute path owned by a same-host sibling workspace cannot read, save, watch, or persist until old saves drain, the exact route and host generations are revalidated, and one authoritative activation transaction installs the sibling owner, target projection, editor state, and first-activation terminal preparation; collisions and stale routes fail without migration.",
-      "oracle": "Hold an old-owner save in flight, start migration, then remove the sibling, change a folder root, or reconnect SSH and require owner migration to fail closed after quiescence. On a stable route require one coherent target-workspace projection, first-activation terminal generation preparation, destination authority for explicit save and autosave, exact watch replacement, destination-only change/delete/rename handling, owner-derived state rekeys, hot-exit restart ownership, and no mutation for dirty or clean collisions.",
+      "invariant": "A restored absolute path owned by a same-host sibling workspace cannot read, save, watch, or persist until old saves drain, the exact route and host generations are revalidated, and one authoritative activation transaction installs the sibling owner, target projection, editor state, reconciliation, and first-activation terminal preparation; collisions and stale routes fail before activation preparation or reconciliation.",
+      "oracle": "Hold an old-owner save in flight, start migration, then remove the sibling, change a folder root, or reconnect SSH and require owner migration to fail closed after quiescence. On a stable route require one coherent target-workspace projection, first-activation terminal generation preparation, destination authority for explicit save and autosave, exact watch replacement, destination-only change/delete/rename handling, owner-derived state rekeys, and hot-exit restart ownership. Seed an invalid destination tab/group model before a collision and require the target projection to remain byte-identical.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts src/renderer/src/lib/runtime-workspace-file-route.test.ts"
       ],
@@ -48,7 +48,7 @@
             "one atomic commit rekeys owner-derived editor, preview, draft, cursor, view, tab, group, active, reveal, focus, provenance, and persistence state",
             "active reparenting uses the centralized workspace activation transaction for terminal, browser, pending-creation, explorer, first-activation, and post-commit state",
             "source watch unsubscribes once, destination watch subscribes once, and only destination change/delete/rename events reach the file",
-            "dirty and clean destination collisions fail closed without changing either open session",
+            "dirty and clean destination collisions fail closed without changing either open session or reconciling destination tabs and groups",
             "folder and direct-SSH owners retain exact root, host, target, and connection-generation authority"
           ]
         },
@@ -74,7 +74,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts src/renderer/src/lib/runtime-workspace-file-route.test.ts",
           "result": "passed",
           "durationSeconds": 3,
-          "summary": "Three deterministic files passed 19 lifecycle, stale-route, activation, ownership, host, collision, persistence, watch, and save tests."
+          "summary": "Three deterministic files passed 20 lifecycle, stale-route, activation, ownership, host, collision, persistence, watch, and save tests."
         }
       ],
       "runtimeBudget": {
