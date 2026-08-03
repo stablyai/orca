@@ -23,6 +23,8 @@ import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeTerminalRead } from '../../shared/runtime-types'
 import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contract'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../shared/orchestration-run-pagination'
+import type { OrchestrationCostReport } from '../../shared/orchestration-cost-report'
+import { formatOrchestrationCostReport } from '../orchestration-report-format'
 import {
   formatMessageReadOnlyTag,
   formatOrchestrationCheckText,
@@ -502,6 +504,13 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
         `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}`
     )
+  },
+
+  'orchestration report': async ({ flags, client, json }) => {
+    const result = await client.call<OrchestrationCostReport>('orchestration.report', {
+      id: getRequiredStringFlag(flags, 'id')
+    })
+    printResult(result, json, formatOrchestrationCostReport)
   },
 
   'orchestration send': async ({ flags, client, cwd, json }) => {

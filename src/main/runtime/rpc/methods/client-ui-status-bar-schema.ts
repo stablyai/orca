@@ -1,6 +1,6 @@
-import type { StatusBarItem } from './types'
+import { z } from 'zod'
 
-export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
+export const ClientUiStatusBarItem = z.enum([
   'claude',
   'codex',
   'gemini',
@@ -13,4 +13,4 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'resource-usage',
   'orchestration-usage',
   'ports'
-]
+])

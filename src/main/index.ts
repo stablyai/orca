@@ -21,6 +21,8 @@ import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
+import { ORCHESTRATION_REPORT_SESSION_LIMIT } from '../shared/orchestration-cost-report'
+import { refreshOrchestrationReportUsageSnapshots } from './runtime/orchestration/cost-report-usage-refresh'
 import {
   killAllPty,
   clearProviderPtyState,
@@ -2340,6 +2342,15 @@ void app.whenReady().then(async () => {
       }),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
+    getOrchestrationUsageSnapshots: (completedAt) =>
+      refreshOrchestrationReportUsageSnapshots(
+        [
+          { provider: 'codex', store: codexUsage },
+          { provider: 'claude', store: claudeUsage },
+          { provider: 'opencode', store: openCodeUsage }
+        ],
+        { completedAt, limit: ORCHESTRATION_REPORT_SESSION_LIMIT }
+      ),
     orchestrationEnvironmentTransport
   })
   runtime = runtimeService

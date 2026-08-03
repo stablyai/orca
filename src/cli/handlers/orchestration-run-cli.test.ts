@@ -98,6 +98,32 @@ describe('lightweight Run CLI handlers', () => {
     })
   })
 
+  it('requests a read-only Run report by id', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        schemaVersion: 1,
+        generatedAt: '2026-01-01T00:00:00.000Z',
+        run: { id: 'run_1' },
+        graph: { rootTaskIds: [], tasks: [] },
+        totals: {
+          elapsed: { milliseconds: null, status: 'unavailable' },
+          usage: { providers: [] }
+        },
+        attribution: { attributed: [], unlinked: [], ambiguous: [] },
+        completeness: { status: 'complete', providerSessions: [], warnings: [] }
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration report']({
+      flags: new Map([['id', 'run_1']]),
+      client: { call: callMock },
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.report', { id: 'run_1' })
+    expect(printResult).toHaveBeenCalled()
+  })
+
   it('passes explicit legacy takeover only when requested', async () => {
     callMock.mockResolvedValue({
       result: { run: { id: 'run_adopted', objective: 'Recovered work' } }

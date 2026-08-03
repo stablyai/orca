@@ -20,6 +20,10 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { CodexUsagePersistedState } from './types'
 import { createWorktreeRefs } from '../usage/usage-worktree-refs'
 import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
+import type {
+  OrchestrationReportUsageSession,
+  OrchestrationReportUsageSnapshot
+} from '../../shared/orchestration-cost-report'
 
 const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
 const STALE_MS = 5 * 60_000
@@ -416,6 +420,77 @@ export class CodexUsageStore {
       ...this.state.scanState,
       isScanning: this.scanPromise !== null,
       hasAnyCodexData: this.state.sessions.length > 0 || this.state.dailyAggregates.length > 0
+    }
+  }
+
+  getOrchestrationReportUsage(limit: number): OrchestrationReportUsageSnapshot {
+    const status = this.state.scanState.enabled
+      ? this.state.scanState.lastScanError
+        ? 'error'
+        : this.scanPromise
+          ? 'scanning'
+          : this.state.scanState.lastScanCompletedAt === null
+            ? 'uninitialized'
+            : Date.now() - this.state.scanState.lastScanCompletedAt >= STALE_MS
+              ? 'stale'
+              : 'available'
+      : 'disabled'
+    const sourceSessions = status === 'available' ? this.state.sessions : []
+    const sessions = sourceSessions.slice(0, limit).map((session) => {
+      const worktreeIds = new Set(session.locationBreakdown.map((row) => row.worktreeId))
+      const worktreeId =
+        worktreeIds.size === 1 && !worktreeIds.has(null) ? ([...worktreeIds][0] as string) : null
+      const costs = session.modelBreakdown.map((row) =>
+        estimateCostUsd(row.modelKey, row.inputTokens, row.cachedInputTokens, row.outputTokens)
+      )
+      const knownCosts = costs.filter((cost): cost is number => cost !== null)
+      const record: OrchestrationReportUsageSession = {
+        provider: 'codex',
+        sessionId: session.sessionId,
+        firstTimestamp: session.firstTimestamp,
+        lastTimestamp: session.lastTimestamp,
+        worktreeId,
+        locationStatus: worktreeId ? 'exact' : worktreeIds.size > 1 ? 'mixed' : 'unavailable',
+        model: session.primaryModel,
+        metrics: {
+          inputTokens: session.totalInputTokens,
+          cachedInputTokens: session.totalCachedInputTokens,
+          outputTokens: session.totalOutputTokens,
+          reasoningOutputTokens: session.totalReasoningOutputTokens,
+          cacheReadTokens: null,
+          cacheWriteTokens: null,
+          totalTokens: session.totalTokens,
+          estimatedCostUsd:
+            knownCosts.length > 0 ? knownCosts.reduce((sum, cost) => sum + cost, 0) : null,
+          costStatus:
+            knownCosts.length === costs.length && costs.length > 0
+              ? 'known'
+              : knownCosts.length > 0
+                ? 'partial'
+                : 'unavailable'
+        }
+      }
+      return record
+    })
+    return {
+      provider: 'codex',
+      status,
+      lastScanCompletedAt: this.state.scanState.lastScanCompletedAt,
+      message:
+        status === 'disabled'
+          ? 'Codex usage tracking is disabled.'
+          : status === 'error'
+            ? 'Codex usage scan failed.'
+            : status === 'uninitialized'
+              ? 'Codex usage has not completed an initial scan.'
+              : status === 'stale'
+                ? 'Codex usage snapshot is stale.'
+                : status === 'scanning'
+                  ? 'Codex usage scan is incomplete.'
+                  : null,
+      limitations: [],
+      sessions,
+      truncated: sourceSessions.length > limit
     }
   }
 

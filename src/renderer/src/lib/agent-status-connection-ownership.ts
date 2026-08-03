@@ -1,4 +1,9 @@
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
+import {
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
@@ -11,6 +16,44 @@ type AgentStatusRoutingState = {
   ptyIdsByTabId: Record<string, string[] | undefined> | undefined
   sshConnectionStates: ReadonlyMap<string, { status: string }>
   transientClearedAgentStatusConnectionIds: Record<string, true>
+}
+
+type LivePanePtyBindingState = Pick<
+  AgentStatusRoutingState,
+  'terminalLayoutsByTabId' | 'ptyIdsByTabId'
+>
+
+function resolveLivePanePtyId(state: LivePanePtyBindingState, paneKey: string): string | null {
+  const pane = parsePaneKey(paneKey)
+  if (!pane) {
+    return null
+  }
+  const ptyId = state.terminalLayoutsByTabId?.[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
+  return ptyId && state.ptyIdsByTabId?.[pane.tabId]?.includes(ptyId) ? ptyId : null
+}
+
+export function resolveLiveAgentStatusExecutionHostId(
+  state: LivePanePtyBindingState,
+  paneKey: string
+): ExecutionHostId | null {
+  const ptyId = resolveLivePanePtyId(state, paneKey)
+  if (!ptyId) {
+    return null
+  }
+  const sshPty = parseAppSshPtyId(ptyId)
+  if (sshPty) {
+    return toSshExecutionHostId(sshPty.connectionId)
+  }
+  if (ptyId.startsWith('ssh:')) {
+    return null
+  }
+  const runtimePty = parseRemoteRuntimePtyId(ptyId)
+  if (runtimePty) {
+    return runtimePty.handle && runtimePty.environmentId
+      ? toRuntimeExecutionHostId(runtimePty.environmentId)
+      : null
+  }
+  return ptyId.startsWith('remote:') ? null : 'local'
 }
 
 export function resolveAgentStatusConnectionRouting(args: {
@@ -70,12 +113,7 @@ export function resolveLiveAgentStatusConnectionRouting(args: {
   expectedConnectionId?: string | null
   runtimeEnvironmentId?: string | null
 }): AgentStatusConnectionRouting | undefined {
-  const pane = parsePaneKey(args.paneKey)
-  if (
-    !pane ||
-    !args.state.ptyIdsByTabId?.[pane.tabId]?.includes(args.ptyId) ||
-    args.state.terminalLayoutsByTabId?.[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] !== args.ptyId
-  ) {
+  if (resolveLivePanePtyId(args.state, args.paneKey) !== args.ptyId) {
     return undefined
   }
   const routing = resolveAgentStatusConnectionRouting(args)

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { CURRENT_CONTRACT_VERSION, OrchestrationDb } from './db'
+import { buildOrchestrationCostReport } from './cost-report'
 
 describe('OrchestrationDb worker Dispatch state', () => {
   let db: OrchestrationDb | undefined
@@ -52,6 +53,43 @@ describe('OrchestrationDb worker Dispatch state', () => {
         agent_terminal_handle: 'term_worker'
       })
     ])
+  })
+
+  it('returns bounded report rows without task or worker payload fields', () => {
+    const d = createDb()
+    const run = d.createRun({
+      objective: 'redacted objective',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = d.createTask({
+      runId: run.id,
+      spec: 'sensitive task spec',
+      taskTitle: 'safe title'
+    })
+    d.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: { prompt: 'sensitive worker prompt' }
+    })
+
+    const report = d.getRunReportRecords(run.id, { tasks: 1, dispatches: 1 })
+
+    expect(report).toMatchObject({ taskCount: 1, dispatchCount: 1 })
+    expect(report?.tasks[0]).not.toHaveProperty('spec')
+    expect(report?.tasks[0]).not.toHaveProperty('result')
+    expect(report?.dispatches[0]).not.toHaveProperty('start_options')
+    expect(report?.dispatches[0]).not.toHaveProperty('last_error')
+    expect(report?.tasks[0].created_at).toMatch(/T.*Z$/)
+    expect(report?.dispatches[0].created_at).toMatch(/T.*Z$/)
+
+    const dispatchStartedAt = Date.parse(report!.dispatches[0].created_at)
+    const costReport = buildOrchestrationCostReport({
+      records: report!,
+      usageSnapshots: [],
+      worktreeHosts: [],
+      generatedAt: new Date(dispatchStartedAt + 1_000).toISOString()
+    })
+    expect(costReport.graph.tasks[0].elapsed.direct.milliseconds).toBe(1_000)
   })
 
   it('requeues an active Task before settling a worker whose terminal is missing', () => {

@@ -19,6 +19,10 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsagePersistedState } from './types'
 import { createWorktreeRefs } from '../usage/usage-worktree-refs'
 import { OPENCODE_USAGE_SCHEMA_VERSION, openCodeUsageProvider } from './opencode-usage-provider'
+import type {
+  OrchestrationReportUsageSession,
+  OrchestrationReportUsageSnapshot
+} from '../../shared/orchestration-cost-report'
 
 const SCHEMA_VERSION = OPENCODE_USAGE_SCHEMA_VERSION
 const STALE_MS = 5 * 60_000
@@ -203,6 +207,67 @@ export class OpenCodeUsageStore {
       ...this.state.scanState,
       isScanning: this.scanPromise !== null,
       hasAnyOpenCodeData: this.state.sessions.length > 0 || this.state.dailyAggregates.length > 0
+    }
+  }
+
+  getOrchestrationReportUsage(limit: number): OrchestrationReportUsageSnapshot {
+    const status = this.state.scanState.enabled
+      ? this.state.scanState.lastScanError
+        ? 'error'
+        : this.scanPromise
+          ? 'scanning'
+          : this.state.scanState.lastScanCompletedAt === null
+            ? 'uninitialized'
+            : Date.now() - this.state.scanState.lastScanCompletedAt >= STALE_MS
+              ? 'stale'
+              : 'available'
+      : 'disabled'
+    const sourceSessions = status === 'available' ? this.state.sessions : []
+    const sessions = sourceSessions.slice(0, limit).map((session) => {
+      const worktreeIds = new Set(session.locationBreakdown.map((row) => row.worktreeId))
+      const worktreeId =
+        worktreeIds.size === 1 && !worktreeIds.has(null) ? ([...worktreeIds][0] as string) : null
+      const record: OrchestrationReportUsageSession = {
+        provider: 'opencode',
+        sessionId: session.sessionId,
+        firstTimestamp: session.firstTimestamp,
+        lastTimestamp: session.lastTimestamp,
+        worktreeId,
+        locationStatus: worktreeId ? 'exact' : worktreeIds.size > 1 ? 'mixed' : 'unavailable',
+        model: session.primaryModel,
+        metrics: {
+          inputTokens: session.totalInputTokens,
+          cachedInputTokens: session.totalCachedInputTokens,
+          outputTokens: session.totalOutputTokens,
+          reasoningOutputTokens: session.totalReasoningOutputTokens,
+          cacheReadTokens: null,
+          cacheWriteTokens: null,
+          totalTokens: session.totalTokens,
+          estimatedCostUsd: session.estimatedCostUsd,
+          costStatus: session.estimatedCostUsd === null ? 'unavailable' : 'known'
+        }
+      }
+      return record
+    })
+    return {
+      provider: 'opencode',
+      status,
+      lastScanCompletedAt: this.state.scanState.lastScanCompletedAt,
+      message:
+        status === 'disabled'
+          ? 'OpenCode usage tracking is disabled.'
+          : status === 'error'
+            ? 'OpenCode usage scan failed.'
+            : status === 'uninitialized'
+              ? 'OpenCode usage has not completed an initial scan.'
+              : status === 'stale'
+                ? 'OpenCode usage snapshot is stale.'
+                : status === 'scanning'
+                  ? 'OpenCode usage scan is incomplete.'
+                  : null,
+      limitations: [],
+      sessions,
+      truncated: sourceSessions.length > limit
     }
   }
 

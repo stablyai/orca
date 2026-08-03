@@ -117,6 +117,10 @@ import {
 } from './orchestration/setup-completion-signal'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
+import type {
+  OrchestrationReportUsageSnapshot,
+  OrchestrationReportWorktreeHostScope
+} from '../../shared/orchestration-cost-report'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 import type {
   OrchestrationCompatibilityEvidence,
@@ -226,6 +230,7 @@ import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
+  normalizeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -2836,6 +2841,9 @@ export class OrcaRuntimeService {
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
+  private readonly getOrchestrationUsageSnapshotsFn:
+    | ((completedAt: number | null) => Promise<OrchestrationReportUsageSnapshot[]>)
+    | null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
   // These listeners fire on every onPtyData call, enabling real-time streaming
@@ -3300,6 +3308,9 @@ export class OrcaRuntimeService {
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
+      getOrchestrationUsageSnapshots?: (
+        completedAt: number | null
+      ) => Promise<OrchestrationReportUsageSnapshot[]>
     }
   ) {
     this.store = store
@@ -3312,6 +3323,7 @@ export class OrcaRuntimeService {
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
+    this.getOrchestrationUsageSnapshotsFn = deps?.getOrchestrationUsageSnapshots ?? null
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -3804,6 +3816,47 @@ export class OrcaRuntimeService {
 
   setOrchestrationDb(db: OrchestrationDb): void {
     this._orchestrationDb = db
+  }
+
+  async getOrchestrationUsageSnapshots(
+    completedAt: number | null
+  ): Promise<OrchestrationReportUsageSnapshot[]> {
+    return (await this.getOrchestrationUsageSnapshotsFn?.(completedAt)) ?? []
+  }
+
+  resolveOrchestrationReportWorktreeHostScope(
+    worktreeId: string
+  ): OrchestrationReportWorktreeHostScope {
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type === 'folder') {
+      const workspace = this.store
+        ?.getFolderWorkspaces?.()
+        .find((entry) => entry.id === scope.folderWorkspaceId)
+      if (!workspace) {
+        return 'unknown'
+      }
+      if (workspace.executionHostId != null) {
+        const hostId = normalizeExecutionHostId(workspace.executionHostId)
+        return hostId ? (hostId === LOCAL_EXECUTION_HOST_ID ? 'local' : 'remote') : 'unknown'
+      }
+      try {
+        return this.resolveFolderWorkspaceConnectionId(workspace) ? 'remote' : 'local'
+      } catch (error) {
+        if (error instanceof Error && error.message === 'folder_workspace_connection_ambiguous') {
+          return 'unknown'
+        }
+        throw error
+      }
+    }
+    const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+    const repo = this.store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
+    const hostId =
+      this.store?.getWorktreeMeta?.(resolvedWorktreeId)?.hostId ??
+      (repo ? getRepoExecutionHostId(repo) : null)
+    if (!hostId) {
+      return 'unknown'
+    }
+    return hostId === LOCAL_EXECUTION_HOST_ID ? 'local' : 'remote'
   }
 
   private getLegacyWorkerTerminalRecoveryPlan(): LegacyWorkerTerminalRecoveryPlan {
@@ -29932,10 +29985,8 @@ export class OrcaRuntimeService {
             displayName: task.display_name
           })
         : { taskTitle: '', displayName: '' }
-    const activeRun =
-      dispatch.status === 'pending' || dispatch.status === 'dispatched'
-        ? db?.getActiveCoordinatorRun?.()
-        : undefined
+    const dispatchIsActive = dispatch.status === 'pending' || dispatch.status === 'dispatched'
+    const activeRun = dispatchIsActive ? db?.getActiveCoordinatorRun?.() : undefined
     const parentTerminalHandle =
       task?.created_by_terminal_handle ??
       (activeRun?.coordinator_handle && activeRun.coordinator_handle !== handle
@@ -29954,7 +30005,7 @@ export class OrcaRuntimeService {
       ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
       ...(parentPaneKey ? { parentPaneKey } : {}),
       ...(activeRun?.coordinator_handle ? { coordinatorHandle: activeRun.coordinator_handle } : {}),
-      ...(activeRun?.id ? { orchestrationRunId: activeRun.id } : {})
+      ...(dispatchIsActive ? { orchestrationRunId: dispatch.run_id } : {})
     }
   }
 

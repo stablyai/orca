@@ -164,6 +164,7 @@ orca orchestration task-list [--status <status>] [--ready] [--brief] [--json]
 orca orchestration task-update --id <task_id> --status <status> [--result <json>] [--json]
 orca orchestration dispatch --task <task_id> --to <handle> [--from <handle>] [--inject] [--json]
 orca orchestration dispatch-show --task <task_id> [--json]
+orca orchestration report --id <run_id> [--json]
 ```
 
 Task statuses: `pending`, `ready`, `dispatched`, `completed`, `failed`, `blocked`.
@@ -174,6 +175,10 @@ Dispatch rules:
 - If the target is a bare shell, omit `--inject`, dispatch for tracking if needed, then send the prompt manually with `orca terminal send --terminal <handle> --text <prompt> --enter --json`.
 - After 3 consecutive failures on one task, the dispatch context circuit-breaks and the task is marked failed.
 - Use `task-list --brief --json` for coordinator sweeps; it collapses whitespace and caps each echoed spec at 160 characters (`spec_truncated` marks shortened rows). Omit `--brief` when the full spec is required, or when an older CLI rejects it as an unknown flag.
+
+`orchestration report` is read-only and uses the running host's structured orchestration rows plus its current deduplicated Codex, Claude, and OpenCode usage snapshots. A Dispatch interval starts at `dispatched_at` (falling back to `created_at`) and ends at `completed_at` (or the report's `generatedAt` while active). It infers a provider session link only when its one exact recorded worktree and whole session interval are contained by exactly one local Dispatch interval in the selected Run. There is no durable terminal-to-provider-session ownership link: partial overlaps are unlinked, multiple containing intervals are ambiguous, and sessions are never split or counted twice. Direct and descendant elapsed values union overlapping Dispatch intervals.
+
+JSON completeness is explicit for uninitialized/scanning/stale/disabled/error usage tracking, unknown pricing, malformed timestamps, missing terminal-session identities, remote or unresolved Dispatch hosts, and bounded scans (500 Tasks, 2,000 Dispatches, 2,000 sessions per provider). Usage snapshots cover only the runtime host; federated and SSH-backed Dispatches are excluded rather than matched to home-host usage, and unresolved worktree host metadata fails closed as partial. Claude session records do not retain per-model token buckets, so their token totals remain available but report cost is unavailable. The report excludes message bodies/payloads, Task specs/results, worker start options/errors, environment variables, and raw transcripts. A workdir appears only when it can be decoded from a recorded worktree ID.
 
 ## Preferred Supervised Worker Loop
 

@@ -134,6 +134,34 @@ describe('CodexUsageStore', () => {
     rmSync(tempUserData, { recursive: true, force: true })
   })
 
+  it('marks never-scanned and stale report snapshots unavailable', () => {
+    const neverScanned = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+    const stale = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: Date.now() - 5 * 60_000,
+        lastScanError: null
+      }
+    })
+
+    expect(neverScanned.getOrchestrationReportUsage(10)).toMatchObject({
+      status: 'uninitialized',
+      sessions: []
+    })
+    expect(stale.getOrchestrationReportUsage(10)).toMatchObject({
+      status: 'stale',
+      sessions: []
+    })
+  })
+
   it('persists a successful refresh with one compact async disk write', async () => {
     const store = createStoreWithState({
       schemaVersion: 5,
@@ -182,6 +210,7 @@ describe('CodexUsageStore', () => {
       lastScanStartedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
       lastScanError: null
     })
+    expect(store.getOrchestrationReportUsage(10).status).toBe('scanning')
     expect(writeOpens.value).toBe(0)
 
     pendingScan.resolve(createEmptyScanResult())

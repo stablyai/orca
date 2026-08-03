@@ -42,6 +42,15 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'id']
   },
   {
+    path: ['orchestration', 'report'],
+    summary: 'Report one Run task graph, elapsed time, and attributed provider usage',
+    usage: 'orca orchestration report --id <run_id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id'],
+    notes: [
+      'Read-only. Usage is inferred only when one provider session has an exact recorded worktree and is fully contained by exactly one local Dispatch interval.'
+    ]
+  },
+  {
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
     usage:

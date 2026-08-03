@@ -4,8 +4,10 @@ import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   resolveAgentStatusConnectionRouting,
+  resolveLiveAgentStatusExecutionHostId,
   resolveLiveAgentStatusConnectionRouting
 } from './agent-status-connection-ownership'
+import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PANE = makePaneKey('tab-1', LEAF)
@@ -75,6 +77,18 @@ describe('agent status connection ownership', () => {
     })
     state.terminalLayoutsByTabId['tab-1'].ptyIdsByLeafId[LEAF] = toAppSshPtyId('ssh-b', 'pty-1')
     expect(resolveLiveAgentStatusConnectionRouting({ state, paneKey: PANE, ptyId })).toBeUndefined()
+  })
+
+  it('derives exact runtime ownership from an environment-scoped live pane binding', () => {
+    const ptyId = toRemoteRuntimePtyId('term-1', 'env-1')
+    const state = {
+      terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [LEAF]: ptyId } } },
+      ptyIdsByTabId: { 'tab-1': [ptyId] }
+    }
+
+    expect(resolveLiveAgentStatusExecutionHostId(state, PANE)).toBe('runtime:env-1')
+    state.ptyIdsByTabId['tab-1'] = []
+    expect(resolveLiveAgentStatusExecutionHostId(state, PANE)).toBeNull()
   })
 
   it('rejects stale SSH routing after clear and throughout transient reconnect', () => {
