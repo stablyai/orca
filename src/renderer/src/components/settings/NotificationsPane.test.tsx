@@ -59,6 +59,29 @@ describe('NotificationsPane', () => {
     )
   })
 
+  it('defaults the needs-attention toggle to checked when settings predate it', () => {
+    const settings = createSettings()
+    delete (settings.notifications as { needsAttention?: boolean }).needsAttention
+
+    const html = renderToStaticMarkup(
+      <NotificationsPane settings={settings} updateSettings={vi.fn()} />
+    )
+
+    expect(html).toContain('Needs Attention')
+    expect(html).toContain('aria-checked="true" aria-label="Needs Attention"')
+  })
+
+  it('renders the needs-attention toggle unchecked when explicitly disabled', () => {
+    const settings = createSettings()
+    settings.notifications.needsAttention = false
+
+    const html = renderToStaticMarkup(
+      <NotificationsPane settings={settings} updateSettings={vi.fn()} />
+    )
+
+    expect(html).toContain('aria-checked="false" aria-label="Needs Attention"')
+  })
+
   it('resets the volume draft only when the persisted volume changes', () => {
     const state = createNotificationVolumeDraftState(50)
     state.draft = 75

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 import { FilledBellIcon } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
+import { NeedsAttentionIndicator } from './NeedsAttentionIndicator'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
@@ -22,6 +23,9 @@ type WorktreeCardStatusSlotProps = {
   newCardStyle?: boolean
   hasBranchIdentity?: boolean
   branchIdentityLabel?: string
+  /** Provider-agnostic reason set via `orca worktree set --needs-attention`.
+   *  Renders its own indicator lane, independent of the review/branch/status glyph above. */
+  needsAttentionReason?: string | null
   className?: string
 }
 
@@ -98,6 +102,7 @@ export function WorktreeCardStatusSlot({
   newCardStyle = false,
   hasBranchIdentity = false,
   branchIdentityLabel,
+  needsAttentionReason,
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
@@ -171,13 +176,23 @@ export function WorktreeCardStatusSlot({
     )
 
   const unreadActionEnabled = showUnreadAction && !newCardStyle
+  // Why: this hook is provider-agnostic and independent of agent/PR status, so it
+  // gets its own always-visible lane rather than competing with the priority chain above.
+  const needsAttentionIndicator = needsAttentionReason ? (
+    <NeedsAttentionIndicator reason={needsAttentionReason} />
+  ) : null
 
-  if (!showStatus && !unreadActionEnabled) {
+  if (!showStatus && !unreadActionEnabled && !needsAttentionIndicator) {
     return null
   }
 
   if (!unreadActionEnabled) {
-    return overlayNewCardUnreadStatus(passiveStatus, showNewCardUnreadAlert)
+    return (
+      <>
+        {showStatus ? overlayNewCardUnreadStatus(passiveStatus, showNewCardUnreadAlert) : null}
+        {needsAttentionIndicator}
+      </>
+    )
   }
 
   const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'
@@ -241,6 +256,7 @@ export function WorktreeCardStatusSlot({
         </TooltipContent>
       </Tooltip>
       {showStatus && <span className="sr-only">{statusLabel}</span>}
+      {needsAttentionIndicator}
     </>
   )
 }

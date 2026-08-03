@@ -899,6 +899,83 @@ describe('registerNotificationHandlers', () => {
     expect(dispatchMobileNotification).not.toHaveBeenCalled()
   })
 
+  it('returns source-disabled when the needs-attention toggle is off', async () => {
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            needsAttention: false,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    const handler = getDispatchHandler()
+    expect(
+      await handler(
+        {},
+        {
+          source: 'needs-attention',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'wt1',
+          needsAttentionReason: 'PR #996: 1 unresolved thread'
+        }
+      )
+    ).toEqual({
+      delivered: false,
+      reason: 'source-disabled'
+    })
+
+    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
+  it('delivers a needs-attention notification when the toggle is on', async () => {
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            needsAttention: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    const handler = getDispatchHandler()
+    const result = await handler(
+      {},
+      {
+        source: 'needs-attention',
+        worktreeId: 'repo::wt1',
+        worktreeLabel: 'wt1',
+        needsAttentionReason: 'PR #996: 1 unresolved thread'
+      }
+    )
+
+    expect(result).toEqual({ delivered: true })
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Needs attention: wt1',
+        body: 'PR #996: 1 unresolved thread'
+      })
+    )
+    expect(dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'needs-attention', worktreeId: 'repo::wt1' })
+    )
+  })
+
   it('dispatches one mobile notification when the active worktree is focused on desktop', async () => {
     getAllWindowsMock.mockReturnValue([
       {

@@ -7451,6 +7451,7 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     instanceId: randomUUID(),
     displayName: '',
     comment: '',
+    needsAttention: null,
     linkedIssue: null,
     linkedPR: null,
     linkedLinearIssue: null,

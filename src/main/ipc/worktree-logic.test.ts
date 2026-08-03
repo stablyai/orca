@@ -501,6 +501,7 @@ describe('mergeWorktree', () => {
       isMainWorktree: false,
       displayName: 'My Feature',
       comment: 'WIP',
+      needsAttention: null,
       linkedIssue: 42,
       linkedPR: 10,
       linkedLinearIssue: null,

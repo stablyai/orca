@@ -448,6 +448,18 @@ describe('orca root help', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it('advertises the needs-attention hook on worktree set help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['worktree', 'set', '--help'], '/tmp/repo')
+
+    const setHelp = String(logSpy.mock.calls[0][0])
+    expect(setHelp).toContain('--needs-attention <text|null>')
+    expect(setHelp).toContain('--needs-attention <text|null> Provider-agnostic "needs attention"')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('advertises explicit orchestration task display labels', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     logSpy.mockClear()
@@ -842,6 +854,96 @@ describe('orca cli worktree awareness', () => {
       parentWorktree: undefined,
       noParent: false
     })
+  })
+
+  it('passes an explicit empty --comment through worktree.set instead of dropping it', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'aaa')]),
+      okFixture('req_1', {
+        worktree: { id: 'repo::/tmp/repo', branch: 'main', path: '/tmp/repo', comment: '' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'active', '--comment', '', '--json'],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.set',
+      expect.objectContaining({ comment: '' })
+    )
+  })
+
+  it('passes a needs-attention reason through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'aaa')]),
+      okFixture('req_1', {
+        worktree: {
+          id: 'repo::/tmp/repo',
+          branch: 'main',
+          path: '/tmp/repo',
+          needsAttention: 'PR #996: 1 unresolved thread'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'active',
+        '--needs-attention',
+        'PR #996: 1 unresolved thread',
+        '--json'
+      ],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.set',
+      expect.objectContaining({
+        worktree: 'id:repo::/tmp/repo',
+        needsAttention: 'PR #996: 1 unresolved thread'
+      })
+    )
+  })
+
+  it('clears a needs-attention reason via --needs-attention null on worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'aaa')]),
+      okFixture('req_1', {
+        worktree: {
+          id: 'repo::/tmp/repo',
+          branch: 'main',
+          path: '/tmp/repo',
+          needsAttention: null
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'active', '--needs-attention', 'null', '--json'],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.set',
+      expect.objectContaining({
+        worktree: 'id:repo::/tmp/repo',
+        needsAttention: null
+      })
+    )
   })
 
   it('passes parent lineage through worktree.set', async () => {

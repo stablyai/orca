@@ -27,7 +27,7 @@ import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { registerAiVaultHandlers } from './ai-vault'
 import { registerNativeChatHandlers } from './native-chat'
-import { registerNotificationHandlers } from './notifications'
+import { dispatchNotification, registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
 import { registerDashboardPopoutHandlers } from './dashboard-popout'
@@ -165,6 +165,10 @@ export function registerCoreHandlers(
   registerStatsHandlers(stats)
   registerMemoryHandlers(store)
   registerNotificationHandlers(store, runtime)
+  // Why: a `needsAttention` metadata change can come from a headless CLI call with
+  // no renderer to relay through (unlike RuntimeNotifier's other events), so the
+  // runtime calls straight into the native-notification dispatch here.
+  runtime.setNotificationDispatch((args) => void dispatchNotification(store, runtime, args))
   registerNotebookHandlers(store)
   registerOnboardingHandlers(store)
   registerDashboardPopoutHandlers(store, keybindings)

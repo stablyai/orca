@@ -219,8 +219,10 @@ import type {
   MRListState,
   PRRefreshOutcome,
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  NotificationDispatchRequest
 } from '../../shared/types'
+import { shouldNotifyNeedsAttentionChange } from './needs-attention-notification-trigger'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
@@ -2041,6 +2043,7 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     isMainWorktree: worktreeId === getRuntimeFolderWorkspaceRootId(repo),
     displayName: meta.displayName || repo.displayName,
     comment: meta.comment || '',
+    needsAttention: meta.needsAttention ?? null,
     linkedIssue: meta.linkedIssue ?? null,
     linkedPR: meta.linkedPR ?? null,
     linkedLinearIssue: meta.linkedLinearIssue ?? null,
@@ -2554,7 +2557,7 @@ type ResolvedWorktreeInFlight = {
 // events after it — idempotent, no duplicate local pushes.
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
-  source: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin'
+  source: 'agent-task-complete' | 'terminal-bell' | 'needs-attention' | 'test' | 'plugin'
   title: string
   body: string
   worktreeId?: string
@@ -2758,6 +2761,10 @@ export class OrcaRuntimeService {
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
   private ptyController: RuntimePtyController | null = null
   private notifier: RuntimeNotifier | null = null
+  // Why: unlike RuntimeNotifier (relays to a renderer), a headless CLI-driven
+  // metadata change has no renderer to relay through, so this calls straight
+  // into the native-notification dispatch (see registerNotificationHandlers).
+  private notificationDispatch: ((args: NotificationDispatchRequest) => void) | null = null
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
   // Why: mobile subscribers discard terminalSideEffects; exclude them from batch delivery and production.
   private terminalSideEffectExcludedClientEventListeners = new Set<
@@ -4782,6 +4789,10 @@ export class OrcaRuntimeService {
       this.forkBackfillStarted = true
       void this.backfillForkUpstreams()
     }
+  }
+
+  setNotificationDispatch(dispatch: ((args: NotificationDispatchRequest) => void) | null): void {
+    this.notificationDispatch = dispatch
   }
 
   onClientEvent(
@@ -22660,6 +22671,7 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const previousNeedsAttention = worktree.needsAttention ?? null
     const { lineage, ...metaUpdates } = updates
     if (lineage?.parentWorktree) {
       this.invalidateResolvedWorktreeCache()
@@ -22729,6 +22741,16 @@ export class OrcaRuntimeService {
     // explicit push so the editor refreshes metadata changed outside the UI.
     this.invalidateResolvedWorktreeCache()
     this.notifyWorktreesChanged(worktree.repoId)
+    if (shouldNotifyNeedsAttentionChange(previousNeedsAttention, metaUpdates.needsAttention)) {
+      this.notificationDispatch?.({
+        source: 'needs-attention',
+        worktreeId: worktree.id,
+        worktreeLabel: worktree.displayName,
+        repoLabel: this.store.getRepo(worktree.repoId)?.displayName,
+        needsAttentionReason: metaUpdates.needsAttention,
+        notificationId: `needs-attention:${worktree.id}`
+      })
+    }
     return await this.showManagedWorktree(`id:${worktree.id}`)
   }
 

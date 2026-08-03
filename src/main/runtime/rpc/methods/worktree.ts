@@ -212,6 +212,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedWorkItem: params.linkedWorkItem,
         linkedTaskSourceContext: params.linkedTaskSourceContext,
         comment: params.comment,
+        needsAttention: params.needsAttention,
         isArchived: params.isArchived,
         isUnread: params.isUnread,
         isPinned: params.isPinned,

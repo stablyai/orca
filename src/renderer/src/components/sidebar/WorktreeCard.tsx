@@ -1399,6 +1399,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             prDisplay={statusLaneReview}
             newCardStyle={newCardStyle}
             hasBranchIdentity={Boolean(branchIdentityDisplay)}
+            needsAttentionReason={worktree.needsAttention}
           />
         </div>
       ) : null}

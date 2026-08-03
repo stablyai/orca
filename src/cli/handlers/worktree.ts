@@ -10,6 +10,7 @@ import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult }
 import { RuntimeClientError } from '../runtime-client'
 import {
   getOptionalNullableNumberFlag,
+  getOptionalNullableStringFlag,
   getOptionalNumberFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -269,7 +270,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       displayName: getOptionalStringFlag(flags, 'display-name'),
       linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
       ...linearIssueLink,
-      comment: getOptionalStringFlag(flags, 'comment'),
+      // Why: the schema's OptionalPlainString supports a genuine empty comment,
+      // but getOptionalStringFlag treats '' as "not provided" and drops it —
+      // silently no-opping `--comment ""`. allowEmpty preserves an explicit blank.
+      comment: getPresentStringFlag(flags, 'comment', { allowEmpty: true }),
+      needsAttention: getOptionalNullableStringFlag(flags, 'needs-attention'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
       noParent: flags.get('no-parent') === true

@@ -435,6 +435,81 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('bg-emerald-500')
   })
 
+  it('shows the needs-attention indicator alongside the quiet status dot', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        needsAttentionReason="PR #996: 1 unresolved thread"
+      />
+    )
+
+    expect(markup).toContain('bg-emerald-500')
+    expect(markup).toContain('data-worktree-needs-attention=""')
+    expect(markup).toContain('PR #996: 1 unresolved thread')
+  })
+
+  it('shows the needs-attention indicator alongside PR status without replacing the review icon', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        prDisplay={review}
+        newCardStyle
+        needsAttentionReason="PR #996: 1 unresolved thread"
+      />
+    )
+
+    expect(markup).toContain('PR checks: Failed')
+    expect(markup).toContain('data-worktree-needs-attention=""')
+    expect(markup).toContain('PR #996: 1 unresolved thread')
+  })
+
+  it('shows the needs-attention indicator in the unread toggle affordance', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction
+        isUnread
+        unreadTooltip="Mark as read"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        needsAttentionReason="PR #996: 1 unresolved thread"
+      />
+    )
+
+    expect(markup).toContain('aria-label="Mark as read"')
+    expect(markup).toContain('data-worktree-needs-attention=""')
+    expect(markup).toContain('PR #996: 1 unresolved thread')
+  })
+
+  it('omits the needs-attention indicator when no reason is set', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('data-worktree-needs-attention=""')
+  })
+
   it('overlays an unread badge on the branch icon in new card style', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot

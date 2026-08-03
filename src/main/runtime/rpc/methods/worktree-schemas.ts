@@ -228,6 +228,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   // Why: empty comments are meaningful metadata updates, so use the plain
   // string parser instead of OptionalString's empty-as-undefined behavior.
   comment: OptionalPlainString,
+  needsAttention: z.union([z.string(), z.null()]).optional(),
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
   linkedLinearIssue: z.union([z.string(), z.null()]).optional(),

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
-import { BellRing, Bot, Siren } from 'lucide-react'
+import { AlertTriangle, BellRing, Bot, Siren } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   MacNotificationPermissionCard,
@@ -159,6 +159,22 @@ export function NotificationsPane({
         onToggle={() =>
           void updateNotificationSettings({
             terminalBell: !notificationSettings.terminalBell
+          })
+        }
+      />
+
+      <NotificationSettingToggle
+        icon={<AlertTriangle className="size-4" />}
+        label={translate('settings.notifications.needsAttention.label', 'Needs Attention')}
+        description={translate(
+          'settings.notifications.needsAttention.description',
+          'An external tool flags a worktree as needing your attention.'
+        )}
+        checked={notificationSettings.needsAttention ?? true}
+        disabled={!notificationSettings.enabled}
+        onToggle={() =>
+          void updateNotificationSettings({
+            needsAttention: !(notificationSettings.needsAttention ?? true)
           })
         }
       />

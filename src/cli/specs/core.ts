@@ -136,7 +136,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--needs-attention <text|null>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'worktree',
@@ -144,17 +144,21 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'issue',
       'linear-issue',
       'comment',
+      'needs-attention',
       'workspace-status',
       'parent-worktree',
       'no-parent'
     ],
     notes: [
       'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
-      'Pass --linear-issue null to clear the Linear issue link.'
+      'Pass --linear-issue null to clear the Linear issue link.',
+      '--needs-attention is a provider-agnostic hook: any external tool can flag a worktree with a free-form reason, shown in the sidebar. Pass --needs-attention null to clear it.'
     ],
     examples: [
       'orca worktree set --worktree active --linear-issue STA-335 --json',
-      'orca worktree set --worktree active --linear-issue null --json'
+      'orca worktree set --worktree active --linear-issue null --json',
+      'orca worktree set --worktree active --needs-attention "PR #996: 1 unresolved thread" --json',
+      'orca worktree set --worktree active --needs-attention null --json'
     ]
   },
   {
