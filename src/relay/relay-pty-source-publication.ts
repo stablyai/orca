@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type { PtySourceDeliveryIdentity } from '../shared/pty-source-credit-contract'
 import type {
   PtySourceRecoveryRequest,
@@ -17,13 +16,23 @@ import {
   type RelayPtySourceDeliveryRecord,
   type RelayPtySourcePublicationCounters
 } from './relay-pty-source-send-scheduler'
-import { sealAndPublishPtySourceExit } from './relay-pty-source-exit-publication'
+import {
+  RelayPtySourceLegacyExitIndex,
+  sealAndPublishTrackedPtySourceExit,
+  type PtyExitParams
+} from './relay-pty-source-exit-publication'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
-import type { RelayPtySourceOutput } from './relay-pty-source-output'
+import {
+  appendPtySourceOutput,
+  projectPtySourceOutputToLegacy,
+  ptySourceDeliveryClosed,
+  type RelayPtySourceOutput
+} from './relay-pty-source-output'
 import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 
 export class RelayPtySourcePublication {
   private readonly deliveries = new Map<string, RelayPtySourceDeliveryRecord>()
+  private readonly legacyExits = new RelayPtySourceLegacyExitIndex()
   private readonly counters: RelayPtySourcePublicationCounters = {
     opened: 0,
     rotated: 0,
@@ -61,7 +70,7 @@ export class RelayPtySourcePublication {
       return false
     }
     const mode = this.session.deliveryMode(context.clientId)
-    const current = this.deliveries.get(id)
+    let current = this.deliveries.get(id)
     if (mode === 'subscriber') {
       this.sender.releaseRotationFence(current)
       return false
@@ -69,10 +78,23 @@ export class RelayPtySourcePublication {
     if (mode === 'legacy-owner') {
       if (current) {
         this.session.cancelDelivery(current.identity, 'source-credit-disabled')
+        this.sender.wakeSendWaiters(current)
         this.deliveries.delete(id)
         this.onCapacity(id)
       }
       return false
+    }
+    if (
+      current?.clientId === context.clientId &&
+      !current.restoreRequired &&
+      current.sourceExitState !== 'pending' &&
+      this.deliveryClosedUnderRecord(current)
+    ) {
+      // Why: a canceled delivery can never resume as 'existing'; retire it so re-attach opens fresh.
+      this.sender.wakeSendWaiters(current)
+      this.deliveries.delete(id)
+      this.onCapacity(id)
+      current = undefined
     }
     if (current?.clientId === context.clientId) {
       this.sender.releaseRotationFence(current)
@@ -195,56 +217,31 @@ export class RelayPtySourcePublication {
     ) {
       return false
     }
-    if (!output.sourceAccepted) {
-      const rawLength = output.rawLength ?? output.data.length
-      output.sourceSpanId ??= randomUUID()
-      try {
-        this.session.appendSource(record.identity, {
-          spanId: output.sourceSpanId,
-          data: output.data,
-          displayStart: record.displayEnd,
-          displayEnd: record.displayEnd + output.data.length,
-          splittable: output.transformed !== true,
-          transform: {
-            transformed: output.transformed === true,
-            rawLengthSu: rawLength,
-            scalarSafe: output.transformed !== true
-          }
-        })
-      } catch {
-        this.counters.appendDenied++
+    if (!output.sourceAccepted && !appendPtySourceOutput(this.session, record, output)) {
+      this.counters.appendDenied++
+      if (this.deliveryClosedUnderRecord(record)) {
+        this.sender.wakeSendWaiters(record)
+        this.deliveries.delete(id)
+        // Why: deferred — publish() can run inside flushPendingOutput's captured-queue drain,
+        // where pendingOutputByPty is transiently empty; a synchronous capacity callback would
+        // publish pty.exit ahead of still-buffered output. By microtask time the failed chunk
+        // has been re-queued (flushPtyOutput re-sets the queue synchronously on failure).
+        queueMicrotask(() => this.onCapacity(id))
         return false
       }
-      output.sourceAccepted = true
-      record.displayEnd += output.data.length
+      return false
     }
-    if (
-      !this.dispatcher.projectPtyDataToMatchingClients(
-        (clientId) => this.session.deliveryMode(clientId) !== 'source-owner',
-        {
-          id,
-          data: output.data,
-          ...(output.seq === undefined ? {} : { seq: output.seq }),
-          ...(output.rawLength === undefined ? {} : { rawLength: output.rawLength }),
-          ...(output.transformed ? { transformed: true } : {})
-        },
-        { interactive }
-      )
-    ) {
+    if (!projectPtySourceOutputToLegacy(this.dispatcher, this.session, id, output, interactive)) {
       return false
     }
     this.sender.pump(record)
     return true
   }
 
-  sealAndPublishExit(params: { id: string; code: number; incarnationId: string }): boolean {
-    const record = this.deliveries.get(params.id)
-    if (!record) {
-      return false
-    }
-    return sealAndPublishPtySourceExit({
+  sealAndPublishExit = (params: PtyExitParams): boolean =>
+    sealAndPublishTrackedPtySourceExit({
       params,
-      record,
+      legacyExits: this.legacyExits,
       deliveries: this.deliveries,
       dispatcher: this.dispatcher,
       session: this.session,
@@ -252,7 +249,10 @@ export class RelayPtySourcePublication {
       counters: this.counters,
       onCapacity: this.onCapacity
     })
-  }
+
+  /** Returns null when the caller should fall back to its own legacy exit broadcast. */
+  publishExitAfterRetire = (params: PtyExitParams): boolean | null =>
+    this.legacyExits.publishAfterRetire(params, this.dispatcher, this.session)
 
   onCreditAvailable = (id: string): void => this.sender.onCreditAvailable(id)
 
@@ -261,13 +261,23 @@ export class RelayPtySourcePublication {
     if (!record || record.sourceExitState !== 'published') {
       return false
     }
+    // Why: owner and legacy subscribers both hold this exit now, so the index row would otherwise
+    // outlive the pty for the daemon's lifetime and re-publish on any later fallback.
+    this.legacyExits.forget(id)
     this.sender.pruneClosed(id, record)
     return true
   }
 
   getDebugSnapshot = () => this.sender.getDebugSnapshot()
 
-  dispose = (): void => this.sender.dispose()
+  dispose = (): void => {
+    this.legacyExits.clear()
+    this.sender.dispose()
+  }
+
+  private deliveryClosedUnderRecord(record: RelayPtySourceDeliveryRecord): boolean {
+    return ptySourceDeliveryClosed(this.session, record.identity)
+  }
 
   private registerActivationSettlement(
     id: string,

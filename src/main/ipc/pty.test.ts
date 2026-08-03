@@ -17,9 +17,10 @@ import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-err
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
+// Why: bare shells no longer mkdir ~/.omp; OMP status lives under userData (#10196).
 const expectedOmpStatusExtension = posix.join(
-  '/tmp/default-omp-agent',
-  'extensions',
+  '/tmp/orca-user-data',
+  'omp-managed-status-extension',
   'orca-agent-status.ts'
 )
 function expectedAttributionShimDir(): string {
@@ -225,6 +226,7 @@ import {
   setPtyOwnership,
   setLocalPtyProvider,
   rebindLocalProviderListeners,
+  resolveCodexHomeAfterManagedAuthReadiness,
   unregisterSshPtyProvider,
   getLocalPtyProvider,
   isCurrentPtyExit,
@@ -247,6 +249,7 @@ import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
+import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 import {
   acceptSshPtyOutputData,
   acceptSshPtyOutputExit,
@@ -268,6 +271,15 @@ const TEST_CODEX_HOME =
   process.platform === 'win32'
     ? 'C:\\Users\\test\\AppData\\Roaming\\orca\\codex-runtime-home\\home'
     : '/tmp/orca-codex-home'
+const TEST_CODEX_AUTH_JSON = JSON.stringify({
+  tokens: {
+    access_token: 'access',
+    id_token: 'e30.eyJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20ifQ.sig',
+    refresh_token: 'refresh',
+    account_id: 'account'
+  },
+  last_refresh: '2026-07-31T00:00:00Z'
+})
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -375,6 +387,7 @@ describe('registerPtyHandlers', () => {
     mainWindow.webContents.removeListener.mockReset()
     // Why: hidden-delivery gate state is module-level (PTY-keyed), so tests must not leak hidden bits across cases.
     _resetHiddenRendererPtyDeliveryGateForTest()
+    __resetShellStartupEnvCache()
 
     // Why: mirror real Electron — ipcMain.handle throws on a duplicate channel, catching re-registration that forgot removeHandler.
     handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
@@ -418,15 +431,33 @@ describe('registerPtyHandlers', () => {
       ORCA_AGENT_HOOK_TOKEN: 'agent-token'
     })
     piBuildPtyEnvMock.mockImplementation(
-      (_ptyId: string, existingAgentDir?: string, kind?: string) =>
-        kind === 'omp'
-          ? {
-              ORCA_OMP_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-omp-agent',
-              ORCA_OMP_STATUS_EXTENSION: `${existingAgentDir ?? '/tmp/default-omp-agent'}/extensions/orca-agent-status.ts`
+      (
+        _ptyId: string,
+        existingAgentDir?: string,
+        kind?: string,
+        options?: { materializeDefaultHome?: boolean }
+      ) => {
+        const materializeDefaultHome = options?.materializeDefaultHome !== false
+        if (kind === 'omp') {
+          // Why: bare shells no longer create ~/.omp; only a userData status path is set (#10196).
+          if (!existingAgentDir && !materializeDefaultHome) {
+            return {
+              ORCA_OMP_STATUS_EXTENSION:
+                '/tmp/orca-user-data/omp-managed-status-extension/orca-agent-status.ts'
             }
-          : {
-              ORCA_PI_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-pi-agent'
-            }
+          }
+          return {
+            ORCA_OMP_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-omp-agent',
+            ORCA_OMP_STATUS_EXTENSION: `${existingAgentDir ?? '/tmp/default-omp-agent'}/extensions/orca-agent-status.ts`
+          }
+        }
+        if (!existingAgentDir && !materializeDefaultHome) {
+          return {}
+        }
+        return {
+          ORCA_PI_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-pi-agent'
+        }
+      }
     )
     isPwshAvailableMock.mockReturnValue(false)
     spawnMock.mockReturnValue({
@@ -2430,15 +2461,58 @@ describe('registerPtyHandlers', () => {
 
     it('installs Pi managed extensions without redirecting Orca terminal PTY homes', async () => {
       const env = await spawnAndGetEnv(undefined, { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' })
-      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent', 'pi')
-      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/tmp/user-pi-agent',
+        'pi',
+        {
+          materializeDefaultHome: false
+        }
+      )
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp', {
+        materializeDefaultHome: false
+      })
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/user-pi-agent')
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
       expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
-        '/tmp/default-omp-agent/extensions/orca-agent-status.ts'
+        '/tmp/orca-user-data/omp-managed-status-extension/orca-agent-status.ts'
       )
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
+    it('does not materialize a missing Pi home when another agent mentions Pi', async () => {
+      const env = await spawnAndGetEnv(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'codex "ask about pi"',
+        'codex'
+      )
+
+      expect(piBuildPtyEnvMock).toHaveBeenCalledTimes(1)
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'pi', {
+        materializeDefaultHome: false
+      })
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
+    it('materializes Pi home for an explicit Pi launch through a custom command', async () => {
+      const env = await spawnAndGetEnv(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'custom-pi-wrapper',
+        'pi'
+      )
+
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'pi', {
+        materializeDefaultHome: true
+      })
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/default-pi-agent')
     })
 
     it('threads command: "omp" through to piBuildPtyEnv and emits OMP status metadata', async () => {
@@ -2453,7 +2527,8 @@ describe('registerPtyHandlers', () => {
       expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
         expect.any(String),
         '/tmp/user-omp-agent',
-        'omp'
+        'omp',
+        { materializeDefaultHome: true }
       )
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/user-omp-agent')
       expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
@@ -2481,7 +2556,8 @@ describe('registerPtyHandlers', () => {
       expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
         expect.any(String),
         '/tmp/user-omp-agent',
-        'omp'
+        'omp',
+        { materializeDefaultHome: true }
       )
       expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
         '/tmp/user-omp-agent/extensions/orca-agent-status.ts'
@@ -2494,7 +2570,14 @@ describe('registerPtyHandlers', () => {
         PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
         ORCA_PI_SOURCE_AGENT_DIR: '/tmp/user-pi-agent'
       })
-      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent', 'pi')
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/tmp/user-pi-agent',
+        'pi',
+        {
+          materializeDefaultHome: false
+        }
+      )
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/parent-orca-pi-overlay')
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
@@ -2513,7 +2596,9 @@ describe('registerPtyHandlers', () => {
         'omp'
       )
 
-      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp', {
+        materializeDefaultHome: true
+      })
       expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/tmp/default-omp-agent')
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
@@ -2533,7 +2618,9 @@ describe('registerPtyHandlers', () => {
         'pi'
       )
 
-      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'pi')
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'pi', {
+        materializeDefaultHome: true
+      })
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/default-pi-agent')
       expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
@@ -2575,7 +2662,8 @@ describe('registerPtyHandlers', () => {
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
           '/home/tester/.config/pi-agent',
-          'pi'
+          'pi',
+          { materializeDefaultHome: false }
         )
         expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
@@ -2690,6 +2778,70 @@ describe('registerPtyHandlers', () => {
       )
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
+    })
+
+    it('waits for managed Codex auth before spawning a local PTY', async () => {
+      vi.useFakeTimers()
+      let authReady = false
+      readFileSyncMock.mockImplementation((filePath: string) => {
+        if (!filePath.endsWith('auth.json')) {
+          return ''
+        }
+        if (!authReady) {
+          throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+        }
+        return TEST_CODEX_AUTH_JSON
+      })
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            managedHomePath: TEST_CODEX_HOME,
+            managedHomeRuntime: 'host'
+          }
+        ]
+      })) as never)
+
+      const spawnPromise = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        launchAgent: 'codex'
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnMock).not.toHaveBeenCalled()
+
+      authReady = true
+      await vi.advanceTimersByTimeAsync(25)
+      await spawnPromise
+
+      expect(spawnMock.mock.calls.at(-1)?.[2].env).toMatchObject({
+        CODEX_HOME: TEST_CODEX_HOME,
+        ORCA_CODEX_HOME: TEST_CODEX_HOME
+      })
+    })
+
+    it('does not gate a bare local shell on managed Codex auth', async () => {
+      readFileSyncMock.mockImplementation((filePath: string) => {
+        if (filePath.endsWith('auth.json')) {
+          throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+        }
+        return ''
+      })
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            managedHomePath: TEST_CODEX_HOME,
+            managedHomeRuntime: 'host'
+          }
+        ]
+      })) as never)
+
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledOnce()
     })
 
     it('leaves an inherited CODEX_HOME untouched for system default when the flag is OFF', async () => {
@@ -2940,6 +3092,371 @@ describe('registerPtyHandlers', () => {
         ).env
       }
 
+      it('waits for managed Codex auth before spawning a daemon PTY', async () => {
+        vi.useFakeTimers()
+        let authReady = false
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (!filePath.endsWith('auth.json')) {
+            return ''
+          }
+          if (!authReady) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return TEST_CODEX_AUTH_JSON
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+
+        const spawnPromise = handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex'
+        })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(daemonSpawn).not.toHaveBeenCalled()
+
+        authReady = true
+        await vi.advanceTimersByTimeAsync(25)
+        await spawnPromise
+
+        expect(daemonSpawn.mock.calls.at(-1)?.[0].env).toMatchObject({
+          CODEX_HOME: TEST_CODEX_HOME,
+          ORCA_CODEX_HOME: TEST_CODEX_HOME
+        })
+      })
+
+      it('resolves valid managed Codex auth synchronously', () => {
+        readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
+        const resolveCurrent = vi.fn(() => TEST_CODEX_HOME)
+        const resolveAfterUnavailable = vi.fn(() => null)
+        const settings = {
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        }
+
+        const resolution = resolveCodexHomeAfterManagedAuthReadiness({
+          selectedCodexHomePath: TEST_CODEX_HOME,
+          getSettings: () => settings as never,
+          target: { runtime: 'host' },
+          resolveCurrent,
+          resolveAfterUnavailable
+        })
+
+        expect(resolution).toBe(TEST_CODEX_HOME)
+        expect(resolveCurrent).not.toHaveBeenCalled()
+        expect(resolveAfterUnavailable).not.toHaveBeenCalled()
+      })
+
+      it('uses the current account when the original auth recovers after a switch', async () => {
+        vi.useFakeTimers()
+        const nextHome = '/managed/next/home'
+        let originalAuthReady = false
+        let selectedHome = TEST_CODEX_HOME
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath === join(TEST_CODEX_HOME, 'auth.json') && !originalAuthReady) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          if (filePath.endsWith('auth.json')) {
+            return TEST_CODEX_AUTH_JSON
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        const resolveHome = vi.fn(() => selectedHome)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, resolveHome, (() => ({
+          codexManagedAccounts: [TEST_CODEX_HOME, nextHome].map((managedHomePath, index) => ({
+            id: `account-${index + 1}`,
+            managedHomePath,
+            managedHomeRuntime: 'host'
+          }))
+        })) as never)
+
+        const spawnPromise = handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex'
+        })
+        await vi.advanceTimersByTimeAsync(0)
+        selectedHome = nextHome
+        originalAuthReady = true
+        await vi.advanceTimersByTimeAsync(25)
+        await spawnPromise
+
+        expect(resolveHome).toHaveBeenCalledTimes(2)
+        expect(daemonSpawn.mock.calls[0]?.[0].env).toMatchObject({
+          CODEX_HOME: nextHome,
+          ORCA_CODEX_HOME: nextHome
+        })
+      })
+
+      it('does not gate a non-Codex daemon PTY on managed Codex auth', async () => {
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'claude'
+        })
+
+        expect(daemonSpawn).toHaveBeenCalledOnce()
+      })
+
+      it('does not gate a Codex daemon reattach on current managed auth', async () => {
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex',
+          sessionId: 'retained-codex'
+        })
+
+        expect(daemonSpawn).toHaveBeenCalledOnce()
+      })
+
+      it('does not gate a runtime-created Codex reattach on current managed auth', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            launchAgent: 'codex'
+            sessionId: string
+          }): Promise<{ id: string }>
+        }
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never, () => TEST_CODEX_HOME, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        await controller.spawn({
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex',
+          sessionId: 'retained-runtime-codex'
+        })
+
+        expect(daemonSpawn).toHaveBeenCalledOnce()
+      })
+
+      it('falls back when managed Codex auth stays unavailable', async () => {
+        vi.useFakeTimers()
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        const resolveHome = vi.fn(
+          (
+            _target?: unknown,
+            _env?: NodeJS.ProcessEnv,
+            context?: { unavailableManagedHomePath?: string }
+          ) => (context?.unavailableManagedHomePath ? null : TEST_CODEX_HOME)
+        )
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, resolveHome, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+
+        const spawnPromise = handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex'
+        })
+        await vi.advanceTimersByTimeAsync(2_000)
+        await spawnPromise
+
+        expect(resolveHome).toHaveBeenCalledTimes(2)
+        expect(resolveHome.mock.calls[1]?.[2]).toMatchObject({
+          unavailableManagedHomePath: TEST_CODEX_HOME
+        })
+        expect(daemonSpawn).toHaveBeenCalledOnce()
+        expect(daemonSpawn.mock.calls[0]?.[0].env).not.toHaveProperty('CODEX_HOME')
+      })
+
+      it('rejects when account changes keep resolving unavailable managed homes', async () => {
+        vi.useFakeTimers()
+        const secondHome = '/managed/second/home'
+        const thirdHome = '/managed/third/home'
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        const resolveHome = vi.fn(
+          (
+            _target?: unknown,
+            _env?: NodeJS.ProcessEnv,
+            context?: { unavailableManagedHomePath?: string }
+          ) =>
+            !context?.unavailableManagedHomePath
+              ? TEST_CODEX_HOME
+              : context.unavailableManagedHomePath === TEST_CODEX_HOME
+                ? secondHome
+                : thirdHome
+        )
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, resolveHome, (() => ({
+          codexManagedAccounts: [TEST_CODEX_HOME, secondHome, thirdHome].map(
+            (managedHomePath, index) => ({
+              id: `account-${index + 1}`,
+              managedHomePath,
+              managedHomeRuntime: 'host'
+            })
+          )
+        })) as never)
+
+        const spawnPromise = handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex'
+        })
+        const rejection = expect(spawnPromise).rejects.toThrow(
+          'The selected Codex account credentials are temporarily unavailable. Try opening the terminal again.'
+        )
+        await vi.advanceTimersByTimeAsync(4_000)
+        await rejection
+
+        expect(resolveHome.mock.calls.map((call) => call[2]?.unavailableManagedHomePath)).toEqual([
+          undefined,
+          TEST_CODEX_HOME,
+          secondHome
+        ])
+        expect(vi.getTimerCount()).toBe(0)
+        expect(daemonSpawn).not.toHaveBeenCalled()
+      })
+
+      it('falls back for a runtime-created Codex launch when auth stays unavailable', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: { cols: number; rows: number; launchAgent: 'codex' }): Promise<{ id: string }>
+        }
+        vi.useFakeTimers()
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        const resolveHome = vi.fn(
+          (
+            _target?: unknown,
+            _env?: NodeJS.ProcessEnv,
+            context?: { unavailableManagedHomePath?: string }
+          ) => (context?.unavailableManagedHomePath ? null : TEST_CODEX_HOME)
+        )
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never, resolveHome, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        const spawnPromise = controller.spawn({ cols: 80, rows: 24, launchAgent: 'codex' })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(daemonSpawn).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(2_000)
+        await spawnPromise
+
+        expect(resolveHome).toHaveBeenCalledTimes(2)
+        expect(resolveHome.mock.calls[1]?.[2]).toMatchObject({
+          unavailableManagedHomePath: TEST_CODEX_HOME
+        })
+        expect(daemonSpawn).toHaveBeenCalledOnce()
+        expect(daemonSpawn.mock.calls[0]?.[0].env).not.toHaveProperty('CODEX_HOME')
+      })
+
       it('injects OpenCode plugin env (OPENCODE_CONFIG_DIR) on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
           OPENCODE_CONFIG_DIR: undefined
@@ -2977,13 +3494,35 @@ describe('registerPtyHandlers', () => {
 
       it('installs Pi managed extensions without redirecting homes on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({ PI_CODING_AGENT_DIR: '/user/.pi/agent' })
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/user/.pi/agent', 'pi')
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+          expect.any(String),
+          '/user/.pi/agent',
+          'pi',
+          {
+            materializeDefaultHome: false
+          }
+        )
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp', {
+          materializeDefaultHome: false
+        })
         expect(env.PI_CODING_AGENT_DIR).toBe('/user/.pi/agent')
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/user/.pi/agent')
         expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(expectedOmpStatusExtension)
+      })
+
+      it('does not materialize agent homes when another daemon agent mentions OMP', async () => {
+        const env = await daemonSpawnAndGetEnv(undefined, undefined, undefined, undefined, {
+          command: 'codex "ask about omp"',
+          launchAgent: 'codex'
+        })
+
+        expect(piBuildPtyEnvMock).toHaveBeenCalledTimes(1)
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'pi', {
+          materializeDefaultHome: false
+        })
+        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
       })
 
       it('threads command: "omp" through to piBuildPtyEnv on the daemon path with OMP status metadata', async () => {
@@ -2998,7 +3537,8 @@ describe('registerPtyHandlers', () => {
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
           '/user/.omp/agent',
-          'omp'
+          'omp',
+          { materializeDefaultHome: true }
         )
         expect(env.PI_CODING_AGENT_DIR).toBe('/user/.omp/agent')
         expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
@@ -3025,7 +3565,8 @@ describe('registerPtyHandlers', () => {
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
           '/user/.omp/agent',
-          'omp'
+          'omp',
+          { materializeDefaultHome: true }
         )
         expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
           '/user/.omp/agent/extensions/orca-agent-status.ts'
@@ -3966,7 +4507,9 @@ describe('registerPtyHandlers', () => {
         expect(sessionId).toEqual(expect.any(String))
         expect((sessionId ?? '').length).toBeGreaterThan(0)
         expect(spawnOpts.isNewSession).toBe(true)
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi', {
+          materializeDefaultHome: false
+        })
       })
 
       it('respects a caller-provided sessionId instead of minting a new one', async () => {
@@ -3981,7 +4524,9 @@ describe('registerPtyHandlers', () => {
         })
         expect(daemonSpawn.mock.calls.at(-1)![0].sessionId).toBe('user-session-42')
         expect(daemonSpawn.mock.calls.at(-1)![0].isNewSession).toBeUndefined()
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith('user-session-42', undefined, 'pi')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith('user-session-42', undefined, 'pi', {
+          materializeDefaultHome: false
+        })
       })
 
       it('prefixes a minted sessionId with the worktreeId when provided', async () => {
@@ -3997,7 +4542,9 @@ describe('registerPtyHandlers', () => {
         })
         const sessionId = daemonSpawn.mock.calls.at(-1)![0].sessionId ?? ''
         expect(sessionId).toMatch(/^wt-alpha@@[0-9a-f]{8}$/)
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi', {
+          materializeDefaultHome: false
+        })
       })
 
       it('reuses one attach-style daemon session for fresh-agent operation retries', async () => {
@@ -4076,7 +4623,8 @@ describe('registerPtyHandlers', () => {
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
           '/ambient/pi/agent',
-          'pi'
+          'pi',
+          { materializeDefaultHome: false }
         )
         expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
@@ -6104,7 +6652,7 @@ describe('registerPtyHandlers', () => {
     await pendingInventory
   })
 
-  it('reports authoritative snapshot capability with the owning provider context', () => {
+  it('reports authoritative snapshot capability with the owning provider context', async () => {
     const capabilityProvider = {
       authoritativeIds: new Set(['current-pty']),
       canProvideAuthoritativeBufferSnapshot(id: string) {
@@ -6113,17 +6661,26 @@ describe('registerPtyHandlers', () => {
     }
     registerPtyHandlers(mainWindow as never)
     setLocalPtyProvider(capabilityProvider as never)
-    const listener = onMock.mock.calls.find(
-      ([channel]) => channel === 'pty:getAuthoritativeBufferSnapshotCapabilitiesSync'
-    )?.[1] as ((event: { returnValue?: unknown }, args: { ids: unknown[] }) => void) | undefined
-    const event: { returnValue?: unknown } = {}
+    const result = await handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
+      ids: ['current-pty', 'legacy-pty', 'current-pty', 42]
+    })
 
-    listener?.(event, { ids: ['current-pty', 'legacy-pty', 'current-pty', 42] })
-
-    expect(event.returnValue).toEqual([
+    expect(result).toEqual([
       { id: 'current-pty', authoritative: true },
       { id: 'legacy-pty', authoritative: false }
     ])
+  })
+
+  it('answers false, not null, for a resolved provider with no snapshot capability', async () => {
+    // Null is never cached, so missing optional methods must resolve false.
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider({ spawn: vi.fn(), write: vi.fn() } as never)
+
+    const result = await handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
+      ids: ['local-pty']
+    })
+
+    expect(result).toEqual([{ id: 'local-pty', authoritative: false }])
   })
 
   it('checks single-PTY liveness without listing every session', async () => {
@@ -6625,6 +7182,17 @@ describe('registerPtyHandlers', () => {
     ).resolves.toEqual({
       foregroundProcess: null,
       hasChildProcesses: true,
+      unavailable: true
+    })
+  })
+
+  it('settles a stale renderer process inspection as unavailable', async () => {
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider({ hasPty: vi.fn(() => false) } as never)
+
+    await expect(handlers.get('pty:inspectProcess')!(null, { id: 'gone-pty' })).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
       unavailable: true
     })
   })
@@ -8862,10 +9430,13 @@ describe('registerPtyHandlers', () => {
         'ORCA_CLI_COMMAND/u',
         'ORCA_AGENT_HOOK_PORT/u',
         'ORCA_AGENT_HOOK_TOKEN/u',
-        'ORCA_OMP_SOURCE_AGENT_DIR/p',
+        // Why: bare WSL shells no longer create ~/.omp; only status extension is exported (#10196).
         'ORCA_OMP_STATUS_EXTENSION/p',
         'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
       ])
+    )
+    expect(env.WSLENV?.split(':')).not.toEqual(
+      expect.arrayContaining(['ORCA_OMP_SOURCE_AGENT_DIR/p'])
     )
   })
 
@@ -14442,15 +15013,201 @@ describe('registerPtyHandlers', () => {
     const getSettings = vi.fn().mockReturnValue({ activeCodexManagedAccountId: 'account-a' })
     registerPtyHandlers(mainWindow as never, undefined, undefined, getSettings as never)
 
-    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
-    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, sessionId: 'pty-reattached' })
+    const nativeCodexEnv = { CODEX_HOME: '', ORCA_CODEX_HOME: '' }
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: nativeCodexEnv })
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      env: nativeCodexEnv,
+      sessionId: 'pty-reattached'
+    })
 
     // Why: a reattached shell keeps the CODEX_HOME baked in at its original
     // spawn, so re-recording it under the current selection would erase the only
     // evidence that the pane is stale.
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
-      ['pty-fresh', { selectionKey: 'host', accountId: 'account-a' }]
+      ['pty-fresh', { selectionKey: 'host', accountId: 'account-a', homeRoute: 'real-home' }]
     ])
+  })
+
+  posixOnlyIt(
+    'does not guess route provenance for a pane-local shell startup CODEX_HOME',
+    async () => {
+      setLocalPtyProvider({
+        spawn: vi.fn(async () => ({ id: 'pty-custom-home' })),
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(),
+        shutdown: vi.fn(),
+        onData: vi.fn(() => vi.fn()),
+        onExit: vi.fn(() => vi.fn()),
+        listProcesses: vi.fn(async () => []),
+        getForegroundProcess: vi.fn(async () => null)
+      } as never)
+      readFileSyncMock.mockImplementation((path: string) =>
+        path === '/pane-home/.zshrc' ? 'export CODEX_HOME="$HOME/custom-codex-home"\n' : ''
+      )
+      const getSettings = vi.fn().mockReturnValue({ activeCodexManagedAccountId: null })
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        () => TEST_CODEX_HOME,
+        getSettings as never
+      )
+
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        env: {
+          CODEX_HOME: '',
+          ORCA_CODEX_HOME: '',
+          HOME: '/pane-home',
+          SHELL: '/bin/zsh'
+        }
+      })
+
+      expect(recordCodexPaneAccountMock).toHaveBeenCalledWith('pty-custom-home', {
+        selectionKey: 'host',
+        accountId: null,
+        homeRoute: 'custom-home'
+      })
+    }
+  )
+
+  it('records route provenance for a process-wide CODEX_HOME', async () => {
+    const previousCodexHome = process.env.CODEX_HOME
+    process.env.CODEX_HOME = '/process/custom-codex-home'
+    try {
+      setLocalPtyProvider({
+        spawn: vi.fn(async () => ({ id: 'pty-process-home' })),
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(),
+        shutdown: vi.fn(),
+        onData: vi.fn(() => vi.fn()),
+        onExit: vi.fn(() => vi.fn()),
+        listProcesses: vi.fn(async () => []),
+        getForegroundProcess: vi.fn(async () => null)
+      } as never)
+      const getSettings = vi.fn().mockReturnValue({ activeCodexManagedAccountId: null })
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        () => TEST_CODEX_HOME,
+        getSettings as never
+      )
+
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        env: { CODEX_HOME: '/process/custom-codex-home' }
+      })
+
+      expect(recordCodexPaneAccountMock).toHaveBeenCalledWith('pty-process-home', {
+        selectionKey: 'host',
+        accountId: null,
+        homeRoute: 'shared-home',
+        environmentHomeOverride: { codexHome: '/process/custom-codex-home' }
+      })
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+    }
+  })
+
+  it('does not guess route provenance for a pane-local environment CODEX_HOME', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({ id: 'pty-pane-env-home' })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const getSettings = vi.fn().mockReturnValue({ activeCodexManagedAccountId: null })
+    registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, getSettings as never)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      env: { CODEX_HOME: '/pane/custom-codex-home' }
+    })
+
+    expect(recordCodexPaneAccountMock).toHaveBeenCalledWith('pty-pane-env-home', {
+      selectionKey: 'host',
+      accountId: null,
+      homeRoute: 'custom-home'
+    })
+  })
+
+  it('does not resume under another account when the origin auth stays unavailable', async () => {
+    vi.useFakeTimers()
+    const spawn = vi.fn(async () => ({ id: 'pty-must-not-spawn' }))
+    setLocalPtyProvider({
+      spawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    readFileSyncMock.mockImplementation((filePath: string) => {
+      if (filePath.endsWith('auth.json')) {
+        throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+      }
+      return ''
+    })
+    const resolveHome = vi.fn(() => '/managed/current/home')
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      resolveHome,
+      (() => ({
+        codexManagedAccounts: [
+          { id: 'account-a', managedHomePath: '/managed/origin/home' },
+          { id: 'account-b', managedHomePath: '/managed/current/home' }
+        ]
+      })) as never,
+      undefined,
+      undefined,
+      {
+        prepareCodexSessionResume: async () => ({
+          outcome: 'resume' as const,
+          codexHomePath: '/managed/origin/home'
+        })
+      }
+    )
+
+    const launch = handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      command: 'codex resume session-a',
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      launchAgent: 'codex',
+      resumeProviderSession: {
+        key: 'session_id',
+        id: 'session-a',
+        transcriptPath: '/managed/origin/home/sessions/2026/07/20/rollout-a.jsonl'
+      }
+    })
+    const rejection = expect(launch).rejects.toThrow(
+      'The Codex account credentials for this session are temporarily unavailable. Try opening the terminal again.'
+    )
+    await vi.advanceTimersByTimeAsync(2_000)
+    await rejection
+
+    expect(resolveHome).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
+    expect(recordCodexPaneAccountMock).not.toHaveBeenCalled()
   })
 
   it('records the origin account a resumed Codex pane is pinned to', async () => {
@@ -14486,6 +15243,7 @@ describe('registerPtyHandlers', () => {
         })
       }
     )
+    readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
 
     await handlers.get('pty:spawn')!(null, {
       cols: 80,
@@ -14502,8 +15260,9 @@ describe('registerPtyHandlers', () => {
     // Why: the resume deliberately overrides the selection, so the pane really
     // is on account-a. Recording that is what makes the restart prompt appear.
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
-      ['pty-resumed', { selectionKey: 'host', accountId: 'account-a' }]
+      ['pty-resumed', { selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' }]
     ])
+    expect(readFileSyncMock).toHaveBeenCalledWith('/managed/origin/home/auth.json', 'utf8')
     expect(forgetCodexPaneAccountMock).not.toHaveBeenCalled()
   })
 
@@ -14605,6 +15364,7 @@ describe('registerPtyHandlers', () => {
       }
     )
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+    readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
 
     await controller.spawn({
       cols: 80,
@@ -14620,8 +15380,12 @@ describe('registerPtyHandlers', () => {
     })
 
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
-      ['pty-runtime-resumed', { selectionKey: 'host', accountId: 'account-a' }]
+      [
+        'pty-runtime-resumed',
+        { selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' }
+      ]
     ])
+    expect(readFileSyncMock).toHaveBeenCalledWith('/managed/origin/home/auth.json', 'utf8')
     expect(forgetCodexPaneAccountMock).not.toHaveBeenCalled()
   })
 

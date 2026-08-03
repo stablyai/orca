@@ -55,15 +55,30 @@ describe('subscribeRuntimeClientEvents', () => {
       }
     })
     capturedOnResponse({
+      ok: true,
+      result: {
+        type: 'nativeChatLaunchDraftResolved',
+        tabId: 'tab-1',
+        text: 'seed',
+        createdAt: 7
+      }
+    })
+    capturedOnResponse({
       ok: false,
       error: { code: 'method_not_found', message: 'missing' }
     })
 
-    expect(onEvent).toHaveBeenCalledTimes(2)
+    expect(onEvent).toHaveBeenCalledTimes(3)
     expect(onEvent).toHaveBeenCalledWith({ type: 'worktreesChanged', repoId: 'repo-1' })
     expect(onEvent).toHaveBeenCalledWith({
       type: 'terminalSideEffects',
       batch: { ptyId: 'pty-1', seq: 7, facts: [{ kind: 'bell' }] }
+    })
+    expect(onEvent).toHaveBeenCalledWith({
+      type: 'nativeChatLaunchDraftResolved',
+      tabId: 'tab-1',
+      text: 'seed',
+      createdAt: 7
     })
     expect(onError).toHaveBeenCalledWith({ code: 'method_not_found', message: 'missing' })
 

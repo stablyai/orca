@@ -11,6 +11,8 @@ import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
 import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
+import { TERMINAL_MOUSE_CLICK_DRAG_JS } from './terminal-webview-mouse-click-drag-injected'
+import { TERMINAL_MOUSE_REPORT_CELL_JS } from './terminal-webview-mouse-report-cell-injected'
 import { TERMINAL_WHEEL_SCROLL_JS } from './terminal-webview-wheel-scroll-injected'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
@@ -37,6 +39,13 @@ const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   brightCyan: '#7dcfff',
   brightWhite: '#c0caf5'
 }
+
+export const MOBILE_TERMINAL_CARET_OPTIONS = {
+  cursorBlink: false,
+  cursorStyle: 'bar',
+  showCursorImmediately: true,
+  cursorInactiveStyle: 'block'
+} as const
 
 // Why: TUI escape codes assume the desktop's cols/rows, so init xterm at those dims and fit the phone via a measured CSS scale() instead of resizing.
 export const XTERM_HTML = `<!DOCTYPE html>
@@ -726,11 +735,12 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       // Why: xterm suppresses parser-generated query replies when disableStdin
       // is true. Native accepts only validated reply grammars from onData.
       disableStdin: false,
-      cursorBlink: false,
-      cursorStyle: 'bar',
-      // Why: native TextInput owns mobile keyboard focus, so xterm stays inactive.
-      // Match its active bar while still honoring application cursor-hide sequences.
-      cursorInactiveStyle: 'bar',
+      cursorBlink: ${MOBILE_TERMINAL_CARET_OPTIONS.cursorBlink},
+      cursorStyle: ${JSON.stringify(MOBILE_TERMINAL_CARET_OPTIONS.cursorStyle)},
+      // Native TextInput owns focus; initialize xterm's otherwise-gated main-buffer caret.
+      showCursorImmediately: ${MOBILE_TERMINAL_CARET_OPTIONS.showCursorImmediately},
+      // A full inactive cell remains visible under the terminal's phone-fit scale.
+      cursorInactiveStyle: ${JSON.stringify(MOBILE_TERMINAL_CARET_OPTIONS.cursorInactiveStyle)},
       convertEol: false,
       allowProposedApi: true
     });
@@ -1145,31 +1155,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     return { col: col, row: viewportRow + viewportY };
   }
 
-  function viewportToMouseReportCell(clientX, clientY) {
-    if (!term) return null;
-    var cellW = getCellWidth();
-    var cellH = getCellHeight();
-    if (cellW <= 0 || cellH <= 0) return null;
-    if (typeof clientX !== 'number') clientX = window.innerWidth / 2;
-    if (typeof clientY !== 'number') clientY = window.innerHeight / 2;
-    var total = getTotalScale();
-    if (total <= 0) total = 1;
-    var sx = (clientX - panX) / total;
-    var sy = (clientY - panY) / total;
-    var maxX = Math.max(0, term.cols * cellW - 1);
-    var maxY = Math.max(0, term.rows * cellH - 1);
-    if (sx < 0) sx = 0;
-    if (sx > maxX) sx = maxX;
-    if (sy < 0) sy = 0;
-    if (sy > maxY) sy = maxY;
-    var col = Math.floor(sx / cellW);
-    var row = Math.floor(sy / cellH);
-    if (col < 0) col = 0;
-    if (col > term.cols - 1) col = term.cols - 1;
-    if (row < 0) row = 0;
-    if (row > term.rows - 1) row = term.rows - 1;
-    return { col: col, row: row, x: Math.floor(sx), y: Math.floor(sy) };
-  }
+  ${TERMINAL_MOUSE_REPORT_CELL_JS}
 
   function isAlternateBufferActive() {
     try {
@@ -1640,6 +1626,10 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
   // terminal-webview-wheel-scroll-injected.ts (extracted for max-lines).
   ${TERMINAL_WHEEL_SCROLL_JS}
 
+  // External mouse click/drag: see
+  // terminal-webview-mouse-click-drag-injected.ts (extracted for max-lines).
+  ${TERMINAL_MOUSE_CLICK_DRAG_JS}
+
   btnCopy.addEventListener('click', function(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -1697,6 +1687,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     targetSurface.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
 
     attachSurfaceWheelHandler(targetSurface);
+    attachSurfaceMouseClickDragHandler(targetSurface);
 
     targetSurface.addEventListener('touchstart', function(e) {
       if (dispatcherShouldBlockSurface()) return;

@@ -47,15 +47,6 @@ export function closeRemoteRuntimeRequestConnection(environmentId: string): void
   closeRemoteRuntimeSharedControlConnection(environmentId)
 }
 
-export function closeAllRemoteRuntimeRequestConnections(): void {
-  for (const environmentId of Array.from(requestConnections.keys())) {
-    closeRemoteRuntimeRequestConnection(environmentId)
-  }
-  for (const environmentId of Array.from(sharedControlConnections.keys())) {
-    closeRemoteRuntimeSharedControlConnection(environmentId)
-  }
-}
-
 export function sendRemoteRuntimeSharedControlRequest<TResult>(
   environmentId: string,
   pairing: PairingOffer,

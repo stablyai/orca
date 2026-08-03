@@ -44,6 +44,10 @@ describe('SshPtyProvider', () => {
     expect(provider.getConnectionId()).toBe('conn-1')
   })
 
+  it('reports that SSH panes cannot restore from authoritative provider snapshots', () => {
+    expect(provider.canProvideAuthoritativeBufferSnapshot(scopedPty1)).toBe(false)
+  })
+
   it('keeps a shared claim probe alive when one waiter disconnects', async () => {
     let finishProbe!: (result: { agentSessionClaimVersion: number }) => void
     mux.request.mockReturnValueOnce(

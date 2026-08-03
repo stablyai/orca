@@ -211,7 +211,7 @@ export async function getComputerCommandTarget(
   }
 }
 
-// Mirror getBrowserCommandTarget / getBrowserWorktreeSelector for emulator (workspace scoped by default + explicit --device/--emulator/--worktree; active from bridge for unqualified).
+// Match browser targeting: workspace by default, explicit device/emulator/worktree overrides.
 export type EmulatorCliTarget = {
   worktree?: string
   device?: string

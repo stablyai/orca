@@ -62,26 +62,32 @@ const NativeChatUnsubscribe = z.object({
 const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
 const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
 // Why: a single tool result (a big file read, a long diff) can be hundreds of KB.
-// The mobile view only previews block bodies, so truncate them on the wire to
-// keep the payload small; the marker tells the user content was clipped.
+// The mobile view only previews tool block bodies, so truncate them on the wire
+// to keep the payload small; the marker tells the user content was clipped.
 const MOBILE_BLOCK_CHAR_CAP = 4000
+// Why: text blocks are the message body itself, rendered in full by the chat
+// view — a preview-sized cap cut long assistant replies mid-sentence with no way
+// to read on (STA-3230). Keep only a generous safety ceiling: a transcript
+// record can legally reach 2MB, and shipping that much markdown in one block
+// would freeze the phone.
+const MOBILE_TEXT_BLOCK_CHAR_CAP = 64_000
 const MOBILE_TOOL_INPUT_ITEMS_CAP = 20
 const MOBILE_TOOL_INPUT_NODE_CAP = 100
 const TRUNCATION_MARKER = '\n… (truncated)'
 
-function clip(text: string): string {
-  return text.length > MOBILE_BLOCK_CHAR_CAP
-    ? text.slice(0, MOBILE_BLOCK_CHAR_CAP) + TRUNCATION_MARKER
-    : text
+function clip(text: string, cap: number): string {
+  return text.length > cap ? text.slice(0, cap) + TRUNCATION_MARKER : text
 }
 
 function clipBlock(block: NativeChatBlock): NativeChatBlock {
   if (block.type === 'text') {
-    return block.text.length > MOBILE_BLOCK_CHAR_CAP ? { ...block, text: clip(block.text) } : block
+    return block.text.length > MOBILE_TEXT_BLOCK_CHAR_CAP
+      ? { ...block, text: clip(block.text, MOBILE_TEXT_BLOCK_CHAR_CAP) }
+      : block
   }
   if (block.type === 'tool-result') {
     return block.output.length > MOBILE_BLOCK_CHAR_CAP
-      ? { ...block, output: clip(block.output) }
+      ? { ...block, output: clip(block.output, MOBILE_BLOCK_CHAR_CAP) }
       : block
   }
   if (block.type === 'tool-call') {

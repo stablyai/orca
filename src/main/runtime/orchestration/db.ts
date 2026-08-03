@@ -55,6 +55,16 @@ function isEquivalentPaneKey(a: string, b: string): boolean {
   return Boolean(aLeaf && bLeaf && aLeaf === bLeaf)
 }
 
+// Why: indexable pre-filter for isEquivalentPaneKey — equal strings and equal leaves both share the
+// text after the first ':', so this narrows candidates without deciding equivalence itself.
+const PANE_KEY_MATCH_SUFFIX_SQL =
+  "substr(coordinator_pane_key, instr(coordinator_pane_key, ':') + 1)"
+
+function paneKeyMatchSuffix(paneKey: string): string {
+  const colon = paneKey.indexOf(':')
+  return colon < 0 ? paneKey : paneKey.slice(colon + 1)
+}
+
 export type {
   MessageType,
   MessagePriority,
@@ -510,6 +520,10 @@ export class OrchestrationDb {
 
       CREATE INDEX IF NOT EXISTS idx_gates_task ON decision_gates(task_id);
       CREATE INDEX IF NOT EXISTS idx_gates_status ON decision_gates(status);
+
+      CREATE INDEX IF NOT EXISTS idx_runs_coordinator_pane_leaf
+        ON runs(${PANE_KEY_MATCH_SUFFIX_SQL})
+        WHERE coordinator_pane_key IS NOT NULL;
 
       CREATE TABLE IF NOT EXISTS coordinator_runs (
         id                  TEXT PRIMARY KEY,
@@ -2245,6 +2259,8 @@ export class OrchestrationDb {
           'Legacy takeover is only available for the automatically adopted Run.'
         )
       }
+      // Why: only LIVE legacy work needs the flag — settled work has no competing authority left, and
+      // fencing it would strand the recovered graph behind an attestation the caller may not have.
       if (
         activeLegacyAssignment &&
         !sameBinding &&
@@ -2338,15 +2354,26 @@ export class OrchestrationDb {
   }
 
   getCurrentRunForPane(paneKey: string): RunRow | undefined {
-    const runs = this.db
-      .prepare('SELECT * FROM runs WHERE coordinator_pane_key IS NOT NULL AND legacy = 0')
-      .all() as RunRow[]
-    const run = runs.find(
-      (candidate) =>
-        candidate.coordinator_pane_key !== null &&
-        isEquivalentPaneKey(candidate.coordinator_pane_key, paneKey)
-    )
+    const run = this.runsBoundToPane(paneKey)[0]
     return run ? exposeRunTimestamps(run) : undefined
+  }
+
+  // Why: the indexed suffix only narrows candidates; isEquivalentPaneKey still decides, so
+  // reminted tab halves keep matching and unparseable keys keep requiring an exact match.
+  private runsBoundToPane(paneKey: string): RunRow[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT * FROM runs
+           WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
+             AND ${PANE_KEY_MATCH_SUFFIX_SQL} = ?
+           ORDER BY rowid`
+        )
+        .all(paneKeyMatchSuffix(paneKey)) as RunRow[]
+    ).filter(
+      (run) =>
+        run.coordinator_pane_key !== null && isEquivalentPaneKey(run.coordinator_pane_key, paneKey)
+    )
   }
 
   private getRunRaw(id: string): RunRow | undefined {
@@ -2354,15 +2381,8 @@ export class OrchestrationDb {
   }
 
   private unbindOtherRunsForPane(paneKey: string, exceptRunId?: string): void {
-    const bound = this.db
-      .prepare('SELECT * FROM runs WHERE coordinator_pane_key IS NOT NULL AND legacy = 0')
-      .all() as RunRow[]
-    for (const run of bound) {
-      if (
-        run.id !== exceptRunId &&
-        run.coordinator_pane_key &&
-        isEquivalentPaneKey(run.coordinator_pane_key, paneKey)
-      ) {
+    for (const run of this.runsBoundToPane(paneKey)) {
+      if (run.id !== exceptRunId) {
         this.db
           .prepare(
             `UPDATE runs
@@ -5806,6 +5826,7 @@ export class OrchestrationDb {
       .prepare(
         `UPDATE dispatch_contexts
          SET status = ?, failure_count = ?, last_failure = ?,
+             completed_at = COALESCE(completed_at, datetime('now')),
              capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
          WHERE id = ?`
       )

@@ -1,5 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { AiVaultAgent, AiVaultGroup, AiVaultSort } from '../../../../shared/ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  type AiVaultAgent,
+  type AiVaultGroup,
+  type AiVaultSort
+} from '../../../../shared/ai-vault-types'
 import {
   createDefaultAiVaultViewOptions,
   enabledAiVaultAgents,
@@ -19,6 +24,7 @@ export function usePersistedAiVaultViewOptions(): {
   setGroup: (group: AiVaultGroup) => void
   setHideEmptySessions: (hide: boolean) => void
   setAgentEnabled: (agent: AiVaultAgent, enabled: boolean) => void
+  setAllAgentsEnabled: (enabled: boolean) => void
   resetViewOptions: () => void
 } {
   const [options, setOptions] = useState<AiVaultViewOptions>(() => readAiVaultViewOptions())
@@ -66,12 +72,26 @@ export function usePersistedAiVaultViewOptions(): {
         if (enabled === !isDisabled) {
           return current
         }
+        // Why: allow zero enabled agents so Clear + re-check one agent is a two-step filter.
         const disabledAgents = enabled
           ? current.disabledAgents.filter((entry) => entry !== agent)
           : [...current.disabledAgents, agent]
-        return enabledAiVaultAgents(disabledAgents).length > 0
-          ? { ...current, disabledAgents }
-          : current
+        return { ...current, disabledAgents }
+      })
+    },
+    [updateOptions]
+  )
+  const setAllAgentsEnabled = useCallback(
+    (enabled: boolean) => {
+      updateOptions((current) => {
+        const disabledAgents = enabled ? [] : [...AI_VAULT_AGENTS]
+        if (
+          disabledAgents.length === current.disabledAgents.length &&
+          disabledAgents.every((agent) => current.disabledAgents.includes(agent))
+        ) {
+          return current
+        }
+        return { ...current, disabledAgents }
       })
     },
     [updateOptions]
@@ -94,6 +114,7 @@ export function usePersistedAiVaultViewOptions(): {
     setGroup,
     setHideEmptySessions,
     setAgentEnabled,
+    setAllAgentsEnabled,
     resetViewOptions
   }
 }

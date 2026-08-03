@@ -146,10 +146,17 @@ export type RuntimeSyncWindowGraph = {
   mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[]
 }
 
+export type RuntimeNativeChatLaunchDraftResolution = {
+  tabId: string
+  text: string
+  createdAt: number
+}
+
 export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
   /** Main owns terminal handles/dispatches, so renderer graph sync returns the
    *  parent metadata needed by title-derived agent rows without name guessing. */
   agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+  nativeChatLaunchDraftResolutions?: RuntimeNativeChatLaunchDraftResolution[]
 }
 
 export type RuntimeMobileSessionTerminalTab = {
@@ -174,6 +181,8 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Launch context delivered only into the TUI input as an unsent draft; the
    *  mobile chat composer adopts it so the context isn't invisible in chat. */
   launchDraft?: string
+  /** Identity of the launch draft text, used to retire only the adopted generation. */
+  launchDraftCreatedAt?: number
   isActive: boolean
 }
 
@@ -536,10 +545,6 @@ export type RuntimeTerminalOrphanAdoptionResult = {
   snapshot: RuntimeMobileSessionTabsResult
 }
 
-export type RuntimeWorktreeTerminalSleepFailure =
-  | 'terminal_liveness_unavailable'
-  | 'terminal_worktree_sleep_still_live'
-
 export type RuntimeWorktreeTerminalSleepResult = {
   stopped: number
   stoppedPtyIds: string[]
@@ -676,6 +681,12 @@ export type RuntimeTerminalFocus = {
   handle: string
   tabId: string
   worktreeId: string
+  /**
+   * Whether this request remained the winning applied host navigation when it settled.
+   * False also covers identity-only requests and unavailable host navigation.
+   * Optional for older clients; omit only when unknown.
+   */
+  navigated?: boolean
 }
 
 export type RuntimeTerminalClose = {
@@ -833,6 +844,19 @@ export type RuntimeWorktreePsResult = {
   totalCount: number
   truncated: boolean
 }
+
+export type RuntimeWorktreePsSnapshotResult = RuntimeWorktreePsResult & {
+  snapshotId: string
+}
+
+export type RuntimeWorktreePsUnchangedResult = {
+  unchanged: true
+  snapshotId: string
+}
+
+export type RuntimeWorktreePsConditionalResult =
+  | RuntimeWorktreePsSnapshotResult
+  | RuntimeWorktreePsUnchangedResult
 
 export type RuntimeRepoList = {
   repos: Repo[]
@@ -1172,16 +1196,8 @@ export type BrowserCaptureStopResult = {
   stopped: boolean
 }
 
-export type BrowserExecResult = {
-  output: unknown
-}
-
 export type BrowserTabCreateResult = {
   browserPageId: string
-}
-
-export type BrowserTabCloseResult = {
-  closed: boolean
 }
 
 export type BrowserErrorCode =
@@ -1199,13 +1215,6 @@ export type BrowserErrorCode =
   | 'browser_debugger_detached'
   | 'browser_timeout'
   | 'browser_error'
-
-export type EmulatorErrorCode =
-  | 'emulator_no_active'
-  | 'emulator_device_not_found'
-  | 'emulator_helper_failed'
-  | 'emulator_not_macos'
-  | 'emulator_error'
 
 // Keep the broad runtime-types import surface stable while letting computer-use
 // CI watch a narrow contract file instead of every runtime type change.

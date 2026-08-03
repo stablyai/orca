@@ -40,7 +40,9 @@ const HOST_INTERACTIVE_COMMANDS: Record<string, string> = {
   'claude-teams':
     'orca claude-teams starts an interactive Claude Code session and cannot run through the SSH relay bridge. Run it in a terminal on the Orca host machine.',
   'agent-teams-tmux':
-    'orca agent-teams-tmux is a tmux pane shim for the Orca host machine and cannot run through the SSH relay bridge.'
+    'orca agent-teams-tmux is a tmux pane shim for the Orca host machine and cannot run through the SSH relay bridge.',
+  'account add':
+    'orca account add runs an interactive agent login and cannot run through the buffered SSH relay bridge. Run it directly in a terminal on the Orca host machine.'
 }
 
 export async function runRemoteOrcaCli(
@@ -52,8 +54,9 @@ export async function runRemoteOrcaCli(
   const json = parsed.flags.has('json')
   const command = parsed.commandPath.join(' ')
 
-  const interactiveMessage = HOST_INTERACTIVE_COMMANDS[parsed.commandPath[0] ?? '']
-  if (interactiveMessage) {
+  const interactiveMessage =
+    HOST_INTERACTIVE_COMMANDS[command] ?? HOST_INTERACTIVE_COMMANDS[parsed.commandPath[0] ?? '']
+  if (interactiveMessage && !parsed.flags.has('help')) {
     if (json) {
       return {
         stdout: `${JSON.stringify(buildRemoteCliError(interactiveMessage, 'unsupported_over_ssh'), null, 2)}\n`,

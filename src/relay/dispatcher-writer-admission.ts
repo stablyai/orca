@@ -15,13 +15,15 @@ export type DispatcherWriterEntry = {
   estimatedBytes: number
   onSettled: (result: DispatcherWriterSettlement) => void
   settled: boolean
+  // Why: control overflow closes the client by default; best-effort frames opt out of that instead.
+  overflowIsNonFatal?: boolean
 }
 
 type AdmissionResult =
   | { accepted: true; replaced?: DispatcherWriterEntry }
   | { accepted: false; error?: Error }
 
-const CONTROL_QUEUE_MAX_FRAMES = 256
+export const DISPATCHER_CONTROL_QUEUE_MAX_FRAMES = 256
 export const DISPATCHER_CONTROL_QUEUE_MAX_BYTES = 1024 * 1024
 const LIVENESS_QUEUE_MAX_FRAMES = 2
 
@@ -66,6 +68,13 @@ export class DispatcherWriterAdmission {
 
   get retainedProducerBytes(): number {
     return this.producerBytes
+  }
+
+  canAdmitControl(bytes: number): boolean {
+    return (
+      this.controlFrames < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES &&
+      this.controlBytes + bytes <= DISPATCHER_CONTROL_QUEUE_MAX_BYTES
+    )
   }
 
   get queuedEntries(): number {
@@ -143,10 +152,12 @@ export class DispatcherWriterAdmission {
   }
 
   private admitControl(entry: DispatcherWriterEntry): AdmissionResult {
-    if (
-      this.controlFrames >= CONTROL_QUEUE_MAX_FRAMES ||
-      this.controlBytes + entry.estimatedBytes > DISPATCHER_CONTROL_QUEUE_MAX_BYTES
-    ) {
+    // Why: best-effort controls may fail soft without weakening protocol-critical admission.
+    const overflowIsNonFatal = entry.overflowIsNonFatal === true
+    if (!this.canAdmitControl(entry.estimatedBytes)) {
+      if (overflowIsNonFatal) {
+        return { accepted: false }
+      }
       return {
         accepted: false,
         error: new Error('Relay control queue exceeded its bounded capacity')

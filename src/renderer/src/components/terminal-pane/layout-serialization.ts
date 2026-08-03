@@ -238,12 +238,11 @@ export function replayTerminalLayout(
 ): Map<string, number> {
   const paneByLeafId = new Map<string, number>()
 
-  const inputSnapshot = snapshot
   const normalized = normalizeTerminalLayoutSnapshot(snapshot)
   snapshot = normalized.snapshot
   const initialLeafId = snapshot.root
     ? getLeftmostLeafId(snapshot.root)
-    : (resolveRootlessTerminalLayoutLeafId(inputSnapshot ?? snapshot) ?? undefined)
+    : (resolveRootlessTerminalLayoutLeafId(snapshot) ?? undefined)
   const initialPane = manager.createInitialPane({ focus: focusInitialPane, leafId: initialLeafId })
   if (!snapshot?.root) {
     paneByLeafId.set(initialPane.leafId, initialPane.id)

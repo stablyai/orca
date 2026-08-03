@@ -49,6 +49,28 @@ describe('hosted review RPC methods', () => {
     })
   })
 
+  it('carries a selected-worktree claim through to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getHostedReviewForBranch: vi.fn().mockResolvedValue(null)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('hostedReview.forBranch', {
+        repo: '/repo',
+        branch: 'feature/selected',
+        active: true
+      })
+    )
+
+    // Why: without this the mobile PR sidebar would sit on the card-list pacing
+    // and take a no-review interval to notice a PR opened elsewhere (#11532).
+    expect(runtime.getHostedReviewForBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ active: true })
+    )
+  })
+
   it('dispatches creation eligibility requests to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

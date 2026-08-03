@@ -113,4 +113,26 @@ describe('createPaneDOM link tooltips', () => {
 
     expect(pane.linkTooltip.textContent).toBe(labeledText)
   })
+
+  // Why: the hovered pane's host decides where its links can go, so both hooks must
+  // receive that pane's id rather than resolving against global state.
+  it('identifies the hovered pane to both tooltip hooks', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    const linkOpenHint = vi.fn(() => 'open hint')
+    const formatLinkTooltip = vi.fn(() => null)
+    createPaneDOM(
+      7,
+      leafId,
+      { linkOpenHint, formatLinkTooltip },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+
+    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'http://localhost:5180/')
+
+    expect(linkOpenHint).toHaveBeenCalledWith(7)
+    expect(formatLinkTooltip).toHaveBeenCalledWith(7, 'http://localhost:5180/', 'open hint')
+  })
 })

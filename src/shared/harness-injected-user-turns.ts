@@ -49,10 +49,24 @@ const HARNESS_INJECTED_TURN_PREFIXES = [
   'this session is being continued from a previous conversation'
 ]
 
+// Why: classification only inspects leading tags/prefixes. Cap the toLowerCase
+// copy so vault-scan / prompt-seed paths stay O(1) on multi-KB pastes.
+const HARNESS_CLASSIFY_HEAD_LIMIT = 256
+const HARNESS_CLASSIFY_LEADING_WS_LIMIT = 64
+
 /** True only for observed harness shapes. Match on trimmed, lowercased text.
  *  Unknown kebab tags stay user turns — only tags we have observed count. */
 export function isKnownHarnessInjectedUserTurnText(text: string): boolean {
-  const normalized = text.trim().toLowerCase()
+  let start = 0
+  const wsScanEnd = Math.min(text.length, HARNESS_CLASSIFY_LEADING_WS_LIMIT)
+  while (start < wsScanEnd && isAsciiWhitespace(text.charCodeAt(start))) {
+    start += 1
+  }
+  if (start >= text.length) {
+    return false
+  }
+  const headEnd = Math.min(text.length, start + HARNESS_CLASSIFY_HEAD_LIMIT)
+  const normalized = text.slice(start, headEnd).toLowerCase()
   if (normalized.length === 0) {
     return false
   }
@@ -61,4 +75,8 @@ export function isKnownHarnessInjectedUserTurnText(text: string): boolean {
     return true
   }
   return HARNESS_INJECTED_TURN_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+}
+
+function isAsciiWhitespace(code: number): boolean {
+  return code === 32 || code === 9 || code === 10 || code === 13 || code === 12
 }

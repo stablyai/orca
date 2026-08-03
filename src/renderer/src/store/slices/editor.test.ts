@@ -66,6 +66,13 @@ function createEditorTabsStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    activeTabId: null,
+    activeTabIdByWorktree: {},
+    tabBarOrderByWorktree: {},
+    setTabBarOrder: (worktreeId: string, order: string[]) =>
+      args[0]((state: AppState) => ({
+        tabBarOrderByWorktree: { ...state.tabBarOrderByWorktree, [worktreeId]: order }
+      })),
     repos: [{ id: 'repo-1', path: '/repo' }],
     worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
     folderWorkspaces: [],
@@ -663,7 +670,7 @@ describe('createEditorSlice openDiff', () => {
   it('bumps fileContentReloadNonce when re-opening an existing clean file with reload requested', () => {
     const store = createEditorStore()
 
-    const openFileWithReloadRequest = (): void =>
+    const openFileWithReloadRequest = (): void => {
       store.getState().openFile(
         {
           filePath: '/repo/file.ts',
@@ -674,6 +681,7 @@ describe('createEditorSlice openDiff', () => {
         },
         { forceContentReload: true }
       )
+    }
 
     openFileWithReloadRequest()
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
@@ -869,7 +877,7 @@ describe('createEditorSlice openDiff', () => {
   it('keeps an existing preview replaceable when it is opened as preview again', () => {
     const store = createEditorTabsStore()
 
-    const openPreviewFile = (): void =>
+    const openPreviewFile = (): void => {
       store.getState().openFile(
         {
           filePath: '/repo/a.ts',
@@ -880,6 +888,7 @@ describe('createEditorSlice openDiff', () => {
         },
         { preview: true }
       )
+    }
 
     openPreviewFile()
     openPreviewFile()
@@ -1623,6 +1632,85 @@ describe('createEditorSlice recently closed editor tabs', () => {
     expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
     expect(store.getState().openFiles.at(-1)).toMatchObject({ filePath: '/repo/notes.md' })
     expect(store.getState().openFiles.at(-1)).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
+
+  it('restores the exact same-path owner instead of moving the local editor', () => {
+    const store = createEditorTabsStore()
+    const localId = store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const remoteId = store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      runtimeEnvironmentId: 'env-1',
+      mode: 'edit'
+    })
+    store.getState().setTabBarOrder('wt-1', [localId, remoteId])
+
+    store.getState().closeFile(remoteId)
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    const openIds = store.getState().openFiles.map((file) => file.id)
+    expect(openIds).toEqual([localId, remoteId])
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([localId, remoteId])
+  })
+
+  it('keeps same-path edit and diff tabs as separate entities on reopen', () => {
+    const store = createEditorTabsStore()
+    const editId = store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openDiff('wt-1', '/repo/notes.md', 'notes.md', 'markdown', false)
+    const diffId = 'wt-1::diff::unstaged::notes.md'
+    store.getState().setTabBarOrder('wt-1', [editId, diffId])
+
+    store.getState().closeFile(diffId)
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().openFiles.map((file) => file.id)).toEqual([editId, diffId])
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([editId, diffId])
+  })
+
+  it('keeps close-all editor snapshots positioned for reopen', () => {
+    const store = createEditorTabsStore()
+    const firstId = store.getState().openFile({
+      filePath: '/repo/first.md',
+      relativePath: 'first.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const middleId = store.getState().openFile({
+      filePath: '/repo/middle.md',
+      relativePath: 'middle.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const lastId = store.getState().openFile({
+      filePath: '/repo/last.md',
+      relativePath: 'last.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().setTabBarOrder('wt-1', [firstId, middleId, lastId])
+
+    store.getState().closeAllFiles()
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().openFiles[0]?.id).toBe(firstId)
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([firstId])
   })
 })
 
@@ -4941,7 +5029,7 @@ describe('closeFile host mirroring', () => {
 describe('read-only editor tabs (AI Vault View Log)', () => {
   const LOG_PATH = '/home/user/.claude/sessions/log.jsonl'
 
-  const openReadOnlyLog = (store: StoreApi<AppState>): void =>
+  const openReadOnlyLog = (store: StoreApi<AppState>): void => {
     store.getState().openFile(
       {
         filePath: LOG_PATH,
@@ -4955,6 +5043,7 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
       },
       { preview: false, forceContentReload: true, suppressActiveRuntimeFallback: true }
     )
+  }
 
   it('creates a permanent read-only edit tab', () => {
     const store = createEditorStore()

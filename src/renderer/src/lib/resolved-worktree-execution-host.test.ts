@@ -56,4 +56,25 @@ describe('getResolvedExecutionHostIdForWorktree', () => {
       )
     ).toBe('runtime:runtime-1')
   })
+
+  it('uses the folder host stamp when same-ID project groups exist on different hosts', () => {
+    expect(
+      getResolvedExecutionHostIdForWorktree(
+        {
+          folderWorkspaces: [
+            {
+              id: 'same-folder',
+              projectGroupId: 'same-group',
+              executionHostId: 'runtime:runtime-1'
+            }
+          ],
+          projectGroups: [
+            { id: 'same-group', executionHostId: 'local' },
+            { id: 'same-group', executionHostId: 'runtime:runtime-1' }
+          ]
+        },
+        'folder:same-folder'
+      )
+    ).toBe('runtime:runtime-1')
+  })
 })

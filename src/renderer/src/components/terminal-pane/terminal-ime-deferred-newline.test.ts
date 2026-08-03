@@ -355,6 +355,7 @@ describe('isTerminalImeProcessEnter', () => {
     { altKey: true },
     // Windows hands every IME-consumed keydown the same Process/229 shape, so a shifted
     // jamo (ㅃ on KeyQ) differs from the committing Enter only by `code`.
+    { code: 'ShiftLeft' },
     { code: 'KeyQ' },
     // Same shape from a Japanese IME: Shift+Left/Right resizes the conversion segment.
     { code: 'ArrowLeft' }

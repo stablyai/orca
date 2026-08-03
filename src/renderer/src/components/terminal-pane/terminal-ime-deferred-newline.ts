@@ -107,20 +107,22 @@ export function getTerminalImeModifiedEnterKind(
   return null
 }
 
+export function isTerminalImeConsumedKey(event: Pick<KeyboardEvent, 'key' | 'keyCode'>): boolean {
+  return event.key === 'Process' && event.keyCode === 229
+}
+
 export function isTerminalImeProcessEnter(
   event: Pick<
     KeyboardEvent,
     'key' | 'code' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
   >
 ): boolean {
-  // Why: Windows reports every IME-consumed keydown as Process/229, so a shifted jamo
-  // (ㅃ, ㄲ) matches the modifier check too; `code` is the only field telling them apart.
-  // An absent code stays accepted — Windows sends this sequence with a blank one, per the
-  // chord owner's "blank codes" case in this module's test.
+  // Why: a shifted jamo (ㅃ, ㄲ) is IME-consumed too, so the modifier check alone matches it;
+  // `code` is the only field separating those from Enter. An absent code stays accepted —
+  // Windows sends this sequence with a blank one, per this module's "blank codes" test.
   const { code } = event
   return (
-    event.key === 'Process' &&
-    event.keyCode === 229 &&
+    isTerminalImeConsumedKey(event) &&
     (!code || code === 'Unidentified' || code === 'Enter' || code === 'NumpadEnter') &&
     getTerminalImeModifiedEnterKind(event) !== null
   )

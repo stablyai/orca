@@ -1,8 +1,18 @@
 import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../shared/types'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 
 type WorktreeOwnerRecord = Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
 type RepoOwnerRecord = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
-type FolderWorkspaceOwnerRecord = Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'>
+type FolderWorkspaceOwnerRecord = Pick<
+  FolderWorkspace,
+  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'
+>
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
 
 // Why: owner resolution runs inside retained selectors and interaction paths;
@@ -17,35 +27,56 @@ const repoOwnerIndexCache = new WeakMap<
 >()
 const folderWorkspaceOwnerIndexCache = new WeakMap<
   readonly FolderWorkspaceOwnerRecord[],
-  ReadonlyMap<string, FolderWorkspaceOwnerRecord>
+  ReadonlyMap<string, IndexedFolderWorkspaceOwnerResolution>
 >()
 const projectGroupOwnerIndexCache = new WeakMap<
   readonly ProjectGroupOwnerRecord[],
-  ReadonlyMap<string, ProjectGroupOwnerRecord>
+  ReadonlyMap<string, IndexedProjectGroupOwnerResolution>
 >()
 
-function findIndexedOwnerRecord<T extends { id: string }>(
-  records: readonly T[] | undefined,
-  id: string,
-  cache: WeakMap<readonly T[], ReadonlyMap<string, T>>
-): T | null {
-  if (!records) {
-    return null
+type IndexedFolderWorkspaceOwnerResolution =
+  | { kind: 'resolved'; owner: FolderWorkspaceOwnerRecord }
+  | { kind: 'missing' }
+  | { kind: 'ambiguous' }
+
+type IndexedProjectGroupOwnerResolution =
+  | { kind: 'resolved'; owner: ProjectGroupOwnerRecord }
+  | { kind: 'missing' }
+  | { kind: 'ambiguous' }
+
+function catalogOwnerHostId(owner: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): ExecutionHostId {
+  const explicitHost = parseExecutionHostId(owner.executionHostId)
+  if (explicitHost) {
+    return explicitHost.id
   }
-  let index = cache.get(records)
-  if (!index) {
-    const next = new Map<string, T>()
-    for (const record of records) {
-      const recordId = record.id
-      if (!next.has(recordId)) {
-        // Preserve the prior Array.find behavior for invalid duplicate IDs.
-        next.set(recordId, record)
-      }
+  const connectionId = owner.connectionId?.trim()
+  return connectionId ? toSshExecutionHostId(connectionId) : 'local'
+}
+
+function buildCatalogOwnerIndex<
+  T extends { id: string; connectionId?: string | null; executionHostId?: string | null }
+>(
+  records: readonly T[]
+): ReadonlyMap<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }> {
+  const next = new Map<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }>()
+  for (const record of records) {
+    const id = record.id
+    const hostId = catalogOwnerHostId(record)
+    const current = next.get(id)
+    if (!current) {
+      next.set(id, { kind: 'resolved', owner: record })
+    } else if (current.kind === 'resolved' && catalogOwnerHostId(current.owner) !== hostId) {
+      next.set(id, { kind: 'ambiguous' })
     }
-    index = next
-    cache.set(records, index)
+    next.set(`${id}\0${hostId}`, {
+      kind: 'resolved',
+      owner: record
+    })
   }
-  return index.get(id) ?? null
+  return next
 }
 
 export function findIndexedWorktreeOwner(
@@ -54,6 +85,21 @@ export function findIndexedWorktreeOwner(
 ): WorktreeOwnerRecord | null {
   const resolution = resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
   return resolution.kind === 'resolved' ? resolution.owner : null
+}
+
+export function findIndexedWorktreeOwnerForHost(
+  worktreesByRepo: Record<string, readonly WorktreeOwnerRecord[]> | undefined,
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): WorktreeOwnerRecord | null {
+  if (!worktreesByRepo) {
+    return null
+  }
+  resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
+  const resolution = worktreeOwnerIndexCache
+    .get(worktreesByRepo)
+    ?.get(`${worktreeId}\0${executionHostId}`)
+  return resolution?.kind === 'resolved' ? resolution.owner : null
 }
 
 export type IndexedRepoOwnerResolution =
@@ -86,6 +132,10 @@ export function resolveIndexedRepoOwner(
       ) {
         next.set(repoId, { kind: 'ambiguous' })
       }
+      next.set(`${repoId}\0${getRepoExecutionHostId(repo)}`, {
+        kind: 'resolved',
+        owner: repo
+      })
     }
     index = next
     repoOwnerIndexCache.set(repos, index)
@@ -104,6 +154,15 @@ function worktreeOwnerIdentity(owner: WorktreeOwnerRecord): string {
     owner.hostId ?? null,
     owner.runtimeOwnerEnvironmentId?.trim() || null
   ])
+}
+
+function worktreeOwnerHostId(owner: WorktreeOwnerRecord): ExecutionHostId {
+  return (
+    parseExecutionHostId(owner.hostId)?.id ??
+    (owner.runtimeOwnerEnvironmentId
+      ? toRuntimeExecutionHostId(owner.runtimeOwnerEnvironmentId)
+      : 'local')
+  )
 }
 
 export function resolveIndexedWorktreeOwner(
@@ -128,6 +187,10 @@ export function resolveIndexedWorktreeOwner(
         ) {
           next.set(id, { kind: 'ambiguous' })
         }
+        next.set(`${id}\0${worktreeOwnerHostId(worktree)}`, {
+          kind: 'resolved',
+          owner: worktree
+        })
       }
     }
     index = next
@@ -144,16 +207,53 @@ export function findIndexedRepoOwner(
   return resolution.kind === 'resolved' ? resolution.owner : null
 }
 
+export function findIndexedRepoOwnerForHost(
+  repos: readonly RepoOwnerRecord[] | undefined,
+  repoId: string,
+  executionHostId: ExecutionHostId
+): RepoOwnerRecord | null {
+  if (!repos) {
+    return null
+  }
+  resolveIndexedRepoOwner(repos, repoId)
+  const resolution = repoOwnerIndexCache.get(repos)?.get(`${repoId}\0${executionHostId}`)
+  return resolution?.kind === 'resolved' ? resolution.owner : null
+}
+
 export function findIndexedFolderWorkspaceOwner(
   folderWorkspaces: readonly FolderWorkspaceOwnerRecord[] | undefined,
-  folderWorkspaceId: string
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
 ): FolderWorkspaceOwnerRecord | null {
-  return findIndexedOwnerRecord(folderWorkspaces, folderWorkspaceId, folderWorkspaceOwnerIndexCache)
+  if (!folderWorkspaces) {
+    return null
+  }
+  let index = folderWorkspaceOwnerIndexCache.get(folderWorkspaces)
+  if (!index) {
+    index = buildCatalogOwnerIndex(folderWorkspaces)
+    folderWorkspaceOwnerIndexCache.set(folderWorkspaces, index)
+  }
+  const resolution = index.get(
+    executionHostId ? `${folderWorkspaceId}\0${executionHostId}` : folderWorkspaceId
+  )
+  return resolution?.kind === 'resolved' ? resolution.owner : null
 }
 
 export function findIndexedProjectGroupOwner(
   projectGroups: readonly ProjectGroupOwnerRecord[] | undefined,
-  projectGroupId: string
+  projectGroupId: string,
+  executionHostId?: ExecutionHostId
 ): ProjectGroupOwnerRecord | null {
-  return findIndexedOwnerRecord(projectGroups, projectGroupId, projectGroupOwnerIndexCache)
+  if (!projectGroups) {
+    return null
+  }
+  let index = projectGroupOwnerIndexCache.get(projectGroups)
+  if (!index) {
+    index = buildCatalogOwnerIndex(projectGroups)
+    projectGroupOwnerIndexCache.set(projectGroups, index)
+  }
+  const resolution = index.get(
+    executionHostId ? `${projectGroupId}\0${executionHostId}` : projectGroupId
+  )
+  return resolution?.kind === 'resolved' ? resolution.owner : null
 }

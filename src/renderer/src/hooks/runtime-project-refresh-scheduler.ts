@@ -1,3 +1,5 @@
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+
 export type RuntimeProjectRefreshSchedulerDeps = {
   refresh: (environmentId: string) => Promise<void>
   debounceMs?: number
@@ -20,6 +22,46 @@ type RefreshEntry = {
 
 const DEFAULT_DEBOUNCE_MS = 250
 const DEFAULT_MIN_INTERVAL_MS = 5_000
+const DEFAULT_REFRESH_CONCURRENCY = 5
+
+export async function refreshRuntimeProjectWorktrees(
+  environmentId: string,
+  repos: readonly { id: string }[],
+  fetchWorktrees: (
+    repoId: string,
+    options: { executionHostId: ExecutionHostId }
+  ) => Promise<unknown>,
+  concurrency = DEFAULT_REFRESH_CONCURRENCY
+): Promise<void> {
+  let nextIndex = 0
+  const failures: { repoId: string; error: unknown }[] = []
+  const workerCount = Math.min(concurrency, repos.length)
+  const executionHostId = toRuntimeExecutionHostId(environmentId)
+
+  // Why: one coalesced event can represent many repos; bound probes without dropping host identity.
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < repos.length) {
+        const index = nextIndex
+        nextIndex += 1
+        const repoId = repos[index].id
+        try {
+          await fetchWorktrees(repoId, { executionHostId })
+        } catch (error) {
+          failures.push({ repoId, error })
+        }
+      }
+    })
+  )
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((failure) => failure.error),
+      `Failed to refresh ${failures.length} runtime project worktree(s): ${failures
+        .map((failure) => failure.repoId)
+        .join(', ')}`
+    )
+  }
+}
 
 export function createRuntimeProjectRefreshScheduler(
   deps: RuntimeProjectRefreshSchedulerDeps

@@ -28,7 +28,10 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           const result = await context.runtime.closeMobileSessionTab(
             params.worktree,
             params.tabId,
-            { reason: 'user' }
+            {
+              reason: 'user',
+              ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
+            }
           )
           span.setAttribute(
             'decision',
@@ -68,7 +71,8 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
             {
               reason: params.reason,
               expectedPublicationEpoch: params.publicationEpoch,
-              expectedTerminalHandle: params.terminal
+              expectedTerminalHandle: params.terminal,
+              ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }
           )
           span.setAttribute(

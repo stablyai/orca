@@ -81,6 +81,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     setGroup,
     setHideEmptySessions,
     setAgentEnabled,
+    setAllAgentsEnabled,
     resetViewOptions
   } = usePersistedAiVaultViewOptions()
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
@@ -320,6 +321,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         onScopeChange={handleScopeChange}
         onExecutionHostScopeChange={onExecutionHostScopeChange}
         onAgentEnabledChange={setAgentEnabled}
+        onAllAgentsEnabledChange={setAllAgentsEnabled}
         onSortChange={setSort}
         onGroupChange={setGroup}
         onHideEmptySessionsChange={setHideEmptySessions}
@@ -349,6 +351,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         loading={loading}
         sessionsCount={sessions.length}
         filteredSessionsCount={filteredSessions.length}
+        noAgentsSelected={agents.length === 0}
         error={error}
         vaultScope={scope}
         buildResumeStartup={launchActions.buildResumeStartup}
