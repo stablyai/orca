@@ -263,6 +263,10 @@ export type RunListPage = {
   nextCursor: string | null
 }
 
+export type TaskRuntimeLineageRow = TaskRow & {
+  current_creator_terminal_handle: string | null
+}
+
 type RunListCursor = {
   createdAt: string
   id: string
@@ -3786,8 +3790,53 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
   }
 
-  getTask(id: string): TaskRow | undefined {
-    return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined
+  // Why: terminal handles outlive Run rebinding, so creator lineage needs current same-Run evidence.
+  getTask(id: string): TaskRow | undefined
+  getTask(id: string, dispatchRunId: string): TaskRuntimeLineageRow | undefined
+  getTask(id: string, dispatchRunId?: string): TaskRow | TaskRuntimeLineageRow | undefined {
+    if (dispatchRunId === undefined) {
+      return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined
+    }
+    return this.db
+      .prepare(
+        `SELECT t.*,
+           CASE
+             WHEN t.run_id = ?
+               AND EXISTS (SELECT 1 FROM runs owner WHERE owner.id = t.run_id)
+               AND NOT EXISTS (
+                 SELECT 1 FROM runs rebound
+                 WHERE rebound.legacy = 0
+                   AND rebound.id <> t.run_id
+                   AND rebound.coordinator_handle = t.created_by_terminal_handle
+               )
+               AND (
+                 EXISTS (
+                   SELECT 1 FROM runs owner
+                   WHERE owner.id = t.run_id
+                     AND owner.coordinator_handle = t.created_by_terminal_handle
+                 )
+                 OR (
+                   EXISTS (
+                     SELECT 1 FROM dispatch_contexts creator
+                     WHERE creator.assignee_handle = t.created_by_terminal_handle
+                       AND creator.run_id = t.run_id
+                       AND creator.status IN ('pending', 'dispatched')
+                   )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM dispatch_contexts creator
+                     WHERE creator.assignee_handle = t.created_by_terminal_handle
+                       AND creator.run_id <> t.run_id
+                       AND creator.status IN ('pending', 'dispatched')
+                   )
+                 )
+               )
+             THEN t.created_by_terminal_handle
+             ELSE NULL
+           END AS current_creator_terminal_handle
+         FROM tasks t
+         WHERE t.id = ?`
+      )
+      .get(dispatchRunId, id) as TaskRuntimeLineageRow | undefined
   }
 
   listTasks(filter?: { status?: TaskStatus; ready?: boolean; runId?: string }): TaskRow[] {

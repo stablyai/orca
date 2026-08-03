@@ -30017,7 +30017,7 @@ export class OrcaRuntimeService {
     if (!dispatch) {
       return undefined
     }
-    const task = db?.getTask?.(dispatch.task_id)
+    const task = db?.getTask?.(dispatch.task_id, dispatch.run_id)
     const display =
       typeof task?.spec === 'string'
         ? buildOrchestrationTaskDisplayMetadata({
@@ -30047,8 +30047,13 @@ export class OrcaRuntimeService {
         : undefined
     const coordinatorHandle = runCoordinatorHandle ?? scopedLegacyActiveRun?.coordinator_handle
     const orchestrationRunId = owningRun?.legacy === 0 ? owningRun.id : scopedLegacyActiveRun?.id
+    const currentCreatorHandle =
+      task?.current_creator_terminal_handle ??
+      (task?.created_by_terminal_handle && task.created_by_terminal_handle === runCoordinatorHandle
+        ? task.created_by_terminal_handle
+        : undefined)
     const parentTerminalHandle =
-      task?.created_by_terminal_handle ??
+      currentCreatorHandle ??
       (coordinatorHandle && coordinatorHandle !== handle ? coordinatorHandle : undefined)
     const parentPaneKey = parentTerminalHandle
       ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)

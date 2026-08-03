@@ -37953,6 +37953,7 @@ describe('OrcaRuntimeService', () => {
         handle === workerHandle
           ? {
               id: 'ctx-done',
+              run_id: 'run-1',
               task_id: 'task-done',
               assignee_handle: workerHandle,
               status: 'completed',
@@ -38026,7 +38027,10 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('fails closed when a modern dispatch owning Run is missing', () => {
+  it.each([
+    ['fails closed when a modern dispatch owning Run is missing', 'run-missing', 'run-missing'],
+    ['fails closed when Task and Dispatch Runs disagree', 'run-dispatch', 'run-task']
+  ])('%s', (_name, dispatchRunId, taskRunId) => {
     const runtime = new OrcaRuntimeService(store)
     const workerLeafId = '77777777-7777-4777-8777-777777777777'
     const coordinatorLeafId = '88888888-8888-4888-8888-888888888888'
@@ -38042,7 +38046,7 @@ describe('OrcaRuntimeService', () => {
         handle === workerHandle
           ? {
               id: 'ctx-missing-run',
-              run_id: 'run-missing',
+              run_id: dispatchRunId,
               task_id: 'task-missing-run',
               assignee_handle: workerHandle,
               status: 'dispatched'
@@ -38052,8 +38056,9 @@ describe('OrcaRuntimeService', () => {
       getLatestDispatchForTerminal: vi.fn(() => undefined),
       getTask: vi.fn(() => ({
         id: 'task-missing-run',
-        run_id: 'run-missing',
-        spec: 'modern task with missing Run'
+        run_id: taskRunId,
+        spec: 'modern task without proven Run',
+        created_by_terminal_handle: coordinatorHandle
       })),
       getRun: vi.fn(() => undefined),
       getActiveCoordinatorRun
@@ -38101,8 +38106,8 @@ describe('OrcaRuntimeService', () => {
       taskId: 'task-missing-run',
       dispatchId: 'ctx-missing-run',
       dispatchStatus: 'dispatched',
-      taskTitle: 'modern task with missing Run',
-      displayName: 'modern task with missing Run'
+      taskTitle: 'modern task without proven Run',
+      displayName: 'modern task without proven Run'
     })
     expect(getActiveCoordinatorRun).not.toHaveBeenCalled()
   })
@@ -38252,6 +38257,150 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('uses the still-bound owning Run coordinator after a creator pane rebinds', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const terminals = [
+      {
+        name: 'coordinator',
+        leafId: '11111111-1111-4111-8111-111111111111'
+      },
+      {
+        name: 'creator',
+        leafId: '22222222-2222-4222-8222-222222222222'
+      },
+      {
+        name: 'worker',
+        leafId: '33333333-3333-4333-8333-333333333333'
+      },
+      {
+        name: 'coordinator-created-worker',
+        leafId: '44444444-4444-4444-8444-444444444444'
+      }
+    ].map((terminal, index) => ({
+      ...terminal,
+      tabId: `tab-${terminal.name}`,
+      ptyId: `pty-${terminal.name}`,
+      paneRuntimeId: index + 1
+    }))
+    const terminalByName = Object.fromEntries(
+      terminals.map((terminal) => [terminal.name, terminal])
+    )
+    const handles = Object.fromEntries(
+      terminals.map((terminal) => [terminal.name, runtime.preAllocateHandleForPty(terminal.ptyId)])
+    )
+    const paneKey = (name: string): string => {
+      const terminal = terminalByName[name]
+      return makePaneKey(terminal.tabId, terminal.leafId)
+    }
+    const graph = {
+      tabs: terminals.map((terminal) => ({
+        tabId: terminal.tabId,
+        worktreeId: TEST_WORKTREE_ID,
+        title: terminal.name,
+        activeLeafId: terminal.leafId,
+        layout: null
+      })),
+      leaves: terminals.map((terminal) => ({
+        tabId: terminal.tabId,
+        worktreeId: TEST_WORKTREE_ID,
+        leafId: terminal.leafId,
+        paneRuntimeId: terminal.paneRuntimeId,
+        ptyId: terminal.ptyId,
+        paneTitle: null
+      }))
+    }
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const runA = db.createRun({
+        objective: 'own the nested worker',
+        coordinatorHandle: handles.coordinator,
+        coordinatorPaneKey: paneKey('coordinator')
+      })
+      const creatorTask = db.createTask({ spec: 'create nested work', runId: runA.id })
+      db.createDispatchContext(creatorTask.id, handles.creator, paneKey('creator'))
+      const workerTask = db.createTask({
+        spec: 'nested work',
+        runId: runA.id,
+        createdByTerminalHandle: handles.creator
+      })
+      const workerDispatch = db.createDispatchContext(
+        workerTask.id,
+        handles.worker,
+        paneKey('worker')
+      )
+      const coordinatorCreatedTask = db.createTask({
+        spec: 'coordinator-created work',
+        runId: runA.id,
+        createdByTerminalHandle: handles.coordinator
+      })
+      const coordinatorCreatedDispatch = db.createDispatchContext(
+        coordinatorCreatedTask.id,
+        handles['coordinator-created-worker'],
+        paneKey('coordinator-created-worker')
+      )
+      runtime.setOrchestrationDb(db)
+      runtime.attachWindow(1)
+
+      expect(
+        runtime.syncWindowGraph(1, graph).agentOrchestrationByPaneKey?.[paneKey('worker')]
+      ).toMatchObject({
+        parentTerminalHandle: handles.creator,
+        parentPaneKey: paneKey('creator'),
+        coordinatorHandle: handles.coordinator,
+        orchestrationRunId: runA.id
+      })
+
+      const runB = db.createRun({
+        objective: 'rebind the creator pane',
+        coordinatorHandle: handles.creator,
+        coordinatorPaneKey: paneKey('creator')
+      })
+      const reboundContext = runtime.syncWindowGraph(1, graph).agentOrchestrationByPaneKey?.[
+        paneKey('worker')
+      ]
+
+      expect(db.getRun(runA.id)).toMatchObject({
+        coordinator_handle: handles.coordinator,
+        consumer_generation: 1
+      })
+      expect(db.getRun(runB.id)).toMatchObject({ coordinator_handle: handles.creator })
+      expect(reboundContext).toMatchObject({
+        taskId: workerTask.id,
+        dispatchId: workerDispatch.id,
+        dispatchStatus: 'dispatched',
+        parentTerminalHandle: handles.coordinator,
+        parentPaneKey: paneKey('coordinator'),
+        coordinatorHandle: handles.coordinator,
+        orchestrationRunId: runA.id
+      })
+
+      db.createRun({
+        objective: 'rebind the original coordinator pane',
+        coordinatorHandle: handles.coordinator,
+        coordinatorPaneKey: paneKey('coordinator')
+      })
+      const unboundContext = runtime.syncWindowGraph(1, graph).agentOrchestrationByPaneKey?.[
+        paneKey('coordinator-created-worker')
+      ]
+
+      expect(db.getRun(runA.id)).toMatchObject({
+        coordinator_handle: null,
+        coordinator_pane_key: null,
+        consumer_generation: 2
+      })
+      expect(unboundContext).toEqual({
+        taskId: coordinatorCreatedTask.id,
+        dispatchId: coordinatorCreatedDispatch.id,
+        dispatchStatus: 'dispatched',
+        taskTitle: 'coordinator-created work',
+        displayName: 'coordinator-created work',
+        orchestrationRunId: runA.id
+      })
+    } finally {
+      db.close()
+    }
+  })
+
   it('queries each stable terminal handle once while publishing orchestration context', () => {
     const runtime = new OrcaRuntimeService(store)
     const terminals = Array.from({ length: 100 }, (_, index) => ({
@@ -38377,6 +38526,7 @@ describe('OrcaRuntimeService', () => {
         handle === workerHandle
           ? {
               id: 'ctx-done',
+              run_id: 'run-1',
               task_id: 'task-done',
               assignee_handle: workerHandle,
               status: 'completed',
@@ -38386,7 +38536,13 @@ describe('OrcaRuntimeService', () => {
       ),
       getTask: vi.fn(() => ({
         id: 'task-done',
+        run_id: 'run-1',
         created_by_terminal_handle: coordinatorHandle
+      })),
+      getRun: vi.fn(() => ({
+        id: 'run-1',
+        coordinator_handle: coordinatorHandle,
+        legacy: 0
       }))
     } as never)
     runtime.attachWindow(1)
