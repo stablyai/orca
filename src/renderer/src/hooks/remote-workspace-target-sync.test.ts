@@ -246,6 +246,38 @@ describe('createRemoteWorkspaceTargetSync', () => {
     )
   })
 
+  it('discards a superseded upload so a stale push result cannot report over the newer one', async () => {
+    const state = appState({
+      tabsByWorktree: {
+        'repo-a::/remote/work': [{ id: 'tab-a', worktreeId: 'repo-a::/remote/work', ptyId: null }]
+      },
+      lastSyncedRemoteWorkspaceRevisionByTargetId: { [owner.targetId]: 5 }
+    })
+    const harness = createHarness(state, async () => snapshot(5))
+    const uploads: Deferred<{ targetId: string; result: RemoteWorkspacePatchResult }[]>[] = []
+    harness.setForConnectedTargets.mockImplementation(() => {
+      const upload = deferred<{ targetId: string; result: RemoteWorkspacePatchResult }[]>()
+      uploads.push(upload)
+      return upload.promise
+    })
+
+    const first = harness.sync.syncAfterConnect(token())
+    await vi.waitFor(() => expect(uploads).toHaveLength(1))
+    const second = harness.sync.syncAfterConnect(token())
+    await vi.waitFor(() => expect(uploads).toHaveLength(2))
+
+    uploads[1]!.resolve([{ targetId: owner.targetId, result: { ok: true, snapshot: snapshot(7) } }])
+    await second
+    uploads[0]!.resolve([{ targetId: owner.targetId, result: { ok: true, snapshot: snapshot(6) } }])
+    await first
+
+    const syncedCalls = vi
+      .mocked(state.setRemoteWorkspaceSyncStatus)
+      .mock.calls.filter(([, status]) => status.phase === 'synced')
+    expect(syncedCalls).toHaveLength(1)
+    expect(syncedCalls[0]?.[1]).toMatchObject({ revision: 7 })
+  })
+
   it('pulls when the remote snapshot advanced past the last synced revision', async () => {
     const state = appState({
       lastSyncedRemoteWorkspaceRevisionByTargetId: { [owner.targetId]: 5 }

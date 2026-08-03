@@ -169,15 +169,24 @@ export function createRemoteWorkspaceTargetSync(
       })
       return
     }
+    // Why: a superseded sync attempt must not report its upload — arrival
+    // fencing keeps an older push from overwriting the newer attempt's
+    // status/last-synced revision when results resolve out of order.
     const pushLocalSession = async (): Promise<void> => {
-      if (!deps.isPreparationTokenCurrent(token)) {
+      if (
+        !isArrivalCurrent(authority.targetId, arrival) ||
+        !deps.isPreparationTokenCurrent(token)
+      ) {
         return
       }
       const results = await deps.remoteWorkspace.setForConnectedTargets({
         session: buildWorkspaceSessionPayload(deps.store.getState()),
         hydratedTargetIds: [authority.targetId]
       })
-      if (!deps.isPreparationTokenCurrent(token)) {
+      if (
+        !isArrivalCurrent(authority.targetId, arrival) ||
+        !deps.isPreparationTokenCurrent(token)
+      ) {
         return
       }
       const result = results.find((entry) => entry.targetId === authority.targetId)?.result
