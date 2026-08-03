@@ -90,7 +90,12 @@ export class BrowserRecorderSessionObserver {
     }
   }
 
-  start(): void {
+  /**
+   * Attaches the observer to the target page. Returns false (and warns) when
+   * the page cannot be resolved — the recorder must fail visibly instead of
+   * silently recording nothing.
+   */
+  start(): boolean {
     const webContents = this.bridge?.getPageWebContents(
       this.target.worktreeId,
       this.target.browserPageId
@@ -98,11 +103,20 @@ export class BrowserRecorderSessionObserver {
     if (webContents) {
       this.attach(webContents)
       void this.injectCaptureScript()
+    } else {
+      console.warn(
+        '[browser-recorder] recording could not attach: no webContents for target',
+        JSON.stringify(this.target)
+      )
+      // Why: network capture feeds the stop-time traffic summary; best-effort so
+      // a missing agent-browser session cannot break the recorder toggle.
+      const capture = this.bridge?.captureStart(this.target.worktreeId, this.target.browserPageId)
+      void capture?.catch(() => {})
+      return false
     }
-    // Why: network capture feeds the stop-time traffic summary; best-effort so
-    // a missing agent-browser session cannot break the recorder toggle.
     const capture = this.bridge?.captureStart(this.target.worktreeId, this.target.browserPageId)
     void capture?.catch(() => {})
+    return true
   }
 
   async stop(): Promise<void> {

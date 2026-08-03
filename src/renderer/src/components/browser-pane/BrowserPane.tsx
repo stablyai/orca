@@ -4505,16 +4505,31 @@ function BrowserPagePane({
     [recorder.startedAt, recorder.steps]
   )
 
-  const handleToggleBrowserRecorder = useCallback((): void => {
+  const handleToggleBrowserRecorder = useCallback(async (): Promise<void> => {
     recordFeatureInteraction('browser-recorder')
     const nextRecording = !recorder.recording
-    recorder.toggle({ pageUrl: browserTab.url, pageTitle: browserTab.title })
-    // Why: main only captures while enabled; the renderer toggle is the single
-    // source of truth for the session, and the page id scopes the observer.
-    void window.api.browser.setRecorderEnabled({
-      enabled: nextRecording,
-      browserPageId: browserTab.id
-    })
+    if (nextRecording) {
+      // Why: fail-closed toggle — if main cannot attach to the page, do not
+      // show a recording session that records nothing.
+      const attached = await window.api.browser.setRecorderEnabled({
+        enabled: true,
+        browserPageId: browserTab.id
+      })
+      if (!attached) {
+        console.warn(
+          '[browser-recorder] could not attach to the page; recording not started',
+          browserTab.id
+        )
+        return
+      }
+      recorder.toggle({ pageUrl: browserTab.url, pageTitle: browserTab.title })
+    } else {
+      void window.api.browser.setRecorderEnabled({
+        enabled: false,
+        browserPageId: browserTab.id
+      })
+      recorder.toggle({ pageUrl: browserTab.url, pageTitle: browserTab.title })
+    }
   }, [browserTab.id, browserTab.title, browserTab.url, recordFeatureInteraction, recorder])
 
   const handleCopyBrowserRecorderLog = useCallback((): void => {

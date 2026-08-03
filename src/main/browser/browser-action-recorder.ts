@@ -57,15 +57,16 @@ export class BrowserActionRecorder {
   /**
    * Enables or disables the recorder. When enabling with a target, a session
    * observer is started (interactions/console/network); disabling stops it.
-   * Hooks are only required when a session observer should run.
+   * Hooks are only required when a session observer should run. Returns false
+   * when enabling could not attach to the target page (fail-closed toggle).
    */
   setEnabled(
     enabled: boolean,
     target: BrowserActionRecorderTarget = {},
     hooks?: BrowserRecorderObserverHookInput
-  ): void {
+  ): boolean {
     if (this.enabled === enabled) {
-      return
+      return enabled ? this.observer != null : true
     }
     this.enabled = enabled
     if (enabled) {
@@ -78,11 +79,17 @@ export class BrowserActionRecorder {
         },
         target
       )
-      this.observer.start()
+      const attached = this.observer.start()
+      if (!attached) {
+        this.observer = null
+        this.enabled = false
+      }
+      return attached
     } else {
       const observer = this.observer
       this.observer = null
       void observer?.stop()
+      return true
     }
   }
 

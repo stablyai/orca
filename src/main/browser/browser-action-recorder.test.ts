@@ -23,7 +23,17 @@ function makeHarness() {
   const evaluate = vi.fn()
   const getPageInfo = vi.fn()
   const send = vi.fn()
-  const bridge = { evaluate, getPageInfo }
+  const webContents = {
+    id: 1,
+    session: { webRequest: { onCompleted: vi.fn() } },
+    mainFrame: { executeJavaScript: vi.fn(() => Promise.resolve('installed')), frames: [] },
+    on: vi.fn(),
+    removeListener: vi.fn()
+  }
+  const getPageWebContents = vi.fn(() => webContents)
+  const captureStart = vi.fn()
+  const captureStop = vi.fn()
+  const bridge = { evaluate, getPageInfo, getPageWebContents, captureStart, captureStop }
   const windowLike = { webContents: { send } }
   return {
     recorder: new BrowserActionRecorder(),
@@ -31,6 +41,7 @@ function makeHarness() {
     windowLike,
     evaluate,
     getPageInfo,
+    getPageWebContents,
     send
   }
 }
@@ -154,7 +165,11 @@ describe('BrowserActionRecorder.capture', () => {
         }),
         origin: 'https://example.com/dashboard'
       })
-    recorder.setEnabled(true)
+    recorder.setEnabled(
+      true,
+      { worktreeId: 'wt-1', browserPageId: 'page-1' },
+      { getBridge: () => bridge as never, getWindow: () => windowLike as never }
+    )
     const run = vi.fn(async () => ({ ok: true }))
 
     const result = await recorder.capture({
@@ -201,7 +216,11 @@ describe('BrowserActionRecorder.capture', () => {
   it('re-throws the action error and records it', async () => {
     const { recorder, bridge, windowLike, evaluate, send } = makeHarness()
     evaluate.mockResolvedValue({ result: makeFingerprintResult(), origin: 'x' })
-    recorder.setEnabled(true)
+    recorder.setEnabled(
+      true,
+      { worktreeId: 'wt-1', browserPageId: 'page-1' },
+      { getBridge: () => bridge as never, getWindow: () => windowLike as never }
+    )
     const failure = new Error('element not found: #missing')
 
     await expect(
@@ -239,7 +258,11 @@ describe('BrowserActionRecorder.capture', () => {
   it('tolerates fingerprint failures and still reports the action', async () => {
     const { recorder, bridge, windowLike, evaluate, send } = makeHarness()
     evaluate.mockRejectedValue(new Error('debugger busy'))
-    recorder.setEnabled(true)
+    recorder.setEnabled(
+      true,
+      { worktreeId: 'wt-1', browserPageId: 'page-1' },
+      { getBridge: () => bridge as never, getWindow: () => windowLike as never }
+    )
 
     await recorder.capture({
       method: 'browser.goto',

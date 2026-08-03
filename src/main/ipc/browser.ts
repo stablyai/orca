@@ -218,7 +218,7 @@ export function registerBrowserHandlers(): void {
   ipcMain.handle(
     'browser:setRecorderEnabled',
     (_event, args: { enabled?: boolean; browserPageId?: string; worktreeId?: string }) => {
-      browserActionRecorder.setEnabled(
+      return browserActionRecorder.setEnabled(
         args?.enabled === true,
         { worktreeId: args?.worktreeId, browserPageId: args?.browserPageId },
         {
@@ -226,7 +226,6 @@ export function registerBrowserHandlers(): void {
           getWindow: () => BrowserWindow.fromWebContents(_event.sender) ?? undefined
         }
       )
-      return true
     }
   )
 
