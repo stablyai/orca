@@ -2895,6 +2895,11 @@
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
+          },
+          "TabGroupEmptyState": {
+            "title": "No open tabs",
+            "description": "Files, search, and Git are still available for this workspace in the sidebar.",
+            "newTerminal": "New terminal"
           }
         },
         "bar": {

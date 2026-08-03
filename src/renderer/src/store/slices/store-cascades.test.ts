@@ -2712,7 +2712,8 @@ describe('setActiveWorktree', () => {
     expect(s.activeTabType).toBe('browser')
   })
 
-  it('returns to the landing state when closing the last terminal tab in the active worktree', () => {
+  // Why: issue #11699 — the workspace stays selected at zero tabs so file/Git browsing survives.
+  it('clears the tab surfaces but keeps the workspace selected when its last terminal tab closes', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
     const groupId = 'group-1'
@@ -2762,7 +2763,7 @@ describe('setActiveWorktree', () => {
     store.getState().closeTab(tabId)
 
     const s = store.getState()
-    expect(s.activeWorktreeId).toBeNull()
+    expect(s.activeWorktreeId).toBe(wt)
     expect(s.activeTabId).toBeNull()
     expect(s.tabsByWorktree[wt]).toEqual([])
     expect(s.unifiedTabsByWorktree[wt]).toEqual([])

@@ -7,12 +7,15 @@
  *   fixed a regression where closing the active editor tab jumped to an
  *   arbitrary file. The existing `tabs.spec.ts` only covers terminal tab
  *   close; the editor/diff close path has no E2E guard today.
- * - PR #677 (`return to Orca landing screen after closing last terminal`)
- *   plus editor.ts's `shouldDeactivateWorktree` branch (also hardened in
- *   tabs.ts's `closeUnifiedTab`) require that when a worktree's last visible
- *   surface closes, the app clears `activeWorktreeId` instead of leaving a
- *   selected worktree with nothing to render. Any regression here shows up
- *   as a blank workspace.
+ * - Issue #11699 supersedes PR #677 (`return to Orca landing screen after
+ *   closing last terminal`). #677 cleared `activeWorktreeId` when a worktree's
+ *   last visible surface closed, because a selected worktree with no surfaces
+ *   rendered a blank workspace. But deselecting also tore down file browsing
+ *   and Git for a workspace the user had not left, which is the bug #11699
+ *   reports. The workspace now stays selected and the tab group renders an
+ *   empty state with a "New terminal" action, so the blank workspace #677 was
+ *   avoiding no longer exists and the landing fallback is no longer needed.
+ *   Sleeping a workspace is now the route back to Landing.
  * - PR #532 had to be patched because `closeFile` forgot to keep
  *   `activeFileIdByWorktree` honest. This spec covers the user-visible
  *   invariant: after closing the active editor tab, the replacement active
@@ -234,11 +237,14 @@ test.describe('Tab Close Navigation', () => {
   })
 
   /**
-   * Covers PR #677 and the `shouldDeactivateWorktree` branch in closeFile:
-   * when the last editor closes and no terminal/browser surface remains for
-   * the worktree, the app must return to Landing (activeWorktreeId === null).
+   * Covers issue #11699, which reverses PR #677: when the last editor closes
+   * and no terminal/browser surface remains, the workspace stays selected so
+   * file browsing and Git keep working, and the tab group renders its empty
+   * state so the pane still offers a way to open a terminal.
    */
-  test('closing the last visible surface returns the app to Landing', async ({ orcaPage }) => {
+  test('closing the last visible surface keeps the workspace selected and offers a terminal', async ({
+    orcaPage
+  }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
 
     // Prepare the worktree so only a single editor tab is present as a
@@ -321,13 +327,25 @@ test.describe('Tab Close Navigation', () => {
 
     await closeFile(orcaPage, editorIds[0])
 
-    // The worktree should be deselected. Landing renders when
-    // activeWorktreeId === null.
+    // The workspace stays selected (issue #11699) — deselecting is what emptied
+    // the file explorer and Git panel for a workspace the user had not left.
     await expect
       .poll(async () => getActiveWorktreeId(orcaPage), {
         timeout: 5_000,
-        message: 'activeWorktreeId was not cleared after closing the last visible surface'
+        message: 'activeWorktreeId must survive closing the last visible surface'
+      })
+      .toBe(worktreeId)
+
+    // The per-surface actives still clear, so nothing stale renders.
+    await expect
+      .poll(async () => getActiveFileId(orcaPage), {
+        timeout: 5_000,
+        message: 'activeFileId was not cleared after closing the last editor'
       })
       .toBeNull()
+
+    // The pane is not blank: the empty state offers a reachable way back in.
+    await expect(orcaPage.getByTestId('tab-group-empty-state')).toBeVisible({ timeout: 10_000 })
+    await expect(orcaPage.getByRole('button', { name: /New terminal/i })).toBeVisible()
   })
 })

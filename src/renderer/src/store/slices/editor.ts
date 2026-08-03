@@ -2153,7 +2153,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         newActiveTabTypeByWorktree[activeWorktreeId] =
           browserTabsForWorktree.length > 0 ? 'browser' : 'terminal'
       }
-      const shouldDeactivateWorktree =
+      const worktreeBecameEmpty =
         activeWorktreeId !== null &&
         remainingForWorktree.length === 0 &&
         browserTabsForWorktree.length === 0 &&
@@ -2207,9 +2207,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         editorDrafts: newEditorDrafts,
         editorCursorLine: newEditorCursorLine,
         activeFileId: newActiveId,
-        // Why: if the last editor closes with no browser/terminal surface left, return to the landing state like the terminal/browser close handlers do.
-        activeWorktreeId: shouldDeactivateWorktree ? null : s.activeWorktreeId,
-        activeBrowserTabId: shouldDeactivateWorktree
+        // Why: the workspace stays selected at zero surfaces (issue #11699) so file/Git browsing survives; only the surface actives clear.
+        activeBrowserTabId: worktreeBecameEmpty
           ? null
           : activeWorktreeId && remainingForWorktree.length === 0
             ? fallbackBrowserTabId
@@ -2346,7 +2345,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const terminalTabsForWorktree = s.tabsByWorktree[activeWorktreeId] ?? []
       newActiveTabTypeByWorktree[activeWorktreeId] =
         browserTabsForWorktree.length > 0 ? 'browser' : 'terminal'
-      const shouldDeactivateWorktree =
+      const worktreeBecameEmpty =
         browserTabsForWorktree.length === 0 && terminalTabsForWorktree.length === 0
 
       // Why: mirrored tabs use host tab ids in tab order while local entries use file ids; remove both shapes.
@@ -2387,9 +2386,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         editorDrafts: newEditorDrafts,
         editorCursorLine: newEditorCursorLine,
         activeFileId: null,
-        // Why: closing every editor can leave no renderable surface; clear the active worktree so the renderer shows the landing page, not a blank workspace.
-        activeWorktreeId: shouldDeactivateWorktree ? null : s.activeWorktreeId,
-        activeBrowserTabId: shouldDeactivateWorktree
+        // Why: closing every editor leaves the workspace selected (issue #11699); the tab group's empty state covers the pane that used to go blank.
+        activeBrowserTabId: worktreeBecameEmpty
           ? null
           : browserTabsForWorktree.length > 0
             ? (s.activeBrowserTabIdByWorktree[activeWorktreeId] ??

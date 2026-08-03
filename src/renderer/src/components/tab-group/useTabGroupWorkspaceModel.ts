@@ -95,7 +95,6 @@ export function useTabGroupWorkspaceModel({
   const pinFile = useAppStore((state) => state.pinFile)
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
-  const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const createEmptySplitGroup = useAppStore((state) => state.createEmptySplitGroup)
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
   const setTabColor = useAppStore((state) => state.setTabColor)
@@ -209,20 +208,8 @@ export function useTabGroupWorkspaceModel({
     [closeFile, worktreeId]
   )
 
-  const leaveWorktreeIfEmpty = useCallback(() => {
-    const state = useAppStore.getState()
-    if (state.activeWorktreeId !== worktreeId) {
-      return
-    }
-    // Why: split-group closes bypass legacy Terminal.tsx; deselect the emptied worktree here or the window goes blank instead of landing.
-    const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
-    if (renderableTabCount === 0) {
-      setActiveWorktree(null)
-    }
-  }, [setActiveWorktree, worktreeId])
-
   const closeItem = useCallback(
-    (itemId: string, opts?: { skipEmptyCheck?: boolean }) => {
+    (itemId: string) => {
       const item = groupTabs.find((candidate) => candidate.id === itemId)
       if (!item) {
         return
@@ -236,9 +223,6 @@ export function useTabGroupWorkspaceModel({
       )
       if (item.contentType === 'terminal') {
         closeTerminalTab(item.entityId)
-        if (!opts?.skipEmptyCheck) {
-          leaveWorktreeIfEmpty()
-        }
         return
       }
       if (item.contentType === 'browser') {
@@ -269,18 +253,8 @@ export function useTabGroupWorkspaceModel({
         }
         closeUnifiedTab(item.id)
       }
-      if (!opts?.skipEmptyCheck) {
-        leaveWorktreeIfEmpty()
-      }
     },
-    [
-      closeBrowserTab,
-      closeEditorIfUnreferenced,
-      closeUnifiedTab,
-      groupTabs,
-      leaveWorktreeIfEmpty,
-      worktreeId
-    ]
+    [closeBrowserTab, closeEditorIfUnreferenced, closeUnifiedTab, groupTabs, worktreeId]
   )
 
   const closeMany = useCallback(
@@ -472,12 +446,11 @@ export function useTabGroupWorkspaceModel({
       (item) => item.groupId === groupId
     )
     for (const item of items) {
-      closeItem(item.id, { skipEmptyCheck: true })
+      closeItem(item.id)
     }
     // Why: closing tabs doesn't remove the group shell; empty split groups are layout state, collapse the placeholder pane here.
     closeEmptyGroup(worktreeId, groupId)
-    leaveWorktreeIfEmpty()
-  }, [closeEmptyGroup, closeItem, groupId, leaveWorktreeIfEmpty, worktreeId])
+  }, [closeEmptyGroup, closeItem, groupId, worktreeId])
 
   const closeAllEditorTabsInGroup = useCallback(() => {
     for (const item of groupTabs) {
