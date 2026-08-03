@@ -3,7 +3,12 @@
 import { spawnSync } from 'node:child_process'
 
 if (process.platform === 'win32') {
-  runNodeScript('config/scripts/build-windows-cli-launcher.mjs')
+  // Why: electron-builder's win extraResources ship both the orca launcher and
+  // the agent-teams tmux shim; building only the default target leaves tmux.exe
+  // missing and breaks packaging.
+  for (const target of ['orca', 'tmux']) {
+    runNodeScript('config/scripts/build-windows-cli-launcher.mjs', '--target', target)
+  }
   process.exit(0)
 }
 
@@ -34,8 +39,8 @@ function runPnpmScript(scriptName) {
   }
 }
 
-function runNodeScript(scriptPath) {
-  const result = spawnSync(process.execPath, [scriptPath], { stdio: 'inherit' })
+function runNodeScript(scriptPath, ...args) {
+  const result = spawnSync(process.execPath, [scriptPath, ...args], { stdio: 'inherit' })
   if (result.signal) {
     process.kill(process.pid, result.signal)
   }
