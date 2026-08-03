@@ -1,0 +1,144 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PRCheckDetail } from '../../../shared/types'
+import { loadGitLabJobLogDetails } from './gitlab-job-trace-client'
+
+const callRuntimeRpc = vi.hoisted(() => vi.fn())
+vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc }))
+
+const jobTrace = vi.fn()
+
+const gitLabCheck: PRCheckDetail = {
+  name: 'Component Tests: Purchase API',
+  status: 'completed',
+  conclusion: 'failure',
+  url: null,
+  gitlabJobId: 42
+}
+
+beforeEach(() => {
+  callRuntimeRpc.mockReset()
+  jobTrace.mockReset()
+  ;(globalThis as { window?: unknown }).window = { api: { gl: { jobTrace } } }
+})
+
+describe('loadGitLabJobLogDetails', () => {
+  it('returns null for a check that is not a GitLab job, touching no transport', async () => {
+    const githubCheck: PRCheckDetail = {
+      name: 'verify',
+      status: 'completed',
+      conclusion: 'failure',
+      url: 'https://github.com/acme/orca/runs/1',
+      checkRunId: 7
+    }
+
+    await expect(
+      loadGitLabJobLogDetails({ repoPath: '/repo', settings: null, check: githubCheck })
+    ).resolves.toBeNull()
+    expect(jobTrace).not.toHaveBeenCalled()
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('asks main for a bounded excerpt over local IPC', async () => {
+    jobTrace.mockResolvedValue({ ok: true, trace: 'ERROR: Job failed: exit code 1' })
+
+    const details = await loadGitLabJobLogDetails({
+      repoPath: '/repo',
+      repoId: 'repo-1',
+      settings: { activeRuntimeEnvironmentId: null },
+      check: gitLabCheck
+    })
+
+    expect(jobTrace).toHaveBeenCalledWith({
+      repoPath: '/repo',
+      repoId: 'repo-1',
+      jobId: 42,
+      projectRef: null,
+      logExcerpt: true
+    })
+    expect(details?.jobs[0]?.logTail).toContain('ERROR: Job failed: exit code 1')
+  })
+
+  it('targets the MR project so a fork pipeline trace is not looked up in the wrong project', async () => {
+    jobTrace.mockResolvedValue({ ok: true, trace: 'boom' })
+
+    await loadGitLabJobLogDetails({
+      repoPath: '/repo',
+      repoId: 'repo-1',
+      settings: { activeRuntimeEnvironmentId: null },
+      check: gitLabCheck,
+      projectRef: { host: 'gitlab.example.test', path: 'contributor/orca' }
+    })
+
+    expect(jobTrace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectRef: { host: 'gitlab.example.test', path: 'contributor/orca' }
+      })
+    )
+  })
+
+  it('does not request a trace for a manual job that cannot have one', async () => {
+    const manualCheck: PRCheckDetail = {
+      name: 'deploy: production',
+      status: 'completed',
+      conclusion: 'neutral',
+      url: null,
+      gitlabJobId: 77
+    }
+
+    const details = await loadGitLabJobLogDetails({
+      repoPath: '/repo',
+      settings: { activeRuntimeEnvironmentId: null },
+      check: manualCheck
+    })
+
+    // Why: GitLab 404s on a job with no trace, and the panel pins that error string.
+    expect(jobTrace).not.toHaveBeenCalled()
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+    expect(details?.jobs).toEqual([])
+    expect(details?.summary).toBe('This GitLab job has not produced a log yet.')
+  })
+
+  it('routes to the owning runtime environment and still requests the excerpt', async () => {
+    callRuntimeRpc.mockResolvedValue({ ok: true, trace: 'remote failure' })
+
+    await loadGitLabJobLogDetails({
+      repoPath: '/repo',
+      repoId: 'repo-1',
+      settings: { activeRuntimeEnvironmentId: 'env-9' },
+      check: gitLabCheck
+    })
+
+    expect(jobTrace).not.toHaveBeenCalled()
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-9' },
+      'gitlab.jobTrace',
+      // Why: bounding in main keeps the response under the 1 MB transport frame cap.
+      { repo: 'repo-1', jobId: 42, projectRef: undefined, logExcerpt: true },
+      { timeoutMs: 30_000 }
+    )
+  })
+
+  it('surfaces the GitLab error verbatim so the panel does not claim "no details"', async () => {
+    jobTrace.mockResolvedValue({ ok: false, error: '403 Forbidden' })
+
+    await expect(
+      loadGitLabJobLogDetails({
+        repoPath: '/repo',
+        settings: { activeRuntimeEnvironmentId: null },
+        check: gitLabCheck
+      })
+    ).rejects.toThrow('403 Forbidden')
+  })
+
+  it('falls back to a translated message when GitLab reports a blank error', async () => {
+    jobTrace.mockResolvedValue({ ok: false, error: '   ' })
+
+    await expect(
+      loadGitLabJobLogDetails({
+        repoPath: '/repo',
+        settings: { activeRuntimeEnvironmentId: null },
+        check: gitLabCheck
+      })
+    ).rejects.toThrow('Failed to load the GitLab job log.')
+  })
+})

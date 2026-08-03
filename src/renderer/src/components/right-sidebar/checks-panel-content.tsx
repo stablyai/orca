@@ -55,6 +55,7 @@ import {
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { CheckJobLogTail } from './check-job-log-tail'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
@@ -541,6 +542,8 @@ type CheckDetailsLoadState = {
   loading: boolean
   details: PRCheckRunDetails | null
   error: string | null
+  /** Check state when the load failed, so a later state change can retry it. */
+  errorAt?: { status: PRCheckDetail['status']; conclusion: PRCheckDetail['conclusion'] }
 }
 
 function getCheckIdentityKey(check: PRCheckDetail, index: number): string {
@@ -549,6 +552,11 @@ function getCheckIdentityKey(check: PRCheckDetail, index: number): string {
   }
   if (check.workflowRunId) {
     return `workflow-run:${check.workflowRunId}`
+  }
+  // Why: manual/created GitLab jobs have no web_url, so they would otherwise key on
+  // the list index and lose their cached log whenever the pipeline re-sorts.
+  if (check.gitlabJobId) {
+    return `gitlab-job:${check.gitlabJobId}`
   }
   if (check.url) {
     return `url:${check.url}`
@@ -914,6 +922,7 @@ function CheckRunDetails({
                           ))}
                       </div>
                     )}
+                    {job.logTail && <CheckJobLogTail logTail={job.logTail} />}
                   </div>
                 ))}
               </div>
@@ -924,15 +933,6 @@ function CheckRunDetails({
                     'Showing first 100 jobs'
                   )}
                 </div>
-              )}
-            </div>
-          )}
-
-          {hasLogTail && (
-            <div className="text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.2524d1fb83',
-                'Log tail available in full details.'
               )}
             </div>
           )}
@@ -1041,13 +1041,20 @@ export function ChecksList({
       const next: Record<string, CheckDetailsLoadState> = { ...current }
       for (const row of rows) {
         const cached = next[row.key]
-        if (!cached?.details) {
+        if (!cached || cached.loading) {
           continue
         }
-        if (
-          cached.details.status !== row.check.status ||
-          cached.details.conclusion !== row.check.conclusion
-        ) {
+        // Why: a failed load (GitLab auth blip, 404, offline) otherwise pins its error
+        // forever — there is no retry affordance — so re-arm it once the job moves on.
+        const stale = cached.details
+          ? cached.details.status !== row.check.status ||
+            cached.details.conclusion !== row.check.conclusion
+          : Boolean(
+              cached.errorAt &&
+              (cached.errorAt.status !== row.check.status ||
+                cached.errorAt.conclusion !== row.check.conclusion)
+            )
+        if (stale) {
           delete next[row.key]
           changed = true
         }
@@ -1061,7 +1068,12 @@ export function ChecksList({
       if (detailsByCheckKey[row.key]?.loading || detailsByCheckKey[row.key]?.details) {
         return
       }
-      if (!row.check.checkRunId && !row.check.workflowRunId && !row.check.url) {
+      if (
+        !row.check.checkRunId &&
+        !row.check.workflowRunId &&
+        !row.check.url &&
+        !row.check.gitlabJobId
+      ) {
         setDetailsByCheckKey((current) => ({
           ...current,
           [row.key]: {
@@ -1104,7 +1116,12 @@ export function ChecksList({
             [row.key]: {
               loading: false,
               details,
-              error: details ? null : 'No inline details are available for this check.'
+              error: details
+                ? null
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.e15a8b77ef',
+                    'No inline details are available for this check.'
+                  )
             }
           }))
         })
@@ -1117,7 +1134,14 @@ export function ChecksList({
             [row.key]: {
               loading: false,
               details: null,
-              error: err instanceof Error ? err.message : 'Failed to load check details.'
+              error:
+                err instanceof Error
+                  ? err.message
+                  : translate(
+                      'auto.components.right.sidebar.checks.panel.content.checkDetailsLoadFailed',
+                      'Failed to load check details.'
+                    ),
+              errorAt: { status: row.check.status, conclusion: row.check.conclusion }
             }
           }))
         })

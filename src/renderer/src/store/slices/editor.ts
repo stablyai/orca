@@ -78,7 +78,11 @@ import {
   getRepoIdFromWorktreeId,
   type ActiveWorktreeStateTransition
 } from './worktree-helpers'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExplicitRuntimeEnvironmentIdForWorktree,
+  getSettingsForWorktreeRuntimeOwner
+} from '@/lib/worktree-runtime-owner'
+import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -3889,17 +3893,26 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
     patch({ details: checkRunDetails.details, loading: true, error: null })
     try {
-      const details = await get().fetchPRCheckDetails(
-        repo.path,
-        {
-          checkRunId: check.checkRunId,
-          workflowRunId: check.workflowRunId,
-          checkName: check.name,
-          url: check.url,
-          prRepo: null
-        },
-        { repoId: repo.id }
-      )
+      // Why: refreshing a GitLab job tab through the GitHub check-runs API returns
+      // null and would blank the tab the user just asked to reload.
+      const details = check.gitlabJobId
+        ? await loadGitLabJobLogDetails({
+            repoPath: repo.path,
+            repoId: repo.id,
+            settings: getSettingsForWorktreeRuntimeOwner(state, file.worktreeId),
+            check
+          })
+        : await get().fetchPRCheckDetails(
+            repo.path,
+            {
+              checkRunId: check.checkRunId,
+              workflowRunId: check.workflowRunId,
+              checkName: check.name,
+              url: check.url,
+              prRepo: null
+            },
+            { repoId: repo.id }
+          )
       patch({
         details,
         loading: false,

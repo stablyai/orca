@@ -39,6 +39,10 @@ vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
 }))
+const loadGitLabJobLogDetailsMock = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/gitlab-job-trace-client', () => ({
+  loadGitLabJobLogDetails: loadGitLabJobLogDetailsMock
+}))
 
 function createEditorStore(): StoreApi<AppState> {
   // Only the editor slice + activeWorktreeId are needed for these tests.
@@ -2993,6 +2997,80 @@ describe('createEditorSlice conflict status reconciliation', () => {
         checkRunDetails: expect.objectContaining({
           loading: false,
           details: expect.objectContaining({ title: 'Build passed', conclusion: 'success' })
+        })
+      })
+    )
+  })
+
+  // Regression for #7732: refreshing a GitLab job tab through the GitHub check-runs
+  // API returns null and blanks the tab the user just asked to reload.
+  it('reloads an open GitLab job tab through the job trace client', async () => {
+    loadGitLabJobLogDetailsMock.mockReset()
+    loadGitLabJobLogDetailsMock.mockResolvedValue({
+      name: 'test: unit',
+      status: 'completed',
+      conclusion: 'failure',
+      url: null,
+      detailsUrl: null,
+      startedAt: null,
+      completedAt: null,
+      title: null,
+      summary: null,
+      text: null,
+      annotations: [],
+      jobs: [
+        {
+          id: 42,
+          name: 'test: unit',
+          status: 'completed',
+          conclusion: 'failure',
+          startedAt: null,
+          completedAt: null,
+          url: null,
+          logTail: 'ERROR: Job failed: exit code 1',
+          steps: []
+        }
+      ]
+    })
+    const fetchPRCheckDetails = vi.fn().mockResolvedValue(null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = createStore<any>()((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      repos: [{ id: 'repo-1', path: '/repo' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+      settings: { activeRuntimeEnvironmentId: null },
+      fetchPRCheckDetails,
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    })) as unknown as StoreApi<AppState>
+    const check = {
+      name: 'test: unit',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      gitlabJobId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: false,
+      error: null
+    })
+
+    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:42')
+
+    expect(fetchPRCheckDetails).not.toHaveBeenCalled()
+    expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ repoPath: '/repo', repoId: 'repo-1', check })
+    )
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::gitlab-job:42',
+        checkRunDetails: expect.objectContaining({
+          loading: false,
+          error: null,
+          details: expect.objectContaining({
+            jobs: [expect.objectContaining({ logTail: 'ERROR: Job failed: exit code 1' })]
+          })
         })
       })
     )

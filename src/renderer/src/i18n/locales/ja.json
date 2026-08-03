@@ -10689,7 +10689,8 @@
                 "5e6e5a13fa": "表示",
                 "actionRequiredHint": "マージが解除される前に、GitHubで手動アクションが必要です（例：ワークフロー実行の承認）。",
                 "b3195cba33": "作成者のボット指定を解除",
-                "f588b46a6c": "作成者をボットとして指定"
+                "f588b46a6c": "作成者をボットとして指定",
+                "checkDetailsLoadFailed": "チェック詳細の読み込みに失敗しました。"
               },
               "empty": {
                 "state": {
@@ -14348,6 +14349,10 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      },
+      "gitlabJobTraceClient": {
+        "loadFailed": "GitLab ジョブのログを読み込めませんでした。",
+        "emptyTrace": "この GitLab ジョブはまだログを出力していません。"
       }
     }
   },
