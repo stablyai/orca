@@ -59,6 +59,23 @@ export type XtermImeKeyboardOptions = {
 
 export const TERMINAL_INTERRUPT_INPUT = '\x03'
 const TERMINAL_MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift'])
+// Keys an open candidate window consumes: navigation, commit, and preedit editing.
+//
+// Escape is deliberately absent. An Escape the IME really owns arrives marked
+// (isComposing, or keyCode 229 / key 'Process') and is already suppressed by the
+// clauses below. An unmarked one means this derived flag has drifted — compositionend
+// is not guaranteed, so the flag can stand until the tracker's stale expiry. Swallowing
+// Escape that long strands vim in insert mode with no recovery.
+//
+// Letting it through bounds recovery by keystrokes instead. Escape skips the finalize
+// path the other keys take: our xterm patch cancels on Escape
+// (CompositionHelper.keydown:278) whenever xterm still has a composition in flight,
+// discarding the preedit and swallowing the key. That cancel clears xterm's own flag
+// but not this tracker, so the next Escape gets through — worst case one extra
+// keypress, and none at all when only this tracker drifted.
+//
+// The general rule this follows: suppress on the per-event markers the IME actually
+// sets, and let a key with no marker through rather than trusting derived state.
 const TERMINAL_IME_OWNED_KEYS = new Set([
   'ArrowDown',
   'ArrowLeft',
@@ -68,7 +85,6 @@ const TERMINAL_IME_OWNED_KEYS = new Set([
   'Delete',
   'End',
   'Enter',
-  'Escape',
   'Home',
   'PageDown',
   'PageUp'
