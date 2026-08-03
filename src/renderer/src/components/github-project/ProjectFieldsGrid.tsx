@@ -1,12 +1,11 @@
 // Why: renders project fields as <section> elements inside the metadata grid,
 // matching the sidebar-style (bordered dropdowns) used by the issue STATUS field.
 // Single-select fields get a popover; dates get a styled input; others use ProjectCell.
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import ProjectCell from './ProjectCell'
-import { getAvailableColumns } from './columns'
-import { useAppStore } from '@/store'
+import { useProjectDialogFields } from './use-project-dialog-fields'
 import type { GitHubItemDialogProjectOrigin } from '../GitHubItemDialog'
 import type {
   GitHubProjectField,
@@ -15,37 +14,6 @@ import type {
 } from '../../../../shared/github-project-types'
 import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
-
-/** Fields managed by the dialog itself — not re-rendered as project fields. */
-const DIALOG_OWNED_DATA_TYPES = new Set([
-  'TITLE',
-  'ASSIGNEES',
-  'LABELS',
-  'REPOSITORY',
-  'MILESTONE',
-  'LINKED_PULL_REQUESTS',
-  'REVIEWERS',
-  'PARENT_ISSUE',
-  'SUB_ISSUES_PROGRESS',
-  'TRACKS',
-  'TRACKED_BY'
-])
-
-/** GitHub auto-generated timestamp fields — not user-editable project fields. */
-const BUILTIN_TIMESTAMP_NAMES = new Set(['created', 'updated', 'closed'])
-
-function isProjectField(f: GitHubProjectField): boolean {
-  if (DIALOG_OWNED_DATA_TYPES.has(f.dataType)) {
-    return false
-  }
-  if (f.id === '__type__') {
-    return false
-  }
-  if (BUILTIN_TIMESTAMP_NAMES.has(f.name.toLowerCase())) {
-    return false
-  }
-  return true
-}
 
 const SINGLE_SELECT_BUTTON_CLASS =
   'inline-flex w-full items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-1.5 text-[12px] font-medium text-foreground transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50'
@@ -57,63 +25,8 @@ export function ProjectFieldsGrid({
 }: {
   projectOrigin: GitHubItemDialogProjectOrigin
 }): React.JSX.Element | null {
-  const entry = useAppStore((s) => s.projectViewCache[projectOrigin.cacheKey] ?? null)
-  const table = entry?.data ?? null
-  const row = useMemo(
-    () => table?.rows.find((r) => r.id === projectOrigin.projectItemId) ?? null,
-    [table, projectOrigin.projectItemId]
-  )
-  const fields = useMemo(() => {
-    if (!table) {
-      return []
-    }
-    const seen = new Set<string>()
-    const all: GitHubProjectField[] = []
-    const add = (f: GitHubProjectField) => {
-      if (!seen.has(f.id)) {
-        seen.add(f.id)
-        all.push(f)
-      }
-    }
-    for (const f of getAvailableColumns(table.selectedView)) {
-      add(f)
-    }
-    for (const f of table.selectedView.groupByFields) {
-      add(f)
-    }
-    for (const s of table.selectedView.sortByFields) {
-      add(s.field)
-    }
-    // Why: project-level fields not in the view (fetched by main process)
-    for (const f of table.projectFields) {
-      add(f)
-    }
-    return all.filter(isProjectField)
-  }, [table])
-  const settings = useAppStore((s) => s.settings)
-  const updateProjectFieldValue = useAppStore((s) => s.updateProjectFieldValue)
-  const clearProjectFieldValue = useAppStore((s) => s.clearProjectFieldValue)
-
-  const handleEditField = useCallback(
-    (fieldId: string, value: GitHubProjectFieldMutationValue | null) => {
-      if (value === null) {
-        void clearProjectFieldValue(projectOrigin.cacheKey, projectOrigin.projectItemId, fieldId)
-      } else {
-        void updateProjectFieldValue(
-          projectOrigin.cacheKey,
-          projectOrigin.projectItemId,
-          fieldId,
-          value
-        )
-      }
-    },
-    [
-      clearProjectFieldValue,
-      projectOrigin.cacheKey,
-      projectOrigin.projectItemId,
-      updateProjectFieldValue
-    ]
-  )
+  const { row, fields, settings, handleEditField, sourceHost } =
+    useProjectDialogFields(projectOrigin)
 
   if (!row || fields.length === 0) {
     return null
@@ -136,7 +49,7 @@ export function ProjectFieldsGrid({
           field={field}
           onEditField={handleEditField}
           sourceSettings={settings}
-          sourceHost={table?.project.host}
+          sourceHost={sourceHost}
         />
       ))}
     </>
@@ -193,6 +106,7 @@ function ProjectSingleSelectSection({
   const currentName = value?.kind === 'single-select' ? value.name : null
   const currentColor = value?.kind === 'single-select' ? value.color : ''
   const options = field.kind === 'single-select' ? field.options : []
+  const isRedacted = row.itemType === 'REDACTED'
 
   const colorHex = (c: string): string => {
     const map: Record<string, string> = {
@@ -215,7 +129,7 @@ function ProjectSingleSelectSection({
       </div>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button type="button" className={SINGLE_SELECT_BUTTON_CLASS}>
+          <button type="button" disabled={isRedacted} className={SINGLE_SELECT_BUTTON_CLASS}>
             <span className="inline-flex items-center gap-1.5">
               <span
                 className="inline-block size-2.5 shrink-0 rounded-full"
@@ -283,8 +197,14 @@ function ProjectDateSection({
     sourceRef.current = currentDate
     setDraft(currentDate)
   }
+  // Why: Escape resets the draft then blurs; the blur commit must not save the discarded value.
+  const skipCommitRef = React.useRef(false)
 
   const commit = (): void => {
+    if (skipCommitRef.current) {
+      skipCommitRef.current = false
+      return
+    }
     if (draft !== currentDate) {
       onEditField(field.id, draft === '' ? null : { kind: 'date', date: draft })
     }
@@ -298,6 +218,7 @@ function ProjectDateSection({
       <input
         type="date"
         value={draft}
+        disabled={row.itemType === 'REDACTED'}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
@@ -306,6 +227,7 @@ function ProjectDateSection({
             ;(e.target as HTMLInputElement).blur()
           } else if (e.key === 'Escape') {
             e.preventDefault()
+            skipCommitRef.current = true
             setDraft(currentDate)
             ;(e.target as HTMLInputElement).blur()
           }

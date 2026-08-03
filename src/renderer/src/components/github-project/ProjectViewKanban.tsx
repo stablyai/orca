@@ -67,7 +67,18 @@ function buildColumns(field: GitHubProjectField, sortedRows: GitHubProjectRow[])
       })
     }
     if (emptyRows.length > 0) {
-      columns.push({ key: '__empty__', label: `No ${field.name}`, color: '', rows: emptyRows })
+      columns.push({
+        key: '__empty__',
+        label: translate(
+          'auto.components.github.project.ProjectViewKanban.56d805c8f8',
+          'No {{value0}}',
+          {
+            value0: field.name
+          }
+        ),
+        color: '',
+        rows: emptyRows
+      })
     }
     return columns
   }
@@ -97,7 +108,18 @@ function buildColumns(field: GitHubProjectField, sortedRows: GitHubProjectRow[])
       })
     }
     if (emptyRows.length > 0) {
-      columns.push({ key: '__empty__', label: `No ${field.name}`, color: '', rows: emptyRows })
+      columns.push({
+        key: '__empty__',
+        label: translate(
+          'auto.components.github.project.ProjectViewKanban.56d805c8f8',
+          'No {{value0}}',
+          {
+            value0: field.name
+          }
+        ),
+        color: '',
+        rows: emptyRows
+      })
     }
     return columns
   }
@@ -135,7 +157,12 @@ function BoardCard({
         e.dataTransfer.setData('text/plain', '')
         e.dataTransfer.effectAllowed = 'move'
         const fieldValue = groupField ? row.fieldValuesByFieldId[groupField.id] : null
-        const groupKey = fieldValue?.kind === 'single-select' ? fieldValue.optionId : '__empty__'
+        const groupKey =
+          fieldValue?.kind === 'single-select'
+            ? fieldValue.optionId
+            : fieldValue?.kind === 'iteration'
+              ? fieldValue.iterationId
+              : '__empty__'
         onDragStart(e, row.id, groupKey)
       }}
       onDragEnd={onDragEnd}
@@ -176,7 +203,7 @@ function BoardCard({
               <span className="inline-flex items-center gap-1.5 text-white/40 italic">
                 <Lock className="size-3 shrink-0" />
                 {translate(
-                  'auto.components.github.project.ProjectViewKanban.af5d8c912a',
+                  'auto.components.github.project.ProjectViewKanban.be36abc351',
                   'Restricted'
                 )}
               </span>
@@ -198,7 +225,7 @@ function BoardCard({
           {isPR && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-400">
               <GitPullRequest className="size-3" />
-              PR
+              {translate('auto.components.github.project.ProjectViewKanban.e34607e0cd', 'PR')}
             </span>
           )}
           {row.content.assignees.length > 0 && (
@@ -279,7 +306,7 @@ export default function ProjectViewKanban({
       return []
     }
     return buildColumns(groupField, sortedRows)
-  }, [table, groupField, sortedRows])
+  }, [groupField, sortedRows])
 
   const dragStateRef = useRef<DragState>(null)
   const dragOverTargetRef = useRef<string | null>(null)
@@ -297,6 +324,8 @@ export default function ProjectViewKanban({
       }
       if (targetKey === '__empty__') {
         onEditField?.(row, groupField.id, null)
+      } else if (groupField.kind === 'iteration') {
+        onEditField?.(row, groupField.id, { kind: 'iteration', iterationId: targetKey })
       } else {
         onEditField?.(row, groupField.id, { kind: 'single-select', optionId: targetKey })
       }
@@ -337,7 +366,7 @@ export default function ProjectViewKanban({
     return (
       <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
         {translate(
-          'auto.components.github.project.ProjectViewKanban.4f57d2e0b1',
+          'auto.components.github.project.ProjectViewKanban.2d0beb1b12',
           "No items match this view's filter."
         )}
       </div>
@@ -375,8 +404,8 @@ export default function ProjectViewKanban({
               {col.rows.length === 0 && (
                 <div className="flex min-h-[80px] items-center justify-center rounded-lg border border-dashed border-white/[0.06] text-[12px] text-white/20">
                   {translate(
-                    'auto.components.github.project.ProjectViewKanban.9e5a3c240b',
-                    'Drop issues here'
+                    'auto.components.github.project.ProjectViewKanban.cf7f3699e4',
+                    'Drop items here'
                   )}
                 </div>
               )}

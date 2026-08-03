@@ -1,16 +1,23 @@
-// Why: verify kanban board shows ALL single-select options as columns (including
-// empty), renders cards, and supports drag-and-drop field mutation callbacks.
-import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+// @vitest-environment happy-dom
+// Why: verify kanban board shows ALL single-select/iteration options as columns
+// (including empty), renders cards, and sends correct drag-and-drop field
+// mutations (single-select and iteration kinds).
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import ProjectViewKanban from './ProjectViewKanban'
 import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github-project-types'
+
+afterEach(cleanup)
 
 function makeTable(opts?: {
   groupFieldId?: string
   groupFieldName?: string
+  groupKind?: 'single-select' | 'iteration'
   optionIds?: string[]
   optionNames?: string[]
   optionColors?: string[]
+  iterationIds?: string[]
+  iterationNames?: string[]
   rows?: GitHubProjectRow[]
   layout?: 'TABLE_LAYOUT' | 'BOARD_LAYOUT'
 }): GitHubProjectTable {
@@ -30,17 +37,31 @@ function makeTable(opts?: {
       filter: '',
       fields: [],
       groupByFields: [
-        {
-          kind: 'single-select',
-          id: groupFieldId,
-          name: groupFieldName,
-          dataType: 'SINGLE_SELECT',
-          options: optionIds.map((id, i) => ({
-            id,
-            name: optionNames[i] ?? id,
-            color: optionColors[i] ?? ''
-          }))
-        }
+        opts?.groupKind === 'iteration'
+          ? {
+              kind: 'iteration',
+              id: groupFieldId,
+              name: groupFieldName,
+              dataType: 'ITERATION',
+              iterations: (opts?.iterationIds ?? ['iter_1', 'iter_2']).map((id, i) => ({
+                id,
+                title: (opts?.iterationNames ?? ['Sprint 1', 'Sprint 2'])[i] ?? id,
+                startDate: '2026-01-01',
+                duration: 14,
+                completed: false
+              }))
+            }
+          : {
+              kind: 'single-select',
+              id: groupFieldId,
+              name: groupFieldName,
+              dataType: 'SINGLE_SELECT',
+              options: optionIds.map((id, i) => ({
+                id,
+                name: optionNames[i] ?? id,
+                color: optionColors[i] ?? ''
+              }))
+            }
       ],
       sortByFields: []
     },
@@ -57,11 +78,31 @@ function makeRow(opts: {
   number?: number
   itemType?: GitHubProjectRow['itemType']
   optionId?: string
+  iterationId?: string
   groupFieldId?: string
   assigneeCount?: number
   labelCount?: number
 }): GitHubProjectRow {
   const groupFieldId = opts?.groupFieldId ?? 'status'
+  let fieldValue: GitHubProjectRow['fieldValuesByFieldId'][string] | undefined
+  if (opts?.iterationId) {
+    fieldValue = {
+      kind: 'iteration',
+      fieldId: groupFieldId,
+      iterationId: opts.iterationId,
+      title: opts.iterationId,
+      startDate: '2026-01-01',
+      duration: 14
+    }
+  } else if (opts?.optionId) {
+    fieldValue = {
+      kind: 'single-select',
+      fieldId: groupFieldId,
+      optionId: opts.optionId,
+      name: opts.optionId,
+      color: ''
+    }
+  }
   return {
     id: opts?.id ?? 'row-1',
     itemType: opts?.itemType ?? 'ISSUE',
@@ -86,20 +127,26 @@ function makeRow(opts: {
       parentIssue: null,
       issueType: null
     },
-    fieldValuesByFieldId: opts?.optionId
-      ? {
-          [groupFieldId]: {
-            kind: 'single-select',
-            fieldId: groupFieldId,
-            optionId: opts.optionId,
-            name: opts.optionId,
-            color: ''
-          }
-        }
-      : {},
+    fieldValuesByFieldId: fieldValue ? { [groupFieldId]: fieldValue } : {},
     updatedAt: '2025-01-01',
     position: 1
   }
+}
+
+function makeDataTransfer() {
+  return { setData: vi.fn(), effectAllowed: '', dropEffect: '' }
+}
+
+function dragCardToColumn(cardLabel: string, columnLabel: string) {
+  const card = screen.getByRole('button', { name: new RegExp(cardLabel) })
+  const column = screen.getByText(columnLabel).parentElement?.parentElement
+  if (!column) {
+    throw new Error(`column ${columnLabel} not found`)
+  }
+  const dt = makeDataTransfer()
+  fireEvent.dragStart(card, { dataTransfer: dt })
+  fireEvent.dragOver(column, { dataTransfer: dt })
+  fireEvent.dragEnd(card, { dataTransfer: dt })
 }
 
 describe('ProjectViewKanban', () => {
@@ -140,18 +187,58 @@ describe('ProjectViewKanban', () => {
     expect(screen.getByText('Done task')).toBeTruthy()
   })
 
-  it('calls onEditField on cross-column drop', () => {
+  it('calls onEditField with single-select mutation on cross-column drop', () => {
+    const onEditField = vi.fn()
+    const r1 = makeRow({ id: 'r1', title: 'Issue 1', optionId: 'opt_todo' })
+    const table = makeTable({
+      optionIds: ['opt_todo', 'opt_done'],
+      optionNames: ['Todo', 'Done'],
+      rows: [r1, makeRow({ id: 'r2', title: 'Done task', optionId: 'opt_done' })]
+    })
+    render(<ProjectViewKanban table={table} onEditField={onEditField} />)
+    dragCardToColumn('Issue 1', 'Done')
+    expect(onEditField).toHaveBeenCalledTimes(1)
+    expect(onEditField).toHaveBeenCalledWith(r1, 'status', {
+      kind: 'single-select',
+      optionId: 'opt_done'
+    })
+  })
+
+  it('does not fire onEditField when dropping on the source column', () => {
     const onEditField = vi.fn()
     const table = makeTable({
       optionIds: ['opt_todo', 'opt_done'],
       optionNames: ['Todo', 'Done'],
-      rows: [
-        makeRow({ id: 'r1', title: 'Issue 1', optionId: 'opt_todo' }),
-        makeRow({ id: 'r2', title: 'Done task', optionId: 'opt_done' })
-      ]
+      rows: [makeRow({ id: 'r1', title: 'Issue 1', optionId: 'opt_todo' })]
     })
     render(<ProjectViewKanban table={table} onEditField={onEditField} />)
-    expect(screen.getByText('Issue 1')).toBeTruthy()
+    dragCardToColumn('Issue 1', 'Todo')
+    expect(onEditField).not.toHaveBeenCalled()
+  })
+
+  it('calls onEditField with iteration mutation on an iteration-grouped board', () => {
+    const onEditField = vi.fn()
+    const r1 = makeRow({
+      id: 'r1',
+      title: 'Sprint 1 item',
+      groupFieldId: 'sprint',
+      iterationId: 'iter_1'
+    })
+    const table = makeTable({
+      groupFieldId: 'sprint',
+      groupFieldName: 'Sprint',
+      groupKind: 'iteration',
+      iterationIds: ['iter_1', 'iter_2'],
+      iterationNames: ['Sprint 1', 'Sprint 2'],
+      rows: [r1]
+    })
+    render(<ProjectViewKanban table={table} onEditField={onEditField} />)
+    dragCardToColumn('Sprint 1 item', 'Sprint 2')
+    expect(onEditField).toHaveBeenCalledTimes(1)
+    expect(onEditField).toHaveBeenCalledWith(r1, 'sprint', {
+      kind: 'iteration',
+      iterationId: 'iter_2'
+    })
   })
 
   it('renders empty state when no group field', () => {

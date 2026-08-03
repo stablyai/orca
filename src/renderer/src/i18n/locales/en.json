@@ -2201,11 +2201,14 @@
             }
           },
           "ProjectViewKanban": {
-            "af5d8c912a": "Restricted",
-            "4f57d2e0b1": "No items match this view's filter.",
-            "244c9e7d06": "No {{value0}}",
-            "9e5a3c240b": "Drop items here",
+            "2d0beb1b12": "No items match this view's filter.",
+            "56d805c8f8": "No {{value0}}",
+            "be36abc351": "Restricted",
+            "cf7f3699e4": "Drop items here",
             "e34607e0cd": "PR"
+          },
+          "ProjectFieldsSection": {
+            "projectFields": "Project fields"
           }
         },
         "GitHubMarkdownComposer": {

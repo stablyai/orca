@@ -7090,7 +7090,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       rows: [],
       totalCount: 0,
-      parentFieldDropped: false
+      parentFieldDropped: false,
+      projectFields: []
     })
     mockApi.gh.getProjectViewTable
       .mockResolvedValueOnce({ ok: true, data: makeTable('github.com', 'dotcom-project') })

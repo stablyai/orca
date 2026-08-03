@@ -1267,6 +1267,15 @@ export async function getProjectViewTable(
   let selectedRaw: RawProjectView | null = null
   let matchStrength: 'id' | 'number' | 'name' | 'defaultTable' | 'defaultBoard' | null = null
   const viewsSeen: RawProjectView[] = []
+  // Precedence: id > number > name > defaultTable > defaultBoard.
+  const rank: Record<MatchResult, number> = {
+    id: 5,
+    number: 4,
+    name: 3,
+    defaultTable: 2,
+    defaultBoard: 1,
+    none: 0
+  }
   while (true) {
     const page = await fetchProjectViewsPage({
       owner: args.owner,
@@ -1289,23 +1298,15 @@ export async function getProjectViewTable(
       if (m === 'none') {
         continue
       }
-      // Precedence: id > number > name > defaultTable > defaultBoard.
-      const rank: Record<MatchResult, number> = {
-        id: 5,
-        number: 4,
-        name: 3,
-        defaultTable: 2,
-        defaultBoard: 1,
-        none: 0
-      }
       const currentRank = matchStrength ? rank[matchStrength] : 0
       if (!selectedRaw || rank[m] > currentRank) {
         selectedRaw = v
         matchStrength = m
       }
     }
-    // Why: stop on ANY match (incl. 'default' = first table view); walking further pages costs a GraphQL call per page with no re-ranking upside.
-    if (selectedRaw) {
+    // Why: exact selectors (id/number/name) outrank any default; a default-tier
+    // match (defaultTable/defaultBoard) may be superseded on a later page.
+    if (matchStrength && rank[matchStrength] >= 3) {
       break
     }
     if (!page.hasNextPage) {
@@ -1340,6 +1341,29 @@ export async function getProjectViewTable(
   }
   const selectedView = finalized.view
 
+  // Why: empty-string override means "no filter"; undefined means "use the view's stored filter". The override is ephemeral, never persisted.
+  const effectiveQuery =
+    typeof args.queryOverride === 'string' ? args.queryOverride : selectedView.filter
+
+  // Unsupported layout: skip item pagination; best-effort count-only query.
+  if (selectedView.layout !== 'TABLE_LAYOUT' && selectedView.layout !== 'BOARD_LAYOUT') {
+    const count = await fetchItemsCountOnly({
+      owner: args.owner,
+      ownerType: args.ownerType,
+      projectNumber: args.projectNumber,
+      query: effectiveQuery,
+      host: args.host
+    })
+    return {
+      ok: false,
+      error: {
+        type: 'unsupported_layout',
+        message: `Orca does not support ${selectedView.layout.replace('_LAYOUT', '').toLowerCase()} views yet.`
+      },
+      ...(typeof count === 'number' ? { totalCount: count } : {})
+    }
+  }
+
   // Why: GitHub board views without an explicit group-by still render columns
   // grouped by the project's first single-select/iteration field (Status by
   // default). Without this fallback such boards collapse into one unlabeled
@@ -1364,29 +1388,6 @@ export async function getProjectViewTable(
   const extraProjectFields = projectFields.filter(
     (pf) => !selectedView.fields.some((f) => f.id === pf.id)
   )
-
-  // Why: empty-string override means "no filter"; undefined means "use the view's stored filter". The override is ephemeral, never persisted.
-  const effectiveQuery =
-    typeof args.queryOverride === 'string' ? args.queryOverride : selectedView.filter
-
-  // Unsupported layout: skip item pagination; best-effort count-only query.
-  if (selectedView.layout !== 'TABLE_LAYOUT' && selectedView.layout !== 'BOARD_LAYOUT') {
-    const count = await fetchItemsCountOnly({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: effectiveQuery,
-      host: args.host
-    })
-    return {
-      ok: false,
-      error: {
-        type: 'unsupported_layout',
-        message: `Orca does not support ${selectedView.layout.replace('_LAYOUT', '').toLowerCase()} views yet.`
-      },
-      ...(typeof count === 'number' ? { totalCount: count } : {})
-    }
-  }
 
   // Fetch items.
   const items = await fetchAllItems({
