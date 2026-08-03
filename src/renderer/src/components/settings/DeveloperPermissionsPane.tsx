@@ -16,11 +16,14 @@ import {
 import { toast } from 'sonner'
 import type {
   DeveloperPermissionId,
-  DeveloperPermissionState,
-  DeveloperPermissionStatus
+  DeveloperPermissionState
 } from '../../../../shared/developer-permissions-types'
 import { Button } from '../ui/button'
 import { translate } from '@/i18n/i18n'
+import {
+  developerPermissionStatusClass,
+  developerPermissionStatusLabel
+} from './developer-permission-status'
 export { getDeveloperPermissionsPaneSearchEntries } from './developer-permissions-search'
 
 type DeveloperPermissionsPaneProps = {
@@ -47,7 +50,9 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Voice input, transcription, audio recording, sox, ffmpeg, and Whisper CLIs.'
       )
     },
-    actionLabel: 'Request',
+    get actionLabel() {
+      return translate('auto.components.settings.DeveloperPermissionsPane.actionRequest', 'Request')
+    },
     icon: <Mic className="size-4" />
   },
   {
@@ -61,7 +66,9 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Webcam capture and camera-driven local test apps.'
       )
     },
-    actionLabel: 'Request',
+    get actionLabel() {
+      return translate('auto.components.settings.DeveloperPermissionsPane.actionRequest', 'Request')
+    },
     icon: <Camera className="size-4" />
   },
   {
@@ -78,7 +85,12 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Screenshot, visual automation, and UI inspection tools.'
       )
     },
-    actionLabel: 'Open Settings',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
+        'Open Settings'
+      )
+    },
     icon: <MonitorUp className="size-4" />
   },
   {
@@ -95,7 +107,9 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Keystroke injection, window control, and UI automation tools.'
       )
     },
-    actionLabel: 'Request',
+    get actionLabel() {
+      return translate('auto.components.settings.DeveloperPermissionsPane.actionRequest', 'Request')
+    },
     icon: <Accessibility className="size-4" />
   },
   {
@@ -112,7 +126,12 @@ const PERMISSIONS: PermissionDefinition[] = [
         "macOS names Orca when the agents it runs read other apps' data, because Orca is the responsible process for terminal commands. Grant this to Orca to reduce those prompts. Then quit and reopen Orca."
       )
     },
-    actionLabel: 'Open Settings',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
+        'Open Settings'
+      )
+    },
     icon: <HardDrive className="size-4" />
   },
   {
@@ -126,7 +145,12 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Apple Events for scripts that control other local apps.'
       )
     },
-    actionLabel: 'Trigger Prompt',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionTriggerPrompt',
+        'Trigger Prompt'
+      )
+    },
     icon: <Workflow className="size-4" />
   },
   {
@@ -140,7 +164,12 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Discovery and access for development servers on your network.'
       )
     },
-    actionLabel: 'Trigger Prompt',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionTriggerPrompt',
+        'Trigger Prompt'
+      )
+    },
     icon: <Network className="size-4" />
   },
   {
@@ -157,7 +186,12 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Hardware debugging and device tools that talk to USB devices.'
       )
     },
-    actionLabel: 'Open Settings',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
+        'Open Settings'
+      )
+    },
     icon: <Usb className="size-4" />
   },
   {
@@ -171,40 +205,15 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Bluetooth device tools and local hardware experiments.'
       )
     },
-    actionLabel: 'Open Settings',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
+        'Open Settings'
+      )
+    },
     icon: <Bluetooth className="size-4" />
   }
 ]
-
-function statusLabel(status: DeveloperPermissionStatus | undefined): string {
-  switch (status) {
-    case 'granted':
-      return 'Granted'
-    case 'denied':
-      return 'Denied'
-    case 'not-determined':
-      return 'Not requested'
-    case 'restricted':
-      return 'Restricted'
-    case 'unsupported':
-      return 'macOS only'
-    case 'ready':
-      return 'Entitled'
-    case 'unknown':
-    case undefined:
-      return 'Check manually'
-  }
-}
-
-function statusClass(status: DeveloperPermissionStatus | undefined): string {
-  if (status === 'granted' || status === 'ready') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-  }
-  if (status === 'denied' || status === 'restricted') {
-    return 'border-destructive/30 bg-destructive/10 text-destructive'
-  }
-  return 'border-border bg-muted text-muted-foreground'
-}
 
 export function DeveloperPermissionsPane({
   highlightedSettingId = null
@@ -361,11 +370,11 @@ export function DeveloperPermissionsPane({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{permission.label}</span>
                     <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusClass(
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${developerPermissionStatusClass(
                         status
                       )}`}
                     >
-                      {statusLabel(status)}
+                      {developerPermissionStatusLabel(status)}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">{permission.description}</p>

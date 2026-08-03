@@ -1856,7 +1856,10 @@
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
         "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
-        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
+        "loadPageUnreachable": "第 {{value0}} 页超出了 GitHub 搜索可返回的范围。",
+        "loadPageFailed": "无法从 GitHub 加载第 {{value0}} 页。",
+        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -2488,7 +2491,9 @@
             "selectedForDeletionCount": "已选择删除：{{value0}}",
             "deleteButtonCount": "删除 {{value0}}",
             "archivedStatus": "已归档",
-            "readyStatus": "就绪"
+            "readyStatus": "就绪",
+            "f637f63882": "资源管理器统计到 {{value0}} 个，此列表找到 {{value1}} 个。该计数仅依据 Orca 的活动记录，而此次扫描还会检查每个工作区的 git 历史，并跳过未连接的远程主机。",
+            "74f6c16279": "返回"
           },
           "backgroundRemoval": {
             "removed": "已删除工作区：{{value0}}",
@@ -2535,6 +2540,16 @@
             "dirtyFilesBlocker": "已更改文件",
             "unknownBaseBlocker": "无法验证未推送提交",
             "dismissedBlocker": "已忽略"
+          },
+          "workspace": {
+            "cleanup": {
+              "candidate": {
+                "row": {
+                  "b5d2b33e47": "正在删除…",
+                  "e1135728e3": "已加入删除队列"
+                }
+              }
+            }
           }
         }
       },
@@ -7044,7 +7059,12 @@
           "4a342f44c1": "高级连接",
           "e9609ddca6": "代理、跳板主机和连接复用",
           "8c922dffba": "复用 SSH 连接以加快设置",
-          "53e9aabfc0": "可用时使用 OpenSSH 多路复用。对于有自定义 SSH 限制的主机，请关闭此项。"
+          "53e9aabfc0": "可用时使用 OpenSSH 多路复用。对于有自定义 SSH 限制的主机，请关闭此项。",
+          "editTitle": "编辑 SSH 主机",
+          "addTitle": "添加 SSH 主机",
+          "editDescription": "更新此机器的连接详情。更改将在下次连接时生效。",
+          "addDescription": "添加一台可通过 SSH 登录的持久机器。",
+          "editingPrefix": "正在编辑"
         },
         "TasksPane": {
           "f71d8a9dd3": "任务提供者",
@@ -8148,8 +8168,8 @@
             "4497e2e2bb": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。",
             "e61157e926": "编辑器自动换行",
             "005be5c699": "在文件编辑器中自动换行长行，而无需水平滚动。",
-            "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamily": "编辑器字体",
+            "editorFontFamilyDesc": "文件编辑器和差异视图使用的字体。留空则跟随终端字体。"
           }
         },
         "git": {
@@ -9201,7 +9221,8 @@
           }
         },
         "computerUseSummary": {
-          "permissionsRequired": "在智能体可操作应用窗口前需要 {{value0}} 项权限{{value1}}。",
+          "permissionsRequired_one": "在智能体可操作应用窗口前需要 1 项权限。",
+          "permissionsRequired_other": "在智能体可操作应用窗口前需要 {{value0}} 项权限。",
           "checkingTitle": "正在检查计算机控制访问权限。",
           "checkingDescription": "Orca 正在检查计算机控制助手的 macOS 隐私权限。",
           "unavailableTitle": "计算机控制不可用。",
@@ -9609,9 +9630,9 @@
           "notice": "Orca Relay is in beta."
         },
         "EditorFontFamilySetting": {
-          "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
-          "placeholder": "Same as terminal font"
+          "title": "编辑器字体",
+          "description": "文件编辑器和差异视图使用的字体。留空则跟随终端字体。",
+          "placeholder": "与终端字体相同"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -11090,6 +11111,7 @@
             "transcriptsSkipped": "跳过了 {{count}} 个记录",
             "noAgentSessionsFound": "未找到智能体会话",
             "noSessionsMatchFilters": "没有会话符合当前筛选条件",
+            "noAgentsSelected": "未选择任何智能体",
             "sessionId": "会话 ID",
             "logPath": "日志路径",
             "agents": "智能体",
@@ -11115,6 +11137,8 @@
             "viewOptionsAriaLabel": "会话历史查看选项",
             "viewOptions": "查看选项",
             "agents": "智能体",
+            "selectAllAgents": "选择全部",
+            "clearAgents": "清除",
             "sort": "排序",
             "lastUpdated": "最后更新",
             "created": "创建时间",
@@ -11188,7 +11212,19 @@
             "recoverableEmptyOpenLogHint": "打开日志以恢复它们。",
             "emptyConversationDetail": "此会话没有已保存的对话，无法恢复。",
             "queuedMessages": "{{value0}} 条排队消息",
-            "subagentTranscripts": "{{value0}} 个子智能体记录"
+            "subagentTranscripts": "{{value0}} 个子智能体记录",
+            "prompt": "提示",
+            "firstPrompt": "首次提示",
+            "recentPrompt": "最近提示",
+            "firstPromptCopied": "已复制首次提示",
+            "recentPromptCopied": "已复制最近提示",
+            "copyFirstPrompt": "复制首次提示",
+            "copyRecentPrompt": "复制最近提示",
+            "copyPrompt": "复制提示",
+            "copied": "已复制",
+            "copy": "复制",
+            "noFirstPromptAvailable": "没有可用的首次提示",
+            "loadingFirstPrompt": "正在加载首次提示…"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",

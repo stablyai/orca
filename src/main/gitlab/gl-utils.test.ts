@@ -27,6 +27,7 @@ import {
 } from './gl-utils'
 import { rememberGlabKnownHost, rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 
 describe('gitlab project ref resolution', () => {
   beforeEach(() => {
@@ -50,7 +51,8 @@ describe('gitlab project ref resolution', () => {
       path: 'fork/orca'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -64,7 +66,8 @@ describe('gitlab project ref resolution', () => {
       path: 'stablyai/orca'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -118,11 +121,13 @@ describe('gitlab project ref resolution', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
       cwd: '/repo',
-      wslDistro: 'Ubuntu'
+      wslDistro: 'Ubuntu',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -143,7 +148,8 @@ describe('gitlab project ref resolution', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
 
     await expect(getProjectRefForRemote('/repo', 'upstream')).resolves.toBeNull()
@@ -159,7 +165,9 @@ describe('gitlab project ref resolution', () => {
       path: 'remote/orca'
     })
 
-    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
+    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo', {
+      signal: expect.any(AbortSignal)
+    })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
@@ -255,7 +263,8 @@ describe('resolveIssueSource', () => {
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 

@@ -1856,7 +1856,10 @@
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
         "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
-        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
+        "loadPageUnreachable": "ページ {{value0}} は GitHub 検索が返せる範囲を超えています。",
+        "loadPageFailed": "GitHub からページ {{value0}} を読み込めませんでした。",
+        "loadPageNoMoreResults": "ページ {{value0}} にはこれ以上結果がありません。"
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -7081,7 +7084,12 @@
           "4a342f44c1": "詳細接続",
           "e9609ddca6": "プロキシ、ジャンプホスト、接続の再利用",
           "8c922dffba": "より速いセットアップのため SSH 接続を再利用",
-          "53e9aabfc0": "利用可能な場合は OpenSSH の多重化を使用します。独自の SSH 制限があるホストではオフにしてください。"
+          "53e9aabfc0": "利用可能な場合は OpenSSH の多重化を使用します。独自の SSH 制限があるホストではオフにしてください。",
+          "editTitle": "SSH ホストを編集",
+          "addTitle": "SSH ホストを追加",
+          "editDescription": "このマシンの接続詳細を更新します。変更は次回の接続時に適用されます。",
+          "addDescription": "SSH でログインできる永続的なマシンを追加します。",
+          "editingPrefix": "編集中"
         },
         "TasksPane": {
           "f71d8a9dd3": "タスクプロバイダー",
@@ -8185,8 +8193,8 @@
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
             "e61157e926": "エディターのワードラップ",
             "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
-            "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamily": "エディターフォント",
+            "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合は端末フォントに従います。"
           }
         },
         "git": {
@@ -9201,7 +9209,8 @@
           }
         },
         "computerUseSummary": {
-          "permissionsRequired": "{{value0}} permission{{value1}} required before agents can operate app windows.",
+          "permissionsRequired_one": "1 permission required before agents can operate app windows.",
+          "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows.",
           "checkingTitle": "Checking Computer Use access.",
           "checkingDescription": "Orca is checking macOS privacy permissions for the Computer Use helper.",
           "unavailableTitle": "Computer Use is unavailable.",
@@ -9609,9 +9618,9 @@
           "notice": "Orca Relay is in beta."
         },
         "EditorFontFamilySetting": {
-          "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
-          "placeholder": "Same as terminal font"
+          "title": "エディターフォント",
+          "description": "ファイルエディターと差分ビューで使用されるフォント。空の場合は端末フォントに従います。",
+          "placeholder": "端末フォントと同じ"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -11090,6 +11099,7 @@
             "transcriptsSkipped": "{{count}} transcript skipped",
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
+            "noAgentsSelected": "エージェントが選択されていません",
             "sessionId": "セッション ID",
             "logPath": "ログパス",
             "agents": "エージェント",
@@ -11115,6 +11125,8 @@
             "viewOptionsAriaLabel": "Session History view options",
             "viewOptions": "表示オプション",
             "agents": "エージェント",
+            "selectAllAgents": "すべて選択",
+            "clearAgents": "クリア",
             "sort": "並び替え",
             "lastUpdated": "最終更新",
             "created": "Created",
@@ -11188,7 +11200,19 @@
             "recoverableEmptyOpenLogHint": "ログを開いて復元できます。",
             "emptyConversationDetail": "このセッションには保存された会話がなく、再開できません。",
             "queuedMessages": "キュー内のメッセージ {{value0}} 件",
-            "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件"
+            "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件",
+            "prompt": "プロンプト",
+            "firstPrompt": "最初のプロンプト",
+            "recentPrompt": "最近のプロンプト",
+            "firstPromptCopied": "最初のプロンプトをコピーしました",
+            "recentPromptCopied": "最近のプロンプトをコピーしました",
+            "copyFirstPrompt": "最初のプロンプトをコピー",
+            "copyRecentPrompt": "最近のプロンプトをコピー",
+            "copyPrompt": "プロンプトをコピー",
+            "copied": "コピーしました",
+            "copy": "コピー",
+            "noFirstPromptAvailable": "最初のプロンプトはありません",
+            "loadingFirstPrompt": "最初のプロンプトを読み込み中…"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} セッションを再開",

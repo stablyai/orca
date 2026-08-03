@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-31",
+  "updatedAt": "2026-08-01",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -10,6 +10,86 @@
     }
   },
   "gates": [
+    {
+      "id": "terminal-provider.login-session-retirement",
+      "title": "macOS login-session retirement preserves live daemons through transient rejection bursts",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "daemon-terminal",
+      "layer": "macos-daemon-lifecycle",
+      "surfaces": [
+        "GUI-spawned macOS daemon",
+        "local PTY survival",
+        "daemon reconnect and replacement"
+      ],
+      "platforms": ["macos"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "A deterministic fake clock covers short-burst recovery, sustained session death, pending-timer and in-flight-probe suspension, event-trigger preemption, resolver corroboration, and shutdown cancellation. The production-only watch remains behind the macOS GUI launch flag; SSH/headless, WSL, Linux, Windows, mobile, and relay paths are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/11749",
+        "https://github.com/stablyai/orca/issues/7936"
+      ],
+      "invariant": "A GUI-spawned macOS daemon may retire for PAM rejections only after it previously accepted login wrapping, receives three conclusive rejections spanning at least one uninterrupted 120-second observation window, and observes explicitly unhealthy in-process resolver state. A conclusive acceptance or a sleep/App Nap-sized gap before or during a probe resets the rejection window to the periodic cadence, and client or PTY activity cannot shorten its scheduled backoff.",
+      "oracle": "Arm the watch with an accepted probe, inject three rejections over 20 seconds plus unhealthy resolver state, then inject client and PTY activity and require zero resolver reads, zero retirement calls, and exactly four probes until the 120-second boundary. Return acceptance at that boundary and require the daemon to survive. Jump wall time by one hour while a timer is pending and while a PAM probe promise is unresolved; require rejection evidence to restart after wake, zero probes for the next 119,999 milliseconds, and recovery without retirement in both cases. Repeatedly delay timers beyond the suspension threshold for one hour and require the periodic probe bound, one live timer, and zero resolver or retirement calls. Separately keep rejecting through an uninterrupted boundary and require one retirement, while healthy or unknown resolver state suppresses it and stop aborts an in-flight resolver check.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/macos-login-session-death-watch.test.ts --reporter=dot"
+      ],
+      "testFiles": ["src/main/daemon/macos-login-session-death-watch.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/macos-login-session-death-watch.test.ts",
+          "assertions": [
+            "preserves the daemon when a short PAM rejection burst recovers after wake",
+            "does not count a suspended timer gap as rejection evidence",
+            "does not count suspension during an in-flight probe as rejection evidence",
+            "backs off repeated timer lateness to the periodic probe cadence",
+            "retires only after sustained conclusive rejections with a degraded resolver",
+            "suppresses retirement while resolver health is healthy or unknown, then retires on explicit degradation",
+            "stop prevents an in-flight resolver check from retiring the daemon"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/macos-login-session-death-watch.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 0.1,
+          "summary": "The focused state-machine suite passed 21 tests, including the field-shaped 20-second rejection burst, pending-timer and in-flight-probe suspension rebaselining, repeated-lateness backoff, bounded recovery retry, sustained-death convergence, resolver suppression, trigger coalescing, and shutdown cancellation."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 2,
+        "scope": "deterministic login-session death-watch state-machine suite"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic suite passes locally; focused CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "On origin/main, the field-shaped accepted then three-rejection sequence calls onRetire after 20 seconds and fails the recovery oracle. With the minimum observation window and non-preemptible rejection schedule, the identical oracle preserves the daemon and recovers at the boundary."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The watch retains one timer and one in-flight probe. A rejection burst runs the existing two 10-second confirmation probes, then one recovery probe at the 120-second boundary; client and PTY activity cannot pull that deadline earlier. Timer lateness and in-flight probe suspension both rebaseline evidence to the periodic cadence, preventing an App Nap retry loop, and resolver work is skipped until the time floor. No polling loop, startup await, session scan, renderer work, provider fanout, listener, or retained payload was added."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Capture field evidence from macOS sleep/wake and a full GUI logout without a false retirement or missed stale-session recovery.",
+        "Keep the exact probe-count, no-early-resolver, trigger-preemption, acceptance-reset, and shutdown-abort assertions green."
+      ],
+      "knownGaps": [
+        "A real dead macOS GUI login session cannot be fabricated without ending the runner's login session; sustained-death coverage uses deterministic PAM and resolver oracles.",
+        "The two-minute production window and one-hour pending/in-flight suspension cases are covered by fake-clock tests rather than a real sleep/wake run.",
+        "No multi-process aggregate throttle is added; each stale daemon independently obeys the same non-preemptible observation window."
+      ],
+      "demotionRule": "Keep experimental or demote if any activity trigger shortens the rejection window, a transient burst reaches resolver retirement authority, sustained dead-session evidence no longer converges, shutdown permits late retirement, or the focused gate flakes without an identified product or harness fault."
+    },
     {
       "id": "ssh-relay.staged-upload-recovery",
       "title": "SSH relay uploads remain retryable before the shared install lock",
@@ -1190,6 +1270,128 @@
         "SSH and remote providers are intentionally unknown-liveness paths and need separate provider-contract gates."
       ],
       "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
+    },
+    {
+      "id": "terminal-session.layout-pty-ownership",
+      "title": "Restored terminal layouts retain one renderer owner per PTY",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-electron-restore",
+      "surfaces": [
+        "persisted terminal layout restore",
+        "daemon PTY reattach",
+        "terminal tab hide and reveal",
+        "xterm renderer ownership",
+        "remote terminal layout mirroring"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "local-daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Provider-independent unit tests cover persisted replay, state-boundary authority transfer, remote-runtime mirroring, rootless layouts, repeated leaf ids, metadata repair, and 12,000 nested duplicate leaves. A two-launch macOS Electron journey covers a real surviving local-daemon PTY, persisted duplicate ownership, synchronized streaming output, and tab hide/reveal. Live Linux, Windows, SSH, WSL, and remote-runtime restore journeys remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/11757",
+        "https://github.com/stablyai/orca/pull/11726"
+      ],
+      "invariant": "Within one terminal tab, each PTY has at most one layout leaf, pane manager surface, and xterm renderer owner. Restore and remote mirroring must normalize duplicate ownership before replay while retaining active-leaf focus, scrollback, pane authority, agent metadata, and distinct sibling PTYs.",
+      "oracle": "Launch Orca with a real daemon PTY running a synchronized full-screen stream, close the desktop client without killing the daemon process, seed the persisted tab layout with two leaves bound to that PTY, and relaunch. Hide the restored tab behind a sibling and reveal it, then require the stream to remain visible with exactly one manager pane, one xterm DOM node, one root leaf, one PTY binding, and one unique PTY. Unit contracts require the same one-owner result through persisted replay, store hydration, remote mirroring, rootless and repeated-leaf layouts, and deeply nested input.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --reporter=dot",
+        "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts",
+        "src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts",
+        "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
+        "tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts",
+          "assertions": [
+            "replays one surface when restored leaves point to the same PTY",
+            "reattaches one PTY when the split repeats its bound leaf id"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts",
+          "assertions": ["prunes deeply nested duplicate ownership without recursive stack growth"]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts",
+          "assertions": [
+            "keeps the active leaf and prunes the stale surface plus its metadata",
+            "is idempotent and preserves one owner across PTY and focus permutations"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts",
+          "assertions": [
+            "normalizes duplicate PTY surfaces at the renderer state boundary",
+            "moves hydrated pane authority onto the retained PTY leaf"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
+          "assertions": ["deduplicates mirrored leaves that claim the same remote PTY"]
+        },
+        {
+          "file": "tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts",
+          "assertions": ["repairs duplicate persisted PTY renderers before streaming tab reveal"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 1.33,
+          "summary": "Five focused files passed 92 ownership, replay, hydration, depth, and remote-mirroring tests."
+        },
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 8.7,
+          "summary": "The two-launch Electron journey preserved one real daemon PTY and one renderer through duplicate-layout repair and post-relaunch tab reveal."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused ownership unit suite plus one prebuilt two-launch Electron journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic unit and Electron gates pass locally on macOS; focused CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Orca 1.4.161 visibly strands and fragments the synchronized stream after restoring duplicate PTY renderers (https://github.com/user-attachments/assets/6917ac6f-9ba3-4f6f-a082-fb62932d511f). The post-resize capture remains corrupted, with duplicated lower rows and the terminal still stranded on the right; it is not recovery evidence (https://github.com/user-attachments/assets/32f7be79-0919-48c2-bcad-e4b7f1e14f2d). After the #11726 ownership repair, the equivalent stream remains continuous in one full-width renderer (https://github.com/user-attachments/assets/8c9cc5a2-dbe3-4348-b05c-f8268b98c476), and the final automated journey reports one owner at every layer after relaunch and tab reveal (https://github.com/user-attachments/assets/f19b46aa-e56f-476c-9e2c-e4c3a784c805)."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Ownership normalization is bounded by layout size, uses iterative traversal, and passes a 12,000-leaf duplicate layout without recursive stack growth. The follow-up adds no production polling, renderer work, listeners, persistence scans, or retained payloads."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Run the live two-launch journey on Linux and Windows.",
+        "Add live SSH or remote-runtime duplicate-restore evidence before claiming provider-complete coverage."
+      ],
+      "knownGaps": [
+        "Live Electron evidence currently covers macOS with a local daemon PTY only.",
+        "The live journey uses a git-backed test workspace; folder-workspace restoration currently relies on the same provider-independent normalization contracts rather than a separate Electron run.",
+        "The gate deterministically seeds the historical persisted-state shape; it does not depend on reproducing the unknown UI sequence that originally wrote duplicate ownership.",
+        "The visual old-release evidence and the structural current-version oracle are separate runs because the current test harness did not exist in Orca 1.4.161."
+      ],
+      "demotionRule": "Keep experimental or demote if ownership cardinality flakes, duplicate replay reaches a second renderer, active metadata or authority moves to the wrong leaf, deep normalization regresses, or a supported provider bypasses normalization."
     },
     {
       "id": "terminal-session.kill-all-surface-cleanup",
@@ -2971,6 +3173,105 @@
       "demotionRule": "Demote or quarantine if the unit gate flakes without a product bug or harness bug filed to the owner."
     },
     {
+      "id": "terminal-scroll.streaming-refocus-intent",
+      "title": "Streaming refocus preserves follow-output viewport intent",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit-and-electron-e2e",
+      "surfaces": [
+        "terminal lifecycle",
+        "window focus recovery",
+        "hidden-to-visible resume",
+        "xterm write backlog",
+        "scrollback"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon"],
+      "coverageNotes": "Unit coverage proves provider-independent ordering for any PaneManager. Live Electron coverage exercises a local PTY through the daemon on macOS; SSH, WSL, remote-runtime, Linux, and Windows remain unproved for this exact race.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/11753",
+        "https://github.com/stablyai/orca/pull/11915"
+      ],
+      "invariant": "When output is queued during a focus or visibility transition, Orca records the pre-flush viewport intent before xterm parses backlog writes, so a follow-output terminal stays at the bottom and a pinned terminal keeps its prior position.",
+      "oracle": "Unit tests require exactly one intent sync before each queued-output flush. The Electron test injects a transient top-of-buffer xterm wobble during refocus and requires every presented scrollbar frame, including the final rendered output, to remain at the bottom.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+        "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-streaming-refocus-viewport.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=5"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+        "tests/e2e/terminal-streaming-refocus-viewport.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "assertions": [
+            "window-wake recovery synchronizes viewport intent exactly once before flushing queued output",
+            "heavy visibility resume synchronizes intent exactly once before flushing queued output"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-streaming-refocus-viewport.spec.ts",
+          "assertions": [
+            "phase-one scrollback is visibly ready at the bottom without a fixed sleep",
+            "no presented animation frame moves the scrollbar thumb away from the bottom during refocus",
+            "the final streamed marker renders with the visible scrollbar still at the bottom"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.096,
+          "summary": "14 tests passed, including exact sync count and pre-flush ordering for wake and heavy visibility resume."
+        },
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-streaming-refocus-viewport.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=5",
+          "result": "passed",
+          "durationSeconds": 35.2,
+          "summary": "Five consecutive Electron iterations passed after replacing fixed-time readiness and stale tab capture with deterministic viewport and pane-identity oracles."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused renderer unit test or one Electron E2E iteration"
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Five consecutive local Electron iterations passed; CI soak history is still required before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The controlled xterm viewport wobble reproduces the pinned-top failure with post-flush intent sampling and passes when intent is latched before the queued write flush."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Wake recovery keeps one O(panes) intent pass before the existing bounded 64 KiB-per-pane flush. Heavy resume removes its second intent pass and keeps the existing bounded 256 KiB-per-pane flush; no polling, timers, subprocesses, IPC, output parsing, fit, or repaint work is added."
+      },
+      "promotionCriteria": [
+        "Collect stable CI soak history for the Electron race gate.",
+        "Run the live oracle on Linux and Windows terminal backends.",
+        "Add live SSH or remote-runtime coverage for queued output during refocus."
+      ],
+      "knownGaps": [
+        "The deterministic wobble uses xterm private buffer state and must be updated if that internal contract changes.",
+        "Live Linux, Windows, SSH, WSL, and remote-runtime execution is not covered for this exact race.",
+        "The Electron gate proves follow-output behavior; adjacent scroll-intent coverage protects pinned viewport behavior."
+      ],
+      "demotionRule": "Demote or quarantine if the Electron oracle flakes without a product bug or harness bug filed to terminal-rendering."
+    },
+    {
       "id": "startup-upgrade.persisted-session-corpus",
       "title": "Current Orca preserves or recovers old production persisted sessions",
       "maturity": "experimental",
@@ -3388,13 +3689,13 @@
       "providers": ["paired-runtime", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["paired-runtime"],
-      "coverageNotes": "Deterministic headed macOS runs launch an isolated Orca desktop server and a separate paired web client. A byte-identical headless run uses an isolated `orca serve` host. Both create six real paired host PTYs with bounded high-output scrollback, prove sustained output while all six client xterms are warm-mounted but hidden causes zero renderer scheduler work, ordinary-park five xterms without enabling the lossy retention budget, assert bounded cells/heap/timer lag, then restore the bounded authoritative tail exactly once on the original PTY including output produced while parked and continued input/output. The headed oracle additionally keeps every remote target workspace and terminal unmounted in the host renderer before and after client recovery. Separate headed/headless ACK-starvation tests recover one stalled stream without replacing its PTY. A headed output-drop oracle proves a successful snapshot probe cannot certify a stale live stream when the authoritative PTY sequence advanced beyond the client high-water. Unit coverage requires an unsequenced client to establish a first-probe baseline, remain attached at the same sequence, and recover only after a later probe advances. A capability-disabled run proves legacy hosts retain the prior lossy limit/TTL fallback. Unit tests cover exact-owner capability routing, raw-stream release, singleton side-effect facts with timed handoff cleanup, provider-authoritative snapshots, 128 active streams plus retry after a 129th-stream capacity rejection, capacity-pressure backoff, full split-leaf remint reconciliation, truncation, and manual-disconnect queue fencing. Linux, Windows, mixed-version paired hosts, live SSH, and production-scale paired hosts remain gaps.",
+      "coverageNotes": "Deterministic headed macOS runs launch an isolated Orca desktop server and a separate paired web client. A byte-identical headless run uses an isolated `orca serve` host. Both create six real paired host PTYs with bounded high-output scrollback, prove sustained output while all six client xterms are warm-mounted but hidden causes zero renderer scheduler work, ordinary-park five xterms without enabling the lossy retention budget, assert bounded cells/heap/timer lag, then restore the bounded authoritative tail exactly once on the original PTY including output produced while parked and continued input/output. The headed oracle additionally keeps every remote target workspace and terminal unmounted in the host renderer before and after client recovery. Separate headed/headless ACK-starvation tests recover one stalled stream without replacing its PTY. A headed output-drop oracle proves a successful snapshot probe cannot certify a stale live stream when the authoritative PTY sequence advanced beyond the client high-water. Unit coverage requires an unsequenced client to establish a first-probe baseline, remain attached at the same sequence, and recover only after a later probe advances. A capability-disabled run proves legacy hosts retain the prior lossy limit/TTL fallback. Unit tests cover exact-owner capability routing, raw-stream release, singleton side-effect facts with timed handoff cleanup, 64 simultaneous synthetic-title sources with zero decorative client events after convergence, per-client late-subscribe recovery, semantic bell/title transitions, local animation-frame preservation, legacy no-output-pause delivery gating with exact snapshot restore, provider-authoritative snapshots, 128 active streams plus retry after a 129th-stream capacity rejection, capacity-pressure backoff, full split-leaf remint reconciliation, truncation, and manual-disconnect queue fencing. Linux, Windows, live SSH, and production-scale paired hosts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8652",
         "https://github.com/stablyai/orca/pull/10625"
       ],
-      "invariant": "A host advertising terminal.paired-parking.v1 keeps the PTY and bounded authoritative history alive while an ordinary hidden-view park destroys the client xterm and releases its raw per-PTY stream. Reveal must restore up to the requested 5,000 rows, parked-time side effects/output, the same PTY identity, and continued input/output. Hosts without the capability must retain the existing limit/TTL force-parking fallback. A paired terminal stream whose delivery credits stop progressing must replace only that stream; command silence first probes authoritative state and replaces the stream if the probe times out or proves the PTY advanced beyond the client's delivered output sequence. When no comparable delivery high-water exists, the first sequenced probe establishes a baseline and only later advancement proves staleness. A same-sequence snapshot remains valid proof of a responsive silent command. A successful status probe may replace a pre-ready shared-control socket without rejecting or duplicating calls already waiting for that transport. Manual disconnect must retain pairing while preventing queued or passive calls and subscriptions from recreating transport until explicit Connect.",
-      "oracle": "Run one byte-identical six-terminal oracle against an isolated headed desktop host and an isolated headless `orca serve` host. Stage at least 1,000,000 xterm cells, enable ordinary parking with the lossy retention budget disabled, require exactly one mounted manager and five parked tabs, at most 45% retained cells, no more than 16 MiB heap growth, and under 500 ms timer drift. In headed mode, require the host renderer to remain on its original workspace with zero target terminal managers mounted throughout client park, reveal, and live I/O. While a tab is parked, require authoritative terminal.read to observe new PTY output; reveal it and require the original PTY, a marker within the requested 5,000-row history, the parked marker, and post-reveal input/output. Drop and acknowledge output only for one original paired-client stream, prove the fixture process consumed input while the host model advanced and the client stayed stale, then require the command snapshot probe to replace that stream, repaint exact fixture output, preserve authoritative PTY identity and target-tab cardinality, and resume live I/O. For a client without a delivered sequence, require the first numeric probe to establish a baseline without replacement, a same-sequence probe to remain attached, and a later advanced probe to replace only that stream. Withhold the first encrypted shared-control ready frame, start one RPC, trigger a status-probe refresh, and require two connections, one host delivery, successful response, and zero retained request bytes. Admit 128 active streams, reject the 129th as retryable, release one stream, then require the retry to attach and publish a snapshot without multiplying retained subscribers. Disable terminal.paired-parking.v1 and require the same oracle to fail before parking, while the legacy limit-one fallback separately passes. Also preserve truncated first paint, ACK-starved same-PTY recovery, responsive silent-command snapshot probes, dead-stream probe timeout recovery, and queued manual-disconnect fencing.",
+      "invariant": "A host advertising terminal.paired-parking.v1 keeps the PTY and bounded authoritative history alive while an ordinary hidden-view park destroys the client xterm and releases its raw per-PTY stream. Reveal must restore up to the requested 5,000 rows, parked-time side effects/output, the same PTY identity, and continued input/output. Hosts without the capability must gate hidden raw output before xterm scheduling and repaint from the authoritative snapshot on reveal while retaining the existing limit/TTL force-parking fallback. After a paired client's first semantic title state, decorative spinner frequency must add zero encrypted client-event frames; local title animation and semantic title, status, bell, completion, and query facts remain intact. A paired terminal stream whose delivery credits stop progressing must replace only that stream; command silence first probes authoritative state and replaces the stream if the probe times out or proves the PTY advanced beyond the client's delivered output sequence. When no comparable delivery high-water exists, the first sequenced probe establishes a baseline and only later advancement proves staleness. A same-sequence snapshot remains valid proof of a responsive silent command. A successful status probe may replace a pre-ready shared-control socket without rejecting or duplicating calls already waiting for that transport. Manual disconnect must retain pairing while preventing queued or passive calls and subscriptions from recreating transport until explicit Connect.",
+      "oracle": "Run one byte-identical six-terminal oracle against an isolated headed desktop host and an isolated headless `orca serve` host. Stage at least 1,000,000 xterm cells, enable ordinary parking with the lossy retention budget disabled, require exactly one mounted manager and five parked tabs, at most 45% retained cells, no more than 16 MiB heap growth, and under 500 ms timer drift. In headed mode, require the host renderer to remain on its original workspace with zero target terminal managers mounted throughout client park, reveal, and live I/O. While a tab is parked, require authoritative terminal.read to observe new PTY output; reveal it and require the original PTY, a marker within the requested 5,000-row history, the parked marker, and post-reveal input/output. Drive 64 host PTYs through ten 80 ms synthetic title frames, require zero paired client events after the first frame per PTY while all 640 local frames remain observable, attach a late client and require one current frame per PTY, then require semantic bell and idle transitions on both clients. Reconstruct a legacy subscribed stream with no outputPause capability, hide a chatty pane, require no hidden xterm writes, reveal it, and require one authoritative snapshot plus continued live output. Drop and acknowledge output only for one original paired-client stream, prove the fixture process consumed input while the host model advanced and the client stayed stale, then require the command snapshot probe to replace that stream, repaint exact fixture output, preserve authoritative PTY identity and target-tab cardinality, and resume live I/O. For a client without a delivered sequence, require the first numeric probe to establish a baseline without replacement, a same-sequence probe to remain attached, and a later advanced probe to replace only that stream. Withhold the first encrypted shared-control ready frame, start one RPC, trigger a status-probe refresh, and require two connections, one host delivery, successful response, and zero retained request bytes. Admit 128 active streams, reject the 129th as retryable, release one stream, then require the retry to attach and publish a snapshot without multiplying retained subscribers. Disable terminal.paired-parking.v1 and require the same oracle to fail before parking, while the legacy limit-one fallback separately passes. Also preserve truncated first paint, ACK-starved same-PTY recovery, responsive silent-command snapshot probes, dead-stream probe timeout recovery, and queued manual-disconnect fencing.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api.test.ts src/main/ipc/runtime-environments.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-shared-control-connection.test.ts",
@@ -3492,6 +3793,7 @@
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "forwards facts over the shared client-event stream without a desktop renderer",
+            "bounds decorative title delivery per paired client without reducing local frames",
             "prefers provider history over a partial headless mirror for requested snapshots",
             "falls back to the available mirror when authoritative provider history is unavailable",
             "bounds a hung authoritative provider acquisition and reuses its fallback"
@@ -3511,7 +3813,11 @@
         },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
-          "assertions": ["restores configured paired scrollback after an ordinary park reveal"]
+          "assertions": [
+            "pauses capable paired output while hidden and restores exactly on reveal",
+            "locally gates hidden paired output when a legacy host cannot pause it",
+            "restores configured paired scrollback after an ordinary park reveal"
+          ]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts",
@@ -3560,6 +3866,33 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-02",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api.test.ts src/main/ipc/runtime-environments.test.ts",
+          "result": "passed",
+          "durationSeconds": 18.71,
+          "summary": "Seventeen focused files passed 2,044 tests with one existing skip, including the 64-PTY decorative-title bound, per-client late subscription, semantic-fact preservation, and the true no-output-pause legacy client shape."
+        },
+        {
+          "date": "2026-08-02",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-retention-memory.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 13.7,
+          "summary": "The isolated headed desktop host and encrypted paired web client kept hidden renderer work bounded, ordinary-parked five of six real PTYs, restored the authoritative tail once, preserved PTY identity, and resumed live input/output."
+        },
+        {
+          "date": "2026-08-02",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/headless-paired-remote-terminal-retention-memory.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 31.4,
+          "summary": "Both isolated headless `orca serve` scenarios passed: ordinary parking restored authoritative history and cold activation mounted only the visible paired terminal."
+        },
         {
           "date": "2026-07-30",
           "runner": "local",
@@ -3661,11 +3994,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The six-PTY ordinary-parking oracle was red in two independently observed stages: the parked paired remount first used detached attach and restored only rows 5,963–5,999, then the requested snapshot still lost to the current-screen replay until park reveals explicitly entered the capability-gated reattach coordinator. The candidate is green on headed and headless hosts, while disabling terminal.paired-parking.v1 makes the byte-identical oracle fail at its capability precondition and leaves the separately tested legacy lossy fallback green. With stalled-stream recovery disabled, the host cursor advanced but the client remained frozen; enabling it repainted the marker with the same PTY and tab. The sequence-gap unit and headed paired oracle are red on current main and with only the new probe decision reverted: the authoritative host advances while the client stays stale after a successful probe. The candidate replaces the stream, repaints the marker, preserves PTY identity, and resumes I/O. Reverting the active-stream limit to 64 makes the exact 128-stream contract fail at 64; restoring 128 admits every intended stream, rejects 129, and reattaches it after one slot releases."
+        "evidence": "The six-PTY ordinary-parking oracle was red in two independently observed stages: the parked paired remount first used detached attach and restored only rows 5,963–5,999, then the requested snapshot still lost to the current-screen replay until park reveals explicitly entered the capability-gated reattach coordinator. The candidate is green on headed and headless hosts, while disabling terminal.paired-parking.v1 makes the byte-identical oracle fail at its capability precondition and leaves the separately tested legacy lossy fallback green. The 64-PTY decorative-title control delivered 576 client events after convergence on unmodified main; the candidate delivers zero while preserving all 640 local frames, one current frame to a late client, and bell/idle transitions to both clients. The legacy no-output-pause control failed to request a reveal snapshot and kept hidden bytes on the xterm path; the candidate gates those bytes locally and restores one authoritative snapshot before live output. With stalled-stream recovery disabled, the host cursor advanced but the client remained frozen; enabling it repainted the marker with the same PTY and tab. The sequence-gap unit and headed paired oracle are red on current main and with only the new probe decision reverted: the authoritative host advances while the client stays stale after a successful probe. The candidate replaces the stream, repaints the marker, preserves PTY identity, and resumes I/O. Reverting the active-stream limit to 64 makes the exact 128-stream contract fail at 64; restoring 128 admits every intended stream, rejects 129, and reattaches it after one slot releases."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Before ordinary parking, six warm-mounted hidden paired xterms receive zero raw frames and schedule zero renderer output drains while host models continue ingesting sustained output. Ordinary parking then retains the host PTY and bounded 5,000-row provider model while destroying five client xterms. Parked side effects share the singleton runtime client-event stream. Headed and headless oracles require exact reduction from six managers to one, at least 55% staged xterm-cell release, no more than 16 MiB heap growth, and under 500 ms timer drift. Legacy hosts retain the prior 12-worktree/45-minute lossy force-parking policy. Stream recovery adds no polling and is scoped to one stream."
+        "evidence": "Before ordinary parking, six warm-mounted hidden paired xterms receive zero raw frames and schedule zero renderer output drains while host models continue ingesting sustained output. Ordinary parking then retains the host PTY and bounded 5,000-row provider model while destroying five client xterms. Decorative title ticks are collapsed per paired subscriber before JSON serialization and encryption; semantic facts remain on the singleton client-event stream. Headed and headless oracles require exact reduction from six managers to one, at least 55% staged xterm-cell release, no more than 16 MiB heap growth, and under 500 ms timer drift. Legacy hosts retain the prior 12-worktree/45-minute lossy force-parking policy but now gate hidden raw output before xterm scheduling and restore from a bounded snapshot on reveal. Stream recovery adds no polling and is scoped to one stream."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history for the headed and headless parking commands.",
@@ -3679,9 +4012,10 @@
         "The scaled paired scenarios use six worktrees and ordinary-park five; they prove real host-backed eviction and buffer release, not a 100-worktree soak.",
         "Display-off reveal latency is a separate atlas and viewport-reflow class and is not covered by this gate.",
         "Historical field trace archives are still required to order replay-wedge events against renderer heartbeat loss and deduplicate archived records.",
+        "The legacy protocol shape is deterministic unit coverage; a packaged pre-v1.4.163 host has not yet run the full headed memory oracle.",
         "The live windows-issues incident recorded two fast snapshot-probe successes while fresh output remained stale, but that release did not log the returned snapshot sequence; the deterministic sequence-gap oracle matches the observed false-health boundary without proving the field transport's lower-level drop mechanism."
       ],
-      "demotionRule": "Keep experimental or demote to protection none if paired first paint is blank, passive work reconnects after manual disconnect, a capable hidden paired manager survives ordinary parking, a legacy host bypasses its fallback, reveal loses requested bounded history or live PTY identity, retained buffer cells do not fall, or either headed/headless scenario flakes."
+      "demotionRule": "Keep experimental or demote to protection none if decorative title frequency changes paired client-event volume after convergence, a semantic fact is dropped, paired first paint is blank, passive work reconnects after manual disconnect, a capable hidden paired manager survives ordinary parking, a legacy hidden pane schedules raw xterm output or bypasses its fallback, reveal loses requested bounded history or live PTY identity, retained buffer cells do not fall, or either headed/headless scenario flakes."
     },
     {
       "id": "terminal-performance.no-hot-list-sessions",
@@ -7174,6 +7508,129 @@
         "Renderer-vs-mirror comparison cannot see corruption upstream of the mirror itself (#7192's stale-width mirror); mirror-vs-PTY truth is owned by terminal-geometry.visible-convergence."
       ],
       "demotionRule": "Disable the probe if it exceeds its per-reveal budget or produces false-positive anomaly noise."
+    },
+    {
+      "id": "terminal-render.atlas-recovery-fanout",
+      "title": "Terminal atlas recovery stays bounded to visible renderers",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit-and-electron",
+      "surfaces": [
+        "WebGL rendering",
+        "document visibility",
+        "hidden terminal output",
+        "paired terminal traffic"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "A deterministic renderer contract models one visible manager plus 64 mounted hidden managers and hidden synchronized/TUI output. A macOS Electron run verifies that a document visibility cycle preserves real WebGL atlases and terminal pixels. Production v1.4.163 evidence linked the same 49-manager fanout to paired traffic, but the candidate has not been rerun against an isolated live paired server.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7054",
+        "https://github.com/stablyai/orca/pull/7604"
+      ],
+      "invariant": "Ordinary document visibility transitions and hidden terminal output must not clear the shared WebGL glyph atlas. Heavy reset-and-refresh recovery may touch only managers with visible terminal surfaces; hidden managers recover when revealed. Genuine OS resume remains a heavy recovery trigger.",
+      "oracle": "Dispatch a visible document visibilitychange and require atlas-preserving wake recovery; register one visible manager and 64 hidden managers and require exactly one reset and one refresh; parse hidden synchronized and high-confidence TUI output and require zero global atlas-recovery schedules. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+        "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+          "assertions": ["preserves the glyph atlas when a fullscreen Space becomes visible"]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts",
+          "assertions": [
+            "preserves WebGL texture atlases when the active terminal document becomes visible"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
+          "assertions": ["bounds atlas recovery to visible managers"]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "defers hidden synchronized-output atlas recovery until reveal",
+            "defers hidden high-confidence TUI redraw recovery until reveal",
+            "advances hidden rewrite state without scheduling atlas recovery"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts",
+          "assertions": [
+            "preserves the WebGL atlas and keeps terminal text painted after document visibility resumes"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "result": "passed",
+          "durationSeconds": 26,
+          "summary": "All 577 focused renderer contracts passed, including atlas-preserving visibility, visible-only recovery fanout, and hidden-output rewrite-state coverage."
+        },
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 18,
+          "summary": "The changed-spec CI topology retained both real WebGL terminal panes with zero atlas clears after a deterministic document visibility cycle."
+        },
+        {
+          "date": "2026-08-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 23,
+          "summary": "Two real WebGL terminal panes retained painted glyphs with zero atlas clears after a deterministic document visibility cycle. BrowserWindow.hide did not change document visibility in the harness, so the test used its explicit visibility-event fallback."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "focused renderer contracts plus one prebuilt Electron visibility test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The focused unit oracle and one local Electron run passed; CI soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "With the fix disabled, the byte-identical unit oracle observed clearGlyphAtlases=true, reset/refreshed all 65 managers, and scheduled hidden synchronized/TUI recovery one to three times. Restoring the fix made every assertion pass."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "A recovery with one visible and 64 hidden managers performs one reset and one refresh instead of 65 of each. Hidden synchronized/TUI output schedules zero global recovery work; no polling, cooldown, provider call, or parking change is added."
+      },
+      "promotionCriteria": [
+        "Accumulate stable macOS Electron runs with real BrowserWindow visibility transitions.",
+        "Run an isolated headed paired-server terminal flood and verify bounded renderer CPU and atlas diagnostics.",
+        "Add Linux and Windows WebGL visibility evidence before claiming cross-platform visual coverage."
+      ],
+      "knownGaps": [
+        "The Electron harness used a deterministic visibility-event fallback because BrowserWindow.hide did not change document.visibilityState.",
+        "No isolated live paired-server candidate run is recorded; remote-runtime coverage is a provider-agnostic renderer contract plus production incident evidence.",
+        "The gate counts recovery fanout and pixel retention but does not impose an end-to-end renderer frame-latency threshold."
+      ],
+      "demotionRule": "Demote if hidden managers re-enter reset/refresh recovery, ordinary visibility clears the atlas, real WebGL pixels regress, or the focused Electron test cannot remain deterministic."
     },
     {
       "id": "terminal-render.atlas-identity-invalidation",

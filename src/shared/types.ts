@@ -8,7 +8,7 @@ import type {
 } from './ssh-types'
 import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
-import type { ReleaseBuild, ReleaseChannel } from './release-channel'
+import type { DedicatedRepoChannel, ReleaseBuild, ReleaseChannel } from './release-channel'
 import type { GitHubProjectSettings } from './github-project-types'
 import type {
   AgentStatusState,
@@ -51,6 +51,7 @@ import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
 import type { TaskSourceContext } from './task-source-context'
+import type { SetupRunnerShell } from './setup-runner-command'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -2065,6 +2066,7 @@ export type ListWorkItemsResult<T> = {
   }
   errors?: {
     issues?: ClassifiedError
+    prs?: ClassifiedError
   }
   /** True when the user's per-repo preference was `'upstream'` but no upstream
    *  remote is configured, so the resolver fell back to origin. Renderer uses
@@ -2165,6 +2167,7 @@ export type RepoHookSettings = {
 export type WorktreeSetupLaunch = {
   runnerScriptPath: string
   envVars: Record<string, string>
+  shell?: SetupRunnerShell
   command?: string
   waitForAgentStartup?: boolean
 }
@@ -2387,7 +2390,32 @@ export type UpdateCheckOptions = {
   targetTag?: string
 }
 
-export type UpdateSource = 'local' | 'hourly'
+/** Non-release origins for an update. Derived from the dev-channel list so a new
+ *  channel with its own repo cannot be reported as an ordinary release. */
+export type UpdateSource = 'local' | DedicatedRepoChannel
+
+/** Root-package Linux install formats whose update installs need privilege escalation. */
+export type LinuxRootPackageType = 'deb' | 'rpm'
+
+export type LinuxPackageInstallFailureReason =
+  | 'authentication-agent-unavailable'
+  | 'authentication-denied'
+  | 'package-install-failed'
+
+// Why: the renderer must not infer "no polkit agent" from copy alone — main classifies and the card branches on this discriminant.
+export type LinuxPackageInstallRecovery = {
+  kind: 'linux-package-install'
+  packageType: LinuxRootPackageType
+  reason: LinuxPackageInstallFailureReason
+  version: string
+}
+
+/** Why: only these two mean no safe command exists here; every other failure clears recovery entirely. */
+export type LinuxPackageCommandUnavailableReason = 'no-sudo' | 'no-package-manager'
+
+export type LinuxPackageInstallInstructions =
+  | { ok: true; command: string; packageFileName: string }
+  | { ok: false; reason: LinuxPackageCommandUnavailableReason; message: string }
 
 export type UpdateStatus = (
   | { state: 'idle' }
@@ -2411,7 +2439,13 @@ export type UpdateStatus = (
   | { state: 'not-available'; userInitiated?: boolean }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
   | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
-  | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
+  | {
+      state: 'error'
+      message: string
+      userInitiated?: boolean
+      activeNudgeId?: string
+      recovery?: LinuxPackageInstallRecovery
+    }
 ) & { source?: UpdateSource }
 
 export type ReleaseBuildListResult =
@@ -2899,6 +2933,8 @@ export type GlobalSettings = {
   terminalSshViewParking?: boolean
   /** Kill switch for the hidden-worktree retention budget (C1): force-parks the least-recently-hidden un-parkable worktrees beyond a count budget or TTL. */
   terminalHiddenWorktreeRetentionBudget?: boolean
+  /** Kill switch for the browser-guest worktree retention budget: destroys the least-recently-activated hidden worktrees' webview guests beyond an LRU count budget. */
+  browserGuestWorktreeRetentionBudget?: boolean
   /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel, not renderer byte parsing. */
   terminalMainSideEffectAuthority?: boolean
   /** Kill switch for main's hidden-delivery gate (Phase 4): drops PTY bytes to hidden views after model ingestion; requires terminalMainSideEffectAuthority. */

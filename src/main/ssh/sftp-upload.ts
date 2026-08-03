@@ -282,25 +282,3 @@ async function assertLocalUploadPathInsideRoot(
     throw new Error(`Path escaped upload root: ${candidatePath}`)
   }
 }
-
-/**
- * Check whether a path exists on the remote via SFTP lstat.
- * Returns true if the path exists (file, directory, or symlink).
- */
-export function sftpPathExists(sftp: SFTPWrapper, remotePath: string): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    sftp.lstat(remotePath, (err) => {
-      if (!err) {
-        resolve(true)
-        return
-      }
-      // Why: SFTP status code 2 = SSH_FX_NO_SUCH_FILE — the path does not
-      // exist, which is the expected "no collision" signal for deconfliction.
-      if ((err as { code?: number }).code === 2) {
-        resolve(false)
-        return
-      }
-      reject(err)
-    })
-  })
-}

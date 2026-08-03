@@ -207,7 +207,7 @@ describe('web before-unload persistence', () => {
   it('persists final UI and host-partitioned sessions synchronously', async () => {
     const { api, storage } = await installApi('Linux')
 
-    api.app.persistBeforeUnloadSync({
+    api.app.stageBeforeUnloadSync({
       sessions: [
         { state: { activeWorktreeId: 'local-worktree' } as never },
         {

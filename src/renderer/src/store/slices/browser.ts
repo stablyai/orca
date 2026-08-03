@@ -1644,14 +1644,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               createdAt: tab.createdAt
             } satisfies BrowserPage
           ]
-          const nextPages = persistedPages.map((page) => ({
-            ...page,
-            workspaceId: tab.id,
-            worktreeId,
-            url: normalizeUrl(page.url),
-            loading: false,
-            loadError: page.loadError ?? null
-          }))
+          const nextPages = persistedPages.map((page) => {
+            // Why: in-memory hydration callers can bypass the persistence schema's unknown-key stripping.
+            const { allowWindowClose: _legacyAllowWindowClose, ...persistedPage } =
+              page as typeof page & {
+                allowWindowClose?: boolean
+              }
+            return {
+              ...persistedPage,
+              workspaceId: tab.id,
+              worktreeId,
+              url: normalizeUrl(page.url),
+              loading: false,
+              loadError: page.loadError ?? null
+            }
+          })
           browserPagesByWorkspace[tab.id] = nextPages
           hydratedTabs.push(
             mirrorWorkspaceFromActivePage(

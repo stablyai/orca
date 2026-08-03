@@ -2186,13 +2186,36 @@ describe('orchestration RPC methods', () => {
       // Why: dispatching a worker is background work — surfaceOwner:false adopts
       // the tab without scrolling the sidebar to the worker's workspace.
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
-        command: 'codex',
+        startupAgent: 'codex',
         title: `worker-${task.id}`,
         surfaceOwner: false
       })
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
         expect.stringContaining('--dispatch-capability dcap_')
+      )
+    })
+
+    // Why: `cursor` on PATH is the Cursor desktop app; passing the agent id as a
+    // shell command opened the IDE and left a blank shell (issue #11926).
+    it('never passes the agent id to the worker terminal as a shell command', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'start a cursor worker' })
+
+      await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'cursor'
+      })
+
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({ startupAgent: 'cursor' })
+      )
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.not.objectContaining({ command: expect.anything() })
       )
     })
 
@@ -2289,7 +2312,7 @@ describe('orchestration RPC methods', () => {
         'id:repo::other',
         // Why: starting a worker in an existing worktree must not pull the sidebar
         // away from whatever the user is looking at.
-        expect.objectContaining({ command: 'codex', surfaceOwner: false })
+        expect.objectContaining({ startupAgent: 'codex', surfaceOwner: false })
       )
       expect(createWorktree).not.toHaveBeenCalled()
     })

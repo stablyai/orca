@@ -1,6 +1,7 @@
-import { gitExecFileAsync } from '../git/runner'
+import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
+import { readRemoteUrl } from '../git/remote-url-probe'
 import type { GitHubOwnerRepo } from '../../shared/types'
-import { getSshGitProvider, getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
+import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
   parseGitHubOwnerRepo,
@@ -8,7 +9,7 @@ import {
   type GitHubRemoteIdentity
 } from './github-remote-identity-parsing'
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
-import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
+import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -61,7 +62,7 @@ type OwnerRepoCacheEntry = {
 }
 
 const ownerRepoCache = new Map<string, OwnerRepoCacheEntry>()
-const ownerRepoInFlight = new Map<string, Promise<OwnerRepo | null>>()
+const ownerRepoInFlight: CoalescedProbes<OwnerRepo | null> = new Map()
 
 /** @internal - exposed for tests only */
 export function _resetOwnerRepoCache(): void {
@@ -93,19 +94,7 @@ export async function getRemoteUrlForRepo(
   context: GitHubRepoContext,
   remoteName: string
 ): Promise<string | null> {
-  if (context.connectionId) {
-    const provider = getSshGitProvider(context.connectionId)
-    if (!provider) {
-      return null
-    }
-    const { stdout } = await provider.exec(['remote', 'get-url', remoteName], context.repoPath)
-    return stdout
-  }
-  const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
-    cwd: context.repoPath,
-    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
-  })
-  return stdout
+  return readRemoteUrl(context, remoteName)
 }
 
 function getOwnerRepoCacheTtl(value: OwnerRepo | null, configSignature?: string): number {
@@ -152,22 +141,13 @@ export async function getOwnerRepoForRemote(
     return refreshedCached.value
   }
 
-  const inFlight = ownerRepoInFlight.get(cacheKey)
-  if (inFlight) {
-    return inFlight
-  }
-
   // Why: startup can resolve issue sources, PR candidates, and repo metadata
-  // for the same repo concurrently. Coalesce missing-remote probes.
-  const probe = resolveOwnerRepoForRemote(context, remoteName, cacheKey, nextConfigSignature)
-  ownerRepoInFlight.set(cacheKey, probe)
-  try {
-    return await probe
-  } finally {
-    if (ownerRepoInFlight.get(cacheKey) === probe) {
-      ownerRepoInFlight.delete(cacheKey)
-    }
-  }
+  // for the same repo concurrently. Coalesce missing-remote probes — but only
+  // onto one young enough to still answer, so a wedged probe cannot pin the
+  // repo's identity for the life of the process (P1-D).
+  return runCoalescedProbe(ownerRepoInFlight, cacheKey, () =>
+    resolveOwnerRepoForRemote(context, remoteName, cacheKey, nextConfigSignature)
+  )
 }
 
 async function resolveOwnerRepoForRemote(

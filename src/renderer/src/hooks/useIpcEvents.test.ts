@@ -1077,6 +1077,12 @@ describe('useIpcEvents browser tab create routing', () => {
 
     expect(acquireBrowserAutomationVisibility).toHaveBeenCalledWith('page-new')
     expect(acquireBrowserAutomationVisibility).not.toHaveBeenCalledWith('page-active')
+    expect(state.createBrowserTab).toHaveBeenCalledWith(
+      'wt-1',
+      'https://example.com',
+      expect.objectContaining({ activate: false })
+    )
+    expect(state.createBrowserTab.mock.calls[0]?.[2]).not.toHaveProperty('allowWindowClose')
     expect(replyTabCreate).toHaveBeenCalledWith({
       requestId: 'req-create',
       browserPageId: 'page-new'

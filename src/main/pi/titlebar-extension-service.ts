@@ -11,7 +11,6 @@ import {
   ORCA_PI_PREFILL_EXTENSION_FILE,
   getPiPrefillExtensionSource
 } from './prefill-extension-source'
-export { ORCA_OMP_PREFILL_ENV_VAR, ORCA_PI_PREFILL_ENV_VAR } from './prefill-extension-source'
 import { ORCA_PI_EXTENSION_FILE, getPiTitlebarExtensionSource } from './titlebar-extension-source'
 import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,

@@ -443,7 +443,7 @@ describe('renderer startup runtime routing', () => {
     expect(checkpointBlock).toContain(
       'buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)'
     )
-    expect(checkpointBlock).toContain('window.api.app.persistBeforeUnloadSync({')
+    expect(checkpointBlock).toContain('window.api.app.stageBeforeUnloadSync({')
     expect(checkpointBlock).toContain('sessions: sessionSnapshots')
     expect(checkpointBlock).toContain('ui: buildActiveViewUnloadPatch(freshState)')
     expect(source).toContain(

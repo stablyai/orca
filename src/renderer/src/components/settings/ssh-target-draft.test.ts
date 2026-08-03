@@ -4,8 +4,10 @@ import {
   applyParsedSshHostInput,
   getEditingTargetForSshTarget,
   getSshTargetDraftConnectionFields,
+  isSshTargetFormDirty,
   parseRelayGracePeriodSeconds,
-  parseSshHostInput
+  parseSshHostInput,
+  type EditingTarget
 } from './ssh-target-draft'
 
 describe('parseSshHostInput', () => {
@@ -242,5 +244,29 @@ describe('getEditingTargetForSshTarget', () => {
 
     expect(draft.relayKeepAliveUntilReset).toBe(false)
     expect(draft.relayGracePeriodSeconds).toBe('600')
+  })
+})
+
+describe('isSshTargetFormDirty', () => {
+  it('is clean when the draft matches the baseline', () => {
+    expect(isSshTargetFormDirty(EMPTY_FORM, EMPTY_FORM)).toBe(false)
+  })
+
+  // Why: a dropped field comparison silently discards unsaved edits on outside
+  // click, so every editable field must be covered.
+  it.each<Partial<EditingTarget>>([
+    { label: 'box' },
+    { configHost: 'alias' },
+    { host: 'box' },
+    { port: '2222' },
+    { username: 'deploy' },
+    { identityFile: '~/.ssh/id_ed25519' },
+    { proxyCommand: 'nc %h %p' },
+    { jumpHost: 'bastion' },
+    { systemSshConnectionReuse: false },
+    { relayGracePeriodSeconds: '600' },
+    { relayKeepAliveUntilReset: false }
+  ])('detects %o against the open-session baseline', (change) => {
+    expect(isSshTargetFormDirty({ ...EMPTY_FORM, ...change }, EMPTY_FORM)).toBe(true)
   })
 })

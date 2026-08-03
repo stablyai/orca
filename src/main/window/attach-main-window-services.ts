@@ -35,14 +35,17 @@ import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runti
 import {
   checkForUpdatesFromMenu,
   downloadUpdate,
+  getLinuxPackageInstallInstructions,
   getUpdateStatus,
   quitAndInstall,
   setupAutoUpdater,
+  showLinuxPackage,
   dismissAvailableUpdate,
   dismissNudge,
   listAvailableReleaseBuilds,
   type UpdateInstallMode
 } from '../updater'
+import { isTrustedUIRenderer } from '../ipc/ui'
 import { scheduleHistoryGc } from '../terminal-history-gc'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
@@ -159,7 +162,7 @@ export function attachMainWindowServices(
         try {
           await options?.onBeforeUpdateQuit?.()
         } finally {
-          store.flush()
+          await store.flushPendingAsync()
         }
       },
       setLastUpdateCheckAt: (timestamp) => {
@@ -530,6 +533,8 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:quitAndInstall')
   ipcMain.removeHandler('updater:dismissNudge')
   ipcMain.removeHandler('updater:dismissAvailableUpdate')
+  ipcMain.removeHandler('updater:getLinuxPackageInstallInstructions')
+  ipcMain.removeHandler('updater:showLinuxPackage')
   ipcMain.removeHandler('updater:listBuilds')
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
@@ -542,6 +547,16 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
+  // Why: the response carries a local package path and the reveal touches the native desktop, so
+  // neither may be reached from a guest, dashboard popout, stale window, or utility renderer.
+  ipcMain.handle('updater:getLinuxPackageInstallInstructions', (event) => {
+    assertTrustedUpdaterRecoverySender(event)
+    return getLinuxPackageInstallInstructions()
+  })
+  ipcMain.handle('updater:showLinuxPackage', (event) => {
+    assertTrustedUpdaterRecoverySender(event)
+    return showLinuxPackage()
+  })
   ipcMain.handle(
     'updater:listBuilds',
     async (_event, channel: ReleaseChannel): Promise<ReleaseBuildListResult> => {
@@ -557,4 +572,10 @@ export function registerUpdaterHandlers(_store: Store): void {
       }
     }
   )
+}
+
+function assertTrustedUpdaterRecoverySender(event: IpcMainInvokeEvent): void {
+  if (!isTrustedUIRenderer(event.sender)) {
+    throw new Error('Unauthorized updater package recovery sender')
+  }
 }

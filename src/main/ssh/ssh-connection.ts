@@ -33,14 +33,26 @@ import {
   isPassphraseError,
   sleep,
   buildConnectConfig,
-  resolveEffectiveProxy,
-  spawnProxyCommand,
   wrapRemoteCommandForPosixShell,
   createSshOperationAbortError,
   type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import { resolveEffectiveProxy, spawnProxyCommand } from './ssh-proxy-command'
+import {
+  createCancelledConnectAttemptError,
+  isCancelledConnectAttemptError
+} from './ssh-connect-attempt-cancellation'
+import {
+  isDefiniteSystemSshHostFailure,
+  isTransientReconnectError
+} from './ssh-reconnect-error-classification'
+import { SshReconnectLadder } from './ssh-reconnect-ladder'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
+import {
+  requiresSystemSshForSecurityKey,
+  shouldUseSystemSshTransport
+} from './ssh-transport-selection'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import {
   resolveSftpTransferPathIfMapped,
@@ -122,6 +134,7 @@ export class SshConnection {
   private callbacks: SshConnectionCallbacks
   private target: SshTarget
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly reconnectLadder = new SshReconnectLadder()
   private disposed = false
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
@@ -595,14 +608,25 @@ export class SshConnection {
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt < INITIAL_RETRY_ATTEMPTS; attempt++) {
+      const connectGeneration = ++this.connectGeneration
       try {
-        await this.attemptConnect()
+        await this.attemptConnect(connectGeneration)
+        this.reconnectLadder.reset()
+        this.reconnectLadder.markConnected(Date.now())
         return
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
 
         // Why: a concurrent disconnect() already set 'disconnected'; a cancelled attempt's late error must not overwrite it with auth-failed/error.
         if (this.disposed) {
+          throw lastError
+        }
+
+        // Why: a newer attempt owns the connection now and publishes its own outcome; retrying here would fight it.
+        if (
+          !this.isCurrentConnectAttempt(connectGeneration) ||
+          isCancelledConnectAttemptError(lastError)
+        ) {
           throw lastError
         }
 
@@ -627,16 +651,23 @@ export class SshConnection {
     throw finalError
   }
 
-  private async attemptConnect(): Promise<void> {
+  // Why: callers claim the generation so their catch can tell their own failure from a superseded one.
+  private async attemptConnect(connectGeneration = ++this.connectGeneration): Promise<void> {
     this.setState('connecting')
     this.proxyProcess?.kill()
     this.proxyProcess = null
-    const connectGeneration = ++this.connectGeneration
 
     const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(
       () => null
     )
-    if (shouldUseSystemSshTransport(this.target, resolved)) {
+    const usesConfiguredSystemTransport = shouldUseSystemSshTransport(this.target, resolved)
+    const requiresSecurityKeyTransport = usesConfiguredSystemTransport
+      ? false
+      : await requiresSystemSshForSecurityKey(this.target, resolved)
+    if (!this.isCurrentConnectAttempt(connectGeneration)) {
+      throw this.createCancelledConnectAttemptError()
+    }
+    if (usesConfiguredSystemTransport || requiresSecurityKeyTransport) {
       await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
       return
     }
@@ -841,8 +872,9 @@ export class SshConnection {
     // Why: OS sleep/wake can leave ssh2 thinking a dead TCP socket is still connected; tear down and reconnect so the relay can reattach remote PTYs.
     this.closeTransportsForReconnect()
     this.state.reconnectAttempt = 0
+    this.reconnectLadder.reset()
     this.setState('reconnecting')
-    await this.runReconnectAttempt(0)
+    await this.runReconnectAttempt()
   }
 
   private async doSystemSshProbe(connectGeneration: number): Promise<void> {
@@ -888,7 +920,7 @@ export class SshConnection {
         const onClose = (code: number | null): void => {
           settle(() => {
             if (this.disposed || connectGeneration !== this.connectGeneration) {
-              reject(new Error('SSH connection attempt was cancelled'))
+              reject(this.createCancelledConnectAttemptError())
               return
             }
             if (
@@ -949,6 +981,13 @@ export class SshConnection {
         throw err
       }
       removeControlSocketPath(controlPath)
+      // Why: a timeout retry doubles the ladder step, but a stuck master can cause the first timeout.
+      if (
+        isDefiniteSystemSshHostFailure(err) ||
+        (err instanceof Error && (isAuthError(err) || isPassphraseError(err)))
+      ) {
+        throw err
+      }
       this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
       this.systemSshControlMasterDisabledForSession = true
       try {
@@ -974,6 +1013,12 @@ export class SshConnection {
         throw err
       }
       removeControlSocketPath(controlPath)
+      if (
+        isDefiniteSystemSshHostFailure(err) ||
+        (err instanceof Error && (isAuthError(err) || isPassphraseError(err)))
+      ) {
+        throw err
+      }
       this.systemSshControlMasterDisabledForSession = true
       if (!this.isCurrentConnectAttempt(connectGeneration)) {
         throw this.createCancelledConnectAttemptError()
@@ -1071,7 +1116,7 @@ export class SshConnection {
   }
 
   private createCancelledConnectAttemptError(): Error {
-    return new Error('SSH connection attempt was cancelled')
+    return createCancelledConnectAttemptError()
   }
 
   private spawnTrackedSystemSshCommand(command: string, options?: SshExecOptions): ClientChannel {
@@ -1166,7 +1211,7 @@ export class SshConnection {
           cleanupStartupListeners()
           client.end()
           client.destroy()
-          reject(new Error('SSH connection attempt was cancelled'))
+          reject(this.createCancelledConnectAttemptError())
           return
         }
         settled = true
@@ -1228,40 +1273,55 @@ export class SshConnection {
     if (this.disposed || this.reconnectTimer) {
       return
     }
-    const attempt = this.state.reconnectAttempt
-    if (attempt >= RECONNECT_BACKOFF_MS.length) {
+    const decision = this.reconnectLadder.next(Date.now())
+    if (decision.kind === 'give-up') {
       this.setState('reconnection-failed', 'Max reconnection attempts reached')
       return
     }
+    this.state.reconnectAttempt = decision.attemptIndex
     this.setState('reconnecting')
+    console.warn(
+      `[ssh] Reconnecting to ${this.target.label} in ${decision.delayMs}ms (delay step ${decision.attemptIndex + 1}/${RECONNECT_BACKOFF_MS.length}, failed handshakes ${this.reconnectLadder.failedAttemptStreak}/${RECONNECT_BACKOFF_MS.length})`
+    )
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null
       if (this.disposed) {
         return
       }
-      await this.runReconnectAttempt(attempt)
-    }, RECONNECT_BACKOFF_MS[attempt])
+      await this.runReconnectAttempt()
+    }, decision.delayMs)
   }
 
-  private async runReconnectAttempt(attempt: number): Promise<void> {
+  private async runReconnectAttempt(): Promise<void> {
+    const connectGeneration = ++this.connectGeneration
     try {
       // Why: reset before connecting so the 'connected' broadcast carries reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
       this.state.reconnectAttempt = 0
-      await this.attemptConnect()
+      await this.attemptConnect(connectGeneration)
+      if (!this.isCurrentConnectAttempt(connectGeneration)) {
+        return
+      }
+      // Why: attemptConnect resolves only after a real handshake on either transport; the system-ssh probe's 'connected' must not clear the failure streak.
+      this.reconnectLadder.markConnected(Date.now())
     } catch (err) {
-      if (this.disposed) {
+      // Why: a superseded attempt has no outcome to publish — the attempt that claimed the generation owns the state, and cancellation is that supersession.
+      if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
         return
       }
       const error = err instanceof Error ? err : new Error(String(err))
+      if (isCancelledConnectAttemptError(error)) {
+        return
+      }
       if (isAuthError(error) || isPassphraseError(error)) {
         this.setState('auth-failed', error.message)
         return
       }
-      if (!isTransientError(error)) {
+      // Why: the system-SSH transport reports timeouts as prose, so the narrow code table would strand FIDO2 targets in 'error' forever.
+      if (!isTransientReconnectError(error)) {
         this.setState('error', error.message)
         return
       }
-      this.state.reconnectAttempt = attempt + 1
+      this.reconnectLadder.markAttemptFailed()
       this.scheduleReconnect()
     }
   }
@@ -1372,6 +1432,7 @@ export class SshConnection {
     this.systemSshControlMasterDisabledForSession = false
     this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
+    this.reconnectLadder.reset()
     this.setState('disconnected')
   }
 
@@ -1386,24 +1447,4 @@ export class SshConnection {
   }
 }
 
-export function shouldUseSystemSshTransport(
-  target: SshTarget,
-  resolved: Pick<SshResolvedConfig, 'proxyUseFdpass' | 'proxyCommand' | 'proxyJump'> | null
-): boolean {
-  if (isOpenSshConfigBackedTarget(target) && resolved) {
-    return (
-      process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' ||
-      resolved.proxyUseFdpass === true ||
-      resolved.proxyCommand != null ||
-      resolved.proxyJump != null
-    )
-  }
-  return (
-    process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' ||
-    target.proxyCommand != null ||
-    target.jumpHost != null ||
-    resolved?.proxyUseFdpass === true ||
-    resolved?.proxyCommand != null ||
-    resolved?.proxyJump != null
-  )
-}
+export { shouldUseSystemSshTransport } from './ssh-transport-selection'
