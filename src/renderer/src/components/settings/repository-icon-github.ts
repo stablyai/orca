@@ -55,20 +55,23 @@ export async function resolveRepositoryGitHubAvatar(
   repo: Repo,
   options: ResolveRepositoryGitHubAvatarOptions = {}
 ): Promise<RepositoryGitHubAvatarResolution> {
-  const upstream =
+  const liveUpstream =
     !options.forceLive && repo.upstream !== undefined
       ? repo.upstream
       : await resolveRepositoryUpstreamLive(runtimeTarget, repo).catch(() => null)
-  if (upstream) {
-    return { repoIcon: githubAvatarIcon(upstream), upstream }
-  }
   // Why: a null live upstream is ambiguous (offline/unauthed vs. not-a-fork). Keep
-  // the last-known parent avatar so a transient failure can't clobber fork identity.
-  if (repo.upstream) {
-    return { repoIcon: githubAvatarIcon(repo.upstream), upstream: repo.upstream }
+  // the last-known parent so a transient failure can't clobber fork identity.
+  const upstream = liveUpstream ?? repo.upstream ?? null
+  if (!upstream) {
+    const slug = await resolveRepositorySlugLive(runtimeTarget, repo)
+    return { repoIcon: slug ? githubAvatarIcon(slug) : null, upstream: null }
   }
-  const slug = await resolveRepositorySlugLive(runtimeTarget, repo)
-  return { repoIcon: slug ? githubAvatarIcon(slug) : null, upstream: null }
+  // Why: a same-name fork is a personal copy identified by its upstream owner; a
+  // renamed fork is its own project, so its origin owner wins. A failed origin
+  // probe degrades to the upstream owner.
+  const origin = await resolveRepositorySlugLive(runtimeTarget, repo).catch(() => null)
+  const renamedFork = origin && origin.repo.toLowerCase() !== upstream.repo.toLowerCase()
+  return { repoIcon: githubAvatarIcon(renamedFork ? origin : upstream), upstream }
 }
 
 function sameRepositoryIdentity(

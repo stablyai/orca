@@ -71,14 +71,18 @@ async function detectRemotePackageHomepageIcon(
   }
 }
 
-async function detectGitHubAvatarIcon(
+export async function detectGitHubAvatarIcon(
   repoPath: string,
   connectionId?: string | null,
   upstream?: GitHubRepositoryIdentity | null
 ): Promise<RepoIcon | null> {
   try {
-    // Why: a fork's origin is the personal copy, so prefer the upstream owner.
-    const slug = upstream ?? (await getRepoSlug(repoPath, connectionId))
+    const origin = await getRepoSlug(repoPath, connectionId).catch(() => null)
+    // Why: a same-name fork is a personal copy identified by its upstream owner;
+    // a renamed fork is its own project, so its origin owner wins.
+    const renamedFork =
+      upstream && origin && origin.repo.toLowerCase() !== upstream.repo.toLowerCase()
+    const slug = renamedFork ? origin : (upstream ?? origin)
     return slug ? githubAvatarIcon(slug) : null
   } catch {
     return null
