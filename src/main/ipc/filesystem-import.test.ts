@@ -804,4 +804,30 @@ describe('fs:importExternalPaths', () => {
       reason: "Path escaped upload root during staging: 'assets'"
     })
   })
+
+  it('keeps the runtime upload failure label non-empty for a filesystem root', async () => {
+    const sourcePath = path.parse(path.resolve('.')).root
+    lstatMock
+      .mockResolvedValueOnce({
+        isFile: () => false,
+        isDirectory: () => true,
+        isSymbolicLink: () => false
+      })
+      .mockResolvedValueOnce({
+        isFile: () => true,
+        isDirectory: () => false,
+        isSymbolicLink: () => false
+      })
+    realpathMock.mockResolvedValue(sourcePath)
+
+    const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
+      sourcePaths: [sourcePath]
+    })) as { sources: { status: string; reason?: string }[] }
+
+    expect(path.basename(sourcePath)).toBe('')
+    expect(result.sources[0]).toMatchObject({
+      status: 'failed',
+      reason: "Unsupported file type in 'root directory'"
+    })
+  })
 })

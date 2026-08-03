@@ -534,10 +534,12 @@ async function stageDirectoryEntries(rootPath: string): Promise<StagedExternalIm
   const rootRealPath = await realpath(rootPath)
 
   async function visit(dirPath: string): Promise<void> {
-    // Why: the root itself has no relative path; fall back to its name so
-    // failure reasons never render an empty '' label.
+    // Why: the root itself has no relative path, and filesystem roots also
+    // have no basename; keep their failure labels actionable and non-empty.
     const dirDisplayPath =
-      normalizeRelativeUploadPath(relative(rootPath, dirPath)) || basename(rootPath)
+      normalizeRelativeUploadPath(relative(rootPath, dirPath)) ||
+      basename(rootPath) ||
+      'root directory'
     const dirStat = await lstat(dirPath)
     if (dirStat.isSymbolicLink()) {
       throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${dirDisplayPath}'`)
