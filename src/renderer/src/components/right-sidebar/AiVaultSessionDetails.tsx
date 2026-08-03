@@ -1,12 +1,5 @@
 import type React from 'react'
-import {
-  FileJson,
-  FolderGit2,
-  MessageSquare,
-  MessageSquarePlus,
-  Play,
-  TextCursorInput
-} from 'lucide-react'
+import { FileJson, FolderGit2, MessageSquare, MessageSquarePlus, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -17,7 +10,7 @@ import {
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { FirstPromptCard } from './ai-vault-first-prompt-card'
-import { sessionDetailConversationTurns, sessionFirstPrompt } from './ai-vault-session-display'
+import { sessionDetailConversationTurns, sessionPromptPreview } from './ai-vault-session-display'
 import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
 import {
@@ -59,7 +52,7 @@ export function SessionInlineDetails({
   const showResumeInNewTab =
     hasResumableContent &&
     (!resumeActions.worktree.worktreeId || Boolean(resumeActions.newTab.worktreeId))
-  const firstPromptPreview = sessionFirstPrompt(session)
+  const promptPreview = sessionPromptPreview(session)
   const detailTurns = sessionDetailConversationTurns(session, 3)
   const worktreeDisplay = worktreeInfo
 
@@ -158,19 +151,7 @@ export function SessionInlineDetails({
       <div className="space-y-3 p-3">
         {hasResumableContent ? (
           <>
-            <SessionReceiptSection
-              icon={<TextCursorInput className="size-3" />}
-              label={translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.firstPrompt',
-                'First prompt'
-              )}
-            >
-              <FirstPromptCard
-                key={session.id}
-                session={session}
-                previewText={firstPromptPreview ?? ''}
-              />
-            </SessionReceiptSection>
+            <FirstPromptCard key={session.id} session={session} preview={promptPreview} />
             <SessionReceiptSection
               icon={<MessageSquare className="size-3" />}
               label={translate(

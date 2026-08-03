@@ -7063,7 +7063,12 @@
           "4a342f44c1": "Conexión avanzada",
           "e9609ddca6": "Proxy, host de salto y reutilización de conexión",
           "8c922dffba": "Reutilizar la conexión SSH para una configuración más rápida",
-          "53e9aabfc0": "Usa multiplexación de OpenSSH cuando está disponible. Desactívalo para hosts con restricciones SSH personalizadas."
+          "53e9aabfc0": "Usa la multiplexación de OpenSSH cuando esté disponible. Desactiva esta opción para hosts con restricciones SSH personalizadas.",
+          "editTitle": "Editar host SSH",
+          "addTitle": "Agregar host SSH",
+          "editDescription": "Actualiza los detalles de conexión de esta máquina. Los cambios se aplican en la próxima conexión.",
+          "addDescription": "Agrega una máquina persistente en la que puedas iniciar sesión por SSH.",
+          "editingPrefix": "Editando"
         },
         "TasksPane": {
           "f71d8a9dd3": "Proveedores de tareas",
@@ -11197,9 +11202,14 @@
             "emptyConversationDetail": "Esta sesión no tiene conversación guardada y no se puede reanudar.",
             "queuedMessages": "{{value0}} mensaje(s) en cola",
             "subagentTranscripts": "{{value0}} transcripción(es) de subagente",
+            "prompt": "Prompt",
             "firstPrompt": "Primer prompt",
+            "recentPrompt": "Prompt reciente",
             "firstPromptCopied": "Primer prompt copiado",
+            "recentPromptCopied": "Prompt reciente copiado",
             "copyFirstPrompt": "Copiar primer prompt",
+            "copyRecentPrompt": "Copiar prompt reciente",
+            "copyPrompt": "Copiar prompt",
             "copied": "Copiado",
             "copy": "Copiar",
             "noFirstPromptAvailable": "No hay primer prompt disponible",

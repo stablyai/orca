@@ -7048,7 +7048,12 @@
           "4a342f44c1": "고급 연결",
           "e9609ddca6": "프록시, 점프 호스트, 연결 재사용",
           "8c922dffba": "더 빠른 설정을 위해 SSH 연결 재사용",
-          "53e9aabfc0": "사용 가능한 경우 OpenSSH 멀티플렉싱을 사용합니다. 사용자 지정 SSH 제한이 있는 호스트에서는 끄세요."
+          "53e9aabfc0": "사용 가능한 경우 OpenSSH 멀티플렉싱을 사용합니다. 사용자 지정 SSH 제한이 있는 호스트에서는 끄세요.",
+          "editTitle": "SSH 호스트 편집",
+          "addTitle": "SSH 호스트 추가",
+          "editDescription": "이 머신의 연결 세부 정보를 업데이트합니다. 변경 사항은 다음 연결 시 적용됩니다.",
+          "addDescription": "SSH로 로그인할 수 있는 영구 머신을 추가합니다.",
+          "editingPrefix": "편집 중"
         },
         "TasksPane": {
           "f71d8a9dd3": "작업 제공자",
@@ -11197,9 +11202,14 @@
             "emptyConversationDetail": "이 세션에는 저장된 대화가 없어 재개할 수 없습니다.",
             "queuedMessages": "대기 중인 메시지 {{value0}}개",
             "subagentTranscripts": "서브에이전트 대화 기록 {{value0}}개",
+            "prompt": "프롬프트",
             "firstPrompt": "첫 프롬프트",
+            "recentPrompt": "최근 프롬프트",
             "firstPromptCopied": "첫 프롬프트를 복사했습니다",
+            "recentPromptCopied": "최근 프롬프트를 복사했습니다",
             "copyFirstPrompt": "첫 프롬프트 복사",
+            "copyRecentPrompt": "최근 프롬프트 복사",
+            "copyPrompt": "프롬프트 복사",
             "copied": "복사됨",
             "copy": "복사",
             "noFirstPromptAvailable": "첫 프롬프트를 사용할 수 없습니다",

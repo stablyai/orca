@@ -271,7 +271,8 @@ import type {
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
   WorkspaceSessionPatch,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  LinuxPackageInstallInstructions
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
@@ -2696,7 +2697,12 @@ export type PreloadApi = {
     quitAndInstall: () => Promise<void>
     dismissNudge: () => Promise<void>
     dismissAvailableUpdate: () => Promise<void>
+    /** Desktop-only. Rejects unless the current status carries `linux-package-install` recovery. */
+    getLinuxPackageInstallInstructions: () => Promise<LinuxPackageInstallInstructions>
+    /** Desktop-only. Reveals the revalidated cached package in the native file manager. */
+    showLinuxPackage: () => Promise<void>
     listBuilds: (channel: ReleaseChannel) => Promise<ReleaseBuildListResult>
+
     onStatus: (callback: (status: UpdateStatus) => void) => () => void
     onClearDismissal: (callback: () => void) => () => void
   }

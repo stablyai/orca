@@ -7085,7 +7085,12 @@
           "4a342f44c1": "詳細接続",
           "e9609ddca6": "プロキシ、ジャンプホスト、接続の再利用",
           "8c922dffba": "より速いセットアップのため SSH 接続を再利用",
-          "53e9aabfc0": "利用可能な場合は OpenSSH の多重化を使用します。独自の SSH 制限があるホストではオフにしてください。"
+          "53e9aabfc0": "利用可能な場合は OpenSSH の多重化を使用します。独自の SSH 制限があるホストではオフにしてください。",
+          "editTitle": "SSH ホストを編集",
+          "addTitle": "SSH ホストを追加",
+          "editDescription": "このマシンの接続詳細を更新します。変更は次回の接続時に適用されます。",
+          "addDescription": "SSH でログインできる永続的なマシンを追加します。",
+          "editingPrefix": "編集中"
         },
         "TasksPane": {
           "f71d8a9dd3": "タスクプロバイダー",
@@ -11197,9 +11202,14 @@
             "emptyConversationDetail": "このセッションには保存された会話がなく、再開できません。",
             "queuedMessages": "キュー内のメッセージ {{value0}} 件",
             "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件",
+            "prompt": "プロンプト",
             "firstPrompt": "最初のプロンプト",
+            "recentPrompt": "最近のプロンプト",
             "firstPromptCopied": "最初のプロンプトをコピーしました",
+            "recentPromptCopied": "最近のプロンプトをコピーしました",
             "copyFirstPrompt": "最初のプロンプトをコピー",
+            "copyRecentPrompt": "最近のプロンプトをコピー",
+            "copyPrompt": "プロンプトをコピー",
             "copied": "コピーしました",
             "copy": "コピー",
             "noFirstPromptAvailable": "最初のプロンプトはありません",

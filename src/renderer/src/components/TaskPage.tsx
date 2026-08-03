@@ -243,6 +243,13 @@ import {
   resolveUserRepoSwitchReset,
   resolveVanishedNewIssueRepoReset
 } from '@/components/task-page-new-issue-draft'
+import {
+  isTaskCreationDraftContentful,
+  type NewJiraIssueDraft,
+  type NewLinearIssueDraft,
+  type NewLinearProjectDraft
+} from '@/store/slices/task-creation-drafts'
+import { useTaskCreationDraftRetention } from '@/components/use-task-creation-draft-retention'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import {
@@ -3056,6 +3063,33 @@ const hasUpstreamCandidateDivergence = (
   !!s.sources.upstreamCandidate &&
   !sameGitHubOwnerRepo(s.sources.originCandidate, s.sources.upstreamCandidate)
 
+function writeNewLinearProjectDraft(draft: NewLinearProjectDraft | null): void {
+  const state = useAppStore.getState()
+  if (draft && isTaskCreationDraftContentful(draft)) {
+    state.setNewLinearProjectDraft(draft)
+  } else {
+    state.clearNewLinearProjectDraft()
+  }
+}
+
+function writeNewLinearIssueDraft(draft: NewLinearIssueDraft | null): void {
+  const state = useAppStore.getState()
+  if (draft && isTaskCreationDraftContentful(draft)) {
+    state.setNewLinearIssueDraft(draft)
+  } else {
+    state.clearNewLinearIssueDraft()
+  }
+}
+
+function writeNewJiraIssueDraft(draft: NewJiraIssueDraft | null): void {
+  const state = useAppStore.getState()
+  if (draft && isTaskCreationDraftContentful(draft)) {
+    state.setNewJiraIssueDraft(draft)
+  } else {
+    state.clearNewJiraIssueDraft()
+  }
+}
+
 export default function TaskPage(): React.JSX.Element {
   useTranslation()
   const settings = useAppStore((s) => s.settings)
@@ -5672,6 +5706,16 @@ export default function TaskPage(): React.JSX.Element {
     setNewLinearProjectLabelIds([])
   }, [newLinearProjectTargetTeam?.id, newLinearProjectTargetTeam?.workspaceId])
 
+  const discardNewLinearProjectDraft = useTaskCreationDraftRetention({
+    open: newLinearProjectOpen,
+    draft: {
+      name: newLinearProjectName,
+      description: newLinearProjectDescription,
+      content: newLinearProjectContent
+    },
+    writeDraft: writeNewLinearProjectDraft
+  })
+
   // New Linear issue dialog state
   const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
   const [newLinearIssueTitle, setNewLinearIssueTitle] = useState('')
@@ -5684,6 +5728,12 @@ export default function TaskPage(): React.JSX.Element {
   const [newLinearIssuePriority, setNewLinearIssuePriority] = useState<number>(0)
   const [newLinearIssueProjectId, setNewLinearIssueProjectId] = useState<string | null>(null)
   const [newLinearIssueLabelIds, setNewLinearIssueLabelIds] = useState<string[]>([])
+
+  const discardNewLinearIssueDraft = useTaskCreationDraftRetention({
+    open: newLinearIssueOpen,
+    draft: { title: newLinearIssueTitle, body: newLinearIssueBody },
+    writeDraft: writeNewLinearIssueDraft
+  })
 
   const newLinearIssueTargetTeam = useMemo(
     () => availableTeams.find((t) => t.id === newLinearIssueTeamId) ?? availableTeams[0] ?? null,
@@ -5822,6 +5872,12 @@ export default function TaskPage(): React.JSX.Element {
   const [newJiraIssueCustomFieldValues, setNewJiraIssueCustomFieldValues] = useState<
     Record<string, string>
   >({})
+
+  const discardNewJiraIssueDraft = useTaskCreationDraftRetention({
+    open: newJiraIssueOpen,
+    draft: { title: newJiraIssueTitle, body: newJiraIssueBody },
+    writeDraft: writeNewJiraIssueDraft
+  })
   const includeJiraSiteNameInProjectLabel = selectedJiraSiteId === 'all'
   const previousProviderRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
 
@@ -6986,6 +7042,7 @@ export default function TaskPage(): React.JSX.Element {
             : undefined
         }
       )
+      discardNewLinearProjectDraft()
       setNewLinearProjectOpen(false)
       setNewLinearProjectName('')
       setNewLinearProjectDescription('')
@@ -7028,7 +7085,8 @@ export default function TaskPage(): React.JSX.Element {
     newLinearProjectTargetTeam,
     openLinearProjectContext,
     linearTaskSourceContext,
-    settings
+    settings,
+    discardNewLinearProjectDraft
   ])
 
   const handleCreateNewLinearIssue = useCallback(async (): Promise<void> => {
@@ -7089,6 +7147,7 @@ export default function TaskPage(): React.JSX.Element {
             : undefined
         }
       )
+      discardNewLinearIssueDraft()
       setNewLinearIssueOpen(false)
       setNewLinearIssueTitle('')
       setNewLinearIssueBody('')
@@ -7134,7 +7193,8 @@ export default function TaskPage(): React.JSX.Element {
     selectedLinearProject,
     setSelectedLinearIssue,
     linearTaskSourceContext,
-    settings
+    settings,
+    discardNewLinearIssueDraft
   ])
 
   const handleCreateNewJiraIssue = useCallback(async (): Promise<void> => {
@@ -7183,6 +7243,7 @@ export default function TaskPage(): React.JSX.Element {
             : undefined
         }
       )
+      discardNewJiraIssueDraft()
       setNewJiraIssueOpen(false)
       setNewJiraIssueTitle('')
       setNewJiraIssueBody('')
@@ -7223,7 +7284,8 @@ export default function TaskPage(): React.JSX.Element {
     jiraTaskSourceContext,
     settings,
     setSelectedJiraIssue,
-    visibleJiraCreateFields
+    visibleJiraCreateFields,
+    discardNewJiraIssueDraft
   ])
 
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
@@ -8652,9 +8714,11 @@ export default function TaskPage(): React.JSX.Element {
                               size="icon"
                               onClick={() => {
                                 if (linearMode === 'projects' && !selectedLinearProject) {
-                                  setNewLinearProjectName('')
-                                  setNewLinearProjectDescription('')
-                                  setNewLinearProjectContent('')
+                                  // Why: restore dismissed typed text (accidental dismissal recoverable); pickers keep their fresh open-time defaults.
+                                  const draft = useAppStore.getState().newLinearProjectDraft
+                                  setNewLinearProjectName(draft?.name ?? '')
+                                  setNewLinearProjectDescription(draft?.description ?? '')
+                                  setNewLinearProjectContent(draft?.content ?? '')
                                   setNewLinearProjectTeamId(availableTeams[0]?.id ?? null)
                                   setNewLinearProjectLeadId(null)
                                   setNewLinearProjectMemberIds([])
@@ -8665,8 +8729,10 @@ export default function TaskPage(): React.JSX.Element {
                                   setNewLinearProjectOpen(true)
                                   return
                                 }
-                                setNewLinearIssueTitle('')
-                                setNewLinearIssueBody('')
+                                // Why: restore dismissed typed text (accidental dismissal recoverable); pickers keep their fresh open-time defaults.
+                                const issueDraft = useAppStore.getState().newLinearIssueDraft
+                                setNewLinearIssueTitle(issueDraft?.title ?? '')
+                                setNewLinearIssueBody(issueDraft?.body ?? '')
                                 const projectTeamId =
                                   selectedLinearProject?.teams?.[0]?.id ??
                                   availableTeams.find(
@@ -8883,8 +8949,10 @@ export default function TaskPage(): React.JSX.Element {
                               variant="outline"
                               size="icon"
                               onClick={() => {
-                                setNewJiraIssueTitle('')
-                                setNewJiraIssueBody('')
+                                // Why: restore dismissed typed text (accidental dismissal recoverable); pickers keep their fresh open-time defaults.
+                                const draft = useAppStore.getState().newJiraIssueDraft
+                                setNewJiraIssueTitle(draft?.title ?? '')
+                                setNewJiraIssueBody(draft?.body ?? '')
                                 setNewJiraIssueProjectId(
                                   sortedAvailableJiraProjects[0]
                                     ? getJiraProjectSelectionKey(sortedAvailableJiraProjects[0])

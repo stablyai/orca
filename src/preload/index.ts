@@ -2963,11 +2963,15 @@ const api = {
     download: () => ipcRenderer.invoke('updater:download'),
     dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
     dismissAvailableUpdate: () => ipcRenderer.invoke('updater:dismissAvailableUpdate'),
+    getLinuxPackageInstallInstructions: () =>
+      ipcRenderer.invoke('updater:getLinuxPackageInstallInstructions'),
+    showLinuxPackage: () => ipcRenderer.invoke('updater:showLinuxPackage'),
     listBuilds: (channel) => ipcRenderer.invoke('updater:listBuilds', channel),
     quitAndInstall: (): Promise<void> =>
       prepareAndInvokeUpdaterInstall(window, updaterQuitAbortRelay, () =>
         ipcRenderer.invoke('updater:quitAndInstall')
       ),
+
     onStatus: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status)
       ipcRenderer.on('updater:status', listener)

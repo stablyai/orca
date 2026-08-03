@@ -2723,6 +2723,9 @@ export class OrcaRuntimeService {
       paired: boolean
       selectIfNoActiveTab: boolean
       viewMode?: 'terminal' | 'chat'
+      /** Resolved agent launch command, kept so a settle over a bare renderer
+       *  PTY can still deliver the launch instead of succeeding silently (STA-3214). */
+      startupCommand?: string
     }
   >()
   private mobileSessionTabListeners = new Set<{
@@ -25117,6 +25120,7 @@ export class OrcaRuntimeService {
         activate: opts.activate !== false,
         paired: pairedCreate,
         selectIfNoActiveTab: true,
+        ...(startupCommand.command ? { startupCommand: startupCommand.command } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
       })
       try {
@@ -25129,6 +25133,7 @@ export class OrcaRuntimeService {
           signal: opts.signal
         })
         if (this.isReadyMobileTerminalSurface(surface)) {
+          this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
           return surface
         }
         const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
@@ -25137,6 +25142,7 @@ export class OrcaRuntimeService {
           signal: opts.signal
         }).catch(() => null)
         if (readySurface) {
+          this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
           return readySurface
         }
         if (opts.signal?.aborted) {
@@ -25171,6 +25177,7 @@ export class OrcaRuntimeService {
         if (this.findLiveRegisteredPtyForRendererTab(worktreeId, reply.tabId)) {
           const rescued = this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
           if (rescued) {
+            this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
             return rescued
           }
         }
@@ -25646,6 +25653,30 @@ export class OrcaRuntimeService {
       typeof surface.tab.terminal === 'string' &&
       surface.tab.terminal.length > 0
     )
+  }
+
+  // Why: a create can settle over a renderer PTY that spawned without its
+  // startup command (the create's renderer stalled, #7587), silently binding
+  // the client to a plain shell under an agent tab forever — once the surface
+  // is ready, the activation-time materialize recovery (#7837) never runs
+  // (STA-3214). Spawn commands are recorded per PTY at spawn time, so a
+  // missing record on the locally registered live PTY proves the launch never
+  // ran; type it into the shell like the create would have.
+  private deliverPendingStartupCommandToBareRendererPty(worktreeId: string, tabId: string): void {
+    const pending = this.pendingMobileTerminalCreatesByKey.get(`${worktreeId}::${tabId}`)
+    const command = pending?.startupCommand
+    if (!command) {
+      return
+    }
+    const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
+    if (!pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
+      return
+    }
+    if (this.ptyController?.write(pty.ptyId, command)) {
+      // Why: Enter rides its own write so a long command cannot swallow it.
+      this.ptyController.write(pty.ptyId, '\r')
+      this.noteTerminalSpawnCommand(pty.ptyId, command)
+    }
   }
 
   private waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {

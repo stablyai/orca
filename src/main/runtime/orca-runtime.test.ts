@@ -31204,6 +31204,125 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('delivers the agent launch command when a create settles over a bare renderer PTY', async () => {
+    vi.useFakeTimers()
+    try {
+      const leafId = '77777777-7777-4777-8777-777777777777'
+      const write = vi.fn((_ptyId: string, _data: string) => true)
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: {}
+        })
+      } as never)
+      runtime.setPtyController({
+        spawn: vi.fn(),
+        write,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.setNotifier(createMobileCreateTestNotifier(vi.fn()))
+      const webContents = { send: vi.fn() }
+      const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+        // Why: the pane spawned before its startup queue landed (the #7587
+        // renderer-stall class), so no spawn command is recorded for the PTY.
+        runtime.registerPty('pty-bare', TEST_WORKTREE_ID, null, { tabId: 'tab-bare', leafId })
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          { requestId: payload.requestId, tabId: 'tab-bare', title: 'Terminal' }
+        )
+      })
+      webContents.send = send
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      electronMocks.BrowserWindow.fromId.mockReturnValue({
+        isDestroyed: () => false,
+        webContents
+      })
+
+      const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'codex',
+        activate: true
+      })
+      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+      await vi.advanceTimersByTimeAsync(50)
+      const result = await create
+
+      expect(result.tab).toMatchObject({
+        type: 'terminal',
+        parentTabId: 'tab-bare',
+        leafId,
+        status: 'ready'
+      })
+      // Why: the adopted PTY never launched codex, so the settle must type the
+      // launch command (Enter as its own write) instead of succeeding silently.
+      expect(write).toHaveBeenCalledTimes(2)
+      expect(write.mock.calls[0][0]).toBe('pty-bare')
+      expect(String(write.mock.calls[0][1])).toMatch(/codex/)
+      expect(write.mock.calls[1]).toEqual(['pty-bare', '\r'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not re-deliver the agent launch command when the adopted renderer PTY spawned with one', async () => {
+    vi.useFakeTimers()
+    try {
+      const leafId = '88888888-8888-4888-8888-888888888888'
+      const write = vi.fn((_ptyId: string, _data: string) => true)
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: {}
+        })
+      } as never)
+      runtime.setPtyController({
+        spawn: vi.fn(),
+        write,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.setNotifier(createMobileCreateTestNotifier(vi.fn()))
+      const webContents = { send: vi.fn() }
+      const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+        // Why: mirrors the spawn IPC handler — a command-carrying spawn records
+        // its launch command right after registering the PTY.
+        runtime.registerPty('pty-carried', TEST_WORKTREE_ID, null, { tabId: 'tab-carried', leafId })
+        runtime.noteTerminalSpawnCommand('pty-carried', 'codex')
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          { requestId: payload.requestId, tabId: 'tab-carried', title: 'Terminal' }
+        )
+      })
+      webContents.send = send
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      electronMocks.BrowserWindow.fromId.mockReturnValue({
+        isDestroyed: () => false,
+        webContents
+      })
+
+      const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'codex',
+        activate: true
+      })
+      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+      await vi.advanceTimersByTimeAsync(50)
+      const result = await create
+
+      expect(result.tab).toMatchObject({ type: 'terminal', parentTabId: 'tab-carried' })
+      expect(write).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps a mobile-created terminal alive when the renderer snapshot is rejected by the version guard', async () => {
     vi.useFakeTimers()
     try {

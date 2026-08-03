@@ -42,6 +42,27 @@ describe('createUpdaterQuitAbortRelay', () => {
     expect(aborted).toHaveBeenCalledTimes(1)
   })
 
+  it('resets a prepared restart on a linux package-install recovery status', () => {
+    const eventTarget = new EventTarget()
+    const aborted = vi.fn()
+    eventTarget.addEventListener('update-restart-aborted', aborted)
+    const relay = createUpdaterQuitAbortRelay(eventTarget, 'update-restart-aborted')
+    relay.markPrepared()
+
+    relay.handleStatus({
+      state: 'error',
+      message: 'No authentication agent found.',
+      recovery: {
+        kind: 'linux-package-install',
+        packageType: 'deb',
+        reason: 'authentication-agent-unavailable',
+        version: '1.0.61'
+      }
+    } satisfies UpdateStatus)
+
+    expect(aborted).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores updater errors when no update restart was prepared', () => {
     const eventTarget = new EventTarget()
     const aborted = vi.fn()

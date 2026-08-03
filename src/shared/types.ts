@@ -2398,6 +2398,29 @@ export type UpdateCheckOptions = {
  *  channel with its own repo cannot be reported as an ordinary release. */
 export type UpdateSource = 'local' | DedicatedRepoChannel
 
+/** Root-package Linux install formats whose update installs need privilege escalation. */
+export type LinuxRootPackageType = 'deb' | 'rpm'
+
+export type LinuxPackageInstallFailureReason =
+  | 'authentication-agent-unavailable'
+  | 'authentication-denied'
+  | 'package-install-failed'
+
+// Why: the renderer must not infer "no polkit agent" from copy alone — main classifies and the card branches on this discriminant.
+export type LinuxPackageInstallRecovery = {
+  kind: 'linux-package-install'
+  packageType: LinuxRootPackageType
+  reason: LinuxPackageInstallFailureReason
+  version: string
+}
+
+/** Why: only these two mean no safe command exists here; every other failure clears recovery entirely. */
+export type LinuxPackageCommandUnavailableReason = 'no-sudo' | 'no-package-manager'
+
+export type LinuxPackageInstallInstructions =
+  | { ok: true; command: string; packageFileName: string }
+  | { ok: false; reason: LinuxPackageCommandUnavailableReason; message: string }
+
 export type UpdateStatus = (
   | { state: 'idle' }
   | { state: 'checking'; userInitiated?: boolean }
@@ -2420,7 +2443,13 @@ export type UpdateStatus = (
   | { state: 'not-available'; userInitiated?: boolean }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
   | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
-  | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
+  | {
+      state: 'error'
+      message: string
+      userInitiated?: boolean
+      activeNudgeId?: string
+      recovery?: LinuxPackageInstallRecovery
+    }
 ) & { source?: UpdateSource }
 
 export type ReleaseBuildListResult =

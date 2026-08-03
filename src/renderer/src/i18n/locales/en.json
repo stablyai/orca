@@ -7193,7 +7193,12 @@
           "4a342f44c1": "Advanced Connection",
           "e9609ddca6": "Proxy, jump host, and connection reuse",
           "8c922dffba": "Reuse SSH connection for faster setup",
-          "53e9aabfc0": "Uses OpenSSH multiplexing when available. Turn off for hosts with custom SSH restrictions."
+          "53e9aabfc0": "Uses OpenSSH multiplexing when available. Turn off for hosts with custom SSH restrictions.",
+          "editTitle": "Edit SSH host",
+          "addTitle": "Add SSH host",
+          "editDescription": "Update connection details for this machine. Changes apply on next connect.",
+          "addDescription": "Add a persistent machine you can log into over SSH.",
+          "editingPrefix": "Editing"
         },
         "TasksPane": {
           "f71d8a9dd3": "Task Providers",
@@ -11333,9 +11338,14 @@
             "jumpToOriginalPane": "Jump to Original Pane",
             "worktree": "Worktree",
             "jumpToWorktree": "Jump to Worktree",
+            "prompt": "Prompt",
             "firstPrompt": "First prompt",
+            "recentPrompt": "Recent prompt",
             "firstPromptCopied": "First prompt copied",
+            "recentPromptCopied": "Recent prompt copied",
             "copyFirstPrompt": "Copy first prompt",
+            "copyRecentPrompt": "Copy recent prompt",
+            "copyPrompt": "Copy prompt",
             "copied": "Copied",
             "copy": "Copy",
             "noFirstPromptAvailable": "No first prompt available",
@@ -14471,6 +14481,18 @@
         "title": "Workspace created from a local base",
         "description": "The remote-tracking ref \"{{value0}}\" was unavailable, so Orca used local \"{{value1}}\" instead. This workspace may not include the latest remote changes.",
         "dismiss": "Got it"
+      },
+      "LinuxPackageInstallRecoveryCard": {
+        "e3de29c86a": "Show Package",
+        "3da99454c6": "Try Automatic Install Again",
+        "55c86654b7": "Copy Install Command",
+        "53e1559f99": "Automatic Install Failed",
+        "a7ac6ec78b": "Orca downloaded the update but could not install the system package automatically.",
+        "82c6dbea00": "Copy the command and run it in a system terminal on the computer where Orca is installed. After it finishes, quit and reopen Orca to run the new version.",
+        "53c4b8e148": "No usable authentication agent answered the privileged install request.",
+        "c732bcbf8f": "Checking package...",
+        "aa57fa4f80": "Command copied. Run it in a system terminal to install {{value0}}, then quit and reopen Orca.",
+        "b7e7c5bc95": "Orca checks the downloaded file against the release metadata at the moment it builds this command. The system package itself is not signature-checked, and Orca cannot vouch for the file after that point."
       },
       "pr-check-counts": {
         "passingChip": "{{value0}} passing",
