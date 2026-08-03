@@ -256,9 +256,11 @@ function FileExplorerFiles(): React.JSX.Element {
 
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
   const [orphanServicesOpen, setOrphanServicesOpen] = useState(false)
+  const showServicesPanel = useAppStore((s) => s.settings?.showServicesPanel !== false)
   // Why: service detection inspects local processes and the local docker
-  // daemon, neither of which describes an SSH-hosted workspace.
-  const servicesEnabled = Boolean(activeRepo && !activeRepo.connectionId)
+  // daemon, neither of which describes an SSH-hosted workspace. Turning the
+  // setting off also stops the scan, not just the rendering.
+  const servicesEnabled = Boolean(showServicesPanel && activeRepo && !activeRepo.connectionId)
   const services = useWorkspaceServices(activeRepo?.id ?? null, servicesEnabled)
   const orphanServices = useMemo(
     () => selectOrphanServices(services.scan?.services ?? []),

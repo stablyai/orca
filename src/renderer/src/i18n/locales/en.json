@@ -7844,7 +7844,11 @@
             "5f4779d525": "言語",
             "0b03f507c2": "언어",
             "ab96f8a4b9": "語言",
-            "b6035a3def": "语言"
+            "b6035a3def": "语言",
+            "6f23d2dff1": "Show Services",
+            "83a5b5bed8": "List running dev servers and containers under the file tree.",
+            "2f7113a20b": "services",
+            "283e7032fa": "docker"
           }
         },
         "auto": {
@@ -9671,7 +9675,9 @@
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
-          "usagePercentageDisplayRemaining": "Remaining"
+          "usagePercentageDisplayRemaining": "Remaining",
+          "2ac24b02ab": "Show Services",
+          "552c0ca722": "Listening ports for this workspace, under the file tree."
         },
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",

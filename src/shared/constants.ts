@@ -276,6 +276,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
     showTasksButton: true,
+    showServicesPanel: true,
     showAutomationsButton: true,
     showMobileButton: true,
     showPinnedWorktreesInGroups: false,
