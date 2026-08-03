@@ -13,7 +13,7 @@ async function writeSkill(root: string, directory: string, markdown: string): Pr
 }
 
 describe('generated WSL skill name filter', () => {
-  it.skipIf(process.platform === 'win32')(
+  it.skipIf(process.platform !== 'linux')(
     'rejects only known scalar mismatches and passes uncertain names to TypeScript',
     async () => {
       const root = await mkdtemp(join(tmpdir(), 'orca-wsl-name-filter-'))
@@ -31,6 +31,14 @@ describe('generated WSL skill name filter', () => {
       await writeSkill(root, 'one-quote', '---\nname: "\n---\n# orchestration\n')
       await writeSkill(root, 'block-name', '---\nname: >-\n  orchestration\n---\n')
       await writeSkill(root, 'bom-crlf', "\uFEFF---\r\nname: 'orchestration'\r\n---\r\n")
+      await writeSkill(root, 'unicode-space', '---\nname:\u3000orchestration\n---\n')
+      await writeSkill(root, 'missing-close', '---\nname: unrelated\n# orchestration\n')
+      await writeSkill(root, 'duplicate-match', '---\nname: unrelated\nname: orchestration\n---\n')
+      await writeSkill(
+        root,
+        'duplicate-mismatch',
+        '---\nname: orchestration\nname: unrelated\n---\n'
+      )
       await writeSkill(
         root,
         'beyond-limit',
@@ -49,17 +57,23 @@ describe('generated WSL skill name filter', () => {
           maxBuffer: 4 * 1024 * 1024
         })
         expect(output).not.toContain('scalar-mismatch')
+        expect(output).not.toContain('duplicate-mismatch')
         expect(output).toContain('beyond-limit')
         expect(output).toContain('multibyte-beyond-limit')
         expect(
-          parseWslSkillDiscoveryOutput(
-            output,
-            [scanRoot],
-            42,
-            ['home'],
-            ['orchestration']
-          ).skills.map((skill) => skill.directoryPath.split('/').at(-1))
-        ).toEqual(['block-name', 'bom-crlf', 'empty-quoted', 'one-quote', 'scalar-match'])
+          parseWslSkillDiscoveryOutput(output, [scanRoot], 42, ['home'], ['orchestration'])
+            .skills.map((skill) => skill.directoryPath.split('/').at(-1))
+            .sort()
+        ).toEqual([
+          'block-name',
+          'bom-crlf',
+          'duplicate-match',
+          'empty-quoted',
+          'missing-close',
+          'one-quote',
+          'scalar-match',
+          'unicode-space'
+        ])
       } finally {
         await rm(root, { recursive: true, force: true })
       }

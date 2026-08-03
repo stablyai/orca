@@ -460,7 +460,10 @@ describe('useInstalledAgentSkill', () => {
 
     // The freshness window is what bounds the storm; past it, focus still reads disk.
     expect(discover).toHaveBeenCalledTimes(2)
-    expect(discover).toHaveBeenLastCalledWith(undefined)
+    expect(discover).toHaveBeenLastCalledWith({
+      names: ['orca-linear', 'linear-tickets'],
+      sourceKinds: ['home']
+    })
   })
 
   it('reuses cached discovery when another surface finishes re-checking', async () => {

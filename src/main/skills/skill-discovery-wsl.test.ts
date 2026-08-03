@@ -90,8 +90,9 @@ describe('WSL skill discovery', () => {
     expect(script).toContain("'orchestration'|'computer-use') return 0")
     expect(script).toContain('local normalized_name=${1,,}')
     expect(script).toContain('metadata_name_known=0')
-    expect(script).toContain('bytes_read=$((bytes_read + ${#line} + 1))')
-    expect(script).toContain('[ "$bytes_read" -gt 262144 ] && return')
+    expect(script).toContain('IFS= read -r -n "$remaining" line || read_status=$?')
+    expect(script).toContain('[ "$line_length" -ge "$remaining" ] && return')
+    expect(script).toContain('[[ "$candidate_name" =~ $non_ascii_pattern ]] && continue')
     expect(script).toContain("line=${line#$'\\xEF\\xBB\\xBF'}")
     expect(script).toContain('if [ "$metadata_name_known" -eq 1 ]; then')
     expect(script).toContain('done < "$1"')
@@ -112,13 +113,22 @@ describe('WSL skill discovery', () => {
         '/home/alice/.codex/skills/.system/bundled/SKILL.md',
         '/home/alice/.codex/skills/.system/bundled/SKILL.md',
         '1700000000',
-        '1',
         markdown
       )
     ].join('')
 
     expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, ['home']).skills).toEqual([])
     expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, []).skills).toHaveLength(1)
+    expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, [], ['   ']).skills).toHaveLength(1)
+  })
+
+  it('leaves non-ASCII requested names to the TypeScript filter', () => {
+    const script = Buffer.from(
+      buildWslSkillDiscoveryCommand([homeRoot], ['orchestrátion']).split("'")[1],
+      'base64'
+    ).toString('utf8')
+
+    expect(script).not.toContain('matches_requested_name')
   })
 
   it('uses the TypeScript summary parser for uncertain WSL name candidates', () => {
@@ -134,7 +144,6 @@ describe('WSL skill discovery', () => {
         '/home/alice/.agents/skills/renamed-a/SKILL.md',
         '/home/alice/.agents/skills/renamed-a/SKILL.md',
         '1700000000',
-        '1',
         blockName
       ),
       record(
@@ -143,7 +152,6 @@ describe('WSL skill discovery', () => {
         '/home/alice/.agents/skills/renamed-b/SKILL.md',
         '/home/alice/.agents/skills/renamed-b/SKILL.md',
         '1700000000',
-        '1',
         headingName
       )
     ].join('')

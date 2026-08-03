@@ -33,7 +33,7 @@ export function buildWslSkillDiscoveryCommand(
   const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
   const nameFilterHelpers: string[] = []
   const nameFilterBody: string[] = []
-  if (normalizedNames?.length) {
+  if (normalizedNames?.length && normalizedNames.every((name) => /^[\x20-\x7e]+$/.test(name))) {
     const patterns = [...new Set(normalizedNames)].map(quoteBashString).join('|')
     nameFilterHelpers.push(
       'matches_requested_name() {',
@@ -46,10 +46,16 @@ export function buildWslSkillDiscoveryCommand(
       'read_frontmatter_name() {',
       '  metadata_name=',
       '  metadata_name_known=0',
-      '  local LC_ALL=C line first_line=1 bytes_read=0',
-      '  while IFS= read -r line; do',
-      '    bytes_read=$((bytes_read + ${#line} + 1))',
-      `    [ "$bytes_read" -gt ${MAX_MARKDOWN_BYTES} ] && return`,
+      `  local LC_ALL=C line first_line=1 remaining=${MAX_MARKDOWN_BYTES}`,
+      "  local read_status line_length candidate_name= candidate_name_known=0 non_ascii_pattern='[^ -~]'",
+      '  while [ "$remaining" -gt 0 ]; do',
+      '    line=',
+      '    read_status=0',
+      '    IFS= read -r -n "$remaining" line || read_status=$?',
+      '    line_length=${#line}',
+      '    [ "$line_length" -ge "$remaining" ] && return',
+      '    [ "$read_status" -eq 0 ] || return',
+      '    remaining=$((remaining - line_length - 1))',
       "    line=${line%$'\\r'}",
       '    if [ "$first_line" -eq 1 ]; then',
       '      first_line=0',
@@ -57,22 +63,27 @@ export function buildWslSkillDiscoveryCommand(
       '      [[ "$line" =~ ^---[[:space:]]*$ ]] || return',
       '      continue',
       '    fi',
-      '    [[ "$line" =~ ^---[[:space:]]*$ ]] && return',
-      '    if [[ "$line" =~ ^name:[[:space:]]*(.*)$ ]]; then',
-      '      metadata_name=${BASH_REMATCH[1]}',
-      '      while [[ "$metadata_name" == [[:space:]]* ]]; do metadata_name=${metadata_name#?}; done',
-      '      while [[ "$metadata_name" == *[[:space:]] ]]; do metadata_name=${metadata_name%?}; done',
-      '      case "$metadata_name" in ""|"|"|"|-"|">"|">-") return ;; esac',
-      '      local quote=${metadata_name:0:1}',
-      `      if [ "\${#metadata_name}" -eq 1 ] && { [ "$quote" = '"' ] || [ "$quote" = "'" ]; }; then return; fi`,
-      `      if [ "\${#metadata_name}" -ge 2 ] && { [ "$quote" = '"' ] || [ "$quote" = "'" ]; } && [ "\${metadata_name: -1}" = "$quote" ]; then`,
-      '        metadata_name=${metadata_name:1:${#metadata_name}-2}',
-      '      fi',
-      '      while [[ "$metadata_name" == [[:space:]]* ]]; do metadata_name=${metadata_name#?}; done',
-      '      while [[ "$metadata_name" == *[[:space:]] ]]; do metadata_name=${metadata_name%?}; done',
-      '      [ -n "$metadata_name" ] || return',
-      '      metadata_name_known=1',
+      '    if [[ "$line" =~ ^---[[:space:]]*$ ]]; then',
+      '      metadata_name=$candidate_name',
+      '      metadata_name_known=$candidate_name_known',
       '      return',
+      '    fi',
+      '    if [[ "$line" =~ ^name:[[:space:]]*(.*)$ ]]; then',
+      '      candidate_name=${BASH_REMATCH[1]}',
+      '      candidate_name_known=0',
+      '      while [[ "$candidate_name" == [[:space:]]* ]]; do candidate_name=${candidate_name#?}; done',
+      '      while [[ "$candidate_name" == *[[:space:]] ]]; do candidate_name=${candidate_name%?}; done',
+      '      case "$candidate_name" in ""|"|"|"|-"|">"|">-") continue ;; esac',
+      '      local quote=${candidate_name:0:1}',
+      `      if [ "\${#candidate_name}" -eq 1 ] && { [ "$quote" = '"' ] || [ "$quote" = "'" ]; }; then continue; fi`,
+      `      if [ "\${#candidate_name}" -ge 2 ] && { [ "$quote" = '"' ] || [ "$quote" = "'" ]; } && [ "\${candidate_name: -1}" = "$quote" ]; then`,
+      '        candidate_name=${candidate_name:1:${#candidate_name}-2}',
+      '      fi',
+      '      while [[ "$candidate_name" == [[:space:]]* ]]; do candidate_name=${candidate_name#?}; done',
+      '      while [[ "$candidate_name" == *[[:space:]] ]]; do candidate_name=${candidate_name%?}; done',
+      '      [ -n "$candidate_name" ] || continue',
+      '      [[ "$candidate_name" =~ $non_ascii_pattern ]] && continue',
+      '      candidate_name_known=1',
       '    fi',
       '  done < "$1"',
       '}'
@@ -159,9 +170,8 @@ export function parseWslSkillDiscoveryOutput(
   const fields = output.split('\0')
   const rootExists = new Map<number, boolean>()
   const skillsByCanonicalPath = new Map<string, DiscoveredSkill>()
-  const expectedNames = names?.length
-    ? new Set(names.map((name) => name.trim().toLowerCase()).filter(Boolean))
-    : undefined
+  const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
+  const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined
   let index = 0
   while (index < fields.length && fields[index]) {
     const recordKind = fields[index++]
