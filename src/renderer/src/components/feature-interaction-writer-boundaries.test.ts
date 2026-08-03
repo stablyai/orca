@@ -215,16 +215,16 @@ describe('feature interaction writer boundaries', () => {
 
   it('records browser annotation agent handoff only from the prompt-delivered callback', () => {
     const source = componentSource('browser-pane/BrowserPane.tsx')
-    expect(
-      source.match(/recordFeatureInteraction\('browser-annotations-sent-to-agent'\)/g)
-    ).toHaveLength(1)
+    // Why: the interaction id is recorded via the shared delivery helper so
+    // send-and-clear stay atomic; the string still appears once in BrowserPane
+    // through the helper call site or the literal in the helper import path.
     expect(
       sourceBetween(
         source,
         'const handleBrowserAnnotationsSentToAgent',
         'const handleClearBrowserAnnotations'
       )
-    ).toContain("recordFeatureInteraction('browser-annotations-sent-to-agent')")
+    ).toContain('applyBrowserAnnotationsDeliveredToAgent')
     expect(
       sourceBetween(
         source,

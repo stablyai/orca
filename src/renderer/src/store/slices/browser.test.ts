@@ -180,6 +180,39 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
   })
 
+  it('clears page annotations on explicit clear (agent delivery / tray trash)', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'a1'))
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'a2'))
+    expect(store.getState().browserAnnotationsByPageId[pageId]).toHaveLength(2)
+
+    store.getState().clearBrowserPageAnnotations(pageId)
+
+    expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+  })
+
+  it('deletes a single page annotation by id', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'keep'))
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'drop'))
+    store.getState().deleteBrowserPageAnnotation(pageId, 'drop')
+
+    const remaining = store.getState().browserAnnotationsByPageId[pageId] ?? []
+    expect(remaining.map((annotation) => annotation.id)).toEqual(['keep'])
+  })
+
   it('keeps certificate challenges transient across navigation, success, and close', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://localhost:3443/')

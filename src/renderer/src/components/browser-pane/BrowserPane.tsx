@@ -117,6 +117,7 @@ import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../shared/b
 import { useGrabMode } from './useGrabMode'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
+import { applyBrowserAnnotationsDeliveredToAgent } from './browser-annotations-delivery'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
 import BrowserAddressBar from './BrowserAddressBar'
@@ -4500,8 +4501,19 @@ function BrowserPagePane({
   )
 
   const handleBrowserAnnotationsSentToAgent = useCallback((): void => {
-    recordFeatureInteraction('browser-annotations-sent-to-agent')
-  }, [recordFeatureInteraction])
+    // Why: once design feedback is in the agent chat, drop live pins/tray cards
+    // so fixed work does not leave stale markers on the page. Transcript is the
+    // recovery path (same delivery pattern as diff/markdown review notes).
+    applyBrowserAnnotationsDeliveredToAgent({
+      pageId: browserTab.id,
+      clearBrowserPageAnnotations,
+      recordFeatureInteraction,
+      resetLocalUiState: () => {
+        clearTimeout(annotationCopyTimerRef.current)
+        setBrowserAnnotationsCopied(false)
+      }
+    })
+  }, [browserTab.id, clearBrowserPageAnnotations, recordFeatureInteraction])
 
   const handleClearBrowserAnnotations = useCallback((): void => {
     if (browserAnnotationsRef.current.length === 0) {
