@@ -80,6 +80,19 @@ describe('resolveMobileNativeChat', () => {
     })
   })
 
+  it('resolves Pi from its hook-reported session file', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        launchAgent: 'pi',
+        agentStatus: status({
+          agentType: 'pi',
+          providerSession: { key: 'session_id', id: 'pi-session', transcriptPath: '/tmp/pi.jsonl' }
+        })
+      })
+    ).toEqual({ agent: 'pi', sessionId: 'pi-session', transcriptPath: '/tmp/pi.jsonl' })
+  })
+
   it('returns null for unsupported agents', () => {
     expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: 'gemini' })).toBeNull()
   })

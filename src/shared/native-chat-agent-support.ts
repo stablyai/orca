@@ -1,11 +1,12 @@
-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok'
+export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'pi'
 
 /** Agents whose transcripts the native chat view can parse and render. */
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
   'claude',
   'openclaude',
   'codex',
-  'grok'
+  'grok',
+  'pi'
 ])
 
 export function isNativeChatSupportedAgent(agent: string | null | undefined): boolean {
@@ -30,7 +31,7 @@ export function resolveNativeChatTranscriptAgent(
   if (agent === 'claude' || agent === 'openclaude') {
     return 'claude'
   }
-  if (agent === 'codex' || agent === 'grok') {
+  if (agent === 'codex' || agent === 'grok' || agent === 'pi') {
     return agent
   }
   return null

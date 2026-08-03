@@ -12,3 +12,4 @@
 export { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 export { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 export { decodeGrokTranscriptLine } from './transcript-line-decoders-grok'
+export { decodePiTranscriptLine } from './transcript-line-decoders-pi'
