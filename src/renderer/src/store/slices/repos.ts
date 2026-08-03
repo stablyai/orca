@@ -1408,6 +1408,7 @@ function getRuntimeTargetCachePrefix(
 type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
 type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
 type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
+// Why: routing options are named per call family here; a create is not a catalog fetch.
 type CreateProjectGroupRouteOptions = { runtimeEnvironmentId?: string | null }
 
 function getFolderWorkspacePathStatusRouteSettings(
