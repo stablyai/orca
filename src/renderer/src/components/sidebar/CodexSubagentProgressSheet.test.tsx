@@ -99,7 +99,7 @@ describe('CodexSubagentProgressSheet', () => {
   })
 
   it('routes runtime-owned child transcripts to the resolved remote runtime', async () => {
-    mocks.state.modalData = target('runtime-ssh-target-1')
+    mocks.state.modalData = target(null)
     mocks.runtimeEnvironmentId = 'runtime-env-1'
     const { default: CodexSubagentProgressSheet } = await import('./CodexSubagentProgressSheet')
 
@@ -112,6 +112,16 @@ describe('CodexSubagentProgressSheet', () => {
 
   it('stops showing a stale working state after the child leaves the live roster', async () => {
     mocks.state.agentStatusByPaneKey = { 'parent-pane': { subagents: [] } }
+    mocks.liveSession.mockReturnValue({ ...liveSession(), status: 'done' })
+    const { default: CodexSubagentProgressSheet } = await import('./CodexSubagentProgressSheet')
+
+    const markup = renderToStaticMarkup(<CodexSubagentProgressSheet />)
+
+    expect(markup).toContain('data-working="false"')
+  })
+
+  it('stops showing a captured working state after the parent entry disappears', async () => {
+    mocks.state.agentStatusByPaneKey = {}
     mocks.liveSession.mockReturnValue({ ...liveSession(), status: 'done' })
     const { default: CodexSubagentProgressSheet } = await import('./CodexSubagentProgressSheet')
 

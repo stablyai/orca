@@ -178,7 +178,7 @@ function CodexSubagentProgressBody({
   const connectionId =
     target.connectionId === undefined ? inferredConnectionId : target.connectionId
   const route = resolveCodexSubagentProgressRoute(connectionId, runtimeEnvironmentId)
-  const state = liveSubagent?.state ?? (parentEntry ? 'idle' : target.state)
+  const state = liveSubagent?.state ?? 'idle'
   const dotState = asDotState(state)
   const label = liveSubagent?.description?.trim() || target.label
   const model = liveSubagent?.model?.trim() || target.model

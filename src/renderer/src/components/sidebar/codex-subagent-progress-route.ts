@@ -15,10 +15,11 @@ export function resolveCodexSubagentProgressRoute(
   if (!isNativeChatTranscriptLocalReadable(connectionId)) {
     return { kind: 'unavailable', reason: 'legacy-ssh' }
   }
+  if (runtimeEnvironmentId) {
+    return { kind: 'readable', runtimeEnvironmentId }
+  }
   if (isRuntimeOwnedSshTargetId(connectionId)) {
-    return runtimeEnvironmentId
-      ? { kind: 'readable', runtimeEnvironmentId }
-      : { kind: 'unavailable', reason: 'runtime-owner-missing' }
+    return { kind: 'unavailable', reason: 'runtime-owner-missing' }
   }
   return { kind: 'readable', runtimeEnvironmentId: null }
 }

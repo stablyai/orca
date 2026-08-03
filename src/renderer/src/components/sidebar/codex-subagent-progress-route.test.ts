@@ -3,7 +3,7 @@ import { resolveCodexSubagentProgressRoute } from './codex-subagent-progress-rou
 
 describe('resolveCodexSubagentProgressRoute', () => {
   it('keeps local transcripts on the local transport', () => {
-    expect(resolveCodexSubagentProgressRoute(null, 'unrelated-runtime')).toEqual({
+    expect(resolveCodexSubagentProgressRoute(null, null)).toEqual({
       kind: 'readable',
       runtimeEnvironmentId: null
     })
@@ -11,6 +11,13 @@ describe('resolveCodexSubagentProgressRoute', () => {
 
   it('routes runtime-owned transcripts to their remote runtime', () => {
     expect(resolveCodexSubagentProgressRoute('runtime-ssh-target-1', 'runtime-env-1')).toEqual({
+      kind: 'readable',
+      runtimeEnvironmentId: 'runtime-env-1'
+    })
+  })
+
+  it('prefers a resolved Model-B runtime owner over a local PTY stamp', () => {
+    expect(resolveCodexSubagentProgressRoute(null, 'runtime-env-1')).toEqual({
       kind: 'readable',
       runtimeEnvironmentId: 'runtime-env-1'
     })
@@ -24,11 +31,11 @@ describe('resolveCodexSubagentProgressRoute', () => {
   })
 
   it('does not fall back to local reads for legacy SSH or unknown owners', () => {
-    expect(resolveCodexSubagentProgressRoute('ssh-target-1', null)).toEqual({
+    expect(resolveCodexSubagentProgressRoute('ssh-target-1', 'unrelated-runtime')).toEqual({
       kind: 'unavailable',
       reason: 'legacy-ssh'
     })
-    expect(resolveCodexSubagentProgressRoute(undefined, null)).toEqual({
+    expect(resolveCodexSubagentProgressRoute(undefined, 'unrelated-runtime')).toEqual({
       kind: 'unavailable',
       reason: 'unknown-owner'
     })
