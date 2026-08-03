@@ -95,6 +95,11 @@ export function recordKeyboardCreatedTerminalPaneSplit(
   return recordCreatedTerminalPaneSplit(createdPane, args)
 }
 
+// Why: bounds the per-code press evidence below so a keydown whose keyup never
+// arrives cannot grow the list without end. Real typing never stacks this many
+// Enter presses before a release.
+const MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE = 8
+
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false
@@ -285,10 +290,12 @@ export function useTerminalKeyboardShortcuts({
     // keydown the IME swallowed entirely. When a keydown for the same physical
     // key was observed, release-time modifier state is rollover noise, not a
     // chord: a plain committing Enter followed by a rolled-over Shift for the
-    // next doubled consonant must not become Shift+Enter. The keydown's
-    // timeStamp is kept so a balancing keyup (copied from the same native
-    // event) does not consume the evidence ahead of the physical release.
-    const observedEnterKeydownTimeStamps = new Map<string, number>()
+    // next doubled consonant must not become Shift+Enter. One entry is kept per
+    // press so a rapid second press cannot be left unguarded by the first
+    // release, and each entry keeps its keydown timeStamp so a balancing keyup
+    // (copied from the same native event) does not consume it ahead of the
+    // physical release.
+    const observedEnterKeydownTimeStamps = new Map<string, number[]>()
     const getHeldImeEnterModifier = () =>
       heldImeEnterModifiers.size === 1
         ? (heldImeEnterModifiers.values().next().value ?? null)
@@ -450,7 +457,15 @@ export function useTerminalKeyboardShortcuts({
         ((e.key === 'Enter' && e.keyCode === 13) ||
           (e.keyCode === 229 && (e.code === 'Enter' || e.code === 'NumpadEnter')))
       ) {
-        observedEnterKeydownTimeStamps.set(e.code, e.timeStamp)
+        const observed = observedEnterKeydownTimeStamps.get(e.code)
+        if (!observed) {
+          observedEnterKeydownTimeStamps.set(e.code, [e.timeStamp])
+        } else if (!e.repeat && observed.length < MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE) {
+          // Why: auto-repeat re-fires keydown with no keyup in between and the
+          // whole run ends in a single release, so a repeat must not stack an
+          // entry that release cannot drain.
+          observed.push(e.timeStamp)
+        }
       }
       const manager = managerRef.current
       if (!manager) {
@@ -781,11 +796,16 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      const enterKeydownWasObserved = observedEnterKeydownTimeStamps.has(e.code)
-      if (enterKeydownWasObserved && observedEnterKeydownTimeStamps.get(e.code) !== e.timeStamp) {
-        // Why: a balancing keyup copies the keydown's native timeStamp; only
-        // the physical release (a different timeStamp) consumes the evidence.
-        observedEnterKeydownTimeStamps.delete(e.code)
+      const observedEnterKeydowns = observedEnterKeydownTimeStamps.get(e.code)
+      const enterKeydownWasObserved = observedEnterKeydowns !== undefined
+      if (enterKeydownWasObserved && !observedEnterKeydowns.includes(e.timeStamp)) {
+        // Why: a balancing keyup copies the keydown's native timeStamp; only a
+        // physical release (a different timeStamp) consumes one press worth of
+        // evidence, so a second press stays guarded until its own release.
+        observedEnterKeydowns.shift()
+        if (observedEnterKeydowns.length === 0) {
+          observedEnterKeydownTimeStamps.delete(e.code)
+        }
       }
       const modifiedEnterKind = getImeEnterModifier(e)
       if (isWindows && modifiedEnterKind && isTerminalImeEnterKeyUp(e)) {
