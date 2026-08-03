@@ -4,6 +4,7 @@ import { Worker } from 'node:worker_threads'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
+import type { OpenCodeSqliteScanContext } from './session-scanner-opencode-sqlite-scan-context'
 
 // Why: resolve the built worker entry + own the process-wide shared client so
 // the client class stays free of Electron (require'd lazily here) and the
@@ -53,6 +54,7 @@ function getSharedClient(): OpenCodeSqliteWorkerClient {
  * @returns Synthetic candidates sorted by effective recency.
  */
 export function listOpenCodeSqliteSessionsViaWorker(args: {
+  context: OpenCodeSqliteScanContext
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
@@ -68,6 +70,7 @@ export function listOpenCodeSqliteSessionsViaWorker(args: {
  * @returns The parsed session, or `null` when it does not exist.
  */
 export function parseOpenCodeSqliteSessionViaWorker(args: {
+  context: OpenCodeSqliteScanContext
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform

@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
+import { OpenCodeSqliteScanContext } from './session-scanner-opencode-sqlite-scan-context'
 
 const { discoverOpenCodeSessionsMock, listOpenCodeDatabasesMock } = vi.hoisted(() => ({
   discoverOpenCodeSessionsMock: vi.fn(),
@@ -31,13 +32,16 @@ describe('opencodeDiscoveries', () => {
       files: []
     })
     const issues = []
+    const context = new OpenCodeSqliteScanContext()
 
-    await Promise.all(opencodeDiscoveries({}, [], 25, issues))
+    await Promise.all(opencodeDiscoveries({ platform: 'linux' }, [], 25, issues, context))
 
     expect(discoverOpenCodeSessionsMock).toHaveBeenCalledWith({
+      context,
       storageDir: join('/xdg/data', 'opencode', 'storage'),
       dbPaths: [],
       limitPerAgent: 25,
+      platform: 'linux',
       issues
     })
   })

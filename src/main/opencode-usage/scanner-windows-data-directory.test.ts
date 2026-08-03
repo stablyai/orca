@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { opencodeDiscoveries } from '../ai-vault/session-scanner-opencode-sources'
+import { OpenCodeSqliteScanContext } from '../ai-vault/session-scanner-opencode-sqlite-scan-context'
 import Database from '../sqlite/sync-database'
 import { scanOpenCodeUsageDatabases } from './scanner'
 
@@ -80,7 +81,10 @@ describe('OpenCode usage discovery on Windows', () => {
 
     const result = await scanOpenCodeUsageDatabases([], [])
     const issues = []
-    const [discovery] = await Promise.all(opencodeDiscoveries({}, [], 25, issues))
+    const context = new OpenCodeSqliteScanContext()
+    const [discovery] = await Promise.all(
+      opencodeDiscoveries({ platform: 'win32' }, [], 25, issues, context)
+    )
 
     expect(discovery?.files.map(({ path }) => path)).toEqual([`${databasePath}#windows-session`])
     expect(issues).toEqual([])

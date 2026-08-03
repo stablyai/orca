@@ -12,10 +12,11 @@ import { createCopilotSessionResumeState } from './session-scanner-copilot-parse
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
+import type { OpenCodeSqliteScanContext } from './session-scanner-opencode-sqlite-scan-context'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
-const MAX_CACHE_ENTRIES = 4096
+export const MAX_CACHE_ENTRIES = 4096
 
 const NEWLINE_BYTE = 0x0a
 const CARRIAGE_RETURN_BYTE = 0x0d
@@ -141,6 +142,36 @@ export function seedSessionParseCache(
   }
 }
 
+function isEntryUnchanged(
+  entry: SessionParseCacheEntry | undefined,
+  candidate: SessionFileCandidate,
+  platform: NodeJS.Platform
+): boolean {
+  const { file } = candidate
+  return (
+    entry?.platform === platform &&
+    entry.mtimeMs === file.mtimeMs &&
+    (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
+  )
+}
+
+/**
+ * Whether this candidate would be served straight from the in-memory cache, i.e.
+ * without touching its store. Callers that gate expensive parses (the OpenCode
+ * SQLite budget) use this so a spent budget never hides an already-parsed row.
+ */
+export function hasFreshSessionParseCacheEntry(
+  candidate: SessionFileCandidate,
+  platform: NodeJS.Platform
+): boolean {
+  return isEntryUnchanged(cache.get(candidate.file.path), candidate, platform)
+}
+
+/** Live read-only view of cached entries, in LRU order (oldest first). */
+export function sessionParseCacheEntries(): Iterable<[string, PersistedSessionParseCacheEntry]> {
+  return cache.entries()
+}
+
 function storeEntry(path: string, entry: SessionParseCacheEntry): void {
   cache.delete(path)
   cache.set(path, entry)
@@ -164,17 +195,13 @@ function storeEntry(path: string, entry: SessionParseCacheEntry): void {
 export async function parseAgentSessionFileCached(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
-  stats?: SessionParseStats
+  stats?: SessionParseStats,
+  opencodeSqliteScanContext?: OpenCodeSqliteScanContext
 ): Promise<AiVaultSession | null> {
   const { file } = candidate
   const entry = cache.get(file.path)
 
-  const unchanged =
-    entry !== undefined &&
-    entry.platform === platform &&
-    entry.mtimeMs === file.mtimeMs &&
-    (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
-  if (unchanged) {
+  if (entry !== undefined && isEntryUnchanged(entry, candidate, platform)) {
     if (stats) {
       stats.reused++
     }
@@ -205,11 +232,13 @@ export async function parseAgentSessionFileCached(
     return parsed.session
   }
 
+  // Counted after the parse: a cancelled OpenCode SQLite parse throws, and work
+  // that never happened must not show up as bytes this scan read.
+  const session = await parseAgentSessionFile(candidate, platform, opencodeSqliteScanContext)
   if (stats) {
     stats.fullParses++
     stats.bytesRead += file.sizeBytes ?? 0
   }
-  const session = await parseAgentSessionFile(candidate, platform)
   storeEntry(file.path, {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,

@@ -10,6 +10,7 @@ import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
+import type { OpenCodeSqliteScanContext } from './session-scanner-opencode-sqlite-scan-context'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
@@ -54,6 +55,7 @@ export async function discoverAiVaultSessionSources(args: {
   options: AiVaultScanOptions
   limitPerAgent: number
   issues: AiVaultScanIssue[]
+  opencodeSqliteScanContext: OpenCodeSqliteScanContext
 }): Promise<SessionFileDiscovery[]> {
   const { options, limitPerAgent, issues } = args
   const wslHomeDirs = normalizedWslHomeDirs(options.wslHomeDirs)
@@ -72,7 +74,13 @@ export async function discoverAiVaultSessionSources(args: {
     // Why: OpenCode 1.17.x migrated sessions from per-session JSON files to a
     // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)
     // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
-    ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    ...opencodeDiscoveries(
+      options,
+      wslHomeDirs,
+      limitPerAgent,
+      issues,
+      args.opencodeSqliteScanContext
+    ),
     ...claudeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...codexDiscoveries(codexSessionsDirs, limitPerAgent, issues),
     ...standardDiscoveries(options, wslHomeDirs, limitPerAgent, issues),

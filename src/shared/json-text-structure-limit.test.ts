@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   assertJsonTextStructureWithinLimits,
-  JsonTextStructureCapacityError
+  JsonTextStructureCapacityError,
+  JsonTextStructureValidator
 } from './json-text-structure-limit'
 
 describe('JSON text structure admission', () => {
@@ -36,5 +37,21 @@ describe('JSON text structure admission', () => {
         nestingDepth: 1
       })
     ).not.toThrow()
+  })
+
+  it('preserves string and escape state across chunks', () => {
+    const content = '{"value":"before\\\\\\\"[{:,}]after","rows":[{}]}'
+    const validator = new JsonTextStructureValidator({
+      structuralTokens: 9,
+      nestingDepth: 3
+    })
+    for (let index = 0; index < content.length; index += 1) {
+      validator.consume(content, index, index + 1)
+    }
+
+    expect(validator.usage()).toEqual({
+      structuralTokens: 9,
+      nestingDepth: 3
+    })
   })
 })

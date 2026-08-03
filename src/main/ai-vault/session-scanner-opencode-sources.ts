@@ -5,19 +5,23 @@ import { resolveOpenCodeStorageDirectory } from '../opencode/opencode-data-direc
 import { listOpenCodeDatabases } from '../opencode-usage/scanner'
 import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-discovery'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
+import type { OpenCodeSqliteScanContext } from './session-scanner-opencode-sqlite-scan-context'
 
 export function opencodeDiscoveries(
   options: AiVaultScanOptions,
   wslHomeDirs: readonly string[],
   limit: number,
-  issues: AiVaultScanIssue[]
+  issues: AiVaultScanIssue[],
+  context: OpenCodeSqliteScanContext
 ): Promise<SessionFileDiscovery>[] {
   const storageDirs = opencodeStorageDirs(options, wslHomeDirs)
   return storageDirs.map(async (storageDir, index) =>
     discoverOpenCodeSessions({
+      context,
       storageDir,
       dbPaths: await opencodeDbPathsForSource(options, wslHomeDirs, storageDir, index),
       limitPerAgent: limit,
+      platform: options.platform ?? process.platform,
       issues
     })
   )

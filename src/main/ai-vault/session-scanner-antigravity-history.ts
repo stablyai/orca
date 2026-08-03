@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { normalizeTitleText, parseJsonObject, timestampMs } from './session-scanner-values'
 
@@ -32,6 +33,14 @@ export function createAntigravityWorkspaceResolver(
       const workspace = findAntigravityWorkspace(session, await index)
       return workspace ? { ...session, cwd: workspace } : session
     }
+  }
+}
+
+export async function readOptionalAntigravityHistoryFile(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, 'utf8')
+  } catch {
+    return null
   }
 }
 
