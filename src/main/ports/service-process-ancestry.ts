@@ -30,15 +30,18 @@ const SHELL_COMMANDS = new Set([
   'tmux',
   'screen',
   'sshd',
-  'cmd.exe',
-  'powershell.exe',
-  'pwsh.exe',
-  'conhost.exe',
-  'wsl.exe',
+  'cmd',
+  'powershell',
+  'pwsh',
+  'conhost',
+  'wsl',
   'init',
   'systemd',
   'launchd'
 ])
+
+/** Executable suffixes Windows appends; the same tool is `claude` and `claude.exe`. */
+const WINDOWS_EXECUTABLE_SUFFIXES = ['.exe', '.cmd', '.bat', '.com', '.ps1']
 
 /**
  * Coding agents we can name from their executable. Deliberately a closed list:
@@ -105,8 +108,21 @@ export function executableName(command: string): string {
   return basename(firstToken).toLowerCase()
 }
 
+/**
+ * Key used to look a command up in the sets above.
+ *
+ * Windows reports `claude.exe` where POSIX reports `claude`. Keying on the raw
+ * basename made every agent lookup miss on Windows, so the badge and the
+ * "stop and tell" action silently never appeared there.
+ */
+export function commandLookupKey(command: string): string {
+  const name = executableName(command)
+  const suffix = WINDOWS_EXECUTABLE_SUFFIXES.find((candidate) => name.endsWith(candidate))
+  return suffix ? name.slice(0, -suffix.length) : name
+}
+
 function isShellCommand(command: string): boolean {
-  return SHELL_COMMANDS.has(executableName(command))
+  return SHELL_COMMANDS.has(commandLookupKey(command))
 }
 
 /**
@@ -118,8 +134,8 @@ export function condenseLaunchCommand(command: string): string {
   if (tokens.length === 0) {
     return command.trim()
   }
-  const runner = executableName(tokens[0])
-  const isInterpreter = runner === 'node' || runner === 'node.exe' || runner === 'bun'
+  const runner = commandLookupKey(tokens[0])
+  const isInterpreter = runner === 'node' || runner === 'bun'
   const condensed =
     !isInterpreter || tokens.length < 2
       ? tokens.map(shortenPathToken).join(' ')
@@ -184,7 +200,7 @@ export function resolveServiceLaunchOrigin(
     // service with no shell in between, and its own command line carries the
     // entire prompt. Climbing into it reports thousands of characters of
     // unrelated text as the launch command.
-    const parentAgent = AGENT_COMMANDS.get(executableName(parent.command))
+    const parentAgent = AGENT_COMMANDS.get(commandLookupKey(parent.command))
     if (parentAgent) {
       return {
         launchCommand: condenseLaunchCommand(topmostNonShell.command),
@@ -226,7 +242,7 @@ function findAgentAbove(
     }
     visited.add(parent.pid)
     ancestorPids.push(parent.pid)
-    const agent = AGENT_COMMANDS.get(executableName(parent.command))
+    const agent = AGENT_COMMANDS.get(commandLookupKey(parent.command))
     if (agent) {
       return agent
     }

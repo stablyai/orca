@@ -99,8 +99,13 @@ async function stopContainer(
   if (!scan.available) {
     return { ok: false, reason: scan.unavailableReason ?? 'Docker is unavailable.' }
   }
+  // Why a prefix match: docker ids are reported at full length but the scan
+  // keeps the short form, and the caller may send either. Comparing prefixes
+  // keeps both directions working without depending on where truncation happened.
   const container = scan.containers.find(
-    (candidate) => candidate.containerId === containerId.slice(0, 12)
+    (candidate) =>
+      candidate.containerId.startsWith(containerId.slice(0, candidate.containerId.length)) ||
+      containerId.startsWith(candidate.containerId)
   )
   if (!container) {
     return { ok: false, reason: 'The container is no longer running.' }

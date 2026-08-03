@@ -51,6 +51,39 @@ describe('stopWorkspaceService — container ownership', () => {
     expect(runCommand.mock.calls[1][1]).toEqual(['stop', 'aaaaaaaaaaaa'])
   })
 
+  it('matches a short request id against a full-length scanned id', async () => {
+    // Docker reports 64-char ids; the scan keeps the short form. Fixtures that
+    // are already 12 chars make the truncation a no-op and hide this path.
+    const fullId = 'a'.repeat(64)
+    const runCommand = vi
+      .fn()
+      .mockResolvedValueOnce({ stdout: containerScan(fullId, path.join(root, 'apps/api')) })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    const result = await stopWorkspaceService(
+      [{ id: 'wt-1', repoId: 'repo-1', displayName: 'wt', path: root }],
+      { kind: 'container', containerId: 'a'.repeat(12) },
+      runCommand
+    )
+
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('matches a full-length request id against the short scanned id', async () => {
+    const runCommand = vi
+      .fn()
+      .mockResolvedValueOnce({ stdout: containerScan('bbbbbbbbbbbb', path.join(root, 'apps/api')) })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    const result = await stopWorkspaceService(
+      [{ id: 'wt-1', repoId: 'repo-1', displayName: 'wt', path: root }],
+      { kind: 'container', containerId: 'b'.repeat(64) },
+      runCommand
+    )
+
+    expect(result).toEqual({ ok: true })
+  })
+
   it('refuses a live container that belongs to no known workspace', async () => {
     // Without this the renderer could stop any container on the machine, since
     // the id only has to look like a docker id to pass the shape check. The

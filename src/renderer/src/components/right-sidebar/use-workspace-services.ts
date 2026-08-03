@@ -81,9 +81,13 @@ export function useWorkspaceServices(
         }
         setError(cause instanceof Error ? cause.message : String(cause))
       } finally {
-        inFlightRef.current = false
-        if (!silent && mountedRef.current && sequence === requestSequenceRef.current) {
-          setIsRefreshing(false)
+        // Only the current request may release the shared flags; a superseded
+        // one clearing them would let its own staleness look like idleness.
+        if (sequence === requestSequenceRef.current) {
+          inFlightRef.current = false
+          if (!silent && mountedRef.current) {
+            setIsRefreshing(false)
+          }
         }
       }
     },
@@ -92,11 +96,16 @@ export function useWorkspaceServices(
 
   const refresh = useCallback(() => runScan(false), [runScan])
 
-  // Why: the previous workspace's result would otherwise describe the new one
-  // for a full round trip, including its orphan count and docker notice.
+  // Why the sequence bump: clearing state is not enough. A request already in
+  // flight for the previous workspace still holds the current sequence, so it
+  // would repopulate the hook with the old workspace's services after the
+  // switch. Advancing the sequence orphans it.
   useEffect(() => {
+    requestSequenceRef.current += 1
+    inFlightRef.current = false
     setScan(null)
     setError(null)
+    setIsRefreshing(false)
   }, [repoId])
 
   useEffect(() => {

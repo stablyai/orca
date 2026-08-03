@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildProcessAncestryTable,
+  commandLookupKey,
   condenseLaunchCommand,
   executableName,
   parseProcessAncestryOutput,
@@ -48,6 +49,24 @@ describe('executableName', () => {
 
   it('handles a bare command', () => {
     expect(executableName('claude --teammate-mode auto')).toBe('claude')
+  })
+})
+
+describe('commandLookupKey', () => {
+  it('strips the Windows executable suffix so one key covers both platforms', () => {
+    // Windows reports claude.exe where POSIX reports claude. Keying on the raw
+    // basename made every agent lookup miss on Windows.
+    expect(commandLookupKey('C:\\Users\\me\\claude.exe --teammate-mode auto')).toBe('claude')
+    expect(commandLookupKey('claude --teammate-mode auto')).toBe('claude')
+  })
+
+  it('covers the other suffixes Windows appends', () => {
+    expect(commandLookupKey('pnpm.cmd dev')).toBe('pnpm')
+    expect(commandLookupKey('thing.bat')).toBe('thing')
+  })
+
+  it('leaves a name with an unrelated dot alone', () => {
+    expect(commandLookupKey('python3.11 -m http.server')).toBe('python3.11')
   })
 })
 
@@ -170,6 +189,19 @@ describe('resolveServiceLaunchOrigin', () => {
 
     expect(launchCommand!.length).toBeLessThanOrEqual(120)
     expect(launchCommand).toMatch(/…$/)
+  })
+
+  it('recognizes an agent launched as a Windows executable', () => {
+    const table = buildProcessAncestryTable([
+      { pid: 30, ppid: 29, command: 'node C:\\repo\\node_modules\\.bin\\vite' },
+      { pid: 29, ppid: 28, command: 'C:\\Windows\\System32\\cmd.exe /c dev' },
+      { pid: 28, ppid: 1, command: 'C:\\Users\\me\\AppData\\claude.exe --teammate-mode auto' }
+    ])
+
+    const origin = resolveServiceLaunchOrigin(30, table)
+
+    expect(origin.launchedByAgent).toBe('Claude Code')
+    expect(origin.launchCommand).toBe('vite')
   })
 
   it('recognizes codex as the launching agent', () => {
