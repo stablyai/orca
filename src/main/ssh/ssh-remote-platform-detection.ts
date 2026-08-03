@@ -37,14 +37,17 @@ export async function detectRemoteHostPlatform(
   if (windows.kind === 'detected') {
     return getRemoteHostPlatform(windows.platform)
   }
-  if (uname.kind === 'unsupported' || windows.kind === 'unsupported') {
+  // Why: only the PowerShell probe can settle a uname the parser cannot map
+  // (Cygwin, say), so a refused or timed-out channel leaves it unsettled.
+  const windowsProbeNeverRan = windows.kind === 'failed' && isTransportShapedError(windows.error)
+  if ((uname.kind === 'unsupported' && !windowsProbeNeverRan) || windows.kind === 'unsupported') {
     const reported = uname.kind === 'unsupported' ? uname.uname : probeUname(windows)
     console.warn(`[ssh-relay] Remote reported an unsupported platform: ${reported}`)
     return null
   }
   console.warn(
     `[ssh-relay] Remote platform detection failed (uname probe: ${uname.kind}, PowerShell probe: ${windows.kind}). ` +
-      `Remote output: "${summarizeProbeOutput(probeOutput(uname) || probeOutput(windows), MAX_LOGGED_OUTPUT_CHARS)}"`
+      `Remote output: "${summarizeProbeOutput(probeEvidence(uname) || probeEvidence(windows), MAX_LOGGED_OUTPUT_CHARS)}"`
   )
   throw undetectedPlatformError(uname, windows)
 }
@@ -107,6 +110,10 @@ function probeOutput(outcome: PlatformProbeOutcome): string {
 
 function probeUname(outcome: PlatformProbeOutcome): string {
   return outcome.kind === 'unsupported' ? outcome.uname : ''
+}
+
+function probeEvidence(outcome: PlatformProbeOutcome): string {
+  return probeOutput(outcome) || probeUname(outcome)
 }
 
 // Why: the marker is printed last, so the tail holds the evidence; collapsing

@@ -212,6 +212,20 @@ describe('detectRemoteHostPlatform failure reporting', () => {
     await expect(detectRemoteHostPlatform(conn)).resolves.toBeNull()
   })
 
+  it('does not call an unmappable uname unsupported when PowerShell was refused', async () => {
+    // Cygwin sh on a win32-x64 host: only PowerShell can settle it, and it never ran.
+    execCommandMock
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
+      .mockRejectedValueOnce(maxSessionsError())
+
+    const error = await detectRemoteHostPlatform(conn).catch((err: unknown) => err)
+
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toMatch(/open failed/iu)
+    expect((error as Error).message).not.toMatch(/unsupported/iu)
+    expect((error as Error).cause).toMatchObject({ reason: 2 })
+  })
+
   it('falls through to PowerShell for a Cygwin uname it cannot map', async () => {
     execCommandMock
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
