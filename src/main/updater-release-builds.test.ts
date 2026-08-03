@@ -80,6 +80,29 @@ describe('listReleaseBuilds', () => {
     expect(builds.map((build) => build.version)).toEqual(['1.4.159'])
   })
 
+  // Why: the hourly workflow composes the release title and the picker renders it
+  // verbatim, so the two can never drift. A title that only repeats the tag says
+  // nothing the version beside it does not, and must not become a picker row
+  // reading "v1.4.163-hourly.202607311933".
+  it('keeps a composed release title and drops one that repeats the tag', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        release('v1.4.163-hourly.202607312054', { name: '1.4.163 • 01 • 07-31 13:54 • e698241' }),
+        release('v1.4.163-hourly.202607311933', { name: 'v1.4.163-hourly.202607311933' }),
+        release('v1.4.163-hourly.202607311835', { name: '   ' }),
+        release('v1.4.163-hourly.202607311735', { name: 42 })
+      ])
+    )
+
+    const builds = await listReleaseBuilds('hourly')
+    expect(builds.map((build) => build.name)).toEqual([
+      '1.4.163 • 01 • 07-31 13:54 • e698241',
+      null,
+      null,
+      null
+    ])
+  })
+
   it('surfaces a rate limit as an actionable message', async () => {
     fetchMock.mockResolvedValue(jsonResponse(null, { ok: false, status: 403 }))
     await expect(listReleaseBuilds('hourly')).rejects.toThrow(/rate limit/i)

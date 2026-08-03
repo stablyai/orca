@@ -257,6 +257,17 @@ describe('renderer startup runtime routing', () => {
     expect(source).toContain('<WorkspacePortScanner enabled={workspaceSessionReady} />')
   })
 
+  it('prefetches terminal snapshot capabilities before reconnect unlocks cold activation', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const capabilityIndex = source.indexOf(
+      "timeRendererStartupStep('terminal-provider-snapshot-capabilities'"
+    )
+    const reconnectIndex = source.indexOf("timeRendererStartupStep('reconnect-terminals'")
+
+    expect(capabilityIndex).toBeGreaterThanOrEqual(0)
+    expect(reconnectIndex).toBeGreaterThan(capabilityIndex)
+  })
+
   it('does not load the terminal workbench on the no-workspace landing path', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
 
@@ -432,7 +443,7 @@ describe('renderer startup runtime routing', () => {
     expect(checkpointBlock).toContain(
       'buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)'
     )
-    expect(checkpointBlock).toContain('window.api.app.persistBeforeUnloadSync({')
+    expect(checkpointBlock).toContain('window.api.app.stageBeforeUnloadSync({')
     expect(checkpointBlock).toContain('sessions: sessionSnapshots')
     expect(checkpointBlock).toContain('ui: buildActiveViewUnloadPatch(freshState)')
     expect(source).toContain(

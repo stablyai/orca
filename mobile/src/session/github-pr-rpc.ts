@@ -141,7 +141,10 @@ export async function fetchHostedReviewForBranch(
     {
       repo: mobileRepoSelectorFromWorktreeId(worktreeId),
       branch: args.branch,
-      linkedGitHubPR: args.linkedGitHubPR ?? null
+      linkedGitHubPR: args.linkedGitHubPR ?? null,
+      // Why: the mobile PR sidebar is only ever open on the selected worktree,
+      // so it belongs in the host's fast re-check tier (#11532).
+      active: true
     },
     readForBranch
   )

@@ -7,6 +7,7 @@ import {
   type StoredHostProfile
 } from './types'
 import { getNextHostNameFromHosts } from './host-names'
+import * as hostListLoads from './host-list-load-sharing'
 import {
   deletePairingKeychainItem,
   readPairingKeychainItem,
@@ -72,7 +73,6 @@ async function deleteHostCredentials(hostId: string): Promise<void> {
 
 // Why: Keychain reads are slow (50-200ms) and loadHosts() runs on every screen mount; cache per-hostId in memory, invalidate on save/remove.
 const tokenCache = new Map<string, string>()
-let inflightLoad: Promise<HostProfile[]> | null = null
 // Why: serialize RMW of the shared hosts JSON; without a queue concurrent writers drop writes (resurrect a removed host, drop a rename).
 let hostListMutation: Promise<void> = Promise.resolve()
 
@@ -102,13 +102,7 @@ export async function loadHosts(): Promise<HostProfile[]> {
   // Why: writers hold the mutation chain across their full RMW; wait so a load doesn't race a half-written list.
   await hostListMutation
   // Why: deduplicate concurrent loadHosts() calls so simultaneously mounting screens share one Keychain read pass.
-  if (inflightLoad) {
-    return inflightLoad
-  }
-  inflightLoad = doLoadHosts().finally(() => {
-    inflightLoad = null
-  })
-  return inflightLoad
+  return hostListLoads.shareHostListLoad(doLoadHosts)
 }
 
 async function doLoadHosts(): Promise<HostProfile[]> {
@@ -130,6 +124,7 @@ async function doLoadHosts(): Promise<HostProfile[]> {
   for (const stored of storedHosts) {
     let token = tokenCache.get(stored.id)
     if (!token) {
+      const readRevision = hostListLoads.getHostListLoadRevision()
       let fetched: string | null
       try {
         fetched = await readDeviceToken(stored.id)
@@ -142,7 +137,9 @@ async function doLoadHosts(): Promise<HostProfile[]> {
         continue
       }
       token = fetched
-      tokenCache.set(stored.id, token)
+      if (readRevision === hostListLoads.getHostListLoadRevision()) {
+        tokenCache.set(stored.id, token)
+      }
     }
     const overlay = overlays.get(stored.id)
     out.push({
@@ -196,6 +193,7 @@ async function mutateStoredHosts(
     const current = await readStoredHostsForMutation()
     const next = update(current)
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    hostListLoads.dropSharedHostListLoad()
   })
   hostListMutation = mutation.catch(() => {})
   return mutation
@@ -249,6 +247,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
   // Why: write metadata before the keychain token so a crash leaves recoverable orphaned metadata, not an orphaned token that persists forever.
   await writeDeviceToken(stored.id, validated.deviceToken)
   tokenCache.set(stored.id, validated.deviceToken)
+  hostListLoads.dropSharedHostListLoad()
   if (validated.endpoints) {
     await saveMobileRelayHostOverlay({
       v: 2,
@@ -257,6 +256,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
       relayHostId: validated.relayHostId,
       relay: validated.relay
     })
+    hostListLoads.dropSharedHostListLoad()
   }
   const overlayRemovalIds = [...duplicateHostIds]
   if (!validated.endpoints && updatedExistingHost) {
@@ -265,6 +265,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
   if (overlayRemovalIds.length > 0) {
     // Why: reusing an id for direct-only re-pairing must not retain routing metadata from the previous transport state.
     await removeMobileRelayHostOverlays(overlayRemovalIds)
+    hostListLoads.dropSharedHostListLoad()
   }
   for (const duplicateHostId of duplicateHostIds) {
     tokenCache.delete(duplicateHostId)
@@ -281,6 +282,7 @@ export async function removeHost(hostId: string): Promise<void> {
   tokenCache.delete(hostId)
   try {
     await removeMobileRelayHostOverlay(hostId)
+    hostListLoads.dropSharedHostListLoad()
   } catch {
     // Base removal is authoritative; a retained overlay can't resurrect the host and is cleaned on a later retry.
   }
@@ -340,6 +342,6 @@ export async function updateLastConnected(hostId: string): Promise<void> {
 export function resetHostStoreForTests(): void {
   hostListMutation = Promise.resolve()
   tokenCache.clear()
-  inflightLoad = null
+  hostListLoads.dropSharedHostListLoad()
   resetPairingKeychainForTests()
 }

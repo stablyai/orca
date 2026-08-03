@@ -14,8 +14,6 @@ import { verifyInstructionalPluginContent } from './plugin-instructional-content
  * IPC handlers and the headless RPC methods both route through here.
  */
 
-export type PluginConsentDecision = PluginConsentRequest['decision']
-
 /** Records the user's consent-dialog answer. Approving stores the CURRENT
  *  consent fingerprint and clears any disable; declining disables so the plugin
  *  never re-prompts on later launches. */

@@ -687,6 +687,60 @@ describe('PtyHandler', () => {
     }
   })
 
+  // Why: both spellings classify as a POSIX startup family, so the relay must not be the one host
+  // that hard-fails a setting the local and daemon PTYs accept.
+  it.each(['bash', 'bash.exe'])(
+    'accepts the %s shell override and routes it through Git Bash resolution',
+    async (shellOverride) => {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: 'win32'
+      })
+      const resolveGitBashSpy = vi
+        .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+        .mockReturnValue('C:\\Program Files\\Git\\bin\\bash.exe')
+      try {
+        await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, shellOverride })
+
+        expect(resolveGitBashSpy).toHaveBeenCalledWith(shellOverride)
+        expect(mockPtySpawn).toHaveBeenCalledWith(
+          'C:\\Program Files\\Git\\bin\\bash.exe',
+          expect.any(Array),
+          expect.any(Object)
+        )
+      } finally {
+        resolveGitBashSpy.mockRestore()
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: originalPlatform
+        })
+      }
+    }
+  )
+
+  it('falls back to the literal bash override when Git Bash is not installed', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveGitBashSpy = vi
+      .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+      .mockReturnValue(null)
+    try {
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, shellOverride: 'bash' })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith('bash', expect.any(Array), expect.any(Object))
+    } finally {
+      resolveGitBashSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
   it('resolves the Git Bash sentinel to the remote bash.exe path on Windows', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', {
@@ -3315,6 +3369,195 @@ describe('PtyHandler', () => {
       { id: 'pty-2', paneKey: 'tab-dispose:1' }
     ])
     expect(handler.activePtyCount).toBe(0)
+  })
+
+  describe('onPtyPoolEmpty', () => {
+    it('fires once when natural exit drains the last PTY, never while one remains', async () => {
+      const onExitCallbacks: ((evt: { exitCode: number }) => void)[] = []
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        onData: vi.fn(),
+        onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+          onExitCallbacks.push(cb)
+        })
+      })
+      const poolEmpty = vi.fn()
+      handler.onPtyPoolEmpty(poolEmpty)
+
+      await spawnPty()
+      await spawnPty()
+      expect(onExitCallbacks).toHaveLength(2)
+
+      onExitCallbacks[0]({ exitCode: 0 })
+      expect(handler.activePtyCount).toBe(1)
+      expect(poolEmpty).not.toHaveBeenCalled()
+
+      onExitCallbacks[1]({ exitCode: 0 })
+      expect(handler.activePtyCount).toBe(0)
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+    })
+
+    it('fires when the dead-shell reap inside attach removes the last PTY', async () => {
+      mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+      const poolEmpty = vi.fn()
+      handler.onPtyPoolEmpty(poolEmpty)
+      await spawnPty()
+
+      const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+      try {
+        await expect(attachPty({ id: 'pty-1', suppressReplayNotification: true })).rejects.toThrow(
+          'PTY "pty-1" not found'
+        )
+      } finally {
+        aliveSpy.mockRestore()
+      }
+
+      expect(handler.activePtyCount).toBe(0)
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+    })
+
+    it('fires when dispose-for-shutdown removes the last PTY', async () => {
+      mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+      const poolEmpty = vi.fn()
+      handler.onPtyPoolEmpty(poolEmpty)
+      await spawnPty()
+      await spawnPty()
+
+      await handler.dispose({ waitForPhysicalExit: false })
+
+      expect(handler.activePtyCount).toBe(0)
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+    })
+
+    it('fires when a spawn fails before the PTY ever reaches the pool', async () => {
+      // Why: removePty can only announce a PTY it stored, so a creation that dies mid-flight
+      // would otherwise leave the relay believing it is still non-idle forever.
+      mockPtySpawn.mockImplementation(() => {
+        throw new Error('posix_spawnp failed')
+      })
+      const poolEmpty = vi.fn()
+      handler.onPtyPoolEmpty(poolEmpty)
+
+      await expect(spawnPty()).rejects.toThrow()
+
+      expect(handler.activePtyCount).toBe(0)
+      expect(handler.pendingPtyCreationCount).toBe(0)
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+    })
+
+    it('stays silent when a failing creation settles while another is still admitted', async () => {
+      let spawnCall = 0
+      mockPtySpawn.mockImplementation(() => {
+        spawnCall += 1
+        if (spawnCall === 1) {
+          throw new Error('posix_spawnp failed')
+        }
+        return { ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() }
+      })
+      const poolEmpty = vi.fn()
+      handler.onPtyPoolEmpty(poolEmpty)
+
+      // Both admissions land before either creation resolves, so the failing one must not
+      // announce an empty pool while the surviving one still owns a shell.
+      const failing = spawnPty()
+      const succeeding = spawnPty()
+      expect(handler.pendingPtyCreationCount).toBe(2)
+
+      await expect(failing).rejects.toThrow()
+      await succeeding
+
+      expect(handler.activePtyCount).toBe(1)
+      expect(poolEmpty).not.toHaveBeenCalled()
+    })
+
+    it('stops notifying after the returned unsubscribe runs', async () => {
+      const onExitCallbacks: ((evt: { exitCode: number }) => void)[] = []
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        onData: vi.fn(),
+        onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+          onExitCallbacks.push(cb)
+        })
+      })
+      const poolEmpty = vi.fn()
+      const unsubscribe = handler.onPtyPoolEmpty(poolEmpty)
+
+      await spawnPty()
+      onExitCallbacks[0]({ exitCode: 0 })
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+
+      unsubscribe()
+      await spawnPty()
+      onExitCallbacks[1]({ exitCode: 0 })
+      expect(handler.activePtyCount).toBe(0)
+      expect(poolEmpty).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('onPtyPoolActive', () => {
+    it('fires at admission, while the pool is still empty', async () => {
+      mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+      const poolCounts: number[] = []
+      handler.onPtyPoolActive(() => {
+        poolCounts.push(handler.activePtyCount)
+      })
+
+      const pending = spawnPty()
+      // The relay must learn it is non-idle here, not after the creation resolves.
+      expect(poolCounts).toEqual([0])
+
+      await pending
+      expect(poolCounts).toEqual([0, 1])
+    })
+
+    it('fires for a revived PTY whose creation was admitted before the pool was empty', async () => {
+      await spawnPty({ cols: 80, rows: 24, cwd: '/tmp' })
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      await handler.dispose({ waitForPhysicalExit: false })
+      dispatcher = createMockDispatcher()
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+      const poolActive = vi.fn()
+      handler.onPtyPoolActive(poolActive)
+
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      try {
+        await dispatcher.callRequest('pty.revive', { state })
+      } finally {
+        killSpy.mockRestore()
+      }
+
+      expect(handler.activePtyCount).toBe(1)
+      expect(poolActive).toHaveBeenCalled()
+    })
+
+    it('stops notifying after the returned unsubscribe runs', async () => {
+      mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+      const poolActive = vi.fn()
+      const unsubscribe = handler.onPtyPoolActive(poolActive)
+
+      await spawnPty()
+      const callsWhileSubscribed = poolActive.mock.calls.length
+      expect(callsWhileSubscribed).toBeGreaterThan(0)
+
+      unsubscribe()
+      await spawnPty()
+      expect(poolActive).toHaveBeenCalledTimes(callsWhileSubscribed)
+    })
+  })
+
+  it('counts a spawn admitted but not yet pooled as a pending creation', async () => {
+    mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+    expect(handler.pendingPtyCreationCount).toBe(0)
+
+    const pending = spawnPty()
+    // The shell is already owned even though activePtyCount still reads zero.
+    expect(handler.activePtyCount).toBe(0)
+    expect(handler.pendingPtyCreationCount).toBe(1)
+
+    await pending
+    expect(handler.activePtyCount).toBe(1)
+    expect(handler.pendingPtyCreationCount).toBe(0)
   })
 })
 

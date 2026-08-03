@@ -32,7 +32,9 @@ export async function sendAgentDraftPasteContent(
   )
 }
 
-async function sendAgentDraftPasteContentNow(
+// Why: callers that must keep extra PTY writes (e.g. submit Enter) inside the same
+// transaction take the lock themselves; taking it again here would deadlock.
+export async function sendAgentDraftPasteContentNow(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   content: string,

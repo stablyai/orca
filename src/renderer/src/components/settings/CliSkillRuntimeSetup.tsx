@@ -89,7 +89,11 @@ export function buildSkillCommandForRuntime(
     currentPlatform
   )
   if (resolvedRuntime.runtime !== 'wsl') {
-    return wrapWindowsSkillCommandWithNpxPrerequisite(normalizedCommand, currentPlatform)
+    return wrapWindowsSkillCommandWithNpxPrerequisite(
+      normalizedCommand,
+      currentPlatform,
+      'copied-command'
+    )
   }
 
   const distroArg = resolvedRuntime.wslDistro?.trim()
@@ -127,9 +131,43 @@ function normalizeWindowsSkillUpdateCommand(
   return buildAgentFeatureSkillInstallCommand([updateMatch[1]])
 }
 
+/**
+ * Where a built skill command is going: the user's clipboard (their own shell)
+ * or the setup terminal Orca spawns itself.
+ */
+type SkillCommandTarget = 'copied-command' | 'orca-setup-terminal'
+
+/**
+ * Re-adds the npx preflight for Orca's own setup terminal, which
+ * `getAgentSkillTerminalShellOverride` forces onto powershell.exe. The copied
+ * string stays bare for POSIX-family shells; only the executed one is wrapped.
+ */
+export function buildSkillSetupTerminalCommand(
+  copiedCommand: string,
+  terminalShellOverride: string | undefined,
+  currentPlatform = getSkillCommandPlatform()
+): string {
+  if (!isSetupTerminalForcedToPowerShell(terminalShellOverride)) {
+    return copiedCommand
+  }
+  return wrapWindowsSkillCommandWithNpxPrerequisite(
+    copiedCommand,
+    currentPlatform,
+    'orca-setup-terminal'
+  )
+}
+
+function isSetupTerminalForcedToPowerShell(terminalShellOverride: string | undefined): boolean {
+  const trimmedOverride = terminalShellOverride?.trim()
+  return (
+    Boolean(trimmedOverride) && resolveWindowsShellStartupFamily(trimmedOverride) === 'powershell'
+  )
+}
+
 function wrapWindowsSkillCommandWithNpxPrerequisite(
   command: string,
-  currentPlatform: NodeJS.Platform
+  currentPlatform: NodeJS.Platform,
+  target: SkillCommandTarget
 ): string {
   const trimmedCommand = command.trim()
   if (
@@ -140,7 +178,7 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
     // Why: the copied command lands in the user's configured shell, and MSYS
     // shells rewrite cmd.exe's leading /d /s /c switches into drive paths,
     // starting an interactive cmd session instead of running the payload.
-    isPosixFamilyWindowsShellConfigured() ||
+    (target === 'copied-command' && isPosixFamilyWindowsShellConfigured()) ||
     !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)
   ) {
     return command

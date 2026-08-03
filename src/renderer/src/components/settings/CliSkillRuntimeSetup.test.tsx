@@ -10,6 +10,7 @@ import { useAppStore } from '@/store'
 import {
   buildSkillCommandForRuntime,
   buildSkillInstallCommandForRuntime,
+  buildSkillSetupTerminalCommand,
   getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
@@ -270,6 +271,60 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     } finally {
       useAppStore.setState({ settings: previous.settings })
     }
+  })
+
+  it('keeps the npx preflight in the PowerShell-forced setup terminal', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    const windowsHost = { runtime: 'host', label: 'Windows' } as const
+    const previous = useAppStore.getState()
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'git-bash' }
+    })
+
+    try {
+      const copied = buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')
+      expect(copied).toBe(installCommand)
+      // Orca forces its own setup terminal to powershell.exe, where cmd.exe works.
+      expect(buildSkillSetupTerminalCommand(copied, 'powershell.exe', 'win32')).toBe(
+        `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`
+      )
+    } finally {
+      useAppStore.setState({ settings: previous.settings })
+    }
+  })
+
+  it('does not re-wrap the setup terminal command when no shell override applies', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    const previous = useAppStore.getState()
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'cmd.exe' }
+    })
+
+    try {
+      const copied = buildSkillCommandForRuntime(
+        installCommand,
+        { runtime: 'host', label: 'Windows' },
+        'win32'
+      )
+      expect(buildSkillSetupTerminalCommand(copied, undefined, 'win32')).toBe(copied)
+      // An already-wrapped command must not gain a second preflight.
+      expect(buildSkillSetupTerminalCommand(copied, 'powershell.exe', 'win32')).toBe(copied)
+    } finally {
+      useAppStore.setState({ settings: previous.settings })
+    }
+  })
+
+  it('leaves WSL and non-Windows setup terminal commands untouched', () => {
+    const wslCommand = buildSkillCommandForRuntime(
+      'npx skills add orchestration --global',
+      { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' },
+      'win32'
+    )
+
+    expect(buildSkillSetupTerminalCommand(wslCommand, 'powershell.exe', 'win32')).toBe(wslCommand)
+    expect(
+      buildSkillSetupTerminalCommand('npx skills add orchestration --global', undefined, 'linux')
+    ).toBe('npx skills add orchestration --global')
   })
 
   it('keeps the bare reinstall rewrite for POSIX-family Windows skill updates', () => {

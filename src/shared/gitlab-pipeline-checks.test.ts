@@ -49,7 +49,7 @@ describe('gitLabPipelineJobsToPRChecks', () => {
       {
         name: 'deploy: deploy',
         status: 'completed',
-        conclusion: 'action_required',
+        conclusion: 'neutral',
         url: null
       },
       {

@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { queryWindowsProcess, readProcessCommandLine } from './daemon-process-inspection'
+import {
+  queryWindowsProcess,
+  readLinuxProcessStartedAtMs,
+  readMacosProcessStartedAtMs,
+  readProcessCommandLine
+} from './daemon-process-inspection'
+
+// btime 1699000000 with 1000 start ticks: 10s after boot at 100Hz, 1s at 1000Hz.
+const readProcStat = async (path: string): Promise<string> =>
+  path === '/proc/stat' ? 'btime 1699000000\n' : `42 (orca-daemon) S${' 0'.repeat(18)} 1000 0 0\n`
 
 describe('daemon process inspection', () => {
   it('falls back to ps when Linux procfs returns an empty command line', async () => {
@@ -21,6 +30,88 @@ describe('daemon process inspection', () => {
       'node\0daemon-entry'
     )
     expect(runCommand).not.toHaveBeenCalled()
+  })
+
+  it('asks PowerShell to report a failed CIM query instead of an absent process', async () => {
+    const runCommand = vi.fn(
+      async (_file: string, _args: string[], _timeoutMs: number) =>
+        '{"status":"present","cmd":"daemon","start":1}'
+    )
+
+    await queryWindowsProcess(42, { runCommand })
+
+    const script = runCommand.mock.calls[0]?.[1].at(-1) ?? ''
+    expect(script).toContain("$ErrorActionPreference = 'Stop'")
+    expect(script).toMatch(/catch \{[^}]*query_failed/)
+  })
+
+  it('keeps a failed CIM query indeterminate instead of proving the process gone', async () => {
+    const runCommand = vi.fn(async () => '{"status":"query_failed"}')
+
+    await expect(queryWindowsProcess(42, { runCommand })).resolves.toEqual({
+      status: 'unavailable'
+    })
+  })
+
+  it('never reads a probe result without a success marker as proof of absence', async () => {
+    const runCommand = vi.fn(async () => '{"exists":false}')
+
+    await expect(queryWindowsProcess(42, { runCommand })).resolves.toEqual({
+      status: 'unavailable'
+    })
+  })
+
+  it('reports absence only from a CIM query that ran and found nothing', async () => {
+    const runCommand = vi.fn(async () => '{"status":"missing"}')
+
+    await expect(queryWindowsProcess(42, { runCommand })).resolves.toEqual({ status: 'missing' })
+  })
+
+  it('reads the macOS start time through an async spawn', async () => {
+    const runCommand = vi.fn(async () => 'Sat Jan  1 00:00:00 2028\n')
+
+    await expect(readMacosProcessStartedAtMs(42, { runCommand })).resolves.toBe(
+      Date.parse('Sat Jan  1 00:00:00 2028')
+    )
+    expect(runCommand).toHaveBeenCalledWith('ps', ['-p', '42', '-o', 'lstart='], 2_000)
+  })
+
+  // CLK_TCK belongs to the host that runs getconf, so a second runner must not inherit the first's.
+  it('scopes the CLK_TCK cache to the runner that produced it', async () => {
+    const hundredHz = vi.fn(async () => '100')
+    const thousandHz = vi.fn(async () => '1000')
+
+    await expect(
+      readLinuxProcessStartedAtMs(42, { readTextFile: readProcStat, runCommand: hundredHz })
+    ).resolves.toBe(1_699_000_010_000)
+    await expect(
+      readLinuxProcessStartedAtMs(42, { readTextFile: readProcStat, runCommand: thousandHz })
+    ).resolves.toBe(1_699_000_001_000)
+    expect(thousandHz).toHaveBeenCalledWith('getconf', ['CLK_TCK'], 1_000)
+
+    // The first runner stays cached: one spawn per runner, not per call.
+    await expect(
+      readLinuxProcessStartedAtMs(42, { readTextFile: readProcStat, runCommand: hundredHz })
+    ).resolves.toBe(1_699_000_010_000)
+    expect(hundredHz).toHaveBeenCalledOnce()
+  })
+
+  it('retries getconf for a runner whose first CLK_TCK read failed', async () => {
+    let attempt = 0
+    const runCommand = vi.fn(async () => {
+      attempt += 1
+      if (attempt === 1) {
+        throw new Error('getconf missing')
+      }
+      return '100'
+    })
+
+    await expect(
+      readLinuxProcessStartedAtMs(42, { readTextFile: readProcStat, runCommand })
+    ).resolves.toBeNull()
+    await expect(
+      readLinuxProcessStartedAtMs(42, { readTextFile: readProcStat, runCommand })
+    ).resolves.toBe(1_699_000_010_000)
   })
 
   it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN])(

@@ -1015,6 +1015,27 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
+      # Why: `uses: ./…` resolves from the checked-out tag, not from the workflow
+      # ref, so cutting from an older/off-main ref whose tree predates a composite
+      # action would fail the step with "Can't find 'action.yml'". Restore the
+      # actions directory from the commit this workflow file itself came from.
+      - name: Restore composite actions from the workflow ref
+        if: matrix.platform == 'win'
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          action_path=".github/actions/install-signpath-module/action.yml"
+          if [ -f "$action_path" ]; then
+            echo "Composite actions already present at the cut ref."
+            exit 0
+          fi
+          echo "Cut ref predates $action_path; restoring it from $WORKFLOW_SHA."
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- .github/actions
+          test -f "$action_path"
+
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6

@@ -49,14 +49,12 @@ function isAiVaultGroup(value: unknown): value is AiVaultGroup {
 export function normalizeAiVaultViewOptions(value: unknown): AiVaultViewOptions {
   const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
   const catalog = new Set<string>(AI_VAULT_AGENTS)
-  const normalizedDisabledAgents = Array.isArray(record.disabledAgents)
+  // Why: empty selection is intentional (Clear all agents) so users can enable only one agent.
+  const disabledAgents = Array.isArray(record.disabledAgents)
     ? [...new Set(record.disabledAgents)].filter(
         (agent): agent is AiVaultAgent => typeof agent === 'string' && catalog.has(agent)
       )
     : []
-  // Why: a stale catalog or hand-edited value must not leave the panel with no selectable agents.
-  const disabledAgents =
-    normalizedDisabledAgents.length < AI_VAULT_AGENTS.length ? normalizedDisabledAgents : []
 
   return {
     disabledAgents,

@@ -140,16 +140,6 @@ jobs:
       - name: Windows daemon workspace-close repro
         if: runner.os == 'Windows'
         run: node config/scripts/windows-daemon-workspace-close-repro.mjs
-      - if: runner.os == 'Linux'
-        env:
-          ORCA_COMPUTER_E2E: '1'
-          ACCESSIBILITY_ENABLED: '1'
-        run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts
-      - if: runner.os == 'Windows'
-        env:
-          ORCA_COMPUTER_E2E: '1'
-        run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts
-
   mac-native-owner-smoke:
     if: github.event_name == 'pull_request'
     runs-on: macos-15

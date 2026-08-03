@@ -41,6 +41,29 @@ describe('orchestration setup completion signal', () => {
     expect(command).toContain('exit "$status"')
   })
 
+  it('routes a WSL-launched Windows-drive runner through its /mnt mount', () => {
+    const { command } = buildObservedSetupCommand(
+      'C:\\repo\\.git\\orca\\setup-runner.sh',
+      'windows',
+      'token-mnt',
+      { family: 'posix', executable: 'wsl.exe' }
+    )
+
+    expect(command).toContain('bash /mnt/c/repo/.git/orca/setup-runner.sh')
+    expect(command).not.toContain('bash /c/repo')
+  })
+
+  it('keeps a Git Bash runner on the MSYS drive form', () => {
+    const { command } = buildObservedSetupCommand(
+      'C:\\repo\\.git\\orca\\setup-runner.sh',
+      'windows',
+      'token-git-bash',
+      { family: 'posix' }
+    )
+
+    expect(command).toContain('bash /c/repo/.git/orca/setup-runner.sh')
+  })
+
   it('recognizes one completion signal across output chunk boundaries', () => {
     const onComplete = vi.fn()
     const scanner = createSetupCompletionScanner('token-chunks', onComplete)

@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   skillsChanged: vi.fn(),
   skillsRefreshed: vi.fn(),
+  freshnessRefresh: vi.fn(),
   terminalInstanceCount: 0
 }))
 
@@ -35,6 +36,10 @@ vi.mock('sonner', () => ({
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   notifyInstalledAgentSkillsChanged: mocks.skillsChanged,
   notifyInstalledAgentSkillsRefreshed: mocks.skillsRefreshed
+}))
+
+vi.mock('@/hooks/useSkillFreshness', () => ({
+  refreshSkillFreshness: mocks.freshnessRefresh
 }))
 
 vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
@@ -155,6 +160,8 @@ describe('AgentSkillSetupPanel', () => {
     mocks.toastSuccess.mockReset()
     mocks.skillsChanged.mockReset()
     mocks.skillsRefreshed.mockReset()
+    mocks.freshnessRefresh.mockReset()
+    mocks.freshnessRefresh.mockResolvedValue(undefined)
     mocks.terminalInstanceCount = 0
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -286,6 +293,50 @@ describe('AgentSkillSetupPanel', () => {
 
     expect(mocks.skillsRefreshed).toHaveBeenCalledOnce()
     expect(mocks.skillsChanged).not.toHaveBeenCalled()
+  })
+
+  it('rechecks presence without invalidating local freshness when no local verdict exists', async () => {
+    const onRecheck = vi.fn(async () => {})
+    await renderInteractivePanel({ onRecheck })
+    await clickButton('Install')
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(0)
+      mocks.terminalProps.at(-1)?.onTerminalExit?.()
+    })
+    await act(async () => {})
+
+    expect(onRecheck).toHaveBeenCalledOnce()
+    expect(mocks.skillsRefreshed).toHaveBeenCalledOnce()
+    expect(mocks.skillsChanged).not.toHaveBeenCalled()
+    expect(mocks.freshnessRefresh).not.toHaveBeenCalled()
+  })
+
+  it('refreshes first-install freshness only after the terminal re-check finishes', async () => {
+    let finishRecheck: (() => void) | null = null
+    const recheck = new Promise<void>((resolve) => {
+      finishRecheck = resolve
+    })
+    const onRecheck = vi.fn(() => recheck)
+    await renderInteractivePanel({ freshnessSkillName: 'orca-cli', onRecheck })
+    await clickButton('Install')
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onTerminalExit?.()
+    })
+
+    expect(onRecheck).toHaveBeenCalledOnce()
+    expect(mocks.freshnessRefresh).not.toHaveBeenCalled()
+    expect(mocks.skillsRefreshed).not.toHaveBeenCalled()
+
+    await act(async () => {
+      finishRecheck?.()
+      await recheck
+    })
+
+    expect(mocks.skillsChanged).not.toHaveBeenCalled()
+    expect(mocks.skillsRefreshed).toHaveBeenCalledOnce()
+    expect(mocks.freshnessRefresh).toHaveBeenCalledOnce()
   })
 
   it('opens not-installed setup with the install command for preview, copy, and terminal', async () => {
@@ -499,9 +550,12 @@ describe('AgentSkillSetupPanel', () => {
     expect(mocks.terminalProps.at(-1)).toMatchObject({ command: UPDATE_COMMAND })
   })
 
-  it('invalidates shared skill state before the direct completion re-check', async () => {
+  it('refreshes shared skill state after the direct completion re-check', async () => {
     const calls: string[] = []
-    mocks.skillsChanged.mockImplementation(() => calls.push('invalidate'))
+    mocks.skillsRefreshed.mockImplementation(() => calls.push('presence'))
+    mocks.freshnessRefresh.mockImplementation(async () => {
+      calls.push('freshness')
+    })
     const onRecheck = vi.fn(() => {
       calls.push('recheck')
     })
@@ -513,7 +567,25 @@ describe('AgentSkillSetupPanel', () => {
       mocks.terminalProps.at(-1)?.onCommandFinished?.(0)
     })
 
-    expect(calls).toEqual(['invalidate', 'recheck'])
+    expect(calls).toEqual(['recheck', 'presence', 'freshness'])
+  })
+
+  it('rechecks once when command completion is followed by terminal exit', async () => {
+    const onRecheck = vi.fn()
+    await renderInteractivePanel({ freshnessSkillName: 'orca-cli', onRecheck })
+    await clickButton('Install')
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(0)
+    })
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onTerminalExit?.()
+    })
+    await act(async () => {})
+
+    expect(onRecheck).toHaveBeenCalledOnce()
+    expect(mocks.skillsRefreshed).toHaveBeenCalledOnce()
+    expect(mocks.freshnessRefresh).toHaveBeenCalledOnce()
   })
 
   it('re-enables Install after the setup shell exits so a failed attempt can retry', async () => {

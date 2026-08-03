@@ -165,6 +165,24 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.startupCommand).toContain('[ "$seen" = nonce-remote ]')
   })
 
+  it('preserves WSL shell metadata when sequencing native Windows runners', () => {
+    const result = createSequencedSetupAgentCommands({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      startupCommand: 'claude',
+      platform: 'windows',
+      shell: { family: 'posix', executable: 'wsl.exe' },
+      nonce: 'nonce-wsl-shell'
+    })
+
+    expect(result.setupCommand).toContain('bash /mnt/c/repo/.git/orca/setup-runner.sh')
+    expect(result.setupCommand).toContain(
+      '/mnt/c/repo/.git/orca/setup-runner.sh.nonce-wsl-shell.done'
+    )
+    expect(result.startupCommand).toContain(
+      '/mnt/c/repo/.git/orca/setup-runner.sh.nonce-wsl-shell.done'
+    )
+  })
+
   it('wraps native Windows runners in a cmd-pinned setup and startup gate', () => {
     const result = createSequencedSetupAgentCommands({
       runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.cmd',

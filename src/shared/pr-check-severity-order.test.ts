@@ -116,10 +116,11 @@ describe('PR check severity order', () => {
       check('pass-b', 'success')
     ]
 
+    // A manual GitLab gate is neutral, so it sinks below the passing checks a reviewer reads first.
     expect(sortChecksBySeverity(checks).map((item) => item.name)).toEqual([
-      'manual',
       'pass-a',
       'pass-b',
+      'manual',
       'future'
     ])
   })

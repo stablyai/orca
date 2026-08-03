@@ -31,7 +31,7 @@ export type DirectSshWorktreeOwner = Pick<
 >
 export type DirectSshFolderOwner = Pick<
   FolderWorkspace,
-  'id' | 'projectGroupId' | 'folderPath' | 'connectionId'
+  'id' | 'projectGroupId' | 'folderPath' | 'connectionId' | 'executionHostId'
 >
 export type DirectSshGroupOwner = Pick<
   ProjectGroup,
