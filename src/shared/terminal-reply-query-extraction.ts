@@ -4,6 +4,7 @@
 // to drop: the renderer's hidden-output restore queue and main's pending-cap
 // bulk drop. A swallowed query means the program that sent it waits forever
 // for a reply (the bench DSR timeout).
+import { detachString, EMPTY_DETACHED_STRING, type DetachedString } from './detached-string'
 import { parseTerminalOscColorQuery } from './terminal-osc-color-reply'
 
 export const HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS = 64
@@ -12,7 +13,15 @@ export type ExtractedRendererQueryData = {
   statelessQueryData: string
   statefulQueryData: string
   oscColorQueryData: string
-  pending: string
+  pending: DetachedString
+}
+
+// Pending query state must not retain the source PTY chunk.
+export function extractHiddenStartupRendererQueryPending(
+  input: string,
+  start: number
+): DetachedString {
+  return detachString(input.slice(start, start + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS))
 }
 
 export function extractHiddenStartupRendererQueryData(
@@ -35,7 +44,7 @@ export function extractHiddenStartupRendererQueryData(
         statelessQueryData,
         statefulQueryData,
         oscColorQueryData,
-        pending: input.slice(candidateIndex)
+        pending: extractHiddenStartupRendererQueryPending(input, candidateIndex)
       }
     }
     if (input.startsWith('\x1b[', candidateIndex)) {
@@ -45,10 +54,7 @@ export function extractHiddenStartupRendererQueryData(
           statelessQueryData,
           statefulQueryData,
           oscColorQueryData,
-          pending: input.slice(
-            candidateIndex,
-            candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
-          )
+          pending: extractHiddenStartupRendererQueryPending(input, candidateIndex)
         }
       }
       const sequence = input.slice(candidateIndex, finalByteIndex + 1)
@@ -68,10 +74,7 @@ export function extractHiddenStartupRendererQueryData(
           statelessQueryData,
           statefulQueryData,
           oscColorQueryData,
-          pending: input.slice(
-            candidateIndex,
-            candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
-          )
+          pending: extractHiddenStartupRendererQueryPending(input, candidateIndex)
         }
       }
       if (query.kind === 'none') {
@@ -88,7 +91,7 @@ export function extractHiddenStartupRendererQueryData(
         statelessQueryData,
         statefulQueryData,
         oscColorQueryData,
-        pending: input.slice(candidateIndex)
+        pending: extractHiddenStartupRendererQueryPending(input, candidateIndex)
       }
     }
 
@@ -98,7 +101,12 @@ export function extractHiddenStartupRendererQueryData(
     }
   }
 
-  return { statelessQueryData, statefulQueryData, oscColorQueryData, pending: '' }
+  return {
+    statelessQueryData,
+    statefulQueryData,
+    oscColorQueryData,
+    pending: EMPTY_DETACHED_STRING
+  }
 }
 
 export function containsCsiRendererQuery(data: string): boolean {

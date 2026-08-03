@@ -1,3 +1,5 @@
+import { detachString, EMPTY_DETACHED_STRING, type DetachedString } from './detached-string'
+
 // Why: PTY/SSH chunks can split an escape sequence before its final byte.
 // Keep parser state far beyond normal sequence lengths while bounding memory.
 const KITTY_SCAN_TAIL_LIMIT = 4096
@@ -23,7 +25,7 @@ const KITTY_STACK_LIMIT = 16
  * state).
  */
 export class TerminalKittyKeyboardModeTracker {
-  private scanTail = ''
+  private scanTail: DetachedString = EMPTY_DETACHED_STRING
   private currentFlags = 0
   private mainFlags = 0
   private altFlags = 0
@@ -46,7 +48,7 @@ export class TerminalKittyKeyboardModeTracker {
   }
 
   reset(): void {
-    this.scanTail = ''
+    this.scanTail = EMPTY_DETACHED_STRING
     this.currentFlags = 0
     this.mainFlags = 0
     this.altFlags = 0
@@ -169,17 +171,18 @@ export class TerminalKittyKeyboardModeTracker {
     }
   }
 
-  private extractScanTail(input: string): string {
+  // Persisted tracker tails must not retain live chunks or replay snapshots.
+  private extractScanTail(input: string): DetachedString {
     const start = Math.max(input.lastIndexOf('\x1b'), input.lastIndexOf('\x9b'))
     if (start === -1) {
-      return ''
+      return EMPTY_DETACHED_STRING
     }
     const tail = input.slice(start)
     if (tail.length > KITTY_SCAN_TAIL_LIMIT) {
-      return ''
+      return EMPTY_DETACHED_STRING
     }
     if (tail === '\x1b' || tail === '\x1b[' || tail === '\x9b') {
-      return tail
+      return detachString(tail)
     }
     const body = tail.startsWith('\x1b[')
       ? tail.slice(2)
@@ -187,9 +190,9 @@ export class TerminalKittyKeyboardModeTracker {
         ? tail.slice(1)
         : null
     if (body === null) {
-      return ''
+      return EMPTY_DETACHED_STRING
     }
-    return this.isIncompleteSequenceBody(body) ? tail : ''
+    return this.isIncompleteSequenceBody(body) ? detachString(tail) : EMPTY_DETACHED_STRING
   }
 
   private isIncompleteSequenceBody(body: string): boolean {

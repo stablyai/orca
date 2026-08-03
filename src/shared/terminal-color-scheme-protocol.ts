@@ -1,3 +1,4 @@
+import { detachString, EMPTY_DETACHED_STRING, type DetachedString } from './detached-string'
 import type { GlobalSettings } from './types'
 
 export type TerminalColorSchemeMode = 'dark' | 'light'
@@ -23,7 +24,7 @@ export type Mode2031ScanResult = {
   subscribe: boolean
   unsubscribe: boolean
   finalState: 'subscribed' | 'unsubscribed' | null
-  tail: string
+  tail: DetachedString
   /**
    * The retained tail is a private-mode sequence still capable of resolving to
    * 2031 once the next chunk arrives — so `finalState` is provisional, not final.
@@ -32,7 +33,7 @@ export type Mode2031ScanResult = {
 }
 
 export type Mode2031ReplyScanState = {
-  tail: string
+  tail: DetachedString
   pendingSubscribe: boolean
 }
 
@@ -44,7 +45,7 @@ export type Mode2031ReplyScanResult = {
 }
 
 export const INITIAL_MODE_2031_REPLY_SCAN_STATE: Mode2031ReplyScanState = {
-  tail: '',
+  tail: EMPTY_DETACHED_STRING,
   pendingSubscribe: false
 }
 
@@ -57,7 +58,7 @@ const NO_MODE_2031_SEQUENCE: Mode2031ScanResult = {
   subscribe: false,
   unsubscribe: false,
   finalState: null,
-  tail: '',
+  tail: EMPTY_DETACHED_STRING,
   tailMayResolveToMode2031: false
 }
 
@@ -131,25 +132,26 @@ function hasMode2031(params: string): boolean {
   return params.split(';').some((param) => Number(param) === 2031)
 }
 
-function extractPrivateModeScanTail(input: string): string {
+// Persisted per-pane tails must not retain their source PTY chunks.
+function extractPrivateModeScanTail(input: string): DetachedString {
   const start = Math.max(input.lastIndexOf('\x1b'), input.lastIndexOf('\x9b'))
   if (start === -1) {
-    return ''
+    return EMPTY_DETACHED_STRING
   }
   const tail = input.slice(start)
   if (tail.length > MODE_2031_SCAN_TAIL_LIMIT) {
-    return ''
+    return EMPTY_DETACHED_STRING
   }
   if (tail === '\x1b' || tail === '\x1b[' || tail === '\x9b') {
-    return tail
+    return detachString(tail)
   }
   if (tail.startsWith('\x1b[?')) {
-    return isIncompletePrivateModeParams(tail.slice(3)) ? tail : ''
+    return isIncompletePrivateModeParams(tail.slice(3)) ? detachString(tail) : EMPTY_DETACHED_STRING
   }
   if (tail.startsWith('\x9b?')) {
-    return isIncompletePrivateModeParams(tail.slice(2)) ? tail : ''
+    return isIncompletePrivateModeParams(tail.slice(2)) ? detachString(tail) : EMPTY_DETACHED_STRING
   }
-  return ''
+  return EMPTY_DETACHED_STRING
 }
 
 function isIncompletePrivateModeParams(params: string): boolean {

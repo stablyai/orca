@@ -7,6 +7,7 @@ import {
   readSavedCursorRegister,
   serializeWithAbsoluteCursor
 } from '../../shared/terminal-serialize-absolute-cursor'
+import { EMPTY_DETACHED_STRING, type DetachedString } from '../../shared/detached-string'
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
@@ -66,7 +67,7 @@ export class HeadlessEmulator {
   // Why: replies must be scoped to the exact write that carried the query, so seeds/snapshots and unsolicited emissions never leak to the PTY.
   private queryReplyForwardingDepth = 0
   // Why: a mid-escape chunk tail lives in xterm's parser, not the buffer, so serialize() drops it and it renders literal after restore (Bug E).
-  private partialEscapeTail = ''
+  private partialEscapeTail: DetachedString = EMPTY_DETACHED_STRING
 
   constructor(opts: HeadlessEmulatorOptions) {
     this.pathFlavor = opts.pathFlavor

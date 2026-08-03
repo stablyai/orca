@@ -1,4 +1,5 @@
 import { extractLastOscTitle } from '../../shared/agent-detection'
+import { EMPTY_DETACHED_STRING, type DetachedString } from '../../shared/detached-string'
 import { parseFileUriPath } from './osc7-file-uri'
 import { extractOscScanTail, scanOsc7Uris } from './osc7-uri-extraction'
 
@@ -15,7 +16,7 @@ export type TerminalOscCwdTitleScannerOptions = {
 }
 
 export class TerminalOscCwdTitleScanner {
-  private scanTail = ''
+  private scanTail: DetachedString = EMPTY_DETACHED_STRING
   private readonly parseOptions: TerminalOscCwdTitleScannerOptions
   cwd: string | null = null
   lastTitle: string | null = null
@@ -32,7 +33,9 @@ export class TerminalOscCwdTitleScanner {
     // non-empty scanTail or this chunk ends with a bare ESC, which
     // extractOscScanTail retains for the next call.
     if (this.scanTail.length === 0 && !data.includes('\x1b]')) {
-      this.scanTail = data.endsWith('\x1b') ? extractOscScanTail(data, OSC_SCAN_TAIL_LIMIT) : ''
+      this.scanTail = data.endsWith('\x1b')
+        ? extractOscScanTail(data, OSC_SCAN_TAIL_LIMIT)
+        : EMPTY_DETACHED_STRING
       return
     }
     const input = this.scanTail.length === 0 ? data : this.scanTail + data

@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { detachString, type DetachedString } from '../../../../shared/detached-string'
 
 type BracketedPasteTerminal = {
   modes: {
@@ -17,7 +18,7 @@ type PasteTerminalTextOptions = {
 }
 
 const interruptedBracketedPasteTerminals = new WeakSet<object>()
-const bracketedPasteModeOutputTail = new WeakMap<object, string>()
+const bracketedPasteModeOutputTail = new WeakMap<object, DetachedString>()
 const ESCAPE = '\u001b'
 export const BRACKETED_PASTE_START = `${ESCAPE}[200~`
 export const BRACKETED_PASTE_END = `${ESCAPE}[201~`
@@ -98,7 +99,11 @@ export function observeTerminalBracketedPasteModeOutput(
     return
   }
   const combined = (bracketedPasteModeOutputTail.get(terminal) ?? '') + data
-  bracketedPasteModeOutputTail.set(terminal, combined.slice(-BRACKETED_PASTE_MODE_TAIL_MAX))
+  // Persisted per-terminal tails must not retain their source PTY chunks.
+  bracketedPasteModeOutputTail.set(
+    terminal,
+    detachString(combined.slice(-BRACKETED_PASTE_MODE_TAIL_MAX))
+  )
   if (hasBracketedPasteModeSequence(combined)) {
     interruptedBracketedPasteTerminals.delete(terminal)
     bracketedPasteModeOutputTail.delete(terminal)

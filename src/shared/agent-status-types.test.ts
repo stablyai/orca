@@ -13,6 +13,7 @@ import {
   AGENT_STATUS_STATES,
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-types'
+import { forceGc } from './string-retention-measurement'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -239,6 +240,29 @@ Fix dispatch fallback preview for normalized status prompts`
     )
     expect(result!.interactivePrompt).toHaveLength(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
     expect(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH).toBe(16000)
+  })
+
+  // Under-cap prompts stay on the allocation-free hook path.
+  it('returns an under-cap interactivePrompt without copying it', () => {
+    const source = JSON.stringify({
+      questions: [{ question: 'Which approach?', options: ['a'.repeat(4000), 'b'.repeat(4000)] }]
+    })
+    expect(source.length).toBeLessThan(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
+    const repeats = 20_000
+
+    forceGc()
+    const before = process.memoryUsage().heapUsed
+    const held = Array.from(
+      { length: repeats },
+      () =>
+        normalizeAgentStatusPayload({ state: 'waiting', interactivePrompt: source })!
+          .interactivePrompt
+    )
+    forceGc()
+    const bytesPerCall = (process.memoryUsage().heapUsed - before) / repeats
+
+    expect(held[0]).toBe(source)
+    expect(bytesPerCall).toBeLessThan(source.length / 4)
   })
 
   it('leaves interactivePrompt undefined when absent or non-string', () => {

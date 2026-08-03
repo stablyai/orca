@@ -1,3 +1,4 @@
+import { detachString, EMPTY_DETACHED_STRING, type DetachedString } from './detached-string'
 import type { DraftPasteReadySignal } from './tui-agent-config'
 
 // Why: agents enable bracketed paste (DECSET 2004) before their composer is
@@ -12,6 +13,7 @@ const CODEX_COMPOSER_PROMPT = '›'
 // racing the composer mount under slow/noisy startup. mimo-code uses the same
 // signal by parity; the quiet-window fallback covers any agent that differs.
 const DECTCEM_SHOW_CURSOR = '\x1b[?25h'
+const RING_CHARS = 512
 
 export type DraftPasteReadyScanResult = {
   /** The agent-specific ready signal fired — caller should deliver the paste now. */
@@ -46,8 +48,8 @@ export type DraftPasteReadyScanResult = {
 export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal): {
   observe: (data: string) => DraftPasteReadyScanResult
 } {
-  let recent = ''
-  let postHandshakeRecent = ''
+  let recent: DetachedString = EMPTY_DETACHED_STRING
+  let postHandshakeRecent: DetachedString = EMPTY_DETACHED_STRING
   let saw2004 = false
 
   const signalMarker =
@@ -60,7 +62,8 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
   return {
     observe(data: string): DraftPasteReadyScanResult {
       const combined = recent + data
-      recent = combined.slice(-512)
+      // Persisted scanner rings must not retain their source PTY chunks.
+      recent = detachString(combined.slice(-RING_CHARS))
       if (!saw2004) {
         const markerIndex = combined.indexOf(DECSET_BRACKETED_PASTE)
         if (markerIndex === -1) {
@@ -71,7 +74,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
         if (signalMarker !== null && postHandshakeChunk.includes(signalMarker)) {
           return { ready: true, armQuietTimer: false }
         }
-        postHandshakeRecent = postHandshakeChunk.slice(-512)
+        postHandshakeRecent = detachString(postHandshakeChunk.slice(-RING_CHARS))
       } else {
         if (
           signalMarker !== null &&
@@ -79,7 +82,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
         ) {
           return { ready: true, armQuietTimer: false }
         }
-        postHandshakeRecent = (postHandshakeRecent + data).slice(-512)
+        postHandshakeRecent = detachString((postHandshakeRecent + data).slice(-RING_CHARS))
       }
       // Why: marker-based signals (Codex glyph, opencode show-cursor) must NOT
       // arm the quiet window. opencode goes silent for ~1.5-2s between enabling

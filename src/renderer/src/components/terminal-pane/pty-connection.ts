@@ -11,6 +11,11 @@ import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-conn
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
+import {
+  detachString,
+  EMPTY_DETACHED_STRING,
+  type DetachedString
+} from '../../../../shared/detached-string'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
@@ -21,10 +26,10 @@ import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal
 import { isWorktreeRemovalFenceError } from '../../../../shared/worktree-removal-fence-error'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
 import {
-  HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS,
   containsCsiRendererQuery,
   containsStatefulRendererQuery,
   extractHiddenStartupRendererQueryData,
+  extractHiddenStartupRendererQueryPending,
   findCsiFinalByteIndex,
   isStatefulRendererReplyCsiQuery,
   isStatelessRendererReplyCsiQuery
@@ -5311,27 +5316,28 @@ export function connectPanePty(
       return trackedPromise
     }
 
-    let foregroundRefreshRiskScanTail = ''
+    let foregroundRefreshRiskScanTail: DetachedString = EMPTY_DETACHED_STRING
 
-    function trailingIncompleteCsiSequence(data: string): string {
+    function trailingIncompleteCsiSequence(data: string): DetachedString {
       const escapeIndex = data.lastIndexOf('\x1b')
       if (escapeIndex === -1) {
-        return ''
+        return EMPTY_DETACHED_STRING
       }
       const tail = data.slice(escapeIndex)
       if (tail === '\x1b') {
-        return tail
+        return detachString(tail)
       }
       if (!tail.startsWith('\x1b[')) {
-        return ''
+        return EMPTY_DETACHED_STRING
       }
       for (let index = 2; index < tail.length; index++) {
         const code = tail.charCodeAt(index)
         if (code >= 0x40 && code <= 0x7e) {
-          return ''
+          return EMPTY_DETACHED_STRING
         }
       }
-      return tail.slice(-TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS)
+      // Persisted per-pane tails must not retain their source PTY chunks.
+      return detachString(tail.slice(-TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS))
     }
 
     function foregroundRendererRiskOutputPrefersRenderRefresh(data: string): boolean {
@@ -5351,9 +5357,9 @@ export function connectPanePty(
     function resetHiddenRendererRiskState(ptyId: string | null = null): void {
       hiddenRiskPtyId = ptyId
       hiddenSynchronizedOutputActive = false
-      hiddenSynchronizedOutputMarkerTail = ''
+      hiddenSynchronizedOutputMarkerTail = EMPTY_DETACHED_STRING
       hiddenRewriteChunkEndedWithCarriageReturn = false
-      hiddenRewriteCsiScanTail = ''
+      hiddenRewriteCsiScanTail = EMPTY_DETACHED_STRING
     }
 
     function ensureHiddenRendererRiskStateForCurrentPty(): void {
@@ -5410,7 +5416,10 @@ export function connectPanePty(
         touchesParsedFrame = true
       }
       hiddenSynchronizedOutputActive = active
-      hiddenSynchronizedOutputMarkerTail = scanData.slice(-SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS)
+      // Persisted per-pane tails must not retain their source PTY chunks.
+      hiddenSynchronizedOutputMarkerTail = detachString(
+        scanData.slice(-SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS)
+      )
       return touchesParsedFrame
     }
 
@@ -5847,16 +5856,16 @@ export function connectPanePty(
     let foregroundImmediateBudgetChars = 0
     let foregroundImmediateBudgetWindowStart = 0
     let foregroundRewriteChunkEndedWithCarriageReturn = false
-    let foregroundRewriteCsiScanTail = ''
+    let foregroundRewriteCsiScanTail: DetachedString = EMPTY_DETACHED_STRING
     let mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
     const shouldSnapshotHiddenCodexOutput = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
-    let hiddenStartupRendererQueryPending = ''
+    let hiddenStartupRendererQueryPending: DetachedString = EMPTY_DETACHED_STRING
     let hiddenRendererStateDirty = false
     let hiddenRiskPtyId: string | null = null
     let hiddenSynchronizedOutputActive = false
-    let hiddenSynchronizedOutputMarkerTail = ''
+    let hiddenSynchronizedOutputMarkerTail: DetachedString = EMPTY_DETACHED_STRING
     let hiddenRewriteChunkEndedWithCarriageReturn = false
-    let hiddenRewriteCsiScanTail = ''
+    let hiddenRewriteCsiScanTail: DetachedString = EMPTY_DETACHED_STRING
     let rendererOrderedPtyId: string | null = null
     let rendererOrderedSeq: number | null = null
     let rendererChannelSeqPtyId: string | null = null
@@ -6417,7 +6426,7 @@ export function connectPanePty(
       consumedCurrentChars: number
     } {
       const pending = hiddenStartupRendererQueryPending
-      hiddenStartupRendererQueryPending = ''
+      hiddenStartupRendererQueryPending = EMPTY_DETACHED_STRING
       if (!pending) {
         return {
           statelessQueryData: '',
@@ -6433,11 +6442,11 @@ export function connectPanePty(
       let statefulQueryData = ''
       let oscColorQueryData = ''
       let consumedInputChars = pending.length
-      let nextPending = ''
+      let nextPending: DetachedString = EMPTY_DETACHED_STRING
       if (input.startsWith('\x1b[')) {
         const finalByteIndex = findCsiFinalByteIndex(input, 2)
         if (finalByteIndex === -1) {
-          nextPending = input.slice(0, HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS)
+          nextPending = extractHiddenStartupRendererQueryPending(input, 0)
           consumedInputChars = input.length
         } else {
           const sequence = input.slice(0, finalByteIndex + 1)
@@ -6451,7 +6460,7 @@ export function connectPanePty(
       } else if (input.startsWith('\x1b]')) {
         const query = parseTerminalOscColorQuery(input, 0)
         if (query.kind === 'partial') {
-          nextPending = input.slice(0, HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS)
+          nextPending = extractHiddenStartupRendererQueryPending(input, 0)
           consumedInputChars = input.length
         } else if (query.kind === 'match') {
           oscColorQueryData = input.slice(0, query.endIndex)
@@ -6460,7 +6469,7 @@ export function connectPanePty(
           consumedInputChars = pending.length
         }
       } else if (input.length === 1) {
-        nextPending = input
+        nextPending = detachString(input)
         consumedInputChars = input.length
       } else {
         consumedInputChars = pending.length
@@ -6505,7 +6514,7 @@ export function connectPanePty(
       if (!data || !data.includes('\x1b')) {
         return
       }
-      const extracted = extractHiddenStartupRendererQueryData(data, '')
+      const extracted = extractHiddenStartupRendererQueryData(data, EMPTY_DETACHED_STRING)
       if (extracted.oscColorQueryData) {
         sendTerminalOscColorQueryReplies(
           extracted.oscColorQueryData,
@@ -6882,7 +6891,7 @@ export function connectPanePty(
       hiddenOutputRestoreFreshSnapshotNeeded = false
       hiddenOutputRestoreRetryDeferred = false
       hiddenOutputRestoreScheduled = false
-      hiddenStartupRendererQueryPending = ''
+      hiddenStartupRendererQueryPending = EMPTY_DETACHED_STRING
       hiddenRendererStateDirty = false
       resetHiddenRendererRiskState()
       cancelScheduledHiddenOutputRestore(pane.terminal)
@@ -6950,7 +6959,7 @@ export function connectPanePty(
     function clearHiddenOutputRestoreState(): void {
       cancelSnapshotScrollRestore()
       clearPendingLiveChunksDuringRestore()
-      hiddenStartupRendererQueryPending = ''
+      hiddenStartupRendererQueryPending = EMPTY_DETACHED_STRING
       hiddenRendererStateDirty = false
       resetHiddenRendererRiskState()
       hiddenOutputRestoreNeeded = false

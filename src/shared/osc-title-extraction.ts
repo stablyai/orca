@@ -1,3 +1,5 @@
+import { detachString } from './detached-string'
+
 const ESC_CODE_UNIT = 0x1b
 const BEL_CODE_UNIT = 0x07
 const RIGHT_BRACKET_CODE_UNIT = 0x5d
@@ -59,15 +61,16 @@ function parseOscTitleAt(data: string, index: number): OscTitleParseResult {
 function readBoundedOscTitle(data: string, titleStart: number, titleEnd: number): string {
   // Why: PTY output can contain pasted or remote-controlled OSC titles; keep
   // downstream title detection bounded while preserving trailing status words.
+  // Extracted titles must not retain their source PTY chunks.
   const length = titleEnd - titleStart
   if (length <= MAX_OSC_TITLE_CHARS) {
-    return data.slice(titleStart, titleEnd)
+    return detachString(data.slice(titleStart, titleEnd))
   }
   const prefixLength = Math.ceil(MAX_OSC_TITLE_CHARS / 2)
   const suffixLength = MAX_OSC_TITLE_CHARS - prefixLength
-  return (
+  return detachString(
     data.slice(titleStart, titleStart + prefixLength) +
-    data.slice(titleEnd - suffixLength, titleEnd)
+      data.slice(titleEnd - suffixLength, titleEnd)
   )
 }
 

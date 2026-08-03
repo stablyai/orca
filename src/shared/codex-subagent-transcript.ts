@@ -6,6 +6,7 @@ import {
   upsertCodexSubagent,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
+import { detachString, EMPTY_DETACHED_STRING, type DetachedString } from './detached-string'
 
 const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
@@ -17,7 +18,7 @@ const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
 type JsonlCursor = {
   filePath?: string
   offset: number
-  carry: string
+  carry: DetachedString
 }
 
 type TrackedTranscriptSubagent = JsonlCursor & {
@@ -53,7 +54,7 @@ function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
   }
   if (stats.size < cursor.offset) {
     cursor.offset = 0
-    cursor.carry = ''
+    cursor.carry = EMPTY_DETACHED_STRING
   }
   if (stats.size === cursor.offset) {
     return []
@@ -77,7 +78,8 @@ function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
   const content = `${skippedPrefix ? '' : cursor.carry}${buffer.toString('utf8', 0, bytesRead)}`
   const lines = content.split('\n')
   cursor.offset = start + bytesRead
-  cursor.carry = lines.pop() ?? ''
+  // Persisted cursor carries must not retain the transcript read buffer.
+  cursor.carry = detachString(lines.pop() ?? '')
   if (skippedPrefix) {
     lines.shift()
   }
@@ -217,7 +219,7 @@ function childIsComplete(records: JsonRecord[]): boolean {
 
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
   return {
-    parent: { offset: 0, carry: '' },
+    parent: { offset: 0, carry: EMPTY_DETACHED_STRING },
     subagents: new Map()
   }
 }
@@ -241,7 +243,7 @@ export function reconcileCodexSubagentTranscript(
     for (const id of state.subagents.keys()) {
       finishCodexSubagent(roster, id)
     }
-    state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
+    state.parent = { filePath: normalizedPath, offset: 0, carry: EMPTY_DETACHED_STRING }
     state.subagents.clear()
   }
   for (const recordValue of readJsonlCursor(state.parent) ?? []) {
@@ -256,7 +258,7 @@ export function reconcileCodexSubagentTranscript(
     }
     const tracked = state.subagents.get(activity.id) ?? {
       offset: 0,
-      carry: '',
+      carry: EMPTY_DETACHED_STRING,
       startedAt: activity.startedAt
     }
     tracked.description = activity.description ?? tracked.description

@@ -16,7 +16,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     // Why: Node 26's undefined Web Storage globals prevent Vitest from installing happy-dom's.
-    execArgv: ['--no-experimental-webstorage'],
+    // --expose-gc backs the string-retention guards in detached-string-retention.test.ts.
+    // --expose-gc is a V8 flag, so this config only works on fork-based pools; worker_threads
+    // rejects it in execArgv and dies at worker start with zero tests run.
+    execArgv: ['--no-experimental-webstorage', '--expose-gc'],
     include: [
       'src/**/*.test.ts',
       'src/**/*.test.tsx',

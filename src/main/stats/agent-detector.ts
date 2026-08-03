@@ -1,5 +1,10 @@
 import { extractLastOscTitle, detectAgentStatusFromTitle } from '../../shared/agent-detection'
 import type { AgentStatus } from '../../shared/agent-detection'
+import {
+  detachString,
+  EMPTY_DETACHED_STRING,
+  type DetachedString
+} from '../../shared/detached-string'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import type { StatsCollector } from './collector'
 
@@ -80,8 +85,8 @@ const MAX_EXITED_PTY_IDS = 1024
 
 export class AgentDetector {
   private ptys = new Map<string, PtyRecord>()
-  private oscTitleScanTailByPtyId = new Map<string, string>()
-  private meaningfulContentScanTailByPtyId = new Map<string, string>()
+  private oscTitleScanTailByPtyId = new Map<string, DetachedString>()
+  private meaningfulContentScanTailByPtyId = new Map<string, DetachedString>()
   private exitedPtyIds = new Set<string>()
   private stats: StatsCollector
   private meaningfulContentDetector: MeaningfulContentDetector
@@ -236,13 +241,15 @@ export class AgentDetector {
   }
 }
 
-function extractMeaningfulContentScanTail(value: string): string {
+function extractMeaningfulContentScanTail(value: string): DetachedString {
   const escapeIndex = value.lastIndexOf('\x1b')
   if (escapeIndex === -1) {
-    return ''
+    return EMPTY_DETACHED_STRING
   }
   const parsed = parseMeaningfulControlSequence(value, escapeIndex)
-  return parsed === null ? trimMeaningfulContentScanTail(value.slice(escapeIndex)) : ''
+  return parsed === null
+    ? trimMeaningfulContentScanTail(value.slice(escapeIndex))
+    : EMPTY_DETACHED_STRING
 }
 
 function parseMeaningfulControlSequence(value: string, escapeIndex: number): number | null {
@@ -285,11 +292,12 @@ function isStTerminatedStringControlIntroducer(introducer: string): boolean {
   return introducer === 'P' || introducer === 'X' || introducer === '^' || introducer === '_'
 }
 
-function trimMeaningfulContentScanTail(value: string): string {
+// Persisted per-PTY tails must not retain their source chunks.
+function trimMeaningfulContentScanTail(value: string): DetachedString {
   if (value.length <= MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT) {
-    return value
+    return detachString(value)
   }
   const introducer = value.slice(0, Math.min(2, value.length))
   const suffixBudget = Math.max(0, MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT - introducer.length)
-  return `${introducer}${value.slice(-suffixBudget)}`
+  return detachString(`${introducer}${value.slice(-suffixBudget)}`)
 }

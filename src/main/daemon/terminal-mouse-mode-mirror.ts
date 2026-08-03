@@ -1,3 +1,8 @@
+import {
+  detachString,
+  EMPTY_DETACHED_STRING,
+  type DetachedString
+} from '../../shared/detached-string'
 import type { TerminalModes } from './types'
 
 type MouseTrackingMode = NonNullable<TerminalModes['mouseTrackingMode']>
@@ -13,7 +18,7 @@ const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
  * must feed `scan()` the same bytes the terminal parsed, in order.
  */
 export class TerminalMouseModeMirror {
-  private scanTail = ''
+  private scanTail: DetachedString = EMPTY_DETACHED_STRING
   private trackingModeState: MouseTrackingMode = 'none'
   private sgrMouseModeState = false
   private sgrMousePixelsModeState = false
@@ -92,25 +97,26 @@ export class TerminalMouseModeMirror {
     }
   }
 
-  private extractScanTail(input: string): string {
+  // Persisted per-session tails must not retain their source PTY chunks.
+  private extractScanTail(input: string): DetachedString {
     const start = Math.max(input.lastIndexOf('\x1b'), input.lastIndexOf('\x9b'))
     if (start === -1) {
-      return ''
+      return EMPTY_DETACHED_STRING
     }
     const tail = input.slice(start)
     if (tail.length > PRIVATE_MODE_SCAN_TAIL_LIMIT) {
-      return ''
+      return EMPTY_DETACHED_STRING
     }
     if (tail === '\x1b' || tail === '\x1b[' || tail === '\x9b') {
-      return tail
+      return detachString(tail)
     }
     if (tail.startsWith('\x1b[?')) {
-      return this.isIncompleteParams(tail.slice(3)) ? tail : ''
+      return this.isIncompleteParams(tail.slice(3)) ? detachString(tail) : EMPTY_DETACHED_STRING
     }
     if (tail.startsWith('\x9b?')) {
-      return this.isIncompleteParams(tail.slice(2)) ? tail : ''
+      return this.isIncompleteParams(tail.slice(2)) ? detachString(tail) : EMPTY_DETACHED_STRING
     }
-    return ''
+    return EMPTY_DETACHED_STRING
   }
 
   private isIncompleteParams(params: string): boolean {

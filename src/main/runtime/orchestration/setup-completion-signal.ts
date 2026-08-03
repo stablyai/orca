@@ -1,4 +1,9 @@
 import {
+  detachString,
+  EMPTY_DETACHED_STRING,
+  type DetachedString
+} from '../../../shared/detached-string'
+import {
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
   type SetupRunnerShell
@@ -52,7 +57,7 @@ export function createSetupCompletionScanner(
   scan: (data: string) => void
 } {
   const expectedPrefix = completionPrefix(completionToken)
-  let carry = ''
+  let carry: DetachedString = EMPTY_DETACHED_STRING
   let completed = false
   return {
     scan(data: string): void {
@@ -70,7 +75,8 @@ export function createSetupCompletionScanner(
           return
         }
       }
-      carry = combined.slice(-SETUP_COMPLETION_CARRY_LENGTH)
+      // Persisted setup carries must not retain their source output chunks.
+      carry = detachString(combined.slice(-SETUP_COMPLETION_CARRY_LENGTH))
     }
   }
 }
