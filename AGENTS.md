@@ -51,6 +51,16 @@ When adding or changing a Git command:
 - Keep the real-binary compatibility contract in PR CI current. When adopting a newer Git feature, add its version boundary so the preferred command and fallback both run against representative Git releases.
 - Preserve commands that begin with global Git options such as `-c` before the subcommand, including auto-maintenance suppression used by worktree-create fetches.
 
+## IME Composition
+
+These rules bind any change to keyboard handling, the chat composer, the terminal pane's input path, or the mobile composer.
+
+- Derive committed text from ranges and event data — never by diffing two observations of a mutable buffer. When the evidence is ambiguous, emit nothing.
+- Guard above the key dispatch, not inside each key branch, and guard `keyup` and global `document` listeners too.
+- `attachCustomKeyEventHandler` returning `false` does **not** call `preventDefault()`, and it bypasses xterm's `CompositionHelper` entirely. Pair the two deliberately.
+- Never normalize IME output at commit. Normalize only at path handling and equality/search comparison.
+- Add a recorded event-trace fixture for the trace that motivated the change, plus a paired negative test proving non-IME behavior is unchanged.
+
 ## Git Provider Compatibility
 
 Source-control and review changes must consider GitLab and other supported git providers, not only GitHub. Keep provider-specific behavior behind explicit checks, and avoid GitHub-only naming for generic review concepts.
