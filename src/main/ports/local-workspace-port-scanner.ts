@@ -1,6 +1,5 @@
 /* eslint-disable max-lines -- Why: the platform-specific scan paths share parsing,
 attribution, and normalization rules that must stay in lockstep. */
-import { execFile } from 'node:child_process'
 import { readFile, readdir, readlink } from 'node:fs/promises'
 import path from 'node:path'
 import type {
@@ -11,9 +10,9 @@ import type {
 } from '../../shared/workspace-ports'
 import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
+import { isCommandTimeoutError, runBoundedCommand as runCommand } from './port-scan-command-runner'
 import { WorkspacePortScanTimeoutBackoff } from './workspace-port-scan-timeout-backoff'
 
-const COMMAND_TIMEOUT_MS = 4_000
 const MAX_PORTS = 200
 const HTTP_PORTS = new Set([80, 3000, 3001, 4200, 5000, 5173, 5174, 8000, 8080, 8888])
 const HTTPS_PORTS = new Set([443, 8443])
@@ -380,64 +379,6 @@ async function loadWindowsProcessMetadata(
     // Process metadata is optional; port rows still render without attribution.
   }
   return result
-}
-
-async function runCommand(command: string, args: string[]): Promise<{ stdout: string }> {
-  return await new Promise((resolve, reject) => {
-    let settled = false
-    let child: ReturnType<typeof execFile> | undefined
-    const timer = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      child?.kill()
-      reject(new CommandTimeoutError(command, COMMAND_TIMEOUT_MS))
-    }, COMMAND_TIMEOUT_MS)
-
-    const settle = (callback: () => void): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      callback()
-    }
-
-    // Why: Node's execFile timeout only signals the child; if the callback
-    // never arrives, the workspace port scan would otherwise hang forever.
-    try {
-      child = execFile(
-        command,
-        args,
-        {
-          timeout: COMMAND_TIMEOUT_MS,
-          maxBuffer: 2 * 1024 * 1024,
-          windowsHide: true
-        },
-        (error, stdout) => {
-          if (error) {
-            settle(() => reject(error))
-            return
-          }
-          settle(() => resolve({ stdout: String(stdout) }))
-        }
-      )
-    } catch (error) {
-      settle(() => reject(error))
-    }
-  })
-}
-
-class CommandTimeoutError extends Error {
-  constructor(command: string, timeoutMs: number) {
-    super(`${command} timed out after ${timeoutMs}ms`)
-    this.name = 'CommandTimeoutError'
-  }
-}
-
-function isCommandTimeoutError(error: unknown): boolean {
-  return error instanceof CommandTimeoutError
 }
 
 async function readTextIfAvailable(filePath: string): Promise<string | undefined> {
