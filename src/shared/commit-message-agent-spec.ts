@@ -509,10 +509,9 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
   cursor: {
     id: 'cursor',
     label: 'Cursor',
-    binary: 'cursor',
+    binary: 'cursor-agent',
     promptDelivery: 'argv',
     buildArgs: ({ prompt, model }) => [
-      'agent',
       '--print',
       '--mode',
       'ask',
@@ -524,7 +523,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       prompt
     ],
     modelSource: 'dynamic',
-    modelDiscovery: { binary: 'cursor', args: ['agent', 'models'], parse: parseCursorModels },
+    modelDiscovery: { binary: 'cursor-agent', args: ['--list-models'], parse: parseCursorModels },
     models: [{ id: 'auto', label: 'Auto' }],
     defaultModelId: 'auto'
   },

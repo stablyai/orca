@@ -199,6 +199,7 @@ import type {
   SpeechTranscriptEvent
 } from '../shared/speech-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
+import type { DetectedAgentExecutables } from '../shared/detected-agent-executables'
 import type {
   PreflightRuntimeContext,
   RefreshAgentsResult,
@@ -2152,6 +2153,10 @@ const api = {
     }> => ipcRenderer.invoke('preflight:check', args),
     detectAgents: (args?: PreflightRuntimeContext): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectAgents', args),
+    detectAgentExecutables: (
+      args?: PreflightRuntimeContext
+    ): Promise<DetectedAgentExecutables | null> =>
+      ipcRenderer.invoke('preflight:detectAgentExecutables', args),
     refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
       ipcRenderer.invoke('preflight:refreshAgents', args),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>

@@ -47,11 +47,7 @@ export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
   }
 }
 
-export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
-  ? 'win32'
-  : navigator.userAgent.includes('Mac')
-    ? 'darwin'
-    : 'linux'
+export { CLIENT_PLATFORM } from './client-platform'
 
 export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
 

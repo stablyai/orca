@@ -9,7 +9,8 @@ import {
   isPermissionError,
   isWindowsBatchScript,
   resolveWindowsCommand,
-  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL,
+  UnsafeWindowsBatchArgumentsError
 } from './win32-utils'
 
 function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
@@ -232,6 +233,54 @@ describe('getSpawnArgsForWindows', () => {
           getSpawnArgsForWindows('C:\\tools\\agent.cmd', [`a${character}b`])
         ).not.toThrow()
       }
+    })
+  })
+
+  // Why: Source Control AI delivers its prompt in argv (`promptDelivery: 'argv'`),
+  // and those prompts are multiline by construction. Both standard Windows Cursor
+  // entry points resolve to batch shims, so this rejection is reached before
+  // cmd.exe ever runs. Locking it here documents that the alias added for
+  // alias-only installs does not change the outcome: the batch-shim limitation
+  // is upstream of command naming and needs a separate launch strategy.
+  it('rejects multiline argv prompts for either Cursor batch shim on win32', () => {
+    const multilinePrompt = [
+      'Write a commit message for this diff:',
+      '',
+      '+ const value = 1',
+      '- const value = 0'
+    ].join('\n')
+
+    withPlatform('win32', () => {
+      for (const shim of ['C:\\cursor-agent\\cursor-agent.cmd', 'C:\\cursor\\cursor.cmd']) {
+        expect(() => getSpawnArgsForWindows(shim, ['--print', multilinePrompt])).toThrow(
+          UnsafeWindowsBatchArgumentsError
+        )
+      }
+
+      // The `cursor` alias launches through a subcommand, so the prompt sits
+      // further along argv. The rejection must still fire.
+      expect(() =>
+        getSpawnArgsForWindows('C:\\cursor\\cursor.cmd', ['agent', '--print', multilinePrompt])
+      ).toThrow(UnsafeWindowsBatchArgumentsError)
+    })
+  })
+
+  // Why: a .ps1 launcher is not a batch script, so the multiline prompt survives.
+  // This is the shape of the only override reported to work end-to-end on Windows.
+  it('passes multiline argv prompts through a non-batch launcher on win32', () => {
+    withPlatform('win32', () => {
+      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        ['-File', 'C:\\cursor-agent\\cursor-agent.ps1', '--print', 'line one\nline two']
+      )
+
+      expect(spawnCmd).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+      expect(spawnArgs).toEqual([
+        '-File',
+        'C:\\cursor-agent\\cursor-agent.ps1',
+        '--print',
+        'line one\nline two'
+      ])
     })
   })
 })
