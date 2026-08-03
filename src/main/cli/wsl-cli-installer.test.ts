@@ -340,7 +340,7 @@ describe('WslCliInstaller', () => {
     expect(bridge).toContain('if ([string]::IsNullOrEmpty($WslCwd))')
     expect(bridge).toContain('$env:ORCA_CLI_CWD = $WslCwd')
     expect(bridge).toContain('Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)')
-    expect(bridge).toContain('& $OrcaLauncher @ForwardArgs')
+    expect(bridge).toContain('& $OrcaLauncher @OrcaForwardArgs')
     const nullExitCodeBranch = bridge.indexOf('if ($null -eq $LASTEXITCODE)')
     const invocationFailureBranch = bridge.indexOf('if (-not $?)')
     expect(nullExitCodeBranch).toBeGreaterThan(-1)

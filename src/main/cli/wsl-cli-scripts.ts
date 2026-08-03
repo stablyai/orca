@@ -33,6 +33,8 @@ exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_P
 }
 
 export function buildWslBridgeScript(): string {
+  // Why: PowerShell binds parameters by name prefix, so a parameter named for a CLI flag
+  // eats it — -ForwardArgs swallowed `--for` and everything after it.
   return `${BRIDGE_MANAGED_MARKER}
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -42,7 +44,7 @@ param(
   [string]$WslCwd,
 
   [Parameter(ValueFromRemainingArguments=$true)]
-  [string[]]$ForwardArgs
+  [string[]]$OrcaForwardArgs
 )
 
 $exitCode = 0
@@ -53,7 +55,7 @@ try {
     $env:ORCA_CLI_CWD = $WslCwd
   }
   Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)
-  & $OrcaLauncher @ForwardArgs
+  & $OrcaLauncher @OrcaForwardArgs
   if ($null -eq $LASTEXITCODE) {
     if (-not $?) {
       $exitCode = 1

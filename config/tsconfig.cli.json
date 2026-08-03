@@ -73,6 +73,7 @@
     "../src/main/rolling-file-backup.ts",
     "../src/main/startup/hydrate-shell-path.ts",
     "../src/main/runtime/runtime-metadata.ts",
+    "../src/main/cli/wsl-cli-scripts.ts",
     "../src/main/win32-utils.ts"
   ],
   "compilerOptions": {
