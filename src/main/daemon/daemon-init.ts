@@ -56,6 +56,7 @@ import {
 } from '../claude-accounts/live-pty-gate'
 import { parseDaemonReadyIdentity } from './daemon-ready-identity'
 import { probeLegacyDaemonInput } from './legacy-daemon-input-probe'
+import { retireLegacyDaemonIfIdle } from './legacy-daemon-retirement'
 import type { IPtyProvider } from '../providers/types'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
@@ -1260,6 +1261,10 @@ export async function createLegacyDaemonAdapters(
           }
         }
       }
+      continue
+    }
+    if (await retireLegacyDaemonIfIdle(runtimeDir, protocolVersion)) {
+      console.info(`[daemon] Retired idle legacy protocol v${protocolVersion}`)
       continue
     }
     // Keep old-protocol PTYs routed to their original daemon during upgrade; legacy adapters never respawn (new code would recreate stale env semantics).

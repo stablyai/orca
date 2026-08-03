@@ -45,7 +45,7 @@ describe('daemon health socket listener cleanup', () => {
     socket.emit(
       'data',
       Buffer.from(
-        '{"type":"hello","ok":true}\n{"id":"health-1","ok":true}\n{"id":"health-2","ok":true}\n'
+        '{"type":"hello","ok":true}\n{"id":"health-1","ok":true,"payload":{"healthy":true}}\n'
       )
     )
 

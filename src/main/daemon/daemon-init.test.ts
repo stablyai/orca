@@ -40,6 +40,7 @@ const {
   adapterInstances,
   defaultListSessionsSessions,
   listProcessesControl,
+  probeLegacyDaemonInputMock,
   getLocalPtyProviderMock,
   localFallbackProvider,
   setLocalPtyProviderMock,
@@ -118,6 +119,7 @@ const {
   const listProcessesControl: {
     current: null | (() => Promise<{ id: string; cwd: string; title: string }[]>)
   } = { current: null }
+  const probeLegacyDaemonInputMock = vi.fn(async () => true)
 
   const localFallbackProvider = {
     routesFreshSpawnsToLocalProvider: undefined,
@@ -181,6 +183,7 @@ const {
     adapterInstances,
     defaultListSessionsSessions,
     listProcessesControl,
+    probeLegacyDaemonInputMock,
     getLocalPtyProviderMock,
     localFallbackProvider,
     setLocalPtyProviderMock,
@@ -219,6 +222,7 @@ type MockAdapter = {
   shutdown: ReturnType<typeof vi.fn>
   dispose: ReturnType<typeof vi.fn>
   disconnectOnly: ReturnType<typeof vi.fn>
+  quarantineInput: ReturnType<typeof vi.fn>
   onData: ReturnType<typeof vi.fn>
   onExit: ReturnType<typeof vi.fn>
   onInputUnavailable: ReturnType<typeof vi.fn>
@@ -265,6 +269,10 @@ vi.mock('./daemon-health', () => ({
 }))
 
 vi.mock('./client', () => ({ DaemonClient: daemonClientMock }))
+
+vi.mock('./legacy-daemon-input-probe', () => ({
+  probeLegacyDaemonInput: probeLegacyDaemonInputMock
+}))
 
 vi.mock('./daemon-lifecycle-event', () => ({
   trackDaemonReplaced: trackDaemonReplacedMock,
@@ -342,6 +350,7 @@ vi.mock('./daemon-pty-adapter', () => ({
     readonly shutdown: ReturnType<typeof vi.fn>
     readonly dispose: ReturnType<typeof vi.fn>
     readonly disconnectOnly: ReturnType<typeof vi.fn>
+    readonly quarantineInput: ReturnType<typeof vi.fn>
     readonly onData: ReturnType<typeof vi.fn>
     readonly onExit: ReturnType<typeof vi.fn>
     readonly onInputUnavailable: ReturnType<typeof vi.fn>
@@ -376,6 +385,7 @@ vi.mock('./daemon-pty-adapter', () => ({
           throw disconnectOnlyError
         }
       })
+      this.quarantineInput = vi.fn()
       this.onData = vi.fn(() => {
         if (routerSubscriptionError.current) {
           const error = routerSubscriptionError.current
@@ -423,6 +433,8 @@ async function importFresh() {
   adapterInstances.length = 0
   defaultListSessionsSessions.length = 0
   listProcessesControl.current = null
+  probeLegacyDaemonInputMock.mockReset()
+  probeLegacyDaemonInputMock.mockResolvedValue(true)
   getLocalPtyProviderMock.mockClear()
   localFallbackProvider.spawn.mockClear()
   localFallbackProvider.write.mockClear()
@@ -486,9 +498,9 @@ function mockConnectedAdoptionClientOnce(): void {
   })
 }
 
-function mockOnlyDaemonSocketAlive(socketSuffix: string): void {
+function mockOnlyDaemonSocketAlive(...socketSuffixes: string[]): void {
   netConnectMock.mockImplementation((options?: { path?: string }) => {
-    const live = options?.path?.endsWith(socketSuffix) ?? false
+    const live = socketSuffixes.some((suffix) => options?.path?.endsWith(suffix) ?? false)
     const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
     return {
       on(event: string, callback: () => void) {
@@ -1038,6 +1050,99 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const { DaemonPtyRouter } = await import('./daemon-pty-router')
     expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyRouter)
     expect(adapterInstances.some((instance) => instance.protocolVersion === 9)).toBe(true)
+  })
+
+  it('reclaims an idle v29 daemon while preserving a live v30 generation on app relaunch', async () => {
+    const mod = await importFresh()
+    const retirementRequests = new Map<number, ReturnType<typeof vi.fn>>()
+    probeSocketExistsMock.mockImplementation(
+      (path?: string) =>
+        path?.endsWith('daemon-v29.sock') || path?.endsWith('daemon-v30.sock') || false
+    )
+    mockOnlyDaemonSocketAlive('daemon-v29.sock', 'daemon-v30.sock')
+    daemonClientMock.mockImplementation(function MockLegacyRetirementClient(options: {
+      protocolVersion: number
+    }) {
+      const request = vi.fn(async (type: string) => {
+        if (type === 'shutdownIfIdle') {
+          return { retiring: options.protocolVersion === 29 }
+        }
+        return {}
+      })
+      retirementRequests.set(options.protocolVersion, request)
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
+        request,
+        disconnect: vi.fn()
+      }
+    })
+
+    await mod.initDaemonPtyProvider()
+
+    expect(retirementRequests.get(29)).toHaveBeenCalledWith(
+      'shutdownIfIdle',
+      undefined,
+      expect.any(Number)
+    )
+    expect(retirementRequests.get(30)).toHaveBeenCalledWith(
+      'shutdownIfIdle',
+      undefined,
+      expect.any(Number)
+    )
+    expect(adapterInstances.some((instance) => instance.protocolVersion === 29)).toBe(false)
+    const v30Adapter = adapterInstances.find((instance) => instance.protocolVersion === 30)
+    expect(v30Adapter).toBeDefined()
+    expect(probeLegacyDaemonInputMock).toHaveBeenCalledOnce()
+    expect(probeLegacyDaemonInputMock).toHaveBeenCalledWith(v30Adapter, FAKE_USER_DATA_PATH)
+  })
+
+  it('preserves a legacy daemon when authenticated idle retirement cannot be verified', async () => {
+    const mod = await importFresh()
+    const disconnect = vi.fn()
+    probeSocketExistsMock.mockImplementation(
+      (path?: string) => path?.endsWith('daemon-v29.sock') ?? false
+    )
+    mockOnlyDaemonSocketAlive('daemon-v29.sock')
+    daemonClientMock.mockImplementation(function MockUnreachableLegacyClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('legacy daemon busy')
+        }),
+        ensureConnectedWithin: vi.fn(async () => {
+          throw new Error('legacy daemon busy')
+        }),
+        request: vi.fn(),
+        disconnect
+      }
+    })
+
+    await mod.initDaemonPtyProvider()
+
+    expect(disconnect).toHaveBeenCalledOnce()
+    expect(adapterInstances.some((instance) => instance.protocolVersion === 29)).toBe(true)
+  })
+
+  it('quarantines a preserved v30 daemon whose input probe fails', async () => {
+    const mod = await importFresh()
+    probeSocketExistsMock.mockImplementation(
+      (path?: string) => path?.endsWith('daemon-v30.sock') ?? false
+    )
+    mockOnlyDaemonSocketAlive('daemon-v30.sock')
+    daemonClientMock.mockImplementation(function MockLiveLegacyClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
+        request: vi.fn(async () => ({ retiring: false })),
+        disconnect: vi.fn()
+      }
+    })
+    probeLegacyDaemonInputMock.mockResolvedValueOnce(false)
+
+    await mod.initDaemonPtyProvider()
+
+    const v30Adapter = adapterInstances.find((instance) => instance.protocolVersion === 30)
+    expect(v30Adapter?.quarantineInput).toHaveBeenCalledOnce()
   })
 
   it('restart path with no legacy adapters yields a bare DaemonPtyAdapter (not wrapped in a router)', async () => {
