@@ -49,6 +49,11 @@ async function acquireToken(): Promise<string | null> {
   try {
     const stdout = await runAzAccessTokenCommand(AZURE_DEVOPS_ENTRA_RESOURCE_ID)
     cached = parseTokenResponse(stdout)
+    // Why: a token already inside the expiry margin would be discarded on the
+    // next call; without the cooldown every sequential poll would respawn az.
+    if (cached && cached.expiresAtMs - EXPIRY_MARGIN_MS <= Date.now()) {
+      cached = null
+    }
     failedAtMs = cached ? null : Date.now()
     return cached?.token ?? null
   } catch {
@@ -73,13 +78,19 @@ export function getAzCliAzureDevOpsAccessToken(): Promise<string | null> {
 
 /** Entra tokens only work for the hosted service, never on-prem Azure DevOps Server. */
 export function isEntraEligibleAzureDevOpsBaseUrl(baseUrl: string): boolean {
-  let host: string
+  let url: URL
   try {
-    host = new URL(baseUrl).hostname.toLowerCase()
+    url = new URL(baseUrl)
   } catch {
     return false
   }
-  return host === 'dev.azure.com' || host === 'visualstudio.com' || host.endsWith('.visualstudio.com')
+  // Why: the base URL can come from env or a git remote — never hand a bearer
+  // token to a cleartext scheme.
+  if (url.protocol !== 'https:') {
+    return false
+  }
+  const host = url.hostname.toLowerCase()
+  return host === 'dev.azure.com' || host.endsWith('.visualstudio.com')
 }
 
 export function _resetAzCliAccessTokenCacheForTests(): void {

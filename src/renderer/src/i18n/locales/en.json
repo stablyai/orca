@@ -10447,7 +10447,6 @@
                   "48842720d2": "ORCA_AZURE_DEVOPS_TOKEN",
                   "7bbc9c64f0": "Set",
                   "f3f47dc7de": "Azure DevOps status is not available in this runtime yet.",
-                  "0eb50d5593": "Pull requests and build statuses via Azure DevOps REST API tokens.",
                   "54636c65d4": "Pull requests and build statuses for detected Azure Repos",
                   "ea204f5e03": "{{value0}} · Pull requests and build statuses",
                   "6154b02093": "Bitbucket credentials are configured but could not authenticate. Check the token and repository permissions, then restart Orca if environment variables changed.",
@@ -10469,7 +10468,8 @@
                     "login": "az login",
                     "or": {
                       "set": " (Azure CLI), set"
-                    }
+                    },
+                    "description": "Pull requests and build statuses via the az CLI or Azure DevOps REST API tokens."
                   }
                 }
               }

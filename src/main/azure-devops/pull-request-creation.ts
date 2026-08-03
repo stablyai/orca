@@ -7,6 +7,10 @@ import {
   HostedReviewApiRequestError,
   requestHostedReviewJson
 } from '../source-control/hosted-review-api-request'
+import {
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from '../source-control/hosted-review-git-options'
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
 import {
   getAzCliAzureDevOpsAccessToken,
@@ -34,7 +38,8 @@ const CREATE_REQUEST_TIMEOUT_MS = 60_000
  */
 export async function isAzureDevOpsReviewCreationAuthenticated(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
   const config = getAzureDevOpsAuthConfig()
   if (azureDevOpsTokenConfigured(config)) {
@@ -42,7 +47,13 @@ export async function isAzureDevOpsReviewCreationAuthenticated(
   }
   const baseUrl = config.apiBaseUrl
     ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl)
-    : (await getAzureDevOpsRepoRef(repoPath, connectionId))?.apiBaseUrl
+    : (
+        await getAzureDevOpsRepoRef(
+          repoPath,
+          connectionId,
+          getHostedReviewLocalGitOptions(options)
+        )
+      )?.apiBaseUrl
   if (!baseUrl || !isEntraEligibleAzureDevOpsBaseUrl(baseUrl)) {
     return false
   }

@@ -78,6 +78,23 @@ describe('Azure DevOps pull request creation', () => {
     await expect(isAzureDevOpsReviewCreationAuthenticated('/repo')).resolves.toBe(false)
   })
 
+  it('forwards local git exec options into repo-ref resolution for the auth gate', async () => {
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    runAzAccessTokenCommandMock.mockResolvedValue(
+      JSON.stringify({ accessToken: 'entra-jwt', expires_on: 32472144000 })
+    )
+
+    await expect(
+      isAzureDevOpsReviewCreationAuthenticated('/repo', null, {
+        localGitExecOptions: { wslDistro: 'Ubuntu-22.04' }
+      })
+    ).resolves.toBe(true)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['remote', 'get-url', 'origin'],
+      expect.objectContaining({ wslDistro: 'Ubuntu-22.04' })
+    )
+  })
+
   it('requires a token for on-prem base URLs instead of consulting az', async () => {
     delete process.env.ORCA_AZURE_DEVOPS_TOKEN
     process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = 'https://tfs.corp.example/tfs/Collection'

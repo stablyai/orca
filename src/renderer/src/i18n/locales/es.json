@@ -9425,7 +9425,6 @@
                   "48842720d2": "ORCA_AZURE_DEVOPS_TOKEN",
                   "7bbc9c64f0": "Configura",
                   "f3f47dc7de": "El estado de Azure DevOps aún no está disponible en este runtime.",
-                  "0eb50d5593": "Pull requests y estados de build mediante tokens de la API REST de Azure DevOps.",
                   "54636c65d4": "Pull requests y estados de build para Azure Repos detectados",
                   "ea204f5e03": "{{value0}} · Pull requests y estados de build",
                   "6154b02093": "Las credenciales de Bitbucket están configuradas, pero no se pudo autenticar. Comprueba el token y los permisos del repositorio; después reinicia Orca si cambiaron las variables de entorno.",

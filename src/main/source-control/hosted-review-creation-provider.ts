@@ -123,7 +123,7 @@ export async function isProviderAuthenticated(
     return isGitLabAuthenticated(repoPath, connectionId, options)
   }
   if (provider === 'azure-devops') {
-    return isAzureDevOpsReviewCreationAuthenticated(repoPath, connectionId)
+    return isAzureDevOpsReviewCreationAuthenticated(repoPath, connectionId, options)
   }
   if (provider === 'gitea') {
     return isGiteaReviewCreationAuthenticated()

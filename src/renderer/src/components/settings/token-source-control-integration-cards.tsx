@@ -33,7 +33,7 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
                   'Pull requests and build statuses for detected Azure Repos'
                 )
           : translate(
-              'auto.components.settings.token.source.control.integration.cards.0eb50d5593',
+              'auto.components.settings.token.source.control.integration.cards.az.description',
               'Pull requests and build statuses via the az CLI or Azure DevOps REST API tokens.'
             )
       }

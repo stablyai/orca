@@ -137,6 +137,22 @@ describe('getAzCliAzureDevOpsAccessToken', () => {
     await expect(getAzCliAzureDevOpsAccessToken()).resolves.toBe('renewed-jwt')
   })
 
+  it('treats an already-expired token as a failure so the cooldown still applies', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-03T00:00:00Z'))
+    runAzAccessTokenCommandMock.mockResolvedValue(
+      JSON.stringify({
+        accessToken: 'stale-jwt',
+        expires_on: Date.parse('2026-08-02T00:00:00Z') / 1000
+      })
+    )
+
+    await expect(getAzCliAzureDevOpsAccessToken()).resolves.toBeNull()
+    // Why: without the cooldown every sequential poll would respawn az forever.
+    await expect(getAzCliAzureDevOpsAccessToken()).resolves.toBeNull()
+    expect(runAzAccessTokenCommandMock).toHaveBeenCalledTimes(1)
+  })
+
   it('caps the cache lifetime when az reports no parseable expiry at all', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-03T00:00:00Z'))
@@ -169,5 +185,13 @@ describe('isEntraEligibleAzureDevOpsBaseUrl', () => {
     expect(isEntraEligibleAzureDevOpsBaseUrl('https://dev.azure.com.evil.example/acme')).toBe(false)
     expect(isEntraEligibleAzureDevOpsBaseUrl('https://notvisualstudio.com')).toBe(false)
     expect(isEntraEligibleAzureDevOpsBaseUrl('not a url')).toBe(false)
+  })
+
+  it('rejects non-HTTPS URLs so a bearer token never travels in cleartext', () => {
+    expect(isEntraEligibleAzureDevOpsBaseUrl('http://dev.azure.com/acme')).toBe(false)
+  })
+
+  it('rejects the bare visualstudio.com apex, which is not an Azure DevOps API host', () => {
+    expect(isEntraEligibleAzureDevOpsBaseUrl('https://visualstudio.com')).toBe(false)
   })
 })
