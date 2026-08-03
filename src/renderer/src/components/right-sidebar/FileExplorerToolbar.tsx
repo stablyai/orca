@@ -1,5 +1,5 @@
 import React from 'react'
-import { Ellipsis, Ghost, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -30,8 +30,6 @@ type FileExplorerToolbarProps = {
   onToggleGitIgnoredFiles: () => void
   showDotfiles: boolean
   onToggleDotfiles: () => void
-  orphanServiceCount: number
-  onShowOrphanServices: () => void
 }
 
 export function FileExplorerToolbar({
@@ -46,9 +44,7 @@ export function FileExplorerToolbar({
   showGitIgnoredFiles,
   onToggleGitIgnoredFiles,
   showDotfiles,
-  onToggleDotfiles,
-  orphanServiceCount,
-  onShowOrphanServices
+  onToggleDotfiles
 }: FileExplorerToolbarProps): React.JSX.Element {
   return (
     <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
@@ -58,41 +54,6 @@ export function FileExplorerToolbar({
       >
         {repoName}
       </span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className={cn(
-              'relative text-muted-foreground hover:text-foreground',
-              orphanServiceCount > 0 && 'text-destructive hover:text-destructive'
-            )}
-            aria-label={translate(
-              'auto.components.right.sidebar.FileExplorerToolbar.0ad7780b8f',
-              'Orphaned Services'
-            )}
-            onClick={onShowOrphanServices}
-          >
-            <Ghost className="size-3" />
-            {orphanServiceCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-destructive" />
-            )}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={4}>
-          {orphanServiceCount > 0
-            ? translate(
-                'auto.components.right.sidebar.FileExplorerToolbar.9190c23983',
-                '{{value0}} orphaned services',
-                { value0: orphanServiceCount }
-              )
-            : translate(
-                'auto.components.right.sidebar.FileExplorerToolbar.0ad7780b8f',
-                'Orphaned Services'
-              )}
-        </TooltipContent>
-      </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

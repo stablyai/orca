@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { ChevronRight, Loader2, RefreshCw, Server } from 'lucide-react'
+import { ChevronRight, Loader2, RefreshCw, Server, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -20,6 +20,8 @@ export function ServicesSection({
   error,
   repoId,
   worktreeId,
+  orphanCount,
+  onShowOrphans,
   onRefresh,
   onOpen,
   onStop
@@ -29,6 +31,8 @@ export function ServicesSection({
   error: string | null
   repoId: string | null
   worktreeId: string | null
+  orphanCount: number
+  onShowOrphans: () => void
   onRefresh: () => void
   onOpen: (service: WorkspaceService) => void
   onStop: (service: WorkspaceService) => void
@@ -96,6 +100,23 @@ export function ServicesSection({
           </TooltipContent>
         </Tooltip>
       </div>
+
+      {orphanCount > 0 && (
+        <button
+          type="button"
+          className="mb-1 flex w-full items-center gap-1.5 border-t border-destructive/20 bg-destructive/10 px-2 py-1 text-left text-[11px] text-destructive transition-colors hover:bg-destructive/20"
+          onClick={onShowOrphans}
+        >
+          <TriangleAlert size={12} className="shrink-0" />
+          <span className="truncate">
+            {translate(
+              'auto.components.right.sidebar.ServicesSection.72da684658',
+              '{{value0}} orphaned, workspace deleted',
+              { value0: orphanCount }
+            )}
+          </span>
+        </button>
+      )}
 
       {!collapsed && (
         <div

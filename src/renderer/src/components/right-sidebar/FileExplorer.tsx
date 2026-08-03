@@ -716,8 +716,6 @@ function FileExplorerFiles(): React.JSX.Element {
           onToggleGitIgnoredFiles={toggleGitIgnoredFiles}
           showDotfiles={showDotfiles}
           onToggleDotfiles={handleToggleDotfiles}
-          orphanServiceCount={orphanServices.length}
-          onShowOrphanServices={() => setOrphanServicesOpen(true)}
         />
         <FileExplorerQueryStrip view={explorerView} onSelectView={handleSelectExplorerView}>
           {/* Why: keep both query rows mounted and cross-fade so the Names/Contents
@@ -870,6 +868,8 @@ function FileExplorerFiles(): React.JSX.Element {
             error={services.error}
             repoId={activeRepo?.id ?? null}
             worktreeId={activeWorktree?.id ?? null}
+            orphanCount={orphanServices.length}
+            onShowOrphans={() => setOrphanServicesOpen(true)}
             onRefresh={() => void services.refresh()}
             onOpen={handleOpenService}
             onStop={(service) => void handleStopService(service)}

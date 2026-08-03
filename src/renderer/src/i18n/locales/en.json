@@ -10334,9 +10334,7 @@
             "d95e30fe28": "Refresh Explorer",
             "6026b16950": "Collapse All",
             "693cbeadd0": "Search",
-            "c1f3f3ec70": "Search file contents",
-            "0ad7780b8f": "Orphaned Services",
-            "9190c23983": "{{value0}} orphaned services"
+            "c1f3f3ec70": "Search file contents"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No files in this workspace",
@@ -11512,7 +11510,8 @@
             "7b483f5f0a": "Refresh Services",
             "0dce278f78": "Services",
             "cd70c78d76": "Scanning...",
-            "e187c588bf": "No services running for this workspace"
+            "e187c588bf": "No services running for this workspace",
+            "72da684658": "{{value0}} orphaned, workspace deleted"
           }
         }
       },
