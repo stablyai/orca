@@ -44,4 +44,26 @@ describe('toTerminalInput', () => {
   it('collapses carriage returns embedded in the notice', () => {
     expect(toTerminalInput('a\r\nb')).toBe('a b\r')
   })
+
+  it('strips escape sequences so a crafted name cannot reach the agent terminal', () => {
+    // A container image or project name is not fully trusted; an embedded ESC
+    // would otherwise be interpreted by the terminal instead of shown as text.
+    const input = toTerminalInput('stopped \u001b[31mred\u001b[0m service')
+
+    expect(input).not.toContain('\u001b')
+    // Control bytes collapse to a space rather than being deleted, so the
+    // surrounding words cannot be silently fused into one token.
+    expect(input).toBe('stopped [31mred [0m service\r')
+  })
+
+  it('strips every other C0 control byte', () => {
+    expect(toTerminalInput('a\u0007b\u0000c')).toBe('a b c\r')
+  })
+
+  it('still ends with exactly one carriage return', () => {
+    const input = toTerminalInput('\u001b\u001b weird \r\n name \u0007')
+
+    expect(input.endsWith('\r')).toBe(true)
+    expect(input.split('\r')).toHaveLength(2)
+  })
 })

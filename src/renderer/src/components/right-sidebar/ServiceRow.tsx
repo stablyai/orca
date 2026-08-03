@@ -29,7 +29,7 @@ export function ServiceRow({
 }: {
   service: WorkspaceService
   showProject: boolean
-  onStop: ((service: WorkspaceService, notifyAgent: boolean) => void) | null
+  onStop: ((request: WorkspaceServiceStopRequest, notifyAgent: boolean) => void) | null
   stopRequest: WorkspaceServiceStopRequest | null
 }): React.JSX.Element {
   const handleCopy = useCallback(() => {
@@ -125,7 +125,7 @@ export function ServiceRow({
                     variant="ghost"
                     size="icon-xs"
                     className={cn('text-muted-foreground hover:text-destructive')}
-                    onClick={() => onStop?.(service, false)}
+                    onClick={() => stopRequest && onStop?.(stopRequest, false)}
                     aria-label={translate(
                       'auto.components.right.sidebar.ServiceRow.26b04179d6',
                       'Stop service on port {{value0}}',
@@ -154,12 +154,15 @@ export function ServiceRow({
         <ContextMenuItem
           variant="destructive"
           disabled={!canStop}
-          onSelect={() => onStop?.(service, false)}
+          onSelect={() => stopRequest && onStop?.(stopRequest, false)}
         >
           {translate('auto.components.right.sidebar.ServiceRow.d3775acb14', 'Stop Service')}
         </ContextMenuItem>
         {canTellAgent && (
-          <ContextMenuItem variant="destructive" onSelect={() => onStop?.(service, true)}>
+          <ContextMenuItem
+            variant="destructive"
+            onSelect={() => stopRequest && onStop?.(stopRequest, true)}
+          >
             {translate(
               'auto.components.right.sidebar.ServiceRow.650664d898',
               'Stop and tell {{value0}}',

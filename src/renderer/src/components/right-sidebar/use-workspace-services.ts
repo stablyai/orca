@@ -11,6 +11,10 @@ export type WorkspaceServicesState = {
 
 /** Fast enough that a service started in a terminal appears while the user still expects it. */
 const POLL_INTERVAL_MS = 8_000
+/** Ceiling on one scan. The main process bounds each child command, but a
+ *  wedged IPC channel would otherwise leave the in-flight flag set forever and
+ *  silently stop every later poll. */
+const SCAN_TIMEOUT_MS = 20_000
 
 /**
  * Scan on mount, on workspace change, and on a poll while the window is visible.
@@ -20,6 +24,22 @@ const POLL_INTERVAL_MS = 8_000
  * skipped rather than queued. A panel that only updated when asked read as
  * broken, which is worse than the cost of the timer.
  */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Service scan timed out.')), timeoutMs)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+    )
+  })
+}
+
 export function useWorkspaceServices(
   repoId: string | null | undefined,
   enabled: boolean
@@ -46,7 +66,10 @@ export function useWorkspaceServices(
         setIsRefreshing(true)
       }
       try {
-        const result = await window.api.workspacePorts.scanServices(repoId ? { repoId } : {})
+        const result = await withTimeout(
+          window.api.workspacePorts.scanServices(repoId ? { repoId } : {}),
+          SCAN_TIMEOUT_MS
+        )
         if (!mountedRef.current || sequence !== requestSequenceRef.current) {
           return
         }
@@ -68,6 +91,13 @@ export function useWorkspaceServices(
   )
 
   const refresh = useCallback(() => runScan(false), [runScan])
+
+  // Why: the previous workspace's result would otherwise describe the new one
+  // for a full round trip, including its orphan count and docker notice.
+  useEffect(() => {
+    setScan(null)
+    setError(null)
+  }, [repoId])
 
   useEffect(() => {
     if (!enabled) {

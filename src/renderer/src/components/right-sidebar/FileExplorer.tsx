@@ -22,9 +22,8 @@ import { OrphanServicesDialog } from './OrphanServicesDialog'
 import { ServicesSection } from './ServicesSection'
 import { useWorkspaceServices } from './use-workspace-services'
 import {
-  resolveServiceStopRequest,
   selectOrphanServices,
-  type WorkspaceService
+  type WorkspaceServiceStopRequest
 } from '../../../../shared/workspace-services'
 import { SearchFilters } from './SearchFilters'
 import { SearchQueryRow } from './SearchQueryRow'
@@ -268,21 +267,25 @@ function FileExplorerFiles(): React.JSX.Element {
   )
 
   const handleStopService = useCallback(
-    async (service: WorkspaceService, notifyAgent: boolean) => {
-      const request = resolveServiceStopRequest(service, activeRepo?.id ?? null)
-      if (!request) {
-        return
+    async (request: WorkspaceServiceStopRequest, notifyAgent: boolean) => {
+      // Why the request is passed in rather than re-resolved: the row already
+      // resolved it with the scoping its own section used. Re-resolving here
+      // against the active repo would send the wrong repoId for an orphan
+      // owned by another project, and the ownership check could never match.
+      try {
+        const result = await window.api.workspacePorts.stopService(
+          request.kind === 'process' ? { ...request, notifyAgent } : request
+        )
+        if (!result.ok) {
+          toast.error(result.reason)
+          return
+        }
+        await services.refresh()
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : String(cause))
       }
-      const result = await window.api.workspacePorts.stopService(
-        request.kind === 'process' ? { ...request, notifyAgent } : request
-      )
-      if (!result.ok) {
-        toast.error(result.reason)
-        return
-      }
-      await services.refresh()
     },
-    [activeRepo?.id, services]
+    [services]
   )
 
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -872,7 +875,7 @@ function FileExplorerFiles(): React.JSX.Element {
             orphanCount={orphanServices.length}
             onShowOrphans={() => setOrphanServicesOpen(true)}
             onRefresh={() => void services.refresh()}
-            onStop={(service, notifyAgent) => void handleStopService(service, notifyAgent)}
+            onStop={(request, notifyAgent) => void handleStopService(request, notifyAgent)}
           />
         )}
       </div>
@@ -881,7 +884,7 @@ function FileExplorerFiles(): React.JSX.Element {
         open={orphanServicesOpen}
         orphans={orphanServices}
         onOpenChange={setOrphanServicesOpen}
-        onStop={(service, notifyAgent) => void handleStopService(service, notifyAgent)}
+        onStop={(request, notifyAgent) => void handleStopService(request, notifyAgent)}
       />
 
       <FileExplorerBackgroundMenu

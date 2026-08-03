@@ -58,6 +58,22 @@ describe('parseDockerPublishedPorts', () => {
     ])
   })
 
+  it('expands a published port range instead of keeping only its first port', () => {
+    expect(parseDockerPublishedPorts('0.0.0.0:8000-8002->8000-8002/tcp')).toEqual([
+      8000, 8001, 8002
+    ])
+  })
+
+  it('keeps a range and a single mapping together', () => {
+    expect(
+      parseDockerPublishedPorts('0.0.0.0:8000-8001->8000-8001/tcp, 0.0.0.0:9000->9000/tcp')
+    ).toEqual([8000, 8001, 9000])
+  })
+
+  it('rejects a range whose end is out of bounds', () => {
+    expect(parseDockerPublishedPorts('0.0.0.0:65534-70000->1-2/tcp')).toEqual([])
+  })
+
   it('skips UDP mappings because the port scan only reports TCP listeners', () => {
     expect(parseDockerPublishedPorts('0.0.0.0:5353->5353/udp')).toEqual([])
   })

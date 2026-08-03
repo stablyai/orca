@@ -100,12 +100,21 @@ export function parseDockerPublishedPorts(value: string): number[] {
     if (separator === -1) {
       continue
     }
-    const port = Number.parseInt(hostSide.slice(separator + 1), 10)
-    if (!Number.isInteger(port) || port <= 0 || port > 65535 || seen.has(port)) {
+    // Docker prints a range as `0.0.0.0:8000-8002->8000-8002/tcp`; parsing only
+    // the first number would leave listeners on the rest unattributed.
+    const [startText, endText] = hostSide.slice(separator + 1).split('-')
+    const start = Number.parseInt(startText, 10)
+    const end = endText === undefined ? start : Number.parseInt(endText, 10)
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start <= 0 || end > 65535) {
       continue
     }
-    seen.add(port)
-    ports.push(port)
+    for (let port = start; port <= end; port++) {
+      if (seen.has(port)) {
+        continue
+      }
+      seen.add(port)
+      ports.push(port)
+    }
   }
   return ports
 }
@@ -174,12 +183,9 @@ export function indexDockerContainersByHostPort(
 export async function scanDockerContainerServices(
   runCommand: typeof runBoundedCommand = runBoundedCommand
 ): Promise<DockerContainerScan> {
-  let binary: string
-  try {
-    binary = await resolveDockerBinary()
-  } catch {
-    return { available: false, containers: [], unavailableReason: 'Docker was not found.' }
-  }
+  // Why no guard around resolveDockerBinary: it swallows its own access errors
+  // and falls back to PATH, so it cannot reject.
+  const binary = await resolveDockerBinary()
 
   try {
     const { stdout } = await runCommand(

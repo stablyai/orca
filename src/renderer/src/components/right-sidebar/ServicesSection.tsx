@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type {
-  WorkspaceService,
-  WorkspaceServiceScanResult
+  WorkspaceServiceScanResult,
+  WorkspaceServiceStopRequest
 } from '../../../../shared/workspace-services'
 import {
   resolveServiceStopRequest,
@@ -34,7 +34,7 @@ export function ServicesSection({
   orphanCount: number
   onShowOrphans: () => void
   onRefresh: () => void
-  onStop: (service: WorkspaceService, notifyAgent: boolean) => void
+  onStop: (request: WorkspaceServiceStopRequest, notifyAgent: boolean) => void
 }): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(false)
   const [showOtherWorktrees, setShowOtherWorktrees] = useState(false)

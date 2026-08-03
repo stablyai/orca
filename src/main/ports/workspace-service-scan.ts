@@ -1,4 +1,3 @@
-import { stat } from 'node:fs/promises'
 import type { WorkspacePort, WorkspacePortProbe } from '../../shared/workspace-ports'
 import type { WorkspaceService, WorkspaceServiceScanResult } from '../../shared/workspace-services'
 import {
@@ -13,6 +12,7 @@ import {
   type ProcessAncestryTable
 } from './service-process-ancestry'
 import { resolveServiceIdentity } from './service-project-identity'
+import { isMissingDirectory } from './workspace-directory-presence'
 
 /**
  * Compose a services view from the three independent sources.
@@ -152,17 +152,16 @@ async function resolveOwner(
 /**
  * A recorded working directory that no longer exists means the workspace was
  * deleted while the service kept running — the case nothing else surfaces.
+ *
+ * Only a genuinely missing path counts. A permission error means the directory
+ * is there and unreadable, and badging that as "workspace deleted" would be
+ * inventing a fact the filesystem never reported.
  */
 async function isOrphanedWorkingDir(workingDir: string | null): Promise<boolean> {
   if (!workingDir) {
     return false
   }
-  try {
-    await stat(workingDir)
-    return false
-  } catch {
-    return true
-  }
+  return isMissingDirectory(workingDir)
 }
 
 function compareServices(a: WorkspaceService, b: WorkspaceService): number {

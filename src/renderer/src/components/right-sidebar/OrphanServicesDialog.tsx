@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/dialog'
 import {
   resolveServiceStopRequest,
-  type WorkspaceService
+  type WorkspaceService,
+  type WorkspaceServiceStopRequest
 } from '../../../../shared/workspace-services'
 import { ServiceRow, UNRESOLVED } from './ServiceRow'
 import { translate } from '@/i18n/i18n'
@@ -28,7 +29,7 @@ export function OrphanServicesDialog({
   open: boolean
   orphans: WorkspaceService[]
   onOpenChange: (open: boolean) => void
-  onStop: (service: WorkspaceService, notifyAgent: boolean) => void
+  onStop: (request: WorkspaceServiceStopRequest, notifyAgent: boolean) => void
 }): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

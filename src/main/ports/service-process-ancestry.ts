@@ -141,7 +141,8 @@ function truncateLaunchCommand(command: string): string {
 function shortenPathToken(token: string): string {
   // Keep flags and short values verbatim; only collapse long absolute paths.
   // Case is preserved: this string is shown to the user, not matched on.
-  if (token.startsWith('-') || !token.includes('/') || token.length < 24) {
+  const looksLikePath = token.includes('/') || token.includes('\\')
+  if (token.startsWith('-') || !looksLikePath || token.length < 24) {
     return token
   }
   return basename(token) || token
