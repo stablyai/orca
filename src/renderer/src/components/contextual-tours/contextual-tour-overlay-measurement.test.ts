@@ -66,9 +66,6 @@ describe('contextual tour overlay measurement', () => {
     )
   })
 
-  // Why: localized copy used to be keyed off the step's position, so inserting
-  // a step ahead of it silently moved the copy onto the wrong step — with no
-  // type or test error. Keying off the step id has to survive that insertion.
   it('keeps localized copy on its own step when a step is inserted before it', async () => {
     await setRendererUiLanguage('ko')
     const target = document.createElement('button')

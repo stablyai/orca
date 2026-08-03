@@ -30,9 +30,7 @@ export type ContextualTourStepAction = {
 export type ContextualTourStepPlacement = 'top' | 'right' | 'bottom' | 'left'
 
 export type ContextualTourStep = {
-  // Why: a stable anchor for localized copy. Keying translations off the step's
-  // position lets an inserted step silently shift copy onto the wrong step,
-  // with no type or test error to catch it.
+  // Stable anchor for localized copy — position-keyed translations shift onto the wrong step when one is inserted.
   id?: string
   title: string
   body: string
