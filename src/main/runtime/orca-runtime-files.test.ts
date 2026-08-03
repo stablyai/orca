@@ -141,6 +141,7 @@ function mockLocalPathStats(entries: Record<string, [number, number]>) {
 
 function createRuntimeFileCommands(options?: {
   path?: string
+  hostId?: string
   openFile?: ReturnType<typeof vi.fn>
   openDiff?: ReturnType<typeof vi.fn>
   resolveRuntimeFileTarget?: ReturnType<typeof vi.fn>
@@ -158,7 +159,8 @@ function createRuntimeFileCommands(options?: {
   const worktree = {
     id: 'wt-1',
     repoId: 'repo-1',
-    path
+    path,
+    ...(options?.hostId ? { hostId: options.hostId } : {})
   }
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
@@ -913,7 +915,7 @@ describe('RuntimeFileCommands', () => {
 
       expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith(
         '/sibling/docs/readme.md',
-        undefined
+        'local'
       )
       expect(result).toEqual({
         worktree: 'wt-2',
@@ -928,6 +930,65 @@ describe('RuntimeFileCommands', () => {
           absolutePath: '/sibling/docs/readme.md'
         }
       })
+    })
+
+    it('stats a sibling SSH workspace through its owning provider', async () => {
+      const sibling = {
+        id: 'wt-2',
+        repoId: 'repo-2',
+        path: '/sibling',
+        hostId: 'ssh:ssh-1',
+        git: {
+          path: '/sibling',
+          head: '',
+          branch: '',
+          isBare: false,
+          isMainWorktree: true
+        }
+      }
+      const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
+        worktree: sibling,
+        connectionId: 'ssh-1',
+        relativePath: 'docs/readme.md'
+      }))
+      const { commands, store } = createRuntimeFileCommands({
+        path: '/repo',
+        resolveKnownWorkspaceFileTarget
+      })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const remoteStat = vi.fn().mockResolvedValue({ type: 'file', size: 12, mtime: 3 })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat: remoteStat } as never)
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '/sibling/docs/readme.md')
+
+      expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith(
+        '/sibling/docs/readme.md',
+        'ssh:ssh-1'
+      )
+      expect(remoteStat).toHaveBeenCalledWith('/sibling/docs/readme.md')
+      expect(statMock).not.toHaveBeenCalled()
+      expect(result).toMatchObject({
+        worktree: 'wt-2',
+        relativePath: 'docs/readme.md',
+        exists: true,
+        openTarget: { provider: 'ssh' }
+      })
+    })
+
+    it('scopes sibling lookup to the selected worktree execution host', async () => {
+      const resolveKnownWorkspaceFileTarget = vi.fn(async () => null)
+      const { commands } = createRuntimeFileCommands({
+        path: '/repo-a',
+        hostId: 'runtime:env-a',
+        resolveKnownWorkspaceFileTarget
+      })
+
+      await commands.resolveTerminalPath('id:wt-1', '/repo-b/docs/readme.md')
+
+      expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledWith(
+        '/repo-b/docs/readme.md',
+        'runtime:env-a'
+      )
     })
 
     it('resolves a relative path against the provided cwd', async () => {

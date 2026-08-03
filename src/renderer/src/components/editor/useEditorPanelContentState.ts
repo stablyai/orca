@@ -164,7 +164,9 @@ export function useEditorPanelContentState({
             restoredOpenFile.externalSshTargetId?.trim() ||
             (isLiveTailLogTab ? undefined : connectionId)
           if (!externalSshOwnerId) {
-            const runtimeEnvironmentId = readSettings?.activeRuntimeEnvironmentId?.trim()
+            const runtimeEnvironmentId = isLiveTailLogTab
+              ? undefined
+              : readSettings?.activeRuntimeEnvironmentId?.trim()
             if (runtimeEnvironmentId) {
               const route = findRuntimeWorkspaceFileRoute(
                 useAppStore.getState(),

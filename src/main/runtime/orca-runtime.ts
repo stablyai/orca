@@ -516,7 +516,7 @@ import {
 } from './workspace-session-terminal-membership-authority'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
-import { RuntimeFileCommands } from './orca-runtime-files'
+import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
 import {
   activateClientSessionTabSelection,
@@ -8864,47 +8864,59 @@ export class OrcaRuntimeService {
 
   private async resolveKnownWorkspaceFileTarget(
     absolutePath: string,
-    connectionId: string | undefined
+    executionHostId: ExecutionHostId
   ): Promise<{
     worktree: ResolvedWorktree
     connectionId?: string
     relativePath: string
   } | null> {
-    const targets = new Map<string, { worktree: ResolvedWorktree; connectionId?: string }>()
+    const targets = new Map<
+      string,
+      {
+        worktree: ResolvedWorktree
+        connectionId?: string
+        executionHostId: ExecutionHostId
+      }
+    >()
     for (const worktree of await this.listResolvedWorktrees()) {
       if (!this.isRuntimeWorktreeVisible(worktree)) {
         continue
       }
       const candidateConnectionId = this.store?.getRepo(worktree.repoId)?.connectionId ?? undefined
-      targets.set(worktree.id, {
+      const target = {
         worktree,
+        executionHostId: getRuntimeFileTargetExecutionHostId({
+          worktree,
+          connectionId: candidateConnectionId
+        }),
         ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
-      })
+      }
+      targets.set(`${target.executionHostId}\0${worktree.id}`, target)
     }
     for (const folderWorkspace of this.store?.getFolderWorkspaces?.() ?? []) {
       try {
         const candidateConnectionId =
           this.resolveFolderWorkspaceConnectionId(folderWorkspace) ?? undefined
         const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
-        targets.set(worktree.id, {
+        const target = {
           worktree,
+          executionHostId: getRuntimeFileTargetExecutionHostId({
+            worktree,
+            connectionId: candidateConnectionId
+          }),
           ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
-        })
+        }
+        targets.set(`${target.executionHostId}\0${worktree.id}`, target)
       } catch {
         // An ambiguous folder workspace has no single filesystem authority.
       }
     }
 
-    const executionHostId = connectionId
-      ? toSshExecutionHostId(connectionId)
-      : LOCAL_EXECUTION_HOST_ID
     const owner = findRuntimeWorkspaceFileOwner(
       [...targets.values()].map((target) => ({
         workspaceId: target.worktree.id,
         rootPath: target.worktree.path,
-        executionHostId: target.connectionId
-          ? toSshExecutionHostId(target.connectionId)
-          : LOCAL_EXECUTION_HOST_ID
+        executionHostId: target.executionHostId
       })),
       absolutePath,
       executionHostId
@@ -8912,7 +8924,7 @@ export class OrcaRuntimeService {
     if (!owner) {
       return null
     }
-    const target = targets.get(owner.workspaceId)
+    const target = targets.get(`${owner.executionHostId}\0${owner.workspaceId}`)
     return target ? { ...target, relativePath: owner.relativePath } : null
   }
 

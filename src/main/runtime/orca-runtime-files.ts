@@ -87,7 +87,7 @@ import {
 } from './runtime-mobile-file-path-search'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
@@ -490,6 +490,15 @@ export type ResolvedRuntimeFileTarget = {
   connectionId?: string
 }
 
+export function getRuntimeFileTargetExecutionHostId(
+  target: ResolvedRuntimeFileTarget
+): ExecutionHostId {
+  return (
+    target.worktree.hostId ??
+    (target.connectionId ? toSshExecutionHostId(target.connectionId) : 'local')
+  )
+}
+
 export type RuntimeFileCommandHost = {
   getRuntimeId(): string
   requireStore(): Store
@@ -497,7 +506,7 @@ export type RuntimeFileCommandHost = {
   resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget>
   resolveKnownWorkspaceFileTarget?(
     absolutePath: string,
-    connectionId: string | undefined
+    executionHostId: ExecutionHostId
   ): Promise<(ResolvedRuntimeFileTarget & { relativePath: string }) | null>
   resolveTerminalCwd?(terminalHandle: string): string | null | Promise<string | null>
   resolveTerminalContext?(
@@ -750,7 +759,10 @@ export class RuntimeFileCommands {
     const relativePath = relativePathInsideRoot(worktree.path, absolutePath)
     const knownWorkspaceTarget =
       relativePath === null || relativePath === ''
-        ? await this.host.resolveKnownWorkspaceFileTarget?.(absolutePath, connectionId)
+        ? await this.host.resolveKnownWorkspaceFileTarget?.(
+            absolutePath,
+            getRuntimeFileTargetExecutionHostId(target)
+          )
         : null
     const ownedWorktree = knownWorkspaceTarget?.worktree ?? worktree
     const ownedConnectionId = knownWorkspaceTarget?.connectionId ?? connectionId
