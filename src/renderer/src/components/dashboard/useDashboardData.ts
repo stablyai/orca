@@ -15,8 +15,15 @@ export type DashboardAgentRow = {
   rowSource?: 'live' | 'retained' | 'subagent'
   state: AgentStatusState | 'idle'
   /** Pane to focus when the row is activated, when it differs from paneKey.
-   *  Subagent rows have no pane of their own and activate their parent's. */
+   *  Subagent rows use this as the parent-terminal fallback. */
   activationPaneKey?: string
+  /** Explicit provider session identity for an in-process child. The child has
+   *  no PTY, so consumers must not derive this from the synthetic pane key. */
+  subagentSession?: {
+    id: string
+    provider: AgentType
+    parentPaneKey: string
+  }
   /** When this agent first began reporting status. Derived from the oldest
    *  stateHistory entry, falling back to updatedAt when no history exists yet.
    *  Used to sort agents by when they started. */

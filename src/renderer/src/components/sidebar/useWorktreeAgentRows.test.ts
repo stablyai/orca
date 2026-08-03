@@ -727,6 +727,7 @@ describe('applyAgentRowLineage', () => {
     const entry = makeEntry(PANE_KEY_1, 1000, {
       state: 'working',
       prompt: 'review the PR',
+      connectionId: 'runtime-ssh-env-1',
       subagents: [
         {
           id: 'a1',
@@ -751,8 +752,9 @@ describe('applyAgentRowLineage', () => {
     expect(children[0]).toMatchObject({
       state: 'working',
       agentType: 'general-purpose',
-      entry: { model: 'gpt-5.4-mini' },
+      entry: { model: 'gpt-5.4-mini', connectionId: 'runtime-ssh-env-1' },
       activationPaneKey: PANE_KEY_1,
+      subagentSession: { id: 'a1', provider: 'claude', parentPaneKey: PANE_KEY_1 },
       startedAt: 1500
     })
     expect(children[0].entry.prompt).toBe('Review loop')
@@ -764,6 +766,27 @@ describe('applyAgentRowLineage', () => {
     expect(ordered[0].lineage).toMatchObject({ depth: 0, childCount: 2 })
     expect(ordered[1].lineage).toMatchObject({ depth: 1, isFirstSibling: true })
     expect(ordered[2].lineage).toMatchObject({ depth: 1, isLastSibling: true })
+  })
+
+  it('binds a Codex child row to the resolved parent provider session', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'codex', title: 'Codex' })],
+      entries: [
+        makeEntry(PANE_KEY_1, 1000, {
+          agentType: undefined,
+          terminalTitle: 'Codex',
+          subagents: [{ id: 'child-codex', state: 'working', startedAt: 1500 }]
+        })
+      ],
+      retained: [],
+      now: 2000
+    })
+
+    expect(rows.find((row) => row.rowSource === 'subagent')?.subagentSession).toEqual({
+      id: 'child-codex',
+      provider: 'codex',
+      parentPaneKey: PANE_KEY_1
+    })
   })
 
   it('decays working subagent child rows to idle when the parent status is stale', () => {

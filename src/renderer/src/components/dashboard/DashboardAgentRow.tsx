@@ -113,7 +113,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      // Why: subagent rows have no pane of their own, so focus the spawning parent's pane.
+      // Why: subagents have no pane, so the caller receives their explicit parent fallback.
       onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
     },
     [onActivate, agent.tab.id, agent.activationPaneKey, agent.paneKey]

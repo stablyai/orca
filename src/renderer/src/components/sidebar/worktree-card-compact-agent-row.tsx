@@ -126,8 +126,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      // Why: subagent child rows have no pane of their own; they focus the
-      // parent pane whose session spawned them.
+      // Why: subagents have no pane, so the caller receives their explicit parent fallback.
       onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
     },
     [agent.activationPaneKey, agent.paneKey, agent.tab.id, onActivate]

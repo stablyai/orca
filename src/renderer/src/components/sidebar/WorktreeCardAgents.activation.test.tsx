@@ -18,6 +18,10 @@ type MockAgentOptions = {
   prompt: string
   worktreeId: string
   startedAt?: number
+  rowSource?: DashboardAgentRowData['rowSource']
+  model?: string
+  connectionId?: string | null
+  subagentSession?: DashboardAgentRowData['subagentSession']
 }
 
 function mockAgent({
@@ -26,13 +30,17 @@ function mockAgent({
   agentType,
   prompt,
   worktreeId,
-  startedAt = 1000
+  startedAt = 1000,
+  rowSource = 'live',
+  model,
+  connectionId,
+  subagentSession
 }: MockAgentOptions): DashboardAgentRowData {
   return {
     paneKey,
     tab: { id: tabId },
     agentType,
-    rowSource: 'live',
+    rowSource,
     state: 'working',
     startedAt,
     entry: {
@@ -42,8 +50,11 @@ function mockAgent({
       updatedAt: startedAt,
       stateStartedAt: startedAt,
       stateHistory: [],
-      worktreeId
-    }
+      worktreeId,
+      model,
+      connectionId
+    },
+    subagentSession
   } as unknown as DashboardAgentRowData
 }
 
@@ -84,6 +95,7 @@ function buildMockStoreState(): Record<string, unknown> {
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
     sendPromptToSidebarAgentTarget: vi.fn(),
+    openModal: activationMocks.openModal,
     settings: {
       promptCacheTimerEnabled: true,
       promptCacheTtlMs: 60_000
@@ -93,7 +105,8 @@ function buildMockStoreState(): Record<string, unknown> {
 
 const activationMocks = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn(),
-  activateTabAndFocusPane: vi.fn()
+  activateTabAndFocusPane: vi.fn(),
+  openModal: vi.fn()
 }))
 
 const staleAgentRowMocks = vi.hoisted(() => ({
@@ -368,6 +381,81 @@ describe('WorktreeCardAgents activation', () => {
     expect(activationMocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
     expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
     expect(staleAgentRowMocks.dismissStaleAgentRowByKey).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('opens Codex subagent progress instead of activating the parent pane', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const parentPaneKey = makePaneKey('tab-1', LEAF_A)
+    mockAgents = [
+      mockAgent({
+        paneKey: `${parentPaneKey}\u0000subagent:child-1`,
+        tabId: 'tab-1',
+        agentType: 'reviewer',
+        prompt: 'Review files',
+        worktreeId: 'wt-1',
+        rowSource: 'subagent',
+        model: 'gpt-5.4-mini',
+        connectionId: null,
+        subagentSession: { id: 'child-1', provider: 'codex', parentPaneKey }
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    capturedRowActivations[0].onActivate('tab-1', parentPaneKey)
+
+    expect(activationMocks.openModal).toHaveBeenCalledWith(
+      'codex-subagent-progress',
+      expect.objectContaining({
+        sessionId: 'child-1',
+        parentPaneKey,
+        terminalTabId: 'tab-1',
+        worktreeId: 'wt-1',
+        label: 'Review files',
+        connectionId: null
+      })
+    )
+    expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+  })
+
+  it('opens Codex subagent progress from compact rows', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    const parentPaneKey = makePaneKey('tab-1', LEAF_A)
+    mockAgents = [
+      mockAgent({
+        paneKey: `${parentPaneKey}\u0000subagent:child-compact`,
+        tabId: 'tab-1',
+        agentType: 'reviewer',
+        prompt: 'Inspect compact progress',
+        worktreeId: 'wt-1',
+        rowSource: 'subagent',
+        connectionId: null,
+        subagentSession: { id: 'child-compact', provider: 'codex', parentPaneKey }
+      })
+    ]
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    await act(async () => {
+      root.render(<WorktreeCardAgents worktreeId="wt-1" />)
+    })
+    const row = host.querySelector('.compact-agent-row')
+    expect(row).toBeInstanceOf(HTMLElement)
+
+    await act(async () => {
+      row?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(activationMocks.openModal).toHaveBeenCalledWith(
+      'codex-subagent-progress',
+      expect.objectContaining({ sessionId: 'child-compact', parentPaneKey })
+    )
+    expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    act(() => root.unmount())
+    host.remove()
   })
 
   it('reveals the worktree and focuses a compact automation worker row hydrated during reveal', async () => {

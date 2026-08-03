@@ -26,6 +26,7 @@ import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constant
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
+import { createCodexSubagentProgressTarget } from './codex-subagent-progress-target'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -80,6 +81,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
+  const openModal = useAppStore((s) => s.openModal)
   const { targetMode: agentSendPopoverTargetMode, agentStatusEpoch } = useAppStore(
     useShallow((s) => selectSendTargetControlInputs(s, worktreeId))
   )
@@ -187,6 +189,17 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const handleActivateRetainedAgent = useCallback(() => {
     // Why: hibernation-retained rows are passive completion evidence; activating would resume sleeping sessions, so the row is inert.
   }, [])
+  const handleOpenCodexSubagentProgress = useCallback(
+    (agent: DashboardAgentRowData) => {
+      const target = createCodexSubagentProgressTarget(agent, worktreeId)
+      if (!target) {
+        handleActivateAgentTab(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+        return
+      }
+      openModal('codex-subagent-progress', target)
+    },
+    [handleActivateAgentTab, openModal, worktreeId]
+  )
 
   // Why: one 30s tick per non-empty inline list; zero-agent cards never mount this (see WorktreeCardAgents), so idle worktrees pay no timer cost.
   const now = useNow(30_000)
@@ -262,7 +275,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           agent={agent}
           onDismiss={handleDismissAgent}
           onActivate={
-            agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
+            agent.rowSource === 'retained'
+              ? handleActivateRetainedAgent
+              : agent.subagentSession?.provider === 'codex'
+                ? () => handleOpenCodexSubagentProgress(agent)
+                : handleActivateAgentTab
           }
           now={now}
           // Why: bold the row until the user visits its tab (useAutoAckViewedAgent auto-acks on focus, muting it).
@@ -323,7 +340,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           agent={agent}
           now={now}
           onActivate={
-            agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
+            agent.rowSource === 'retained'
+              ? handleActivateRetainedAgent
+              : agent.subagentSession?.provider === 'codex'
+                ? () => handleOpenCodexSubagentProgress(agent)
+                : handleActivateAgentTab
           }
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}

@@ -16238,6 +16238,28 @@
       "deliveryFailed": "The new {{agent}} session started, but its context could not be sent.",
       "launchFailed": "Could not start a new {{agent}} session."
     },
+    "codex-subagent-progress": {
+      "loading": {
+        "title": "Waiting for subagent output…",
+        "subtitle": "New messages, reasoning, and tool activity will appear here as Codex writes them."
+      },
+      "empty": {
+        "title": "No transcript entries",
+        "subtitle": "This subagent did not write any visible messages or tool activity."
+      },
+      "error": {
+        "title": "Subagent progress unavailable",
+        "subtitle": "The subagent transcript could not be read."
+      },
+      "unavailable": {
+        "legacy-ssh": "Live subagent transcripts are not available for legacy SSH workspaces.",
+        "runtime-owner-missing": "The remote runtime owner is not available yet. Reopen this view after the workspace reconnects.",
+        "unknown-owner": "Orca could not determine which host owns this subagent transcript."
+      },
+      "read-only": "Read only",
+      "description": "Codex subagent transcript",
+      "title": "Codex subagent progress"
+    },
     "status": {
       "bar": {
         "workspaceSpace": {
