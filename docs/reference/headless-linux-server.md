@@ -155,6 +155,8 @@ display `:99` when no display exists:
 Description=Orca runtime server
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -165,6 +167,7 @@ ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
+RestartPreventExitStatus=3
 RestartSec=5
 
 [Install]
@@ -173,6 +176,15 @@ WantedBy=multi-user.target
 
 Replace `100.64.1.20` with the LAN, Tailscale, tunnel, or public hostname that
 clients should use.
+
+Exit status `3` means another process already owns this userData profile, so
+`RestartPreventExitStatus=3` stops the unit instead of retrying a launch that
+cannot succeed. Any other permanent startup fault is capped at 5 starts per
+5 minutes; systemd's defaults (10s window, 5 starts) can never trip at
+`RestartSec=5`, which is how one bad launch could restart thousands of times.
+On systemd older than 230 those two directives are spelled
+`StartLimitInterval=`/`StartLimitBurst=` and belong in `[Service]`; Ubuntu
+20.04, Orca's oldest supported base, ships systemd 245.
 
 Enable the service:
 
@@ -228,6 +240,8 @@ Then add the display dependency to the Orca service:
 Description=Orca runtime server
 After=network-online.target orca-xvfb.service
 Wants=network-online.target orca-xvfb.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -237,6 +251,7 @@ Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
 ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
 Restart=on-failure
+RestartPreventExitStatus=3
 RestartSec=5
 
 [Install]
@@ -805,6 +820,19 @@ refuse to run there and print the command to run on the machine you want.
   `orca` user and that `/opt/orca` is readable by that user.
 - Clients cannot connect: make sure `--pairing-address` is an address reachable
   from the client, and make sure firewalls allow the selected `--port`.
+- Journal shows `Another Orca instance is already running for this userData
+  profile` and the unit exits `3`: another process already owns the profile, so
+  `RestartPreventExitStatus=3` leaves the unit `failed` on purpose. Find the
+  owner with `systemctl status orca-serve` and `pgrep -af orca`. Stop it (or
+  keep it and leave the unit down), then run
+  `sudo systemctl reset-failed orca-serve && sudo systemctl start orca-serve` —
+  `reset-failed` is required because a tripped `StartLimitBurst` refuses a plain
+  `start`. If no owner exists, the lock is stale (Chromium recorded a pid that
+  has since been reused): remove `SingletonLock` and `SingletonSocket` from the
+  userData directory and start again. If an earlier crash-loop already leaked
+  AppImage mounts, list them with `findmnt -rn -t fuse.orca-linux.AppImage` and
+  release only the ones with no live owner using `fusermount -uz <target>` (or
+  `umount -l <target>`), leaving the running instance's mount alone.
 - Service crash-loops right after an upgrade: use [Roll back](#roll-back) with
   the pre-upgrade `.ready` bundle. Do not rerun the upgrade first; doing so would
   make the crashing version the next rollback binary.

@@ -7,6 +7,15 @@ export const SINGLE_INSTANCE_LOCK_BYPASS_ENV = 'ORCA_BYPASS_SINGLE_INSTANCE_LOCK
 export const SINGLE_INSTANCE_LOCK_E2E_ENFORCE_ENV = 'ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK'
 export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
   '[single-instance] ORCA_BYPASS_SINGLE_INSTANCE_LOCK=1 is set; bypassing the packaged macOS single-instance lock for diagnostics. Do not use this with another Orca instance running for the same profile.'
+// Why: stable "another process owns this profile" contract that systemd RestartPreventExitStatus= keys off; changing it silently un-fixes #11935.
+export const SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE = 3
+
+const SERVE_MODE_ARG = '--serve'
+
+// Why: a duplicate `orca serve` is a supervisor artifact, not a user asking for a window; fail open when argv is unavailable.
+export function shouldActivateDesktopForSecondInstance(argv: readonly string[] = []): boolean {
+  return !argv.includes(SERVE_MODE_ARG)
+}
 
 /**
  * Why: Orca writes two canonical discovery files into `<userData>/`:
@@ -26,11 +35,14 @@ export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
  * way dev (`orca-dev` userData) and packaged (`orca` userData) runs lock in
  * separate namespaces instead of serialising against each other.
  */
-export function acquireSingleInstanceLock(app: App, onSecondInstance: () => void): boolean {
+export function acquireSingleInstanceLock(
+  app: App,
+  onSecondInstance: (argv: readonly string[]) => void
+): boolean {
   if (!app.requestSingleInstanceLock()) {
     return false
   }
-  app.on('second-instance', onSecondInstance)
+  app.on('second-instance', (_event, argv) => onSecondInstance(argv))
   return true
 }
 
