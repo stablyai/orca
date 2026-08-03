@@ -38292,7 +38292,7 @@ describe('OrcaRuntimeService', () => {
       const terminal = terminalByName[name]
       return makePaneKey(terminal.tabId, terminal.leafId)
     }
-    const graph = {
+    const graph = () => ({
       tabs: terminals.map((terminal) => ({
         tabId: terminal.tabId,
         worktreeId: TEST_WORKTREE_ID,
@@ -38308,20 +38308,36 @@ describe('OrcaRuntimeService', () => {
         ptyId: terminal.ptyId,
         paneTitle: null
       }))
-    }
+    })
     const db = new OrchestrationDb(':memory:')
     try {
+      runtime.setOrchestrationDb(db)
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, graph())
       const runA = db.createRun({
         objective: 'own the nested worker',
         coordinatorHandle: handles.coordinator,
         coordinatorPaneKey: paneKey('coordinator')
       })
+      const creatorAuthority = runtime.getOrchestrationDispatchAuthority(handles.creator)
+      const coordinatorAuthority = runtime.getOrchestrationDispatchAuthority(handles.coordinator)
+      expect(creatorAuthority?.processIncarnation).toBeTruthy()
+      expect(coordinatorAuthority?.processIncarnation).toBeTruthy()
       const creatorTask = db.createTask({ spec: 'create nested work', runId: runA.id })
-      db.createDispatchContext(creatorTask.id, handles.creator, paneKey('creator'))
+      db.createDispatchContext(
+        creatorTask.id,
+        handles.creator,
+        paneKey('creator'),
+        undefined,
+        creatorAuthority?.processIncarnation ?? undefined
+      )
       const workerTask = db.createTask({
         spec: 'nested work',
         runId: runA.id,
-        createdByTerminalHandle: handles.creator
+        createdByTerminalHandle: handles.creator,
+        createdByPaneKey: paneKey('creator'),
+        createdByProcessIncarnation: creatorAuthority?.processIncarnation ?? undefined,
+        createdByRunGeneration: runA.consumer_generation
       })
       const workerDispatch = db.createDispatchContext(
         workerTask.id,
@@ -38331,18 +38347,18 @@ describe('OrcaRuntimeService', () => {
       const coordinatorCreatedTask = db.createTask({
         spec: 'coordinator-created work',
         runId: runA.id,
-        createdByTerminalHandle: handles.coordinator
+        createdByTerminalHandle: handles.coordinator,
+        createdByPaneKey: paneKey('coordinator'),
+        createdByProcessIncarnation: coordinatorAuthority?.processIncarnation ?? undefined,
+        createdByRunGeneration: runA.consumer_generation
       })
       const coordinatorCreatedDispatch = db.createDispatchContext(
         coordinatorCreatedTask.id,
         handles['coordinator-created-worker'],
         paneKey('coordinator-created-worker')
       )
-      runtime.setOrchestrationDb(db)
-      runtime.attachWindow(1)
-
       expect(
-        runtime.syncWindowGraph(1, graph).agentOrchestrationByPaneKey?.[paneKey('worker')]
+        runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[paneKey('worker')]
       ).toMatchObject({
         parentTerminalHandle: handles.creator,
         parentPaneKey: paneKey('creator'),
@@ -38350,12 +38366,17 @@ describe('OrcaRuntimeService', () => {
         orchestrationRunId: runA.id
       })
 
+      const oldCreatorPaneKey = paneKey('creator')
+      terminalByName.creator.tabId = 'tab-creator-reminted'
+      terminalByName.creator.ptyId = 'pty-creator-reminted'
+      const remintedCreatorHandle = runtime.preAllocateHandleForPty(terminalByName.creator.ptyId)
+      runtime.syncWindowGraph(1, graph())
       const runB = db.createRun({
         objective: 'rebind the creator pane',
-        coordinatorHandle: handles.creator,
+        coordinatorHandle: remintedCreatorHandle,
         coordinatorPaneKey: paneKey('creator')
       })
-      const reboundContext = runtime.syncWindowGraph(1, graph).agentOrchestrationByPaneKey?.[
+      const reboundContext = runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[
         paneKey('worker')
       ]
 
@@ -38363,7 +38384,8 @@ describe('OrcaRuntimeService', () => {
         coordinator_handle: handles.coordinator,
         consumer_generation: 1
       })
-      expect(db.getRun(runB.id)).toMatchObject({ coordinator_handle: handles.creator })
+      expect(oldCreatorPaneKey).not.toBe(paneKey('creator'))
+      expect(db.getRun(runB.id)).toMatchObject({ coordinator_handle: remintedCreatorHandle })
       expect(reboundContext).toMatchObject({
         taskId: workerTask.id,
         dispatchId: workerDispatch.id,
@@ -38379,7 +38401,7 @@ describe('OrcaRuntimeService', () => {
         coordinatorHandle: handles.coordinator,
         coordinatorPaneKey: paneKey('coordinator')
       })
-      const unboundContext = runtime.syncWindowGraph(1, graph).agentOrchestrationByPaneKey?.[
+      const unboundContext = runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[
         paneKey('coordinator-created-worker')
       ]
 

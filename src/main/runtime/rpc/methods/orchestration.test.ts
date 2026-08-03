@@ -1763,17 +1763,27 @@ describe('orchestration RPC methods', () => {
       expect(result.task.status).toBe('pending')
     })
 
-    it('records the caller terminal handle when creating a task', async () => {
+    it('records the caller pane, process, and Run generation when creating a task', async () => {
       setup()
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_creator' ? coordinatorPaneKey : null
       )
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        terminalHandle: 'term_creator',
+        paneKey: coordinatorPaneKey,
+        processIncarnation: 'pty-creator:incarnation-a'
+      } as never)
       const result = (await call('orchestration.taskCreate', {
         spec: 'spawn related workspace',
         callerTerminalHandle: 'term_creator'
       })) as { task: { id: string } }
 
-      expect(db.getTask(result.task.id)?.created_by_terminal_handle).toBe('term_creator')
+      expect(db.getTask(result.task.id)).toMatchObject({
+        created_by_terminal_handle: 'term_creator',
+        created_by_pane_key: coordinatorPaneKey,
+        created_by_process_incarnation: 'pty-creator:incarnation-a',
+        created_by_run_generation: 1
+      })
     })
 
     it('rejects invalid deps JSON', async () => {

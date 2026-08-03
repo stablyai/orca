@@ -30047,11 +30047,44 @@ export class OrcaRuntimeService {
         : undefined
     const coordinatorHandle = runCoordinatorHandle ?? scopedLegacyActiveRun?.coordinator_handle
     const orchestrationRunId = owningRun?.legacy === 0 ? owningRun.id : scopedLegacyActiveRun?.id
+    const creatorPaneKey = task?.created_by_pane_key
+    const creatorPaneHandle = creatorPaneKey
+      ? this.getTerminalHandleForPaneKey(creatorPaneKey)
+      : null
+    const creatorAuthority = creatorPaneHandle
+      ? this.getOrchestrationDispatchAuthority(creatorPaneHandle)
+      : null
+    const storedCreatorPane = creatorPaneKey ? parsePaneKey(creatorPaneKey) : null
+    const currentCreatorPane = creatorAuthority?.paneKey
+      ? parsePaneKey(creatorAuthority.paneKey)
+      : null
+    const sameCreatorPane = Boolean(
+      creatorPaneKey &&
+      creatorAuthority?.paneKey &&
+      (creatorPaneKey === creatorAuthority.paneKey ||
+        (storedCreatorPane &&
+          currentCreatorPane &&
+          storedCreatorPane.leafId === currentCreatorPane.leafId))
+    )
+    const paneRun = creatorPaneKey ? db?.getCurrentRunForPane?.(creatorPaneKey) : undefined
+    const sameRunCreatorDispatch = Boolean(
+      task?.creator_dispatch_id &&
+      task.creator_dispatch_run_id === owningRun?.id &&
+      task.creator_dispatch_pane_key &&
+      task.creator_dispatch_process_incarnation === task.created_by_process_incarnation &&
+      parsePaneKey(task.creator_dispatch_pane_key)?.leafId === storedCreatorPane?.leafId
+    )
     const currentCreatorHandle =
-      task?.current_creator_terminal_handle ??
-      (task?.created_by_terminal_handle && task.created_by_terminal_handle === runCoordinatorHandle
-        ? task.created_by_terminal_handle
-        : undefined)
+      owningRun?.legacy === 0 &&
+      task?.created_by_run_generation === owningRun.consumer_generation &&
+      task.created_by_process_incarnation === creatorAuthority?.processIncarnation &&
+      sameCreatorPane &&
+      (paneRun
+        ? paneRun.id === owningRun.id &&
+          paneRun.consumer_generation === task.created_by_run_generation
+        : sameRunCreatorDispatch)
+        ? (creatorPaneHandle ?? undefined)
+        : undefined
     const parentTerminalHandle =
       currentCreatorHandle ??
       (coordinatorHandle && coordinatorHandle !== handle ? coordinatorHandle : undefined)
@@ -30121,10 +30154,21 @@ export class OrcaRuntimeService {
         return pty
       }
       leafPty = pty ?? null
+      for (const candidate of this.leaves.values()) {
+        if (candidate.leafId !== parsed.leafId || !candidate.ptyId) {
+          continue
+        }
+        const remintedPty = this.ptysById.get(candidate.ptyId)
+        if (remintedPty?.connected) {
+          return remintedPty
+        }
+        leafPty ??= remintedPty ?? null
+      }
     }
     let newestMatch: RuntimePtyWorktreeRecord | null = null
     for (const pty of this.ptysById.values()) {
-      if (pty.paneKey === paneKey) {
+      const ptyPane = parsePaneKey(pty.paneKey ?? '')
+      if (pty.paneKey === paneKey || (parsed && ptyPane && parsed.leafId === ptyPane.leafId)) {
         if (pty.connected) {
           return pty
         }

@@ -228,7 +228,13 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
     db = undefined
 
     const oldDb = new Database(dbPath)
-    oldDb.exec('DROP INDEX IF EXISTS idx_dispatch_assignee_handle')
+    oldDb.exec(`
+      DROP INDEX IF EXISTS idx_dispatch_assignee_handle;
+      DROP INDEX IF EXISTS idx_dispatch_assignee_pane_leaf;
+      ALTER TABLE tasks DROP COLUMN created_by_pane_key;
+      ALTER TABLE tasks DROP COLUMN created_by_process_incarnation;
+      ALTER TABLE tasks DROP COLUMN created_by_run_generation;
+    `)
     oldDb.pragma('user_version = 21')
     oldDb.close()
 
@@ -236,6 +242,11 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
     const sqlite = sqliteFor(db)
     expect(sqlite.pragma('user_version', { simple: true })).toBe(23)
     expect(db.getDispatchContextById(dispatch.id)).toMatchObject({ assignee_handle: 'term_worker' })
+    expect(db.getTask(task.id)).toMatchObject({
+      created_by_pane_key: null,
+      created_by_process_incarnation: null,
+      created_by_run_generation: null
+    })
     expect(
       sqlite
         .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
@@ -251,6 +262,11 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
     expect(plan.map((row) => row.detail).join('\n')).toContain(
       'USING INDEX idx_dispatch_assignee_handle'
     )
+    expect(
+      sqlite
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
+        .get('idx_dispatch_assignee_pane_leaf')
+    ).toBeDefined()
 
     db.close()
     db = new OrchestrationDb(dbPath)
