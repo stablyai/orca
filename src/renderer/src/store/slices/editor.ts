@@ -292,6 +292,15 @@ type EditorOpenTargetOptions = {
   forceContentReload?: boolean
 }
 
+type EditorOpenFileOptions = {
+  preview?: boolean
+  targetGroupId?: string
+  recordReplacedPreview?: boolean
+  suppressActiveRuntimeFallback?: boolean
+  forceContentReload?: boolean
+  focusEditor?: boolean
+}
+
 type GitRuntimeOperationOptions = {
   runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   applyUpstreamStatus?: boolean
@@ -455,16 +464,11 @@ export type EditorSlice = {
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type
   activeTabType: WorkspaceVisibleTabType
   setActiveTabType: (type: WorkspaceVisibleTabType) => void
-  openFile: (
+  openFile: (file: Omit<OpenFile, 'id' | 'isDirty'>, options?: EditorOpenFileOptions) => void
+  openFileAtLocation: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
-    options?: {
-      preview?: boolean
-      targetGroupId?: string
-      recordReplacedPreview?: boolean
-      suppressActiveRuntimeFallback?: boolean
-      forceContentReload?: boolean
-      focusEditor?: boolean
-    }
+    location: { line: number; column?: number },
+    options?: EditorOpenFileOptions
   ) => void
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
@@ -1886,6 +1890,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       })
     }
+  },
+
+  openFileAtLocation: (file, location, options) => {
+    get().openFile(file, options)
+    const state = get()
+    const fileId = getOpenedEditFileIdAfterOpen(state, file.filePath, file.worktreeId)
+    state.setEditorViewMode(fileId, 'edit')
+    if (file.language === 'markdown') {
+      state.setMarkdownViewMode(fileId, 'source')
+    }
+    scheduleEditorLineReveal(get, file.filePath, location.line, location.column, fileId)
   },
 
   openNewMarkdownInActiveWorkspace: async (groupId) => {
@@ -4380,6 +4395,22 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       openHttpLink(target.url, { worktreeId: ctx.worktreeId, sourceOwner })
       return
     }
+    const openMarkdownLinkTarget = (
+      file: Omit<OpenFile, 'id' | 'isDirty'>,
+      line: number | undefined,
+      column: number | undefined
+    ): void => {
+      const options = {
+        preview: true,
+        targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
+        recordReplacedPreview: true
+      }
+      if (line === undefined) {
+        get().openFile(file, options)
+      } else {
+        get().openFileAtLocation(file, { line, column }, options)
+      }
+    }
     if (target.kind === 'file') {
       const { line, column } = target
       if (target.relativePath === undefined) {
@@ -4412,25 +4443,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
 
-      get().openFile(
-        {
-          filePath: target.absolutePath,
-          relativePath: target.relativePath ?? target.absolutePath,
-          worktreeId: ctx.worktreeId,
-          runtimeEnvironmentId: sourceRuntimeEnvironmentId,
-          language: detectLanguage(target.absolutePath),
-          mode: 'edit'
-        },
-        {
-          preview: true,
-          targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
-          recordReplacedPreview: true
-        }
-      )
-      if (line !== undefined) {
-        const fileId = getOpenedEditFileIdAfterOpen(get(), target.absolutePath, ctx.worktreeId)
-        scheduleEditorLineReveal(get, target.absolutePath, line, column, fileId)
+      const file = {
+        filePath: target.absolutePath,
+        relativePath: target.relativePath ?? target.absolutePath,
+        worktreeId: ctx.worktreeId,
+        runtimeEnvironmentId: sourceRuntimeEnvironmentId,
+        language: detectLanguage(target.absolutePath),
+        mode: 'edit' as const
       }
+      openMarkdownLinkTarget(file, line, column)
       return
     }
 
@@ -4456,28 +4477,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
 
-    get().openFile(
-      {
-        filePath: absolutePath,
-        relativePath,
-        worktreeId: ctx.worktreeId,
-        runtimeEnvironmentId: sourceRuntimeEnvironmentId,
-        language: 'markdown',
-        mode: 'edit'
-      },
-      {
-        preview: true,
-        targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
-        recordReplacedPreview: true
-      }
-    )
-
-    if (line !== undefined) {
-      const fileId = getOpenedEditFileIdAfterOpen(get(), absolutePath, ctx.worktreeId)
-      // Why: MonacoEditor drops the reveal if the file stays in rich mode; switch to source using the resolved owner-qualified id.
-      get().setMarkdownViewMode(fileId, 'source')
-      scheduleEditorLineReveal(get, absolutePath, line, column, fileId)
+    const file = {
+      filePath: absolutePath,
+      relativePath,
+      worktreeId: ctx.worktreeId,
+      runtimeEnvironmentId: sourceRuntimeEnvironmentId,
+      language: 'markdown',
+      mode: 'edit' as const
     }
+    openMarkdownLinkTarget(file, line, column)
   },
 
   // Why: only edit-mode files are restored — diffs/conflict views depend on transient git state that may be stale between sessions.

@@ -2251,6 +2251,88 @@ describe('createEditorSlice pending editor reveal', () => {
   })
 })
 
+describe('createEditorSlice openFileAtLocation', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 0
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('opens and targets the owner-qualified editor with the requested line and column', () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings'],
+      openFiles: [
+        {
+          id: '/repo/src/file.ts',
+          filePath: '/repo/src/file.ts',
+          relativePath: 'src/file.ts',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    } as Partial<AppState>)
+    const runtimeFileId = ownedEditorFileId('/repo/src/file.ts', 'wt-1', 'env-active')
+
+    store.getState().openFileAtLocation(
+      {
+        filePath: '/repo/src/file.ts',
+        relativePath: 'src/file.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { line: 12, column: 7 }
+    )
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({ id: '/repo/src/file.ts', runtimeEnvironmentId: null }),
+      expect.objectContaining({ id: runtimeFileId, runtimeEnvironmentId: 'env-active' })
+    ])
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/src/file.ts',
+      fileId: runtimeFileId,
+      line: 12,
+      column: 7,
+      matchLength: 0
+    })
+  })
+
+  it('defaults to column one and switches targeted Markdown from rich view to source', () => {
+    const store = createEditorStore()
+    const file = {
+      filePath: '/repo/docs/guide.md',
+      relativePath: 'docs/guide.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit' as const
+    }
+    store.getState().openFile(file)
+    store.getState().setMarkdownViewMode(file.filePath, 'rich')
+    store.getState().setEditorViewMode(file.filePath, 'changes')
+
+    store.getState().openFileAtLocation(file, { line: 2304 })
+
+    expect(store.getState().markdownViewMode[file.filePath]).toBe('source')
+    expect(store.getState().editorViewMode[file.filePath]).toBeUndefined()
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: file.filePath,
+      fileId: file.filePath,
+      line: 2304,
+      column: 1,
+      matchLength: 0
+    })
+  })
+})
+
 describe('createEditorSlice editor drafts', () => {
   it('clears draft buffers when closing the file', () => {
     const store = createEditorStore()

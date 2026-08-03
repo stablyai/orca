@@ -15,6 +15,16 @@ export type QuickOpenSearchResult = {
   score: number
 }
 
+export type QuickOpenLocation = {
+  line: number
+  column?: number
+}
+
+export type ParsedQuickOpenQuery = {
+  fileQuery: string
+  location: QuickOpenLocation | null
+}
+
 export function prepareQuickOpenFiles(files: readonly string[]): QuickOpenIndexedFile[] {
   return files.map((path, inputIndex) => {
     const searchPath = path.replace(/\\/g, '/')
@@ -33,6 +43,38 @@ export function isQuickOpenQueryTooLarge(
   maxBytes = QUICK_OPEN_QUERY_MAX_BYTES
 ): boolean {
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
+export function parseQuickOpenQuery(query: string): ParsedQuickOpenQuery {
+  const unchanged = { fileQuery: query, location: null }
+  if (isQuickOpenQueryTooLarge(query)) {
+    return unchanged
+  }
+
+  const queryWithoutTrailingWhitespace = query.trimEnd()
+  const match = /:(\d+)(?::(\d+))?$/.exec(queryWithoutTrailingWhitespace)
+  if (!match) {
+    return unchanged
+  }
+
+  const fileQuery = queryWithoutTrailingWhitespace.slice(0, match.index)
+  const line = Number(match[1])
+  const column = match[2] === undefined ? undefined : Number(match[2])
+  const isBareWindowsDrive = /^[a-z]$/i.test(fileQuery.trim())
+  if (
+    !fileQuery.trim() ||
+    isBareWindowsDrive ||
+    !Number.isSafeInteger(line) ||
+    line <= 0 ||
+    (column !== undefined && (!Number.isSafeInteger(column) || column <= 0))
+  ) {
+    return unchanged
+  }
+
+  return {
+    fileQuery,
+    location: { line, ...(column === undefined ? {} : { column }) }
+  }
 }
 
 export function rankQuickOpenFiles(
