@@ -57,6 +57,7 @@ function claudeEffort(extended: boolean): CatalogOption {
   }
 }
 
+/** Claude gates `/fast` to Opus 5 and Opus 4.8; switching models turns it off. */
 const CLAUDE_FAST_MODE: CatalogOption = {
   id: 'fastMode',
   label: 'Fast mode',
@@ -92,12 +93,12 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     {
       id: 'opus',
       label: 'Opus 5',
+      isDefault: true,
       options: claudeOpus([CLAUDE_FAST_MODE])
     },
     {
       id: 'sonnet',
       label: 'Sonnet 5',
-      isDefault: true,
       options: [claudeEffort(true)]
     },
     {
@@ -115,7 +116,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     {
       id: 'claude-opus-4-7',
       label: 'Opus 4.7',
-      options: claudeOpus([CLAUDE_FAST_MODE])
+      options: claudeOpus()
     },
     {
       id: 'claude-opus-4-6',
