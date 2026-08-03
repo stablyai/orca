@@ -24,6 +24,32 @@ function permissionFor(status: Partial<AgentStatusEntry> | null): unknown {
   return captured
 }
 
+// Keeps one probe mounted across a status change, so the assertion covers a live
+// pane whose agent resumed rather than a pane first rendered in the later state.
+function permissionAcross(
+  before: Partial<AgentStatusEntry>,
+  after: Partial<AgentStatusEntry>
+): { before: unknown; after: unknown } {
+  let captured: unknown
+  function Probe({ status }: { status: Partial<AgentStatusEntry> }): null {
+    captured = useMobileNativeChatPrompts({
+      enabled: true,
+      status: status as AgentStatusEntry,
+      messages: []
+    }).permission
+    return null
+  }
+  let renderer: ReturnType<typeof TestRenderer.create> | undefined
+  TestRenderer.act(() => {
+    renderer = TestRenderer.create(createElement(Probe, { status: before }))
+  })
+  const capturedBefore = captured
+  TestRenderer.act(() => {
+    renderer?.update(createElement(Probe, { status: after }))
+  })
+  return { before: capturedBefore, after: captured }
+}
+
 describe('useMobileNativeChatPrompts approval-envelope state gate', () => {
   it('renders no approval card while the agent is working', () => {
     expect(permissionFor({ state: 'working', interactivePrompt: APPROVAL })).toBeNull()
@@ -48,6 +74,16 @@ describe('useMobileNativeChatPrompts approval-envelope state gate', () => {
     expect(permissionFor({ state: 'blocked', interactivePrompt: APPROVAL })).toMatchObject({
       title: 'Allow Bash?'
     })
+  })
+
+  it('drops the approval card when a waiting agent resumes on the same pane', () => {
+    const permission = permissionAcross(
+      { state: 'waiting', interactivePrompt: APPROVAL },
+      { state: 'working', interactivePrompt: APPROVAL }
+    )
+
+    expect(permission.before).toMatchObject({ title: 'Allow Bash?' })
+    expect(permission.after).toBeNull()
   })
 
   it('prefers the heuristic numbered menu over the envelope while paused', () => {
