@@ -3,10 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DaemonServer } from './daemon-server'
-import type { DaemonRequest } from './types'
+import { SessionNotFoundError, type DaemonRequest } from './types'
 
 type DaemonServerPrivate = {
   host: { kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void> }
+  pendingPtySpawnPreparations: Map<string, Set<{ canceled: boolean; clientId: string }>>
   routeRequest(clientId: string, request: DaemonRequest): Promise<unknown>
 }
 
@@ -31,15 +32,22 @@ describe('daemon kill attribution', () => {
       }
     })
     const daemon = server as unknown as DaemonServerPrivate
-    vi.spyOn(daemon.host, 'kill').mockImplementation(async () => {
-      expect(killLog.log).not.toHaveBeenCalledWith('session-killed', expect.anything())
+    let finishKill!: () => void
+    const killFinished = new Promise<void>((resolve) => {
+      finishKill = resolve
     })
+    vi.spyOn(daemon.host, 'kill').mockReturnValue(killFinished)
 
-    await daemon.routeRequest('control-42', {
+    const request = daemon.routeRequest('control-42', {
       id: 'kill-1',
       type: 'kill',
       payload: { sessionId: 'agent-session', immediate: true }
     })
+
+    await vi.waitFor(() => expect(daemon.host.kill).toHaveBeenCalledOnce())
+    expect(killLog.log).not.toHaveBeenCalledWith('session-killed', expect.anything())
+    finishKill()
+    await request
 
     expect(killLog.log).toHaveBeenCalledWith('session-killed', {
       sessionId: 'agent-session',
@@ -76,5 +84,36 @@ describe('daemon kill attribution', () => {
       clientId: 'control-42'
     })
     expect(killLog.log).not.toHaveBeenCalledWith('session-killed', expect.anything())
+  })
+
+  it('attributes a tolerated kill after canceling a pending spawn', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'daemon-kill-attribution-'))
+    const killLog = { log: vi.fn(), close: vi.fn() }
+    server = new DaemonServer({
+      socketPath: join(dir, 'daemon.sock'),
+      tokenPath: join(dir, 'daemon.token'),
+      log: killLog,
+      spawnSubprocess: () => {
+        throw new Error('not used')
+      }
+    })
+    const daemon = server as unknown as DaemonServerPrivate
+    const pendingPreparation = { canceled: false, clientId: 'control-42' }
+    daemon.pendingPtySpawnPreparations.set('agent-session', new Set([pendingPreparation]))
+    vi.spyOn(daemon.host, 'kill').mockRejectedValue(new SessionNotFoundError('agent-session'))
+
+    await daemon.routeRequest('control-42', {
+      id: 'kill-1',
+      type: 'kill',
+      payload: { sessionId: 'agent-session', immediate: true }
+    })
+
+    expect(pendingPreparation.canceled).toBe(true)
+    expect(killLog.log).toHaveBeenCalledWith('session-killed', {
+      sessionId: 'agent-session',
+      immediate: true,
+      clientId: 'control-42'
+    })
+    expect(killLog.log).not.toHaveBeenCalledWith('session-kill-failed', expect.anything())
   })
 })
