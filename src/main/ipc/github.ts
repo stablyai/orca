@@ -466,14 +466,18 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         noCache?: boolean
       }
     ) => {
-      if (args.repos.length > MAX_GITHUB_WORK_ITEMS_BATCH_REPOS) {
+      const repos = Array.isArray(args?.repos) ? args.repos : []
+      if (repos.length > MAX_GITHUB_WORK_ITEMS_BATCH_REPOS) {
         throw new Error(
           `GitHub work-item selection exceeds the ${MAX_GITHUB_WORK_ITEMS_BATCH_REPOS}-repository limit`
         )
       }
+      if (repos.length === 0) {
+        return listWorkItemsAcrossRepos([], args?.limit, args?.query, args?.page, false, [])
+      }
       const inputs: GitHubWorkItemsBatchInput[] = []
       const resolutionFailures: unknown[] = []
-      for (const selector of args.repos) {
+      for (const selector of repos) {
         try {
           const repo = assertRegisteredRepo(selector, store)
           const localGitOptions = localGitOptionArgs(store, repo)[0]
