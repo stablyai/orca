@@ -738,10 +738,22 @@ function buildMirroredAgentStatusPatch(
     }
   }
   const nextByPaneKey = new Map<string, AgentStatusEntry>()
+  // Why: a pane the host has no live handle for carries no agentStatus, and that is
+  // "unknown", not "idle" — pruning on it made a running agent render as done the moment
+  // its tab lost focus. Scoped to `pending-handle` on purpose: a `ready` pane the host IS
+  // streaming genuinely has no agent, and must still prune so a shell that reclaimed the
+  // pane clears its spinner (#1437).
+  const unreportedPaneKeys = new Set<string>()
   for (const surface of terminalSurfaceTabs) {
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
+    if (!surface.agentStatus && surface.status === 'pending-handle') {
+      const unreportedPaneKey = toMirroredPaneKey(surface, retainedSurface?.leafId)
+      if (unreportedPaneKey) {
+        unreportedPaneKeys.add(unreportedPaneKey)
+      }
+    }
     const entry = remapHostAgentStatus(surface, retainedSurface)
     if (!entry) {
       continue
@@ -778,6 +790,11 @@ function buildMirroredAgentStatusPatch(
       continue
     }
     if (nextByPaneKey.has(paneKey)) {
+      continue
+    }
+    // Why: the host has no live handle for this pane, so it reported no status.
+    // Keep what we know rather than reading silence as "the agent stopped".
+    if (unreportedPaneKeys.has(paneKey)) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
@@ -2677,16 +2694,72 @@ export function applyWebSessionTabsStorePatch(
   buildPatch: (state: AppState) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>
 ): void {
   let mirroredAgentStatusChanged = false
+  let observedStatuses: { paneKey: string; worktreeId: string; entry: AgentStatusEntry }[] = []
   useAppStore.setState((state) => {
     const patch = buildPatch(state)
     mirroredAgentStatusChanged =
       patch !== state && Object.prototype.hasOwnProperty.call(patch, 'agentStatusByPaneKey')
+    if (mirroredAgentStatusChanged) {
+      observedStatuses = collectChangedMirroredAgentStatuses(
+        state.agentStatusByPaneKey,
+        (patch as Partial<WebSessionTabsSyncState>).agentStatusByPaneKey ?? {}
+      )
+    }
     return patch
   })
   // Why: paired-web snapshots bypass setAgentStatus, so arm the stale-boundary timer explicitly like local hook events do.
   if (mirroredAgentStatusChanged) {
     useAppStore.getState().scheduleAgentStatusFreshness()
   }
+  // Why: a remote `orca serve` host has no ingestRemote path (only SSH and WSL do), so its
+  // agent hooks never reach the local main-process IPC that drives completion
+  // notifications. The mirror is the only carrier, so feed it the same observer the local
+  // hook path uses — on every changed status, not just completions, so the coordinator
+  // sees the working->done sequence it needs rather than a bare terminal `done`.
+  if (observedStatuses.length > 0) {
+    // Why lazy: a static import of the notification observer pulls the terminal-pane and
+    // store graph in ahead of this module and deadlocks initialization (the store's
+    // getState is undefined at module scope). Notifications are fire-and-forget, so
+    // resolving the module on first use is harmless.
+    void import('@/hooks/agent-hook-completion-notifications')
+      .then(({ observeAgentHookCompletionForNotification }) => {
+        for (const observed of observedStatuses) {
+          observeAgentHookCompletionForNotification({
+            paneKey: observed.paneKey,
+            worktreeId: observed.worktreeId,
+            payload: observed.entry
+          })
+        }
+      })
+      .catch(() => {
+        // Best-effort: a missing notification must never break snapshot application.
+      })
+  }
+}
+
+/** Mirrored pane statuses that actually changed, so the notification observer sees each
+ *  transition once rather than on every republished snapshot. */
+function collectChangedMirroredAgentStatuses(
+  previous: Readonly<Record<string, AgentStatusEntry>>,
+  next: Readonly<Record<string, AgentStatusEntry>>
+): { paneKey: string; worktreeId: string; entry: AgentStatusEntry }[] {
+  const changed: { paneKey: string; worktreeId: string; entry: AgentStatusEntry }[] = []
+  for (const [paneKey, entry] of Object.entries(next)) {
+    const parsed = parsePaneKey(paneKey)
+    if (!parsed || !isWebTerminalSurfaceTabId(parsed.tabId)) {
+      continue
+    }
+    const worktreeId = entry.worktreeId
+    if (!worktreeId) {
+      continue
+    }
+    const before = previous[paneKey]
+    if (before && agentStatusEntryEqual(before, entry)) {
+      continue
+    }
+    changed.push({ paneKey, worktreeId, entry })
+  }
+  return changed
 }
 
 export function useWebSessionTabsSync(): void {

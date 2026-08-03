@@ -41,7 +41,8 @@ import {
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload,
   type AgentStatusOrchestrationContext,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type AgentStatusState
 } from '../../shared/agent-status-types'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
@@ -29579,25 +29580,34 @@ export class OrcaRuntimeService {
         )
       }
     }
-    // A hook-only pane has no PTY status to date the row from; `done` with a
-    // now-stamp is the honest projection — the hook proves identity, not liveness.
-    const now = pty?.lastOutputAt ?? Date.now()
+    // Why: a headless host holds no live handle for a pane it is not streaming, so its
+    // only liveness signal is the hook row — `pty.lastAgentStatus` is title-derived and
+    // the title is the 'Terminal' placeholder. Reading identity from the hook but state
+    // from the title published `done` over a running agent, which showed an unfocused tab
+    // as idle and erased the working->done edge completion notifications need.
+    const now = hookRow.state ? hookRow.receivedAt : (pty?.lastOutputAt ?? Date.now())
     const agentType = ownerAgent ?? undefined
+    // Why: a pane the host is not streaming has no PTY record, so keying worktree
+    // attribution off one published this status with no `worktreeId` at all. Clients
+    // skip a mirrored status they cannot attribute, so every completion on an
+    // unfocused pane was dropped and only fired once the pane materialized.
+    const worktreeId = pty?.worktreeId ?? hookRow.worktreeId
     return {
       agentStatus: {
         state:
-          pty?.lastAgentStatus === 'working'
+          hookRow.state ??
+          (pty?.lastAgentStatus === 'working'
             ? 'working'
             : pty?.lastAgentStatus === 'permission'
               ? 'blocked'
-              : 'done',
-        prompt: '',
+              : 'done'),
+        prompt: hookRow.prompt ?? '',
         updatedAt: now,
-        stateStartedAt: now,
+        stateStartedAt: hookRow.stateStartedAt ?? now,
         paneKey,
         ...(terminalHandle ? { terminalHandle } : {}),
         ...(agentType ? { agentType } : {}),
-        ...(pty?.worktreeId ? { worktreeId: pty.worktreeId } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
         tabId: tab.parentTabId,
         terminalTitle,
         stateHistory: [],
@@ -29622,6 +29632,16 @@ export class OrcaRuntimeService {
     providerSessionAgentType: string | null
     providerSessionReceivedAt: number | null
     agentType: string | null
+    // Why: on a headless host the hook is the only live signal a non-streamed pane has.
+    // Returning identity without state forced callers to fall back to the title-derived
+    // status, which reads the 'Terminal' placeholder and reports a running agent as done.
+    state: AgentStatusState | null
+    prompt: string | null
+    stateStartedAt: number | null
+    receivedAt: number
+    // Why: the hook payload is the only worktree attribution a non-streamed pane has —
+    // there is no PTY record to read it from. Clients key completion notifications by it.
+    worktreeId: string | null
   } {
     let session: AgentStatusIpcPayload | null = null
     let agent: AgentStatusIpcPayload | null = null
@@ -29648,7 +29668,15 @@ export class OrcaRuntimeService {
       providerSession: session?.providerSession ?? null,
       providerSessionAgentType: session?.agentType ?? null,
       providerSessionReceivedAt: session?.receivedAt ?? null,
-      agentType: agent?.agentType ?? null
+      agentType: agent?.agentType ?? null,
+      // Why: bounded by the same staleness window as agentType — an abandoned pane must
+      // not keep claiming `working` forever. `providerSessionOnly` rows are resume
+      // identity with placeholder status fields, so they never carry liveness.
+      state: agent && agent.providerSessionOnly !== true ? (agent.state ?? null) : null,
+      prompt: agent && agent.providerSessionOnly !== true ? (agent.prompt ?? null) : null,
+      stateStartedAt: agent?.stateStartedAt ?? null,
+      receivedAt: agent?.receivedAt ?? Date.now(),
+      worktreeId: agent?.worktreeId ?? session?.worktreeId ?? null
     }
   }
 

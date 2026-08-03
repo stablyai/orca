@@ -1896,6 +1896,135 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.sortEpoch).toBe(1)
   })
 
+  it('keeps a running agent status when the host republishes the pane without one', () => {
+    // A headless host omits agentStatus for a pane it is not streaming. Dropping the
+    // entry made a working agent render as idle the moment the tab lost focus.
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const workingSurface = {
+      type: 'terminal' as const,
+      id: HOST_SURFACE_ID,
+      title: 'codex [working]',
+      parentTabId: 'host-tab-1',
+      leafId: LEAF_ID,
+      isActive: true,
+      status: 'ready' as const,
+      terminal: 'terminal-1',
+      agentStatus: {
+        state: 'working' as const,
+        prompt: 'fix web parity',
+        updatedAt: NOW - 100,
+        stateStartedAt: NOW - 1_000,
+        agentType: 'codex' as const,
+        paneKey: hostPaneKey,
+        tabId: 'host-tab-1',
+        worktreeId: WT,
+        terminalTitle: 'codex [working]',
+        stateHistory: []
+      }
+    }
+
+    const initial = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([workingSurface]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const mirroredId = initial.tabsByWorktree?.[WT]?.[0]?.id
+    const mirroredPaneKey = makePaneKey(mirroredId!, LEAF_ID)
+    expect(initial.agentStatusByPaneKey?.[mirroredPaneKey]?.state).toBe('working')
+
+    // Same pane, still present — the host just has no live handle to report status from.
+    const next = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: initial.tabsByWorktree,
+        agentStatusByPaneKey: initial.agentStatusByPaneKey,
+        agentStatusEpoch: initial.agentStatusEpoch ?? 0,
+        ptyIdsByTabId: initial.ptyIdsByTabId
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Terminal',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: false,
+          status: 'pending-handle',
+          terminal: null
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState> | null
+
+    const retained = (next?.agentStatusByPaneKey ?? initial.agentStatusByPaneKey)?.[mirroredPaneKey]
+    expect(retained?.state).toBe('working')
+  })
+
+  it('still clears agent status when a streamed pane reports none (stuck spinner guard)', () => {
+    // A `ready` pane the host IS streaming genuinely has no agent — a shell reclaimed it.
+    // That must still prune, or #1437 comes back for mirrored panes.
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const initial = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'codex [working]',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1',
+          agentStatus: {
+            state: 'working',
+            prompt: 'fix web parity',
+            updatedAt: NOW - 100,
+            stateStartedAt: NOW - 1_000,
+            agentType: 'codex',
+            paneKey: hostPaneKey,
+            tabId: 'host-tab-1',
+            worktreeId: WT,
+            terminalTitle: 'codex [working]',
+            stateHistory: []
+          }
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const mirroredId = initial.tabsByWorktree?.[WT]?.[0]?.id
+    const mirroredPaneKey = makePaneKey(mirroredId!, LEAF_ID)
+
+    const next = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: initial.tabsByWorktree,
+        agentStatusByPaneKey: initial.agentStatusByPaneKey,
+        agentStatusEpoch: initial.agentStatusEpoch ?? 0,
+        ptyIdsByTabId: initial.ptyIdsByTabId
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'gal@omarchy: ~/dev',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState> | null
+
+    expect(next?.agentStatusByPaneKey?.[mirroredPaneKey]).toBeUndefined()
+  })
+
   it('repairs mirrored same-state attribution and retains identity from an older snapshot', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
     const snapshot = makeSnapshot([
