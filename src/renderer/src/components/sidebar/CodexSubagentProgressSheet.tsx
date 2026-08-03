@@ -12,8 +12,12 @@ import {
   SheetTitle
 } from '@/components/ui/sheet'
 import { translate } from '@/i18n/i18n'
+import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusState
+} from '../../../../shared/agent-status-types'
 import { resolveCodexSubagentProgressRoute } from './codex-subagent-progress-route'
 import {
   parseCodexSubagentProgressTarget,
@@ -166,7 +170,16 @@ function CodexSubagentProgressBody({
   target: CodexSubagentProgressTarget
 }): React.JSX.Element {
   const parentEntry = useAppStore((state) => state.agentStatusByPaneKey[target.parentPaneKey])
-  const liveSubagent = parentEntry?.subagents?.find((subagent) => subagent.id === target.sessionId)
+  // Freshness expiry retains the entry and advances only this epoch.
+  const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)
+  void agentStatusEpoch
+  const freshParentEntry =
+    parentEntry && isExplicitAgentStatusFresh(parentEntry, Date.now(), AGENT_STATUS_STALE_AFTER_MS)
+      ? parentEntry
+      : undefined
+  const liveSubagent = freshParentEntry?.subagents?.find(
+    (subagent) => subagent.id === target.sessionId
+  )
   const route = resolveCodexSubagentProgressRoute(target.hostAuthority)
   const state = liveSubagent?.state ?? 'idle'
   const dotState = asDotState(state)

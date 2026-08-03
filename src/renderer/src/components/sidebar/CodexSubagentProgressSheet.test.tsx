@@ -1,13 +1,15 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 
 const mocks = vi.hoisted(() => ({
   state: {
     activeModal: 'codex-subagent-progress',
     modalData: {} as Record<string, unknown>,
     closeModal: vi.fn(),
-    agentStatusByPaneKey: {} as Record<string, unknown>
+    agentStatusByPaneKey: {} as Record<string, unknown>,
+    agentStatusEpoch: 0
   },
   liveSession: vi.fn()
 }))
@@ -68,6 +70,7 @@ describe('CodexSubagentProgressSheet', () => {
     mocks.state.activeModal = 'codex-subagent-progress'
     mocks.state.modalData = target()
     mocks.state.agentStatusByPaneKey = {}
+    mocks.state.agentStatusEpoch = 0
     mocks.liveSession.mockReturnValue(liveSession())
   })
 
@@ -114,6 +117,43 @@ describe('CodexSubagentProgressSheet', () => {
     const { default: CodexSubagentProgressSheet } = await import('./CodexSubagentProgressSheet')
 
     const markup = renderToStaticMarkup(<CodexSubagentProgressSheet />)
+
+    expect(markup).toContain('data-working="false"')
+  })
+
+  it('uses a fresh working roster while the transcript is between updates', async () => {
+    const now = Date.parse('2026-08-03T12:00:00.000Z')
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(now)
+    mocks.state.agentStatusByPaneKey = {
+      'parent-pane': {
+        updatedAt: now,
+        subagents: [{ id: 'child-1', state: 'working' }]
+      }
+    }
+    mocks.liveSession.mockReturnValue({ ...liveSession(), status: 'done' })
+    const { default: CodexSubagentProgressSheet } = await import('./CodexSubagentProgressSheet')
+
+    const markup = renderToStaticMarkup(<CodexSubagentProgressSheet />)
+    dateNow.mockRestore()
+
+    expect(markup).toContain('data-working="true"')
+  })
+
+  it('stops trusting an expired working roster after the freshness epoch advances', async () => {
+    const now = Date.parse('2026-08-03T12:00:00.000Z')
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(now)
+    mocks.state.agentStatusEpoch = 1
+    mocks.state.agentStatusByPaneKey = {
+      'parent-pane': {
+        updatedAt: now - AGENT_STATUS_STALE_AFTER_MS - 1,
+        subagents: [{ id: 'child-1', state: 'working' }]
+      }
+    }
+    mocks.liveSession.mockReturnValue({ ...liveSession(), status: 'done' })
+    const { default: CodexSubagentProgressSheet } = await import('./CodexSubagentProgressSheet')
+
+    const markup = renderToStaticMarkup(<CodexSubagentProgressSheet />)
+    dateNow.mockRestore()
 
     expect(markup).toContain('data-working="false"')
   })
