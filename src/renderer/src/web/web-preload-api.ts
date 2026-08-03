@@ -3245,9 +3245,11 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
     removeTarget: () => Promise.resolve(),
     importConfig: () => Promise.resolve({ targets: [], repoReadoptions: [] }),
     connect: async (args) => {
+      // Why: dropping the initiator re-armed the auto-reconnect budget as 'user' on every paired
+      // remount; an old server strips the extra key, which degrades to pre-budget behavior (C1).
       const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
         'ssh.connect',
-        { targetId: args.targetId }
+        { targetId: args.targetId, initiator: args.initiator }
       )
       return state
     },

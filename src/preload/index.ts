@@ -4399,7 +4399,13 @@ const api = {
     importConfig: (args?: { reAdopt?: boolean }): Promise<SshConfigImportResult> =>
       ipcRenderer.invoke('ssh:importConfig', args),
 
-    connect: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
+    // Why: `initiator: 'auto'` marks connects Orca issues on its own (pane remounts, automations).
+    // Only a user-initiated connect re-earns the auto-reconnect budget; defaulting to 'user' keeps
+    // every unmarked caller on the pre-existing behavior.
+    connect: async (args: {
+      targetId: string
+      initiator?: 'user' | 'auto'
+    }): Promise<SshConnectionState | null> => {
       const state: unknown = await ipcRenderer.invoke('ssh:connect', args)
       return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
     },

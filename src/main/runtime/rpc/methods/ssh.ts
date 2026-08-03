@@ -12,6 +12,13 @@ const SshTarget = z.object({
   targetId: z.string().min(1)
 })
 
+// Why separate from SshTarget: only connect takes an initiator; omitted stays 'user' so legacy
+// paired clients keep pre-existing behavior, while shared auto paths stay budget-gated (C1).
+const SshConnectParams = z.object({
+  targetId: z.string().min(1),
+  initiator: z.enum(['user', 'auto']).optional()
+})
+
 function listRegisteredSshTargetSummaries(): { id: string; label: string }[] {
   return listRegisteredSshTargets().map(({ id, label }) => ({ id, label }))
 }
@@ -26,10 +33,14 @@ export const SSH_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'ssh.connect',
-    params: SshTarget,
+    params: SshConnectParams,
     handler: async (params) => {
       try {
-        return { state: getPublicSshState(await connectRegisteredSshTarget(params.targetId)) }
+        return {
+          state: getPublicSshState(
+            await connectRegisteredSshTarget(params.targetId, params.initiator ?? 'user')
+          )
+        }
       } catch {
         const state = getRegisteredSshState(params.targetId)
         throw new Error(getPublicSshError(state?.status ?? 'error'))

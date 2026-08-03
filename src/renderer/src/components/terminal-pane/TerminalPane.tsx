@@ -40,6 +40,7 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import {
   selectRuntimeAwareSshStatus,
+  selectRuntimeAwareSshStatusError,
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
 } from '@/store/slices/runtime-environment-ssh'
@@ -347,6 +348,11 @@ function TerminalPane(
   const sshReconnectStatus = useAppStore((store) =>
     sshReconnectTargetId
       ? selectRuntimeAwareSshStatus(store, sshReconnectEnvironmentId, sshReconnectTargetId)
+      : null
+  )
+  const sshReconnectStatusError = useAppStore((store) =>
+    sshReconnectTargetId
+      ? selectRuntimeAwareSshStatusError(store, sshReconnectEnvironmentId, sshReconnectTargetId)
       : null
   )
   const sshReconnectTargetLabel = useAppStore((store) =>
@@ -3002,6 +3008,7 @@ function TerminalPane(
                 targetId={sshReconnectTargetId}
                 targetLabel={sshReconnectTargetLabel}
                 status={sshReconnectStatus}
+                statusError={sshReconnectStatusError}
                 targetRemoved={sshReconnectTargetRemoved}
                 worktreeId={worktreeId}
                 sshOwnerEnvironmentId={sshReconnectEnvironmentId}

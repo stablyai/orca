@@ -58,8 +58,40 @@ describe('ssh RPC methods', () => {
 
     const response = await dispatcher.dispatch(makeRequest('ssh.connect', { targetId: 'ssh-1' }))
 
-    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1')
+    // Why 'user': legacy paired clients omit the initiator and must keep pre-budget behavior.
+    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1', 'user')
     expect(response).toMatchObject({ ok: true, result: { state } })
+  })
+
+  it('forwards an auto initiator so paired remounts stay budget-gated', async () => {
+    connectRegisteredSshTargetMock.mockResolvedValueOnce({
+      targetId: 'ssh-1',
+      status: 'reconnection-failed',
+      error: 'paused',
+      reconnectAttempt: 0
+    })
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ssh.connect', { targetId: 'ssh-1', initiator: 'auto' })
+    )
+
+    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1', 'auto')
+    expect(response).toMatchObject({ ok: true })
+  })
+
+  it('rejects an invalid initiator without reaching the connect lifecycle', async () => {
+    connectRegisteredSshTargetMock.mockClear()
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ssh.connect', { targetId: 'ssh-1', initiator: 'scheduled' })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(connectRegisteredSshTargetMock).not.toHaveBeenCalled()
   })
 
   it('returns null when the target has no registered state yet', async () => {

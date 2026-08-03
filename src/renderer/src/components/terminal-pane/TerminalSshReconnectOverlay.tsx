@@ -16,6 +16,9 @@ type TerminalSshReconnectOverlayProps = {
   targetId: string
   targetLabel: string
   status: SshConnectionStatus
+  // Host-authored failure detail (e.g. the auto-reconnect paused notice); shown
+  // verbatim for 'reconnection-failed' so the user learns why retries stopped.
+  statusError?: string | null
   // The SSH target was removed entirely — reconnect is impossible, so offer to
   // remove the workspace instead of a Connect button that can only fail.
   targetRemoved?: boolean
@@ -36,7 +39,11 @@ function canConnectStatus(status: SshConnectionStatus): boolean {
   return ['disconnected', 'reconnection-failed', 'error', 'auth-failed'].includes(status)
 }
 
-function messageForStatus(status: SshConnectionStatus, targetLabel: string): string {
+function messageForStatus(
+  status: SshConnectionStatus,
+  targetLabel: string,
+  statusError?: string | null
+): string {
   switch (status) {
     case 'auth-failed':
       return translate(
@@ -46,6 +53,11 @@ function messageForStatus(status: SshConnectionStatus, targetLabel: string): str
       )
     case 'error':
     case 'reconnection-failed':
+      // Why verbatim: same established surface as toast.error(err.message); a
+      // main-supplied notice (auto-reconnect paused) beats the generic copy.
+      if (status === 'reconnection-failed' && statusError) {
+        return statusError
+      }
       return translate(
         'auto.components.terminal.pane.TerminalSshReconnectOverlay.reconnectFailed',
         'The SSH connection to {{value0}} failed. Connect again to continue this terminal session.',
@@ -77,6 +89,7 @@ export function TerminalSshReconnectOverlay({
   targetId,
   targetLabel,
   status,
+  statusError = null,
   targetRemoved = false,
   worktreeId,
   sshOwnerEnvironmentId = null
@@ -178,7 +191,7 @@ export function TerminalSshReconnectOverlay({
                   'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedBody',
                   'The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.'
                 )
-              : messageForStatus(status, targetLabel)}
+              : messageForStatus(status, targetLabel, statusError)}
           </div>
         </div>
         {targetRemoved ? (

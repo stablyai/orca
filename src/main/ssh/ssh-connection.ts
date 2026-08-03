@@ -48,6 +48,11 @@ import {
   isTransientReconnectError
 } from './ssh-reconnect-error-classification'
 import { SshReconnectLadder } from './ssh-reconnect-ladder'
+import {
+  AUTO_RECONNECT_PAUSED_MESSAGE,
+  sshAutoReconnectBudget,
+  type SshConnectInitiator
+} from './ssh-auto-reconnect-budget'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import {
   requiresSystemSshForSecurityKey,
@@ -600,7 +605,7 @@ export class SshConnection {
     })
   }
 
-  async connect(): Promise<void> {
+  async connect(options?: { initiator?: SshConnectInitiator }): Promise<void> {
     if (this.disposed) {
       throw new Error('Connection disposed')
     }
@@ -613,6 +618,9 @@ export class SshConnection {
         await this.attemptConnect(connectGeneration)
         this.reconnectLadder.reset()
         this.reconnectLadder.markConnected(Date.now())
+        // Why not reset: a bare handshake proves nothing during a flap storm; only a connection that
+        // survives to the next drop (see noteDropped) re-earns budget.
+        sshAutoReconnectBudget.markConnected(this.target.id, Date.now())
         return
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
@@ -641,6 +649,15 @@ export class SshConnection {
         }
 
         if (attempt < INITIAL_RETRY_ATTEMPTS - 1) {
+          // Why: this loop is ~160s of SSH work per call, so an automatic caller must not run it out
+          // past the budget. A user connect always gets every attempt.
+          if (
+            options?.initiator === 'auto' &&
+            sshAutoReconnectBudget.isExhausted(this.target.id, Date.now())
+          ) {
+            this.setState('reconnection-failed', AUTO_RECONNECT_PAUSED_MESSAGE)
+            throw lastError
+          }
           await sleep(INITIAL_RETRY_DELAY_MS)
         }
       }
@@ -1273,15 +1290,29 @@ export class SshConnection {
     if (this.disposed || this.reconnectTimer) {
       return
     }
-    const decision = this.reconnectLadder.next(Date.now())
+    const nowMs = Date.now()
+    // Why here: this is the one place every drop passes through, so it is where a connection that
+    // held long enough to count as stable gets to re-earn the window.
+    sshAutoReconnectBudget.noteDropped(this.target.id, nowMs)
+    // Why: target-scoped, so the give-up survives SshConnectionManager discarding this object and
+    // building a fresh ladder on the next pane remount — a connection-scoped bound never sticks.
+    if (sshAutoReconnectBudget.isExhausted(this.target.id, nowMs)) {
+      this.setState('reconnection-failed', AUTO_RECONNECT_PAUSED_MESSAGE)
+      return
+    }
+    const deadlineMs = sshAutoReconnectBudget.deadlineFor(this.target.id, nowMs)
+    const decision = this.reconnectLadder.next(nowMs)
     if (decision.kind === 'give-up') {
       this.setState('reconnection-failed', 'Max reconnection attempts reached')
       return
     }
+    // Why: never sleep past the deadline — that would waste the tail of the budget on a wait whose
+    // attempt is already out of budget by the time it fires.
+    const delayMs = Math.min(decision.delayMs, Math.max(0, deadlineMs - nowMs))
     this.state.reconnectAttempt = decision.attemptIndex
     this.setState('reconnecting')
     console.warn(
-      `[ssh] Reconnecting to ${this.target.label} in ${decision.delayMs}ms (delay step ${decision.attemptIndex + 1}/${RECONNECT_BACKOFF_MS.length}, failed handshakes ${this.reconnectLadder.failedAttemptStreak}/${RECONNECT_BACKOFF_MS.length})`
+      `[ssh] Reconnecting to ${this.target.label} in ${delayMs}ms (delay step ${decision.attemptIndex + 1}/${RECONNECT_BACKOFF_MS.length}, failed handshakes ${this.reconnectLadder.failedAttemptStreak}/${RECONNECT_BACKOFF_MS.length}, ${Math.max(0, deadlineMs - nowMs)}ms of auto-reconnect budget left)`
     )
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null
@@ -1289,10 +1320,16 @@ export class SshConnection {
         return
       }
       await this.runReconnectAttempt()
-    }, decision.delayMs)
+    }, delayMs)
   }
 
   private async runReconnectAttempt(): Promise<void> {
+    // Why: the delay is clamped to the deadline, so this timer can fire exactly at exhaustion —
+    // re-check here or the pause still costs one full connect timeout of dialing.
+    if (sshAutoReconnectBudget.isExhausted(this.target.id, Date.now())) {
+      this.setState('reconnection-failed', AUTO_RECONNECT_PAUSED_MESSAGE)
+      return
+    }
     const connectGeneration = ++this.connectGeneration
     try {
       // Why: reset before connecting so the 'connected' broadcast carries reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
@@ -1303,6 +1340,7 @@ export class SshConnection {
       }
       // Why: attemptConnect resolves only after a real handshake on either transport; the system-ssh probe's 'connected' must not clear the failure streak.
       this.reconnectLadder.markConnected(Date.now())
+      sshAutoReconnectBudget.markConnected(this.target.id, Date.now())
     } catch (err) {
       // Why: a superseded attempt has no outcome to publish — the attempt that claimed the generation owns the state, and cancellation is that supersession.
       if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {

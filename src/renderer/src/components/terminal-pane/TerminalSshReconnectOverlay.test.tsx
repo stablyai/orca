@@ -129,6 +129,39 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(screen.getByRole('button', { name: 'Connect' })).toBeEnabled()
   })
 
+  it('shows the host-authored paused notice for reconnection-failed', () => {
+    installSshConnect(vi.fn())
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="devbox"
+        status="reconnection-failed"
+        statusError="The SSH host is unreachable. Automatic reconnect is paused — use Connect to retry."
+      />
+    )
+
+    expect(
+      screen.getByText(/Automatic reconnect is paused — use Connect to retry/)
+    ).toBeInTheDocument()
+    // Why: the pause is only recoverable through a user connect; the button must stay offered.
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeEnabled()
+  })
+
+  it('falls back to the generic copy when reconnection-failed carries no error detail', () => {
+    installSshConnect(vi.fn())
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="devbox"
+        status="reconnection-failed"
+      />
+    )
+
+    expect(screen.getByText(/The SSH connection to devbox failed/)).toBeInTheDocument()
+  })
+
   it('resyncs target metadata after a failed connect so a stale overlay converges', async () => {
     const connect = vi.fn().mockRejectedValue(new Error('SSH target "ssh-dead" not found'))
     const listTargets = vi

@@ -5,6 +5,11 @@ import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
 import type { SshConnectionCallbacks } from '../ssh/ssh-connection'
 import { SshConnectionManager } from '../ssh/ssh-connection-manager'
+import {
+  AUTO_RECONNECT_PAUSED_MESSAGE,
+  sshAutoReconnectBudget,
+  type SshConnectInitiator
+} from '../ssh/ssh-auto-reconnect-budget'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession, type SshRelayAiVaultHostInfo } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
@@ -55,7 +60,9 @@ import {
 let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
 let portForwardManager: SshPortForwardManager | null = null
-let registeredConnectSshTarget: ((targetId: string) => Promise<SshConnectionState>) | null = null
+let registeredConnectSshTarget:
+  | ((targetId: string, initiator?: SshConnectInitiator) => Promise<SshConnectionState>)
+  | null = null
 let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined) | null = null
 let persistedStore: Store | null = null
 let advertisedUrlWatcherUnsubscribe: (() => void) | null = null
@@ -91,11 +98,15 @@ function getCurrentMainWindow(): BrowserWindow | null {
   return currentGetMainWindow()
 }
 
-export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
+export async function connectRegisteredSshTarget(
+  targetId: string,
+  // Why: paired clients dropping the initiator re-armed the auto-reconnect budget as 'user' (C1).
+  initiator: SshConnectInitiator = 'user'
+): Promise<SshConnectionState> {
   if (!registeredConnectSshTarget) {
     throw new Error('ssh_handlers_not_registered')
   }
-  return registeredConnectSshTarget(targetId)
+  return registeredConnectSshTarget(targetId, initiator)
 }
 
 export function getRegisteredSshState(targetId: string): SshConnectionState | undefined {
@@ -113,6 +124,8 @@ export function listRegisteredRemovedSshTargetLabels(): Record<string, string> {
 }
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
+  // Why: an explicit stop is user intent; a stale exhausted window must not park the next connect.
+  sshAutoReconnectBudget.reset(targetId)
   invalidateConnectAttempt(targetId)
   await runTargetLifecycle(targetId, () =>
     teardownSshTargetTransport(targetId, (session) => session.detachAndPersist())
@@ -124,6 +137,8 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
     return
   }
   const store = sshStore
+  // Why: the id can be re-added later; a leftover window would park the re-added target unprobed.
+  sshAutoReconnectBudget.reset(targetId)
   invalidateConnectAttempt(targetId)
   await runTargetLifecycle(targetId, async () => {
     try {
@@ -562,6 +577,9 @@ function registerPowerMonitorReconnect(): void {
     }
   }
   const onResume = (): void => {
+    // Why: waking is new network evidence, and the budget burns wall-clock through sleep — keeping a
+    // pre-sleep give-up here would skip the #7773 liveness probe on a laptop that woke healthy.
+    sshAutoReconnectBudget.clear()
     for (const [targetId, session] of activeSessions) {
       const manager = connectionManager
       const conn = manager?.getConnection(targetId)
@@ -969,11 +987,18 @@ export function registerSshHandlers(
 
   // ── Connection lifecycle ───────────────────────────────────────────
 
-  async function connectTarget(targetId: string): Promise<SshConnectionState> {
+  async function connectTarget(
+    targetId: string,
+    initiator: SshConnectInitiator = 'user'
+  ): Promise<SshConnectionState> {
     const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
     if (e2eProbePath) {
       appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
       throw new Error('e2e_forbidden_local_ssh_connect')
+    }
+    if (initiator === 'user') {
+      // Why: the user asking to connect is what re-arms automatic retries after a give-up.
+      sshAutoReconnectBudget.reset(targetId)
     }
     // Why: fence callers that entered before a same-turn disconnect/reset but resume after its cleanup.
     const admissionAuthority = getSshProviderAuthority(targetId)
@@ -1005,8 +1030,33 @@ export function registerSshHandlers(
       throw createCancelledConnectAttemptError()
     }
 
+    // Why after the dedupe: an auto connect that joined an in-flight connect must not park it
+    // mid-flight. Why the live check: with stability-gated re-arm an exhausted window can coexist
+    // with a healthy connection (reconnected late in the window), and a pane remount must never
+    // park a live session — doConnect's refresh path handles it.
+    if (initiator === 'auto' && connectionManager!.getState(targetId)?.status !== 'connected') {
+      if (sshAutoReconnectBudget.isExhausted(targetId, Date.now())) {
+        // Why: without this the give-up is unreachable — SshConnectionManager.connect() replaces the
+        // connection with a fresh ladder, so every pane remount would restart the retry loop forever.
+        // Why an override rather than a bare broadcast: getPublicSshState reads overrides first, so a
+        // later ssh:getState reports the same pause instead of a stale 'Relay channel lost' message.
+        clearRelayLostBackoff(targetId)
+        publishRelayOverride(
+          getCurrentMainWindow,
+          targetId,
+          'reconnection-failed',
+          AUTO_RECONNECT_PAUSED_MESSAGE,
+          0
+        )
+        return getPublicSshState(targetId)!
+      }
+      // Why open it here too: a target that was never up this session never reaches
+      // scheduleReconnect, so this is the only place a cold remount storm can start the clock.
+      sshAutoReconnectBudget.deadlineFor(targetId, Date.now())
+    }
+
     pendingTransportReconnects.delete(targetId)
-    const promise = doConnect(targetId, replacePendingTransport)
+    const promise = doConnect(targetId, replacePendingTransport, initiator)
     const attempt = { authority: getSshProviderAuthority(targetId), promise }
     connectInFlight.set(targetId, attempt)
     try {
@@ -1021,13 +1071,17 @@ export function registerSshHandlers(
   registeredConnectSshTarget = connectTarget
   registeredGetSshState = (targetId: string) => getPublicSshState(targetId)
 
-  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
-    return connectTarget(args.targetId)
-  })
+  ipcMain.handle(
+    'ssh:connect',
+    async (_event, args: { targetId: string; initiator?: SshConnectInitiator }) => {
+      return connectTarget(args.targetId, args.initiator ?? 'user')
+    }
+  )
 
   async function doConnect(
     targetId: string,
-    replacePendingTransport = false
+    replacePendingTransport = false,
+    initiator?: SshConnectInitiator
   ): Promise<SshConnectionState> {
     const target = sshStore!.getTarget(targetId)
     if (!target) {
@@ -1052,6 +1106,7 @@ export function registerSshHandlers(
     }
 
     const authority = rotateSshProviderAuthority(targetId)
+    // Why: this also drops a parked-state override, so a give-up never outlives the connect that ends it.
     clearRelayStateOverride(targetId)
     const pendingTransportDisconnect = replacePendingTransport
       ? connectionManager!.disconnect(targetId).then(
@@ -1107,7 +1162,7 @@ export function registerSshHandlers(
       isCurrentConnectAttempt(targetId, authority) && activeSessions.get(targetId) === session
 
     try {
-      conn = await connectionManager!.connect(target)
+      conn = await connectionManager!.connect(target, { initiator })
       if (!ownsSession()) {
         throw createCancelledConnectAttemptError()
       }
@@ -1123,6 +1178,22 @@ export function registerSshHandlers(
       await abandonFailedSshSession(targetId, session)
       clearRelayLostBackoff(targetId)
       clearRelayStateOverride(targetId)
+      // Why: connect()'s retry loop gives up early once the budget runs out mid-loop, so report the
+      // pause instead of the last dial's error — otherwise the "use Connect" reason never surfaces.
+      if (
+        status !== 'auth-failed' &&
+        initiator === 'auto' &&
+        sshAutoReconnectBudget.isExhausted(targetId, Date.now())
+      ) {
+        publishRelayOverride(
+          getCurrentMainWindow,
+          targetId,
+          'reconnection-failed',
+          AUTO_RECONNECT_PAUSED_MESSAGE,
+          0
+        )
+        throw err
+      }
       broadcastSshState(getCurrentMainWindow, targetId, {
         targetId,
         status,
@@ -1184,6 +1255,8 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:terminateSessions', async (_event, args: { targetId: string }) => {
+    // Why: a user recovery action re-arms automatic retries, same as clicking Connect.
+    sshAutoReconnectBudget.reset(args.targetId)
     invalidateConnectAttempt(args.targetId)
     await runTargetLifecycle(args.targetId, async () => {
       const provider = getSshPtyProvider(args.targetId)
@@ -1295,6 +1368,9 @@ export function registerSshHandlers(
     if (!target) {
       throw new Error(`SSH target "${args.targetId}" not found`)
     }
+
+    // Why: a user recovery action re-arms automatic retries, same as clicking Connect.
+    sshAutoReconnectBudget.reset(args.targetId)
 
     let resetPromise: Promise<void>
     resetPromise = runTargetLifecycle(args.targetId, () =>
@@ -1499,6 +1575,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   resetRelayInFlight.clear()
   testingTargets.clear()
   credentialRequestedForTarget.clear()
+  sshAutoReconnectBudget.clear()
 
   await connectionManager?.disconnectAll()
   portForwardManager?.dispose()

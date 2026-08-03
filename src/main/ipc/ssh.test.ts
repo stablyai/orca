@@ -244,6 +244,11 @@ vi.mock('../ssh/ssh-port-scanner', () => ({
 import { getSshConnectionManager, registerSshHandlers, resetSshHandlerStateForTests } from './ssh'
 import { RelayVersionMismatchError } from '../ssh/ssh-relay-version-mismatch-error'
 import {
+  AUTO_RECONNECT_BUDGET_MS,
+  AUTO_RECONNECT_PAUSED_MESSAGE,
+  sshAutoReconnectBudget
+} from '../ssh/ssh-auto-reconnect-budget'
+import {
   SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD,
   type SshConnectionState,
   type SshConnectionStatus,
@@ -576,7 +581,245 @@ describe('SSH IPC handlers', () => {
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
 
-    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
+    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { initiator: 'user' })
+  })
+
+  it('ssh:connect opens the auto-reconnect window on the first automatic connect', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockRejectedValue(new Error('connect ETIMEDOUT'))
+    mockConnectionManager.getState.mockReturnValue(null)
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', initiator: 'auto' })
+    ).rejects.toThrow('ETIMEDOUT')
+
+    // A host that was never up this session never reaches scheduleReconnect, so this admission is
+    // the only thing that can start the clock on a cold remount storm.
+    expect(sshAutoReconnectBudget.isExhausted('ssh-1', Date.now() + AUTO_RECONNECT_BUDGET_MS)).toBe(
+      true
+    )
+  })
+
+  it('ssh:connect parks an automatic connect once the auto-reconnect budget is spent', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.getState.mockReturnValue(null)
+    // Open a window that has already elapsed — the host has been unreachable for the full budget.
+    sshAutoReconnectBudget.deadlineFor('ssh-1', Date.now() - AUTO_RECONNECT_BUDGET_MS)
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', initiator: 'auto' })
+    ).resolves.toMatchObject({
+      targetId: 'ssh-1',
+      status: 'reconnection-failed',
+      error: AUTO_RECONNECT_PAUSED_MESSAGE,
+      reconnectAttempt: 0
+    })
+    // Why: pane remounts drive this path, so the park has to cost zero SSH work, not just fail fast.
+    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+    // Why an override, not a bare broadcast: a later poll must read the pause, not a stale error.
+    expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toMatchObject({
+      status: 'reconnection-failed',
+      error: AUTO_RECONNECT_PAUSED_MESSAGE
+    })
+  })
+
+  it('ssh:connect reports the pause when the budget runs out during an automatic dial', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.getState.mockReturnValue(null)
+    mockConnectionManager.connect.mockImplementation(async () => {
+      // Stands in for wall-clock elapsing mid-dial: connect()'s own guard cuts the retry loop short
+      // and rethrows the last dial error, so this catch is the only place the reason can surface.
+      sshAutoReconnectBudget.reset('ssh-1')
+      sshAutoReconnectBudget.deadlineFor('ssh-1', Date.now() - AUTO_RECONNECT_BUDGET_MS)
+      throw new Error('connect ETIMEDOUT')
+    })
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', initiator: 'auto' })
+    ).rejects.toThrow('ETIMEDOUT')
+
+    // Why not the raw dial error: the retries stopped by policy, and only the pause tells the user
+    // that Connect is what restarts them.
+    expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toMatchObject({
+      status: 'reconnection-failed',
+      error: AUTO_RECONNECT_PAUSED_MESSAGE
+    })
+  })
+
+  it('ssh:connect still reports an auth failure when the budget is spent', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.getState.mockReturnValue(null)
+    mockConnectionManager.connect.mockImplementation(async () => {
+      sshAutoReconnectBudget.reset('ssh-1')
+      sshAutoReconnectBudget.deadlineFor('ssh-1', Date.now() - AUTO_RECONNECT_BUDGET_MS)
+      throw new Error('All configured authentication methods failed')
+    })
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', initiator: 'auto' })
+    ).rejects.toThrow('All configured authentication methods failed')
+
+    // Bad credentials are not a retry-budget problem — masking them with the pause hides the fix.
+    expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toBeUndefined()
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith(
+      'ssh:state-changed',
+      expect.objectContaining({
+        state: expect.objectContaining({
+          status: 'auth-failed',
+          error: 'All configured authentication methods failed'
+        })
+      })
+    )
+  })
+
+  it('ssh:connect does not park an automatic connect while the target is still connected', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    // Stability-gated re-arm lets a spent window coexist with a healthy session (it came back late).
+    sshAutoReconnectBudget.deadlineFor('ssh-1', Date.now() - AUTO_RECONNECT_BUDGET_MS)
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', initiator: 'auto' })
+    ).resolves.toMatchObject({ status: 'connected' })
+    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { initiator: 'auto' })
+  })
+
+  it('ssh:connect re-arms the auto-reconnect budget when the user asks', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    sshAutoReconnectBudget.deadlineFor('ssh-1', Date.now() - AUTO_RECONNECT_BUDGET_MS)
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
+    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { initiator: 'user' })
+    expect(sshAutoReconnectBudget.isExhausted('ssh-1', Date.now())).toBe(false)
+  })
+
+  it('bounds the automatic storm that follows a failed user connect', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockRejectedValue(new Error('connect ETIMEDOUT'))
+    mockConnectionManager.getState.mockReturnValue(null)
+
+    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).rejects.toThrow(
+      'ETIMEDOUT'
+    )
+    // The user's own attempt is unbounded, but it must not leave the following remounts unbounded.
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', initiator: 'auto' })
+    ).rejects.toThrow('ETIMEDOUT')
+
+    expect(sshAutoReconnectBudget.isExhausted('ssh-1', Date.now() + AUTO_RECONNECT_BUDGET_MS)).toBe(
+      true
+    )
+  })
+
+  // Why one test per action: each is a distinct "the user is trying to fix this host" signal, and a
+  // target that stays parked through them can only be revived by clicking Connect.
+  it('ssh:disconnect re-arms the auto-reconnect budget', async () => {
+    mockConnectionManager.disconnect.mockResolvedValue(undefined)
+    sshAutoReconnectBudget.deadlineFor('ssh-1', Date.now() - AUTO_RECONNECT_BUDGET_MS)
+
+    await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
+
+    expect(sshAutoReconnectBudget.isExhausted('ssh-1', Date.now())).toBe(false)
+  })
+
+  it('ssh:removeTarget re-arms the auto-reconnect budget', async () => {
+    mockConnectionManager.disconnect.mockResolvedValue(undefined)
+    sshAutoReconnectBudget.deadlineFor('ssh-1', Date.now() - AUTO_RECONNECT_BUDGET_MS)
+
+    await handlers.get('ssh:removeTarget')!(null, { id: 'ssh-1' })
+
+    // A re-added target must not inherit the removed one's pause.
+    expect(sshAutoReconnectBudget.isExhausted('ssh-1', Date.now())).toBe(false)
+  })
+
+  it('ssh:terminateSessions re-arms the auto-reconnect budget', async () => {
+    mockConnectionManager.disconnect.mockResolvedValue(undefined)
+    sshAutoReconnectBudget.deadlineFor('ssh-1', Date.now() - AUTO_RECONNECT_BUDGET_MS)
+
+    await handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
+
+    expect(sshAutoReconnectBudget.isExhausted('ssh-1', Date.now())).toBe(false)
+  })
+
+  it('ssh:resetRelay re-arms the auto-reconnect budget', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getConnection.mockReturnValue(undefined)
+    sshAutoReconnectBudget.deadlineFor('ssh-1', Date.now() - AUTO_RECONNECT_BUDGET_MS)
+
+    await handlers.get('ssh:resetRelay')!(null, { targetId: 'ssh-1' })
+
+    expect(sshAutoReconnectBudget.isExhausted('ssh-1', Date.now())).toBe(false)
   })
 
   it('registers the provider before broadcasting connected authority', async () => {
@@ -2370,7 +2613,7 @@ describe('SSH IPC handlers', () => {
 
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
     expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1)
-    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
+    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { initiator: 'user' })
   })
 
   it('ssh:resetRelay reuses duplicate in-flight resets for the same target', async () => {
@@ -2502,6 +2745,39 @@ describe('SSH IPC handlers', () => {
     expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toMatchObject({
       connectionGeneration: 2
     })
+  })
+
+  it('re-arms a parked target on system resume and still probes liveness', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    mockMux.probeLiveness.mockResolvedValue(true)
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    // The budget burns wall-clock through sleep, so a long nap alone can exhaust it.
+    sshAutoReconnectBudget.deadlineFor('ssh-1', Date.now() - AUTO_RECONNECT_BUDGET_MS)
+
+    const resumeListener = powerMonitorOnMock.mock.calls.find(([event]) => event === 'resume')?.[1]
+    resumeListener()
+
+    // Waking is new network evidence: keeping the pre-sleep give-up would skip the wake probe on a
+    // laptop that woke healthy.
+    await vi.waitFor(() => expect(mockMux.probeLiveness).toHaveBeenCalledTimes(1))
+    expect(sshAutoReconnectBudget.isExhausted('ssh-1', Date.now())).toBe(false)
   })
 
   it('skips reconnect on system resume when the relay link is still alive', async () => {

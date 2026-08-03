@@ -383,7 +383,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
 
     expect(state.allWorktrees).not.toHaveBeenCalled()
-    expect(mockSshConnect).toHaveBeenCalledWith({ targetId: 'ssh-folder' })
+    expect(mockSshConnect).toHaveBeenCalledWith({ targetId: 'ssh-folder', initiator: 'auto' })
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: folderWorkspace.id,
@@ -395,6 +395,57 @@ describe('useAutomationDispatchEvents setup launch', () => {
         status: 'dispatched',
         workspaceId: folderWorkspace.id,
         workspaceDisplayName: folderWorkspace.displayName
+      })
+    )
+  })
+
+  it('records why a parked SSH target skipped the run', async () => {
+    const folderWorkspace = {
+      id: 'folder:fw-1',
+      repoId: 'folder-workspace:group-1',
+      displayName: 'SSH folder',
+      path: '/srv/project'
+    }
+    state.repos = [
+      {
+        id: 'repo-1',
+        connectionId: 'ssh-folder',
+        executionHostId: null,
+        path: '/srv/project/repo'
+      }
+    ]
+    state.folderWorkspaces = [
+      {
+        id: 'fw-1',
+        projectGroupId: 'group-1',
+        folderPath: '/srv/project',
+        connectionId: 'ssh-folder'
+      }
+    ]
+    state.projectGroups = [{ id: 'group-1', connectionId: 'ssh-folder' }]
+    state.getKnownWorktreeById.mockReturnValue(folderWorkspace)
+    mockSshGetState.mockResolvedValue({ status: 'disconnected' })
+    // A parked target resolves with the pause instead of throwing, so the reason only reaches the
+    // run record if the skip carries the state's error.
+    mockSshConnect.mockResolvedValue({
+      status: 'reconnection-failed',
+      error: 'The SSH host is unreachable. Automatic reconnect is paused — use Connect to retry.'
+    })
+
+    await registerAndDispatch(
+      makeAutomation({
+        workspaceMode: 'existing',
+        workspaceId: folderWorkspace.id,
+        setupDecision: 'skip',
+        runContext: { repoId: 'repo-1', hostId: 'ssh:ssh-folder' }
+      })
+    )
+
+    expect(mockLaunchAgentBackgroundSession).not.toHaveBeenCalled()
+    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'skipped_unavailable',
+        error: 'The SSH host is unreachable. Automatic reconnect is paused — use Connect to retry.'
       })
     )
   })

@@ -3416,7 +3416,12 @@ export type PreloadApi = {
     }) => Promise<SshTarget>
     removeTarget: (args: { id: string }) => Promise<void>
     importConfig: (args?: { reAdopt?: boolean }) => Promise<SshConfigImportResult>
-    connect: (args: { targetId: string }) => Promise<SshConnectionState | null>
+    // `initiator: 'auto'` = Orca reconnecting on its own; only 'user' (the default) re-earns the
+    // auto-reconnect budget that stops a down host from being retried forever.
+    connect: (args: {
+      targetId: string
+      initiator?: 'user' | 'auto'
+    }) => Promise<SshConnectionState | null>
     disconnect: (args: { targetId: string }) => Promise<void>
     terminateSessions: (args: { targetId: string }) => Promise<void>
     resetRelay: (args: { targetId: string }) => Promise<void>

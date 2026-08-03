@@ -287,6 +287,25 @@ export function selectRuntimeAwareSshStatus(
   return bucket.connectionStates.get(targetId)?.status ?? null
 }
 
+/** Same sourcing rules as selectRuntimeAwareSshStatus; carries the host-authored failure detail (e.g. the auto-reconnect paused notice). */
+export function selectRuntimeAwareSshStatusError(
+  state: RuntimeAwareSshReadState,
+  environmentId: string | null,
+  targetId: string
+): string | null {
+  if (environmentId === null) {
+    return state.sshConnectionStates.get(targetId)?.error ?? null
+  }
+  if (!isEnvironmentReachable(state, environmentId)) {
+    return null
+  }
+  const bucket = state.sshStateByEnvironment.get(environmentId)
+  if (!bucket?.targetsHydrated) {
+    return null
+  }
+  return bucket.connectionStates.get(targetId)?.error ?? null
+}
+
 export function selectRuntimeAwareSshTargetLabel(
   state: RuntimeAwareSshReadState,
   environmentId: string | null,

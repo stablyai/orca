@@ -3409,12 +3409,16 @@ describe('web SSH preload API', () => {
       providerEpoch: 'web-provider-epoch',
       connectionGeneration: 23
     })
+    // Why: shared renderer paths mark remounts/automations 'auto'; the RPC payload must carry it
+    // or the paired path re-arms the auto-reconnect budget as 'user' (C1).
+    await globals.window.api.ssh.connect({ targetId: 'ssh-1', initiator: 'auto' })
     const partial = await globals.window.api.ssh.getState({ targetId: 'ssh-1' })
 
     expect(partial).toMatchObject({ providerEpoch: 'partial-provider-epoch' })
     expect(partial).not.toHaveProperty('connectionGeneration')
     expect(runtimeCalls).toEqual([
       { method: 'ssh.connect', params: { targetId: 'ssh-1' } },
+      { method: 'ssh.connect', params: { targetId: 'ssh-1', initiator: 'auto' } },
       { method: 'ssh.getState', params: { targetId: 'ssh-1' } }
     ])
   })

@@ -20,6 +20,7 @@ import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../sha
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../shared/worktree-removal-fence-error'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
+import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import {
   HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS,
   containsCsiRendererQuery,
@@ -811,6 +812,12 @@ function hasCodexRestartNotices(
   return codexRestartNoticePresence
 }
 
+const SSH_CONNECT_FAILED_STATUSES = new Set<SshConnectionStatus>([
+  'auth-failed',
+  'error',
+  'reconnection-failed'
+])
+
 function sshPromptConnectOutcomeForStatus(
   status: string | undefined,
   sawNonDisconnected: boolean
@@ -842,7 +849,19 @@ async function waitForSshConnection(connectionId: string): Promise<SshConnectRes
 
   const promise: Promise<SshConnectResult> = (async (): Promise<SshConnectResult> => {
     try {
-      await window.api.ssh.connect({ targetId: connectionId })
+      // Why: a pane remount is Orca reconnecting on its own, not the user asking — it must not
+      // re-arm the auto-reconnect budget, or a down host is retried forever as panes remount.
+      const connectState = await window.api.ssh.connect({
+        targetId: connectionId,
+        initiator: 'auto'
+      })
+      // Why: an auto connect against a given-up target resolves with the paused state instead of
+      // throwing, so reattaching on a resolved promise alone would drive the PTY at a dead host.
+      // Only the act-on-me statuses count — 'connecting'/'deploying-relay' still resolve to a
+      // reattach the way an in-flight connect always has.
+      if (connectState && SSH_CONNECT_FAILED_STATUSES.has(connectState.status)) {
+        return { connected: false, error: connectState.error ?? connectState.status }
+      }
       return { connected: true }
     } catch (err) {
       console.warn(`Deferred SSH reconnect failed for ${connectionId}:`, err)

@@ -1026,7 +1026,8 @@ function App(): React.JSX.Element {
                       const result = await reconnectSshTargetForRendererStartup({
                         targetId,
                         timeoutMs: SSH_RECONNECT_TIMEOUT_MS,
-                        connect: (id) => window.api.ssh.connect({ targetId: id }),
+                        connect: (id) =>
+                          window.api.ssh.connect({ targetId: id, initiator: 'auto' }),
                         publishState: actions.setSshConnectionState,
                         onFailure: (id, error) => {
                           console.warn(`SSH auto-reconnect failed for ${id}:`, error)
