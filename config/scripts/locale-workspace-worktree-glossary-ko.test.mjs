@@ -12,7 +12,7 @@ const WORKTREE = '워크트리'
 const WORKSPACE = '워크스페이스'
 const STRAY_WORKTREE = '작업 트리'
 
-describe('locale-translation-policy ko round 6', () => {
+describe('locale-translation-policy ko workspace/worktree glossary', () => {
   it('renders worktree as 워크트리, spaced or not', () => {
     expect(
       repairKo(

@@ -8200,7 +8200,7 @@
             "e61157e926": "エディターのワードラップ",
             "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
             "editorFontFamily": "エディターフォント",
-            "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合は端末フォントに従います。"
+            "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合は terminal フォントに従います。"
           }
         },
         "git": {
@@ -9625,8 +9625,8 @@
         },
         "EditorFontFamilySetting": {
           "title": "エディターフォント",
-          "description": "ファイルエディターと差分ビューで使用されるフォント。空の場合は端末フォントに従います。",
-          "placeholder": "端末フォントと同じ"
+          "description": "ファイルエディターと差分ビューで使用されるフォント。空の場合は terminal フォントに従います。",
+          "placeholder": "terminal フォントと同じ"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -11106,7 +11106,7 @@
             "transcriptsSkipped": "{{count}} transcript skipped",
             "noAgentSessionsFound": "No agent sessions found",
             "noSessionsMatchFilters": "No sessions match the current filters",
-            "noAgentsSelected": "エージェントが選択されていません",
+            "noAgentsSelected": "agents が選択されていません",
             "sessionId": "セッション ID",
             "logPath": "ログパス",
             "agents": "Agents",

@@ -1,6 +1,5 @@
-import { KO_WORKSPACE_WORKTREE_FIXES } from './workspace-worktree-phrase-fixes.mjs'
-
 // Korean phrase fixes from high-visibility UI audit round 5.
+// Workspace/worktree/primary terms live in locale-workspace-worktree-glossary.mjs (own repair stage).
 export const KO_PHRASE_FIXES_ROUND5 = [
   { pattern: /검토 필요/g, replacement: '리뷰 필요', whenEnIncludes: 'Needs review' },
   { pattern: /검토 중/g, replacement: '리뷰 중', whenEnIncludes: 'In review' },
@@ -58,6 +57,5 @@ export const KO_PHRASE_FIXES_ROUND5 = [
   { pattern: /표시하다/g, replacement: '표시', whenEnIncludes: 'display' },
   { pattern: /구성하다/g, replacement: '작성', whenEnIncludes: 'compose' },
   { pattern: /유지하다/g, replacement: '유지', whenEnIncludes: 'Keep' },
-  { pattern: /확인하다/g, replacement: '검증', whenEnIncludes: 'verify' },
-  ...KO_WORKSPACE_WORKTREE_FIXES
+  { pattern: /확인하다/g, replacement: '검증', whenEnIncludes: 'verify' }
 ]

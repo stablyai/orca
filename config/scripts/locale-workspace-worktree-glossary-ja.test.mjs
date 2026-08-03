@@ -9,7 +9,7 @@ function repairJa(key, enValue, localeValue) {
 const WORKTREE = 'ワークツリー'
 const WORKSPACE = 'ワークスペース'
 
-describe('locale-translation-policy ja round 6', () => {
+describe('locale-translation-policy ja workspace/worktree glossary', () => {
   it('renders worktree as ワークツリー, with or without hyphenated English', () => {
     expect(
       repairJa(

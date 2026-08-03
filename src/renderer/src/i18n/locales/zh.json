@@ -8175,7 +8175,7 @@
             "e61157e926": "编辑器自动换行",
             "005be5c699": "在文件编辑器中自动换行长行，而无需水平滚动。",
             "editorFontFamily": "编辑器字体",
-            "editorFontFamilyDesc": "文件编辑器和差异视图使用的字体。留空则跟随终端字体。"
+            "editorFontFamilyDesc": "文件编辑器和差异视图使用的字体。留空则跟随 terminal 字体。"
           }
         },
         "git": {
@@ -9637,8 +9637,8 @@
         },
         "EditorFontFamilySetting": {
           "title": "编辑器字体",
-          "description": "文件编辑器和差异视图使用的字体。留空则跟随终端字体。",
-          "placeholder": "与终端字体相同"
+          "description": "文件编辑器和差异视图使用的字体。留空则跟随 terminal 字体。",
+          "placeholder": "与 terminal 字体相同"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -11118,7 +11118,7 @@
             "transcriptsSkipped": "跳过了 {{count}} 个记录",
             "noAgentSessionsFound": "未找到 agent 会话",
             "noSessionsMatchFilters": "没有会话符合当前筛选条件",
-            "noAgentsSelected": "未选择任何智能体",
+            "noAgentsSelected": "未选择任何 agents",
             "sessionId": "会话 ID",
             "logPath": "日志路径",
             "agents": "Agents",

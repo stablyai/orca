@@ -1,4 +1,4 @@
-import { ZH_WORKSPACE_WORKTREE_FIXES } from './workspace-worktree-phrase-fixes.mjs'
+// Workspace/worktree/primary terms live in locale-workspace-worktree-glossary.mjs (own repair stage).
 
 // Chinese phrase fixes from high-visibility UI audit round 5.
 export const ZH_PHRASE_FIXES_ROUND5 = [
@@ -55,6 +55,5 @@ export const ZH_PHRASE_FIXES_ROUND5 = [
     pattern: /显示 Orca 移动按钮/g,
     replacement: '显示 Orca Mobile 按钮',
     whenEnIncludes: 'Show Orca Mobile Button'
-  },
-  ...ZH_WORKSPACE_WORKTREE_FIXES
+  }
 ]

@@ -9,6 +9,7 @@ describe('localization package scripts', () => {
     expect(scripts['verify:localization-catalog']).toBeDefined()
     expect(scripts['sync:localization-catalog']).toBeDefined()
     expect(scripts['verify:localization-extraction']).toBeDefined()
+    expect(scripts['verify:localization-repair']).toBeDefined()
   })
 
   it('does not expose whole-catalog translation and repair commands', () => {
@@ -17,6 +18,7 @@ describe('localization package scripts', () => {
     expect(scripts['bootstrap:ko-catalog']).toBeUndefined()
     expect(scripts['bootstrap:ja-catalog']).toBeUndefined()
     expect(scripts['bootstrap:es-catalog']).toBeUndefined()
+    // Mutating repair stays offline-only; CI uses verify:localization-repair (check, not write).
     expect(scripts['repair:locale-catalog']).toBeUndefined()
   })
 })

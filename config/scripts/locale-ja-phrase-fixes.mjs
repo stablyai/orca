@@ -1,4 +1,4 @@
-import { JA_WORKSPACE_WORKTREE_FIXES } from './workspace-worktree-phrase-fixes.mjs'
+// Workspace/worktree/primary terms live in locale-workspace-worktree-glossary.mjs (own repair stage).
 
 // Japanese phrase fixes from high-visibility UI audit rounds 1–4.
 // Why: keep locale-phrase-fixes.mjs under max-lines while preserving repair coverage.
@@ -252,6 +252,5 @@ export const JA_PHRASE_FIXES = [
     whenEnMatches: /\bAI agents?\b/i
   },
   // Why: JP engineers use "Issue" in Latin, not katakana. Runs last so all *→イシュー fixes above normalize to Issue.
-  { pattern: /イシュー/g, replacement: 'Issue', whenEnIncludes: 'issue' },
-  ...JA_WORKSPACE_WORKTREE_FIXES
+  { pattern: /イシュー/g, replacement: 'Issue', whenEnIncludes: 'issue' }
 ]

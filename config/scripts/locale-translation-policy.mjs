@@ -9,6 +9,7 @@ import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
 import { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
 import { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mjs'
+import { applyWorkspaceWorktreeGlossary } from './locale-workspace-worktree-glossary.mjs'
 
 export { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 export { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
@@ -472,26 +473,27 @@ function applyPhraseFixes(enValue, localeValue, locale) {
   return result
 }
 
+// Brand → MT phrase soup → product glossary → CJK spacing. Glossary is last so domain terms win.
+function applyPolicyRepairs(enValue, localeValue, locale, key) {
+  let result = applyBrandMistranslationFixes(enValue, localeValue, locale, key)
+  result = applyPhraseFixes(enValue, result, locale)
+  result = applyWorkspaceWorktreeGlossary(enValue, result, locale)
+  if (['zh', 'ja', 'ko'].includes(locale)) {
+    result = applyCjkLatinTermSpacing(result, locale)
+  }
+  return result
+}
+
 export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   const keyOverride = LOCALE_KEY_OVERRIDES[key]?.[locale]
   if (keyOverride) {
     // Why: exact key overrides can still carry stale MT output, so glossary repairs remain the final gate.
-    let result = applyBrandMistranslationFixes(enValue, keyOverride, locale, key)
-    result = applyPhraseFixes(enValue, result, locale)
-    if (['zh', 'ja', 'ko'].includes(locale)) {
-      result = applyCjkLatinTermSpacing(result, locale)
-    }
-    return result
+    return applyPolicyRepairs(enValue, keyOverride, locale, key)
   }
 
   const valueOverride = LOCALE_VALUE_OVERRIDES[locale]?.[enValue]
   if (valueOverride) {
-    let result = applyBrandMistranslationFixes(enValue, valueOverride, locale, key)
-    result = applyPhraseFixes(enValue, result, locale)
-    if (['zh', 'ja', 'ko'].includes(locale)) {
-      result = applyCjkLatinTermSpacing(result, locale)
-    }
-    return result
+    return applyPolicyRepairs(enValue, valueOverride, locale, key)
   }
 
   if (shouldPreserveEnglishValue(enValue, key)) {
@@ -507,11 +509,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
     }
   }
 
-  result = applyBrandMistranslationFixes(enValue, result, locale, key)
-  result = applyPhraseFixes(enValue, result, locale)
-  if (['zh', 'ja', 'ko'].includes(locale)) {
-    result = applyCjkLatinTermSpacing(result, locale)
-  }
+  result = applyPolicyRepairs(enValue, result, locale, key)
 
   if (enValue.includes('orca://')) {
     result = result.replace(/虎鲸:\/\//g, 'orca://')
@@ -610,6 +608,12 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
   }
 
   return repaired
+}
+
+// Non-mutating: how many leaves would change if repairCatalog ran. Used by verify:localization-repair.
+export function countCatalogRepairDrifts(enCatalog, localeCatalog, locale) {
+  const clone = structuredClone(localeCatalog)
+  return repairCatalog(enCatalog, clone, locale)
 }
 
 export function repairCacheMap(cache, locale) {

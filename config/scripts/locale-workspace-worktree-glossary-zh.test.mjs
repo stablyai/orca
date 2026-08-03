@@ -9,7 +9,7 @@ function repairZh(key, enValue, localeValue) {
 const WORKTREE = '工作树'
 const WORKSPACE = '工作区'
 
-describe('locale-translation-policy zh round 6', () => {
+describe('locale-translation-policy zh workspace/worktree glossary', () => {
   it('renders worktree as 工作树, with or without hyphenated English', () => {
     expect(
       repairZh(
