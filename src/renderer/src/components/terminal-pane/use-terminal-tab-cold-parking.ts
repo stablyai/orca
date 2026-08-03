@@ -16,6 +16,7 @@ import {
 import { getTerminalTabColdParkRecheckDelayMs } from './terminal-cold-park-recheck-deadlines'
 import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
+  selectPairedRuntimeParkingEnvironmentIds,
   selectColdParkedTerminalTabs,
   type TerminalTabColdParkCandidate
 } from './terminal-hidden-view-parking'
@@ -89,6 +90,11 @@ export function useTerminalTabColdParking(args: {
   )
   const terminalSshParkingEnabled = useAppStore(
     (state) => state.settings?.terminalSshViewParking !== false
+  )
+  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const pairedRuntimeParkingEnvironmentIds = useMemo(
+    () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
+    [runtimeStatusByEnvironmentId]
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   // Why (shared measure-clock contract with Terminal.tsx): tab hiddenSince
@@ -189,7 +195,10 @@ export function useTerminalTabColdParking(args: {
       parkingEnabled: terminalParkingEnabled,
       nowMs,
       parkCooldownUntilMs: measureParkCooldownUntilRef.current,
-      restorePolicy: { sshParkingEnabled: terminalSshParkingEnabled },
+      restorePolicy: {
+        sshParkingEnabled: terminalSshParkingEnabled,
+        pairedRuntimeParkingEnvironmentIds
+      },
       ...overrides
     })
     // Why: a tab the byte watchers cannot cover (no capture, no layout
@@ -238,6 +247,7 @@ export function useTerminalTabColdParking(args: {
     assignments,
     isWorktreeActive,
     pendingStartupByTabId,
+    pairedRuntimeParkingEnvironmentIds,
     shouldMeasureHiddenWorktree,
     terminalParkingEnabled,
     terminalSshParkingEnabled,

@@ -68,7 +68,10 @@ import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isPtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
-import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
+import {
+  inspectPtyProviderProcess,
+  inspectPtyProviderProcessForRenderer
+} from '../providers/pty-process-inspection'
 import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
@@ -185,12 +188,21 @@ import { validateTerminalViewAttributes } from '../../shared/terminal-view-attri
 import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import {
+  isCodexHomeAuthReadyForLaunch,
+  waitForManagedCodexAuthReady
+} from '../codex-accounts/managed-codex-auth-readiness'
+import {
   forgetCodexPaneAccount,
   recordCodexPaneAccount
 } from '../codex/codex-pane-account-registry'
 import { resolveCodexPaneLaunchAccount } from '../codex/codex-pane-launch-account'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
+import {
+  environmentCodexHomeOverrideContextsEqual,
+  getCustomCodexHomeOverrideForLaunch,
+  shellStartupCodexHomeOverrideContextsEqual
+} from '../codex/codex-real-home-path'
 import type { CodexSessionResumePreparation } from '../codex/codex-session-resume-home'
 import { dropUnverifiedCodexResumeArgv } from '../codex/codex-unverified-resume-launch'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
@@ -820,10 +832,16 @@ function getLocalOrcaCodexHomeEnvKeysToDelete(env: Record<string, string>): stri
   return keysToDelete
 }
 
+export type CodexHomeLaunchContext = {
+  workspacePath?: string
+  launchAgent?: TuiAgent
+  unavailableManagedHomePath?: string
+}
+
 export type GetSelectedCodexHomePath = (
   target?: CodexAccountSelectionTarget,
   launchEnv?: NodeJS.ProcessEnv,
-  launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+  launchContext?: CodexHomeLaunchContext
 ) => string | null
 export type PrepareCodexSessionResume = (args: {
   providerSession: AgentProviderSessionMetadata
@@ -863,6 +881,113 @@ function getCompatibleSelectedCodexHomePath(
     : selectedCodexHomePath
 }
 
+const MANAGED_CODEX_AUTH_UNAVAILABLE_MESSAGE =
+  'The selected Codex account credentials are temporarily unavailable. Try opening the terminal again.'
+const CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE =
+  'The Codex account credentials for this session are temporarily unavailable. Try opening the terminal again.'
+
+type ManagedCodexAuthResolutionArgs = {
+  selectedCodexHomePath: string | null
+  getSettings: () => GlobalSettings | undefined
+  requiredCodexHomePath?: string
+  target: CodexAccountSelectionTarget
+  resolveCurrent: () => string | null
+  resolveAfterUnavailable: (unavailableManagedHomePath: string) => string | null
+}
+
+export function resolveCodexHomeAfterManagedAuthReadiness(
+  args: ManagedCodexAuthResolutionArgs
+): string | null | Promise<string | null> {
+  const selectedCodexHomePath = args.selectedCodexHomePath
+  if (
+    args.requiredCodexHomePath &&
+    !codexHomePathsEqual(selectedCodexHomePath, args.requiredCodexHomePath)
+  ) {
+    throw new Error(CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE)
+  }
+  const readiness = waitForManagedCodexAuthReady({
+    codexHomePath: selectedCodexHomePath,
+    settings: args.getSettings(),
+    target: args.target
+  })
+  return readiness
+    ? continueCodexHomeAfterManagedAuthWait(args, selectedCodexHomePath, readiness)
+    : selectedCodexHomePath
+}
+
+async function continueCodexHomeAfterManagedAuthWait(
+  args: ManagedCodexAuthResolutionArgs,
+  initialCodexHomePath: string | null,
+  initialReadiness: Promise<boolean>
+): Promise<string | null> {
+  let selectedCodexHomePath = initialCodexHomePath
+  let readiness = initialReadiness
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (await readiness) {
+      if (args.requiredCodexHomePath) {
+        return selectedCodexHomePath
+      }
+      const currentCodexHomePath = args.resolveCurrent()
+      if (codexHomeSelectionsEqual(selectedCodexHomePath, currentCodexHomePath)) {
+        return selectedCodexHomePath
+      }
+      selectedCodexHomePath = currentCodexHomePath
+      if (attempt === 1) {
+        break
+      }
+      const nextReadiness = waitForManagedCodexAuthReady({
+        codexHomePath: selectedCodexHomePath,
+        settings: args.getSettings(),
+        target: args.target
+      })
+      if (!nextReadiness) {
+        return selectedCodexHomePath
+      }
+      readiness = nextReadiness
+      continue
+    }
+    if (args.requiredCodexHomePath) {
+      throw new Error(CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE)
+    }
+    selectedCodexHomePath = args.resolveAfterUnavailable(selectedCodexHomePath!)
+    if (attempt === 1) {
+      break
+    }
+    const nextReadiness = waitForManagedCodexAuthReady({
+      codexHomePath: selectedCodexHomePath,
+      settings: args.getSettings(),
+      target: args.target
+    })
+    if (!nextReadiness) {
+      return selectedCodexHomePath
+    }
+    readiness = nextReadiness
+  }
+  if (
+    isCodexHomeAuthReadyForLaunch({
+      codexHomePath: selectedCodexHomePath,
+      settings: args.getSettings(),
+      target: args.target
+    })
+  ) {
+    return selectedCodexHomePath
+  }
+  throw new Error(MANAGED_CODEX_AUTH_UNAVAILABLE_MESSAGE)
+}
+
+function codexHomeSelectionsEqual(left: string | null, right: string | null): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right))
+  )
+}
+
+function codexHomePathsEqual(left: string | null, right: string): boolean {
+  return codexHomeSelectionsEqual(left, right)
+}
+
 // Why: CODEX_HOME is fixed in a shell's environment at spawn and the daemon
 // keeps that shell alive across app restarts, so the launch account is the only
 // way to tell later that a pane still runs Codex as the previously selected
@@ -875,16 +1000,47 @@ function recordCodexPaneAccountForSpawn(args: {
   isReattach: boolean
   pinnedByResume: boolean
   launchCodexHomePath: string | null
+  launchEnv?: NodeJS.ProcessEnv
   target: CodexAccountSelectionTarget
   settings: GlobalSettings | undefined
 }): void {
   if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
     return
   }
+  const customHomeOverride = getCustomCodexHomeOverrideForLaunch(args.launchEnv)
+  const processHomeOverride = customHomeOverride ? getCustomCodexHomeOverrideForLaunch() : null
+  const recheckableEnvironmentOverride =
+    customHomeOverride?.source === 'environment' &&
+    processHomeOverride?.source === 'environment' &&
+    environmentCodexHomeOverrideContextsEqual(
+      customHomeOverride.context,
+      processHomeOverride.context
+    )
+      ? customHomeOverride.context
+      : undefined
+  const recheckableShellStartupOverride =
+    customHomeOverride?.source === 'shell-startup' &&
+    processHomeOverride?.source === 'shell-startup' &&
+    shellStartupCodexHomeOverrideContextsEqual(
+      customHomeOverride.context,
+      processHomeOverride.context
+    )
+      ? customHomeOverride.context
+      : undefined
   const record = args.settings
     ? resolveCodexPaneLaunchAccount({
         pinnedByResume: args.pinnedByResume,
         launchCodexHomePath: args.launchCodexHomePath,
+        // Why: pane-local overrides cannot be re-derived when a restart builds
+        // a fresh launch env, so route prompts would guess and block valid input.
+        recordComparableHomeRoute:
+          args.pinnedByResume ||
+          ((customHomeOverride?.source !== 'environment' ||
+            recheckableEnvironmentOverride !== undefined) &&
+            (customHomeOverride?.source !== 'shell-startup' ||
+              recheckableShellStartupOverride !== undefined)),
+        shellStartupHomeOverride: args.pinnedByResume ? undefined : recheckableShellStartupOverride,
+        environmentHomeOverride: args.pinnedByResume ? undefined : recheckableEnvironmentOverride,
         systemCodexHomePath: getSystemCodexHomePath(),
         settings: args.settings,
         target: args.target
@@ -1755,7 +1911,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
-  ipcMain.removeAllListeners('pty:getAuthoritativeBufferSnapshotCapabilitiesSync')
+  ipcMain.removeHandler('pty:getAuthoritativeBufferSnapshotCapabilities')
   ipcMain.removeHandler('pty:declarePendingPaneSerializer')
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
@@ -3772,7 +3928,7 @@ export function registerPtyHandlers(
       if (args.preAllocatedHandle) {
         env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
       }
-      const selectedCodexHomePath = isDaemonHostSpawn
+      let selectedCodexHomePath = !args.connectionId
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
             codexResumeHome
@@ -3783,6 +3939,35 @@ export function registerPtyHandlers(
                 }) ?? null)
           )
         : null
+      if (args.launchAgent === 'codex' && callerRequestedSessionId === undefined) {
+        const resolution = resolveCodexHomeAfterManagedAuthReadiness({
+          selectedCodexHomePath,
+          getSettings: () => getSettings?.(),
+          requiredCodexHomePath: codexResumeHome?.codexHomePath,
+          target: codexSelectionTarget,
+          resolveCurrent: () =>
+            getCompatibleSelectedCodexHomePath(
+              codexSelectionTarget,
+              getSelectedCodexHomePath?.(codexSelectionTarget, env, {
+                workspacePath: cwd,
+                launchAgent: 'codex'
+              }) ?? null
+            ),
+          resolveAfterUnavailable: (unavailableManagedHomePath) =>
+            getCompatibleSelectedCodexHomePath(
+              codexSelectionTarget,
+              getSelectedCodexHomePath?.(codexSelectionTarget, env, {
+                workspacePath: cwd,
+                launchAgent: 'codex',
+                unavailableManagedHomePath
+              }) ?? null
+            )
+        })
+        selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
+      }
+      const codexResumeHomeSelected = Boolean(
+        codexResumeHome && codexHomePathsEqual(selectedCodexHomePath, codexResumeHome.codexHomePath)
+      )
       const skipCodexHomeEnv =
         isDaemonHostSpawn &&
         shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd) &&
@@ -3833,8 +4018,8 @@ export function registerPtyHandlers(
         env,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
-      if (!isDaemonHostSpawn && codexResumeHome) {
-        spawnOptions.codexHomePathOverride = { value: codexResumeHome.codexHomePath }
+      if (!args.connectionId && !isDaemonHostSpawn) {
+        spawnOptions.codexHomePathOverride = { value: selectedCodexHomePath }
       }
       const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
       if (startupTerminalColorQueryReplyColors) {
@@ -3870,7 +4055,7 @@ export function registerPtyHandlers(
           'ORCA_CODEX_HOME'
         ])
       }
-      if (codexResumeHome?.codexHomePath) {
+      if (codexResumeHomeSelected) {
         spawnOptions.envToDelete = removeCodexHomeDeletionRequests(spawnOptions.envToDelete)
       }
       deleteRequestedEnvKeys(env, spawnOptions.envToDelete)
@@ -4210,8 +4395,9 @@ export function registerPtyHandlers(
           ptyId: result.id,
           isDaemonHostSpawn,
           isReattach: result.isReattach === true,
-          pinnedByResume: Boolean(codexResumeHome),
+          pinnedByResume: codexResumeHomeSelected,
           launchCodexHomePath: selectedCodexHomePath,
+          launchEnv: args.env,
           target: codexSelectionTarget,
           settings: getSettings?.()
         })
@@ -4950,7 +5136,7 @@ export function registerPtyHandlers(
       // Why: declared after the strip so a local-provider spawn cannot capture the
       // pre-strip env — only the daemon branch below re-derives this from baseEnv.
       let env: Record<string, string> | undefined = baseEnv
-      const selectedCodexHomePath = isDaemonHostSpawn
+      let selectedCodexHomePath = !args.connectionId
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
             codexResumeHome
@@ -4961,6 +5147,35 @@ export function registerPtyHandlers(
                 }) ?? null)
           )
         : null
+      if (args.launchAgent === 'codex' && args.sessionId === undefined) {
+        const resolution = resolveCodexHomeAfterManagedAuthReadiness({
+          selectedCodexHomePath,
+          getSettings: () => getSettings?.(),
+          requiredCodexHomePath: codexResumeHome?.codexHomePath,
+          target: codexSelectionTarget,
+          resolveCurrent: () =>
+            getCompatibleSelectedCodexHomePath(
+              codexSelectionTarget,
+              getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+                workspacePath: cwd,
+                launchAgent: 'codex'
+              }) ?? null
+            ),
+          resolveAfterUnavailable: (unavailableManagedHomePath) =>
+            getCompatibleSelectedCodexHomePath(
+              codexSelectionTarget,
+              getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+                workspacePath: cwd,
+                launchAgent: 'codex',
+                unavailableManagedHomePath
+              }) ?? null
+            )
+        })
+        selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
+      }
+      const codexResumeHomeSelected = Boolean(
+        codexResumeHome && codexHomePathsEqual(selectedCodexHomePath, codexResumeHome.codexHomePath)
+      )
       const skipCodexHomeEnv =
         isDaemonHostSpawn &&
         shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd) &&
@@ -5035,7 +5250,7 @@ export function registerPtyHandlers(
         // main cannot safely decide ownership for a process it may not parent.
         stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
       )
-      if (codexResumeHome?.codexHomePath) {
+      if (codexResumeHomeSelected) {
         combinedEnvToDelete = removeCodexHomeDeletionRequests(combinedEnvToDelete)
       }
       deleteRequestedEnvKeys(spawnEnv, combinedEnvToDelete)
@@ -5047,8 +5262,8 @@ export function registerPtyHandlers(
         env: spawnEnv,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
-      if (!isDaemonHostSpawn && codexResumeHome) {
-        spawnOptions.codexHomePathOverride = { value: codexResumeHome.codexHomePath }
+      if (!args.connectionId && !isDaemonHostSpawn) {
+        spawnOptions.codexHomePathOverride = { value: selectedCodexHomePath }
       }
       if (combinedEnvToDelete) {
         spawnOptions.envToDelete = combinedEnvToDelete
@@ -5265,8 +5480,9 @@ export function registerPtyHandlers(
           ptyId: result.id,
           isDaemonHostSpawn,
           isReattach: result.isReattach === true,
-          pinnedByResume: Boolean(codexResumeHome),
+          pinnedByResume: codexResumeHomeSelected,
           launchCodexHomePath: selectedCodexHomePath,
+          launchEnv: baseEnv,
           target: codexSelectionTarget,
           settings: getSettings?.()
         })
@@ -6108,9 +6324,9 @@ export function registerPtyHandlers(
     return Array.from(deduped.values())
   })
 
-  ipcMain.on(
-    'pty:getAuthoritativeBufferSnapshotCapabilitiesSync',
-    (event, args: { ids?: unknown }) => {
+  ipcMain.handle(
+    'pty:getAuthoritativeBufferSnapshotCapabilities',
+    (_event, args: { ids?: unknown }) => {
       const ids = Array.isArray(args?.ids) ? args.ids.slice(0, 512) : []
       const capabilities: { id: string; authoritative: boolean | null }[] = []
       const seen = new Set<string>()
@@ -6125,18 +6341,18 @@ export function registerPtyHandlers(
         }
         seen.add(value)
         const provider = tryGetProviderForPty(value)
-        // Why: degraded routing mixes preserved daemons with an in-process fallback; keep all panes mounted rather than guess ownership.
+        // Resolved providers without the optional method are definitively non-authoritative; null remains retryable.
         capabilities.push({
           id: value,
-          authoritative: provider?.canProvideAuthoritativeBufferSnapshot
-            ? provider.canProvideAuthoritativeBufferSnapshot(value)
-            : provider && routesFreshSpawnsToLocalProvider(provider)
-              ? false
-              : null
+          authoritative:
+            provider === undefined || provider === null
+              ? null
+              : provider.canProvideAuthoritativeBufferSnapshot
+                ? provider.canProvideAuthoritativeBufferSnapshot(value)
+                : false
         })
       }
-      // Why: cold deferral runs during render before hidden panes mount; this in-memory route lookup lets legacy PTYs mount in that pass.
-      event.returnValue = capabilities
+      return capabilities
     }
   )
 
@@ -6178,7 +6394,7 @@ export function registerPtyHandlers(
   )
 
   ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) =>
-    inspectPtyProviderProcess(getProviderForPty(args.id), args.id)
+    inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
   )
 
   ipcMain.handle(

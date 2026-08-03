@@ -1,11 +1,10 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'node:fs'
-import { writeFile, mkdir, rm } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
+import { join } from 'node:path'
 import type { StatsSummary } from '../../shared/types'
-import type { StatsEvent, StatsAggregates, StatsFile } from './types'
+import type { StatsEvent, StatsAggregates } from './types'
+import { loadStatsFile, STATS_SCHEMA_VERSION } from './stats-file-loader'
+import { StatsSnapshotWriter } from './stats-snapshot-writer'
 
-const STATS_SCHEMA_VERSION = 1
 const MAX_EVENTS = 10_000
 // Why: countedPRs is a deduplication registry that grows with every PR created
 // through Orca. Without a cap, a heavily-used instance accumulates thousands of
@@ -33,40 +32,22 @@ function getStatsFile(): string {
   return _statsFile
 }
 
-function getDefaultAggregates(): StatsAggregates {
-  return {
-    totalAgentsSpawned: 0,
-    totalPRsCreated: 0,
-    totalAgentTimeMs: 0,
-    countedPRs: [],
-    firstEventAt: null
-  }
-}
-
-function getDefaultStatsFile(): StatsFile {
-  return {
-    schemaVersion: STATS_SCHEMA_VERSION,
-    events: [],
-    aggregates: getDefaultAggregates()
-  }
-}
-
 export class StatsCollector {
   private events: StatsEvent[]
   private aggregates: StatsAggregates
   private liveAgents = new Map<string, number>() // ptyId → startTimestamp
   private writeTimer: ReturnType<typeof setTimeout> | null = null
-  // Monotonic id stamped on each prepared payload; the highest committed one
-  // wins so a slow in-flight async write can't clobber a newer sync flush.
-  private writeGeneration = 0
-  private lastCommittedGeneration = 0
+  private readonly snapshotWriter = new StatsSnapshotWriter(getStatsFile)
+  /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
+  private quitFlushStarted = false
+  private quitFlushPromise: Promise<void> | null = null
   // Why: star-nag lives in its own service but needs to observe the running
   // agent-spawned counter. A lightweight listener avoids cyclic imports and
   // keeps StatsCollector unaware of how the counter is consumed.
   private agentStartListeners: ((totalAgentsSpawned: number) => void)[] = []
 
   constructor() {
-    const data = this.load()
+    const data = loadStatsFile(getStatsFile())
     this.events = data.events
     this.aggregates = data.aggregates
   }
@@ -146,6 +127,41 @@ export class StatsCollector {
    * a second flush() after resumed activity works correctly.
    */
   flush(): void {
+    if (this.quitFlushStarted) {
+      return
+    }
+    this.closeOutLiveAgents()
+    this.cancelPendingSave()
+    this.snapshotWriter.writeSync(() => this.serialize())
+  }
+
+  /**
+   * Async twin of flush() for the quit path.
+   *
+   * Why the quit path needs one: writeToDiskSync parks the Electron main thread for the
+   * whole ~900KB write, and on a stalled network profile mount that park is uninterruptible
+   * — the app stops repainting and stops responding to Force Quit.
+   *
+   * Why the agent closeout stays synchronous: will-quit calls this before killAllPty(),
+   * which skips runtime.onPtyExit(), so live agents must be stopped before the kill even
+   * though the write itself is awaited later.
+   *
+   * Never throws — it joins the quit teardown barrier, where a rejection is noise.
+   */
+  flushAsync(): Promise<void> {
+    if (this.quitFlushPromise) {
+      return this.quitFlushPromise
+    }
+    this.quitFlushStarted = true
+    this.closeOutLiveAgents()
+    this.cancelPendingSave()
+    this.quitFlushPromise = this.enqueueWrite().catch((err) => {
+      console.error('[stats] Failed to flush stats:', err)
+    })
+    return this.quitFlushPromise
+  }
+
+  private closeOutLiveAgents(): void {
     const now = Date.now()
     // Why snapshot keys: onAgentStop mutates liveAgents, so we snapshot
     // the keys first to avoid iterator invalidation.
@@ -153,37 +169,9 @@ export class StatsCollector {
     for (const ptyId of livePtyIds) {
       this.onAgentStop(ptyId, now)
     }
-    this.cancelPendingSave()
-    this.writeToDiskSync()
   }
 
   // ── Persistence ───────────────────────────────────────────────────
-
-  private load(): StatsFile {
-    try {
-      const statsFile = getStatsFile()
-      if (existsSync(statsFile)) {
-        const raw = readFileSync(statsFile, 'utf-8')
-        const parsed = JSON.parse(raw) as StatsFile
-        // Merge with defaults for forward compatibility
-        return {
-          ...getDefaultStatsFile(),
-          ...parsed,
-          aggregates: {
-            ...getDefaultAggregates(),
-            ...parsed.aggregates
-          }
-        }
-      }
-    } catch (err) {
-      // Why "start fresh" instead of crashing: lifetime aggregates are lost
-      // on corruption, which is unfortunate but not critical — this is a
-      // "fun stats" feature, not billing data. The corrupt file is left on
-      // disk so it can be inspected for debugging.
-      console.error('[stats] Failed to load stats, starting fresh:', err)
-    }
-    return getDefaultStatsFile()
-  }
 
   private updateAggregates(event: StatsEvent): void {
     if (this.aggregates.firstEventAt === null) {
@@ -226,18 +214,18 @@ export class StatsCollector {
   }
 
   private scheduleSave(): void {
+    // Why: once the quit flush has run, a newly debounced write would fire during teardown
+    // with nothing awaiting it, and the process can exit mid-rename.
+    if (this.quitFlushStarted) {
+      return
+    }
     if (this.writeTimer) {
       return // already scheduled
     }
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
-      // Why: the debounced save is fun-stats telemetry, not crash-critical
-      // state, so it uses the async writer to move the ~900KB tmp-file write
-      // off the main thread (the stringify stays sync — see prepareWritePayload).
-      // A chatty multi-agent session re-arms this every 5s; a fully-sync write
-      // is a recurring main-thread stall. Shutdown flush() stays synchronous;
-      // the generation guard keeps the two paths race-safe.
-      void this.writeToDiskAsync().catch((err) => {
+      // Why async: a chatty session can write ~900KB every 5s and stall the main thread.
+      void this.enqueueWrite().catch((err) => {
         console.error('[stats] Failed to write stats:', err)
       })
     }, DEBOUNCE_MS)
@@ -250,68 +238,18 @@ export class StatsCollector {
     }
   }
 
-  // Serialize the current state and pick a unique temp path. Trimming mutates
-  // in-memory state and JSON.stringify must see a consistent snapshot, so both
-  // writers call this synchronously before any await to avoid a torn snapshot.
-  // The monotonic generation lets a later write veto an earlier, still-in-flight
-  // one so a stale rename can never win (see writeToDiskAsync).
-  private prepareWritePayload(): {
-    statsFile: string
-    tmpFile: string
-    json: string
-    generation: number
-  } {
-    const statsFile = getStatsFile()
-
-    // Trim events to bounded size before writing
+  private serialize(): string {
     if (this.events.length > MAX_EVENTS) {
       this.events = this.events.slice(-MAX_EVENTS)
     }
-
-    const data: StatsFile = {
+    return JSON.stringify({
       schemaVersion: STATS_SCHEMA_VERSION,
       events: this.events,
       aggregates: this.aggregates
-    }
-
-    const generation = ++this.writeGeneration
-    // Unique temp file so the async debounced writer and the sync shutdown
-    // flush never write the same temp path (same pattern as persistence.ts).
-    const tmpFile = `${statsFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    return { statsFile, tmpFile, json: JSON.stringify(data), generation }
+    })
   }
 
-  private writeToDiskSync(): void {
-    const dir = dirname(getStatsFile())
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
-    const { statsFile, tmpFile, json, generation } = this.prepareWritePayload()
-    writeFileSync(tmpFile, json, 'utf-8')
-    renameSync(tmpFile, statsFile)
-    this.lastCommittedGeneration = Math.max(this.lastCommittedGeneration, generation)
-  }
-
-  private async writeToDiskAsync(): Promise<void> {
-    const dir = dirname(getStatsFile())
-    if (!existsSync(dir)) {
-      await mkdir(dir, { recursive: true })
-    }
-    const { statsFile, tmpFile, json, generation } = this.prepareWritePayload()
-    // Only the ~900KB tmp write moves off the main thread; stringify stayed sync
-    // above (torn-snapshot constraint). The rename is a trivial metadata op done
-    // SYNCHRONOUSLY so it stays ordered with the shutdown flush's renameSync —
-    // an async rename could land after flush and clobber the more-complete
-    // shutdown data. The generation guard vetoes this write if a newer one (a
-    // later debounce OR the shutdown flush) already committed while we were
-    // writing; the check + rename run with no await between them, so the sync
-    // flush cannot interleave.
-    await writeFile(tmpFile, json, 'utf-8')
-    if (this.lastCommittedGeneration >= generation) {
-      await rm(tmpFile, { force: true }).catch(() => {})
-      return
-    }
-    renameSync(tmpFile, statsFile)
-    this.lastCommittedGeneration = generation
+  private enqueueWrite(): Promise<void> {
+    return this.snapshotWriter.write(() => this.serialize())
   }
 }

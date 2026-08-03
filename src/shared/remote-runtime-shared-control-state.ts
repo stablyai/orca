@@ -77,22 +77,6 @@ export function refreshSharedControlPendingRequestTimeouts(
   }
 }
 
-export function waitForSharedControlReady(ready: Promise<void>, timeoutMs: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(remoteRuntimeUnavailableError()), timeoutMs)
-    void ready.then(
-      () => {
-        clearTimeout(timeout)
-        resolve()
-      },
-      (error) => {
-        clearTimeout(timeout)
-        reject(error)
-      }
-    )
-  })
-}
-
 export function rejectAllSharedControlPendingRequests(
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>,
   error?: Error

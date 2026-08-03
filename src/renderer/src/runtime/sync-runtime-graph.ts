@@ -25,6 +25,7 @@ import type {
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { isClaudeManagementTitle } from '../../../shared/agent-detection'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type {
   Tab,
   TabGroup,
@@ -243,10 +244,11 @@ async function runRuntimeGraphSync(): Promise<void> {
 }
 
 export type RuntimeMobileSessionSyncKey = {
-  // Why: compared by reference; reallocation signals a real layout/title change, avoiding stringifying thousands of tabs. See docs/agent-working-pane-typing-lag.md.
+  // Why: reference changes signal layout/title updates without stringifying thousands of tabs.
   terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   nativeChatLaunchDraftByTabId: AppState['nativeChatLaunchDraftByTabId']
+  folderWorkspaces: AppState['folderWorkspaces']
   groupsByWorktree: AppState['groupsByWorktree']
   activeGroupIdByWorktree: AppState['activeGroupIdByWorktree']
   layoutByWorktree: AppState['layoutByWorktree']
@@ -303,6 +305,7 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
     state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId &&
     state.nativeChatLaunchDraftByTabId === previousState.nativeChatLaunchDraftByTabId &&
+    state.folderWorkspaces === previousState.folderWorkspaces &&
     state.agentStatusEpoch === previousState.agentStatusEpoch &&
     state.agentStatusByPaneKey === previousState.agentStatusByPaneKey
   )
@@ -340,6 +343,7 @@ export function getRuntimeMobileSessionSyncKey(
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
     nativeChatLaunchDraftByTabId: state.nativeChatLaunchDraftByTabId,
+    folderWorkspaces: state.folderWorkspaces,
     groupsByWorktree: state.groupsByWorktree,
     activeGroupIdByWorktree: state.activeGroupIdByWorktree,
     layoutByWorktree: state.layoutByWorktree ?? EMPTY_LAYOUT_BY_WORKTREE,
@@ -585,6 +589,7 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.terminalLayoutsByTabId === b.terminalLayoutsByTabId &&
     a.runtimePaneTitlesByTabId === b.runtimePaneTitlesByTabId &&
     a.nativeChatLaunchDraftByTabId === b.nativeChatLaunchDraftByTabId &&
+    a.folderWorkspaces === b.folderWorkspaces &&
     a.groupsByWorktree === b.groupsByWorktree &&
     a.activeGroupIdByWorktree === b.activeGroupIdByWorktree &&
     a.layoutByWorktree === b.layoutByWorktree &&
@@ -757,6 +762,9 @@ export function buildMobileSessionTabSnapshots(
   // Why: high-frequency title ticks fire mobile sync; cache indexes/hashes by store-slice ref to skip rescanning editor state.
   const openFileIndexes = getOpenFileIndexes(state.openFiles)
   const editorDraftVersionByFileId = getEditorDraftVersionByFileId(state.editorDrafts)
+  const liveFolderWorkspaceIds = new Set(
+    (state.folderWorkspaces ?? []).map((workspace) => workspace.id)
+  )
   const worktreeIds = new Set<string>([
     ...Object.keys(state.tabsByWorktree),
     ...Object.keys(state.groupsByWorktree),
@@ -767,6 +775,14 @@ export function buildMobileSessionTabSnapshots(
 
   const snapshots: RuntimeMobileSessionTabsSnapshot[] = []
   for (const worktreeId of worktreeIds) {
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (
+      workspaceScope?.type === 'folder' &&
+      !liveFolderWorkspaceIds.has(workspaceScope.folderWorkspaceId)
+    ) {
+      mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
+      continue
+    }
     const activeGroupId = state.activeGroupIdByWorktree[worktreeId] ?? null
     const terminalTabByIdForWorktree = new Map(
       (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])

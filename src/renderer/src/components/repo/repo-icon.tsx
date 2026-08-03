@@ -27,12 +27,6 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export type RepoLucideIconOption = {
-  name: string
-  label: string
-  icon: LucideIcon
-}
-
 export const getRepoLucideIconOptions = createLocalizedCatalog(() => [
   {
     name: 'Folder',

@@ -3,7 +3,7 @@ import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand,
   realHomeCodexResumeEnvDeletion
-} from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault-resume-command'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
 import type { SleepingAgentLaunchConfig } from '../../../src/shared/agent-session-resume'

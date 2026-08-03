@@ -48,7 +48,7 @@ describe('AccountsPane', () => {
 
     expect(markup).toContain('Account location')
     expect(markup).toContain('aria-label="Account location"')
-    expect(markup).toContain('role="radio" aria-checked="true" disabled=""')
+    expect(markup).toContain('role="radio" aria-checked="true" aria-disabled="true"')
   })
 
   it('selects the WSL account location under auto when the global project runtime is WSL', () => {
@@ -70,8 +70,8 @@ describe('AccountsPane', () => {
       )
 
       expect(markup).toContain('aria-label="Account location"')
-      // The resolved WSL radio is the checked option (disabled while capabilities load).
-      expect(markup).toContain('role="radio" aria-checked="true" disabled=""')
+      // The resolved WSL radio is the checked option (unavailable while capabilities load).
+      expect(markup).toContain('role="radio" aria-checked="true" aria-disabled="true"')
     } finally {
       if (originalOwnUserAgent) {
         Object.defineProperty(globalThis.navigator, 'userAgent', originalOwnUserAgent)

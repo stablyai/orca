@@ -19,7 +19,6 @@ import {
   Bell,
   BellOff,
   CircleX,
-  Moon,
   Pencil,
   Pin,
   PinOff,
@@ -44,7 +43,6 @@ import type {
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import {
   getCyclicProjectedWorktreeLineageIds,
@@ -57,6 +55,11 @@ import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
 import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
+import {
+  hasSleepableWorkspaceActivity,
+  useWorkspaceLineageMenuActions
+} from './workspace-lineage-menu-actions'
+import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import {
@@ -188,18 +191,6 @@ function getWorktreeParentPickerAnchor(
     return dragRow
   }
   return scope
-}
-
-function hasSleepableWorkspaceActivity(
-  worktreeId: string,
-  tabsByWorktree: Record<string, { id: string }[]>,
-  ptyIdsByTabId: Record<string, string[]>,
-  browserTabsByWorktree: Record<string, { id: string }[]>
-): boolean {
-  const tabs = tabsByWorktree[worktreeId] ?? []
-  const hasLiveTerminal = tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
-  const hasBrowser = (browserTabsByWorktree[worktreeId] ?? []).length > 0
-  return hasLiveTerminal || hasBrowser
 }
 
 function shouldRemoveProjectFromContextMenu(
@@ -403,14 +394,31 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const sleepableWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) =>
-        hasSleepableWorkspaceActivity(item.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+        hasSleepableWorkspaceActivity(item.id, {
+          tabsByWorktree,
+          ptyIdsByTabId,
+          browserTabsByWorktree
+        })
       ),
     [activeContextWorktrees, browserTabsByWorktree, ptyIdsByTabId, tabsByWorktree]
   )
+  const lineageMenuActions = useWorkspaceLineageMenuActions({
+    enabled: !isMultiContext,
+    parent: worktree,
+    worktrees: allWorktrees,
+    lineageById: worktreeLineageById,
+    activity: { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree }
+  })
+  const lineageDescendantCount = lineageMenuActions.descendants.length
+  const subtreeSleepableWorktrees = lineageMenuActions.sleepableTargets
   const deletingContext = useMemo(
     () => activeContextWorktrees.some((item) => deleteStateByWorktreeId[item.id]?.isDeleting),
     [activeContextWorktrees, deleteStateByWorktreeId]
   )
+  const deletingSubtree = lineageMenuActions.targets.some(
+    (item) => deleteStateByWorktreeId[item.id]?.isDeleting
+  )
+  const contextDeletePending = isMultiContext ? deletingContext : deletingSubtree
   const contextWorkspaceStatus = useMemo(() => {
     const [first, ...rest] = activeContextWorktrees
     if (!first) {
@@ -597,16 +605,24 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     openModal
   ])
 
+  const sleepWorktreesAfterMenuClose = useCallback(
+    (worktreeIds: string[]) => {
+      setMenuOpenState(false)
+      // Let Radix tear down before sleeping can remount the virtualized sidebar.
+      window.setTimeout(() => {
+        void runSleepWorktrees(worktreeIds)
+      }, 50)
+    },
+    [setMenuOpenState]
+  )
+
   const handleCloseTerminals = useCallback(() => {
-    const worktreeIds = sleepableWorktrees.map((item) => item.id)
-    setMenuOpenState(false)
-    // Why: Sleep can remount the sidebar when it clears the active workspace.
-    // Let Radix finish closing the menu first so its focus/portal teardown
-    // cannot scroll the virtualized list during that remount.
-    window.setTimeout(() => {
-      void runSleepWorktrees(worktreeIds)
-    }, 50)
-  }, [setMenuOpenState, sleepableWorktrees])
+    sleepWorktreesAfterMenuClose(sleepableWorktrees.map((item) => item.id))
+  }, [sleepWorktreesAfterMenuClose, sleepableWorktrees])
+
+  const handleSleepSubtree = useCallback(() => {
+    sleepWorktreesAfterMenuClose(subtreeSleepableWorktrees.map((item) => item.id))
+  }, [sleepWorktreesAfterMenuClose, subtreeSleepableWorktrees])
 
   const handleDelete = useCallback(() => {
     // Folder mode handled inline because it routes to a different modal;
@@ -771,7 +787,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className={cn('w-52', contentClassName)}
+          className={cn(lineageDescendantCount > 0 ? 'w-60' : 'w-52', contentClassName)}
           sideOffset={0}
           align="start"
           onPointerUpCapture={suppressOpeningPointerEvent}
@@ -951,28 +967,15 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               <DropdownMenuSeparator />
             </>
           ) : null}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuItem
-                onSelect={handleCloseTerminals}
-                disabled={deletingContext || sleepableWorktrees.length === 0}
-              >
-                <Moon className="size-3.5" />
-                {sleepLabel}
-              </DropdownMenuItem>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
-              {isMultiContext
-                ? translate(
-                    'auto.components.sidebar.WorktreeContextMenu.7d190f7d2b',
-                    'Close all active panels in the selected workspaces to free up memory and CPU.'
-                  )
-                : translate(
-                    'auto.components.sidebar.WorktreeContextMenu.0918b35e4f',
-                    'Close all active panels in this workspace to free up memory and CPU.'
-                  )}
-            </TooltipContent>
-          </Tooltip>
+          <WorkspaceSleepMenuItems
+            isMultiContext={isMultiContext}
+            sleepLabel={sleepLabel}
+            sleepDisabled={deletingContext || sleepableWorktrees.length === 0}
+            descendantCount={lineageDescendantCount}
+            subtreeSleepDisabled={deletingSubtree || subtreeSleepableWorktrees.length === 0}
+            onSleep={handleCloseTerminals}
+            onSleepSubtree={handleSleepSubtree}
+          />
           {/* Why: primary checkout rows can't be git-worktree-removed, so keep a
              disabled Delete Worktree for parity with non-primary cards and pair
              it with the enabled Remove Project action below. */}
@@ -1005,7 +1008,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             variant="destructive"
             onSelect={handleDelete}
             disabled={
-              deletingContext ||
+              contextDeletePending ||
               (!isMultiContext && worktree.isMainWorktree && !removesProject) ||
               (isMultiContext && batchDeleteWorktrees.length === 0)
             }
@@ -1019,7 +1022,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             }
           >
             <Trash2 className="size-3.5" />
-            {deletingContext
+            {contextDeletePending
               ? translate('auto.components.sidebar.WorktreeContextMenu.b42391d8bf', 'Deleting…')
               : isMultiContext
                 ? deleteLabel
@@ -1033,7 +1036,15 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                         'auto.components.sidebar.WorktreeContextMenu.f5ac91531d',
                         'Remove Project from Orca'
                       )
-                    : translate('auto.components.sidebar.WorktreeContextMenu.f4475537d8', 'Delete')}
+                    : lineageDescendantCount > 0
+                      ? translate(
+                          'auto.components.sidebar.WorktreeContextMenu.deleteWithDescendants',
+                          'Delete with Descendants…'
+                        )
+                      : translate(
+                          'auto.components.sidebar.WorktreeContextMenu.f4475537d8',
+                          'Delete'
+                        )}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -1071,7 +1082,6 @@ export {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
-  hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,

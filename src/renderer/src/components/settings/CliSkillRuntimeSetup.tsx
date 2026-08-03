@@ -8,6 +8,7 @@ import {
   quotePowerShellNativeArgument
 } from '../../../../shared/powershell-native-argument'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
+import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
 import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import { useAppStore } from '@/store'
 import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
@@ -88,7 +89,11 @@ export function buildSkillCommandForRuntime(
     currentPlatform
   )
   if (resolvedRuntime.runtime !== 'wsl') {
-    return wrapWindowsSkillCommandWithNpxPrerequisite(normalizedCommand, currentPlatform)
+    return wrapWindowsSkillCommandWithNpxPrerequisite(
+      normalizedCommand,
+      currentPlatform,
+      'copied-command'
+    )
   }
 
   const distroArg = resolvedRuntime.wslDistro?.trim()
@@ -126,9 +131,43 @@ function normalizeWindowsSkillUpdateCommand(
   return buildAgentFeatureSkillInstallCommand([updateMatch[1]])
 }
 
+/**
+ * Where a built skill command is going: the user's clipboard (their own shell)
+ * or the setup terminal Orca spawns itself.
+ */
+type SkillCommandTarget = 'copied-command' | 'orca-setup-terminal'
+
+/**
+ * Re-adds the npx preflight for Orca's own setup terminal, which
+ * `getAgentSkillTerminalShellOverride` forces onto powershell.exe. The copied
+ * string stays bare for POSIX-family shells; only the executed one is wrapped.
+ */
+export function buildSkillSetupTerminalCommand(
+  copiedCommand: string,
+  terminalShellOverride: string | undefined,
+  currentPlatform = getSkillCommandPlatform()
+): string {
+  if (!isSetupTerminalForcedToPowerShell(terminalShellOverride)) {
+    return copiedCommand
+  }
+  return wrapWindowsSkillCommandWithNpxPrerequisite(
+    copiedCommand,
+    currentPlatform,
+    'orca-setup-terminal'
+  )
+}
+
+function isSetupTerminalForcedToPowerShell(terminalShellOverride: string | undefined): boolean {
+  const trimmedOverride = terminalShellOverride?.trim()
+  return (
+    Boolean(trimmedOverride) && resolveWindowsShellStartupFamily(trimmedOverride) === 'powershell'
+  )
+}
+
 function wrapWindowsSkillCommandWithNpxPrerequisite(
   command: string,
-  currentPlatform: NodeJS.Platform
+  currentPlatform: NodeJS.Platform,
+  target: SkillCommandTarget
 ): string {
   const trimmedCommand = command.trim()
   if (
@@ -136,6 +175,10 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
     // Why: skill setup terminals spawn on the focused runtime environment, so a
     // Windows client must not hand a cmd.exe command to a remote host.
     isRemoteRuntimeEnvironmentFocused() ||
+    // Why: the copied command lands in the user's configured shell, and MSYS
+    // shells rewrite cmd.exe's leading /d /s /c switches into drive paths,
+    // starting an interactive cmd session instead of running the payload.
+    (target === 'copied-command' && isPosixFamilyWindowsShellConfigured()) ||
     !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)
   ) {
     return command
@@ -147,6 +190,13 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
   // Prompt, and it resolves the bare name through PATHEXT for both the
   // preflight and the executed command, so shims such as npx.exe still count.
   return `cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 (${missingNpxGuidance}) else (${trimmedCommand})"`
+}
+
+function isPosixFamilyWindowsShellConfigured(): boolean {
+  return (
+    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell) ===
+    'posix'
+  )
 }
 
 function isRemoteRuntimeEnvironmentFocused(): boolean {

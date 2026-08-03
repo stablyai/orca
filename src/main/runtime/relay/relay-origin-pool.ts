@@ -55,6 +55,10 @@ export class RelayOriginPool {
     return this.basisOrigins.get(basisConnId)?.availableControl ?? null
   }
 
+  hasLiveControl(): boolean {
+    return this.activeOrigin?.hasLiveControl() ?? false
+  }
+
   async openInitial(assignment: RelayAssignment, relayJwt: string): Promise<void> {
     this.assignment = assignment
     this.relayJwt = relayJwt
@@ -159,6 +163,9 @@ export class RelayOriginPool {
         directorUrl: this.options.directorUrl,
         relayToken: this.relayJwt,
         relayHostId: this.options.relayHostId,
+        // Recovery always follows an established assignment; the director
+        // verifies this and admits through its reconnect fast lane.
+        reconnect: true,
         fetch: this.options.fetch
       })
       this.assertCurrent()
@@ -186,6 +193,12 @@ export class RelayOriginPool {
       this.scheduleControlRotation()
     } catch (error) {
       if (this.isCurrent() && origin === this.activeOrigin) {
+        // Why: this retry loop ran silently during the 2026-08 incident while
+        // Director 503 throttling stretched recovery to minutes.
+        console.warn(
+          '[relay] control recovery attempt failed:',
+          error instanceof Error ? error.message : String(error)
+        )
         const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
         this.drainRetry.schedule(retryAfterMs, () => this.handleDrain(origin, message))
       }

@@ -101,7 +101,7 @@ export function useTerminalWindowWakeRecovery({
     const onFocus = (): void => recoverVisibleWake(false, 'focus')
     const onVisibilityChange = (): void => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        recoverVisibleWake(true, 'visibilitychange')
+        recoverVisibleWake(false, 'visibilitychange')
       }
     }
     // Why: Linux has no window-occlusion tracking, so visibilitychange never

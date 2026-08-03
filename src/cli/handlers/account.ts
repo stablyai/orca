@@ -16,7 +16,11 @@ import {
   getVersionManagerBinPaths,
   resolveCliCommand
 } from '../../shared/node-cli-command-resolution'
-import { getSpawnArgsForWindows } from '../../shared/windows-batch-spawn'
+import {
+  getSpawnArgsForWindows,
+  UnsafeWindowsBatchArgumentsError,
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
+} from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
@@ -86,7 +90,25 @@ async function runAgentLoginInTerminal(
 ): Promise<void> {
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const resolvedCommand = resolveCliCommand(command)
-    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedCommand, args)
+    let spawnCmd: string
+    let spawnArgs: string[]
+    try {
+      ;({ spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedCommand, args))
+    } catch (error) {
+      // Why: the bare sentinel message reaches the user verbatim otherwise, with
+      // nothing naming the path or the characters that made it unspawnable.
+      rejectPromise(
+        error instanceof UnsafeWindowsBatchArgumentsError
+          ? new RuntimeClientError(
+              'invalid_environment',
+              `Cannot run \`${command}\` from "${resolvedCommand}": the path contains characters ` +
+                `cmd.exe would reinterpret. Install it somewhere without ` +
+                `${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL} in the path.`
+            )
+          : error
+      )
+      return
+    }
     const env = addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
     const child = spawn(spawnCmd, spawnArgs, {
       // Why: JSON mode reserves stdout for the response envelope while keeping

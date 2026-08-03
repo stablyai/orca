@@ -75,6 +75,17 @@ describe('openSshPtyConsumerSession', () => {
     ).rejects.toThrow('session contract mismatch')
   })
 
+  it('rejects an owner lease that cannot be resumed through the relay protocol', async () => {
+    const { mux } = muxReturning(legacyOwnerGrant({ ownerLease: 'x'.repeat(513) }))
+
+    await expect(
+      openSshPtyConsumerSession(mux, {
+        clientInstanceId: 'client-a',
+        expectedServerBuildId: 'build-a'
+      })
+    ).rejects.toThrow('did not grant')
+  })
+
   it('does not silently downgrade when V1 was offered', async () => {
     const { mux } = muxReturning(legacyOwnerGrant())
 

@@ -32,6 +32,7 @@ import {
   getWslCliDistroRequest
 } from './CliSkillRuntimeSetup'
 import { WslCliRegistration } from './WslCliRegistration'
+import { useLocalCliSkillFreshnessName } from './use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
 
 type CliSectionProps = {
@@ -86,6 +87,7 @@ export function CliSection({
       getSelectedAgentRuntime(settings, wslSupportedPlatform, wslAvailable, wslCapabilitiesLoading),
     [settings, wslAvailable, wslCapabilitiesLoading, wslSupportedPlatform]
   )
+  const cliSkillFreshnessName = useLocalCliSkillFreshnessName(agentRuntime)
   const cliSkillDiscoveryTarget = useMemo(
     () => getSkillDiscoveryTargetForRuntime(agentRuntime),
     [agentRuntime]
@@ -395,7 +397,7 @@ export function CliSection({
                     }))
               }}
               onRecheck={refreshCliSkill}
-              freshnessSkillName={agentRuntime.runtime === 'host' ? ORCA_CLI_SKILL_NAME : undefined}
+              freshnessSkillName={cliSkillFreshnessName}
             />
           </div>
         ) : null}

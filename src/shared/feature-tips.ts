@@ -56,11 +56,10 @@ export const FEATURE_TIPS = [
     id: 'voice-dictation',
     priority: 'unseen',
     eyebrow: 'Tip',
-    title: 'Voice Dictation is here',
-    description:
-      'Speak into any focused pane and Orca will transcribe it. Press the dictation shortcut to start and stop.',
+    title: 'Dictate into any pane',
+    description: 'Start voice dictation in any focused pane, then use the shortcut again to stop.',
     action: 'enable-voice',
-    ctaLabel: 'Set Up Voice',
+    ctaLabel: 'Set up voice dictation',
     completedByFeatureInteractions: ['voice-dictation']
   }
 ] as const satisfies readonly FeatureTip[]

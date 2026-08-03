@@ -36,9 +36,9 @@ import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-se
 import { PluginOverlayManager } from './plugin-overlay'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
-  AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
+import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
@@ -51,6 +51,11 @@ import {
 } from '../shared/pi-agent-kind'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import { pickRemoteCliEnv } from './remote-cli-env'
+import {
+  applyRelayGraceTimeConfiguration,
+  decideRelayGrace,
+  type RelayGraceBranch
+} from './relay-grace-branch'
 import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
@@ -68,6 +73,9 @@ const EMPTY_DETACHED_STARTUP_GRACE_MS = parseNonNegativeIntEnv(
   'ORCA_RELAY_EMPTY_STARTUP_GRACE_MS',
   60_000
 )
+// Why: a relay holding zero PTYs preserves nothing, so an unlimited grace only accumulates idle daemons.
+// The env override is test-only — the remote relay is launched over a non-interactive SSH exec channel that carries no client env.
+const IDLE_RELAY_GRACE_MS = parseNonNegativeIntEnv('ORCA_RELAY_IDLE_GRACE_MS', 15 * 60_000)
 
 type SocketIdentity = {
   dev: bigint
@@ -677,12 +685,14 @@ async function main(): Promise<void> {
   })
 
   function configureRelayGraceTime(params: Record<string, unknown>): { graceTimeMs: number } {
-    const seconds = Number(params.graceTimeSeconds)
-    if (Number.isFinite(seconds) && seconds >= 0) {
-      // Why: the host sends 0 before system sleep so live remote PTYs survive longer than the ordinary grace window.
-      ptyHandler.setGraceTimeMs(Math.floor(seconds) * 1000)
-    }
-    return { graceTimeMs: ptyHandler.configuredGraceTimeMs }
+    return applyRelayGraceTimeConfiguration(params.graceTimeSeconds, {
+      readConfiguredGraceMs: () => ptyHandler.configuredGraceTimeMs,
+      writeConfiguredGraceMs: (graceMs) => ptyHandler.setGraceTimeMs(graceMs),
+      isGraceTimerArmed: () => graceDeadlineAt !== null && graceReason !== null,
+      isShutdownInFlight: () => shutdownInFlight,
+      readGraceBranch: () => graceBranch,
+      startGrace
+    })
   }
 
   dispatcher.onNotification(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, (params) => {
@@ -697,13 +707,8 @@ async function main(): Promise<void> {
   const hookServer = new RelayAgentHookServer({
     // Why: scope endpoint.env/cmd by socket path so multiple relay daemons on one account can't overwrite each other's hook tokens.
     endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
-    forward: (envelope) => {
-      // Why: notify is fire-and-forget and drops during reconnect; the per-paneKey cache lets us replay last status after --connect.
-      dispatcher.notify(
-        AGENT_HOOK_NOTIFICATION_METHOD,
-        envelope as unknown as Record<string, unknown>
-      )
-    }
+    // Why: publication is fire-and-forget and drops during reconnect; the per-paneKey cache lets us replay last status after --connect.
+    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
   })
   // Why: await the bind before announcing readiness so the first PTY spawn already sees ORCA_AGENT_HOOK_* env; bind failure is soft (log and continue).
   try {
@@ -829,6 +834,9 @@ async function main(): Promise<void> {
   let hasAcceptedSocketClient = false
   let graceDeadlineAt: number | null = null
   let graceReason: string | null = null
+  // Why: only the idle branch is a "nothing left to preserve" bet, so only it may be revoked when a
+  // PTY appears mid-window; the other branches keep their armed deadline.
+  let graceBranch: RelayGraceBranch | null = null
 
   dispatcher.onRequest('relay.status', async () => ({
     pid: process.pid,
@@ -864,6 +872,7 @@ async function main(): Promise<void> {
     }
     graceDeadlineAt = null
     graceReason = null
+    graceBranch = null
     ptyHandler.cancelGraceTimer()
   }
 
@@ -1116,24 +1125,43 @@ async function main(): Promise<void> {
     dispatcher.invalidateClient()
   })
 
-  function startGrace(reason: string): void {
-    const startupEmptyDetached =
-      detached && !hasAcceptedSocketClient && ptyHandler.activePtyCount === 0
-    // Why: a detached relay that never accepted a client has no PTY state and shouldn't linger forever.
-    const timeoutMs = startupEmptyDetached
-      ? graceTimeMs === 0
-        ? EMPTY_DETACHED_STARTUP_GRACE_MS
-        : Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
-      : graceTimeMs
+  function startGrace(reason: string, options?: { retryDeferredShutdown?: boolean }): void {
+    // Why: the live configured value, not the launch-time argv closure — the host can raise the grace
+    // after launch via relay.configureGraceTime, and a zero-only gate reading a stale zero would be
+    // zero-at-launch-only, i.e. correct only by coincidence.
+    const decision = decideRelayGrace({
+      configuredGraceMs: ptyHandler.configuredGraceTimeMs,
+      relayIdle: isRelayIdle(),
+      detached,
+      hasAcceptedSocketClient,
+      activePtyCount: ptyHandler.activePtyCount,
+      retryDeferredShutdown: options?.retryDeferredShutdown === true,
+      emptyDetachedStartupGraceMs: EMPTY_DETACHED_STARTUP_GRACE_MS,
+      idleRelayGraceMs: IDLE_RELAY_GRACE_MS
+    })
+    graceBranch = decision.branch
+    const timeoutMs = decision.timeoutMs
     graceDeadlineAt = timeoutMs === 0 ? null : Date.now() + timeoutMs
     graceReason = reason
     relayLogLine(
-      `[relay] Grace started (${reason}): timeoutMs=${timeoutMs}, startupEmptyDetached=${startupEmptyDetached}, ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}`
+      `[relay] Grace started (${reason}): timeoutMs=${timeoutMs}, branch=${graceBranch}, ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}`
     )
     ptyHandler.startGraceTimer(() => {
+      // Why: last line of defense for the idle cap — a PTY that appeared without announcing itself
+      // must not be killed by a timer armed while the relay was still empty (#6955).
+      if (graceBranch === 'idle-no-ptys' && !isRelayIdle()) {
+        relayLogLine(`[relay] Grace expired (${reason}) but relay is no longer idle; re-evaluating`)
+        startGrace(reason)
+        return
+      }
       relayLogLine(`[relay] Grace expired (${reason}); shutting down`)
       shutdown()
     }, timeoutMs)
+  }
+
+  // Why: a creation admitted but not yet pooled already owns a shell, so it counts as non-idle.
+  function isRelayIdle(): boolean {
+    return ptyHandler.activePtyCount === 0 && ptyHandler.pendingPtyCreationCount === 0
   }
 
   if (detached) {
@@ -1176,9 +1204,12 @@ async function main(): Promise<void> {
     )
     graceDeadlineAt = null
     graceReason = null
+    graceBranch = null
     void ptyHandler
       .dispose()
       .then(() => {
+        stopPoolWatch()
+        stopPoolActiveWatch()
         dispatcher.dispose()
         fsHandler.dispose()
         gitHandler.dispose()
@@ -1192,12 +1223,40 @@ async function main(): Promise<void> {
       })
       .catch((error) => {
         // Why: keep owning a PTY whose native kill was rejected so a transient signal failure doesn't orphan a remote shell.
+        // Why: the pool watches stay registered — the socket server is still listening, so a client can
+        // reconnect and cancel this grace, and that revived relay still needs both re-evaluations.
         shutdownInFlight = false
         relayLogLine(
           `[relay] Shutdown deferred: ${error instanceof Error ? error.message : String(error)}`
         )
+        // Why: shutdown() already cleared graceReason, so without re-arming a client-less relay
+        // whose kill was refused would stay resident forever with nothing left to retry it.
+        if (socketClients.size === 0) {
+          startGrace('shutdown deferred', { retryDeferredShutdown: true })
+        }
       })
   }
+
+  // Why: with the shipped unlimited default the grace timer is never armed, so an expiry can't
+  // notice the pool emptying; re-evaluate on the last exit instead. graceReason (not
+  // graceTimerActive) is the only signal that a grace window is open in that configuration.
+  // Why: a null deadline is exactly that unlimited case; re-arming a scheduled one would restart
+  // an explicitly configured window and double it.
+  const stopPoolWatch = ptyHandler.onPtyPoolEmpty(() => {
+    if (graceReason !== null && graceDeadlineAt === null && !shutdownInFlight) {
+      startGrace('last pty exited')
+    }
+  })
+
+  // Why: the idle cap is armed on an empty pool, but creation is asynchronous — a spawn or revive
+  // admitted after that decision (the client dropped mid-`pty.revive`, say) makes the relay non-idle
+  // again, and re-evaluating disarms the timer instead of letting it kill a live PTY (#6955).
+  // The grace window itself stays open, so the PTY's own exit still re-arms the cap.
+  const stopPoolActiveWatch = ptyHandler.onPtyPoolActive(() => {
+    if (graceBranch === 'idle-no-ptys' && graceReason !== null && !shutdownInFlight) {
+      startGrace(graceReason)
+    }
+  })
 
   process.on('SIGTERM', shutdown)
   process.on('SIGINT', shutdown)

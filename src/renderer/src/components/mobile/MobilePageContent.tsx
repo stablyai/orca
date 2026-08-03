@@ -24,6 +24,10 @@ type MobilePageContentProps = {
   generatePairing: (rotate: boolean) => void
   canGeneratePairing: boolean
   handleAddressChange: (address: string) => void
+  customAddresses: readonly string[]
+  selectedAddressIsCustom: boolean
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
   beforeCustomAddressChange: (address: string) => Promise<boolean>
   handleBack: () => void
   handleContinue: () => void
@@ -66,6 +70,10 @@ export function MobilePageContent({
   generatePairing,
   canGeneratePairing,
   handleAddressChange,
+  customAddresses,
+  selectedAddressIsCustom,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
   beforeCustomAddressChange,
   handleBack,
   handleContinue,
@@ -141,8 +149,12 @@ export function MobilePageContent({
               canGeneratePairing={canGeneratePairing}
               onCopyPairingCode={copyPairingCode}
               networkInterfaces={networkInterfaces}
+              customAddresses={customAddresses}
               selectedAddress={selectedAddress}
+              selectedAddressIsCustom={selectedAddressIsCustom}
               onSelectedAddressChange={handleAddressChange}
+              onCustomAddressSelect={onCustomAddressSelect}
+              onCustomAddressRemove={onCustomAddressRemove}
               beforeCustomAddressChange={beforeCustomAddressChange}
               onRefreshNetworkInterfaces={loadNetworkInterfaces}
               refreshingNetworkInterfaces={refreshingNetworkInterfaces}

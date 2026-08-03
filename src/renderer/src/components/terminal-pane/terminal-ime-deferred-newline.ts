@@ -106,12 +106,20 @@ export function getTerminalImeModifiedEnterKind(
   return null
 }
 
+export function isTerminalImeConsumedKey(event: Pick<KeyboardEvent, 'key' | 'keyCode'>): boolean {
+  return event.key === 'Process' && event.keyCode === 229
+}
+
 export function isTerminalImeProcessEnter(
-  event: Pick<KeyboardEvent, 'key' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'code' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+  >
 ): boolean {
+  const { code } = event
   return (
-    event.key === 'Process' &&
-    event.keyCode === 229 &&
+    isTerminalImeConsumedKey(event) &&
+    (!code || code === 'Unidentified' || code === 'Enter' || code === 'NumpadEnter') &&
     getTerminalImeModifiedEnterKind(event) !== null
   )
 }

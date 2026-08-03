@@ -234,6 +234,14 @@ describe('agent process recognition', () => {
     ).toEqual({ agent: 'gemini', processName: 'gemini' })
   })
 
+  it.each(['earendil-works', 'mariozechner'])('recognizes the @%s Pi npm entrypoint', (scope) => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node.exe C:\Users\dev\AppData\Roaming\npm\node_modules\@${scope}\pi-coding-agent\dist\cli.js`
+      )
+    ).toEqual({ agent: 'pi', processName: 'pi' })
+  })
+
   it('recognizes only the agent subcommand of the generic Orca CLI', () => {
     expect(recognizeAgentProcessFromCommandLine('orca claude-teams')).toEqual({
       agent: 'claude-agent-teams',
@@ -280,6 +288,11 @@ describe('agent process recognition', () => {
     ).toBeNull()
     expect(recognizeAgentProcessFromCommandLine(String.raw`node C:\repo\codex.js`)).toBeNull()
     expect(recognizeAgentProcessFromCommandLine(String.raw`node C:\repo\gemini.mjs`)).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node C:\repo\node_modules\@example\pi-coding-agent\dist\cli.js`
+      )
+    ).toBeNull()
     expect(recognizeAgentProcessFromCommandLine(String.raw`python C:\repo\aider.py`)).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('python -m not_aider')).toBeNull()
   })

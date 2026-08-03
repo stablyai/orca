@@ -160,12 +160,17 @@ function localhostLabelRouteForHttpLink(
   return localhostLabelRouteForTerminalLink(url, state, sourceOwner?.kind === 'local', sourceScan)
 }
 
-export async function resolveLocalhostHttpLinkDisplayUrl(url: string): Promise<string | null> {
+export async function resolveLocalhostHttpLinkDisplayUrl(
+  url: string,
+  sourceOwner?: HttpLinkSourceOwner
+): Promise<string | null> {
   const state = storeAccessor?.()
   if (!state) {
     return null
   }
-  const localhostRoute = localhostLabelRouteForTerminalLink(url, state)
+  // Why: the hover label must resolve the same route the click will take, or a
+  // remote pane's loopback URL gets shown with a local worktree's label.
+  const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
   if (!localhostRoute) {
     return null
   }

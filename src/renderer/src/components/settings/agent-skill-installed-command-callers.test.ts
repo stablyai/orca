@@ -170,7 +170,11 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     )
 
     expect(source).toContain('buildSkillCommandForRuntime(')
-    expect(source).toContain('command={skillCommand}')
+    // The copied string stays bare for POSIX-family shells; the forced-PowerShell
+    // setup terminal keeps the npx preflight.
+    expect(source).toContain('writeClipboardText(skillCommand)')
+    expect(source).toContain('buildSkillSetupTerminalCommand(')
+    expect(source).toContain('command={setupTerminalCommand}')
     expect(source).toContain('shellOverride={activeSkillRuntime.terminalShellOverride}')
     expect(source).not.toContain('command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}')
     // This terminal auto-pastes with no install gate, so a repair-required runtime
@@ -178,6 +182,35 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     expect(source).toContain(
       'activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime'
     )
+  })
+
+  it('keeps client freshness behind resolved local runtime authority', () => {
+    const expectedGates = new Map<string, string>([
+      [
+        'src/renderer/src/components/settings/use-local-cli-skill-freshness-name.ts',
+        "agentRuntime.runtime === 'host' && activeSkillRuntime.canUseLocalSkillFreshness"
+      ],
+      [
+        'src/renderer/src/components/settings/MobileEmulatorAgentControlRow.tsx',
+        'activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined'
+      ],
+      [
+        'src/renderer/src/components/settings/Settings.tsx',
+        'useSkillFreshness(skillFreshnessApplies)'
+      ],
+      [
+        'src/renderer/src/components/skills/SkillFreshnessNudge.tsx',
+        'useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)'
+      ],
+      [
+        'src/renderer/src/components/skills/SkillFreshnessUpdateDialog.tsx',
+        'useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)'
+      ]
+    ])
+
+    for (const [relativePath, expectedGate] of expectedGates) {
+      expect(readRepoFile(relativePath), relativePath).toContain(expectedGate)
+    }
   })
 
   it('fails when a production caller can show the default Update action without installedCommand', () => {

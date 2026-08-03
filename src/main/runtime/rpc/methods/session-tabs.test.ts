@@ -136,7 +136,8 @@ describe('session tab RPC methods', () => {
 
     expect(replies).toHaveLength(1)
     expect(runtime.closeMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', {
-      reason: 'user'
+      reason: 'user',
+      clientNavigationId: 'current-runtime'
     })
     expect(runtime.refuseUnattributedMobileSessionTabClose).not.toHaveBeenCalled()
   })
@@ -180,7 +181,8 @@ describe('session tab RPC methods', () => {
 
     expect(replies).toHaveLength(1)
     expect(runtime.closeMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', {
-      reason: 'user'
+      reason: 'user',
+      clientNavigationId: 'legacy-runtime'
     })
     expect(runtime.refuseUnattributedMobileSessionTabClose).not.toHaveBeenCalled()
   })

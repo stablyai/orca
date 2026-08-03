@@ -224,6 +224,25 @@ describe('LocalPtyProvider', () => {
       expect(typeof result.id).toBe('string')
     })
 
+    it('expands variables in PATH before spawning a Windows shell', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: {
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+          ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
+          PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
+        }
+      })
+
+      expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe(
+        'C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows'
+      )
+    })
+
     it('reattaches to an existing caller-supplied session id without spawning', async () => {
       const first = await provider.spawn({ cols: 80, rows: 24, sessionId: 'serve-session-1' })
       spawnMock.mockClear()

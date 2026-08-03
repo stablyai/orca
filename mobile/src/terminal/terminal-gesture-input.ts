@@ -1,8 +1,9 @@
 const ESC = '\x1b'
 const MAX_TERMINAL_GESTURE_INPUT_LENGTH = 2048
 const MAX_TERMINAL_GESTURE_INPUT_SEQUENCES = 32
+// Buttons: 0 left press/release, 32 left-drag motion, 64/65 wheel.
 const SGR_MOUSE_GESTURE_SEQUENCE_RE = new RegExp(
-  `^${ESC}\\[<(0|64|65);([0-9]{1,4});([0-9]{1,4})([Mm])$`
+  `^${ESC}\\[<(0|32|64|65);([0-9]{1,4});([0-9]{1,4})([Mm])$`
 )
 
 function isDefaultMouseGestureSequence(bytes: string, offset: number): number | null {
@@ -12,8 +13,9 @@ function isDefaultMouseGestureSequence(bytes: string, offset: number): number | 
   const button = bytes.charCodeAt(offset + 3)
   const col = bytes.charCodeAt(offset + 4)
   const row = bytes.charCodeAt(offset + 5)
+  // Buttons: 32 left press, 35 release, 64 left-drag motion, 96/97 wheel.
   if (
-    (button === 32 || button === 35 || button === 96 || button === 97) &&
+    (button === 32 || button === 35 || button === 64 || button === 96 || button === 97) &&
     col >= 33 &&
     col <= 126 &&
     row >= 33 &&
