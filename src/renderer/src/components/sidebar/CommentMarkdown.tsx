@@ -70,9 +70,9 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
 const remarkPlugins: RemarkPlugins = [remarkGfm, remarkBreaks]
 const mathRemarkPlugins: RemarkPlugins = [
   remarkGfm,
-  remarkBreaks,
   remarkMath,
-  remarkGitHubBacktickMath
+  remarkGitHubBacktickMath,
+  remarkBreaks
 ]
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
