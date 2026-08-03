@@ -85,6 +85,7 @@ import {
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
+const REMOTE_NULL_PTY_TAB_GRACE_MS = 30_000
 
 type SessionTabsStreamEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
@@ -525,7 +526,8 @@ function shouldReplaceTerminalTab(
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>,
   nextMirroredTerminalIds: ReadonlySet<string>,
-  exactProvisionalHandoffs: ReadonlySet<string>
+  exactProvisionalHandoffs: ReadonlySet<string>,
+  now: number
 ): boolean {
   if (exactProvisionalHandoffs.has(tab.id)) {
     // Why: agent kind is not session identity; retire only the provisional tab
@@ -536,8 +538,15 @@ function shouldReplaceTerminalTab(
     // Why: host snapshots are authoritative for mirrored tabs; replace old mirrors even when the next surface still awaits a stream handle, else parity drifts.
     return true
   }
-  if (tab.pendingActivationSpawn && tab.ptyId === null && nextRemotePtyIds.size > 0) {
-    return true
+  if (tab.ptyId === null) {
+    if (tab.pendingActivationSpawn && nextRemotePtyIds.size > 0) {
+      return true
+    }
+    // Why: a worktree has one execution host, so null-PTY placeholders inherit this
+    // snapshot's owner; after the bounded create window, omission proves they are ghosts.
+    if (now - tab.createdAt >= REMOTE_NULL_PTY_TAB_GRACE_MS) {
+      return true
+    }
   }
   if (!isRuntimeTerminalTabForEnvironment(tab, environmentId)) {
     return false
@@ -1852,7 +1861,8 @@ export function applyWebSessionTabsSnapshot(
         environmentId,
         nextRemotePtyIds,
         nextMirroredTerminalIds,
-        exactProvisionalHandoffs
+        exactProvisionalHandoffs,
+        now
       )
   )
   const mirroredTerminalTabs = buildMirroredTerminalTabs(

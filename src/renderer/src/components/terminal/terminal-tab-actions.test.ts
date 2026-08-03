@@ -492,6 +492,44 @@ describe('closeTerminalTab', () => {
     })
   })
 
+  it('routes a remote PTY close by terminal evidence while the worktree catalog is absent', () => {
+    const closeTab = vi.fn()
+    isWebRuntimeSessionActiveMock.mockImplementation(
+      (environmentId: string) => environmentId === 'owner-runtime'
+    )
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'host-tab-1',
+            ptyId: 'remote:owner-runtime@@terminal-1',
+            worktreeId: 'wt-1'
+          }
+        ]
+      },
+      unifiedTabsByWorktree: {},
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'host-tab-1',
+      openFiles: [],
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    closeTerminalTab('host-tab-1')
+
+    expect(closeTab).toHaveBeenCalledWith('host-tab-1', {
+      reason: undefined,
+      remoteCloseOwnedByHost: true
+    })
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'host-tab-1',
+      environmentId: 'owner-runtime',
+      reason: 'user'
+    })
+  })
+
   function makePinnedTabState(
     overrides: { confirmClosePinnedTab: boolean } & Record<string, unknown>
   ): Record<string, unknown> {

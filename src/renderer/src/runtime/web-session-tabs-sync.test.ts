@@ -798,6 +798,67 @@ describe('applyWebSessionTabsSnapshot', () => {
     )
   })
 
+  it('prunes an aged null-PTY tab after an authoritative host snapshot omits it', () => {
+    const staleTab: TerminalTab = {
+      id: 'stale-local-tab',
+      ptyId: null,
+      worktreeId: WT,
+      title: 'Claude',
+      defaultTitle: 'Claude',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 31_000,
+      launchAgent: 'claude'
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [staleTab] },
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: staleTab.id,
+              entityId: staleTab.id,
+              groupId: 'group-1',
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: staleTab.title,
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: staleTab.createdAt,
+              isPreview: false,
+              isPinned: false
+            }
+          ]
+        }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Codex',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          launchAgent: 'codex',
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.map((tab) => tab.id)).toEqual([
+      toWebTerminalSurfaceTabId('host-tab-1')
+    ])
+    expect(patch.unifiedTabsByWorktree?.[WT]?.map((tab) => tab.entityId)).toEqual([
+      toWebTerminalSurfaceTabId('host-tab-1')
+    ])
+  })
+
   it('replaces only the provisional tab with an exact structured-create handoff', () => {
     const provisional = (id: string): TerminalTab => ({
       id,
