@@ -2128,7 +2128,8 @@
             "d34ef9b554": "Board (unsupported)",
             "43a88ae574": "BOARD_LAYOUT",
             "1a2b8e512e": "Table",
-            "cafb908f34": "TABLE_LAYOUT"
+            "cafb908f34": "TABLE_LAYOUT",
+            "board": "Board"
           },
           "ProjectRow": {
             "75b5d816e3": "Start work",
@@ -2147,7 +2148,7 @@
             "4d2a77a119": "File feature request",
             "1bf8c01c8b": "Switch to a Table view to work with this project in Orca.",
             "55de4fb57a": "{{value0}}. {{value1}} File a feature request at {{value2}}.",
-            "2edf5e7e77": "{{value0}} — Orca doesn't support {{value1}} project views yet. File a feature request at {{value2}}.",
+            "2edf5e7e77": "Roadmap — not yet supported.",
             "7245c3d7ac": "Clear search",
             "c5bc7ec007": "View filter: {{value0}}",
             "840c268665": "Add repo",
@@ -2198,6 +2199,13 @@
                 "7c302f8174": "Untitled"
               }
             }
+          },
+          "ProjectViewKanban": {
+            "af5d8c912a": "Restricted",
+            "4f57d2e0b1": "No items match this view's filter.",
+            "244c9e7d06": "No {{value0}}",
+            "9e5a3c240b": "Drop items here",
+            "e34607e0cd": "PR"
           }
         },
         "GitHubMarkdownComposer": {

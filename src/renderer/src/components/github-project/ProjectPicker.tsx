@@ -758,32 +758,29 @@ function ViewPickStep({
           </div>
         ) : (
           views.map((v) => {
-            const supported = v.layout === 'TABLE_LAYOUT'
+            const isRoadmap = v.layout === 'ROADMAP_LAYOUT'
+            const layoutLabel =
+              v.layout === 'BOARD_LAYOUT'
+                ? translate('auto.components.github.project.ProjectPicker.board', 'Board')
+                : v.layout === 'ROADMAP_LAYOUT'
+                  ? translate(
+                      'auto.components.github.project.ProjectPicker.ab1a2c357d',
+                      'Roadmap (unsupported)'
+                    )
+                  : translate('auto.components.github.project.ProjectPicker.1a2b8e512e', 'Table')
             return (
               <button
                 key={v.id}
                 type="button"
-                disabled={!supported}
+                disabled={isRoadmap}
                 onClick={() => void onPick(v)}
                 className={cn(
                   'flex w-full flex-col items-start rounded px-2 py-1 text-left',
-                  supported ? 'hover:bg-muted/50' : 'cursor-not-allowed opacity-50'
+                  isRoadmap ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted/50'
                 )}
               >
                 <span className="text-sm">{v.name}</span>
-                <span className="text-[10px] text-muted-foreground">
-                  {v.layout === 'TABLE_LAYOUT'
-                    ? translate('auto.components.github.project.ProjectPicker.1a2b8e512e', 'Table')
-                    : v.layout === 'BOARD_LAYOUT'
-                      ? translate(
-                          'auto.components.github.project.ProjectPicker.d34ef9b554',
-                          'Board (unsupported)'
-                        )
-                      : translate(
-                          'auto.components.github.project.ProjectPicker.ab1a2c357d',
-                          'Roadmap (unsupported)'
-                        )}
-                </span>
+                <span className="text-[10px] text-muted-foreground">{layoutLabel}</span>
               </button>
             )
           })

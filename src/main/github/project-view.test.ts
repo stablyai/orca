@@ -26,8 +26,10 @@ import {
   isValidOwnerSlug,
   isValidRepoSlug,
   parseProjectPaste,
+  resolveBoardGroupByFallback,
   resolveProjectRef
 } from './project-view'
+import type { GitHubProjectField } from '../../shared/github-project-types'
 
 describe('classifyProjectError', () => {
   it('classifies HTTP 404 as not_found', () => {
@@ -282,5 +284,70 @@ describe('project view owner caches', () => {
     expect(_hasProjectViewParentFieldWarningLoggedForTests('owner-0\u0000organization')).toBe(false)
     expect(_hasProjectViewParentFieldRetriedForTests('owner-1\u0000organization')).toBe(true)
     expect(_hasProjectViewParentFieldWarningLoggedForTests('owner-1\u0000organization')).toBe(true)
+  })
+})
+
+describe('resolveBoardGroupByFallback', () => {
+  const statusField: GitHubProjectField = {
+    kind: 'single-select',
+    id: 'PVTSSF_status',
+    name: 'Status',
+    dataType: 'SINGLE_SELECT',
+    options: [{ id: 'o1', name: 'TODO', color: 'COLOR' }]
+  }
+  const iterationField: GitHubProjectField = {
+    kind: 'iteration',
+    id: 'PVTIF_iter',
+    name: 'Sprint',
+    dataType: 'ITERATION',
+    iterations: []
+  }
+  const textField: GitHubProjectField = {
+    kind: 'field',
+    id: 'PVTF_title',
+    name: 'Title',
+    dataType: 'TITLE'
+  }
+
+  it('injects the first single-select project field into a board view without a group-by', () => {
+    expect(
+      resolveBoardGroupByFallback({ layout: 'BOARD_LAYOUT', groupByFields: [] }, [
+        textField,
+        statusField,
+        iterationField
+      ])
+    ).toEqual(statusField)
+  })
+
+  it('prefers iteration fields when the project has no single-select field', () => {
+    expect(
+      resolveBoardGroupByFallback({ layout: 'BOARD_LAYOUT', groupByFields: [] }, [
+        textField,
+        iterationField
+      ])
+    ).toEqual(iterationField)
+  })
+
+  it('returns null when the project has no groupable field', () => {
+    expect(
+      resolveBoardGroupByFallback({ layout: 'BOARD_LAYOUT', groupByFields: [] }, [textField])
+    ).toBeNull()
+  })
+
+  it('keeps an explicit group-by untouched', () => {
+    expect(
+      resolveBoardGroupByFallback({ layout: 'BOARD_LAYOUT', groupByFields: [statusField] }, [
+        iterationField
+      ])
+    ).toBeNull()
+  })
+
+  it('never touches non-board layouts', () => {
+    expect(
+      resolveBoardGroupByFallback({ layout: 'TABLE_LAYOUT', groupByFields: [] }, [statusField])
+    ).toBeNull()
+    expect(
+      resolveBoardGroupByFallback({ layout: 'ROADMAP_LAYOUT', groupByFields: [] }, [statusField])
+    ).toBeNull()
   })
 })

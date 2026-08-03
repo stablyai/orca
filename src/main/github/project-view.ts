@@ -754,6 +754,57 @@ async function fetchViewFieldsContinuation(
   return { ok: true, fields: collected }
 }
 
+// Why: board views without an explicit group-by still render columns grouped
+// by the project's first single-select/iteration field (Status by default on
+// GitHub); mirror that fallback so a board never collapses into one column.
+export function resolveBoardGroupByFallback(
+  view: { layout: GitHubProjectViewLayout; groupByFields: GitHubProjectField[] },
+  projectFields: GitHubProjectField[]
+): GitHubProjectField | null {
+  if (view.layout !== 'BOARD_LAYOUT' || view.groupByFields.length > 0) {
+    return null
+  }
+  return projectFields.find((f) => f.kind === 'single-select' || f.kind === 'iteration') ?? null
+}
+
+async function fetchProjectFields(args: {
+  owner: string
+  ownerType: GitHubProjectOwnerType
+  projectNumber: number
+  host?: string
+}): Promise<GitHubProjectField[]> {
+  const root = ownerQueryRoot(args.ownerType)
+  const query = `
+    query($owner:String!, $num:Int!) {
+      ${root}(login:$owner) {
+        projectV2(number:$num) {
+          fields(first:${FIELDS_PAGE_SIZE}) {
+            nodes { ...FieldConfig }
+          }
+        }
+      }
+    }
+    ${FIELD_CONFIG_FRAGMENT}
+  `
+  const res = await runGraphql<
+    Record<
+      string,
+      { projectV2?: { fields?: { nodes?: (RawProjectV2Field | null)[] } | null } | null } | null
+    >
+  >(query, { owner: args.owner, num: args.projectNumber }, projectGhExecOptions(args.host))
+  if (!res.ok) {
+    return []
+  }
+  const fields: GitHubProjectField[] = []
+  for (const f of res.data[root]?.projectV2?.fields?.nodes ?? []) {
+    const n = normalizeField(f)
+    if (n) {
+      fields.push(n)
+    }
+  }
+  return fields
+}
+
 function finalizeView(
   raw: RawProjectView,
   extraFields: RawProjectV2Field[]
@@ -808,7 +859,7 @@ function finalizeView(
 function matchesSelector(
   raw: RawProjectView,
   sel: { viewId?: string; viewNumber?: number; viewName?: string }
-): 'none' | 'id' | 'number' | 'name' | 'default' {
+): 'id' | 'number' | 'name' | 'defaultTable' | 'defaultBoard' | 'none' {
   if (sel.viewId && raw.id === sel.viewId) {
     return 'id'
   }
@@ -818,18 +869,18 @@ function matchesSelector(
   if (sel.viewName && raw.name === sel.viewName) {
     return 'name'
   }
-  if (
-    sel.viewId === undefined &&
-    sel.viewNumber === undefined &&
-    sel.viewName === undefined &&
-    raw.layout === 'TABLE_LAYOUT'
-  ) {
-    return 'default'
+  if (sel.viewId === undefined && sel.viewNumber === undefined && sel.viewName === undefined) {
+    if (raw.layout === 'TABLE_LAYOUT') {
+      return 'defaultTable'
+    }
+    if (raw.layout === 'BOARD_LAYOUT') {
+      return 'defaultBoard'
+    }
   }
   return 'none'
 }
 
-// ─── Items fetch (paginated) ──────────────────────────────────────────
+type MatchResult = 'id' | 'number' | 'name' | 'defaultTable' | 'defaultBoard' | 'none'
 
 type RawItemsPage = {
   totalCount?: number
@@ -1214,7 +1265,7 @@ export async function getProjectViewTable(
   let cursor: string | null = null
   let project: { id: string; title: string; url: string } | null = null
   let selectedRaw: RawProjectView | null = null
-  let matchStrength: 'id' | 'number' | 'name' | 'default' | null = null
+  let matchStrength: 'id' | 'number' | 'name' | 'defaultTable' | 'defaultBoard' | null = null
   const viewsSeen: RawProjectView[] = []
   while (true) {
     const page = await fetchProjectViewsPage({
@@ -1238,8 +1289,15 @@ export async function getProjectViewTable(
       if (m === 'none') {
         continue
       }
-      // Precedence: id > number > name > default.
-      const rank: Record<typeof m, number> = { id: 4, number: 3, name: 2, default: 1 }
+      // Precedence: id > number > name > defaultTable > defaultBoard.
+      const rank: Record<MatchResult, number> = {
+        id: 5,
+        number: 4,
+        name: 3,
+        defaultTable: 2,
+        defaultBoard: 1,
+        none: 0
+      }
       const currentRank = matchStrength ? rank[matchStrength] : 0
       if (!selectedRaw || rank[m] > currentRank) {
         selectedRaw = v
@@ -1282,12 +1340,37 @@ export async function getProjectViewTable(
   }
   const selectedView = finalized.view
 
+  // Why: GitHub board views without an explicit group-by still render columns
+  // grouped by the project's first single-select/iteration field (Status by
+  // default). Without this fallback such boards collapse into one unlabeled
+  // column; the items fetch already includes the group field's values.
+  const projectFields = await fetchProjectFields({
+    owner: args.owner,
+    ownerType: args.ownerType,
+    projectNumber: args.projectNumber,
+    host: args.host
+  })
+
+  if (selectedView.layout === 'BOARD_LAYOUT' && selectedView.groupByFields.length === 0) {
+    const fallback = resolveBoardGroupByFallback(selectedView, projectFields)
+    if (fallback) {
+      selectedView.groupByFields.push(fallback)
+    }
+  }
+
+  // Why: store deduped project-level fields on the table so the renderer
+  // can merge them into the dialog without polluting selectedView.fields
+  // (which drives the table column list).
+  const extraProjectFields = projectFields.filter(
+    (pf) => !selectedView.fields.some((f) => f.id === pf.id)
+  )
+
   // Why: empty-string override means "no filter"; undefined means "use the view's stored filter". The override is ephemeral, never persisted.
   const effectiveQuery =
     typeof args.queryOverride === 'string' ? args.queryOverride : selectedView.filter
 
   // Unsupported layout: skip item pagination; best-effort count-only query.
-  if (selectedView.layout !== 'TABLE_LAYOUT') {
+  if (selectedView.layout !== 'TABLE_LAYOUT' && selectedView.layout !== 'BOARD_LAYOUT') {
     const count = await fetchItemsCountOnly({
       owner: args.owner,
       ownerType: args.ownerType,
@@ -1299,7 +1382,7 @@ export async function getProjectViewTable(
       ok: false,
       error: {
         type: 'unsupported_layout',
-        message: `Orca only renders table views. This is a ${selectedView.layout.replace('_LAYOUT', '').toLowerCase()} view.`
+        message: `Orca does not support ${selectedView.layout.replace('_LAYOUT', '').toLowerCase()} views yet.`
       },
       ...(typeof count === 'number' ? { totalCount: count } : {})
     }
@@ -1334,7 +1417,9 @@ export async function getProjectViewTable(
     selectedView,
     rows: items.rows,
     totalCount: items.totalCount,
-    parentFieldDropped: items.parentFieldDropped
+    parentFieldDropped: items.parentFieldDropped,
+    // Why: project-level fields not in the view — used by ProjectFieldsGrid dialog
+    projectFields: extraProjectFields
   }
   return { ok: true, data: table }
 }

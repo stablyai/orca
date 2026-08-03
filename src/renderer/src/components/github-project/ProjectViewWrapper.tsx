@@ -21,7 +21,6 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import GitHubItemDialog, { type GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { GhAuthErrorHelp } from '@/components/github-project/GhAuthErrorHelp'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
@@ -44,6 +43,7 @@ import type {
 import type { GitHubWorkItem } from '../../../../shared/types'
 import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
+import ProjectViewKanban from './ProjectViewKanban'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import {
   filterProjectTableRowsBySelectedRepos,
@@ -69,8 +69,6 @@ import {
 type Props = {
   selectedRepoIds: ReadonlySet<string>
 }
-
-const ORCA_FEATURE_REQUEST_URL = 'https://github.com/stablyai/orca/issues/new'
 
 function listProjectViewsForRuntime(
   settings: Parameters<typeof getActiveRuntimeTarget>[0],
@@ -947,21 +945,29 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
           onClose={() => setDialogRepoItem(null)}
         />
       ) : visibleTable ? (
-        <ProjectViewList
-          table={visibleTable}
-          onOpenDialog={handleOpenDialog}
-          onEditField={handleEditField}
-          onEditAssignees={(row, add, remove) => void handleEditAssignees(row, add, remove)}
-          onEditLabels={(row, add, remove) => void handleEditLabels(row, add, remove)}
-          onEditIssueType={(row, issueType) => void handleEditIssueType(row, issueType)}
-          onOpenInBrowser={(row) => {
-            if (row.content.url) {
-              void window.api.shell.openUrl(row.content.url)
-            }
-          }}
-          onStartWork={handleStartWork}
-          sourceSettings={settings}
-        />
+        visibleTable.selectedView.layout === 'BOARD_LAYOUT' ? (
+          <ProjectViewKanban
+            table={visibleTable}
+            onOpenDialog={handleOpenDialog}
+            onEditField={(row, fieldId, value) => void handleEditField(row, fieldId, value)}
+          />
+        ) : (
+          <ProjectViewList
+            table={visibleTable}
+            onOpenDialog={handleOpenDialog}
+            onEditField={handleEditField}
+            onEditAssignees={(row, add, remove) => void handleEditAssignees(row, add, remove)}
+            onEditLabels={(row, add, remove) => void handleEditLabels(row, add, remove)}
+            onEditIssueType={(row, issueType) => void handleEditIssueType(row, issueType)}
+            onOpenInBrowser={(row) => {
+              if (row.content.url) {
+                void window.api.shell.openUrl(row.content.url)
+              }
+            }}
+            onStartWork={handleStartWork}
+            sourceSettings={settings}
+          />
+        )
       ) : null}
 
       {/* Slug-only dialog for unadded-repo rows; Start-work lives in the parent's `repoNotInOrca` modal, not here (avoids a confusing duplicate button). */}
@@ -1169,95 +1175,43 @@ function ViewTabStrip({
   activeViewId: string | null
   onPick: (viewId: string) => void
 }): React.JSX.Element {
-  // Why: emulate GitHub Projects' tab strip; non-table layouts stay visible but disabled.
+  // Why: emulate GitHub Projects' tab strip; all layouts supported.
   return (
     <div className="project-view-tab-strip flex min-h-[41px] min-w-0 flex-none items-end gap-1 overflow-x-auto overflow-y-hidden border-b border-border/50 bg-muted/20 px-3 pt-3">
       {views.map((v) => {
-        const supported = v.layout === 'TABLE_LAYOUT'
         const active = v.id === activeViewId
-        const layoutLabel =
-          v.layout === 'BOARD_LAYOUT'
-            ? 'Board'
-            : v.layout === 'ROADMAP_LAYOUT'
-              ? 'Roadmap'
-              : 'Table'
         const Icon =
           v.layout === 'BOARD_LAYOUT'
             ? KanbanSquare
             : v.layout === 'ROADMAP_LAYOUT'
               ? MapIcon
               : TableIcon
-        const tab = (
+        return (
           <button
             key={v.id}
             type="button"
-            disabled={!supported}
+            disabled={v.layout === 'ROADMAP_LAYOUT'}
             onClick={() => onPick(v.id)}
             title={
-              supported
-                ? v.name
-                : translate(
+              v.layout === 'ROADMAP_LAYOUT'
+                ? translate(
                     'auto.components.github.project.ProjectViewWrapper.2edf5e7e77',
-                    "{{value0}} — Orca doesn't support {{value1}} project views yet. File a feature request at {{value2}}.",
-                    { value0: v.name, value1: layoutLabel, value2: ORCA_FEATURE_REQUEST_URL }
+                    'Roadmap — not yet supported.'
                   )
+                : v.name
             }
             className={cn(
               'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md border-x border-t px-3 py-1.5 text-xs',
               active
                 ? '-mb-px border-border/60 bg-background text-foreground'
                 : 'border-transparent text-muted-foreground hover:bg-background/40 hover:text-foreground',
-              !supported &&
+              v.layout === 'ROADMAP_LAYOUT' &&
                 'pointer-events-none cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted-foreground'
             )}
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground" />
             <span className={cn(active && 'font-medium')}>{v.name}</span>
           </button>
-        )
-        if (supported) {
-          return tab
-        }
-        const unsupportedMessage = `Orca doesn't support ${layoutLabel} project views yet.`
-        return (
-          <HoverCard key={v.id} openDelay={200} closeDelay={100}>
-            <HoverCardTrigger asChild>
-              <span
-                tabIndex={0}
-                aria-label={translate(
-                  'auto.components.github.project.ProjectViewWrapper.55de4fb57a',
-                  '{{value0}}. {{value1}} File a feature request at {{value2}}.',
-                  { value0: v.name, value1: unsupportedMessage, value2: ORCA_FEATURE_REQUEST_URL }
-                )}
-                className="inline-flex shrink-0 cursor-not-allowed rounded-t-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              >
-                {tab}
-              </span>
-            </HoverCardTrigger>
-            <HoverCardContent side="bottom" align="start" sideOffset={8} className="w-72 p-3">
-              <div className="space-y-2">
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {unsupportedMessage}{' '}
-                  {translate(
-                    'auto.components.github.project.ProjectViewWrapper.1bf8c01c8b',
-                    'Switch to a Table view to work with this project in Orca.'
-                  )}
-                </p>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  onClick={() => void window.api.shell.openUrl(ORCA_FEATURE_REQUEST_URL)}
-                >
-                  {translate(
-                    'auto.components.github.project.ProjectViewWrapper.4d2a77a119',
-                    'File feature request'
-                  )}
-                  <ExternalLink className="size-3" />
-                </Button>
-              </div>
-            </HoverCardContent>
-          </HoverCard>
         )
       })}
     </div>
@@ -1297,7 +1251,7 @@ function ErrorState({
     error.type === 'too_large'
       ? `This view has ${totalCount ?? 'many'} items — too large to render in Orca. Narrow the view's filter on GitHub.`
       : error.type === 'unsupported_layout'
-        ? 'Orca only renders table views yet. This is a Board or Roadmap view.'
+        ? 'Roadmap views are not supported yet.'
         : error.type === 'not_found'
           ? 'Could not find this project or view.'
           : error.type === 'schema_drift'

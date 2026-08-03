@@ -87,7 +87,8 @@ function makeTable(view: GitHubProjectView, rows: GitHubProjectRow[]): GitHubPro
     selectedView: view,
     rows,
     totalCount: rows.length,
-    parentFieldDropped: false
+    parentFieldDropped: false,
+    projectFields: []
   }
 }
 

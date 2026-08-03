@@ -198,6 +198,8 @@ export type GitHubProjectTable = {
   /** True when the `parent` retry fallback fired. The UI can hint
    *  "sub-issues unavailable" without claiming a hard error. */
   parentFieldDropped: boolean
+  /** Project-level fields not in this view — rendered in the item dialog. */
+  projectFields: GitHubProjectField[]
 }
 
 export type GitHubProjectSummary = {

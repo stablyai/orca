@@ -286,6 +286,8 @@ function getGitHubRepositoryLabelsUrl(itemUrl: string): string | null {
   }
 }
 
+import { ProjectFieldsGrid } from '@/components/github-project/ProjectFieldsGrid'
+
 type GitHubItemDialogProps = {
   workItem: GitHubWorkItem | null
   repoPath: string | null
@@ -4811,6 +4813,7 @@ function GHEditSection({
             </div>
           )}
         </section>
+        {projectOrigin ? <ProjectFieldsGrid projectOrigin={projectOrigin} /> : null}
       </aside>
     )
   }

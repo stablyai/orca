@@ -476,7 +476,13 @@ function optimisticFieldValueFromMutation(
   fieldId: string,
   value: GitHubProjectFieldMutationValue
 ): GitHubProjectTable['rows'][number]['fieldValuesByFieldId'][string] | null {
-  const field = table.selectedView.fields.find((f) => f.id === fieldId)
+  // Why: BOARD_LAYOUT groups custom fields (Status, Priority) in groupByFields,
+  // not in the regular fields array. Check all field sources.
+  const field =
+    table.selectedView.fields.find((f) => f.id === fieldId) ??
+    table.selectedView.groupByFields.find((f) => f.id === fieldId) ??
+    table.selectedView.sortByFields.find((s) => s.field.id === fieldId)?.field ??
+    table.projectFields.find((f) => f.id === fieldId)
   switch (value.kind) {
     case 'single-select': {
       if (field?.kind === 'single-select') {
