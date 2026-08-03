@@ -407,6 +407,71 @@ describe('Windows Korean IME real-device captures', () => {
     // an injection with nothing visible on screen. Captured on the same probe:
     // the same physical key reports as Process/229 while a session is open and
     // as Control/17 once it has closed.
+    // A pty capture of one ~10s Ctrl hold mid-composition showed three
+    // `\x1b[13;5u` injections, not one, which the chord owner was expected to
+    // prevent — it refuses a second claim until the modifier's keyup releases it,
+    // and replaying the hold as auto-repeat keydowns gives exactly one send.
+    // Replaying it as repeated down/up pairs reproduces the amplification: each
+    // release hands the chord back, so the next press claims it again and the
+    // count tracks the number of pairs one-for-one. That makes the chord owner a
+    // weaker backstop than it looks, and leaves the `code` gate carrying the case
+    // on its own — which it does, since ControlLeft is not Enter.
+    it.each([3, 5])('sends nothing for a held Ctrl delivered as %i down/up pairs', (pairs) => {
+      const harness = createHarness()
+      const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+      harness.startComposition()
+
+      let timeStamp = 100
+      const rows: Parameters<typeof replay>[1][number][] = []
+      for (let pair = 0; pair < pairs; pair += 1) {
+        rows.push(
+          {
+            t: 'keydown',
+            key: 'Process',
+            code: 'ControlLeft',
+            keyCode: 229,
+            ts: (timeStamp += 1),
+            shift: false,
+            ctrl: true,
+            comp: true
+          },
+          {
+            t: 'keydown',
+            key: 'Control',
+            code: 'ControlLeft',
+            keyCode: 17,
+            ts: (timeStamp += 1),
+            shift: false,
+            ctrl: true,
+            comp: true
+          },
+          {
+            t: 'keyup',
+            key: 'Process',
+            code: 'ControlLeft',
+            keyCode: 229,
+            ts: (timeStamp += 1),
+            shift: false,
+            comp: true
+          },
+          {
+            t: 'keyup',
+            key: 'Control',
+            code: 'ControlLeft',
+            keyCode: 17,
+            ts: (timeStamp += 1),
+            shift: false,
+            comp: true
+          }
+        )
+      }
+      replay(harness, rows)
+
+      expect(harness.sendInput).not.toHaveBeenCalled()
+      hook.unmount()
+      harness.dispose()
+    })
+
     it('sends nothing for a bare Ctrl press mid-composition', () => {
       const harness = createHarness()
       const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
