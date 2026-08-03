@@ -25,7 +25,7 @@ export function elementPropsSuffix(element: BrowserRecorderElementProps | undefi
     parts.push(`.${element.classes.join(',.')}`)
   }
   if (element.text) {
-    parts.push(`"${element.text}"`)
+    parts.push(`"${inlineText(element.text, 40)}"`)
   }
   if (element.styles.length > 0) {
     parts.push(element.styles.join(';'))

@@ -23,6 +23,7 @@ import {
 } from './browser-recorder-message-parsing'
 import type { ConsoleMessageDetails } from './browser-console-streak'
 import { BrowserRecorderEventRecorder } from './browser-recorder-event-recorder'
+import { BrowserRecorderWebRequest } from './browser-recorder-web-request'
 import {
   BrowserRecorderPageSource,
   type BrowserActionRecorderTarget
@@ -64,20 +65,12 @@ export class BrowserRecorderSessionObserver {
       void frame.executeJavaScript(INTERACTION_CAPTURE_EXPRESSION).catch(() => {})
     }
   }
-  private readonly handleFrameNavigate = (
-    _event: unknown,
-    url: string,
-    httpResponseCode: number,
-    _httpStatusText: string,
-    isMainFrame: boolean
-  ): void => {
-    // Why: iframe form submits (a common SPA save path) are navigations, not
-    // XHR — record them as requests so the flow stays complete.
-    if (isMainFrame || !url || url.startsWith('about:')) {
-      return
-    }
-    void this.events.recordFrameNavigation(url, httpResponseCode || null)
+  private readonly handleFrameNavigate = (): void => {
+    // Why: iframe navigations are recorded as requests by the webRequest
+    // safety net; here they only trigger a re-inject of the capture script.
+    this.rearm()
   }
+  private detachWebRequest: (() => void) | null = null
 
   constructor(hooks: BrowserRecorderObserverHooks, target: BrowserActionRecorderTarget) {
     this.bridge = hooks.getBridge()
@@ -114,6 +107,7 @@ export class BrowserRecorderSessionObserver {
 
   async stop(): Promise<void> {
     this.events.flushConsoleStreak()
+    this.events.dispose()
     this.detach()
     await this.emitNetworkSummary()
     const stopCapture = this.bridge?.captureStop(this.target.worktreeId, this.target.browserPageId)
@@ -147,11 +141,20 @@ export class BrowserRecorderSessionObserver {
     webContents.on('did-finish-load', this.handleNavigation)
     webContents.on('frame-created', this.handleFrameCreated)
     webContents.on('did-frame-navigate', this.handleFrameNavigate)
+    // Why: authoritative request capture (xhr/fetch/iframe submits) that the
+    // in-page hook cannot see; scoped to this webContents.
+    this.detachWebRequest = BrowserRecorderWebRequest.attach(
+      webContents.session,
+      webContents.id,
+      (details) => this.events.recordWebRequest(details)
+    )
   }
 
   private detach(): void {
     const webContents = this.attachedWebContents
     this.attachedWebContents = null
+    this.detachWebRequest?.()
+    this.detachWebRequest = null
     if (!webContents) {
       return
     }

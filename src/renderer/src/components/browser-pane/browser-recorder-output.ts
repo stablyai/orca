@@ -49,9 +49,17 @@ export function formatBrowserRecorderStepsAsMarkdown(
     const branch = kind === 'network-request' && pendingTrigger ? '  └ ' : ''
     lines.push(`${index + 1}. ${branch}${formatCompactStepLine(step)}`)
     // Why: requests stream in after their click/type trigger; the tree keeps
-    // them grouped until the next user interaction breaks the chain. Console
+    // them grouped until the next user interaction breaks the chain. Hover and
+    // scroll never trigger requests, so they do not open a branch. Console
     // noise and later requests do not break it.
-    if (kind === 'interaction' || kind === 'automation-action' || kind === 'navigation') {
+    if (
+      kind === 'interaction' &&
+      (step.detail.interaction.kind === 'click' ||
+        step.detail.interaction.kind === 'type' ||
+        step.detail.interaction.kind === 'keydown')
+    ) {
+      pendingTrigger = true
+    } else if (kind === 'automation-action' || kind === 'navigation') {
       pendingTrigger = true
     } else if (kind === 'element-selected' || kind === 'annotation-added') {
       pendingTrigger = false

@@ -66,7 +66,8 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
   function elementInfo(el) {
     if (!el || !el.tagName) { return null }
     var classes = typeof el.className === 'string' ? el.className.trim().split(/\\s+/).filter(Boolean).slice(0, 5) : []
-    var text = (el.innerText || el.value || '').trim().slice(0, 60)
+    // Why: collapse newlines so element text never splits a log line.
+    var text = (el.innerText || el.value || '').replace(/\\s+/g, ' ').trim().slice(0, 60)
     var styles = []
     try {
       var cs = window.getComputedStyle(el)
@@ -117,6 +118,7 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
     return /password|passwd|sifre|parola/i.test(name)
   }
   document.addEventListener('keydown', function (e) {
+    if (!e.isTrusted) { flushTyping(); return }
     var active = document.activeElement
     var target = summarize(active)
     if (isPrintableKey(e.key)) {
@@ -140,6 +142,9 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
   }, true)
   document.addEventListener('click', function (e) {
     flushTyping()
+    // Why: synthetic .click() calls (app-internal triggers) are not user
+    // actions — log only trusted clicks so the flow stays truthful.
+    if (!e.isTrusted) { return }
     var t = e.target
     report('click', { x: e.clientX, y: e.clientY, target: summarize(t), tagName: t && t.tagName ? t.tagName.toLowerCase() : '', el: elementInfo(t) })
   }, true)
@@ -192,13 +197,19 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
   XMLHttpRequest.prototype.send = function (body) {
     var info = pending.get(this)
     if (info) { info.body = body == null ? '' : String(body) }
+    var xhr = this
+    // Why: listeners must be registered on the instance — prototype-level
+    // addEventListener never receives events dispatched on instances.
+    if (!xhr.__orcaLoadendAttached) {
+      xhr.__orcaLoadendAttached = true
+      xhr.addEventListener('loadend', function () {
+        var i = pending.get(xhr)
+        if (!i) { return }
+        pending.delete(xhr)
+        report('request', { method: i.method, url: i.url, body: i.body, status: xhr.status, durationMs: Date.now() - i.started, origin: i.origin, kind: 'xhr' })
+      })
+    }
     return nativeSend.apply(this, arguments)
   }
-  XMLHttpRequest.prototype.addEventListener.call(XMLHttpRequest.prototype, 'loadend', function () {
-    var info = pending.get(this)
-    if (!info) { return }
-    pending.delete(this)
-    report('request', { method: info.method, url: info.url, body: info.body, status: this.status, durationMs: Date.now() - info.started, origin: info.origin, kind: 'xhr' })
-  })
   return 'installed'
 })()`

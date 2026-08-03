@@ -112,7 +112,15 @@ describe('BrowserActionRecorder session observer', () => {
     }
     const consoleListeners = new Map<string, (...args: unknown[]) => void>()
     const executeJavaScript = vi.fn(() => Promise.resolve('installed'))
+    let webRequestHandler: ((details: Record<string, unknown>) => void) | null = null
+    const onCompleted = vi.fn(
+      (_filter: unknown, handler: (details: Record<string, unknown>) => void) => {
+        webRequestHandler = handler
+      }
+    )
     const webContents = {
+      id: 7,
+      session: { webRequest: { onCompleted } },
       mainFrame: { executeJavaScript, frames: [] },
       on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         consoleListeners.set(event, handler)
@@ -144,6 +152,17 @@ describe('BrowserActionRecorder session observer', () => {
       } as never)
     const fireFrameNavigate = (url: string, isMainFrame: boolean, status = 200) =>
       consoleListeners.get('did-frame-navigate')?.('event', url, status, 'OK', isMainFrame)
+    const fireWebRequest = (details: Record<string, unknown>) => {
+      webRequestHandler?.({
+        url: 'https://example.com/api',
+        method: 'GET',
+        statusCode: 200,
+        resourceType: 'xhr',
+        webContentsId: 7,
+        timestamp: Date.now(),
+        ...details
+      })
+    }
     return {
       recorder,
       bridge,
@@ -151,13 +170,15 @@ describe('BrowserActionRecorder session observer', () => {
       send,
       evaluate,
       executeJavaScript,
+      onCompleted,
       getPageWebContents,
       captureStart,
       captureStop,
       networkLog,
       enable,
       fireConsole,
-      fireFrameNavigate
+      fireFrameNavigate,
+      fireWebRequest
     }
   }
 
@@ -172,13 +193,20 @@ describe('BrowserActionRecorder session observer', () => {
     recorder.setEnabled(false)
   })
 
-  it('records iframe navigations as frame requests', async () => {
-    const { recorder, send, enable, fireFrameNavigate } = makeObserverHarness()
+  it('emits webRequest completions as safety-net requests', async () => {
+    const { recorder, send, enable, fireWebRequest } = makeObserverHarness()
     enable()
-    fireFrameNavigate('https://example.com/panel/stok', false, 200)
-    await vi.waitFor(() => {
-      expect(send).toHaveBeenCalledTimes(1)
+    fireWebRequest({
+      url: 'https://example.com/panel/stok',
+      resourceType: 'subFrame',
+      statusCode: 200
     })
+    await vi.waitFor(
+      () => {
+        expect(send).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 2000 }
+    )
     const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
     expect(event).toMatchObject({
       kind: 'network-request',
@@ -189,6 +217,45 @@ describe('BrowserActionRecorder session observer', () => {
         status: 200
       }
     })
+    recorder.setEnabled(false)
+  })
+
+  it('deduplicates webRequest completions already reported by the page hook', async () => {
+    const { recorder, send, enable, fireConsole, fireWebRequest } = makeObserverHarness()
+    enable()
+    // Page hook reports the request first (with body).
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'request',
+        method: 'POST',
+        url: 'https://example.com/api/stok',
+        body: 'islem=stok_kaydet',
+        status: 200,
+        durationMs: 85,
+        kind: 'xhr'
+      })}`
+    )
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+    // Safety net fires for the same request — must not double-report.
+    fireWebRequest({
+      url: 'https://example.com/api/stok',
+      method: 'POST',
+      resourceType: 'xhr',
+      statusCode: 200
+    })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    expect(send).toHaveBeenCalledTimes(1)
+    recorder.setEnabled(false)
+  })
+
+  it('ignores webRequest events for other webContents', async () => {
+    const { recorder, send, enable, fireWebRequest } = makeObserverHarness()
+    enable()
+    fireWebRequest({ webContentsId: 999 })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    expect(send).not.toHaveBeenCalled()
     recorder.setEnabled(false)
   })
 
@@ -297,6 +364,8 @@ describe('BrowserActionRecorder session observer', () => {
     enable()
     const secondExecute = vi.fn(() => Promise.resolve('installed'))
     const secondWebContents = {
+      id: 8,
+      session: { webRequest: { onCompleted: vi.fn() } },
       on: vi.fn(),
       removeListener: vi.fn(),
       mainFrame: { executeJavaScript: secondExecute, frames: [] }
