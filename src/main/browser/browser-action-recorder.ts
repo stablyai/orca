@@ -21,8 +21,8 @@ import {
   type BrowserRecorderStreamEvent
 } from '../../shared/browser-recorder-automation'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
+import { DOM_FINGERPRINT_EXPRESSION } from './browser-page-capture-expressions'
 import {
-  DOM_FINGERPRINT_EXPRESSION,
   NAVIGATION_METHODS,
   capText,
   diffFingerprints,

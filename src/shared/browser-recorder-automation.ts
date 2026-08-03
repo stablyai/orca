@@ -74,7 +74,7 @@ export type BrowserRecorderAutomationAction = {
   domDiff: BrowserRecorderDomDiff | null
 }
 
-export type BrowserRecorderInteractionKind = 'click' | 'keydown' | 'scroll'
+export type BrowserRecorderInteractionKind = 'click' | 'keydown' | 'type' | 'scroll' | 'hover'
 
 /** A manual page interaction observed while recording (in-page capture script). */
 export type BrowserRecorderInteraction = {
@@ -85,25 +85,45 @@ export type BrowserRecorderInteraction = {
   /** click */
   x?: number
   y?: number
-  /** Clicked element: '#id', 'button.primary', or tag name. */
+  /** Clicked/hovered/typed-into element: '#id', 'button.primary', or tag name. */
   target?: string
   tagName?: string
-  /** keydown */
+  /** keydown (special key) or type (coalesced burst) */
   key?: string
+  /** Coalesced typing burst text (kind 'type'). */
+  text?: string
   /** scroll */
   scrollX?: number
   scrollY?: number
 }
 
+/** One page network request observed while recording (fetch/XHR hook). */
+export type BrowserRecorderNetworkRequest = {
+  id: string
+  page: { browserPageId: string; url: string; title: string }
+  startedAt: string
+  method: string
+  /** Request URL (query secrets redacted). */
+  url: string
+  /** Form-encoded body with secret-shaped values redacted (capped). */
+  postData: string | null
+  status: number | null
+  durationMs: number | null
+  /** DOM change kinds observed after the response landed. */
+  screenChanged: BrowserRecorderDomChangeKind[]
+}
+
 export type BrowserRecorderConsoleLevel = 'log' | 'warning' | 'error' | 'debug'
 
-/** One page console message observed while recording. */
+/** One page console message observed while recording (repeats coalesced). */
 export type BrowserRecorderConsoleEntry = {
   id: string
   level: BrowserRecorderConsoleLevel
   message: string
   source: string
   lineNumber: number
+  /** How many consecutive identical messages this entry represents. */
+  repeatCount: number
   page: { browserPageId: string; url: string; title: string }
   startedAt: string
 }
@@ -129,6 +149,7 @@ export type BrowserRecorderStreamEvent =
   | { kind: 'action'; action: BrowserRecorderAutomationAction }
   | { kind: 'interaction'; interaction: BrowserRecorderInteraction }
   | { kind: 'console'; entry: BrowserRecorderConsoleEntry }
+  | { kind: 'network-request'; request: BrowserRecorderNetworkRequest }
   | { kind: 'network-summary'; summary: BrowserRecorderNetworkSummary }
 
 export const BROWSER_RECORDER_ACTION_CHANNEL = 'browser:recorder-action'
@@ -154,9 +175,13 @@ export const BROWSER_RECORDER_BUDGET = {
   /** Cap on the recorded error message. */
   errorMaxLength: 500,
   /** Cap on manual interaction records per session (oldest dropped). */
-  interactionMaxPerSession: 200,
+  interactionMaxPerSession: 400,
   /** Cap on console entries per session (oldest dropped). */
-  consoleMaxPerSession: 100,
+  consoleMaxPerSession: 120,
   /** Cap on a console message text kept in an entry. */
-  consoleMessageMaxLength: 300
+  consoleMessageMaxLength: 300,
+  /** Cap on network request records per session (oldest dropped). */
+  networkRequestMaxPerSession: 300,
+  /** Cap on a request body kept in an entry. */
+  requestBodyMaxLength: 300
 } as const

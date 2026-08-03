@@ -1,17 +1,12 @@
-import type {
-  BrowserRecorderElementSummary,
-  BrowserRecorderStep,
-  BrowserRecorderStepDetail
-} from './browser-recorder-types'
+import type { BrowserRecorderElementSummary, BrowserRecorderStep } from './browser-recorder-types'
 import type { BrowserRecorderAutomationAction } from '../../../../shared/browser-recorder-automation'
 import {
-  formatConsoleEntryLines,
-  formatInteractionLines,
-  formatInteractionSummary,
-  formatNetworkSummaryLines,
-  interactionDetailHeading
+  compactConsoleEntry,
+  compactNetworkRequest,
+  compactNetworkSummary,
+  formatInteractionSummary
 } from './browser-recorder-stream-output'
-import { formatPageUrl, formatTime, inlineCode, inlineText } from './browser-recorder-text'
+import { formatPageUrl, formatTime, inlineText } from './browser-recorder-text'
 
 function elementLabel(element: BrowserRecorderElementSummary): string {
   const accessibleName = element.accessibleName?.trim()
@@ -23,159 +18,11 @@ function elementLabel(element: BrowserRecorderElementSummary): string {
   return base
 }
 
-function formatElementLines(element: BrowserRecorderElementSummary): string[] {
-  const rect = element.rectViewport
-  const lines = [`**Element:** ${elementLabel(element)}`]
-  lines.push(`**Selector:** ${inlineCode(element.selector)}`)
-  if (element.elementPath) {
-    lines.push(`**Location:** ${inlineCode(element.elementPath)}`)
-  }
-  lines.push(
-    `**Bounds:** x=${Math.round(rect.x)}, y=${Math.round(rect.y)}, ${Math.round(rect.width)}x${Math.round(rect.height)}`
-  )
-  if (element.cssClasses) {
-    lines.push(`**Classes:** ${inlineCode(element.cssClasses)}`)
-  }
-  if (element.textSnippet) {
-    lines.push(`**Text:** "${inlineText(element.textSnippet)}"`)
-  }
-  return lines
-}
-
-export function formatBrowserRecorderStepDetail(
-  step: BrowserRecorderStep,
-  index: number
-): string[] {
-  const detail = step.detail
-  const lines: string[] = []
-  const heading = detailHeading(detail)
-  lines.push(`### ${index + 1}. ${heading}`)
-  lines.push(`**Time:** ${formatTime(step.createdAt)}`)
-  lines.push(`**Page:** ${inlineText(step.pageUrl)}`)
-  if (step.pageTitle && step.pageTitle !== step.pageUrl) {
-    lines.push(`**Page title:** ${inlineText(step.pageTitle)}`)
-  }
-
-  switch (detail.kind) {
-    case 'recording-started':
-      break
-    case 'navigation':
-      lines.push(`**From:** ${inlineText(detail.fromUrl)}`)
-      lines.push(`**To:** ${inlineText(detail.toUrl)}`)
-      break
-    case 'element-selected':
-      lines.push(...formatElementLines(detail.element))
-      break
-    case 'annotation-added':
-      lines.push(...formatElementLines(detail.element))
-      lines.push(`**Intent:** ${detail.intent}`)
-      lines.push(`**Feedback:** ${inlineText(detail.comment)}`)
-      break
-    case 'automation-action':
-      lines.push(...formatAutomationActionLines(detail.action))
-      break
-    case 'interaction':
-      lines.push(...formatInteractionLines(detail.interaction))
-      break
-    case 'console':
-      lines.push(...formatConsoleEntryLines(detail.entry))
-      break
-    case 'network-summary':
-      lines.push(...formatNetworkSummaryLines(detail.summary))
-      break
-  }
-  return lines
-}
-
-function formatAutomationActionLines(action: BrowserRecorderAutomationAction): string[] {
-  const lines: string[] = []
-  lines.push(`**Method:** ${inlineCode(action.method)}`)
-  if (action.target.kind !== 'none' && action.target.value) {
-    lines.push(`**Target:** ${action.target.kind} ${inlineCode(action.target.value)}`)
-  }
-  const paramEntries = Object.entries(action.params)
-  if (paramEntries.length > 0) {
-    lines.push(
-      `**Params:** ${paramEntries
-        .map(([key, value]) => `${key}=${inlineText(String(value ?? ''))}`)
-        .join(', ')}`
-    )
-  }
-  lines.push(
-    `**Result:** ${action.ok ? 'ok' : 'error'} (${action.durationMs}ms)${
-      action.error ? ` — ${inlineText(action.error)}` : ''
-    }`
-  )
-  if (action.urlAfter && action.urlAfter !== action.page.url) {
-    lines.push(`**URL:** ${inlineText(action.page.url)} → ${inlineText(action.urlAfter)}`)
-  } else if (action.urlAfter) {
-    lines.push(`**URL:** ${inlineText(action.urlAfter)}`)
-  }
-  if (action.titleAfter && action.titleAfter !== action.page.title) {
-    lines.push(`**Title:** ${inlineText(action.page.title)} → ${inlineText(action.titleAfter)}`)
-  }
-  if (action.domDiff && action.domDiff.changed.length > 0) {
-    const diff = action.domDiff
-    const parts: string[] = []
-    if (diff.urlChanged) {
-      parts.push('url')
-    }
-    if (diff.titleChanged) {
-      parts.push('title')
-    }
-    if (diff.textLengthDelta !== 0) {
-      parts.push(`text ${diff.textLengthDelta > 0 ? '+' : ''}${diff.textLengthDelta}`)
-    }
-    if (diff.interactiveDelta !== 0) {
-      parts.push(`interactive ${diff.interactiveDelta > 0 ? '+' : ''}${diff.interactiveDelta}`)
-    }
-    if (diff.inputsChanged) {
-      parts.push('inputs')
-    }
-    if (parts.length > 0) {
-      lines.push(`**DOM changed:** ${parts.join(', ')}`)
-    }
-    const shownChanges = diff.inputChanges.slice(0, 5)
-    if (shownChanges.length > 0) {
-      const changeLines = shownChanges.map(
-        (change) =>
-          `${inlineCode(change.label)}: "${inlineText(change.before)}" → "${inlineText(change.after)}"`
-      )
-      const hidden = diff.inputChanges.length - shownChanges.length
-      if (hidden > 0) {
-        changeLines.push(`+${hidden} more`)
-      }
-      lines.push('**Fields:**')
-      lines.push(...changeLines.map((line) => `- ${line}`))
-    }
-  } else if (action.ok && action.domDiff) {
-    lines.push('**DOM changed:** none')
-  }
-  return lines
-}
-
-function detailHeading(detail: BrowserRecorderStepDetail): string {
-  switch (detail.kind) {
-    case 'recording-started':
-      return 'Recording started'
-    case 'navigation':
-      return 'Navigated to a new page'
-    case 'element-selected':
-      return 'Selected element'
-    case 'annotation-added':
-      return 'Added annotation'
-    case 'automation-action':
-      return 'Browser automation action'
-    case 'interaction':
-      return interactionDetailHeading(detail.interaction)
-    case 'console':
-      return `Console ${detail.entry.level}`
-    case 'network-summary':
-      return 'Network summary'
-  }
-}
-
-/** Formats the recorded session as a self-contained markdown log. */
+/**
+ * Formats the recorded session as a compact markdown log, one line per step,
+ * so it fits more context when handed to an agent. Every line ends with the
+ * page it happened on.
+ */
 export function formatBrowserRecorderStepsAsMarkdown(
   steps: BrowserRecorderStep[],
   options?: { startedAt?: string }
@@ -196,11 +43,86 @@ export function formatBrowserRecorderStepsAsMarkdown(
   lines.push('')
 
   steps.forEach((step, index) => {
-    lines.push(...formatBrowserRecorderStepDetail(step, index))
-    lines.push('')
+    lines.push(`${index + 1}. ${formatCompactStepLine(step)}`)
   })
 
   return lines.join('\n').trimEnd()
+}
+
+/** One compact line describing a step, ending with the page it happened on. */
+export function formatCompactStepLine(step: BrowserRecorderStep): string {
+  const body = compactStepBody(step)
+  const page = inlineText(formatPageUrl(step.pageUrl), 60)
+  return body ? `${body} @ ${page}` : `@ ${page}`
+}
+
+function compactStepBody(step: BrowserRecorderStep): string {
+  switch (step.detail.kind) {
+    case 'recording-started':
+      return 'recording started'
+    case 'navigation':
+      return `navigate ${formatPageUrl(step.detail.fromUrl)} → ${formatPageUrl(step.detail.toUrl)}`
+    case 'element-selected':
+      return `selected ${elementLabel(step.detail.element)}`
+    case 'annotation-added':
+      return `annotated ${elementLabel(step.detail.element)}: "${inlineText(step.detail.comment, 80)}"`
+    case 'automation-action':
+      return compactAutomationAction(step.detail.action)
+    case 'interaction':
+      return formatInteractionSummary(step.detail.interaction)
+    case 'console':
+      return compactConsoleEntry(step.detail.entry)
+    case 'network-request':
+      return compactNetworkRequest(step.detail.request)
+    case 'network-summary':
+      return compactNetworkSummary(step.detail.summary)
+  }
+}
+
+function compactAutomationAction(action: BrowserRecorderAutomationAction): string {
+  const method = action.method.replace(/^browser\./, '')
+  const target =
+    action.target.kind !== 'none' && action.target.value ? ` ${action.target.value}` : ''
+  const result = action.ok
+    ? 'ok'
+    : `error${action.error ? `: ${inlineText(action.error, 60)}` : ''}`
+  const parts: string[] = [`action ${method}${target} ${result} (${action.durationMs}ms)`]
+  if (action.domDiff && action.domDiff.changed.length > 0) {
+    const diff = action.domDiff
+    const changedParts: string[] = []
+    if (diff.urlChanged) {
+      changedParts.push('url')
+    }
+    if (diff.titleChanged) {
+      changedParts.push('title')
+    }
+    if (diff.textLengthDelta !== 0) {
+      changedParts.push(`text ${diff.textLengthDelta > 0 ? '+' : ''}${diff.textLengthDelta}`)
+    }
+    if (diff.interactiveDelta !== 0) {
+      changedParts.push(
+        `interactive ${diff.interactiveDelta > 0 ? '+' : ''}${diff.interactiveDelta}`
+      )
+    }
+    if (diff.inputsChanged) {
+      changedParts.push('inputs')
+    }
+    if (changedParts.length > 0) {
+      parts.push(`changed: ${changedParts.join(',')}`)
+    }
+    const shownChanges = diff.inputChanges.slice(0, 3)
+    if (shownChanges.length > 0) {
+      parts.push(
+        shownChanges
+          .map(
+            (change) =>
+              `${change.label} "${inlineText(change.before, 20)}"→"${inlineText(change.after, 20)}"`
+          )
+          .join('; ')
+      )
+    }
+  }
+  return parts.join(' · ')
 }
 
 /** One-line human summary of a step, used by the tray list. */
@@ -217,9 +139,11 @@ export function formatBrowserRecorderStepSummary(step: BrowserRecorderStep): str
     case 'automation-action':
       return formatAutomationActionSummary(step.detail.action)
     case 'interaction':
-      return formatInteractionSummary(step.detail.interaction)
+      return `User ${formatInteractionSummary(step.detail.interaction)}`
     case 'console':
-      return `Console ${step.detail.entry.level}: ${inlineText(step.detail.entry.message, 60)}`
+      return `Console ${step.detail.entry.level}${step.detail.entry.repeatCount > 1 ? ` ×${step.detail.entry.repeatCount}` : ''}: ${inlineText(step.detail.entry.message, 60)}`
+    case 'network-request':
+      return `Request ${step.detail.request.method} ${inlineText(step.detail.request.url, 60)} → ${step.detail.request.status ?? 'pending'}`
     case 'network-summary':
       return `Network: ${step.detail.summary.total} requests, ${step.detail.summary.failed} failed`
   }

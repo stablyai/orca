@@ -16,6 +16,7 @@ import type {
   BrowserRecorderAutomationAction,
   BrowserRecorderConsoleEntry,
   BrowserRecorderInteraction,
+  BrowserRecorderNetworkRequest,
   BrowserRecorderNetworkSummary,
   BrowserRecorderStreamEvent
 } from '../../../../shared/browser-recorder-automation'
@@ -39,6 +40,7 @@ export type BrowserRecorderStepKind =
   | 'automation-action'
   | 'interaction'
   | 'console'
+  | 'network-request'
   | 'network-summary'
 
 export type BrowserRecorderStepDetail =
@@ -54,6 +56,7 @@ export type BrowserRecorderStepDetail =
   | { kind: 'automation-action'; action: BrowserRecorderAutomationAction }
   | { kind: 'interaction'; interaction: BrowserRecorderInteraction }
   | { kind: 'console'; entry: BrowserRecorderConsoleEntry }
+  | { kind: 'network-request'; request: BrowserRecorderNetworkRequest }
   | { kind: 'network-summary'; summary: BrowserRecorderNetworkSummary }
 
 export type BrowserRecorderStep = {
@@ -99,6 +102,8 @@ export function recorderEventPage(event: BrowserRecorderStreamEvent): {
       return event.interaction.page
     case 'console':
       return event.entry.page
+    case 'network-request':
+      return event.request.page
     case 'network-summary':
       return event.summary.page
   }

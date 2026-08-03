@@ -1,6 +1,55 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserActionRecorder } from './browser-action-recorder'
+import {
+  parseBrowserInteractionMessage,
+  parseBrowserRequestMessage,
+  redactPostData,
+  redactRequestUrl
+} from './browser-recorder-message-parsing'
 import { BROWSER_RECORDER_ACTION_CHANNEL } from '../../shared/browser-recorder-automation'
+
+describe('recorder message parsers', () => {
+  it('parses typing bursts, keys, hovers, and requests from tagged lines', () => {
+    expect(
+      parseBrowserInteractionMessage(
+        `__orca_recorder__ ${JSON.stringify({ type: 'type', text: 'ABC', target: '#stok_kod' })}`
+      )
+    ).toEqual({ type: 'type', text: 'ABC', target: '#stok_kod' })
+    expect(
+      parseBrowserInteractionMessage(
+        `__orca_recorder__ ${JSON.stringify({ type: 'keydown', key: 'Enter', target: '#a' })}`
+      )
+    ).toEqual({ type: 'keydown', key: 'Enter', target: '#a' })
+    expect(
+      parseBrowserInteractionMessage(
+        `__orca_recorder__ ${JSON.stringify({ type: 'hover', target: '#menu-stok' })}`
+      )
+    ).toEqual({ type: 'hover', target: '#menu-stok' })
+    expect(parseBrowserInteractionMessage('__orca_recorder__ not-json')).toBeNull()
+  })
+
+  it('routes request lines to the request parser only', () => {
+    const line = `__orca_recorder__ ${JSON.stringify({ type: 'request', method: 'POST', url: 'https://x/a', status: 200 })}`
+    expect(parseBrowserInteractionMessage(line)).toBeNull()
+    expect(parseBrowserRequestMessage(line)).toMatchObject({
+      type: 'request',
+      method: 'POST',
+      url: 'https://x/a',
+      status: 200
+    })
+    expect(parseBrowserRequestMessage('console.log("plain")')).toBeNull()
+  })
+
+  it('redacts secret-shaped values in request URLs and bodies', () => {
+    expect(redactRequestUrl('https://x/api?islem=stok&key=abc123')).toBe(
+      'https://x/api?islem=stok&key=***'
+    )
+    expect(redactPostData('islem=stok_kaydet&sifre=hunter2&ad=Test', 500)).toBe(
+      'islem=stok_kaydet&sifre=***&ad=Test'
+    )
+    expect(redactPostData('k=v'.repeat(200), 20)).toMatch(/…$/)
+  })
+})
 
 describe('BrowserActionRecorder session observer', () => {
   function makeObserverHarness() {
@@ -68,6 +117,7 @@ describe('BrowserActionRecorder session observer', () => {
     const { recorder, webContents, evaluate, captureStart, enable } = makeObserverHarness()
     enable()
     expect(webContents.on).toHaveBeenCalledWith('console-message', expect.any(Function))
+    expect(webContents.on).toHaveBeenCalledWith('did-navigate', expect.any(Function))
     expect(evaluate).toHaveBeenCalledWith(
       expect.stringContaining('__orca_recorder__'),
       'wt-1',
@@ -77,11 +127,11 @@ describe('BrowserActionRecorder session observer', () => {
     recorder.setEnabled(false)
   })
 
-  it('turns tagged console lines into interaction events', async () => {
+  it('turns a typing burst into a single type interaction', () => {
     const { recorder, send, enable, fireConsole } = makeObserverHarness()
     enable()
     fireConsole(
-      `__orca_recorder__ ${JSON.stringify({ type: 'click', x: 340, y: 215, target: '#login-btn', tagName: 'button' })}`
+      `__orca_recorder__ ${JSON.stringify({ type: 'type', text: 'ABC123', target: '#stok_kod' })}`
     )
     expect(send).toHaveBeenCalledTimes(1)
     const [channel, event] = send.mock.calls[0] as [string, Record<string, unknown>]
@@ -89,30 +139,60 @@ describe('BrowserActionRecorder session observer', () => {
     expect(event).toMatchObject({
       kind: 'interaction',
       interaction: {
-        kind: 'click',
-        x: 340,
-        y: 215,
-        target: '#login-btn',
-        tagName: 'button',
+        kind: 'type',
+        text: 'ABC123',
+        target: '#stok_kod',
         page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' }
       }
     })
     recorder.setEnabled(false)
   })
 
-  it('turns untagged console lines into console entries', () => {
+  it('turns untagged console lines into coalesced console entries', () => {
     const { recorder, send, enable, fireConsole } = makeObserverHarness()
     enable()
-    fireConsole('Uncaught TypeError: x is not a function', 'error')
+    fireConsole('same message', 'error')
+    fireConsole('same message', 'error')
+    fireConsole('same message', 'error')
+    fireConsole('different message')
     expect(send).toHaveBeenCalledTimes(1)
     const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
     expect(event).toMatchObject({
       kind: 'console',
       entry: {
         level: 'error',
-        message: 'Uncaught TypeError: x is not a function',
-        source: 'a.js',
-        lineNumber: 3
+        message: 'same message',
+        repeatCount: 3
+      }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('turns tagged request lines into network-request events with redaction', async () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable()
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'request',
+        method: 'POST',
+        url: 'https://example.com/api/stok?key=abc',
+        body: 'islem=stok_kaydet&sifre=hunter2',
+        status: 200,
+        durationMs: 85
+      })}`
+    )
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'network-request',
+      request: {
+        method: 'POST',
+        url: 'https://example.com/api/stok?key=***',
+        postData: 'islem=stok_kaydet&sifre=***',
+        status: 200,
+        durationMs: 85
       }
     })
     recorder.setEnabled(false)
@@ -121,14 +201,14 @@ describe('BrowserActionRecorder session observer', () => {
   it('caps console entries and warns once when the cap is reached', () => {
     const { recorder, send, enable, fireConsole } = makeObserverHarness()
     enable()
-    for (let index = 0; index < 102; index += 1) {
+    for (let index = 0; index < 130; index += 1) {
       fireConsole(`message-${index}`)
     }
     const consoleEvents = send.mock.calls.filter(
       (call) => (call[1] as Record<string, unknown>).kind === 'console'
     )
-    // 100 entries + 1 cap warning
-    expect(consoleEvents).toHaveLength(101)
+    // 120 entries + 1 cap warning
+    expect(consoleEvents).toHaveLength(121)
     const capWarnings = consoleEvents.filter((call) =>
       ((call[1] as Record<string, unknown>).entry as { message: string }).message.includes(
         'cap reached'

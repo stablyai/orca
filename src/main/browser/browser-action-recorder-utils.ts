@@ -1,10 +1,14 @@
 // ---------------------------------------------------------------------------
 // Browser action recorder — pure helpers (no electron, no bridge)
+//
+// Method classification, param sanitization, target extraction, fingerprint
+// diffing, and network-log summarization. In-page capture expressions live in
+// browser-page-capture-expressions.ts; tagged-line parsing in
+// browser-recorder-message-parsing.ts.
 // ---------------------------------------------------------------------------
 
 import {
   BROWSER_RECORDER_BUDGET,
-  BROWSER_RECORDER_INTERACTION_TAG,
   type BrowserRecorderAutomationParam,
   type BrowserRecorderAutomationTarget,
   type BrowserRecorderDomChangeKind,
@@ -12,109 +16,9 @@ import {
   type BrowserRecorderDomFingerprint,
   type BrowserRecorderInputChange,
   type BrowserRecorderInputState,
-  type BrowserRecorderInteractionKind,
   type BrowserRecorderNetworkStatusBucket
 } from '../../shared/browser-recorder-automation'
 import type { BrowserNetworkEntry } from '../../shared/runtime-types'
-
-// Why: a compact in-page snapshot is far cheaper than a full AX snapshot and
-// still answers "did url/title/text/form state change" for every action.
-export const DOM_FINGERPRINT_EXPRESSION = `(() => {
-  try {
-    const form = Array.from(document.querySelectorAll('input:not([type="password"]),textarea,select'))
-    const inputsDetail = form.slice(0, 50).map(function (el) {
-      var v = (el && 'value' in el ? el.value : '') || ''
-      var label = el.id || el.name || el.getAttribute('aria-label') || el.type || el.tagName
-      return { label: label, value: v.length > 60 ? v.slice(0, 60) + '...' : v }
-    })
-    var text = (document.body && document.body.innerText) || ''
-    return {
-      url: location.href,
-      title: document.title,
-      textLength: text.length,
-      interactive: document.querySelectorAll('a,button,input,select,textarea,[role="button"],[role="link"],[role="tab"]').length,
-      inputsDetail: inputsDetail
-    }
-  } catch (e) {
-    return { url: '', title: '', textLength: 0, interactive: 0, inputsDetail: [] }
-  }
-})()`
-
-// Why: while recording, manual page interactions are reported to the main
-// process as tagged console.debug lines (the recorder's console-message
-// listener splits tagged lines into interactions, everything else into console
-// entries). One-shot: re-inject after a navigation to keep capturing.
-export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
-  if (window.__orcaRecorderInstalled) { return 'already-installed' }
-  window.__orcaRecorderInstalled = true
-  var TAG = '__orca_recorder__'
-  function report(type, payload) {
-    try { console.debug(TAG, JSON.stringify(Object.assign({ type: type }, payload))) } catch (e) {}
-  }
-  function summarize(el) {
-    if (!el || !el.tagName) { return '' }
-    if (el.id) { return '#' + el.id }
-    var cls = typeof el.className === 'string' ? el.className.split(/\\s+/)[0] : ''
-    if (cls) { return el.tagName.toLowerCase() + '.' + cls }
-    return el.tagName.toLowerCase()
-  }
-  document.addEventListener('click', function (e) {
-    var t = e.target
-    report('click', { x: e.clientX, y: e.clientY, target: summarize(t), tagName: t && t.tagName ? t.tagName.toLowerCase() : '' })
-  }, true)
-  document.addEventListener('keydown', function (e) {
-    report('keydown', { key: String(e.key), code: e.code || '' })
-  }, true)
-  var lastScroll = 0
-  document.addEventListener('scroll', function () {
-    var now = Date.now()
-    if (now - lastScroll < 1000) { return }
-    lastScroll = now
-    report('scroll', { x: Math.round(window.scrollX || 0), y: Math.round(window.scrollY || 0) })
-  }, true)
-  return 'installed'
-})()`
-
-/** Raw payload carried inside a tagged console.debug line from the page. */
-export type BrowserRecorderInteractionPayload = {
-  type: BrowserRecorderInteractionKind
-  x?: number
-  y?: number
-  target?: string
-  tagName?: string
-  key?: string
-  code?: string
-}
-
-/**
- * Parses a page console line into an interaction payload, or null when the
- * line is not a tagged interaction (regular console output).
- */
-export function parseBrowserInteractionMessage(
-  message: string
-): BrowserRecorderInteractionPayload | null {
-  if (!message.startsWith(BROWSER_RECORDER_INTERACTION_TAG)) {
-    return null
-  }
-  const json = message.slice(BROWSER_RECORDER_INTERACTION_TAG.length).trim()
-  try {
-    const parsed = JSON.parse(json) as Partial<BrowserRecorderInteractionPayload>
-    if (parsed.type !== 'click' && parsed.type !== 'keydown' && parsed.type !== 'scroll') {
-      return null
-    }
-    return {
-      type: parsed.type,
-      x: typeof parsed.x === 'number' ? Math.round(parsed.x) : undefined,
-      y: typeof parsed.y === 'number' ? Math.round(parsed.y) : undefined,
-      target: typeof parsed.target === 'string' ? parsed.target.slice(0, 100) : undefined,
-      tagName: typeof parsed.tagName === 'string' ? parsed.tagName.slice(0, 40) : undefined,
-      key: typeof parsed.key === 'string' ? parsed.key.slice(0, 40) : undefined,
-      code: typeof parsed.code === 'string' ? parsed.code.slice(0, 40) : undefined
-    }
-  } catch {
-    return null
-  }
-}
 
 /** Summarizes a page network log into the compact recorder report. */
 export function summarizeBrowserNetworkEntries(entries: BrowserNetworkEntry[]): {

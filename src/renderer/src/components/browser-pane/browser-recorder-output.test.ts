@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserRecorderElementSummary, BrowserRecorderStep } from './browser-recorder-types'
 import {
-  formatBrowserRecorderStepSummary,
-  formatBrowserRecorderStepsAsMarkdown
+  formatBrowserRecorderStepsAsMarkdown,
+  formatCompactStepLine
 } from './browser-recorder-output'
 
 const element: BrowserRecorderElementSummary = {
@@ -50,49 +50,36 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
     expect(output).toContain('**Last page:** example.com/checkout')
   })
 
-  it('renders a navigation step with from/to URLs and the page it happened on', () => {
-    const step = makeStep({
-      detail: {
-        kind: 'navigation',
-        fromUrl: 'https://example.com/cart',
-        toUrl: 'https://example.com/checkout'
-      }
-    })
-    const output = formatBrowserRecorderStepsAsMarkdown([step])
-    expect(output).toContain('### 1. Navigated to a new page')
-    expect(output).toContain('**Page:** https://example.com/checkout')
-    expect(output).toContain('**From:** https://example.com/cart')
-    expect(output).toContain('**To:** https://example.com/checkout')
+  it('renders every step as a single compact line ending with its page', () => {
+    const output = formatBrowserRecorderStepsAsMarkdown([
+      makeStep({ detail: { kind: 'recording-started' } }),
+      makeStep({
+        detail: {
+          kind: 'navigation',
+          fromUrl: 'https://example.com/cart',
+          toUrl: 'https://example.com/checkout'
+        }
+      }),
+      makeStep({ detail: { kind: 'element-selected', element } }),
+      makeStep({
+        detail: {
+          kind: 'annotation-added',
+          element,
+          comment: 'Make the button green',
+          intent: 'change'
+        }
+      })
+    ])
+    const lines = output.split('\n').filter((line) => /^\d+\. /.test(line))
+    expect(lines).toEqual([
+      '1. recording started @ example.com/checkout',
+      '2. navigate example.com/cart → example.com/checkout @ example.com/checkout',
+      '3. selected button "Submit order" @ example.com/checkout',
+      '4. annotated button "Submit order": "Make the button green" @ example.com/checkout'
+    ])
   })
 
-  it('renders an element selection with label, selector, bounds, and text', () => {
-    const step = makeStep({ detail: { kind: 'element-selected', element } })
-    const output = formatBrowserRecorderStepsAsMarkdown([step])
-    expect(output).toContain('### 1. Selected element')
-    expect(output).toContain('**Element:** button "Submit order"')
-    expect(output).toContain('**Selector:** `form > button[type="submit"]`')
-    expect(output).toContain('**Location:** `body > form > button`')
-    expect(output).toContain('**Bounds:** x=12, y=34, 120x32')
-    expect(output).toContain('**Classes:** `btn primary`')
-    expect(output).toContain('**Text:** "Submit order now"')
-  })
-
-  it('renders an annotation with intent and comment', () => {
-    const step = makeStep({
-      detail: {
-        kind: 'annotation-added',
-        element,
-        comment: 'Make the button green',
-        intent: 'change'
-      }
-    })
-    const output = formatBrowserRecorderStepsAsMarkdown([step])
-    expect(output).toContain('### 1. Added annotation')
-    expect(output).toContain('**Intent:** change')
-    expect(output).toContain('**Feedback:** Make the button green')
-  })
-
-  it('renders an automation action with target, params, result, and DOM diff', () => {
+  it('renders an automation action with result, diff, and per-field changes on one line', () => {
     const step = makeStep({
       detail: {
         kind: 'automation-action',
@@ -124,15 +111,9 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
         }
       }
     })
-    const output = formatBrowserRecorderStepsAsMarkdown([step])
-    expect(output).toContain('### 1. Browser automation action')
-    expect(output).toContain('**Method:** `browser.click`')
-    expect(output).toContain('**Target:** selector `#login-btn`')
-    expect(output).toContain('**Params:** element=#login-btn')
-    expect(output).toContain('**Result:** ok (42ms)')
-    expect(output).toContain('**URL:** https://example.com/login → https://example.com/dashboard')
-    expect(output).toContain('**Title:** Login → Dashboard')
-    expect(output).toContain('**DOM changed:** url, title, text +280, interactive +2, inputs')
+    expect(formatCompactStepLine(step)).toBe(
+      'action click #login-btn ok (42ms) · changed: url,title,text +280,interactive +2,inputs · #email ""→"user@example.com" @ example.com/checkout'
+    )
   })
 
   it('renders a failed automation action with its error', () => {
@@ -155,80 +136,90 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
         }
       }
     })
-    const output = formatBrowserRecorderStepsAsMarkdown([step])
-    expect(output).toContain('**Result:** error (9ms) — element not found: @e9')
+    expect(formatCompactStepLine(step)).toBe(
+      'action click @e9 error: element not found: @e9 (9ms) @ example.com/checkout'
+    )
   })
 
-  it('escapes backtick runs in selectors so markdown stays valid', () => {
-    const elementWithBackticks: BrowserRecorderElementSummary = {
-      ...element,
-      selector: 'code `x` and ``y``'
-    }
-    const step = makeStep({ detail: { kind: 'element-selected', element: elementWithBackticks } })
-    const output = formatBrowserRecorderStepsAsMarkdown([step])
-    expect(output).toContain('**Selector:** ``` code `x` and ``y`` ```')
-  })
-
-  it('renders per-field input changes with before/after values', () => {
-    const step = makeStep({
-      detail: {
-        kind: 'automation-action',
-        action: {
-          id: 'act-fields',
-          method: 'browser.type',
-          target: { kind: 'selector', value: '#email' },
-          params: { input: 'user@example.com' },
-          page: { browserPageId: 'page-1', url: 'https://example.com/login', title: 'Login' },
-          startedAt: '2026-07-31T10:15:30.000Z',
-          durationMs: 5,
-          ok: true,
-          error: null,
-          urlAfter: null,
-          titleAfter: null,
-          domDiff: {
-            urlChanged: false,
-            titleChanged: false,
-            textLengthDelta: 0,
-            interactiveDelta: 0,
-            inputsChanged: true,
-            inputChanges: [
-              { label: '#email', before: '', after: 'user@example.com' },
-              { label: '#qty', before: '1', after: '3' }
-            ],
-            changed: ['inputs']
+  it('renders manual interactions compactly (click, type, key, hover, scroll)', () => {
+    const cases: [BrowserRecorderStep['detail'], string][] = [
+      [
+        {
+          kind: 'interaction',
+          interaction: {
+            id: 'i-1',
+            kind: 'click',
+            page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+            startedAt: '2026-07-31T10:15:30.000Z',
+            x: 340,
+            y: 215,
+            target: '#login-btn',
+            tagName: 'button'
           }
-        }
-      }
-    })
-    const output = formatBrowserRecorderStepsAsMarkdown([step])
-    expect(output).toContain('**Fields:**')
-    expect(output).toContain('- `#email`: "" → "user@example.com"')
-    expect(output).toContain('- `#qty`: "1" → "3"')
+        },
+        'click #login-btn (340,215) @ example.com/checkout'
+      ],
+      [
+        {
+          kind: 'interaction',
+          interaction: {
+            id: 'i-2',
+            kind: 'type',
+            page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+            startedAt: '2026-07-31T10:15:30.000Z',
+            text: 'user@example.com',
+            target: '#email'
+          }
+        },
+        'type "user@example.com" into #email @ example.com/checkout'
+      ],
+      [
+        {
+          kind: 'interaction',
+          interaction: {
+            id: 'i-3',
+            kind: 'keydown',
+            page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+            startedAt: '2026-07-31T10:15:30.000Z',
+            key: 'Enter'
+          }
+        },
+        'key Enter @ example.com/checkout'
+      ],
+      [
+        {
+          kind: 'interaction',
+          interaction: {
+            id: 'i-4',
+            kind: 'hover',
+            page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+            startedAt: '2026-07-31T10:15:30.000Z',
+            target: '#menu-stok'
+          }
+        },
+        'hover #menu-stok @ example.com/checkout'
+      ],
+      [
+        {
+          kind: 'interaction',
+          interaction: {
+            id: 'i-5',
+            kind: 'scroll',
+            page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+            startedAt: '2026-07-31T10:15:30.000Z',
+            scrollX: 0,
+            scrollY: 1200
+          }
+        },
+        'scroll x=0, y=1200 @ example.com/checkout'
+      ]
+    ]
+    for (const [detail, expected] of cases) {
+      expect(formatCompactStepLine(makeStep({ detail }))).toBe(expected)
+    }
   })
 
-  it('renders a manual click interaction with position and target', () => {
-    const step = makeStep({
-      detail: {
-        kind: 'interaction',
-        interaction: {
-          id: 'i-1',
-          kind: 'click',
-          page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
-          startedAt: '2026-07-31T10:15:30.000Z',
-          x: 340,
-          y: 215,
-          target: '#login-btn',
-          tagName: 'button'
-        }
-      }
-    })
-    const output = formatBrowserRecorderStepsAsMarkdown([step])
-    expect(output).toContain('### 1. Clicked element')
-    expect(output).toContain('**At:** 340,215 (`#login-btn`)')
-    expect(output).toContain('**Element:** `button`')
-  })
-
-  it('renders a console entry with level, message, and source', () => {
+  it('renders a coalesced console entry with repeat count and source', () => {
     const step = makeStep({
       detail: {
         kind: 'console',
@@ -238,23 +229,45 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
           message: 'Uncaught TypeError: x is not a function',
           source: 'a.js',
           lineNumber: 12,
+          repeatCount: 23,
           page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
           startedAt: '2026-07-31T10:15:30.000Z'
         }
       }
     })
-    const output = formatBrowserRecorderStepsAsMarkdown([step])
-    expect(output).toContain('### 1. Console error')
-    expect(output).toContain('**Message:** `Uncaught TypeError: x is not a function`')
-    expect(output).toContain('**Source:** `a.js`:12')
+    expect(formatCompactStepLine(step)).toBe(
+      'console error ×23 "Uncaught TypeError: x is not a function" (a.js) @ example.com/checkout'
+    )
   })
 
-  it('renders a network summary with counts, bytes, and status buckets', () => {
+  it('renders a network request with status, screen change, and body', () => {
+    const step = makeStep({
+      detail: {
+        kind: 'network-request',
+        request: {
+          id: 'n-1',
+          page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+          startedAt: '2026-07-31T10:15:30.000Z',
+          method: 'POST',
+          url: 'https://example.com/api/stok',
+          postData: 'islem=stok_kaydet,ad=Test',
+          status: 200,
+          durationMs: 85,
+          screenChanged: ['text', 'inputs']
+        }
+      }
+    })
+    expect(formatCompactStepLine(step)).toBe(
+      'request POST `https://example.com/api/stok` → 200 (85ms) · changed: text,inputs · islem=stok_kaydet,ad=Test @ example.com/checkout'
+    )
+  })
+
+  it('renders a network summary with status buckets', () => {
     const step = makeStep({
       detail: {
         kind: 'network-summary',
         summary: {
-          id: 'n-1',
+          id: 'n-2',
           page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
           startedAt: '2026-07-31T10:15:30.000Z',
           total: 3,
@@ -267,126 +280,8 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
         }
       }
     })
-    const output = formatBrowserRecorderStepsAsMarkdown([step])
-    expect(output).toContain('### 1. Network summary')
-    expect(output).toContain('**Requests:** 3')
-    expect(output).toContain('**Failed:** 1')
-    expect(output).toContain('**Transferred:** 1.5 KB')
-    expect(output).toContain('**By status:** 200×2, 404×1')
-  })
-})
-
-describe('formatBrowserRecorderStepSummary', () => {
-  it('produces one-line summaries for every step kind', () => {
-    expect(
-      formatBrowserRecorderStepSummary(makeStep({ detail: { kind: 'recording-started' } }))
-    ).toBe('Recording started')
-    expect(
-      formatBrowserRecorderStepSummary(
-        makeStep({
-          detail: {
-            kind: 'navigation',
-            fromUrl: 'https://example.com/a',
-            toUrl: 'https://example.com/b'
-          }
-        })
-      )
-    ).toBe('Navigated example.com/a → example.com/b')
-    expect(
-      formatBrowserRecorderStepSummary(makeStep({ detail: { kind: 'element-selected', element } }))
-    ).toBe('Selected button "Submit order"')
-    expect(
-      formatBrowserRecorderStepSummary(
-        makeStep({
-          detail: { kind: 'annotation-added', element, comment: 'x', intent: 'fix' }
-        })
-      )
-    ).toBe('Annotated button "Submit order"')
-    expect(
-      formatBrowserRecorderStepSummary(
-        makeStep({
-          detail: {
-            kind: 'automation-action',
-            action: {
-              id: 'act-3',
-              method: 'browser.type',
-              target: { kind: 'selector', value: '#email' },
-              params: { input: 'user@example.com' },
-              page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
-              startedAt: '2026-07-31T10:15:32.000Z',
-              durationMs: 12,
-              ok: true,
-              error: null,
-              urlAfter: null,
-              titleAfter: null,
-              domDiff: {
-                urlChanged: false,
-                titleChanged: false,
-                textLengthDelta: 0,
-                interactiveDelta: 0,
-                inputsChanged: true,
-                inputChanges: [{ label: '#email', before: '', after: 'user@example.com' }],
-                changed: ['inputs']
-              }
-            }
-          }
-        })
-      )
-    ).toBe('type #email ✓ (12ms) · inputs')
-    expect(
-      formatBrowserRecorderStepSummary(
-        makeStep({
-          detail: {
-            kind: 'interaction',
-            interaction: {
-              id: 'i-1',
-              kind: 'click',
-              page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
-              startedAt: '2026-07-31T10:15:30.000Z',
-              x: 10,
-              y: 20,
-              target: '#save',
-              tagName: 'button'
-            }
-          }
-        })
-      )
-    ).toBe('Clicked #save')
-    expect(
-      formatBrowserRecorderStepSummary(
-        makeStep({
-          detail: {
-            kind: 'console',
-            entry: {
-              id: 'c-1',
-              level: 'warning',
-              message: 'Slow network detected',
-              source: 'x.js',
-              lineNumber: 1,
-              page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
-              startedAt: '2026-07-31T10:15:30.000Z'
-            }
-          }
-        })
-      )
-    ).toBe('Console warning: Slow network detected')
-    expect(
-      formatBrowserRecorderStepSummary(
-        makeStep({
-          detail: {
-            kind: 'network-summary',
-            summary: {
-              id: 'n-1',
-              page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
-              startedAt: '2026-07-31T10:15:30.000Z',
-              total: 5,
-              failed: 2,
-              totalBytes: 0,
-              byStatus: []
-            }
-          }
-        })
-      )
-    ).toBe('Network: 5 requests, 2 failed')
+    expect(formatCompactStepLine(step)).toBe(
+      'network: 3 requests, 1 failed (200×2, 404×1) @ example.com/checkout'
+    )
   })
 })

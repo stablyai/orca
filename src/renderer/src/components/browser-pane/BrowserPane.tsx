@@ -205,6 +205,8 @@ function toRecorderStepDetail(event: BrowserRecorderStreamEvent): BrowserRecorde
       return { kind: 'interaction', interaction: event.interaction }
     case 'console':
       return { kind: 'console', entry: event.entry }
+    case 'network-request':
+      return { kind: 'network-request', request: event.request }
     case 'network-summary':
       return { kind: 'network-summary', summary: event.summary }
   }
