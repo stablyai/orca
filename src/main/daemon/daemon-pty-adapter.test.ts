@@ -1452,11 +1452,17 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('fails closed before dispatching attach-only to a v30 daemon', async () => {
+    it('reattaches a stable pane through a preserved v30 daemon', async () => {
       const ensureConnected = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
-      const request = vi.spyOn(DaemonClient.prototype, 'request')
+      const request = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: false,
+        snapshot: null,
+        pid: 4321,
+        shellState: 'unsupported',
+        incarnationId: 'legacy-stable-pane-incarnation'
+      })
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
       try {
         await expect(
@@ -1464,10 +1470,65 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
             cols: 80,
             rows: 24,
             sessionId: 'legacy-stable-pane-session',
-            attachOnly: true
+            attachOnly: true,
+            command: 'must-not-run'
           })
-        ).rejects.toThrow('terminal_pane_owner_unknown')
-        expect(request).not.toHaveBeenCalledWith('createOrAttach', expect.anything())
+        ).resolves.toMatchObject({
+          id: 'legacy-stable-pane-session',
+          incarnationId: 'legacy-stable-pane-incarnation',
+          isReattach: true
+        })
+        expect(request).toHaveBeenCalledWith(
+          'createOrAttach',
+          expect.objectContaining({
+            command: undefined,
+            launchAgent: undefined,
+            startupCommandDelivery: undefined
+          })
+        )
+        expect(request.mock.calls[0]?.[1]).not.toHaveProperty('attachOnly')
+      } finally {
+        legacy.dispose()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
+    })
+
+    it('retires a replacement created by a raced-out v30 stable pane', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockResolvedValueOnce({
+          isNew: true,
+          snapshot: null,
+          pid: 4321,
+          shellState: 'unsupported',
+          incarnationId: 'legacy-replacement-incarnation'
+        })
+        .mockResolvedValueOnce({})
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(
+          legacy.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'raced-out-legacy-session',
+            attachOnly: true,
+            command: 'must-not-run'
+          })
+        ).rejects.toThrow('Session not found: raced-out-legacy-session')
+        expect(request).toHaveBeenNthCalledWith(
+          1,
+          'createOrAttach',
+          expect.objectContaining({ command: undefined })
+        )
+        expect(request).toHaveBeenNthCalledWith(2, 'kill', {
+          sessionId: 'raced-out-legacy-session',
+          immediate: true
+        })
+        expect(legacy.getActiveSessionIds()).toEqual([])
       } finally {
         legacy.dispose()
         request.mockRestore()

@@ -2444,6 +2444,17 @@ const api = {
       webContentsId: number
     }): Promise<boolean> => ipcRenderer.invoke('browser:registerGuest', args),
 
+    isGuestRegistered: (args: { browserPageId: string; webContentsId: number }): Promise<boolean> =>
+      ipcRenderer.invoke('browser:isGuestRegistered', args),
+
+    repairGuestRegistration: (args: {
+      browserPageId: string
+      workspaceId: string
+      worktreeId: string
+      sessionProfileId?: string | null
+      webContentsId: number
+    }): Promise<boolean> => ipcRenderer.invoke('browser:repairGuestRegistration', args),
+
     unregisterGuest: (args: { browserPageId: string }): Promise<void> =>
       ipcRenderer.invoke('browser:unregisterGuest', args),
 
@@ -4626,7 +4637,7 @@ const api = {
       address?: string
       rotate?: boolean
     }): Promise<
-      | { available: false }
+      | { available: false; reason?: 'network_exposure_failed'; guidance?: string }
       | {
           available: true
           pairingUrl: string

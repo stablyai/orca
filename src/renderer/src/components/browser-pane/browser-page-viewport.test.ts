@@ -98,6 +98,18 @@ describe('ensureBrowserPageViewport', () => {
     expect(evicted.shell.isConnected).toBe(false)
     expect(getBrowserPageViewportContainer('page-1')).toBe(rebuilt!.container)
   })
+
+  it('removes the stale shell when a connected slot root is replaced', () => {
+    const oldRoot = mountSlotViewport('workspace-1')
+    const stale = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    const newRoot = mountSlotViewport('workspace-1')
+    expect(oldRoot.contains(stale.shell)).toBe(true)
+
+    const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    expect(oldRoot.contains(stale.shell)).toBe(false)
+    expect(rebuilt.shell.parentElement).toBe(newRoot)
+  })
 })
 
 describe('syncBrowserPageChromeInset', () => {

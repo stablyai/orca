@@ -6511,11 +6511,12 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "Deterministic units cover authority-aware legacy formatting, exact legacy worker identity planning, local worker presentation, retained-output reads after adoption, reveal-failure warnings, stable-pane Run/Dispatch routing, the SSH in-process CLI fallback, and federated non-reveal. Two isolated macOS Electron journeys launch fake Codex workers through the real RPC path and record append-only spawn/interruption ledgers. They assert immediate inactive presentation, one live agent PID, stable PTY/incarnation/tab/leaf/worktree/Task/Dispatch identity, and no interruption after workspace re-entry; the restart journey additionally removes renderer ownership, marks the Dispatch legacy, retains the daemon process across an app restart, and proves exact background adoption with readable ACK output and no resume replay. Distinct A/B artifacts plus live SSH, WSL, folder, remote-runtime, Linux, and Windows cutover journeys remain explicit gaps.",
+      "coverageNotes": "A deterministic service-state-machine oracle now models a current-contract worker and coordinator whose renderer graph identities disappear across an app/runtime update. It exercises the production verifier with restored PTY and hydrated hook commitments, proves authenticated completion replay across a fresh runtime, explicit takeover, ordinary mail routing, remote-attachment process fencing, retained Task/Dispatch/terminal identity, and unchanged fixture marker bytes, and rejects foreign pane evidence. Other deterministic units cover authority-aware legacy formatting, exact legacy worker identity planning, local worker presentation, retained-output reads after adoption, reveal-failure warnings, stable-pane Run/Dispatch routing, the SSH in-process CLI fallback, and federated non-reveal. Two isolated macOS Electron journeys launch fake Codex workers through the real RPC path and record append-only spawn/interruption ledgers. They assert immediate inactive presentation, one live agent PID, stable PTY/incarnation/tab/leaf/worktree/Task/Dispatch identity, and no interruption after workspace re-entry; the restart journey additionally removes renderer ownership, marks the Dispatch legacy, retains the daemon process across an app restart, and proves exact background adoption with readable ACK output and no resume replay. Distinct A/B artifacts plus live SSH, WSL, folder, remote-runtime, Linux, and Windows cutover journeys remain explicit gaps.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/11107#discussion_r3663321387"],
-      "invariant": "Starting a worker in the coordinator's current workspace must materialize one inactive terminal tab before worker-start returns, preserve coordinator focus, and remain exactly once after workspace re-entry. After an app update or restart, an exact live legacy worker must fence automatic provider resume, adopt its original PTY into its original background pane, retain readable output, and clear the resume record without spawning, writing, signalling, interrupting, replacing, or focusing the worker. An exact existing target workspace must receive a discoverable tab without stealing coordinator focus; if renderer reveal fails, worker-start must expose that the live worker remains background-only. Run and Dispatch checks must resolve through the caller's stable pane identity when a terminal handle is reminted, while a live handle outranks mismatched pane metadata, explicit legacy terminal inspection remains handle-scoped, and remote or headless worker presentation remains background-only.",
-      "oracle": "Drive Run create, Task create, and worker-start through production Electron runtimes with a deterministic Codex fixture. Require append-only ledgers with one still-live PID and no interruption, a visible inactive worker tab while the coordinator stays active, Run delivery through stable pane identity, and stable PTY/incarnation, tab, leaf, worktree, Task, and Dispatch across workspace re-entry. In a restart journey, retain the original daemon PTY and PID, remove renderer ownership, retain sleeping-session evidence, mark the Dispatch legacy, relaunch, and require exact inactive tab adoption, readable ACK output, cleared resume state, one spawn, and no resume argv or Conversation interrupted text after another workspace round trip. Unit tests separately assert authority-specific legacy affordances, exact identity and owner matching, retained-output fallback, pane-stable routing, federated non-activation, and SSH fallback parity.",
+      "invariant": "Starting a worker in the coordinator's current workspace must materialize one inactive terminal tab before worker-start returns, preserve coordinator focus, and remain exactly once after workspace re-entry. After an app update or restart, an exact live legacy worker must fence automatic provider resume, adopt its original PTY into its original background pane, retain readable output, and clear the resume record without spawning, writing, signalling, interrupting, replacing, or focusing the worker. A current-contract worker whose renderer graph identity is temporarily absent must retain its Dispatch capability and settle exactly once from exact hook-attested handle, pane, and process evidence; otherwise only an exact attested coordinator may take over. An exact existing target workspace must receive a discoverable tab without stealing coordinator focus; if renderer reveal fails, worker-start must expose that the live worker remains background-only. Run and Dispatch checks must resolve through the caller's stable pane identity when a terminal handle is reminted, while a live handle outranks mismatched pane metadata, explicit legacy terminal inspection remains handle-scoped, and remote or headless worker presentation remains background-only.",
+      "oracle": "Drive Run create, Task create, and worker-start through production Electron runtimes with a deterministic Codex fixture. Require append-only ledgers with one still-live PID and no interruption, a visible inactive worker tab while the coordinator stays active, Run delivery through stable pane identity, and stable PTY/incarnation, tab, leaf, worktree, Task, and Dispatch across workspace re-entry. In a restart journey, retain the original daemon PTY and PID, remove renderer ownership, retain sleeping-session evidence, mark the Dispatch legacy, relaunch, and require exact inactive tab adoption, readable ACK output, cleared resume state, one spawn, and no resume argv or Conversation interrupted text after another workspace round trip. The service oracle removes renderer lookup identity from current-contract callers while retaining real restored-PTY and hook commitments, replays authenticated completion and takeover across fresh runtimes, and requires one Task, Dispatch, terminal authority, message, mutation, ordinary-mail delivery, remote process fencing, and unchanged fixture marker bytes while foreign pane evidence remains rejected. Unit tests separately assert authority-specific legacy affordances, exact identity and owner matching, retained-output fallback, pane-stable routing, federated non-activation, and SSH fallback parity.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-worker-cli.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/ssh/ssh-remote-orca-cli.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/formatter.test.ts src/main/runtime/rpc/methods/orchestration-federation.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/orchestration-legacy-worker-terminal-recovery.test.ts",
@@ -6524,6 +6525,7 @@
         "pnpm run test:e2e -- tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --workers=1"
       ],
       "testFiles": [
+        "src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts",
         "src/main/runtime/orchestration/formatter.test.ts",
         "src/main/runtime/orchestration/orchestration-legacy-worker-terminal-recovery.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
@@ -6537,6 +6539,16 @@
         "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts",
+          "assertions": [
+            "an exact current worker settles once through an app/runtime update even when renderer graph identity is absent",
+            "only an attested current coordinator may explicitly take over retained live work",
+            "Task, Dispatch, terminal authority, completion, and filesystem bytes are neither lost nor duplicated",
+            "foreign pane evidence cannot borrow retained lifecycle authority",
+            "ordinary mail and remote attachments use the same attested pane and process authority"
+          ]
+        },
         {
           "file": "src/main/runtime/orchestration/orchestration-legacy-worker-terminal-recovery.test.ts",
           "assertions": [
@@ -6617,6 +6629,42 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts --reporter=dot",
+          "result": "failed",
+          "durationSeconds": 3.07,
+          "summary": "The byte-identical 5f45c270f1 oracle, applied as the sole tree overlay in 063340a8ba on origin/main@34291f07e9, failed 3 of 5 rows: completion remained dispatched, takeover lacked a stable pane, and remote attachment authority lost process identity."
+        },
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 3.13,
+          "summary": "The same byte-identical oracle passed 5 tests on candidate@2748b0b29b, exercising the production verifier and fresh-runtime replay while preserving exact DB identity and unchanged fixture bytes."
+        },
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts --reporter=dot",
+          "result": "failed",
+          "durationSeconds": 3.14,
+          "summary": "With current-authority propagation actually disabled in candidate child 08a7db37bf, the same byte-identical oracle failed 2 of 5 rows: completion remained dispatched and remote attachment authority was rejected."
+        },
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 3.1,
+          "summary": "After reverting the intentional break in d2a4e2e024, the same byte-identical oracle passed all 5 tests."
+        },
+        {
           "date": "2026-07-28",
           "runner": "local",
           "platform": "macos",
@@ -6663,7 +6711,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The focused presentation and stale-handle tests failed against the pre-fix implementation. The restart journey additionally failed first on empty retained output while the original PTY/PID remained live, then passed after the scoped recovered-worker snapshot fallback. The live incident and pre-fix Electron topology showed workspace re-entry replaying provider resume against a worker whose tab binding was missing. Saved intentional-break and CI artifacts are still needed."
+        "evidence": "The byte-identical 5f45c270f1 service oracle is red as the sole overlay 063340a8ba on origin/main@34291f07e9, green on candidate@2748b0b29b, red with current-authority propagation actually disabled in child 08a7db37bf, and green again after revert d2a4e2e024. The focused presentation and stale-handle tests failed against the earlier pre-fix implementation. The restart journey additionally failed first on empty retained output while the original PTY/PID remained live, then passed after the scoped recovered-worker snapshot fallback. The live incident and pre-fix Electron topology showed workspace re-entry replaying provider resume against a worker whose tab binding was missing. Distinct installed A/B and CI artifacts are still needed."
       },
       "performanceBudget": {
         "required": true,

@@ -32,6 +32,7 @@ import {
   type DaemonEvent,
   type GetSnapshotResult,
   type ListSessionsResult,
+  SessionNotFoundError,
   type SessionInfo,
   type TakePendingOutputResult
 } from './types'
@@ -334,9 +335,6 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    if (opts.attachOnly && this.protocolVersion < STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION) {
-      throw new Error('terminal_pane_owner_unknown')
-    }
     const sessionId = opts.sessionId ?? mintPtySessionId(opts.worktreeId)
     const operation = {
       exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
@@ -382,6 +380,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
       throw new Error('agent_session_claim_unavailable')
     }
     const requestedSessionId = opts.sessionId!
+    // Why: v30 daemons survive upgrades; reject their accidental create result before publication.
+    const attachOnly = opts.attachOnly === true
+    const emulateLegacyAttachOnly =
+      attachOnly && this.protocolVersion < STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     let sessionId = requestedSessionId
     let wslDistro = resolveWslSessionContext({
       cwd: opts.cwd,
@@ -498,25 +500,29 @@ export class DaemonPtyAdapter implements IPtyProvider {
         sessionId,
         cols: effectiveCols,
         rows: effectiveRows,
-        cwd: effectiveCwd,
-        env: opts.env,
-        envToDelete: opts.envToDelete,
-        command: opts.command,
-        startupCommandDelivery: opts.startupCommandDelivery,
-        launchAgent: opts.launchAgent,
-        ...(opts.attachOnly ? { attachOnly: true } : {}),
+        cwd: attachOnly ? undefined : effectiveCwd,
+        env: attachOnly ? undefined : opts.env,
+        envToDelete: attachOnly ? undefined : opts.envToDelete,
+        command: attachOnly ? undefined : opts.command,
+        startupCommandDelivery: attachOnly ? undefined : opts.startupCommandDelivery,
+        launchAgent: attachOnly ? undefined : opts.launchAgent,
+        ...(attachOnly && !emulateLegacyAttachOnly ? { attachOnly: true } : {}),
         // Why: without forwarding the override, the daemon falls back to cmd.exe/PowerShell, ignoring the shell the renderer chose; this matches LocalPtyProvider.
-        shellOverride: opts.shellOverride,
-        terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
-        terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
-        shellReadySupported,
-        ...(shellReadyTimeoutMs !== undefined ? { shellReadyTimeoutMs } : {}),
+        shellOverride: attachOnly ? undefined : opts.shellOverride,
+        terminalWindowsWslDistro: attachOnly ? undefined : opts.terminalWindowsWslDistro,
+        terminalWindowsPowerShellImplementation: attachOnly
+          ? undefined
+          : opts.terminalWindowsPowerShellImplementation,
+        shellReadySupported: attachOnly ? false : shellReadySupported,
+        ...(!attachOnly && shellReadyTimeoutMs !== undefined ? { shellReadyTimeoutMs } : {}),
         ...(historySeed ? { historySeed } : {}),
         ...(historySeedTransferId ? { historySeedTransferId } : {}),
-        ...(this.supportsStartupIngress && opts.startupIngress
+        ...(this.supportsStartupIngress && !attachOnly && opts.startupIngress
           ? { startupIngress: opts.startupIngress }
           : {}),
-        ...(opts.agentSessionEnsure ? { agentSessionEnsure: opts.agentSessionEnsure } : {})
+        ...(!attachOnly && opts.agentSessionEnsure
+          ? { agentSessionEnsure: opts.agentSessionEnsure }
+          : {})
       })
     }
 
@@ -604,6 +610,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
       historySeedSegments = null
     }
     let result = await createOrAttach(historySeedSegments)
+    if (emulateLegacyAttachOnly && result.isNew) {
+      operation.ignoreNextExit = true
+      await this.client.request('kill', { sessionId: requestedSessionId, immediate: true })
+      throw new SessionNotFoundError(requestedSessionId)
+    }
     await adoptSpawnResultSession(result)
     // Both ids: adoptSpawnResultSession may have rewritten sessionId to the claim owner.
     this.clearSessionAwaitingDaemonRecovery(requestedSessionId)
