@@ -107,11 +107,18 @@ export function getTerminalImeModifiedEnterKind(
 }
 
 export function isTerminalImeProcessEnter(
-  event: Pick<KeyboardEvent, 'key' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'keyCode' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+  >
 ): boolean {
   return (
     event.key === 'Process' &&
     event.keyCode === 229 &&
+    // Why: Windows masks every IME-consumed keydown as Process/229, so the held
+    // modifier alone cannot tell Shift+Enter from Shift+<jamo> (ㄲㄸㅃㅆㅉ, ㅒㅖ) or
+    // even the IME-claimed bare Shift. `code` is the physical key and is not masked.
+    (event.code === 'Enter' || event.code === 'NumpadEnter') &&
     getTerminalImeModifiedEnterKind(event) !== null
   )
 }

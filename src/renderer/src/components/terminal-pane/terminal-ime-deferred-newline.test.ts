@@ -326,6 +326,7 @@ describe('isTerminalImeProcessEnter', () => {
     ({
       key: 'Process',
       keyCode: 229,
+      code: 'Enter',
       metaKey: false,
       ctrlKey: false,
       altKey: false,
@@ -340,6 +341,10 @@ describe('isTerminalImeProcessEnter', () => {
     }
   )
 
+  it('recognizes the numeric keypad Enter', () => {
+    expect(isTerminalImeProcessEnter(event({ code: 'NumpadEnter' }))).toBe(true)
+  })
+
   it.each([
     { key: 'Enter' },
     { keyCode: 13 },
@@ -347,6 +352,19 @@ describe('isTerminalImeProcessEnter', () => {
     { ctrlKey: true },
     { altKey: true }
   ])('rejects a non-IME or ambiguous Process key', (override) => {
+    expect(isTerminalImeProcessEnter(event(override))).toBe(false)
+  })
+
+  // Why: the Windows Korean IME claims both the jamo keydown and the bare Shift
+  // keydown while composing, and Chromium reports each as Process/229 with the
+  // modifier held. Only `code` distinguishes them from a real Shift+Enter.
+  it.each([
+    { code: 'KeyR' },
+    { code: 'KeyE' },
+    { code: 'KeyT' },
+    { code: 'ShiftLeft' },
+    { code: 'ShiftRight' }
+  ])('rejects an IME-claimed non-Enter physical key', (override) => {
     expect(isTerminalImeProcessEnter(event(override))).toBe(false)
   })
 })
