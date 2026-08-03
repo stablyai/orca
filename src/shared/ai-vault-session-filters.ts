@@ -2,7 +2,11 @@
 // It lives in /shared (not renderer) so the mobile package can reuse it —
 // Metro only watches mobile/ + repo-root src/shared, never src/renderer.
 // INVARIANT: /shared is a leaf — this module must NOT import from src/renderer.
-import { isPathInsideOrEqual, normalizeRuntimePathSeparators } from './cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison,
+  normalizeRuntimePathSeparators
+} from './cross-platform-path'
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
 import { parseWslUncPath } from './wsl-paths'
 import type {
@@ -257,7 +261,11 @@ function getGroupIdentity(
 }
 
 function getFolderGroupKey(pathValue: string | null): string {
-  return pathValue ? normalizeRuntimePathSeparators(pathValue).toLowerCase() : 'unknown'
+  // Why: route through the comparison normalizer so trailing-slash variants and NFC/NFD
+  // spellings of the same folder collapse to one key — matches isAiVaultSessionInWorkspacePath
+  // (same file) and the #10832 NFC/NFD cwd fix that normalizer documents. .toLowerCase() keeps
+  // the all-platforms case-fold the bare separator normalizer provided.
+  return pathValue ? normalizeRuntimePathForComparison(pathValue).toLowerCase() : 'unknown'
 }
 
 function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: string): boolean {

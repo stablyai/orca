@@ -89,6 +89,61 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
     expect(groups.map((group) => group.label).sort()).toEqual(['packages/ui', 'repo/app'])
   })
 
+  it('groups trailing-slash variants of the same folder as one group', () => {
+    // The folder key must trim trailing slashes so a cwd recorded with and without
+    // one collapse to a single group instead of two visually identical labels.
+    const trailingSlash: AiVaultSession = {
+      ...baseSession,
+      id: 'trailing',
+      cwd: '/Users/ada/repo/app/'
+    }
+    const groups = groupAiVaultSessions([baseSession, trailingSlash], 'folder')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].label).toBe('repo/app')
+    expect(groups[0].sessions.map((session) => session.id).sort()).toEqual(['claude:1', 'trailing'])
+  })
+
+  it('groups NFC and NFD spellings of the same non-ASCII folder as one group', () => {
+    // macOS file pickers/on-disk names yield NFD while agents record cwd in NFC (#10832);
+    // the comparison-key normalizer folds them, so both sessions land in one group.
+    const nfc: AiVaultSession = { ...baseSession, id: 'nfc', cwd: '/Users/ada/repo/Caf\u00E9' }
+    const nfd: AiVaultSession = { ...baseSession, id: 'nfd', cwd: '/Users/ada/repo/Cafe\u0301' }
+    const groups = groupAiVaultSessions([nfc, nfd], 'folder')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].sessions.map((session) => session.id).sort()).toEqual(['nfc', 'nfd'])
+  })
+
+  it('groups case-variant POSIX spellings of the same folder as one group', () => {
+    // getFolderGroupKey lowercases on top of the POSIX-branch normalizer (which does not),
+    // locking the all-platforms case-fold the comment on it promises.
+    const lower: AiVaultSession = { ...baseSession, id: 'lower', cwd: '/Users/ada/repo/app' }
+    const mixed: AiVaultSession = { ...baseSession, id: 'mixed', cwd: '/Users/ada/repo/App' }
+    const groups = groupAiVaultSessions([lower, mixed], 'folder')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].sessions.map((session) => session.id).sort()).toEqual(['lower', 'mixed'])
+  })
+
+  it('groups the wsl.localhost and wsl$ UNC aliases of the same WSL folder as one group', () => {
+    // normalizeRuntimePathForComparison folds both UNC aliases to //wsl/<distro>/...,
+    // so a WSL session recorded under either alias lands in one folder group.
+    const localhost: AiVaultSession = {
+      ...baseSession,
+      id: 'wsl-localhost',
+      cwd: '//wsl.localhost/Ubuntu/home/ada/repo/app'
+    }
+    const dollar: AiVaultSession = {
+      ...baseSession,
+      id: 'wsl-dollar',
+      cwd: '//wsl$/Ubuntu/home/ada/repo/app'
+    }
+    const groups = groupAiVaultSessions([localhost, dollar], 'folder')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].sessions.map((session) => session.id).sort()).toEqual([
+      'wsl-dollar',
+      'wsl-localhost'
+    ])
+  })
+
   it('parses repo: and path: operators from the query', () => {
     expect(parseVaultQuery('hello repo:orca path:/tmp world')).toEqual({
       terms: ['hello', 'world'],
