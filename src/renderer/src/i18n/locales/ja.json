@@ -30,7 +30,8 @@
         "resourceUsageToggleDescription": "リソースマネージャーを表示します。クリックすると、CPU、メモリ、セッション、デーモン コントロール、ワークスペース ディスクスキャンの情報を確認できます。",
         "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。",
         "antigravityToggleDescription": "アクティブなワークスペースの Antigravity サブスクリプション使用量を表示します。",
-        "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。"
+        "grokToggleDescription": "Grok CLI でサインインしている場合、Grok サブスクリプションのクレジット使用量を表示します。",
+        "ollamaCloudToggleDescription": "アクティブなワークスペースの Ollama Cloud サブスクリプション使用量を表示します。"
       },
       "menuBarIcon": {
         "title": "メニューバーアイコンを表示",
@@ -3209,7 +3210,8 @@
             "antigravityUsage": "Antigravity の使用状況",
             "antigravityUsageDetails": "Antigravity の使用状況詳細を開く",
             "grokUsageAria": "Grok の使用状況詳細を開く",
-            "grokUsageMenu": "Grok の使用状況"
+            "grokUsageMenu": "Grok の使用状況",
+            "ollamaCloudUsage": "Ollama Cloud の使用状況"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -5229,7 +5231,14 @@
           "codexSystemDefaultNeedsSignIn": "{{value0}} の Codex サインインが見つかりません。",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "ollamaCloud": "Ollama Cloud",
+          "ollamaCloudDesc": "Ollama Cloud プロバイダー設定を構成します。",
+          "ollamaCloudCookie": "Ollama Cloud セッション Cookie",
+          "ollamaCloudCookieDesc": "レート制限を取得するために、ollama.com セッション Cookie を貼り付けます。",
+          "ollamaCloudCookieLabel": "Ollama Cloud セッション Cookie",
+          "ollamaCloudCookiePlaceholder": "__Secure-session=… トークンまたは完全な Cookie ヘッダー",
+          "ollamaCloudCookieHelp": "ollama.com DevTools → Network → 任意のリクエスト → Cookie ヘッダーから __Secure-session Cookie 値を貼り付けます。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "再起動",
@@ -7500,7 +7509,10 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "認証",
-            "a9f3d7b5c8": "ログイン"
+            "a9f3d7b5c8": "ログイン",
+            "ollamaCloudCookie": "Ollama Cloud セッション Cookie",
+            "ollamaCloudCookieDesc": "レート制限を取得するために、ollama.com セッション Cookie を貼り付けます。",
+            "ollama": "ollama"
           }
         },
         "advanced": {
@@ -7722,6 +7734,8 @@
             "antigravityUsageTitle": "Antigravity の使用状況",
             "antigravityUsageDescription": "ステータスバーに Antigravity サブスクリプションの使用量を表示します。",
             "antigravityKeyword": "antigravity",
+            "ollamaCloudUsage": "Ollama Cloud の使用状況",
+            "ollamaCloudUsageDesc": "ステータスバーに Ollama Cloud サブスクリプションの使用量を表示します。",
             "f8e2a1c4b6": "Grok の使用状況",
             "e7d1b0f3a5": "Grok CLI OAuth から Grok の週次クレジット使用量を表示します。",
             "d6c0a9e2f4": "grok",

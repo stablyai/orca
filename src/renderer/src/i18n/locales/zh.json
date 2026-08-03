@@ -29,8 +29,9 @@
         "sshToggleDescription": "当有可用的 SSH 和远程 Orca 主机时显示它们。",
         "resourceUsageToggleDescription": "显示资源管理器。点击可查看 CPU、内存、会话、守护进程控制和工作区磁盘扫描。",
         "portsToggleDescription": "显示实时工作区端口。单击可查看工作区范围的端口和外部监听器。",
-        "antigravityToggleDescription": "显示当前工作区的 Antigravity 订阅使用量。",
-        "grokToggleDescription": "通过 Grok CLI 登录后显示 Grok 订阅额度使用量。"
+        "antigravityToggleDescription": "显示活动工作区的 Antigravity 订阅使用情况。",
+        "grokToggleDescription": "通过 Grok CLI 登录时显示 Grok 订阅额度使用情况。",
+        "ollamaCloudToggleDescription": "显示活动工作区的 Ollama Cloud 订阅使用情况。"
       },
       "menuBarIcon": {
         "title": "显示菜单栏图标",
@@ -3221,7 +3222,8 @@
             "antigravityUsage": "Antigravity 使用量",
             "antigravityUsageDetails": "打开 Antigravity 使用详情",
             "grokUsageAria": "打开 Grok 使用详情",
-            "grokUsageMenu": "Grok 使用量"
+            "grokUsageMenu": "Grok 使用量",
+            "ollamaCloudUsage": "Ollama Cloud 使用量"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -5241,7 +5243,14 @@
           "codexSystemDefaultNeedsSignIn": "未找到 {{value0}} 的 Codex 登录信息。",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "ollamaCloud": "Ollama Cloud",
+          "ollamaCloudDesc": "配置 Ollama Cloud 提供商设置。",
+          "ollamaCloudCookie": "Ollama Cloud 会话 Cookie",
+          "ollamaCloudCookieDesc": "粘贴您的 ollama.com 会话 Cookie 以进行速率限制获取。",
+          "ollamaCloudCookieLabel": "Ollama Cloud 会话 Cookie",
+          "ollamaCloudCookiePlaceholder": "__Secure-session=… token 或完整 Cookie 请求头",
+          "ollamaCloudCookieHelp": "从 ollama.com DevTools → Network → 任意请求 → Cookie 请求头中粘贴 __Secure-session Cookie 值。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
@@ -7475,7 +7484,10 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
-            "a9f3d7b5c8": "登录"
+            "a9f3d7b5c8": "登录",
+            "ollamaCloudCookie": "Ollama Cloud 会话 Cookie",
+            "ollamaCloudCookieDesc": "粘贴您的 ollama.com 会话 Cookie 以进行速率限制获取。",
+            "ollama": "ollama"
           }
         },
         "advanced": {
@@ -7697,6 +7709,8 @@
             "antigravityUsageTitle": "Antigravity 使用量",
             "antigravityUsageDescription": "在状态栏中显示 Antigravity 订阅使用量。",
             "antigravityKeyword": "antigravity",
+            "ollamaCloudUsage": "Ollama Cloud 使用量",
+            "ollamaCloudUsageDesc": "在状态栏中显示 Ollama Cloud 订阅使用量。",
             "f8e2a1c4b6": "Grok 使用量",
             "e7d1b0f3a5": "显示来自 Grok CLI OAuth 的 Grok 每周额度使用量。",
             "d6c0a9e2f4": "grok",

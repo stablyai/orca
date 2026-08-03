@@ -59,7 +59,14 @@ import {
   getProviderDisplayName,
   getProviderUsageStatusLabel
 } from './tooltip'
-import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import {
+  ClaudeIcon,
+  GeminiIcon,
+  MiniMaxIcon,
+  OpenAIIcon,
+  OpenCodeGoIcon,
+  OllamaCloudIcon
+} from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { UsageRosterPanel, getTightestUsageSection } from './UsageRosterPanel'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
@@ -1149,6 +1156,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'G'
     case 'opencode-go':
       return 'O'
+    case 'ollama-cloud':
+      return 'L'
     case 'kimi':
       return 'K'
     case 'antigravity':
@@ -2065,7 +2074,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, gemini, opencodeGo, ollamaCloud, kimi, antigravity, minimax, grok } =
+    rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -2087,6 +2097,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
+  // Why: Ollama Cloud is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
+  const visibleOllamaCloud = getVisibleUsageProvider('ollama-cloud', ollamaCloud, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -2116,6 +2128,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
+  // Why: Ollama Cloud is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
+  const showOllamaCloud = visibleOllamaCloud !== null && statusBarItems.includes('ollama-cloud')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
@@ -2127,6 +2141,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showCodex ||
     showGemini ||
     showOpencodeGo ||
+    showOllamaCloud ||
     showKimi ||
     showAntigravity ||
     showMiniMax ||
@@ -2134,7 +2149,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini, opencodeGo, ollamaCloud, kimi, antigravity, minimax, grok },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -2144,6 +2159,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     codex?.status === 'fetching' ||
     gemini?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
+    ollamaCloud?.status === 'fetching' ||
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
@@ -2164,6 +2180,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showGemini ? visibleGemini : null,
     showAntigravity ? visibleAntigravity : null,
     showOpencodeGo ? visibleOpencodeGo : null,
+    showOllamaCloud ? visibleOllamaCloud : null,
     showKimi ? visibleKimi : null,
     showMiniMax ? visibleMiniMax : null,
     showGrok ? visibleGrok : null
@@ -2465,6 +2482,19 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           >
             <OpenCodeGoIcon size={14} />
             {translate('auto.components.status.bar.StatusBar.8c86cd77b0', 'OpenCode Go Usage')}
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('ollama-cloud')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('ollama-cloud')
+            }}
+          >
+            <OllamaCloudIcon size={14} />
+            {translate(
+              'auto.components.status.bar.StatusBar.ollamaCloudUsage',
+              'Ollama Cloud Usage'
+            )}
           </DropdownMenuCheckboxItem>
           {isStatusBarItemAvailable('kimi', detectedAgentIds) && (
             <DropdownMenuCheckboxItem

@@ -30,7 +30,8 @@
         "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del daemon y análisis de disco de los espacios de trabajo.",
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
         "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
-        "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
+        "grokToggleDescription": "Muestra el uso de crédito de suscripción de Grok cuando has iniciado sesión a través de Grok CLI.",
+        "ollamaCloudToggleDescription": "Muestra el uso de suscripción de Ollama Cloud para el espacio de trabajo activo."
       },
       "menuBarIcon": {
         "title": "Mostrar icono en la barra de menús",
@@ -3209,7 +3210,8 @@
             "antigravityUsage": "Uso de Antigravity",
             "antigravityUsageDetails": "Abrir detalles de uso de Antigravity",
             "grokUsageAria": "Abrir detalles de uso de Grok",
-            "grokUsageMenu": "Uso de Grok"
+            "grokUsageMenu": "Uso de Grok",
+            "ollamaCloudUsage": "Uso de Ollama Cloud"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -5244,7 +5246,14 @@
           "codexSystemDefaultNeedsSignIn": "No se encontró ningún inicio de sesión de Codex para {{value0}}.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "ollamaCloud": "Ollama Cloud",
+          "ollamaCloudDesc": "Configura los ajustes del proveedor Ollama Cloud.",
+          "ollamaCloudCookie": "Cookie de sesión de Ollama Cloud",
+          "ollamaCloudCookieDesc": "Pega tu cookie de sesión de ollama.com para obtener límites de uso.",
+          "ollamaCloudCookieLabel": "Cookie de sesión de Ollama Cloud",
+          "ollamaCloudCookiePlaceholder": "__Secure-session=… token o encabezado completo de cookie",
+          "ollamaCloudCookieHelp": "Pega el valor de la cookie __Secure-session desde ollama.com DevTools → Red → cualquier solicitud → encabezado Cookie."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Reiniciar",
@@ -7478,7 +7487,10 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
-            "a9f3d7b5c8": "inicio de sesión"
+            "a9f3d7b5c8": "inicio de sesión",
+            "ollamaCloudCookie": "Cookie de sesión de Ollama Cloud",
+            "ollamaCloudCookieDesc": "Pega tu cookie de sesión de ollama.com para obtener límites de uso.",
+            "ollama": "ollama"
           }
         },
         "advanced": {
@@ -7700,6 +7712,8 @@
             "antigravityUsageTitle": "Uso de Antigravity",
             "antigravityUsageDescription": "Muestra el uso de suscripción de Antigravity en la barra de estado.",
             "antigravityKeyword": "antigravity",
+            "ollamaCloudUsage": "Uso de Ollama Cloud",
+            "ollamaCloudUsageDesc": "Muestra el uso de suscripción de Ollama Cloud en la barra de estado.",
             "f8e2a1c4b6": "Uso de Grok",
             "e7d1b0f3a5": "Muestra el uso semanal de créditos de Grok desde OAuth de Grok CLI.",
             "d6c0a9e2f4": "grok",

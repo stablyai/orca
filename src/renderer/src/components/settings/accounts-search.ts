@@ -171,6 +171,29 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsOllamaCloudSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.accounts.search.ollamaCloudCookie',
+      'Ollama Cloud Session Cookie'
+    ),
+    description: translate(
+      'auto.components.settings.accounts.search.ollamaCloudCookieDesc',
+      'Paste your ollama.com session cookie for rate limit fetching.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.ollama', 'ollama'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.61f7d1fcbe', 'cookie'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.9c4e40cf6b', 'session'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsMiniMaxSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.accounts.search.733f9e2a93', 'MiniMax Usage'),
@@ -218,6 +241,7 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsCodexSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
+  ...getAccountsOllamaCloudSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
   ...getAccountsGrokSearchEntries()
 ])

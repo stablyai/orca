@@ -157,6 +157,7 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
+    ollamaSessionCookie: '',
     opencodeWorkspaceId: '',
     minimaxGroupId: '',
     minimaxUsageModels: 'general',

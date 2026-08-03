@@ -53,7 +53,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "ollamaCloudToggleDescription": "Show Ollama Cloud subscription usage for the active workspace."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3262,7 +3263,8 @@
             "antigravityUsage": "Antigravity Usage",
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
-            "grokUsageMenu": "Grok Usage"
+            "grokUsageMenu": "Grok Usage",
+            "ollamaCloudUsage": "Ollama Cloud Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -5311,7 +5313,14 @@
           "codexSystemDefaultNeedsSignIn": "No Codex sign-in was found for {{value0}}.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "ollamaCloud": "Ollama Cloud",
+          "ollamaCloudDesc": "Configure Ollama Cloud provider settings.",
+          "ollamaCloudCookie": "Ollama Cloud Session Cookie",
+          "ollamaCloudCookieDesc": "Paste your ollama.com session cookie for rate limit fetching.",
+          "ollamaCloudCookieLabel": "Ollama Cloud session cookie",
+          "ollamaCloudCookiePlaceholder": "__Secure-session=… token or full cookie header",
+          "ollamaCloudCookieHelp": "Paste the __Secure-session cookie value from ollama.com DevTools → Network → any request → Cookie header."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -7608,7 +7617,10 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
-            "a9f3d7b5c8": "login"
+            "a9f3d7b5c8": "login",
+            "ollamaCloudCookie": "Ollama Cloud Session Cookie",
+            "ollamaCloudCookieDesc": "Paste your ollama.com session cookie for rate limit fetching.",
+            "ollama": "ollama"
           }
         },
         "advanced": {
@@ -7830,6 +7842,8 @@
             "antigravityUsageTitle": "Antigravity Usage",
             "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
             "antigravityKeyword": "antigravity",
+            "ollamaCloudUsage": "Ollama Cloud Usage",
+            "ollamaCloudUsageDesc": "Show Ollama Cloud subscription usage in the status bar.",
             "f8e2a1c4b6": "Grok Usage",
             "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
             "d6c0a9e2f4": "grok",

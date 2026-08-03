@@ -2985,6 +2985,8 @@ export type GlobalSettings = {
   defaultLinearTeamSelection: string[] | null
   /** Session cookie for OpenCode Go rate-limit fetching. Stored encrypted. */
   opencodeSessionCookie: string
+  /** Session cookie for Ollama Cloud rate-limit fetching. Stored encrypted. */
+  ollamaSessionCookie: string
   /** Optional OpenCode Go workspace ID override; when set, skips the workspaces lookup and fetches usage directly. */
   opencodeWorkspaceId: string
   /** Optional MiniMax group id. When empty, the usage fetcher extracts minimax_group_id_v2 from the cookie. */
@@ -3292,6 +3294,7 @@ export type StatusBarItem =
   | 'gemini'
   | 'antigravity'
   | 'opencode-go'
+  | 'ollama-cloud'
   | 'kimi'
   | 'minimax'
   | 'grok'

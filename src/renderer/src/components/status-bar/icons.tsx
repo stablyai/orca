@@ -315,6 +315,24 @@ export function OpenCodeGoIcon({ size = 14 }: { size?: number }): React.JSX.Elem
   )
 }
 
+export function OllamaCloudIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="10" fill="#1a1a2e" />
+      <ellipse cx="12" cy="14" rx="5" ry="3" fill="#e6e6fa" />
+      <circle cx="12" cy="10" r="3" fill="#e6e6fa" />
+      <path d="M8 14c0 2 1.5 4 4 4s4-2 4-4" stroke="#7c3aed" strokeWidth="0.8" fill="none" />
+      <path d="M9 8.5a3 3 0 016 0" stroke="#7c3aed" strokeWidth="0.6" fill="none" />
+    </svg>
+  )
+}
+
 export function ClaudeIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   return (
     <svg height={size} width={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

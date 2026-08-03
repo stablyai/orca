@@ -3056,6 +3056,9 @@ export class Store {
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
         }
+        if (parsed.settings?.ollamaSessionCookie) {
+          parsed.settings.ollamaSessionCookie = decrypt(parsed.settings.ollamaSessionCookie)
+        }
         if (parsed.settings?.httpProxyUrl) {
           parsed.settings.httpProxyUrl = decrypt(parsed.settings.httpProxyUrl)
         }
@@ -3905,6 +3908,7 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encryptToSentinel(this.state.settings.opencodeSessionCookie),
+        ollamaSessionCookie: encryptToSentinel(this.state.settings.ollamaSessionCookie),
         httpProxyUrl: encryptToSentinel(this.state.settings.httpProxyUrl ?? '')
       },
       ui: {

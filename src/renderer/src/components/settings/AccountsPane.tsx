@@ -38,7 +38,8 @@ import {
   GeminiIcon,
   MiniMaxIcon,
   OpenAIIcon,
-  OpenCodeGoIcon
+  OpenCodeGoIcon,
+  OllamaCloudIcon
 } from '../status-bar/icons'
 import { toast } from 'sonner'
 import {
@@ -49,6 +50,7 @@ import {
   getAccountsGrokSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
+  getAccountsOllamaCloudSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
@@ -1725,6 +1727,77 @@ export function AccountsPane({
               )}
             </code>
             ).
+          </p>
+        </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsOllamaCloudSearchEntries()) ? (
+      <section key="ollama-cloud" id="accounts-ollama-cloud" className="space-y-4 scroll-mt-6">
+        <div className="space-y-1">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <OllamaCloudIcon size={16} />
+            {translate('auto.components.settings.AccountsPane.ollamaCloud', 'Ollama Cloud')}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.AccountsPane.ollamaCloudDesc',
+              'Configure Ollama Cloud provider settings.'
+            )}
+          </p>
+        </div>
+
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.AccountsPane.ollamaCloudCookie',
+            'Ollama Cloud Session Cookie'
+          )}
+          description={translate(
+            'auto.components.settings.AccountsPane.ollamaCloudCookieDesc',
+            'Paste your ollama.com session cookie for rate limit fetching.'
+          )}
+          keywords={['ollama', 'cookie', 'session', 'rate limit', 'status bar']}
+          className="space-y-2"
+        >
+          <Label>
+            {translate(
+              'auto.components.settings.AccountsPane.ollamaCloudCookieLabel',
+              'Ollama Cloud session cookie'
+            )}
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              value={settings.ollamaSessionCookie}
+              onChange={(e) => {
+                recordOpenCodeSettingEdit('cookie')
+                updateSettings({ ollamaSessionCookie: e.target.value })
+              }}
+              placeholder={translate(
+                'auto.components.settings.AccountsPane.ollamaCloudCookiePlaceholder',
+                '__Secure-session=… token or full cookie header'
+              )}
+              spellCheck={false}
+              className="flex-1 text-xs"
+            />
+            {settings.ollamaSessionCookie && (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => {
+                  recordFeatureInteraction('usage-tracking')
+                  updateSettings({ ollamaSessionCookie: '' })
+                }}
+                className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {translate('auto.components.settings.AccountsPane.b398b834c9', 'Clear')}
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.AccountsPane.ollamaCloudCookieHelp',
+              'Paste the __Secure-session cookie value from ollama.com DevTools → Network → any request → Cookie header.'
+            )}
           </p>
         </SearchableSetting>
       </section>
