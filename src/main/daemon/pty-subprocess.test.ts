@@ -208,6 +208,7 @@ describe('createPtySubprocess', () => {
         rows: 24,
         cwd: 'C:\\repo',
         env: {
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
           ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
           PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
         }
