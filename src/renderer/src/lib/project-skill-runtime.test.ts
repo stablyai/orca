@@ -68,7 +68,7 @@ describe('project skill runtime helpers', () => {
     expect(getProjectSkillInstallDisabledReason(repairRuntime)).toContain('unavailable')
   })
 
-  it('forces PowerShell for WSL setup and for host setup when the terminal shell is WSL', () => {
+  it('uses the runtime shell for WSL setup and PowerShell for host setup', () => {
     expect(
       getProjectAgentSkillTerminalShellOverride(
         'win32',
@@ -82,7 +82,7 @@ describe('project skill runtime helpers', () => {
         { terminalWindowsShell: 'pwsh.exe' },
         getProjectAgentSkillRuntime(wslRuntime, 'win32')
       )
-    ).toBe('powershell.exe')
+    ).toBeUndefined()
   })
 
   it('forces PowerShell for host setup when the terminal shell is Git Bash', () => {
