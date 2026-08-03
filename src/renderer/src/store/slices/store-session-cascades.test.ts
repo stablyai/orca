@@ -1775,7 +1775,7 @@ describe('reconnectPersistedTerminals', () => {
     expect((mockApi.pty as Record<string, unknown>).spawn).not.toHaveBeenCalled()
   })
 
-  it('falls back to tab ptyIds when activeWorktreeIdsOnShutdown is absent (upgrade)', async () => {
+  it('falls back to the active worktree when activeWorktreeIdsOnShutdown is absent (upgrade)', async () => {
     const store = createDaemonEnabledStore()
     const wt1 = 'repo1::/path/wt1'
 
@@ -1805,6 +1805,120 @@ describe('reconnectPersistedTerminals', () => {
     await store.getState().reconnectPersistedTerminals()
     // Why: deferred reattach records the old daemon session ID on the tab
     expect(store.getState().tabsByWorktree[wt1][0].ptyId).toBe('old-pty')
+  })
+
+  it('reconnects the restored repo fallback for a legacy session without an active worktree', () => {
+    const store = createDaemonEnabledStore()
+    const wt1 = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1', isMainWorktree: true })]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: null,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [wt1]: [makeTab({ id: 'tab1', worktreeId: wt1, ptyId: 'old-pty' })]
+      },
+      terminalLayoutsByTabId: { tab1: makeLayout() }
+    })
+
+    expect(store.getState().activeWorktreeId).toBe(wt1)
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([wt1])
+  })
+
+  it('does not wake every preserved ptyId during legacy session upgrade', () => {
+    const store = createDaemonEnabledStore()
+    const active = 'repo1::/path/active'
+    const slept = 'repo1::/path/slept'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: active, repoId: 'repo1', path: '/path/active' }),
+          makeWorktree({ id: slept, repoId: 'repo1', path: '/path/slept' })
+        ]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: active,
+      activeTabId: 'active-tab',
+      tabsByWorktree: {
+        [active]: [makeTab({ id: 'active-tab', worktreeId: active, ptyId: 'active-pty' })],
+        [slept]: [makeTab({ id: 'slept-tab', worktreeId: slept, ptyId: 'wake-hint-pty' })]
+      },
+      terminalLayoutsByTabId: {
+        'active-tab': makeLayout(),
+        'slept-tab': makeLayout()
+      }
+      // No activeWorktreeIdsOnShutdown field: preserved ptyIds are ambiguous
+      // across update, because slept tabs also keep wake-hint ids.
+    })
+
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([active])
+    expect(store.getState().pendingReconnectPtyIdByTabId).toEqual({
+      'active-tab': 'active-pty'
+    })
+  })
+
+  it('does not reconnect a slept SSH tab from a legacy relay wake hint', () => {
+    const store = createDaemonEnabledStore()
+    const active = 'repo1::/path/active'
+    const slept = 'repo1::/path/slept'
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'slow-host'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: active, repoId: 'repo1', path: '/path/active' }),
+          makeWorktree({ id: slept, repoId: 'repo1', path: '/path/slept' })
+        ]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: active,
+      activeTabId: 'active-tab',
+      tabsByWorktree: {
+        [active]: [makeTab({ id: 'active-tab', worktreeId: active, ptyId: null })],
+        [slept]: [makeTab({ id: 'slept-tab', worktreeId: slept, ptyId: null })]
+      },
+      terminalLayoutsByTabId: {
+        'active-tab': makeLayout(),
+        'slept-tab': makeLayout()
+      },
+      remoteSessionIdsByTabId: {
+        'active-tab': 'active-relay-session',
+        'slept-tab': 'wake-hint-relay-session'
+      }
+    })
+
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([active])
+    expect(store.getState().pendingReconnectTabByWorktree).toEqual({
+      [active]: ['active-tab']
+    })
   })
 
   it('reconnects the correct tab per worktree (not always tabs[0])', async () => {
