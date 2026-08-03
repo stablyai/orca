@@ -12682,7 +12682,9 @@ describe('OrcaRuntimeService', () => {
   // platform (launchCmdByPlatform), so it is what proves resolution is
   // platform-aware rather than a fixed string.
   it.each([
-    { platform: 'win32' as const, expected: 'orca.cmd claude-teams' },
+    // Why: win32 launches Claude directly rather than through the Orca CLI wrapper —
+    // Electron-as-node exposes no TTY stdin, so the wrapper path cannot run the TUI.
+    { platform: 'win32' as const, expected: 'claude --teammate-mode auto' },
     { platform: 'linux' as const, expected: 'orca-ide claude-teams' },
     { platform: 'darwin' as const, expected: 'orca claude-teams' }
   ])(
