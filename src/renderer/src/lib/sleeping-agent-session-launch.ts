@@ -11,6 +11,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
@@ -68,6 +69,17 @@ export function launchSleepingAgentSession(
 ): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
+  // Why: cold/sleeping resume types the launch line into the live terminal shell.
+  // Win32 defaults to PowerShell quoting when `shell` is omitted, but users may run
+  // cmd.exe: single-quoted tokens then become literal argv (`'--resume'`, `'uuid'`)
+  // and agent CLIs reject the resume. Match the host `terminalWindowsShell` family.
+  const platform = getResumeLaunchPlatform(record.worktreeId)
+  const shell = resolveLocalWindowsAgentStartupShell({
+    platform,
+    // Platform is already forced to linux for remote/WSL worktrees above.
+    isRemote: false,
+    terminalWindowsShell: state.settings?.terminalWindowsShell
+  })
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -84,7 +96,8 @@ export function launchSleepingAgentSession(
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
-    platform: getResumeLaunchPlatform(record.worktreeId)
+    platform,
+    shell
   })
   if (!startupPlan) {
     toast.error(

@@ -278,6 +278,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
@@ -4894,6 +4895,14 @@ export function connectPanePty(
         (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
         matchingSleepingLaunchConfig
       const resumePlatform = getColdRestoreAgentResumePlatform()
+      // Why: cold restore types the resume line into the restored tab shell.
+      // Omitting `shell` defaults win32 quoting to PowerShell, which breaks
+      // cmd.exe tabs (single-quoted resume ids become literal argv).
+      const resumeShell = resolveLocalWindowsAgentStartupShell({
+        platform: resumePlatform,
+        isRemote: false,
+        terminalWindowsShell: state.settings?.terminalWindowsShell
+      })
       const startupPlan = buildAgentResumeStartupPlan({
         agent,
         providerSession,
@@ -4910,7 +4919,8 @@ export function connectPanePty(
         ...(launchConfig?.ompResumeFilePath
           ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
           : {}),
-        platform: resumePlatform
+        platform: resumePlatform,
+        shell: resumeShell
       })
       if (!startupPlan) {
         return null
