@@ -27,6 +27,7 @@ import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
 import { createCodexSubagentProgressTarget } from './codex-subagent-progress-target'
+import { selectCodexSubagentProgressHostAuthority } from './codex-subagent-progress-host-authority'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -191,7 +192,13 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   }, [])
   const handleOpenCodexSubagentProgress = useCallback(
     (agent: DashboardAgentRowData) => {
-      const target = createCodexSubagentProgressTarget(agent, worktreeId)
+      const hostAuthority = selectCodexSubagentProgressHostAuthority(useAppStore.getState(), {
+        worktreeId,
+        parentPaneKey: agent.subagentSession?.parentPaneKey ?? agent.paneKey,
+        tabPtyId: agent.tab.ptyId,
+        connectionId: agent.entry.connectionId
+      })
+      const target = createCodexSubagentProgressTarget(agent, worktreeId, hostAuthority)
       if (!target) {
         handleActivateAgentTab(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
         return

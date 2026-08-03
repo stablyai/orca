@@ -25,7 +25,9 @@ function childRow(provider = 'codex'): DashboardAgentRow {
 
 describe('Codex subagent progress target', () => {
   it('preserves explicit child identity and local host authority', () => {
-    expect(createCodexSubagentProgressTarget(childRow(), 'folder:workspace-1')).toEqual({
+    expect(
+      createCodexSubagentProgressTarget(childRow(), 'folder:workspace-1', { kind: 'local' })
+    ).toEqual({
       sessionId: 'child-1',
       paneKey: 'parent\u0000subagent:child-1',
       parentPaneKey: 'parent-pane',
@@ -33,16 +35,28 @@ describe('Codex subagent progress target', () => {
       worktreeId: 'folder:workspace-1',
       label: 'Review files',
       model: 'gpt-5.4-mini',
-      state: 'working',
-      connectionId: null
+      hostAuthority: { kind: 'local' }
     })
   })
 
   it('does not create a Codex target for another provider', () => {
-    expect(createCodexSubagentProgressTarget(childRow('claude'), 'wt-1')).toBeNull()
+    expect(
+      createCodexSubagentProgressTarget(childRow('claude'), 'wt-1', { kind: 'local' })
+    ).toBeNull()
   })
 
   it('rejects malformed modal data', () => {
     expect(parseCodexSubagentProgressTarget({ sessionId: 'child-1' })).toBeNull()
+  })
+
+  it('retains captured runtime authority without consulting live workspace state', () => {
+    const target = createCodexSubagentProgressTarget(childRow(), 'wt-1', {
+      kind: 'runtime',
+      environmentId: 'env-1'
+    })
+
+    expect(parseCodexSubagentProgressTarget(target as Record<string, unknown>)).toMatchObject({
+      hostAuthority: { kind: 'runtime', environmentId: 'env-1' }
+    })
   })
 })

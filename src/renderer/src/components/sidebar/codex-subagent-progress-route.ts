@@ -1,25 +1,20 @@
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import type { CodexSubagentProgressHostAuthority } from './codex-subagent-progress-host-authority'
 
 export type CodexSubagentProgressRoute =
   | { kind: 'readable'; runtimeEnvironmentId: string | null }
   | { kind: 'unavailable'; reason: 'unknown-owner' | 'legacy-ssh' | 'runtime-owner-missing' }
 
 export function resolveCodexSubagentProgressRoute(
-  connectionId: string | null | undefined,
-  runtimeEnvironmentId: string | null
+  authority: CodexSubagentProgressHostAuthority
 ): CodexSubagentProgressRoute {
-  if (connectionId === undefined) {
-    return { kind: 'unavailable', reason: 'unknown-owner' }
+  switch (authority.kind) {
+    case 'local':
+      return { kind: 'readable', runtimeEnvironmentId: null }
+    case 'runtime':
+      return { kind: 'readable', runtimeEnvironmentId: authority.environmentId }
+    case 'legacy-ssh':
+      return { kind: 'unavailable', reason: 'legacy-ssh' }
+    case 'unknown':
+      return { kind: 'unavailable', reason: authority.reason }
   }
-  if (!isNativeChatTranscriptLocalReadable(connectionId)) {
-    return { kind: 'unavailable', reason: 'legacy-ssh' }
-  }
-  if (runtimeEnvironmentId) {
-    return { kind: 'readable', runtimeEnvironmentId }
-  }
-  if (isRuntimeOwnedSshTargetId(connectionId)) {
-    return { kind: 'unavailable', reason: 'runtime-owner-missing' }
-  }
-  return { kind: 'readable', runtimeEnvironmentId: null }
 }

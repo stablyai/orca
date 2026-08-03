@@ -9,21 +9,11 @@ const mocks = vi.hoisted(() => ({
     closeModal: vi.fn(),
     agentStatusByPaneKey: {} as Record<string, unknown>
   },
-  inferredConnectionId: null as string | null | undefined,
-  runtimeEnvironmentId: null as string | null,
   liveSession: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
-}))
-
-vi.mock('@/lib/connection-context', () => ({
-  getConnectionIdFromState: () => mocks.inferredConnectionId
-}))
-
-vi.mock('@/components/native-chat/native-chat-runtime-owner', () => ({
-  selectNativeChatRuntimeEnvironmentId: () => mocks.runtimeEnvironmentId
 }))
 
 vi.mock('@/components/native-chat/use-native-chat-live-session', () => ({
@@ -44,7 +34,9 @@ vi.mock('@/components/ui/sheet', () => ({
   SheetDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>
 }))
 
-function target(connectionId: string | null | undefined): Record<string, unknown> {
+function target(
+  hostAuthority: Record<string, unknown> = { kind: 'local' }
+): Record<string, unknown> {
   return {
     sessionId: 'child-1',
     paneKey: 'parent\u0000subagent:child-1',
@@ -53,8 +45,7 @@ function target(connectionId: string | null | undefined): Record<string, unknown
     worktreeId: 'wt-1',
     label: 'Review files',
     model: 'gpt-5.4-mini',
-    state: 'working',
-    ...(connectionId === undefined ? {} : { connectionId })
+    hostAuthority
   }
 }
 
@@ -75,10 +66,8 @@ describe('CodexSubagentProgressSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state.activeModal = 'codex-subagent-progress'
-    mocks.state.modalData = target(null)
+    mocks.state.modalData = target()
     mocks.state.agentStatusByPaneKey = {}
-    mocks.inferredConnectionId = null
-    mocks.runtimeEnvironmentId = null
     mocks.liveSession.mockReturnValue(liveSession())
   })
 
@@ -99,8 +88,7 @@ describe('CodexSubagentProgressSheet', () => {
   })
 
   it('routes runtime-owned child transcripts to the resolved remote runtime', async () => {
-    mocks.state.modalData = target(null)
-    mocks.runtimeEnvironmentId = 'runtime-env-1'
+    mocks.state.modalData = target({ kind: 'runtime', environmentId: 'runtime-env-1' })
     const { default: CodexSubagentProgressSheet } = await import('./CodexSubagentProgressSheet')
 
     renderToStaticMarkup(<CodexSubagentProgressSheet />)
@@ -131,7 +119,7 @@ describe('CodexSubagentProgressSheet', () => {
   })
 
   it('blocks legacy SSH without attempting a local transcript read', async () => {
-    mocks.state.modalData = target('ssh-target-1')
+    mocks.state.modalData = target({ kind: 'legacy-ssh' })
     const { default: CodexSubagentProgressSheet } = await import('./CodexSubagentProgressSheet')
 
     const markup = renderToStaticMarkup(<CodexSubagentProgressSheet />)
@@ -139,6 +127,18 @@ describe('CodexSubagentProgressSheet', () => {
     expect(mocks.liveSession).not.toHaveBeenCalled()
     expect(markup).toContain(
       'Live subagent transcripts are not available for legacy SSH workspaces.'
+    )
+  })
+
+  it('keeps captured runtime routing after the parent and workspace owner disappear', async () => {
+    mocks.state.modalData = target({ kind: 'runtime', environmentId: 'runtime-env-1' })
+    mocks.state.agentStatusByPaneKey = {}
+    const { default: CodexSubagentProgressSheet } = await import('./CodexSubagentProgressSheet')
+
+    renderToStaticMarkup(<CodexSubagentProgressSheet />)
+
+    expect(mocks.liveSession).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeEnvironmentId: 'runtime-env-1' })
     )
   })
 })

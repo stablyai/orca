@@ -21,6 +21,7 @@ type MockAgentOptions = {
   rowSource?: DashboardAgentRowData['rowSource']
   model?: string
   connectionId?: string | null
+  ptyId?: string | null
   subagentSession?: DashboardAgentRowData['subagentSession']
 }
 
@@ -34,11 +35,12 @@ function mockAgent({
   rowSource = 'live',
   model,
   connectionId,
+  ptyId,
   subagentSession
 }: MockAgentOptions): DashboardAgentRowData {
   return {
     paneKey,
-    tab: { id: tabId },
+    tab: { id: tabId, ptyId },
     agentType,
     rowSource,
     state: 'working',
@@ -396,6 +398,7 @@ describe('WorktreeCardAgents activation', () => {
         rowSource: 'subagent',
         model: 'gpt-5.4-mini',
         connectionId: null,
+        ptyId: 'local-pty-1',
         subagentSession: { id: 'child-1', provider: 'codex', parentPaneKey }
       })
     ]
@@ -412,7 +415,7 @@ describe('WorktreeCardAgents activation', () => {
         terminalTabId: 'tab-1',
         worktreeId: 'wt-1',
         label: 'Review files',
-        connectionId: null
+        hostAuthority: { kind: 'local' }
       })
     )
     expect(activationMocks.activateAndRevealWorktree).not.toHaveBeenCalled()
@@ -431,6 +434,7 @@ describe('WorktreeCardAgents activation', () => {
         worktreeId: 'wt-1',
         rowSource: 'subagent',
         connectionId: null,
+        ptyId: 'local-pty-1',
         subagentSession: { id: 'child-compact', provider: 'codex', parentPaneKey }
       })
     ]

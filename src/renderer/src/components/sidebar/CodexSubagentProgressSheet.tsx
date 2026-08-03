@@ -1,7 +1,6 @@
 import { Loader2, MessageSquare, TriangleAlert } from 'lucide-react'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { NativeChatMessageList } from '@/components/native-chat/NativeChatMessageList'
-import { selectNativeChatRuntimeEnvironmentId } from '@/components/native-chat/native-chat-runtime-owner'
 import { selectNativeChatViewState } from '@/components/native-chat/native-chat-view-state'
 import { useNativeChatLiveSession } from '@/components/native-chat/use-native-chat-live-session'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +12,6 @@ import {
   SheetTitle
 } from '@/components/ui/sheet'
 import { translate } from '@/i18n/i18n'
-import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import { resolveCodexSubagentProgressRoute } from './codex-subagent-progress-route'
@@ -169,15 +167,7 @@ function CodexSubagentProgressBody({
 }): React.JSX.Element {
   const parentEntry = useAppStore((state) => state.agentStatusByPaneKey[target.parentPaneKey])
   const liveSubagent = parentEntry?.subagents?.find((subagent) => subagent.id === target.sessionId)
-  const inferredConnectionId = useAppStore((state) =>
-    getConnectionIdFromState(state, target.worktreeId)
-  )
-  const runtimeEnvironmentId = useAppStore((state) =>
-    selectNativeChatRuntimeEnvironmentId(state, target.terminalTabId)
-  )
-  const connectionId =
-    target.connectionId === undefined ? inferredConnectionId : target.connectionId
-  const route = resolveCodexSubagentProgressRoute(connectionId, runtimeEnvironmentId)
+  const route = resolveCodexSubagentProgressRoute(target.hostAuthority)
   const state = liveSubagent?.state ?? 'idle'
   const dotState = asDotState(state)
   const label = liveSubagent?.description?.trim() || target.label

@@ -1,5 +1,5 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { CodexSubagentProgressHostAuthority } from './codex-subagent-progress-host-authority'
 
 export type CodexSubagentProgressTarget = {
   sessionId: string
@@ -9,17 +9,8 @@ export type CodexSubagentProgressTarget = {
   worktreeId: string
   label: string
   model?: string
-  state: AgentStatusState | 'idle'
-  connectionId?: string | null
+  hostAuthority: CodexSubagentProgressHostAuthority
 }
-
-const TARGET_STATES = new Set<AgentStatusState | 'idle'>([
-  'working',
-  'blocked',
-  'waiting',
-  'done',
-  'idle'
-])
 
 function nonEmptyString(value: unknown): string | null {
   if (typeof value !== 'string') {
@@ -31,7 +22,8 @@ function nonEmptyString(value: unknown): string | null {
 
 export function createCodexSubagentProgressTarget(
   agent: DashboardAgentRow,
-  worktreeId: string
+  worktreeId: string,
+  hostAuthority: CodexSubagentProgressHostAuthority
 ): CodexSubagentProgressTarget | null {
   const session = agent.subagentSession
   if (agent.rowSource !== 'subagent' || session?.provider !== 'codex') {
@@ -51,8 +43,29 @@ export function createCodexSubagentProgressTarget(
     worktreeId,
     label,
     ...(model ? { model } : {}),
-    state: agent.state,
-    connectionId: agent.entry.connectionId
+    hostAuthority
+  }
+}
+
+function parseHostAuthority(value: unknown): CodexSubagentProgressHostAuthority | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  const authority = value as Record<string, unknown>
+  switch (authority.kind) {
+    case 'local':
+    case 'legacy-ssh':
+      return { kind: authority.kind }
+    case 'runtime': {
+      const environmentId = nonEmptyString(authority.environmentId)
+      return environmentId ? { kind: 'runtime', environmentId } : null
+    }
+    case 'unknown':
+      return authority.reason === 'unknown-owner' || authority.reason === 'runtime-owner-missing'
+        ? { kind: 'unknown', reason: authority.reason }
+        : null
+    default:
+      return null
   }
 }
 
@@ -65,7 +78,7 @@ export function parseCodexSubagentProgressTarget(
   const terminalTabId = nonEmptyString(value.terminalTabId)
   const worktreeId = nonEmptyString(value.worktreeId)
   const label = nonEmptyString(value.label)
-  const state = value.state
+  const hostAuthority = parseHostAuthority(value.hostAuthority)
   if (
     !sessionId ||
     !paneKey ||
@@ -73,16 +86,11 @@ export function parseCodexSubagentProgressTarget(
     !terminalTabId ||
     !worktreeId ||
     !label ||
-    typeof state !== 'string' ||
-    !TARGET_STATES.has(state as AgentStatusState | 'idle')
+    !hostAuthority
   ) {
     return null
   }
   const model = nonEmptyString(value.model)
-  const connectionId = value.connectionId
-  if (connectionId !== undefined && connectionId !== null && typeof connectionId !== 'string') {
-    return null
-  }
   return {
     sessionId,
     paneKey,
@@ -91,7 +99,6 @@ export function parseCodexSubagentProgressTarget(
     worktreeId,
     label,
     ...(model ? { model } : {}),
-    state: state as AgentStatusState | 'idle',
-    ...(connectionId === undefined ? {} : { connectionId })
+    hostAuthority
   }
 }
