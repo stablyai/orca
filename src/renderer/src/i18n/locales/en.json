@@ -1985,8 +1985,8 @@
         "repoMissing": "Project is no longer available.",
         "folderRepo": "Folder workspaces do not use setup scripts.",
         "remoteHost": "Run setup script is not yet supported for remote worktrees. Create a new worktree to run setup on that host, or open a local clone.",
-        "prepareFailed": "Could not prepare the setup script.",
-        "runnerFailed": "Could not prepare the setup script.",
+        "prepareFailed": "Could not reach the setup service.",
+        "runnerFailed": "Could not prepare the setup runner.",
         "noSetup": "No setup script is configured for this project.",
         "activationFailed": "Could not open the workspace to run setup."
       }
