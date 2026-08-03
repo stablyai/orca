@@ -64,6 +64,7 @@ import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
+import CodexRestartChip from '../CodexRestartChip'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './TerminalErrorToast'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
@@ -250,7 +251,6 @@ type TerminalPaneProps = {
   showSplitButton?: boolean
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
-  onInitialRenderSettled?: () => void
 }
 
 export type TerminalPaneHandle = {
@@ -298,8 +298,7 @@ function TerminalPane(
     isolatedPaneKey = null,
     showSplitButton = true,
     onPtyExit,
-    onCloseTab,
-    onInitialRenderSettled
+    onCloseTab
   }: TerminalPaneProps,
   ref: React.ForwardedRef<TerminalPaneHandle>
 ): React.JSX.Element {
@@ -330,8 +329,6 @@ function TerminalPane(
   const isRendererVisible = isVisible && isWorktreeActive
   const isVisibleRef = useRef(isRendererVisible)
   isVisibleRef.current = isRendererVisible
-  const onInitialRenderSettledRef = useRef(onInitialRenderSettled)
-  onInitialRenderSettledRef.current = onInitialRenderSettled
   const sshReconnectTargetId = useAppStore((store) => {
     const connectionId = getConnectionIdFromState(store, worktreeId)
     // Why: runtime-owned SSH targets are internal plumbing users can't connect to, so a reconnect prompt would mislead.
@@ -1485,8 +1482,7 @@ function TerminalPane(
     setPaneCount,
     setPaneLayoutRevision,
     resolveExternalPaneDropTarget,
-    onExternalPaneDrop: handleExternalPaneDrop,
-    onInitialRenderSettledRef
+    onExternalPaneDrop: handleExternalPaneDrop
   })
 
   useEffect(() => {
@@ -1714,6 +1710,9 @@ function TerminalPane(
   // transport, so a queued restart has no ptyId to match on the mount pass. The
   // reconnected PTY rewrites this map when it binds — `ptyIdsByTabId` does not,
   // because a restored id is already listed there before the pane ever mounts.
+  // Panes with no mounted TerminalPane at all are executed by the detached
+  // driver instead (codex-detached-pane-restart), which leaves anything a live
+  // transport owns to this effect.
   const panePtyLayoutBindings = savedLayout.ptyIdsByLeafId
   useEffect(() => {
     const manager = managerRef.current
@@ -2968,6 +2967,24 @@ function TerminalPane(
           })
         }}
       />
+      {managedPanes.map((pane) => {
+        const ptyId =
+          paneTransportsRef.current.get(pane.id)?.getPtyId() ??
+          savedLayout.ptyIdsByLeafId?.[pane.leafId]
+        if (!ptyId) {
+          return null
+        }
+        return createPortal(
+          <CodexRestartChip
+            key={`codex-restart-${pane.id}-${ptyId}`}
+            isVisible={isVisible}
+            ptyId={ptyId}
+            shouldFocus={isActive && isVisible && activePane?.id === pane.id}
+          />,
+          pane.container,
+          `codex-restart-${pane.id}`
+        )
+      })}
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
           toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
       {terminalError && isActive && !showSshReconnectOverlay ? (

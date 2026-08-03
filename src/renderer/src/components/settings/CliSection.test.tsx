@@ -7,9 +7,11 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { CliSection } from './CliSection'
 
 const capturedPanel = vi.hoisted(() => ({
+  canUseLocalSkillFreshness: true,
   props: null as null | {
     command: string
     installedCommand: string
+    freshnessSkillName?: string
     getPrerequisiteStatus: () => Promise<unknown>
     onBeforeOpenTerminal: () => Promise<void>
   },
@@ -24,6 +26,12 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   useInstalledAgentSkill: capturedPanel.useInstalledAgentSkill
 }))
 
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => ({
+    canUseLocalSkillFreshness: capturedPanel.canUseLocalSkillFreshness
+  })
+}))
+
 capturedPanel.useInstalledAgentSkill.mockReturnValue({
   installed: false,
   loading: false,
@@ -33,6 +41,7 @@ capturedPanel.useInstalledAgentSkill.mockReturnValue({
 
 afterEach(() => {
   cleanup()
+  capturedPanel.canUseLocalSkillFreshness = true
   toastError.mockReset()
   vi.unstubAllGlobals()
 })
@@ -41,6 +50,7 @@ vi.mock('./AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: function AgentSkillSetupPanel(props: {
     command: string
     installedCommand: string
+    freshnessSkillName?: string
     getPrerequisiteStatus: () => Promise<unknown>
     onBeforeOpenTerminal: () => Promise<void>
   }) {
@@ -62,6 +72,30 @@ vi.mock('./WslCliRegistration', () => ({
 }))
 
 describe('CliSection project runtime defaults', () => {
+  it('exposes freshness only for a resolved local host runtime', () => {
+    const settings = getDefaultSettings('/tmp')
+    renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)
+    expect(capturedPanel.props?.freshnessSkillName).toBe('orca-cli')
+
+    capturedPanel.canUseLocalSkillFreshness = false
+    renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)
+    expect(capturedPanel.props?.freshnessSkillName).toBeUndefined()
+
+    capturedPanel.canUseLocalSkillFreshness = true
+    renderToStaticMarkup(
+      <CliSection
+        currentPlatform="win32"
+        settings={{
+          ...settings,
+          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+        }}
+        wslSupportedPlatform
+        wslAvailable
+      />
+    )
+    expect(capturedPanel.props?.freshnessSkillName).toBeUndefined()
+  })
+
   it('passes the default project WSL distro to CLI skill prerequisite checks', async () => {
     const getWslInstallStatus = vi
       .fn()

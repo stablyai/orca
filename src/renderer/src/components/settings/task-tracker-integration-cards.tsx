@@ -11,6 +11,7 @@ import { useIntegrationSubordinateRowClass } from './integration-card-presentati
 import { LinearAgentSkillInstallCta } from './linear-agent-skill-install-cta'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
+import { LINEAR_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
@@ -68,6 +69,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
 
   return (
     <IntegrationCardShell
+      settingsSectionId={LINEAR_INTEGRATION_SECTION_ID}
       icon={<LinearIcon className="size-5" />}
       name="Linear"
       description={

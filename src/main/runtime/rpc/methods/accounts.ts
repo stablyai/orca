@@ -56,6 +56,30 @@ const ConsumeCodexResetCreditParams = z
   })
   .strict()
 
+const AddClaudeFromConfigDirParams = z.object({
+  configDir: z.string().min(1, 'Missing configDir'),
+  runtime: z.enum(['host', 'wsl']).optional(),
+  wslDistro: z.string().nullish(),
+  previousLegacyCredentialsSha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/, 'Invalid legacy credential digest')
+    .nullable()
+    .optional()
+})
+
+const AddCodexFromHomeParams = z.object({
+  sourceHome: z.string().min(1, 'Missing sourceHome'),
+  runtime: z.enum(['host', 'wsl']).optional(),
+  wslDistro: z.string().nullish()
+})
+
+// Why: `orca account list` prints only emails and the active ids, so it opts out
+// of the forced all-provider usage refresh below — that lane bypasses the poll
+// throttle and Retry-After gate and costs one serial round-trip per account.
+const ListAccountsParams = z.object({
+  refreshUsage: z.boolean().default(true)
+})
+
 const AccountsUnsubscribeParams = z.object({
   subscriptionId: z
     .unknown()
@@ -64,20 +88,25 @@ const AccountsUnsubscribeParams = z.object({
 })
 
 // Why: bridges the desktop ClaudeAccountService / CodexAccountService /
-// RateLimitService into the mobile WebSocket RPC. Read + switch + remove
-// only — interactive add/re-auth flows spawn `claude login` / `codex login`
-// PTYs that need a desktop browser, so they intentionally remain
-// desktop-only. See plan in spec doc for issue #1438.
+// RateLimitService into the WebSocket / local-socket RPC. Read + switch +
+// remove for all clients; interactive add/re-auth flows spawn `claude login`
+// / `codex login` PTYs that need a desktop browser, so they intentionally
+// remain desktop-only. `accounts.addClaudeFromConfigDir` is the exception: it
+// captures an already-authenticated CLAUDE_CONFIG_DIR (no PTY) so the local
+// `orca account add` CLI can register accounts on a headless host; it is gated
+// to the local runtime connection, never a mobile device token. See #1438.
 export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'accounts.list',
-    params: null,
-    handler: async (_params, { runtime }) => {
+    params: ListAccountsParams,
+    handler: async (params, { runtime }) => {
       // Why: ensure the snapshot reflects the latest provider state before
       // returning. Desktop polling pauses when the window is unfocused and
       // inactive-account caches only fill on AccountsPane open, so without
       // this the mobile UI would render stale nulls / zeroes.
-      await runtime.refreshAccountsForMobile()
+      if (params.refreshUsage) {
+        await runtime.refreshAccountsForMobile()
+      }
       return runtime.getAccountsSnapshot()
     }
   }),
@@ -114,6 +143,35 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
     name: 'accounts.removeCodex',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeCodexAccount(params.accountId)
+  }),
+  defineMethod({
+    name: 'accounts.addClaudeFromConfigDir',
+    params: AddClaudeFromConfigDirParams,
+    handler: async (params, { runtime, clientKind }) => {
+      // Why: capturing a host filesystem path is local-socket-only; paired
+      // mobile and remote-runtime tokens must never read host credential paths.
+      if (clientKind !== undefined) {
+        throw new Error('Adding Claude accounts is only available on the Orca host runtime.')
+      }
+      return runtime.addClaudeAccountFromConfigDir(params.configDir, {
+        runtime: params.runtime,
+        wslDistro: params.wslDistro ?? null,
+        previousLegacyCredentialsSha256: params.previousLegacyCredentialsSha256
+      })
+    }
+  }),
+  defineMethod({
+    name: 'accounts.addCodexFromHome',
+    params: AddCodexFromHomeParams,
+    handler: async (params, { runtime, clientKind }) => {
+      if (clientKind !== undefined) {
+        throw new Error('Adding Codex accounts is only available on the Orca host runtime.')
+      }
+      return runtime.addCodexAccountFromHome(params.sourceHome, {
+        runtime: params.runtime,
+        wslDistro: params.wslDistro ?? null
+      })
+    }
   }),
   // Why: streaming counterpart so mobile usage bars refresh in place when the
   // desktop's 5-minute rate-limit poll completes or when the user switches

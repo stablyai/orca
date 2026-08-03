@@ -22,6 +22,14 @@ function createMockMux(): MockMultiplexer {
   }
 }
 
+const sourceActivationRequestOptions = expect.objectContaining({
+  beforeResolve: expect.any(Function)
+})
+
+function expectRequest(request: ReturnType<typeof vi.fn>, ...expected: unknown[]): void {
+  expect(request.mock.calls.map((call) => call.slice(0, expected.length))).toContainEqual(expected)
+}
+
 describe('SshPtyProvider', () => {
   let mux: MockMultiplexer
   let provider: SshPtyProvider
@@ -34,6 +42,10 @@ describe('SshPtyProvider', () => {
 
   it('returns the connectionId', () => {
     expect(provider.getConnectionId()).toBe('conn-1')
+  })
+
+  it('reports that SSH panes cannot restore from authoritative provider snapshots', () => {
+    expect(provider.canProvideAuthoritativeBufferSnapshot(scopedPty1)).toBe(false)
   })
 
   it('keeps a shared claim probe alive when one waiter disconnects', async () => {
@@ -184,7 +196,7 @@ describe('SshPtyProvider', () => {
       await expect(
         provider.spawn({ cols: 80, rows: 24, agentSessionEnsure: { claim, surface } })
       ).rejects.toThrow('agent_session_ownership_unknown')
-      expect(mux.request).toHaveBeenCalledWith('pty.shutdown', {
+      expectRequest(mux.request, 'pty.shutdown', {
         id: 'pty-malformed',
         immediate: true
       })
@@ -261,7 +273,7 @@ describe('SshPtyProvider', () => {
 
       const result = await provider.spawn({ cols: 80, rows: 24 })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 80,
         rows: 24,
         cwd: undefined,
@@ -289,7 +301,8 @@ describe('SshPtyProvider', () => {
 
       await provider.spawn({ cols: 80, rows: 24, startupIngress })
 
-      expect(mux.request).toHaveBeenCalledWith(
+      expectRequest(
+        mux.request,
         'pty.spawn',
         expect.objectContaining({
           startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
@@ -308,7 +321,7 @@ describe('SshPtyProvider', () => {
         env: { FOO: 'bar' }
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 120,
         rows: 40,
         cwd: '/home/user',
@@ -326,7 +339,8 @@ describe('SshPtyProvider', () => {
         launchAgent: 'claude'
       })
 
-      expect(mux.request).toHaveBeenCalledWith(
+      expectRequest(
+        mux.request,
         'pty.spawn',
         expect.objectContaining({
           command: 'cd /repo && custom-agent-wrapper',
@@ -345,7 +359,7 @@ describe('SshPtyProvider', () => {
         tabId: 'tab-a'
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 120,
         rows: 40,
         cwd: undefined,
@@ -365,7 +379,7 @@ describe('SshPtyProvider', () => {
         terminalWindowsWslDistro: 'Ubuntu'
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 120,
         rows: 40,
         cwd: undefined,
@@ -384,7 +398,7 @@ describe('SshPtyProvider', () => {
         env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'already-set' }
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 120,
         rows: 40,
         cwd: undefined,
@@ -402,7 +416,7 @@ describe('SshPtyProvider', () => {
         envToDelete: [POWERLEVEL10K_WIZARD_DISABLE_ENV]
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 120,
         rows: 40,
         cwd: undefined,
@@ -426,7 +440,7 @@ describe('SshPtyProvider', () => {
         envToDelete
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 120,
         rows: 40,
         cwd: undefined,
@@ -452,7 +466,7 @@ describe('SshPtyProvider', () => {
         startupCommandDelivery: 'shell-ready'
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 120,
         rows: 40,
         cwd: undefined,
@@ -478,7 +492,7 @@ describe('SshPtyProvider', () => {
         env: { PATH: '/usr/bin', ORCA_TERMINAL_HANDLE: 'term_ssh' }
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 120,
         rows: 40,
         cwd: undefined,
@@ -509,7 +523,7 @@ describe('SshPtyProvider', () => {
         env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 120,
         rows: 40,
         cwd: undefined,
@@ -540,7 +554,7 @@ describe('SshPtyProvider', () => {
         env: { Path: 'C:/Windows/System32;C:/Tools' }
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+      expectRequest(mux.request, 'pty.spawn', {
         cols: 120,
         rows: 40,
         cwd: undefined,
@@ -563,12 +577,17 @@ describe('SshPtyProvider', () => {
 
       const result = await provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.attach', {
-        id: 'pty-old',
-        cols: 80,
-        rows: 24,
-        suppressReplayNotification: true
-      })
+      expectRequest(
+        mux.request,
+        'pty.attach',
+        {
+          id: 'pty-old',
+          cols: 80,
+          rows: 24,
+          suppressReplayNotification: true
+        },
+        sourceActivationRequestOptions
+      )
       expect(result).toEqual({
         id: 'ssh:conn-1@@pty-old',
         isReattach: true,
@@ -590,7 +609,8 @@ describe('SshPtyProvider', () => {
         }
       })
 
-      expect(mux.request).toHaveBeenCalledWith(
+      expectRequest(
+        mux.request,
         'pty.attach',
         expect.not.objectContaining({ startupIngress: expect.anything() })
       )
@@ -606,7 +626,7 @@ describe('SshPtyProvider', () => {
         sessionId: 'ssh:conn-1@@pty-old'
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.attach', {
+      expectRequest(mux.request, 'pty.attach', {
         id: 'pty-old',
         cols: 80,
         rows: 24,
@@ -630,7 +650,7 @@ describe('SshPtyProvider', () => {
         tabId: 'tab-a'
       })
 
-      expect(mux.request).toHaveBeenCalledWith('pty.attach', {
+      expectRequest(mux.request, 'pty.attach', {
         id: 'pty-old',
         cols: 80,
         rows: 24,
@@ -647,12 +667,17 @@ describe('SshPtyProvider', () => {
         'SSH_SESSION_EXPIRED: pty-old'
       )
 
-      expect(mux.request).toHaveBeenNthCalledWith(1, 'pty.attach', {
-        id: 'pty-old',
-        cols: 80,
-        rows: 24,
-        suppressReplayNotification: true
-      })
+      expect(mux.request).toHaveBeenNthCalledWith(
+        1,
+        'pty.attach',
+        {
+          id: 'pty-old',
+          cols: 80,
+          rows: 24,
+          suppressReplayNotification: true
+        },
+        sourceActivationRequestOptions
+      )
       expect(mux.request).toHaveBeenCalledTimes(1)
     })
 
@@ -669,7 +694,7 @@ describe('SshPtyProvider', () => {
 
   it('attach sends pty.attach request', async () => {
     await provider.attach(scopedPty1)
-    expect(mux.request).toHaveBeenCalledWith('pty.attach', { id: 'pty-1' })
+    expectRequest(mux.request, 'pty.attach', { id: 'pty-1' })
   })
 
   it('attachForReconnect returns replay without relay notification', async () => {
@@ -684,10 +709,18 @@ describe('SshPtyProvider', () => {
       replay: 'restored output',
       incarnationId: 'incarnation-reconnect'
     })
-    expect(mux.request).toHaveBeenCalledWith('pty.attach', {
-      id: 'pty-1',
-      suppressReplayNotification: true
-    })
+    expectRequest(
+      mux.request,
+      'pty.attach',
+      {
+        id: 'pty-1',
+        suppressReplayNotification: true
+      },
+      expect.objectContaining({
+        timeoutMs: 10_000,
+        beforeResolve: expect.any(Function)
+      })
+    )
   })
 
   it('keeps missing incarnation compatible with an old relay', async () => {
@@ -712,12 +745,20 @@ describe('SshPtyProvider', () => {
       tabId: 'tab-a'
     })
 
-    expect(mux.request).toHaveBeenCalledWith('pty.attach', {
-      id: 'pty-1',
-      suppressReplayNotification: true,
-      expectedPaneKey: 'tab-a:leaf-a',
-      expectedTabId: 'tab-a'
-    })
+    expectRequest(
+      mux.request,
+      'pty.attach',
+      {
+        id: 'pty-1',
+        suppressReplayNotification: true,
+        expectedPaneKey: 'tab-a:leaf-a',
+        expectedTabId: 'tab-a'
+      },
+      expect.objectContaining({
+        timeoutMs: 10_000,
+        beforeResolve: expect.any(Function)
+      })
+    )
   })
 
   it('write sends pty.data notification', () => {
@@ -734,7 +775,7 @@ describe('SshPtyProvider', () => {
     mux.request.mockResolvedValue({ cols: 120, rows: 40 })
 
     await expect(provider.getAppliedSize(scopedPty1)).resolves.toEqual({ cols: 120, rows: 40 })
-    expect(mux.request).toHaveBeenCalledWith('pty.getSize', { id: 'pty-1' }, { timeoutMs: 1_000 })
+    expectRequest(mux.request, 'pty.getSize', { id: 'pty-1' }, { timeoutMs: 1_000 })
   })
 
   it('caches only an old relay method-not-found response', async () => {
@@ -759,7 +800,8 @@ describe('SshPtyProvider', () => {
 
   it('shutdown sends pty.shutdown request', async () => {
     await provider.shutdown(scopedPty1, { immediate: true })
-    expect(mux.request).toHaveBeenCalledWith(
+    expectRequest(
+      mux.request,
       'pty.shutdown',
       {
         id: 'pty-1',
@@ -772,7 +814,8 @@ describe('SshPtyProvider', () => {
 
   it('shutdown forwards keepHistory: true over the relay', async () => {
     await provider.shutdown(scopedPty1, { immediate: true, keepHistory: true })
-    expect(mux.request).toHaveBeenCalledWith(
+    expectRequest(
+      mux.request,
       'pty.shutdown',
       {
         id: 'pty-1',
@@ -789,7 +832,8 @@ describe('SshPtyProvider', () => {
     vi.useFakeTimers()
     try {
       await provider.shutdown(scopedPty1, { immediate: true, deadlineMs: Date.now() + 4321 })
-      expect(mux.request).toHaveBeenCalledWith(
+      expectRequest(
+        mux.request,
         'pty.shutdown',
         { id: 'pty-1', immediate: true, keepHistory: false },
         { timeoutMs: 4321 }
@@ -801,19 +845,19 @@ describe('SshPtyProvider', () => {
 
   it('sendSignal sends pty.sendSignal request', async () => {
     await provider.sendSignal(scopedPty1, 'SIGINT')
-    expect(mux.request).toHaveBeenCalledWith('pty.sendSignal', { id: 'pty-1', signal: 'SIGINT' })
+    expectRequest(mux.request, 'pty.sendSignal', { id: 'pty-1', signal: 'SIGINT' })
   })
 
   it('getCwd sends pty.getCwd request', async () => {
     mux.request.mockResolvedValue('/home/user/project')
     const cwd = await provider.getCwd(scopedPty1)
     expect(cwd).toBe('/home/user/project')
-    expect(mux.request).toHaveBeenCalledWith('pty.getCwd', { id: 'pty-1' })
+    expectRequest(mux.request, 'pty.getCwd', { id: 'pty-1' })
   })
 
   it('clearBuffer sends pty.clearBuffer request', async () => {
     await provider.clearBuffer(scopedPty1)
-    expect(mux.request).toHaveBeenCalledWith('pty.clearBuffer', { id: 'pty-1' })
+    expectRequest(mux.request, 'pty.clearBuffer', { id: 'pty-1' })
   })
 
   it('acknowledgeDataEvent sends pty.ackData notification', () => {
@@ -825,14 +869,14 @@ describe('SshPtyProvider', () => {
     mux.request.mockResolvedValue(true)
     const result = await provider.hasChildProcesses(scopedPty1)
     expect(result).toBe(true)
-    expect(mux.request).toHaveBeenCalledWith('pty.hasChildProcesses', { id: 'pty-1' })
+    expectRequest(mux.request, 'pty.hasChildProcesses', { id: 'pty-1' })
   })
 
   it('getForegroundProcess returns process name', async () => {
     mux.request.mockResolvedValue('node')
     const result = await provider.getForegroundProcess(scopedPty1)
     expect(result).toBe('node')
-    expect(mux.request).toHaveBeenCalledWith('pty.getForegroundProcess', { id: 'pty-1' })
+    expectRequest(mux.request, 'pty.getForegroundProcess', { id: 'pty-1' })
   })
 
   it('preserves unavailable process inspection', async () => {
@@ -844,7 +888,7 @@ describe('SshPtyProvider', () => {
     mux.request.mockResolvedValue(inspection)
 
     await expect(provider.inspectProcess(scopedPty1)).resolves.toEqual(inspection)
-    expect(mux.request).toHaveBeenCalledWith('pty.inspectProcess', { id: 'pty-1' })
+    expectRequest(mux.request, 'pty.inspectProcess', { id: 'pty-1' })
   })
 
   it('serializes scoped app ids using raw relay ids', async () => {
@@ -853,7 +897,7 @@ describe('SshPtyProvider', () => {
     const result = await provider.serialize([scopedPty1])
 
     expect(result).toBe('serialized')
-    expect(mux.request).toHaveBeenCalledWith('pty.serialize', { ids: ['pty-1'] })
+    expectRequest(mux.request, 'pty.serialize', { ids: ['pty-1'] })
   })
 
   it('rejects scoped ids owned by another SSH connection', async () => {

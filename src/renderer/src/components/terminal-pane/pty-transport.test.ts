@@ -892,6 +892,104 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
+  it('bounds the deferred side-effect queue under a stalled drain, keeping the newest title and a pending bell', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
+        await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onBell = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onBell })
+      const callbacks = { onData: vi.fn() }
+      const total = MAX_PENDING_PTY_SIDE_EFFECTS * 4
+
+      // Why: the bell is queued first so the cap must evict it — the latch has to survive onto a newer entry.
+      processor.processData('\x07', callbacks)
+      for (let i = 0; i < total / 2; i++) {
+        processor.processData(`\x1b]0;cap-title-${i}\x07`, callbacks)
+      }
+      // Why: a paused drain (background shutdown window) must not disable the bound either.
+      processor.pausePendingSideEffects()
+      for (let i = total / 2; i < total; i++) {
+        processor.processData(`\x1b]0;cap-title-${i}\x07`, callbacks)
+      }
+
+      expect(onTitleChange).not.toHaveBeenCalled()
+      processor.flushPendingSideEffects()
+
+      // Why: exactly the cap survives — every older title was evicted, never applied.
+      expect(onTitleChange).toHaveBeenCalledTimes(MAX_PENDING_PTY_SIDE_EFFECTS)
+      expect(onTitleChange).toHaveBeenLastCalledWith(
+        `cap-title-${total - 1}`,
+        `cap-title-${total - 1}`
+      )
+      expect(onBell).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('collapses evicted agent-status payloads onto the survivor, keeping the newest', async () => {
+    vi.useFakeTimers()
+    try {
+      const {
+        createPtyOutputProcessor,
+        MAX_PENDING_PTY_SIDE_EFFECTS,
+        MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY
+      } = await import('./pty-transport')
+      const onAgentStatus = vi.fn()
+      const processor = createPtyOutputProcessor({ onAgentStatus })
+      const callbacks = { onData: vi.fn() }
+      const total = MAX_PENDING_PTY_SIDE_EFFECTS * 2
+
+      for (let i = 0; i < total; i++) {
+        processor.processData(
+          `\x1b]9999;{"state":"working","prompt":"cap-status-${i}"}\x07`,
+          callbacks
+        )
+      }
+      processor.flushPendingSideEffects()
+
+      const delivered = onAgentStatus.mock.calls.map(([payload]) => payload.prompt)
+      expect(delivered.length).toBeLessThanOrEqual(
+        MAX_PENDING_PTY_SIDE_EFFECTS + MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY
+      )
+      expect(delivered.at(-1)).toBe(`cap-status-${total - 1}`)
+      // Why: eviction collapse must preserve chronological delivery order.
+      expect(delivered).toEqual(
+        [...delivered].sort((a, b) => Number(a.slice(11)) - Number(b.slice(11)))
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('delivers every side effect in order when the queue stays below the cap', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onBell = vi.fn()
+      const onAgentStatus = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onBell, onAgentStatus })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x07', callbacks)
+      for (let i = 0; i < 100; i++) {
+        processor.processData(`\x1b]0;under-cap-${i}\x07`, callbacks)
+      }
+      processor.processData('\x1b]9999;{"state":"done","prompt":"done"}\x07', callbacks)
+      await vi.runAllTimersAsync()
+
+      expect(onBell).toHaveBeenCalledTimes(1)
+      expect(onTitleChange).toHaveBeenCalledTimes(100)
+      expect(onTitleChange).toHaveBeenLastCalledWith('under-cap-99', 'under-cap-99')
+      expect(onAgentStatus).toHaveBeenCalledWith({ state: 'done', prompt: 'done' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('still runs stale-title detection when an OSC status chunk has no title', async () => {
     vi.useFakeTimers()
     try {

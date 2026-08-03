@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockLaunchAgentBackgroundSession = vi.fn()
 const mockLaunchWorktreeBackgroundTerminals = vi.fn()
-const mockSubmitPromptToAgentTab = vi.fn()
 const mockFindReusableAutomationSession = vi.fn()
 const mockObserveExistingAutomationSession = vi.fn()
 const mockCreateWorktree = vi.fn()
@@ -125,9 +124,7 @@ vi.mock('@/lib/launch-worktree-background-terminals', () => ({
   launchWorktreeBackgroundTerminals: mockLaunchWorktreeBackgroundTerminals
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
-  submitPromptToAgentTab: mockSubmitPromptToAgentTab
-}))
+vi.mock('@/lib/agent-paste-draft', () => ({}))
 
 vi.mock('@/lib/automation-session-reuse', () => ({
   findReusableAutomationSession: mockFindReusableAutomationSession

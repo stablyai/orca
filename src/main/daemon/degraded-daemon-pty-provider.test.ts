@@ -5,6 +5,7 @@ import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 type ProviderMock = IPtyProvider & {
+  probePtyLiveness: (id: string) => Promise<boolean | null>
   inspectProcess: (id: string) => Promise<PtyProcessInspection>
   emitData: (id: string, data: string, sequenceChars?: number) => void
   emitReplay: (id: string, data: string) => void
@@ -31,6 +32,7 @@ function createProvider(
     }),
     attach: vi.fn(async () => {}),
     hasPty: vi.fn((id: string) => sessions.includes(id)),
+    probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),
     providesAgentSessionOwnerListings: vi.fn(() => authoritativeOwnerListings),
     write: vi.fn(),
     resize: vi.fn(),
@@ -254,6 +256,20 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.write).not.toHaveBeenCalled()
   })
 
+  it('probes daemon owners without borrowing fallback liveness', async () => {
+    const current = createDaemonAdapter('current')
+    const legacy = createDaemonAdapter('legacy')
+    const fallback = createProvider('fallback', ['unknown-session'])
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+    vi.mocked(legacy.probePtyLiveness).mockResolvedValue(null)
+
+    await expect(provider.probePtyLiveness('unknown-session')).resolves.toBeNull()
+    expect(fallback.probePtyLiveness).not.toHaveBeenCalled()
+
+    vi.mocked(current.probePtyLiveness).mockResolvedValue(true)
+    await expect(provider.probePtyLiveness('unknown-session')).resolves.toBe(true)
+  })
+
   it('routes authoritative recovery snapshots to the owning daemon', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')
@@ -388,5 +404,20 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(exitSpy).toHaveBeenCalledWith({ id: 'current-session', code: -1 })
     expect(provider.getCurrentDaemonSessionIds()).toEqual([])
     expect(provider.hasPty('legacy-session')).toBe(true)
+  })
+
+  it('keeps an exited legacy daemon poisoning listProcesses after construction', async () => {
+    const current = createDaemonAdapter('daemon', ['current-session'])
+    const legacy = createDaemonAdapter('legacy', ['legacy-session'])
+    const fallback = createProvider('fallback', ['fallback-session'])
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+    await provider.discoverDaemonSessions()
+    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('legacy exited'))
+
+    await expect(provider.listProcesses()).rejects.toThrow('legacy exited')
+    await expect(provider.listProcesses()).rejects.toThrow('legacy exited')
+    expect(provider.getLegacyAdapters()).toEqual([legacy])
+    expect(current.listProcesses).toHaveBeenCalledTimes(3)
+    expect(fallback.listProcesses).toHaveBeenCalledTimes(2)
   })
 })

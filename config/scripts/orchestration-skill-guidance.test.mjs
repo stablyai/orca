@@ -51,30 +51,39 @@ describe('orchestration skill guidance', () => {
     )
   })
 
-  it('teaches the hard cutover without reviving a legacy executor', () => {
+  it('teaches attested adoption without reviving the retired scheduler', () => {
     const skill = readSkill()
     const migration = getSection(skill, 'Contract Migration')
 
-    expect(migration).toContain('hard cutover')
-    expect(migration).toContain('effectsApplied')
-    expect(migration).toContain('skills get orchestration --full')
-    expect(migration).toContain('Do not retry the rejected command unchanged')
-    expect(migration).toContain('no longer supervised')
-    expect(migration).toContain('task-list --run run_legacy_local')
-    expect(migration).toContain('Read-only inspection never consumes legacy mail')
-    expect(migration).toContain('does not run a legacy scheduler, translate old writes, or drain')
-    expect(migration).toContain('does not cancel the prior assignment')
-    expect(migration).toContain('invalidate its worktree')
-    expect(migration).toContain('discard filesystem changes')
-    expect(migration).toContain('leave it as the only editor in that worktree')
-    expect(migration).toContain('observe it manually, read-only')
-    expect(migration).toContain('until it reaches a stable handoff point')
-    expect(migration).toContain('visible activity is a reason to keep observing')
     expect(migration).toContain(
-      'Never launch a replacement editor in the same worktree while the legacy worker may still write there.'
+      'adopts a live pre-update orchestration assignment into an ordinary Run'
     )
-    expect(migration).toContain('if remaining work needs new lifecycle supervision')
-    expect(migration).not.toContain('restart the work using Run -> Task -> `worker-start`')
+    expect(migration).toContain(
+      'preserves the existing agent process, PTY/session, terminal handle, tab/leaf/pane, worktree or folder workspace, Task, and Dispatch'
+    )
+    expect(migration).toContain('never restarts or replaces the worker')
+    expect(migration).toContain('The retired scheduler is not revived')
+    expect(migration).toContain('[LEGACY COMPATIBILITY]')
+    expect(migration).toContain('[LEGACY READ-ONLY]')
+    expect(migration).toContain(
+      'Loss of lifecycle authority does not invalidate the existing assignment, process, or filesystem work.'
+    )
+    expect(migration).toContain(
+      'It must not spawn, write, signal, stop, switch, focus, split, or inject a terminal.'
+    )
+    expect(migration).not.toContain('task-list --run run_legacy_local')
+    expect(migration).toContain('run_legacy_local is an empty audit tombstone')
+    expect(migration).toContain('Recovered orchestration work from a contract update')
+    expect(migration).toContain('run-show --id <adopted_run_id>')
+    expect(migration).toContain('task-list --run <adopted_run_id>')
+    expect(migration).toContain('Legacy inspection remains available without consuming mail')
+    expect(migration).toContain('run-use --id <adopted_run_id> --takeover-legacy')
+    expect(migration).toContain('Takeover fences only the old coordinator')
+    expect(migration).toContain('Live legacy workers keep their original Tasks, Dispatches')
+    expect(migration).toContain(
+      'keep the original worker as the only editor until it reaches a stable handoff point'
+    )
+    expect(migration).toContain('a conflict-free placement for any remaining work')
   })
 
   it('treats long-running worker waits as liveness checkpoints, not failures', () => {

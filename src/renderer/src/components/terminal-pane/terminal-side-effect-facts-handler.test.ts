@@ -152,10 +152,20 @@ describe('registerTerminalSideEffectFactConsumer', () => {
 
   it('routes live facts to the registered consumer in batch order', () => {
     const { callbacks, events } = createCallbackRecorder()
-    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        ...callbacks,
+        onAgentStatus: (payload) => events.push(['status', payload.state, payload.agentType])
+      }
+    })
 
     _dispatchTerminalSideEffectBatchForTest(
       batch([
+        {
+          kind: 'agent-status',
+          payload: { state: 'working', prompt: 'fix it', agentType: 'codex' }
+        },
         { kind: 'title', normalizedTitle: '⠋ Claude', rawTitle: '⠋ Claude' },
         { kind: 'agent-working' },
         { kind: 'title', normalizedTitle: '✳ Claude', rawTitle: '✳ Claude' },
@@ -165,6 +175,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     )
 
     expect(events).toEqual([
+      ['status', 'working', 'codex'],
       ['title', '⠋ Claude', '⠋ Claude'],
       ['working'],
       ['title', '✳ Claude', '✳ Claude'],
@@ -427,6 +438,138 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }]))
 
     expect(events).toEqual([])
+  })
+
+  it('hands off facts emitted between the parked watcher unregistering and the pane registering', () => {
+    // Why: the reveal window — the watcher unregisters synchronously in the
+    // effect flush, the pane registers only after its async reattach resolves,
+    // and replay is title-only, so an unbuffered bell/command-code-done is lost.
+    const watcher = createCallbackRecorder()
+    const disposeWatcher = registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: watcher.callbacks
+    })
+    disposeWatcher()
+
+    const events: unknown[][] = []
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'bell' }, { kind: 'command-code-done', prompt: 'Fix the spinner' }], {
+        seq: 7
+      })
+    )
+    // A PTY that never had a consumer stays dropped — no buffer was opened.
+    _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }], { ptyId: 'never-consumed' }))
+
+    expect(events).toEqual([])
+    expect(watcher.events).toEqual([])
+
+    const neverConsumed = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({
+      ptyId: 'never-consumed',
+      callbacks: neverConsumed.callbacks
+    })
+    expect(neverConsumed.events).toEqual([])
+
+    const dispose = registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onBell: () => events.push(['bell']),
+        onCommandCodeDone: (prompt) => events.push(['cc-done', prompt])
+      }
+    })
+
+    expect(events).toEqual([['bell'], ['cc-done', 'Fix the spinner']])
+    expect(watcher.events).toEqual([])
+
+    // Drained exactly once: a later registration gets nothing.
+    dispose()
+    const later: unknown[][] = []
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onBell: () => later.push(['bell']),
+        onCommandCodeDone: (prompt) => later.push(['cc-done', prompt])
+      }
+    })
+
+    expect(later).toEqual([])
+  })
+
+  it('does not buffer replay batches across a handoff', () => {
+    // Why: the next consumer requests its own snapshot; a held replay would
+    // regress the title it just restored.
+    const dispose = registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: createCallbackRecorder().callbacks
+    })
+    dispose()
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'title', normalizedTitle: 'stale', rawTitle: 'stale' }], {
+        replay: true,
+        seq: 5
+      })
+    )
+
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+    expect(events).toEqual([])
+  })
+
+  it('drains the handoff buffer before the register snapshot, so the replay is stale', async () => {
+    // Why: the drained live title sets lastLiveTitleSeq, which is what makes
+    // the async snapshot's older title lose to the fact the pane already got.
+    const snapshot = batch([{ kind: 'title', normalizedTitle: 'snapshot', rawTitle: 'snapshot' }], {
+      replay: true,
+      seq: 20
+    })
+    ;(globalThis as { window: unknown }).window = {
+      api: { pty: { getSideEffectSnapshot: vi.fn(async () => snapshot) } }
+    }
+
+    const dispose = registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: createCallbackRecorder().callbacks
+    })
+    dispose()
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'title', normalizedTitle: 'live', rawTitle: 'live' }], { seq: 20 })
+    )
+
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks,
+      restoreTitleOnRegister: true
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(events).toEqual([['title', 'live', 'live']])
+  })
+
+  it('drops a handoff-buffered batch once the buffer TTL expires', () => {
+    vi.useFakeTimers()
+    try {
+      const dispose = registerTerminalSideEffectFactConsumer({
+        ptyId: PTY_ID,
+        callbacks: createCallbackRecorder().callbacks
+      })
+      dispose()
+      _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }]))
+      expect(vi.getTimerCount()).toBe(1)
+
+      vi.advanceTimersByTime(15_001)
+      expect(vi.getTimerCount()).toBe(0)
+
+      const { callbacks, events } = createCallbackRecorder()
+      registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+      expect(events).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('subscribes to the channel once and routes IPC batches', () => {

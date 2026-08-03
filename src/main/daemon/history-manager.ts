@@ -1,15 +1,18 @@
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, writeFileSync, existsSync, rmSync, unlinkSync } from 'node:fs'
+import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { getHistorySessionDirName } from './history-paths'
 import {
   fingerprintTerminalHistorySession,
   hasTerminalHistoryRecoveryProtection,
   quarantineTerminalHistorySession,
-  removeTerminalHistoryQuarantines,
   type ActiveHistoryRecoveryFreeze,
   type HistoryRecoveryFreeze
 } from './terminal-history-recovery-quarantine'
+import {
+  removeTerminalHistorySessionTrees,
+  schedulePendingSessionTreeRemovals
+} from './terminal-history-session-tombstone'
 import { TerminalHistorySessionWriter } from './terminal-history-session-writer'
 import {
   readTerminalHistoryMetaFromDir,
@@ -43,6 +46,8 @@ export class HistoryManager {
   ) {
     this.onWriteError = opts?.onWriteError
     this.checkpointMaxBytes = opts?.checkpointMaxBytes ?? TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
+    // Why: a quit between tombstone and reclaim leaves the tree on disk; nothing else rescans the queue.
+    schedulePendingSessionTreeRemovals(this.basePath)
   }
 
   async openSession(sessionId: string, opts: OpenSessionOptions): Promise<void> {
@@ -270,16 +275,11 @@ export class HistoryManager {
   async removeSession(sessionId: string): Promise<void> {
     this.writers.delete(sessionId)
     this.disabledSessions.delete(sessionId)
-    const activeFreeze = this.recoveryFreezes.get(sessionId)
-    if (activeFreeze) {
-      this.recoveryFreezes.delete(sessionId)
-    }
+    this.recoveryFreezes.delete(sessionId)
     await this.mutations.wait(sessionId)
-    rmSync(join(this.basePath, getHistorySessionDirName(sessionId)), {
-      recursive: true,
-      force: true
-    })
-    removeTerminalHistoryQuarantines(this.basePath, sessionId)
+    // Why tombstoned: writer handles are closed by here, so the trees only have to become unreachable —
+    // they reach hundreds of MB and every terminal a worktree delete tears down awaits this.
+    await removeTerminalHistorySessionTrees(this.basePath, sessionId)
   }
 
   isSessionDisabled(sessionId: string): boolean {

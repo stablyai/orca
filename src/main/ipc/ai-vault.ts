@@ -13,11 +13,13 @@ import { claudeProjectsRootDirs } from '../ai-vault/session-scanner-source-disco
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { aiVaultScanIssueResult, mergeAiVaultListResults } from '../ai-vault/session-list-results'
 import type {
+  AiVaultFirstUserPromptArgs,
   AiVaultListArgs,
   AiVaultListResult,
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
 } from '../../shared/ai-vault-types'
+import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-prompt-read'
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -285,6 +287,9 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     'aiVault:listSubagentSessions',
     (_event, args?: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>
       listAiVaultSubagentSessions(args)
+  )
+  ipcMain.handle('aiVault:getFirstUserPrompt', (_event, args?: AiVaultFirstUserPromptArgs) =>
+    handleAiVaultGetFirstUserPrompt(args)
   )
   // DOM focus/visibility events don't fire in the renderer on macOS app
   // activation, so refresh-on-refocus needs this main-process signal.

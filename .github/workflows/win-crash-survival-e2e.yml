@@ -6,56 +6,10 @@ name: Windows Crash-Survival E2E
 # silent-installs it, opens a terminal, force-kills ONLY the app main (no
 # tree-kill), and asserts the daemon + shell stay alive, a relaunch adopts the
 # same daemon and shell, and post-crash input causes no pwsh FailFast. Targeted
-# pull requests keep it as a durable regression gate. A CI runner is the only
+# manual runs keep it as a durable regression proof. A CI runner is the only
 # safe place to install — see the relocation post-mortem.
 
 on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
-    paths:
-      - '.github/workflows/win-crash-survival-e2e.yml'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'electron.vite.config.ts'
-      - 'build-plugins/**'
-      - 'config/electron-builder.config.cjs'
-      - 'config/patches/**'
-      - 'config/scripts/ensure-native-runtime.mjs'
-      - 'config/scripts/rebuild-native-deps.mjs'
-      - 'config/scripts/verify-packaged-plugin-resources.cjs'
-      - 'native/**'
-      # Byte-hashed at package time, and CRLF-sensitive on Windows.
-      - '.gitattributes'
-      - 'resources/plugins/**'
-      - 'resources/win32/**'
-      - 'src/main/daemon/**'
-      - 'src/main/index.ts'
-      - 'src/main/ipc/pty*.ts'
-      - 'src/main/persistence.ts'
-      - 'src/main/providers/**'
-      - 'src/main/pty/**'
-      - 'src/main/startup/first-window-startup-services.ts'
-      - 'src/main/window/attach-main-window-services.ts'
-      - 'src/preload/**'
-      - 'src/renderer/src/App.tsx'
-      - 'src/renderer/src/components/terminal-pane/**'
-      - 'src/renderer/src/hooks/useIpcEvents.ts'
-      - 'src/renderer/src/lib/pane-manager/**'
-      - 'src/renderer/src/lib/session-write-subscriber.ts'
-      - 'src/renderer/src/lib/workspace-session-host-persistence.ts'
-      - 'src/renderer/src/store/slices/terminals.ts'
-      - 'src/shared/pty-session-id-format.ts'
-      - 'tools/win-crash-survival-e2e/**'
-      - 'tools/win-update-e2e/**'
-      # Why: source tests and benchmarks do not change the packaged artifact;
-      # their own verify jobs cover them without spending a Windows build slot.
-      - '!src/**/*.test.*'
-      - '!src/**/*.bench.*'
   workflow_dispatch:
     inputs:
       expect:
@@ -181,7 +135,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           $log = "artifacts/crash-survival-output.log"
-          node tools/win-crash-survival-e2e/run.mjs `
+          node tests/tools/win-crash-survival-e2e/run.mjs `
             --expect "$env:EXPECT" `
             --exe-path "$env:ORCA_EXE" `
             --soak-seconds 8 2>&1 | Tee-Object -FilePath $log

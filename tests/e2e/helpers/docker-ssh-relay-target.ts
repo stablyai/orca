@@ -14,6 +14,7 @@ export const DOCKER_SSH_SECOND_HUB_REMOTE_REPO_PATH = '/tmp/orca-docker-second-h
 export type DockerSshRelayTarget = {
   containerName: string
   containerIp: string
+  host: string
   identityFile: string
   port: number
   tempDir: string
@@ -58,7 +59,7 @@ function sshArgs(target: DockerSshRelayTarget, command: string): string[] {
     'BatchMode=yes',
     '-o',
     'IdentitiesOnly=yes',
-    'root@127.0.0.1',
+    `root@${target.host}`,
     command
   ]
 }
@@ -122,6 +123,13 @@ export function writeDockerSshRelayTargetFile(
 }
 
 export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTarget {
+  const host = process.env.ORCA_E2E_SSH_TARGET_HOST?.trim() || '127.0.0.1'
+  if (host === 'localhost' || host === '::1' || host.startsWith('127.')) {
+    if (process.env.ORCA_E2E_SSH_TARGET_HOST) {
+      throw new Error(`ORCA_E2E_SSH_TARGET_HOST must be non-loopback: ${host}`)
+    }
+  }
+  const bindHost = host === '127.0.0.1' ? host : '0.0.0.0'
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'orca-ssh-docker-'))
   const identityFile = path.join(tempDir, 'id_ed25519')
   run('ssh-keygen', ['-t', 'ed25519', '-N', '', '-f', identityFile, '-q'])
@@ -139,7 +147,7 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
         '--name',
         containerName,
         '-p',
-        '127.0.0.1::22',
+        `${bindHost}::22`,
         '-e',
         `AUTHORIZED_KEY=${publicKey}`,
         getDockerSshRelayImage(),
@@ -169,7 +177,7 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
     if (!containerIp) {
       throw new Error(`Unable to read container IP for ${containerName}`)
     }
-    target = { containerName, containerIp, identityFile, port, tempDir }
+    target = { containerName, containerIp, host, identityFile, port, tempDir }
     waitForSsh(target)
     seedRemoteRepo(target, DOCKER_SSH_RELAY_REMOTE_REPO_PATH)
     seedRemoteRepo(target, DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH)
@@ -177,7 +185,7 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
     return target
   } catch (error) {
     cleanupDockerSshRelayTarget(
-      target ?? { containerName, containerIp: '', identityFile, port: 0, tempDir }
+      target ?? { containerName, containerIp: '', host, identityFile, port: 0, tempDir }
     )
     throw error
   }

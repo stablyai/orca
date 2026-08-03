@@ -79,6 +79,12 @@ export function normalizeDisabledTuiAgents(value: unknown): TuiAgent[] {
   return [...seen]
 }
 
+export function haveSameDisabledTuiAgents(left: unknown, right: unknown): boolean {
+  const leftSet = new Set(normalizeDisabledTuiAgents(left))
+  const rightSet = new Set(normalizeDisabledTuiAgents(right))
+  return leftSet.size === rightSet.size && [...leftSet].every((agent) => rightSet.has(agent))
+}
+
 export function isTuiAgentEnabled(agent: TuiAgent, disabled?: Iterable<unknown> | null): boolean {
   return !normalizeDisabledTuiAgents(disabled).includes(agent)
 }

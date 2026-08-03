@@ -144,7 +144,7 @@ describe('AgentKanbanCard', () => {
     expect(onOpenTerminal).toHaveBeenCalledTimes(1)
   })
 
-  it('labels one subagent and the workspace status accessibly', () => {
+  it('labels one subagent accessibly and never renders a workspace-status dot', () => {
     renderCard({
       card: card({
         workspaceStatusId: 'in-review',
@@ -156,7 +156,7 @@ describe('AgentKanbanCard', () => {
     })
 
     expect(screen.getByRole('button', { name: '1 subagent' })).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'In review' })).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'In review' })).not.toBeInTheDocument()
   })
 
   it('tints attention amber and done green, leaving every other state neutral', () => {

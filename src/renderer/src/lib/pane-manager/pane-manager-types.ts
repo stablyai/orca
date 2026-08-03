@@ -26,7 +26,7 @@ export type PaneSpawnHints = {
 export type ClosedPaneInfo = {
   paneId: number
   leafId: TerminalLeafId
-  reason?: 'close' | 'detach'
+  reason?: 'close' | 'detach' | 'retire'
 }
 
 export type PaneExternalDropTarget = {
@@ -59,7 +59,13 @@ export type PaneManagerOptions = {
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   terminalTuiScrollSensitivity?: () => number | undefined
   onLinkClick?: (event: MouseEvent | undefined, url: string) => void
+  /** Resolved per hover so link-routing setting changes apply without recreating panes. */
+  // Why: required so dropping the wiring is a compile error — an optional hint with a
+  // default would silently serve stale copy that no test can distinguish.
+  // Why: paneId-scoped because the hovered pane's host decides where its links can go.
+  linkOpenHint: (paneId: number) => string
   formatLinkTooltip?: (
+    paneId: number,
     url: string,
     openLinkHint: string
   ) => string | null | undefined | Promise<string | null | undefined>

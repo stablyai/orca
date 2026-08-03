@@ -18,7 +18,7 @@ const fsReadFile = vi.fn()
 const fsDeletePath = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 
-vi.mock('@/components/confirmation-dialog', () => ({
+vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
 vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: () => 'Delete' }))

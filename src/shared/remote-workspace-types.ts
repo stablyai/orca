@@ -31,11 +31,6 @@ export type RemoteWorkspaceConnectedClient = {
   isCurrent?: boolean
 }
 
-export type RemoteWorkspacePatch = {
-  kind: 'replace-session'
-  session: RemoteWorkspaceSession
-}
-
 export type RemoteWorkspacePatchResult =
   | {
       ok: true

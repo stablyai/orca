@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FsHandler } from './fs-handler'
 import { RelayContext } from './context'
 import type { RelayDispatcher } from './dispatcher'
-import { STREAM_CHUNK_SIZE } from './protocol'
+import { MAX_CONCURRENT_STREAMS, STREAM_CHUNK_SIZE } from './protocol'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -10,15 +10,27 @@ import { tmpdir } from 'node:os'
 
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
 
-type Notification = { method: string; params?: Record<string, unknown> }
+type NotificationLane = 'producer' | 'bulk' | 'control'
+type Notification = {
+  method: string
+  params?: Record<string, unknown>
+  lane: NotificationLane
+  clientId?: number
+}
+type MockRequestContext = { clientId?: number; isStale: () => boolean }
 
 function createMockDispatcher() {
   const requestHandlers = new Map<
     string,
-    (params: Record<string, unknown>, context?: { isStale: () => boolean }) => Promise<unknown>
+    (params: Record<string, unknown>, context?: MockRequestContext) => Promise<unknown>
   >()
   const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
   const notifications: Notification[] = []
+  const droppedProducerFrames: Notification[] = []
+  // Mirrors the real lane split: a saturated producer queue drops frames, control frames still land.
+  let producerSaturated = false
+  let holdControlSettlement = false
+  const heldControlSettlements: (() => void)[] = []
   return {
     onRequest: vi.fn(
       (
@@ -32,16 +44,65 @@ function createMockDispatcher() {
       notificationHandlers.set(method, handler)
     }),
     notify: vi.fn((method: string, params?: Record<string, unknown>) => {
-      notifications.push({ method, params })
+      const frame: Notification = { method, params, lane: 'producer' }
+      if (producerSaturated) {
+        droppedProducerFrames.push(frame)
+        return
+      }
+      notifications.push(frame)
     }),
-    notifyBulk: vi.fn(async (method: string, params?: Record<string, unknown>): Promise<void> => {
-      notifications.push({ method, params })
+    notifyBulk: vi.fn(
+      async (
+        method: string,
+        params?: Record<string, unknown>,
+        opts?: { clientId?: number }
+      ): Promise<void> => {
+        notifications.push({ method, params, lane: 'bulk', clientId: opts?.clientId })
+      }
+    ),
+    notifyClient: vi.fn((clientId: number, method: string, params?: Record<string, unknown>) => {
+      notifications.push({ method, params, lane: 'control', clientId })
+    }),
+    // Mirrors the real control lane: the frame is queued on enqueue, but settles only once the
+    // sink actually wrote it — holding settlement models a socket that is not draining.
+    tryNotifyClient: vi.fn(
+      (
+        clientId: number,
+        method: string,
+        params?: Record<string, unknown>,
+        onSettled?: (result: { ok: boolean }) => void
+      ): boolean => {
+        notifications.push({ method, params, lane: 'control', clientId })
+        const settle = () => onSettled?.({ ok: true })
+        if (holdControlSettlement) {
+          heldControlSettlements.push(settle)
+        } else {
+          settle()
+        }
+        return true
+      }
+    ),
+    notifyControl: vi.fn((method: string, params?: Record<string, unknown>) => {
+      notifications.push({ method, params, lane: 'control' })
     }),
     _notifications: notifications,
+    _droppedProducerFrames: droppedProducerFrames,
+    saturateProducerLane() {
+      producerSaturated = true
+    },
+    holdControlSettlements() {
+      holdControlSettlement = true
+    },
+    settleHeldControlFrames() {
+      holdControlSettlement = false
+      for (const settle of heldControlSettlements.splice(0)) {
+        settle()
+      }
+    },
     callRequest(
       method: string,
       params: Record<string, unknown> = {},
-      context?: { isStale: () => boolean }
+      context?: MockRequestContext
     ) {
       const handler = requestHandlers.get(method)
       if (!handler) {
@@ -136,6 +197,60 @@ describe('FsHandler readFileStream', () => {
     expect(end).toEqual({ streamId: meta.streamId })
     const reassembled = Buffer.concat(chunks.map((c) => Buffer.from(c.data, 'base64')))
     expect(reassembled.equals(content)).toBe(true)
+  })
+
+  it('publishes fs.streamEnd after the final fs.streamChunk and targets the same client', async () => {
+    const filePath = path.join(tmpDir, 'targeted.png')
+    writeFileSync(filePath, Buffer.alloc(300 * 1024, 0x42))
+
+    const meta = (await dispatcher.callRequest(
+      'fs.readFileStream',
+      { filePath },
+      { clientId: 7, isStale: () => false }
+    )) as { streamId: number }
+
+    await waitFor(() => collectStream(dispatcher).end !== null)
+    const frames = dispatcher._notifications
+    const endIndex = frames.findIndex((n) => n.method === 'fs.streamEnd')
+    const lastChunkIndex = frames.map((n) => n.method).lastIndexOf('fs.streamChunk')
+    expect(lastChunkIndex).toBeGreaterThanOrEqual(0)
+    expect(endIndex).toBe(lastChunkIndex + 1)
+    expect(frames[endIndex]).toEqual({
+      method: 'fs.streamEnd',
+      params: { streamId: meta.streamId },
+      lane: 'control',
+      clientId: 7
+    })
+    expect(frames[lastChunkIndex].clientId).toBe(7)
+  })
+
+  // Real saturation is not constructible: the fixed-bulk lane admits a chunk only while producerBytes is 0,
+  // so a real backlog parks the chunk pump long before the terminal frame — hence the lane-tagging mock.
+  it('orders fs.streamEnd after the final chunk on the control lane and releases the stream', async () => {
+    const filePath = path.join(tmpDir, 'stream-end-release.png')
+    writeFileSync(filePath, Buffer.alloc(300 * 1024, 0x42))
+    // Producer-lane frames now divert to the drop log, so an empty log proves no stream frame took that lane.
+    dispatcher.saturateProducerLane()
+
+    const meta = (await dispatcher.callRequest(
+      'fs.readFileStream',
+      { filePath },
+      { clientId: 3, isStale: () => false }
+    )) as { streamId: number }
+
+    await waitFor(() => collectStream(dispatcher).end !== null)
+    expect(dispatcher._droppedProducerFrames).toHaveLength(0)
+    expect(collectStream(dispatcher).end).toEqual({ streamId: meta.streamId })
+
+    const frames = dispatcher._notifications
+    const endIndex = frames.findIndex((n) => n.method === 'fs.streamEnd')
+    const lastChunkIndex = frames.map((n) => n.method).lastIndexOf('fs.streamChunk')
+    expect(lastChunkIndex).toBeGreaterThanOrEqual(0)
+    expect(endIndex).toBe(lastChunkIndex + 1)
+    expect(frames[endIndex].lane).toBe('control')
+
+    const registry = (handler as unknown as { streamRegistry: { size(): number } }).streamRegistry
+    await waitFor(() => registry.size() === 0)
   })
 
   it('fills protocol chunks when fs.read returns short before EOF', async () => {
@@ -334,6 +449,47 @@ describe('FsHandler readFileStream', () => {
     const { end, err } = collectStream(dispatcher)
     expect(end).toBeNull()
     expect(err).toBeNull()
+  })
+
+  it('caps undelivered terminal frames so they cannot overflow the link-killing control lane', async () => {
+    const filePath = path.join(tmpDir, 'terminal-budget.png')
+    writeFileSync(filePath, Buffer.alloc(STREAM_CHUNK_SIZE, 0x42)) // one chunk per stream
+    // A socket that accepts nothing: control frames queue, and the real writer destroys the
+    // client once 256 of them pile up.
+    dispatcher.holdControlSettlements()
+
+    const registry = (handler as unknown as { streamRegistry: { size(): number } }).streamRegistry
+    const context = { clientId: 5, isStale: () => false }
+    const terminalFrames = () =>
+      dispatcher._notifications.filter(
+        (n) => n.method === 'fs.streamEnd' || n.method === 'fs.streamError'
+      )
+
+    for (let i = 0; i < MAX_CONCURRENT_STREAMS; i++) {
+      await dispatcher.callRequest('fs.readFileStream', { filePath }, context)
+      await waitFor(() => terminalFrames().length === i + 1)
+    }
+    // The fd must go back even though its terminal frame is still undelivered.
+    await waitFor(() => registry.size() === 0)
+
+    await expect(
+      dispatcher.callRequest('fs.readFileStream', { filePath }, context)
+    ).rejects.toThrow(/Too many concurrent streams/)
+    await flush(10)
+    expect(terminalFrames()).toHaveLength(MAX_CONCURRENT_STREAMS)
+
+    // The budget is per client, so a second peer on the same relay still reads.
+    await dispatcher.callRequest(
+      'fs.readFileStream',
+      { filePath },
+      { clientId: 9, isStale: () => false }
+    )
+    await waitFor(() => terminalFrames().length === MAX_CONCURRENT_STREAMS + 1)
+
+    // Draining the sink settles the queued frames and hands the budget back.
+    dispatcher.settleHeldControlFrames()
+    await dispatcher.callRequest('fs.readFileStream', { filePath }, context)
+    await waitFor(() => terminalFrames().length === MAX_CONCURRENT_STREAMS + 2)
   })
 
   it('rejects the 17th concurrent stream with TooManyStreams', async () => {

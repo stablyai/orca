@@ -201,6 +201,23 @@ describe('Jira client credential storage', () => {
     expect(userAgent).not.toMatch(/Mozilla|Chrome|Safari|AppleWebKit/i)
   })
 
+  it('removes cancelled queued reads so the request pool recovers', async () => {
+    const jira = await loadClientModule()
+    await Promise.all([jira.acquire(), jira.acquire(), jira.acquire(), jira.acquire()])
+    const controller = new AbortController()
+    const queued = jira.acquire(controller.signal)
+
+    controller.abort()
+
+    await expect(queued).rejects.toMatchObject({ name: 'AbortError' })
+    jira.release()
+    await expect(jira.acquire()).resolves.toBeUndefined()
+    jira.release()
+    jira.release()
+    jira.release()
+    jira.release()
+  })
+
   it('downloads same-origin attachment URLs without forwarding auth cross-origin', async () => {
     const jira = await loadClientModule({ encryptionAvailable: true })
     const client = {

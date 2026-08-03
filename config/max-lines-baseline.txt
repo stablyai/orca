@@ -3,7 +3,6 @@
 # split the oversized file instead (AGENTS.md → "Do Not Disable Max Lines").
 # Mobile entries record max=<ceiling>; their ceiling may only decrease.
 # Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries and lowers ceilings)
-inline mobile/src/constants/marine-creatures.ts
 inline src/cli/handlers/automations.ts
 inline src/cli/handlers/orchestration.ts
 inline src/cli/help.ts
@@ -252,7 +251,6 @@ inline src/renderer/src/components/tab-bar/TabBar.tsx
 inline src/renderer/src/components/tab-bar/TabBar.windows-shell-launch.test.ts
 inline src/renderer/src/components/tab-group/useTabDragSplit.ts
 inline src/renderer/src/components/tab-group/useTabGroupWorkspaceModel.ts
-inline src/renderer/src/components/task-page-cache-selectors.ts
 inline src/renderer/src/components/terminal-pane/TerminalPane.tsx
 inline src/renderer/src/components/terminal-pane/agent-completion-coordinator.test.ts
 inline src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts

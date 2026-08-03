@@ -81,6 +81,41 @@ describe('folderWorkspaceToWorktree', () => {
     expect(worktree.linkedGitLabMR).toBeNull()
   })
 
+  it('projects durable Jira item and source context without legacy issue zero', () => {
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'group-1',
+      hostId: 'local' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      }
+    }
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({
+        linkedTask: {
+          provider: 'jira',
+          type: 'issue',
+          number: 0,
+          title: 'ORCA-123 Link Jira',
+          url: 'https://company.atlassian.net/browse/ORCA-123',
+          jiraIdentifier: 'ORCA-123'
+        },
+        linkedTaskSourceContext
+      })
+    )
+
+    expect(worktree.linkedIssue).toBeNull()
+    expect(worktree.linkedWorkItem).toMatchObject({
+      provider: 'jira',
+      jiraIdentifier: 'ORCA-123'
+    })
+    expect(worktree.linkedTaskSourceContext).toEqual(linkedTaskSourceContext)
+  })
+
   it('projects first-message rename state for folder workspace cards', () => {
     const worktree = folderWorkspaceToWorktree(
       makeFolderWorkspace({

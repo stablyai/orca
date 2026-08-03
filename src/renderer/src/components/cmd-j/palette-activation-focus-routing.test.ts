@@ -24,10 +24,10 @@ describe('Cmd+J activation focus routing (#9939)', () => {
       'const handleSelectBrowserPage'
     )
 
-    expect(handler).toContain('queueWorkspaceActivationTerminalFocus(worktreeId, activation)')
+    expect(handler).toContain('queueWorkspaceActivationTerminalFocus(worktree.id, activation)')
     // The fallback must be reachable only when the helper declines the destination.
     expect(handler).toMatch(
-      /if \(!queueWorkspaceActivationTerminalFocus\(worktreeId, activation\)\) \{\s*focusFallbackSurface\(\)\s*\}/
+      /if \(!queueWorkspaceActivationTerminalFocus\(worktree\.id, activation\)\) \{\s*focusFallbackSurface\(\)\s*\}/
     )
     // An unconditional fallback is the exact shape of the original bug, so the only bare call
     // allowed is the guarded one inside the if-block above.

@@ -4,9 +4,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetBitbucketRepoRefCache } from '../bitbucket/repository-ref'
 import { getHostedReviewForBranch } from './hosted-review'
+import { __resetHostedReviewBranchCacheForTests } from './hosted-review-branch-cache'
 
 const execFileAsync = promisify(execFile)
 const OLD_ENV = process.env
@@ -28,11 +29,14 @@ describe('Bitbucket hosted review integration', () => {
     delete process.env.ORCA_BITBUCKET_EMAIL
     delete process.env.ORCA_BITBUCKET_API_TOKEN
     _resetBitbucketRepoRefCache()
+    __resetHostedReviewBranchCacheForTests()
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     process.env = OLD_ENV
     _resetBitbucketRepoRefCache()
+    __resetHostedReviewBranchCacheForTests()
   })
 
   it('resolves a Bitbucket PR through real git remote parsing and HTTP API calls', async () => {
@@ -111,6 +115,82 @@ describe('Bitbucket hosted review integration', () => {
       const query = new URLSearchParams(seen[0].search)
       expect(query.get('q')).toContain('source.branch.name = "feature/bitbucket"')
       expect(query.getAll('state')).toEqual(['OPEN', 'MERGED', 'DECLINED', 'SUPERSEDED'])
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+      })
+    }
+  })
+
+  it('does not cache a transient API failure as a definitive no-review result', async () => {
+    vi.useFakeTimers({ now: Date.now() })
+    let pullRequestCalls = 0
+    let buildStatusCalls = 0
+    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
+      if (url.pathname === '/2.0/repositories/team/repo/pullrequests') {
+        pullRequestCalls += 1
+        if (pullRequestCalls === 1) {
+          res.writeHead(503, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ message: 'temporary outage' }))
+          return
+        }
+        sendJson(res, {
+          values: [
+            {
+              id: 13,
+              title: 'Recovered Bitbucket branch',
+              state: 'OPEN',
+              updated_on: '2026-05-15T00:00:00Z',
+              links: { html: { href: 'https://bitbucket.org/team/repo/pull-requests/13' } },
+              source: { branch: { name: 'feature/recovery' }, commit: { hash: 'def456' } }
+            }
+          ]
+        })
+        return
+      }
+
+      if (url.pathname === '/2.0/repositories/team/repo/commit/def456/statuses/build') {
+        buildStatusCalls += 1
+        sendJson(res, { values: [{ state: 'SUCCESSFUL' }] })
+        return
+      }
+
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ message: 'not found' }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-bitbucket-review-recovery-'))
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('expected TCP server address')
+      }
+
+      process.env.ORCA_BITBUCKET_API_BASE_URL = `http://127.0.0.1:${address.port}/2.0`
+      await execFileAsync('git', ['init'], { cwd: repoPath })
+      await execFileAsync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:team/repo.git'], {
+        cwd: repoPath
+      })
+
+      await expect(
+        getHostedReviewForBranch({ repoPath, branch: 'refs/heads/feature/recovery' })
+      ).rejects.toThrow('HTTP 503')
+
+      vi.advanceTimersByTime(60_001)
+      await expect(
+        getHostedReviewForBranch({ repoPath, branch: 'refs/heads/feature/recovery' })
+      ).resolves.toMatchObject({
+        provider: 'bitbucket',
+        number: 13,
+        title: 'Recovered Bitbucket branch',
+        state: 'open'
+      })
+      expect(pullRequestCalls).toBe(2)
+      // The failed lookup never reaches build status, so the recovery owns this call.
+      expect(buildStatusCalls).toBe(1)
     } finally {
       await rm(repoPath, { recursive: true, force: true })
       await new Promise<void>((resolve, reject) => {

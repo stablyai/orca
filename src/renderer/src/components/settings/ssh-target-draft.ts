@@ -145,6 +145,22 @@ export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
   )
 }
 
+export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTarget): boolean {
+  return (
+    current.label !== baseline.label ||
+    current.configHost !== baseline.configHost ||
+    current.host !== baseline.host ||
+    current.port !== baseline.port ||
+    current.username !== baseline.username ||
+    current.identityFile !== baseline.identityFile ||
+    current.proxyCommand !== baseline.proxyCommand ||
+    current.jumpHost !== baseline.jumpHost ||
+    current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
+    current.relayGracePeriodSeconds !== baseline.relayGracePeriodSeconds ||
+    current.relayKeepAliveUntilReset !== baseline.relayKeepAliveUntilReset
+  )
+}
+
 export function parseRelayGracePeriodSeconds(draft: EditingTarget): number {
   return draft.relayKeepAliveUntilReset ? 0 : Number.parseInt(draft.relayGracePeriodSeconds, 10)
 }

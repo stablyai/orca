@@ -85,6 +85,29 @@ export type DashboardCard = {
   /** The tab's conversation name, resolved exactly as the sidebar's agent rows
    *  resolve it. Undefined when no usable name exists (status-only titles). */
   conversationName?: string
+  /** Host-dependent input facts the preview terminal needs to encode keys the
+   *  way this agent's real pane does. Null when the card has no live pty. Only
+   *  the main renderer owns the store these derive from, so they ride the
+   *  snapshot to reach the pop-out. */
+  terminalInput?: DashboardCardTerminalInput
+}
+
+/**
+ * Per-pty input contract shared by a pane and its dashboard preview. Byte
+ * protocols follow the PTY's execution host, not the client OS — they differ
+ * for a macOS client driving a Windows runtime.
+ */
+export type DashboardCardTerminalInput = {
+  /** Platform executing the pty; picks the host-side byte encodings. */
+  hostPlatform: NodeJS.Platform
+  /** Local native Windows ConPTY, where PSReadLine binds Ctrl+←/→ itself. */
+  localWindowsConpty: boolean
+  /** OS release of a local Windows client, for xterm's ConPTY wrap-marker compat. */
+  osRelease?: string
+  /** Shift+Enter encoding resolved from this pane's agent evidence. */
+  windowsShiftEnterEncoding: 'alt-enter' | 'csi-u'
+  /** False withholds the kitty (CSI-u) advertisement, as ConPTY panes do. */
+  kittyKeyboardAdvertised: boolean
 }
 
 export type DashboardFilterOption = {

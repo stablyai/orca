@@ -15,6 +15,7 @@ import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-prefligh
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { buildGitHubWorkspaceSource } from '../../../shared/new-workspace/workspace-source'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -273,10 +274,26 @@ export function buildInitialGitHubWorkItemRequest(
   const workspaceRunContext = getWorkspaceRunContextForRepo(repo, args.workspaceRunContext)
   const ownerHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   const identity = resolveGitHubWorkItemIdentity(args.item)
+  const linkedWorkItem =
+    identity.number !== null
+      ? buildGitHubWorkspaceSource({
+          type: identity.type,
+          number: identity.number,
+          title: args.item.title,
+          url: args.item.url,
+          repoId: args.repoId
+        })
+      : null
   return {
     repoId: args.repoId,
     worktreeCreateProgressMode: ownerHost?.kind === 'local' ? 'stepped' : 'indeterminate',
     ...(args.taskSourceContext ? { taskSourceContext: args.taskSourceContext } : {}),
+    ...(linkedWorkItem
+      ? {
+          linkedWorkItem,
+          ...(args.taskSourceContext ? { linkedTaskSourceContext: args.taskSourceContext } : {})
+        }
+      : {}),
     ...(workspaceRunContext ? { workspaceRunContext } : {}),
     name: seedName,
     ...(displayName ? { displayName } : {}),
