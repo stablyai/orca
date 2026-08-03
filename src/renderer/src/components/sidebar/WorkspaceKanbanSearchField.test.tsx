@@ -195,6 +195,21 @@ describe('WorkspaceKanbanSearchField', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
+  it('still clears on an unmarked Escape after a composition that never ended', () => {
+    // Why: compositionend is not guaranteed, and this field is the board's only
+    // Escape handler, so trusting the document flag alone would strand the query.
+    renderField({ query: '検索', matchCount: 1, totalCount: 12 })
+
+    act(() => {
+      input().dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+      input().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      )
+    })
+
+    expect(onClear).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps focus in the field after the clear button unmounts itself', () => {
     renderField({ query: 'orca', matchCount: 3, totalCount: 12 })
     act(() => {

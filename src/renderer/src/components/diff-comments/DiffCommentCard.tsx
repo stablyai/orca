@@ -2,6 +2,7 @@ import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
@@ -292,7 +293,7 @@ export function DiffCommentCard({
                   handleCancel()
                   return
                 }
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
+                if (e.key === 'Enter' && !isImeCompositionKeyDown(e) && !e.shiftKey) {
                   e.preventDefault()
                   if (!canSubmit) {
                     return

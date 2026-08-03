@@ -3,6 +3,7 @@ import { CircleStop, FolderOpen, Settings } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
 import { RemoteFileBrowser } from './RemoteFileBrowser'
 import { SshTargetRow } from './SshTargetRow'
@@ -172,7 +173,7 @@ export function RemoteStep({
               value={remotePath}
               onChange={(event) => onRemotePathChange(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                if (event.key === 'Enter' && !isImeCompositionKeyDown(event)) {
                   event.preventDefault()
                   if (selectedTargetId && remotePath.trim() && !isAddingRemote) {
                     onAdd()

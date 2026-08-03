@@ -42,6 +42,7 @@ import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   getSettingsFocusedExecutionHostId,
   parseExecutionHostId,
@@ -6571,12 +6572,7 @@ export default function TaskPage(): React.JSX.Element {
     (event: React.KeyboardEvent<HTMLInputElement>): void => {
       if (event.key === 'Enter') {
         // React SyntheticEvent does not expose isComposing; use nativeEvent.
-        if (
-          shouldSuppressEnterSubmit(
-            { isComposing: event.nativeEvent.isComposing, shiftKey: event.shiftKey },
-            false
-          )
-        ) {
+        if (shouldSuppressEnterSubmit(event.nativeEvent, false)) {
           return
         }
         event.preventDefault()
@@ -8711,15 +8707,7 @@ export default function TaskPage(): React.JSX.Element {
                             onChange={(e) => setLinearSearchInput(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
-                                if (
-                                  shouldSuppressEnterSubmit(
-                                    {
-                                      isComposing: e.nativeEvent.isComposing,
-                                      shiftKey: e.shiftKey
-                                    },
-                                    false
-                                  )
-                                ) {
+                                if (shouldSuppressEnterSubmit(e.nativeEvent, false)) {
                                   return
                                 }
                                 e.preventDefault()
@@ -8895,12 +8883,7 @@ export default function TaskPage(): React.JSX.Element {
                           onChange={(e) => setJiraSearchInput(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                              if (
-                                shouldSuppressEnterSubmit(
-                                  { isComposing: e.nativeEvent.isComposing, shiftKey: e.shiftKey },
-                                  false
-                                )
-                              ) {
+                              if (shouldSuppressEnterSubmit(e.nativeEvent, false)) {
                                 return
                               }
                               e.preventDefault()
@@ -11123,7 +11106,7 @@ export default function TaskPage(): React.JSX.Element {
                 value={newIssueTitle}
                 onChange={(e) => setNewIssueTitle(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  if (e.key === 'Enter' && !isImeCompositionKeyDown(e)) {
                     e.preventDefault()
                     void handleCreateNewIssue()
                   }
@@ -11297,7 +11280,7 @@ export default function TaskPage(): React.JSX.Element {
               value={newLinearProjectName}
               onChange={(event) => setNewLinearProjectName(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                if (event.key === 'Enter' && !isImeCompositionKeyDown(event)) {
                   event.preventDefault()
                   void handleCreateNewLinearProject()
                 }
@@ -11744,7 +11727,7 @@ export default function TaskPage(): React.JSX.Element {
               value={newLinearIssueTitle}
               onChange={(e) => setNewLinearIssueTitle(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                if (e.key === 'Enter' && !isImeCompositionKeyDown(e)) {
                   e.preventDefault()
                   void handleCreateNewLinearIssue()
                 }
@@ -12344,7 +12327,7 @@ export default function TaskPage(): React.JSX.Element {
                 value={newJiraIssueTitle}
                 onChange={(e) => setNewJiraIssueTitle(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  if (e.key === 'Enter' && !isImeCompositionKeyDown(e)) {
                     e.preventDefault()
                     void handleCreateNewJiraIssue()
                   }

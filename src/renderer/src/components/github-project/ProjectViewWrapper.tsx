@@ -24,6 +24,7 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import GitHubItemDialog, { type GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { GhAuthErrorHelp } from '@/components/github-project/GhAuthErrorHelp'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { cn } from '@/lib/utils'
@@ -1103,7 +1104,7 @@ function ProjectSearchInput({
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
-            if (e.nativeEvent.isComposing) {
+            if (isImeCompositionKeyDown(e)) {
               return
             }
             e.preventDefault()

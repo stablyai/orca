@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type KeyboardEventHandler, type SetStateAction } from 'react'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   recallNext,
   recallPrevious,
@@ -42,7 +43,7 @@ export function useNativeChatComposerKeyDown({
 }: UseNativeChatComposerKeyDownArgs): KeyboardEventHandler<HTMLTextAreaElement> {
   return useCallback(
     (event) => {
-      if (isComposing() || event.nativeEvent.isComposing || event.keyCode === 229) {
+      if (isComposing() || isImeCompositionKeyDown(event)) {
         // Why: IME Enter confirms composition; allowing it to fall through
         // would accept a picker row or submit a partial draft.
         if (event.key === 'Enter') {
