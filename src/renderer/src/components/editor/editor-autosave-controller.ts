@@ -92,6 +92,10 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
           return
         }
 
+        if (liveFile.pendingOwnerMigration === true) {
+          throw new Error('This file is still restoring its workspace owner. Try saving again.')
+        }
+
         // Why: only autosave is blocked while suspended; explicit user saves proceed (the banner warned).
         if (trigger === 'autosave' && isAutosaveSuspendedForFile(liveFile)) {
           return
@@ -339,6 +343,10 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       const file = store.getState().openFiles.find((openFile) => openFile.id === detail.fileId)
       if (!file) {
         detail.resolve()
+        return
+      }
+      if (file.pendingOwnerMigration === true) {
+        detail.reject('This file is still restoring its workspace owner. Try saving again.')
         return
       }
 

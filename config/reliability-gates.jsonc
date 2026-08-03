@@ -11,6 +11,99 @@
   },
   "gates": [
     {
+      "id": "editor.restored-sibling-owner-reparent",
+      "title": "Restored sibling tabs migrate filesystem authority before becoming editable",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "editor-runtime",
+      "layer": "renderer-store-controller-contract",
+      "surfaces": [
+        "restored editor tabs",
+        "editor save and autosave",
+        "filesystem watches and hot-exit persistence"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "paired-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh", "paired-runtime"],
+      "coverageNotes": "Deterministic store/controller tests cover local, direct-SSH, paired-runtime identity, folder workspaces, queue quiescence, owner-derived IDs, drafts and editor maps, tab/group placement, exact watch replacement, change/delete/rename correlation, explicit save, autosave, collision refusal, provenance, and restart hot-exit persistence. Live headed/headless paired-runtime and post-establish Electron IPC remain uncollected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/11304",
+        "https://github.com/stablyai/orca/pull/11369"
+      ],
+      "invariant": "A restored absolute path owned by a same-host sibling workspace cannot read, save, watch, or persist until one atomic transaction drains old saves and installs the sibling workspace, relative path, execution host, runtime/SSH generation, mutation provenance, owner-derived IDs, editor state, and UI placement; collisions fail without mutation.",
+      "oracle": "Hold an old-owner save in flight, start migration, and require ownership to remain unchanged behind an autosave gate until the save settles. Then require destination authority for explicit save and autosave, one source-watch unsubscribe plus one destination subscribe, destination-only change/delete/rename handling, owner-derived state rekeys, folder and SSH provenance, hot-exit restart ownership, and no mutation for dirty or clean collisions.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts src/renderer/src/lib/runtime-workspace-file-route.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts",
+        "src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts",
+        "src/renderer/src/lib/runtime-workspace-file-route.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts",
+          "assertions": [
+            "one atomic commit rekeys owner-derived editor, preview, draft, cursor, view, tab, group, active, reveal, focus, provenance, and persistence state",
+            "source watch unsubscribes once, destination watch subscribes once, and only destination change/delete/rename events reach the file",
+            "dirty and clean destination collisions fail closed without changing either open session",
+            "folder and direct-SSH owners retain exact root, host, target, and connection-generation authority"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts",
+          "assertions": [
+            "migration waits for the old save queue and routes later explicit and automatic saves through the destination worktree"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/runtime-workspace-file-route.test.ts",
+          "assertions": [
+            "same-host runtime, folder, local, and direct-SSH roots resolve without cross-host fallback"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-03",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts src/renderer/src/components/editor/restored-editor-owner-save-lifecycle.test.ts src/renderer/src/lib/runtime-workspace-file-route.test.ts",
+          "result": "passed",
+          "durationSeconds": 3,
+          "summary": "Three deterministic files passed 15 lifecycle, ownership, host, collision, persistence, watch, and save tests."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "focused renderer store/controller contract on a local development runner"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One local deterministic run is recorded; CI and soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The prior candidate lacks the migration action and fails the lifecycle invariant after its initial sibling read; an isolated byte-identical overlay run is still required before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Route lookup scans only the already-indexed renderer workspace catalog, while migration is O(open editor files + source/destination tabs/groups) and performs no provider call, Git scan, polling, retry, subprocess, or global fanout beyond the required old/new watch delta."
+      },
+      "promotionCriteria": [
+        "Collect isolated old-candidate red and current-candidate green artifacts with the same lifecycle oracle.",
+        "Collect headed and headless paired-runtime coverage after the post-establish Electron IPC gap is fixed.",
+        "Collect physical Windows or WSL path/host evidence and CI soak history."
+      ],
+      "knownGaps": [
+        "Headed Electron post-establish IPC, paired headless, reconnect, and physical Windows/WSL journeys are uncollected.",
+        "Cold many-repo main-process sibling discovery remains a separately measured follow-up.",
+        "Registered-workspace symlink policy remains inherited and unchanged."
+      ],
+      "demotionRule": "Keep experimental or demote if migration can race a save, retain source authority, fan out watches, lose dirty/editor state, accept an owner-generation change, merge a collision, or the focused contract flakes without a product or harness bug."
+    },
+    {
       "id": "terminal-provider.login-session-retirement",
       "title": "macOS login-session retirement preserves live daemons through transient rejection bursts",
       "maturity": "experimental",

@@ -42,7 +42,7 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
-  findRuntimeWorkspaceFileRoute: vi.fn(() => null)
+  findWorkspaceFileRoute: vi.fn(() => null)
 }))
 
 vi.mock('@/store', () => ({

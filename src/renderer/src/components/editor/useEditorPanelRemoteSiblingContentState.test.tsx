@@ -8,7 +8,8 @@ import type { FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn(),
-  findRuntimeWorkspaceFileRoute: vi.fn(),
+  findWorkspaceFileRoute: vi.fn(),
+  migrateRestoredEditorFileOwner: vi.fn(),
   getState: vi.fn()
 }))
 
@@ -37,7 +38,15 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
-  findRuntimeWorkspaceFileRoute: mocks.findRuntimeWorkspaceFileRoute
+  findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
+}))
+
+vi.mock('./migrate-restored-editor-file-owner', () => ({
+  migrateRestoredEditorFileOwner: mocks.migrateRestoredEditorFileOwner
+}))
+
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: vi.fn(() => 'local')
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
@@ -89,8 +98,10 @@ describe('remote sibling editor content routing', () => {
     authorizeExternalPath.mockResolvedValue(undefined)
     ;(window as unknown as { api: unknown }).api = { fs: { authorizeExternalPath } }
     mocks.readRuntimeFileContent.mockReset()
-    mocks.findRuntimeWorkspaceFileRoute.mockReset()
-    mocks.findRuntimeWorkspaceFileRoute.mockReturnValue(null)
+    mocks.findWorkspaceFileRoute.mockReset()
+    mocks.findWorkspaceFileRoute.mockReturnValue(null)
+    mocks.migrateRestoredEditorFileOwner.mockReset()
+    mocks.migrateRestoredEditorFileOwner.mockResolvedValue({ ok: true, fileId: 'owned-file' })
     mocks.getState.mockReset()
     mocks.getState.mockReturnValue({
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
@@ -121,37 +132,37 @@ describe('remote sibling editor content routing', () => {
     await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
 
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('log line'))
-    expect(mocks.findRuntimeWorkspaceFileRoute).not.toHaveBeenCalled()
+    expect(mocks.findWorkspaceFileRoute).not.toHaveBeenCalled()
     expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: logPath })
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: undefined, includeLocalLogMetadata: true })
     )
   })
 
-  it('reads an unstamped sibling file through its owning runtime workspace', async () => {
+  it('atomically reparents an unstamped sibling file before reading', async () => {
     const activeFile = createOpenFile({
       id: '/work/repo-b/docs/readme.md',
       filePath: '/work/repo-b/docs/readme.md',
       relativePath: '/work/repo-b/docs/readme.md',
       worktreeId: 'repo-a::/work/repo-a'
     })
-    mocks.findRuntimeWorkspaceFileRoute.mockReturnValue({
+    const route = {
       worktreeId: 'repo-b::/work/repo-b',
-      relativePath: 'docs/readme.md'
-    })
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: '# sibling', isBinary: false })
+      relativePath: 'docs/readme.md',
+      executionHostId: 'runtime:runtime-1'
+    } as const
+    mocks.findWorkspaceFileRoute.mockReturnValue(route)
 
     await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
 
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# sibling'))
-    expect(authorizeExternalPath).not.toHaveBeenCalled()
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/work/repo-b/docs/readme.md',
-        relativePath: 'docs/readme.md',
-        worktreeId: 'repo-b::/work/repo-b',
-        connectionId: undefined
-      })
+    await vi.waitFor(() =>
+      expect(mocks.migrateRestoredEditorFileOwner).toHaveBeenCalledWith(
+        activeFile.id,
+        route,
+        'runtime-1'
+      )
     )
+    expect(authorizeExternalPath).not.toHaveBeenCalled()
+    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
   })
 })

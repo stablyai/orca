@@ -9,7 +9,12 @@ import { useAppStore } from '@/store'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
-import { findRuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
+import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host'
 import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
@@ -32,6 +37,7 @@ import {
 } from './useEditorPanelExternalContentEvents'
 import { useEditorPanelFileLoadRetry } from './useEditorPanelFileLoadRetry'
 import { useLocalLogTail } from './useLocalLogTail'
+import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-owner'
 
 const inFlightFileReads = new Map<string, Promise<FileContent>>()
 const inFlightDiffReads = new Map<string, Promise<DiffContent>>()
@@ -163,22 +169,45 @@ export function useEditorPanelContentState({
           const externalSshOwnerId =
             restoredOpenFile.externalSshTargetId?.trim() ||
             (isLiveTailLogTab ? undefined : connectionId)
-          if (!externalSshOwnerId) {
-            const runtimeEnvironmentId = isLiveTailLogTab
-              ? undefined
-              : readSettings?.activeRuntimeEnvironmentId?.trim()
-            if (runtimeEnvironmentId) {
-              const route = findRuntimeWorkspaceFileRoute(
-                useAppStore.getState(),
-                runtimeEnvironmentId,
-                filePath
+          const runtimeEnvironmentId = isLiveTailLogTab
+            ? undefined
+            : readSettings?.activeRuntimeEnvironmentId?.trim()
+          if (isLiveTailLogTab) {
+            await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+            readConnectionId = undefined
+          } else {
+            const currentState = useAppStore.getState()
+            const executionHostId = externalSshOwnerId
+              ? toSshExecutionHostId(externalSshOwnerId)
+              : runtimeEnvironmentId
+                ? toRuntimeExecutionHostId(runtimeEnvironmentId)
+                : LOCAL_EXECUTION_HOST_ID
+            const route = findWorkspaceFileRoute(currentState, executionHostId, filePath)
+            if (route && route.worktreeId !== worktreeId) {
+              const migration = await migrateRestoredEditorFileOwner(
+                id,
+                route,
+                runtimeEnvironmentId ?? null
               )
-              if (!route) {
-                throw new Error('External local files are not available for remote workspaces.')
+              fileReadGenerationRef.current[id] = ++fileReadGenerationCounterRef.current
+              if (!migration.ok) {
+                throw new Error(
+                  migration.reason === 'collision'
+                    ? 'The sibling file is already open; close one tab before restoring it.'
+                    : 'The sibling file owner changed while the tab was restoring.'
+                )
               }
-              readWorktreeId = route.worktreeId
-              readRelativePath = route.relativePath
-            } else {
+              setFileContents((prev) => {
+                const next = { ...prev }
+                delete next[id]
+                return next
+              })
+              return
+            }
+            if (runtimeEnvironmentId && !route) {
+              throw new Error('External local files are not available for remote workspaces.')
+            }
+            if (!externalSshOwnerId) {
               // Why: client-local external tabs need their main-process path grant
               // refreshed because that authorization is only held in memory.
               await window.api.fs.authorizeExternalPath({ targetPath: filePath })
