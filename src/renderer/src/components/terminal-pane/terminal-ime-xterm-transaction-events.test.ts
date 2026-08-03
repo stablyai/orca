@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
 import { Terminal as EsmTerminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -14,7 +12,6 @@ const requireFromHere = createRequire(import.meta.url)
 const { Terminal: CjsTerminal } = requireFromHere('@xterm/xterm') as {
   Terminal: typeof EsmTerminal
 }
-const xtermPackageRoot = dirname(requireFromHere.resolve('@xterm/xterm/package.json'))
 const EXPECTED_XTERM_VERSION = '6.1.0-beta.287'
 
 function nextEventLoop(): Promise<void> {
@@ -68,9 +65,9 @@ async function openComposedTerminal(TerminalType: typeof EsmTerminal): Promise<{
 }
 
 describe.each([
-  ['ESM', EsmTerminal, 'xterm.mjs.map'],
-  ['CJS', CjsTerminal, 'xterm.js.map']
-])('xterm composition transaction events (%s)', (_format, TerminalType, sourceMapName) => {
+  ['ESM', EsmTerminal],
+  ['CJS', CjsTerminal]
+])('xterm composition transaction events (%s)', (_format, TerminalType) => {
   beforeEach(() => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
       measureText: () => ({ width: 10 })
@@ -82,23 +79,16 @@ describe.each([
     document.body.replaceChildren()
   })
 
-  it('keeps the runtime and mapped source package versions aligned', async () => {
+  it('reports the expected package version from the patched bundle', async () => {
     const terminal = new TerminalType()
     const output: string[] = []
     terminal.onData((data) => output.push(data))
 
     await new Promise<void>((resolve) => terminal.write('\x1b[>0q', resolve))
 
+    // The banner is the compiled-in XTERM_VERSION, so this reads the bundle
+    // itself. Provenance against the pinned commit is the generator's job.
     expect(output).toEqual([`\x1bP>|xterm.js(${EXPECTED_XTERM_VERSION})\x1b\\`])
-    const sourceMap = JSON.parse(
-      readFileSync(join(xtermPackageRoot, 'lib', sourceMapName), 'utf8')
-    ) as { sources: string[]; sourcesContent: (string | null)[] }
-    const versionSourceIndex = sourceMap.sources.findIndex((source) =>
-      source.endsWith('/common/Version.ts')
-    )
-    expect(sourceMap.sourcesContent[versionSourceIndex]).toContain(
-      `XTERM_VERSION = '${EXPECTED_XTERM_VERSION}'`
-    )
     terminal.dispose()
   })
 

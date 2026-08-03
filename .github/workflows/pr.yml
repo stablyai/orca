@@ -173,6 +173,34 @@ jobs:
           done
           exit "$status"
 
+  xterm_patch_sync:
+    name: xterm patch sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      # Why: the check rebuilds xterm.js from a pinned upstream commit. Caching the
+      # npm metadata and the shallow clone turns a ~4 min cold run into well under a
+      # minute; the key is the manifest, so a commit or toolchain bump invalidates it.
+      - name: Restore upstream xterm build inputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ${{ runner.temp }}/xterm-patch-build/upstream/.git
+          key: xterm-upstream-${{ hashFiles('config/patches/xterm-upstream.json') }}
+
+      - name: Verify xterm patches match the pinned upstream build
+        env:
+          WORK_DIR: ${{ runner.temp }}/xterm-patch-build
+        run: node config/scripts/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
+
   shell_contracts:
     name: shell contracts
     runs-on: ubuntu-latest
@@ -397,6 +425,7 @@ jobs:
       - root_directory_guard
       - typecheck
       - git_compatibility
+      - xterm_patch_sync
       - shell_contracts
       - test
       - package
@@ -418,6 +447,7 @@ jobs:
           ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
+          XTERM_PATCH_SYNC: ${{ needs.xterm_patch_sync.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
           PACKAGE: ${{ needs.package.result }}
@@ -428,6 +458,7 @@ jobs:
             "$ROOT_DIRECTORY_GUARD" \
             "$TYPECHECK" \
             "$GIT_COMPATIBILITY" \
+            "$XTERM_PATCH_SYNC" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
             "$PACKAGE" \
