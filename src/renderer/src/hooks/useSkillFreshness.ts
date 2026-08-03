@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 
@@ -24,7 +24,18 @@ let snapshot: SkillFreshnessSnapshot = {
   loading: false,
   error: null
 }
+const DISABLED_SNAPSHOT: SkillFreshnessSnapshot = Object.freeze({
+  inventory: null,
+  loading: false,
+  error: null
+})
+const REENABLING_SNAPSHOT: SkillFreshnessSnapshot = Object.freeze({
+  inventory: null,
+  loading: true,
+  error: null
+})
 const subscribers = new Set<() => void>()
+let pendingReenableRefresh: Promise<void> | null = null
 
 function publishSnapshot(next: SkillFreshnessSnapshot): void {
   if (
@@ -70,7 +81,10 @@ async function loadInventory(force: boolean): Promise<SkillFreshnessInventory> {
   }
 }
 
-async function refreshSkillFreshness(force = true): Promise<void> {
+/** Rescan freshness without going through the hook, for surfaces whose explicit
+ *  refresh affordance must move the shared verdict (the installed-skills refreshed
+ *  event reuses a completed scan and deliberately does not reach this store). */
+export async function refreshSkillFreshness(force = true): Promise<void> {
   if (scheduledFocusRescan !== null) {
     window.clearTimeout(scheduledFocusRescan)
     scheduledFocusRescan = null
@@ -133,12 +147,24 @@ function subscribe(subscriber: () => void): () => void {
     if (subscribers.size === 0) {
       window.removeEventListener('focus', onWindowFocus)
       window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, onInstalledSkillsChanged)
+      if (scheduledFocusRescan !== null) {
+        window.clearTimeout(scheduledFocusRescan)
+        scheduledFocusRescan = null
+      }
     }
   }
 }
 
+function subscribeDisabled(): () => void {
+  return () => {}
+}
+
 function getSnapshot(): SkillFreshnessSnapshot {
   return snapshot
+}
+
+function getDisabledSnapshot(): SkillFreshnessSnapshot {
+  return DISABLED_SNAPSHOT
 }
 
 function ensureInventoryLoaded(): void {
@@ -151,14 +177,41 @@ export type SkillFreshnessState = SkillFreshnessSnapshot & {
   refresh: () => Promise<void>
 }
 
-export function useSkillFreshness(): SkillFreshnessState {
-  const current = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+async function skipSkillFreshnessRefresh(): Promise<void> {}
+
+function refreshSkillFreshnessAfterReenable(): Promise<void> {
+  pendingReenableRefresh ??= refreshSkillFreshness(true).finally(() => {
+    pendingReenableRefresh = null
+  })
+  return pendingReenableRefresh
+}
+
+export function useSkillFreshness(enabled = true): SkillFreshnessState {
+  const previousEnabledRef = useRef(enabled)
+  const reenabled = enabled && !previousEnabledRef.current
+  const current = useSyncExternalStore(
+    enabled ? subscribe : subscribeDisabled,
+    enabled ? getSnapshot : getDisabledSnapshot,
+    enabled ? getSnapshot : getDisabledSnapshot
+  )
 
   useEffect(() => {
+    const wasEnabled = previousEnabledRef.current
+    previousEnabledRef.current = enabled
+    if (!enabled) {
+      return
+    }
+    if (!wasEnabled) {
+      void refreshSkillFreshnessAfterReenable()
+      return
+    }
     ensureInventoryLoaded()
-  }, [])
+  }, [enabled])
 
-  return { ...current, refresh: refreshSkillFreshness }
+  return {
+    ...(reenabled ? REENABLING_SNAPSHOT : current),
+    refresh: enabled ? refreshSkillFreshness : skipSkillFreshnessRefresh
+  }
 }
 
 export const _skillFreshnessCacheForTests = {
@@ -169,6 +222,7 @@ export const _skillFreshnessCacheForTests = {
     completedRevision = -1
     lastCompletedScanAt = 0
     refreshSequence = 0
+    pendingReenableRefresh = null
     if (scheduledFocusRescan !== null) {
       window.clearTimeout(scheduledFocusRescan)
       scheduledFocusRescan = null

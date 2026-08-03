@@ -9,6 +9,7 @@ import type {
   HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
+import type { BrowserFindSource } from '../shared/browser-find-source'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -18,6 +19,7 @@ import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
 } from '../shared/terminal-tab-close'
+import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
 import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
@@ -26,12 +28,29 @@ import type {
 } from '../shared/local-log-tail-types'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
+import type { ReleaseChannel } from '../shared/release-channel'
+import type {
+  HostQualifiedDetectedWorktreeResult,
+  LegacyDetectedWorktreeRequest,
+  ListDetectedWorktreesArgs,
+  ProviderRequestId
+} from '../shared/detected-worktree-provider-contract'
+import type {
+  HostRepoCatalogSnapshot,
+  ListReposForExecutionHostArgs
+} from '../shared/host-repo-catalog-contract'
+import type {
+  HostLineageSnapshot,
+  ListDesktopLineageForHostArgs
+} from '../shared/host-lineage-contract'
 import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
 } from '../shared/terminal-render-desync-evidence'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
 import type {
   SshMutationExpectation,
   SshConnectionState,
@@ -112,6 +131,7 @@ import type {
   CustomPet,
   DetectedWorktreeListResult,
   DirEntry,
+  FilesystemPathFlavor,
   ForceDeleteWorktreeBranchResult,
   FsChangedPayload,
   GhosttyImportPreview,
@@ -236,6 +256,7 @@ import type {
   StatsSummary,
   MemorySnapshot,
   TuiAgent,
+  ReleaseBuildListResult,
   UpdateCheckOptions,
   UpdateStatus,
   Worktree,
@@ -250,7 +271,8 @@ import type {
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
   WorkspaceSessionPatch,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  LinuxPackageInstallInstructions
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
@@ -460,6 +482,8 @@ import type {
   OpenCodeUsageSummary
 } from '../shared/opencode-usage-types'
 import type {
+  AiVaultFirstUserPromptArgs,
+  AiVaultFirstUserPromptResult,
   AiVaultListArgs,
   AiVaultListResult,
   AiVaultSubagentListArgs,
@@ -522,6 +546,14 @@ type GitHubRepoSelectorArgs = {
 
 export type BrowserApi = {
   registerGuest: (args: {
+    browserPageId: string
+    workspaceId: string
+    worktreeId: string
+    sessionProfileId?: string | null
+    webContentsId: number
+  }) => Promise<boolean>
+  isGuestRegistered: (args: { browserPageId: string; webContentsId: number }) => Promise<boolean>
+  repairGuestRegistration: (args: {
     browserPageId: string
     workspaceId: string
     worktreeId: string
@@ -858,11 +890,14 @@ export type OpenCodeUsageApi = {
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  cancelListSessions: (args: { requestToken: string }) => Promise<void>
   prepareSessionResume: (
     args: AiVaultPrepareSessionResumeArgs
   ) => Promise<AiVaultPrepareSessionResumeResult>
   /** Lists the Task subagent transcripts of one session, on demand. */
   listSubagentSessions: (args: AiVaultSubagentListArgs) => Promise<AiVaultSubagentListResult>
+  /** Full first user prompt for copy/reuse (re-parses one transcript). */
+  getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) => Promise<AiVaultFirstUserPromptResult>
   /** Fires when any app window regains OS focus; returns an unsubscribe. */
   onWindowFocused: (callback: () => void) => () => void
 }
@@ -947,15 +982,16 @@ export type AppApi = {
   /** Reloads the current app renderer through main so expected renderer
    *  teardown can be classified before Electron emits process-gone events. */
   reload: () => Promise<void>
-  /** Commits the renderer's final locally durable state before unload and
-   *  throws when the blocking durable write fails. */
-  persistBeforeUnloadSync: (args: {
+  /** Stages the renderer's final state synchronously before unload. */
+  stageBeforeUnloadSync: (args: {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
   }) => void
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>
+  /** Reconciles legacy worker authority around persisted terminal reconnect. */
+  recoverLegacyWorkerTerminalsForRendererStartup: () => Promise<void>
   /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */
   startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
   /** macOS active input mode, or layout ID when no IME is selected (e.g. `com.apple.keylayout.PolishPro`).
@@ -1157,6 +1193,7 @@ export type PreloadApi = {
   }
   repos: {
     list: () => Promise<Repo[]>
+    listForExecutionHost?: (args: ListReposForExecutionHostArgs) => Promise<HostRepoCatalogSnapshot>
     // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
     add: (args: {
       path: string
@@ -1172,6 +1209,7 @@ export type PreloadApi = {
     }) => Promise<{ status: 'applied' | 'rejected' }>
     update: (args: {
       repoId: string
+      hostId?: ExecutionHostId
       updates: Partial<
         Pick<
           Repo,
@@ -1342,7 +1380,13 @@ export type PreloadApi = {
   }
   worktrees: {
     list: (args: { repoId: string }) => Promise<Worktree[]>
-    listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
+    listDetected: {
+      (
+        args: ListDetectedWorktreesArgs
+      ): Promise<HostQualifiedDetectedWorktreeResult | DetectedWorktreeListResult>
+      (args: LegacyDetectedWorktreeRequest): Promise<DetectedWorktreeListResult>
+    }
+    cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     /** Two-phase progress for a background `create`, correlated by `creationId`. The remote/runtime
@@ -1375,6 +1419,10 @@ export type PreloadApi = {
       worktreeId: string
       hostId?: ExecutionHostId
       force?: boolean
+      // Why (#11960): distinct from `force`, which the plain Delete confirmation
+      // already sets to skip the dirty-file prompt. Only an explicit Force Delete
+      // may waive the proof that every PTY stopped.
+      allowUnverifiedPtyStop?: boolean
       skipArchive?: boolean
     }) => Promise<RemoveWorktreeResult>
     // Forget a workspace from Orca only (no remote Git/FS work) — for workspaces pinned to a removed/disconnected SSH host.
@@ -1392,6 +1440,7 @@ export type PreloadApi = {
       lineage: Record<string, WorktreeLineage>
       workspaceLineage?: Record<string, WorkspaceLineage>
     }>
+    listLineageForHost?: (args: ListDesktopLineageForHostArgs) => Promise<HostLineageSnapshot>
     updateLineage: (args: {
       worktreeId: string
       parentWorktreeId?: string
@@ -1528,7 +1577,7 @@ export type PreloadApi = {
     listSessions: () => Promise<PtyListedSession[]>
     getAuthoritativeBufferSnapshotCapabilities?: (
       ids: string[]
-    ) => { id: string; authoritative: boolean | null }[]
+    ) => Promise<{ id: string; authoritative: boolean | null }[]>
     hasPty: (id: string) => Promise<boolean | null>
     getMainBufferSnapshot: (
       id: string,
@@ -1634,7 +1683,10 @@ export type PreloadApi = {
       submitAnonymously?: boolean
       githubLogin: string | null
       githubEmail: string | null
-    }) => Promise<{ ok: true } | { ok: false; status: number | null; error: string }>
+      images?: { contentType: string; data: Uint8Array }[]
+    }) => Promise<
+      { ok: true; imagesDelivered?: boolean } | { ok: false; status: number | null; error: string }
+    >
   }
   crashReports: {
     getLatestPending: () => Promise<CrashReportRecord | null>
@@ -2207,6 +2259,7 @@ export type PreloadApi = {
     disconnect: (args?: { siteId?: string }) => Promise<void>
     selectSite: (args: { siteId: JiraSiteSelection }) => Promise<JiraConnectionStatus>
     status: () => Promise<JiraConnectionStatus>
+    readStatus: () => Promise<JiraConnectionStatus>
     testConnection: (args?: {
       siteId?: string
     }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
@@ -2214,13 +2267,21 @@ export type PreloadApi = {
       jql: string
       limit?: number
       siteId?: JiraSiteSelection
+      requestId?: string
     }) => Promise<JiraIssue[]>
+    cancelSearchIssues: (args: { requestId: string }) => Promise<void>
     listIssues: (args?: {
       filter?: JiraIssueFilter
       limit?: number
       siteId?: JiraSiteSelection
     }) => Promise<JiraIssue[]>
     getIssue: (args: { key: string; siteId?: string }) => Promise<JiraIssue | null>
+    lookupIssueSummary: (args: {
+      key: string
+      siteId: string
+      requestId?: string
+    }) => Promise<JiraIssue | null>
+    cancelIssueSummary: (args: { requestId: string }) => Promise<void>
     createIssue: (
       args: JiraCreateIssueArgs
     ) => Promise<{ ok: true; id: string; key: string; url: string } | { ok: false; error: string }>
@@ -2335,10 +2396,14 @@ export type PreloadApi = {
       wslDistro?: string | null
     }) => Promise<CodexRateLimitAccountsState>
     /** Live PTYs whose baked CODEX_HOME still points at a deselected account. */
-    listStalePanes: (args: {
-      ptyIds: string[]
-    }) => Promise<
-      { ptyId: string; launchAccountId: string | null; activeAccountId: string | null }[]
+    listStalePanes: (args: { ptyIds: string[] }) => Promise<
+      {
+        ptyId: string
+        launchAccountId: string | null
+        activeAccountId: string | null
+        /** Optional for compatibility with a pre-reason main process. */
+        reason?: 'account-change' | 'home-route-change'
+      }[]
     >
     /** The selection lane each PTY launched from, keyed by pty id; unrecorded panes are absent. */
     listRecordedPaneLanes: (args: { ptyIds: string[] }) => Promise<Record<string, string>>
@@ -2440,6 +2505,14 @@ export type PreloadApi = {
     unsubscribe: (ptyId: string) => Promise<void>
     onData: (callback: (payload: TerminalPreviewDataPayload) => void) => () => void
   }
+  macosTccPrompts: {
+    /** Fires once macOS has raised its Nth consent dialog naming Orca (#9756). */
+    onThreshold: (callback: (payload: { promptCount: number }) => void) => () => void
+    consumePending: () => Promise<{ claimId: number; promptCount: number } | null>
+    acknowledgePending: (claimId: number) => Promise<void>
+    releasePending: (claimId: number) => Promise<void>
+    dismiss: () => Promise<void>
+  }
   developerPermissions: {
     getStatus: () => Promise<DeveloperPermissionState[]>
     request: (args: { id: DeveloperPermissionId }) => Promise<DeveloperPermissionRequestResult>
@@ -2493,7 +2566,10 @@ export type PreloadApi = {
       hooks: OrcaHooks | null
       mayNeedUpdate: boolean
     }>
-    inspectSetupScriptImports: (args: { repoId: string }) => Promise<SetupScriptImportCandidate[]>
+    inspectSetupScriptImports: (args: {
+      repoId: string
+      hostId?: ExecutionHostId
+    }) => Promise<SetupScriptImportCandidate[]>
     createIssueCommandRunner: (args: {
       repoId: string
       worktreePath: string
@@ -2618,6 +2694,13 @@ export type PreloadApi = {
     download: () => Promise<void>
     quitAndInstall: () => Promise<void>
     dismissNudge: () => Promise<void>
+    dismissAvailableUpdate: () => Promise<void>
+    /** Desktop-only. Rejects unless the current status carries `linux-package-install` recovery. */
+    getLinuxPackageInstallInstructions: () => Promise<LinuxPackageInstallInstructions>
+    /** Desktop-only. Reveals the revalidated cached package in the native file manager. */
+    showLinuxPackage: () => Promise<void>
+    listBuilds: (channel: ReleaseChannel) => Promise<ReleaseBuildListResult>
+
     onStatus: (callback: (status: UpdateStatus) => void) => () => void
     onClearDismissal: (callback: () => void) => () => void
   }
@@ -3060,12 +3143,14 @@ export type PreloadApi = {
     replyTabClose: (reply: { requestId: string; error?: string }) => void
     onNewTerminalTab: (callback: () => void) => () => void
     onFocusBrowserAddressBar: (callback: () => void) => () => void
-    onFindInBrowserPage: (callback: () => void) => () => void
+    onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
     onReloadBrowserPage: (callback: () => void) => () => void
     onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     onHardReloadBrowserPage: (callback: () => void) => () => void
     onCloseActiveTab: (callback: () => void) => () => void
+    onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
+    onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchRecentTab: (callback: () => void) => () => void
@@ -3101,7 +3186,9 @@ export type PreloadApi = {
         title?: string
         ptyId?: string
         activate?: boolean
+        focus?: boolean
         presentation?: RuntimeTerminalPresentation
+        surfaceOwner?: false
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -3115,12 +3202,7 @@ export type PreloadApi = {
     onRequestTerminalTabMount: (
       callback: (data: { worktreeId: string; tabId?: string; ptyId?: string }) => void
     ) => () => void
-    replyTerminalCreate: (reply: {
-      requestId: string
-      tabId?: string
-      title?: string
-      error?: string
-    }) => void
+    replyTerminalCreate: (reply: TerminalTabCreateReply) => void
     onSplitTerminal: (
       callback: (data: {
         tabId: string
@@ -3189,6 +3271,7 @@ export type PreloadApi = {
       runtimeEnvironmentId?: string | null
     }) => Promise<string | null>
     writeClipboardText: (text: string) => Promise<void>
+    writeTerminalClipboardText: (text: string) => Promise<void>
     writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
     performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void
@@ -3206,7 +3289,7 @@ export type PreloadApi = {
     syncTrafficLights: (zoomFactor: number) => void
     setMarkdownEditorFocused: (focused: boolean) => void
     setTerminalInputFocused: (focused: boolean) => void
-    setFloatingTerminalInputFocused: (focused: boolean) => void
+    setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void
     setShortcutRecorderFocused: (focused: boolean) => void
     onRichMarkdownContextCommand: (
       callback: (payload: RichMarkdownContextMenuCommandPayload) => void
@@ -3254,6 +3337,9 @@ export type PreloadApi = {
     onTerminalDriverChanged: (
       callback: (event: { ptyId: string; driver: RuntimeTerminalDriverState }) => void
     ) => () => void
+    onNativeChatLaunchDraftResolved?: (
+      callback: (event: { tabId: string; text: string; createdAt: number }) => void
+    ) => () => void
     onBrowserDriverChanged: (
       callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ) => () => void
@@ -3264,11 +3350,20 @@ export type PreloadApi = {
       name: string
       pairingCode: string
     }) => Promise<{ environment: PublicKnownRuntimeEnvironment }>
+    verifyAndAddFromPairingCode: (args: {
+      name: string
+      pairingCode: string
+      allowLoopback?: boolean
+    }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
     remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
     disconnect: (args: {
       selector: string
     }) => Promise<{ disconnected: PublicKnownRuntimeEnvironment }>
+    connect: (args: {
+      selector: string
+      timeoutMs?: number
+    }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
     getStatus: (args: {
       selector: string
       timeoutMs?: number
@@ -3369,6 +3464,7 @@ export type PreloadApi = {
     browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
       entries: { name: string; isDirectory: boolean }[]
       resolvedPath: string
+      pathFlavor: FilesystemPathFlavor
     }>
     onCredentialRequest: (
       callback: (data: {
@@ -3481,6 +3577,13 @@ export type PreloadApi = {
     /** Listen for PTYs on a legacy numeric pane key that have registry-backed UUID pane proof. */
     onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void
     onMigrationUnsupportedClear: (callback: (data: { ptyId: string }) => void) => () => void
+    onLegacyWorkerTerminalRecovery: (
+      callback: (data: {
+        paneKey: string
+        resolution: 'adopted' | 'exited' | 'rolled_back'
+        ptyId?: string
+      }) => void
+    ) => () => void
     getMigrationUnsupportedSnapshot: () => Promise<MigrationUnsupportedPtyEntry[]>
     /** Drop a paneKey from the main-process hook cache and on-disk last-status file. Fire-and-forget. */
     drop: (paneKey: string) => void
@@ -3504,14 +3607,20 @@ export type PreloadApi = {
       connectionMode?: MobilePairingConnectionMode
       rotate?: boolean
     }) => Promise<
-      | { available: false }
+      | {
+          available: false
+          reason?: string
+          guidance?: string
+          relayFailure?: MobileRelayMintFailure
+        }
       | {
           available: true
-          qrDataUrl: string
+          qrDataUrl: string | null
+          qrError?: 'encoding_failed'
           pairingUrl: string
           endpoint: string
           deviceId: string
-          /** Mode the QR actually encodes; 'local-only' when Relay could not be attached. */
+          /** Mode the QR actually encodes. */
           connectionMode: MobilePairingConnectionMode
         }
     >
@@ -3532,7 +3641,7 @@ export type PreloadApi = {
     >
     openWindowsNetworkSettings: () => Promise<boolean>
     getRuntimePairingUrl: (args?: { address?: string; rotate?: boolean }) => Promise<
-      | { available: false }
+      | { available: false; reason?: 'network_exposure_failed'; guidance?: string }
       | {
           available: true
           pairingUrl: string

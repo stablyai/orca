@@ -18,6 +18,7 @@ import {
 } from './wsl-hook-relay-deps'
 import { wireWslRelayLink } from './wsl-hook-relay-link'
 import { WslRelayRecovery } from './wsl-hook-relay-recovery'
+import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { requestGuestOpenCodeOverlayDir } from './wsl-guest-plugin-install'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
@@ -44,10 +45,6 @@ type DistroState = {
   lastInstallAt?: number
 }
 
-function distroKey(distro: string): string {
-  return distro.trim().toLowerCase()
-}
-
 export class WslHookRelayManager {
   private deps: WslHookRelayManagerDeps
   private recovery: WslRelayRecovery
@@ -62,17 +59,21 @@ export class WslHookRelayManager {
       isDistroRunning: (distro) => this.deps.isDistroRunning(distro),
       warn: (message) => this.deps.warn(message),
       isDisposed: () => this.disposed,
-      isCurrent: (state) => this.states.get(distroKey(state.distro)) === state,
+      isCurrent: (state) => this.states.get(wslHookRelayStateKey(state.distro)) === state,
       restart: (distro) => this.ensureForDistro(distro),
       dropState: (state) => {
         // Why: identity-guarded — a fresh ensure() may own this key by now;
         // deleting by key alone would orphan its live relay child.
-        const key = distroKey(state.distro)
+        const key = wslHookRelayStateKey(state.distro)
         if (this.states.get(key) === state) {
           this.states.delete(key)
         }
       }
     })
+  }
+
+  setManagedHookSettingsResolver(resolve: WslHookRelayManagerDeps['managedHookSettings']): void {
+    this.deps.managedHookSettings = resolve
   }
 
   /** Fire-and-forget from every WSL PTY spawn-env build; errors breadcrumb. */
@@ -89,7 +90,7 @@ export class WslHookRelayManager {
 
   private stateFor(distro: string | null): DistroState | undefined {
     // Empty key never matches a real (non-empty) distro state.
-    return this.states.get(distroKey(distro ?? this.defaultDistro ?? ''))
+    return this.states.get(wslHookRelayStateKey(distro ?? this.defaultDistro ?? ''))
   }
 
   /** Guest endpoint file path once known; null before first connect
@@ -120,7 +121,7 @@ export class WslHookRelayManager {
     if (!distro || this.disposed) {
       return
     }
-    const key = distroKey(distro)
+    const key = wslHookRelayStateKey(distro)
     const existing = this.states.get(key)
     if (existing) {
       if (existing.phase === 'running') {
@@ -280,6 +281,7 @@ export class WslHookRelayManager {
       guestHome,
       distro: state.distro,
       installHooks: this.deps.installHooks,
+      settings: this.deps.managedHookSettings(),
       warn: this.deps.warn
     })
     // Why: ship OpenCode's status plugin and record the guest overlay dir the

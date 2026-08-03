@@ -60,6 +60,9 @@ export type SleepingAgentSessionRecord = {
    *  so only the pane's own cold-restore path may consume them — activation
    *  launching a tab too would duplicate a warm-reattached session (#5232). */
   origin?: 'worktree-sleep' | 'quit' | 'live'
+  /** Prevents provider-session relaunch while main reconciles a durable
+   *  orchestration assignment against authoritative PTY inventory. */
+  automaticResumeBlockedBy?: 'legacy-orchestration-worker'
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)

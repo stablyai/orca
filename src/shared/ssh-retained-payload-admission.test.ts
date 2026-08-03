@@ -7,7 +7,10 @@ import {
   SSH_DETECTED_PORTS_MAX_ENTRIES,
   SSH_DETECTED_PORT_ADVERTISED_URL_MAX_UTF8_BYTES,
   SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES,
-  SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES
+  SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES,
+  SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES,
+  admitSshConnectionStateForAuthorityReconciliation,
+  isAdmissibleDirectSshAuthority
 } from './ssh-retained-payload-admission'
 
 describe('SSH retained payload admission', () => {
@@ -18,6 +21,7 @@ describe('SSH retained payload admission', () => {
         status: 'connected',
         error: null,
         reconnectAttempt: 2,
+        providerEpoch: 'provider-a',
         connectionGeneration: 3,
         supportsFolderDownload: true,
         remotePlatform: 'linux',
@@ -31,9 +35,104 @@ describe('SSH retained payload admission', () => {
       status: 'connected',
       error: null,
       reconnectAttempt: 2,
+      providerEpoch: 'provider-a',
       connectionGeneration: 3,
       supportsFolderDownload: true,
       remotePlatform: 'linux'
+    })
+  })
+
+  it('rejects partial and malformed provider authority', () => {
+    const state = {
+      targetId: 'ssh-a',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    }
+
+    expect(admitSshConnectionState({ ...state, providerEpoch: 'provider-a' }, 'ssh-a')).toBeNull()
+    expect(admitSshConnectionState({ ...state, connectionGeneration: 3 }, 'ssh-a')).toBeNull()
+    expect(
+      admitSshConnectionState(
+        {
+          ...state,
+          providerEpoch: 'x'.repeat(SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES + 1),
+          connectionGeneration: 3
+        },
+        'ssh-a'
+      )
+    ).toBeNull()
+  })
+
+  it('admits only bounded complete direct SSH authority', () => {
+    expect(
+      isAdmissibleDirectSshAuthority({
+        targetId: 'ssh-a',
+        providerEpoch: 'provider-a',
+        connectionGeneration: 3
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleDirectSshAuthority({
+        targetId: 'ssh-a',
+        providerEpoch: 'provider-a'
+      })
+    ).toBe(false)
+    expect(
+      isAdmissibleDirectSshAuthority({
+        targetId: 'x'.repeat(SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES + 1),
+        providerEpoch: 'provider-a',
+        connectionGeneration: 3
+      })
+    ).toBe(false)
+    expect(
+      isAdmissibleDirectSshAuthority({
+        targetId: 'ssh-a',
+        providerEpoch: 'x'.repeat(SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES + 1),
+        connectionGeneration: 3
+      })
+    ).toBe(false)
+  })
+
+  it('normalizes only partial authority for bounded reconciliation', () => {
+    const state = {
+      targetId: 'ssh-a',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    }
+
+    expect(
+      admitSshConnectionStateForAuthorityReconciliation(
+        { ...state, providerEpoch: 'provider-a' },
+        'ssh-a'
+      )
+    ).toEqual({ ...state, providerEpoch: null })
+    expect(
+      admitSshConnectionStateForAuthorityReconciliation(
+        { ...state, providerEpoch: '', connectionGeneration: 3 },
+        'ssh-a'
+      )
+    ).toBeNull()
+  })
+
+  it('normalizes legacy authority to unknown', () => {
+    expect(
+      admitSshConnectionState(
+        {
+          targetId: 'ssh-a',
+          status: 'disconnected',
+          error: null,
+          reconnectAttempt: 0
+        },
+        'ssh-a'
+      )
+    ).toEqual({
+      targetId: 'ssh-a',
+      status: 'disconnected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: null
     })
   })
 

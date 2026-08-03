@@ -41,6 +41,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
     markdownTocPanelWidth: 240,
+    combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
     sortBy: 'name',
     projectOrderBy: 'manual',

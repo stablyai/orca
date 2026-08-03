@@ -10,25 +10,39 @@ const clearDraftForSend = vi.fn()
 const restoreRejectedDraft = vi.fn()
 const holdUnconfirmedSend = vi.fn()
 
+// Mutable stand-ins so the launch-draft wiring below can drive chat resolution
+// and transcript state; defaults keep the send-seam tests unchanged.
+const viewMode = { isTabChatView: (_tabId: string) => true }
+const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
+const draftsArgs: Record<string, unknown>[] = []
+
 // The controller composes many session hooks; each is mocked to a minimal shape
 // so this test isolates the send seam (outcome -> drafts accounting).
 vi.mock('./use-mobile-session-view-mode', () => ({
-  useMobileSessionViewMode: () => ({ isTabChatView: () => true, toggleTabChatView: vi.fn() })
+  useMobileSessionViewMode: () => ({
+    isTabChatView: (tabId: string) => viewMode.isTabChatView(tabId),
+    toggleTabChatView: vi.fn()
+  })
 }))
 vi.mock('./use-mobile-native-chat-session', () => ({
-  useMobileNativeChatSession: () => ({ messages: [] })
+  useMobileNativeChatSession: () => sessionState
 }))
 vi.mock('./use-mobile-native-chat-drafts', () => ({
-  useMobileNativeChatDrafts: () => ({
-    composerText: '',
-    setComposerText: vi.fn(),
-    pending: [],
-    captureSendOrigin,
-    clearDraftForSend,
-    restoreRejectedDraft,
-    acceptSend,
-    holdUnconfirmedSend
-  })
+  useMobileNativeChatDrafts: (args: Record<string, unknown>) => {
+    draftsArgs.push(args)
+    return {
+      composerText: '',
+      setComposerText: vi.fn(),
+      pending: [],
+      captureSendOrigin,
+      readSeededLaunchDraft: () => null,
+      readSeededLaunchDraftSeed: () => null,
+      clearDraftForSend,
+      restoreRejectedDraft,
+      acceptSend,
+      holdUnconfirmedSend
+    }
+  }
 }))
 vi.mock('./use-mobile-native-chat-prompts', () => ({
   useMobileNativeChatPrompts: () => ({ permission: null, question: null, ask: null })
@@ -213,6 +227,27 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
   })
 
+  it('pre-clears the input line for a text-only send but never for an image send', async () => {
+    // The image path pastes the image behind its OWN leading Ctrl+U and then calls
+    // this send; a second clear here wipes the image off the input line and the
+    // agent receives text alone while the echo bubble still shows the thumbnail.
+    sendWithOutcome.mockResolvedValue('accepted')
+
+    await act(async () => {
+      await controller!.handleNativeChatSend('answer')
+    })
+    expect(sendWithOutcome).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: 'answer', clearInputFirst: true })
+    )
+
+    await act(async () => {
+      await controller!.handleNativeChatSend('look', ['file:///a.jpg'])
+    })
+    expect(sendWithOutcome).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: 'look', clearInputFirst: false })
+    )
+  })
+
   it('holds an unknown-outcome send without posting the optimistic echo', async () => {
     sendWithOutcome.mockResolvedValue('unknown')
     let accepted = false
@@ -280,5 +315,109 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(clearDraftForSend).not.toHaveBeenCalled()
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledWith('Message not sent')
+  })
+})
+
+describe('useMobileNativeChatController launch-draft wiring', () => {
+  let renderer: ReactTestRenderer | null = null
+  const clientStub = { sendRequest: vi.fn() }
+
+  const chatTab = {
+    type: 'terminal',
+    id: 'tab-1',
+    title: 'Claude',
+    terminal: 'term-1',
+    launchAgent: 'claude',
+    launchDraft: 'https://github.com/o/r/issues/12',
+    launchDraftCreatedAt: 7,
+    isActive: true
+  }
+
+  function Harness({ tab }: { tab: unknown }): null {
+    useMobileNativeChatController({
+      client: clientStub as unknown as RpcClient,
+      connState: 'connected',
+      hostId: 'h',
+      worktreeId: 'w',
+      activeSessionTab: tab as never,
+      activeSessionTabId: 'tab-1',
+      activeHandleRef: { current: 'term-1' },
+      deviceTokenRef: { current: null },
+      nativeChatTranscriptIsLocalReadable: true,
+      nativeChatInputLeaseReady: true,
+      onSendError: vi.fn(),
+      onSendResolved: vi.fn()
+    })
+    return null
+  }
+
+  function render(tab: unknown): void {
+    const original = console.error
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
+      if (typeof a[0] === 'string' && a[0].includes('react-test-renderer is deprecated')) {
+        return
+      }
+      original(...a)
+    })
+    try {
+      act(() => {
+        renderer = create(createElement(Harness, { tab }))
+      })
+    } finally {
+      spy.mockRestore()
+    }
+  }
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    draftsArgs.length = 0
+    viewMode.isTabChatView = () => true
+    sessionState.messages = []
+    sessionState.status = 'ready'
+    sessionState.transcriptLoading = false
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  it('forwards the tab launch draft and chat-active flag for a chat-resolved tab', () => {
+    render(chatTab)
+
+    expect(draftsArgs.at(-1)).toMatchObject({
+      tabId: 'tab-1',
+      launchDraft: 'https://github.com/o/r/issues/12',
+      launchDraftCreatedAt: 7,
+      chatActive: true,
+      transcriptLoading: false
+    })
+  })
+
+  it('forwards the raw draft with chatActive false when the tab shows the terminal', () => {
+    // Nulling the draft off-chat is indistinguishable from a host retraction and
+    // permanently declines the prefill; the flag is what keeps them apart.
+    viewMode.isTabChatView = () => false
+    render(chatTab)
+
+    expect(draftsArgs.at(-1)).toMatchObject({
+      launchDraft: 'https://github.com/o/r/issues/12',
+      chatActive: false
+    })
+  })
+
+  it('forwards the session hook’s transcriptLoading, not its status', () => {
+    // 'working' masks 'loading' in status, so only the read-phase signal is honest.
+    sessionState.status = 'working'
+    sessionState.transcriptLoading = true
+    render(chatTab)
+
+    expect(draftsArgs.at(-1)).toMatchObject({ transcriptLoading: true })
+  })
+
+  it('forwards a null draft for a tab that publishes none', () => {
+    render({ ...chatTab, launchDraft: undefined })
+
+    expect(draftsArgs.at(-1)).toMatchObject({ launchDraft: null, chatActive: true })
   })
 })

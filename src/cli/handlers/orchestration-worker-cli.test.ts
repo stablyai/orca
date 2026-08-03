@@ -7,10 +7,12 @@ vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
+import { printResult } from '../format'
 
 describe('orchestration worker-start CLI contract', () => {
   beforeEach(() => {
     callMock.mockReset()
+    vi.mocked(printResult).mockReset()
     process.exitCode = undefined
   })
 
@@ -102,6 +104,47 @@ describe('orchestration worker-start CLI contract', () => {
     )
 
     expect(process.exitCode).toBe(1)
+  })
+
+  it('prints a reveal warning for a live background worker', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        warning: 'Terminal term_worker is running but could not be revealed.',
+        effects: [],
+        residualResources: []
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-start']({
+      flags: new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: false
+    } as never)
+
+    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
+      | ((result: {
+          taskId: string
+          dispatchId: string
+          state: string
+          warning?: string
+        }) => string)
+      | undefined
+    expect(
+      formatter?.({
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        warning: 'Terminal term_worker is running but could not be revealed.'
+      })
+    ).toContain('Warning: Terminal term_worker is running but could not be revealed.')
   })
 
   it('allows the initial zero cursor when paging worker output', async () => {

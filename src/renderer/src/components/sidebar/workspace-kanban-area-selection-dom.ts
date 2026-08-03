@@ -1,23 +1,13 @@
+import {
+  AREA_SELECTION_SCROLL_CONTAINER_SELECTOR,
+  type AreaSelectionCardRect
+} from './workspace-kanban-area-selection-card-rects'
+
 export type AreaSelectionRect = {
   left: number
   top: number
   width: number
   height: number
-}
-
-export type AreaSelectionCardRect = {
-  id: string
-  element: HTMLElement
-  rect: DOMRect
-  scrollContainer: HTMLElement | null
-  contentRect: AreaSelectionCardContentRect | null
-}
-
-type AreaSelectionCardContentRect = {
-  top: number
-  bottom: number
-  containerTop: number
-  scrollTop: number
 }
 
 type AreaSelectionAutoScrollParams = {
@@ -37,7 +27,6 @@ type AreaSelectionCardIdOptions = {
 }
 
 const AREA_SELECTED_ATTR = 'data-workspace-board-card-area-selected'
-export const AREA_SELECTION_SCROLL_CONTAINER_SELECTOR = '[data-workspace-board-lane-scroll]'
 export const AREA_SELECTION_AUTO_SCROLL_EDGE_SIZE = 48
 export const AREA_SELECTION_AUTO_SCROLL_MAX_DELTA = 22
 
@@ -91,45 +80,6 @@ export function isScrollbarPointerDown(
   const hitsHorizontalScrollbar =
     target.scrollWidth > target.clientWidth && event.clientY >= rect.bottom - 14
   return hitsVerticalScrollbar || hitsHorizontalScrollbar
-}
-
-export function getAreaSelectionCardRects(board: HTMLElement): AreaSelectionCardRect[] {
-  const cardRects: AreaSelectionCardRect[] = []
-  const seen = new Set<string>()
-  const scrollMetrics = new Map<HTMLElement, { containerTop: number; scrollTop: number }>()
-  const cards = board.querySelectorAll<HTMLElement>('[data-workspace-board-card-id]')
-  for (const card of cards) {
-    const id = card.dataset.workspaceBoardCardId
-    if (!id || seen.has(id)) {
-      continue
-    }
-    const rect = card.getBoundingClientRect()
-    const scrollContainer = card.closest<HTMLElement>(AREA_SELECTION_SCROLL_CONTAINER_SELECTOR)
-    let metrics = scrollContainer ? scrollMetrics.get(scrollContainer) : undefined
-    if (scrollContainer && !metrics) {
-      metrics = {
-        containerTop: scrollContainer.getBoundingClientRect().top,
-        scrollTop: scrollContainer.scrollTop
-      }
-      scrollMetrics.set(scrollContainer, metrics)
-    }
-    cardRects.push({
-      id,
-      element: card,
-      rect,
-      scrollContainer,
-      contentRect: metrics
-        ? {
-            top: rect.top - metrics.containerTop + metrics.scrollTop,
-            bottom: rect.bottom - metrics.containerTop + metrics.scrollTop,
-            containerTop: metrics.containerTop,
-            scrollTop: metrics.scrollTop
-          }
-        : null
-    })
-    seen.add(id)
-  }
-  return cardRects
 }
 
 export function getAreaSelectionCardIds(
@@ -256,7 +206,8 @@ export function clearPreviewSelection(
   previewIds: Set<string>
 ): void {
   for (const card of cardRects) {
-    if (previewIds.has(card.id)) {
+    // Why: virtual remounts replace the element; clear via live connected node when present.
+    if (card.element?.isConnected && previewIds.has(card.id)) {
       card.element.removeAttribute(AREA_SELECTED_ATTR)
     }
   }
@@ -276,16 +227,29 @@ export function updatePreviewSelection(
   }
 
   for (const card of cardRects) {
+    const element = card.element?.isConnected ? card.element : null
+    if (!element) {
+      if (!nextIds.has(card.id)) {
+        previewIds.delete(card.id)
+      }
+      continue
+    }
     const shouldPreview = nextIds.has(card.id)
-    const isPreviewed = previewIds.has(card.id)
+    // Why: virtualization can remount the same card id; trust the live attr, not previewIds alone.
+    const isPreviewed = element.getAttribute(AREA_SELECTED_ATTR) === 'true'
     if (shouldPreview === isPreviewed) {
+      if (shouldPreview) {
+        previewIds.add(card.id)
+      } else {
+        previewIds.delete(card.id)
+      }
       continue
     }
     if (shouldPreview) {
-      card.element.setAttribute(AREA_SELECTED_ATTR, 'true')
+      element.setAttribute(AREA_SELECTED_ATTR, 'true')
       previewIds.add(card.id)
     } else {
-      card.element.removeAttribute(AREA_SELECTED_ATTR)
+      element.removeAttribute(AREA_SELECTED_ATTR)
       previewIds.delete(card.id)
     }
   }

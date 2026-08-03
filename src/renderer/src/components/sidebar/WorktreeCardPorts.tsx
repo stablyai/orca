@@ -2,10 +2,8 @@ import React, { useCallback, useMemo } from 'react'
 import { Plug, Copy, ExternalLink, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
@@ -19,7 +17,6 @@ import {
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
 import { addressForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
-import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent
@@ -319,32 +316,5 @@ export function WorktreeCardPortsDetails({
         ))}
       </WorktreeCardDetailSectionContent>
     </WorktreeCardDetailSection>
-  )
-}
-
-export function WorktreeCardPorts({ ports }: WorktreeCardPortsProps): React.JSX.Element | null {
-  if (ports.length === 0) {
-    return null
-  }
-
-  return (
-    <HoverCard openDelay={250} closeDelay={120}>
-      <HoverCardTrigger asChild>
-        <WorktreeCardPortsTrigger ports={ports} />
-      </HoverCardTrigger>
-      <HoverCardContent
-        side="right"
-        align="start"
-        sideOffset={8}
-        className="w-56 select-text p-2 text-xs"
-        {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
-        onClick={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-      >
-        <SelectedTextCopyMenu>
-          <WorktreeCardPortsDetails ports={ports} />
-        </SelectedTextCopyMenu>
-      </HoverCardContent>
-    </HoverCard>
   )
 }

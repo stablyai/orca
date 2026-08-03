@@ -73,6 +73,9 @@ export type MobileNativeChatController = {
     images?: string[],
     deadline?: number
   ) => Promise<MobileNativeChatSendOutcome>
+  /** Launch-context text still parked on the agent's TUI input line, or null.
+   *  Image sends read it to size their leading clear (one Ctrl+U per line). */
+  readSeededLaunchDraft: () => string | null
 }
 
 /** Owns mobile native-chat state and teardown outside the already dense session
@@ -134,6 +137,8 @@ export function useMobileNativeChatController(args: {
     setComposerText: setChatComposerText,
     pending: chatPending,
     captureSendOrigin,
+    readSeededLaunchDraft,
+    readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
@@ -143,7 +148,14 @@ export function useMobileNativeChatController(args: {
     worktreeId,
     tabId: activeSessionTabId,
     sessionId: activeChatSessionId,
-    messages: nativeChatSession.messages
+    messages: nativeChatSession.messages,
+    launchDraft: activeSessionTab?.launchDraft ?? null,
+    launchDraftCreatedAt: activeSessionTab?.launchDraftCreatedAt ?? null,
+    // Why: pass the raw draft plus this flag rather than nulling it off-chat —
+    // a null is indistinguishable from a host retraction, and peeking at the
+    // terminal view would permanently decline the prefill.
+    chatActive: showNativeChat,
+    transcriptLoading: nativeChatSession.transcriptLoading
   })
 
   const nativeChatStatus = activeChatResolution ? activeSessionTab?.agentStatus : null
@@ -237,6 +249,7 @@ export function useMobileNativeChatController(args: {
     handleRef: activeHandleRef,
     deviceTokenRef,
     captureSendOrigin,
+    readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
@@ -272,6 +285,7 @@ export function useMobileNativeChatController(args: {
     loadNativeChatFiles,
     handleNativeChatQuestionAnswer,
     handleNativeChatSend,
-    handleNativeChatSendWithOutcome
+    handleNativeChatSendWithOutcome,
+    readSeededLaunchDraft
   }
 }

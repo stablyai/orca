@@ -241,12 +241,13 @@ export async function createGitHubWorkItemWorkspaceInBackground(
     if (!deps.hasPendingCreate(creationId)) {
       return { kind: 'background-started' }
     }
-    const { startupPlan, quickPrompt, quickTelemetry } = buildGitHubWorkItemStartupPlan({
-      agent,
-      item: args.item,
-      repo,
-      store
-    })
+    const { startupPlan, quickPrompt, launchDraftPrompt, quickTelemetry } =
+      buildGitHubWorkItemStartupPlan({
+        agent,
+        item: args.item,
+        repo,
+        store
+      })
     if (agent && !startupPlan) {
       deps.toastError(agentLaunchCommandErrorMessage())
       abandonStagedCreate(creationId, restoreView, deps)
@@ -310,6 +311,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
       ...(issueCommand ? { issueCommand } : {}),
       startupPlan,
       quickPrompt,
+      ...(launchDraftPrompt ? { launchDraftPrompt } : {}),
       quickTelemetry
     }
 

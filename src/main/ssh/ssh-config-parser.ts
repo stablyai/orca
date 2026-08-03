@@ -74,20 +74,21 @@ export function parseSshConfig(content: string): SshConfigHost[] {
 
     const value = parseScalarConfigValue(rawValue)
 
+    // Why: OpenSSH uses the first obtained value for single-valued parameters.
     switch (key) {
       case 'hostname':
         for (const host of current) {
-          host.hostname = value
+          host.hostname ??= value
         }
         break
       case 'port':
         for (const host of current) {
-          host.port = Number.parseInt(value, 10) || 22
+          host.port ??= Number.parseInt(value, 10) || 22
         }
         break
       case 'user':
         for (const host of current) {
-          host.user = value
+          host.user ??= value
         }
         break
       case 'identityfile':
@@ -97,17 +98,16 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'identityagent':
         for (const host of current) {
-          host.identityAgent = resolveSshConfigHomePath(value)
+          host.identityAgent ??= resolveSshConfigHomePath(value)
         }
         break
       case 'identitiesonly':
         for (const host of current) {
-          host.identitiesOnly = value.toLowerCase() === 'yes'
+          host.identitiesOnly ??= value.toLowerCase() === 'yes'
         }
         break
       case 'gssapiauthentication':
         for (const host of current) {
-          // Why: OpenSSH uses the first obtained value for each parameter.
           host.gssapiAuthentication ??= value.toLowerCase() === 'yes'
         }
         break
@@ -115,17 +115,17 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         for (const host of current) {
           // Why: OpenSSH treats ProxyCommand as a shell snippet and preserves
           // the rest of the line, including quotes and `#` characters.
-          host.proxyCommand = rawValue.trim()
+          host.proxyCommand ??= rawValue.trim()
         }
         break
       case 'proxyusefdpass':
         for (const host of current) {
-          host.proxyUseFdpass = value.toLowerCase() === 'yes'
+          host.proxyUseFdpass ??= value.toLowerCase() === 'yes'
         }
         break
       case 'proxyjump':
         for (const host of current) {
-          host.proxyJump = value
+          host.proxyJump ??= value
         }
         break
     }

@@ -15,6 +15,7 @@ import {
 import { agentHookServer, _internals as agentHookInternals } from '../agent-hooks/server'
 import { getSshPtyProvider } from '../ipc/pty'
 import { toAppSshPtyId } from '../providers/ssh-pty-id'
+import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -97,6 +98,21 @@ function createFakeRelay(): FakeRelay {
   })
   relayFeed = (data) => dispatcher.feed(data)
 
+  dispatcher.onRequest('pty.openClient', async (params) => ({
+    protocolVersion: 1,
+    serverBuildId: 'test-relay-build',
+    clientGeneration: 1,
+    role: 'session-owner',
+    ownerGeneration:
+      typeof (params.resume as { ownerGeneration?: unknown } | undefined)?.ownerGeneration ===
+      'number'
+        ? (params.resume as { ownerGeneration: number }).ownerGeneration + 1
+        : 1,
+    ownerLease: 'test-owner-lease',
+    capabilities: {
+      outputFlowControl: { version: 1, windowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
+    }
+  }))
   dispatcher.onRequest('session.resolveHome', async (params) => ({
     resolvedPath: params.path === '~' ? '/home/orca' : params.path
   }))
@@ -133,9 +149,14 @@ function createFakeRelay(): FakeRelay {
 function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
   const store = {
     getRepos: vi.fn().mockReturnValue([]),
+    getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
+    upsertSshPtyConsumerRecovery: vi.fn(),
+    removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
-    markSshRemotePtyLeases: vi.fn()
+    markSshRemotePtyLeases: vi.fn(),
+    markSshRemotePtyLeasesAsync: vi.fn(),
+    markSshRemotePtyLeasesAttachedAsync: vi.fn()
   } as unknown as Store
   const portForwardManager = {
     removeAllForwards: vi.fn().mockResolvedValue(undefined)
@@ -224,6 +245,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
     const events: CapturedStatus[] = []
@@ -277,8 +299,16 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     const initialRelay = createFakeRelay()
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay)
-      .mockResolvedValueOnce({ transport: initialRelay.transport, platform: 'linux-x64' })
-      .mockResolvedValueOnce({ transport: relay.transport, platform: 'linux-x64' })
+      .mockResolvedValueOnce({
+        transport: initialRelay.transport,
+        serverBuildId: 'test-relay-build',
+        platform: 'linux-x64'
+      })
+      .mockResolvedValueOnce({
+        transport: relay.transport,
+        serverBuildId: 'test-relay-build',
+        platform: 'linux-x64'
+      })
     const clearListener = vi.fn()
     agentHookServer.setPaneStatusClearListener(clearListener)
     session = createSession('conn-clear')
@@ -318,6 +348,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     )
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
     const events: CapturedStatus[] = []
@@ -345,6 +376,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
     const events: CapturedStatus[] = []
@@ -375,6 +407,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
 
@@ -434,6 +467,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
     const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
@@ -449,6 +483,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         toolUseId: 'toolu-1',
         toolAgentId: 'agent-subagent-a',
         toolAgentType: 'Review',
+        claudeRunningNonAgentTask: true,
         providerSessionOnly: true,
         providerSession: {
           key: 'session_id',
@@ -471,6 +506,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
           toolUseId: 'toolu-1',
           toolAgentId: 'agent-subagent-a',
           toolAgentType: 'Review',
+          claudeRunningNonAgentTask: true,
           providerSessionOnly: true,
           providerSession: {
             key: 'session_id',
@@ -488,6 +524,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
 
@@ -535,6 +572,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
+      serverBuildId: 'test-relay-build',
       platform: 'linux-x64'
     })
 

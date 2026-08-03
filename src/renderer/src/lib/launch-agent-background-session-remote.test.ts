@@ -230,6 +230,34 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
         worktreeId: 'wt-1',
         prompt: 'run the automation'
       })
+      // Why the longer wait: a shell that has emitted nothing is still booting,
+      // so the fallback holds off rather than pasting before readline arms.
+      vi.advanceTimersByTime(1_550)
+      expect(mockWrite).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(15_050)
+
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the short fallback for an SSH shell that talks but cannot emit the marker', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation'
+      })
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      dataSidecar('user@remote repo % ')
       vi.advanceTimersByTime(1_550)
 
       expect(mockWrite).toHaveBeenCalledWith(

@@ -473,6 +473,7 @@ describe('OrchestrationDb', () => {
       const after3 = d.failDispatch(ctx3.id, 'timeout')
       expect(after3?.failure_count).toBe(3)
       expect(after3?.status).toBe('circuit_broken')
+      expect([after1, after2, after3].every((dispatch) => dispatch?.completed_at)).toBe(true)
       expect(d.getTask(task.id)?.status).toBe('failed')
     })
 
@@ -942,7 +943,7 @@ describe('OrchestrationDb', () => {
 
       // v1 data preserved
       expect(d.getMessageById('msg_v1')?.subject).toBe('pre-migration')
-      expect(d.getMessageById('msg_v1')?.run_id).toBe(LEGACY_RUN_ID)
+      expect(d.getMessageById('msg_v1')?.run_id).toBe(d.getLegacyAdoption()?.adopted_run_id)
       expect(d.getRun(LEGACY_RUN_ID)).toMatchObject({ legacy: 1 })
     })
 

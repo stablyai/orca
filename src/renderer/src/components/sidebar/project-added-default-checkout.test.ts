@@ -3,6 +3,7 @@ import { getDefaultOnboardingState } from '../../../../shared/constants'
 import type {
   DetectedWorktree,
   DetectedWorktreeListResult,
+  Repo,
   Worktree
 } from '../../../../shared/types'
 import {
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
     filterRepoIds: [] as string[],
     showActiveOnly: false,
     hideDefaultBranchWorkspace: false,
+    repos: [] as Repo[],
     worktreesByRepo: {} as Record<string, Worktree[]>,
     detectedWorktreesByRepo: {} as Record<string, DetectedWorktreeListResult>,
     setActiveRepo: vi.fn(),
@@ -125,6 +127,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     mocks.state.filterRepoIds = []
     mocks.state.showActiveOnly = false
     mocks.state.hideDefaultBranchWorkspace = false
+    mocks.state.repos = []
     mocks.state.worktreesByRepo = {}
     mocks.state.detectedWorktreesByRepo = {}
     mocks.state.updateRepo.mockResolvedValue(true)
@@ -171,6 +174,71 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       reason: 'loaded_default_checkout'
     })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+  })
+
+  it('activates only the captured host default checkout when repo IDs collide', async () => {
+    const localMain = makeWorktree({
+      id: 'repo-1::same-id',
+      path: '/local/repo',
+      hostId: 'local'
+    })
+    const runtimeMain = makeWorktree({
+      id: 'repo-1::same-id',
+      path: '/runtime/repo',
+      hostId: 'runtime:env-1'
+    })
+    mocks.state.repos = [
+      {
+        id: 'repo-1',
+        path: '/local/repo',
+        displayName: 'local',
+        badgeColor: '#111',
+        addedAt: 1,
+        executionHostId: 'local'
+      },
+      {
+        id: 'repo-1',
+        path: '/runtime/repo',
+        displayName: 'runtime',
+        badgeColor: '#222',
+        addedAt: 2,
+        executionHostId: 'runtime:env-1'
+      }
+    ]
+    mocks.state.worktreesByRepo = {
+      'repo-1': [localMain, runtimeMain]
+    }
+
+    await openProjectDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'clone_url',
+      executionHostId: 'runtime:env-1',
+      setHideDefaultBranchWorkspace: vi.fn()
+    })
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
+      executionHostId: 'runtime:env-1'
+    })
+  })
+
+  it('activates a runtime-owned checkout even when its physical host is private SSH', async () => {
+    const runtimeMain = makeWorktree({
+      id: 'repo-1::runtime-ssh',
+      hostId: 'ssh:private-target',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
+    mocks.state.worktreesByRepo = { 'repo-1': [runtimeMain] }
+
+    await openProjectDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'runtime_server_path',
+      executionHostId: 'runtime:env-1',
+      setHideDefaultBranchWorkspace: vi.fn()
+    })
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
+      executionHostId: 'runtime:env-1'
+    })
   })
 
   it('passes a contained selected path through as the initial terminal cwd', async () => {

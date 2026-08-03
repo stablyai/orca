@@ -2,20 +2,11 @@ export const PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES = 20_000
 export const PLUGIN_LANGUAGE_CATALOG_MAX_DEPTH = 16
 
 const DANGEROUS_CATALOG_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
-const PROTECTED_TRANSLATION_PREFIXES = [
-  'auto.components.settings.PluginConsentDialog',
-  'auto.components.settings.PluginInstallDialog',
-  'auto.components.settings.PluginKeybindingConsentPreview',
-  'auto.components.settings.PluginMarketplaceBrowser',
-  'auto.components.settings.PluginMarketplaceListingRow',
-  'auto.components.settings.PluginMarketplacePreviewDialog',
-  'auto.components.settings.PluginMarketplaceSourceDialog',
-  'auto.components.settings.PluginRemoveDialog',
-  'auto.components.settings.PluginRollbackDialog',
-  'auto.components.settings.PluginSettingsRow',
-  'auto.components.settings.PluginVmRecipeConsentPreview',
-  'auto.components.settings.PluginsSettingsSection'
-]
+// Why: every plugin-facing security surface lives under this namespace, so
+// protecting the whole subtree keeps a new dialog from silently becoming
+// plugin-writable the way PluginConsentProvenance did when it was extracted.
+const PROTECTED_TRANSLATION_ROOT = 'auto.components.settings.'
+const PROTECTED_TRANSLATION_MODULE = /^plugin/i
 
 export type PluginLanguagePackRegistration = {
   id: `plugin:${string}`
@@ -51,9 +42,10 @@ function isCatalogObject(value: unknown): value is Record<string, unknown> {
 }
 
 function protectedTranslation(path: string): boolean {
-  return PROTECTED_TRANSLATION_PREFIXES.some(
-    (prefix) => path === prefix || path.startsWith(`${prefix}.`)
-  )
+  if (!path.startsWith(PROTECTED_TRANSLATION_ROOT)) {
+    return false
+  }
+  return PROTECTED_TRANSLATION_MODULE.test(path.slice(PROTECTED_TRANSLATION_ROOT.length))
 }
 
 function hasUnsafeCatalogKeyCharacter(key: string): boolean {

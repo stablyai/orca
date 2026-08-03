@@ -298,6 +298,49 @@ describe('renderer breadcrumb IPC routing', () => {
     ])
   })
 
+  // Why: the renderer guard is once per tab-id/verdict, so one stale worktree
+  // map can emit enough crumbs to evict the pre-crash trail.
+  it('coalesces duplicate-tab-owner notices across tabs', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_id_owned_by_multiple_worktrees',
+      data: { ownerCount: 2, resolvedToActiveWorktree: true }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_id_owned_by_multiple_worktrees',
+      data: { ownerCount: 3, resolvedToActiveWorktree: true }
+    })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+    expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
+    for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
+      expect(call[0]).toMatchObject({
+        coalesceKey: 'terminal_tab_id_owned_by_multiple_worktrees:true'
+      })
+    }
+  })
+
+  // Why flag-scoped: coalescing keeps only the newest payload, and the verdict
+  // flips under a persisting duplicate, so one would erase the other.
+  it('keeps a non-converging duplicate-tab-owner notice out of the converging one', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_id_owned_by_multiple_worktrees',
+      data: { ownerCount: 2, resolvedToActiveWorktree: false }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_id_owned_by_multiple_worktrees',
+      data: { ownerCount: 2, resolvedToActiveWorktree: true }
+    })
+
+    expect(
+      recordCoalescedCrashBreadcrumbMock.mock.calls.map(
+        (call) => (call[0] as { coalesceKey: string }).coalesceKey
+      )
+    ).toEqual([
+      'terminal_tab_id_owned_by_multiple_worktrees:false',
+      'terminal_tab_id_owned_by_multiple_worktrees:true'
+    ])
+  })
+
   it('records non-error renderer breadcrumbs without coalescing', () => {
     emitRendererBreadcrumb({ name: 'renderer_bootstrap_started', data: { dev: true } })
 

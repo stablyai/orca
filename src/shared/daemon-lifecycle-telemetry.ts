@@ -17,13 +17,11 @@ export const DAEMON_RETIRE_REASONS = ['died_respawn'] as const
 export type DaemonRetireReason = (typeof DAEMON_RETIRE_REASONS)[number]
 
 export const DAEMON_LIFECYCLE_TRANSITIONS = ['replaced', 'retired'] as const
-export type DaemonLifecycleTransition = (typeof DAEMON_LIFECYCLE_TRANSITIONS)[number]
 
 export const DAEMON_LIFECYCLE_REASONS = [
   ...DAEMON_REPLACE_REASONS,
   ...DAEMON_RETIRE_REASONS
 ] as const
-export type DaemonLifecycleReason = (typeof DAEMON_LIFECYCLE_REASONS)[number]
 
 // Bucketed, never raw: exact live-session counts could fingerprint heavy users. `unknown` when
 // the count couldn't be verified (null) — e.g. a wedged daemon or an already-dead respawn target.

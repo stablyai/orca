@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { SettingsSegmentedControl } from '../settings/SettingsFormControls'
+import { SettingsSegmentedControl, SettingsSwitch } from '../settings/SettingsFormControls'
 import type { AgentDashboardMode } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -28,6 +29,7 @@ export function AgentDashboardSettingsMenu({
   onOpenChange
 }: AgentDashboardSettingsMenuProps): React.JSX.Element {
   const mode = useAppStore((s) => s.settings?.experimentalAgentDashboardMode ?? 'in-window')
+  const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
 
   const handleModeChange = (next: AgentDashboardMode): void => {
@@ -48,7 +50,7 @@ export function AgentDashboardSettingsMenu({
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={translate('dashboardPopout.settings', 'Agent Dashboard settings')}
+              aria-label={translate('dashboardPopout.settingsLabel', 'Agent Dashboard settings')}
               className="text-muted-foreground"
             >
               <Settings className="size-3.5" />
@@ -102,6 +104,27 @@ export function AgentDashboardSettingsMenu({
                 )
               }
             ]}
+          />
+        </div>
+        <DropdownMenuSeparator />
+        <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5">
+          <span className="min-w-0 space-y-0.5">
+            <span className="block text-[12px] font-medium leading-4 text-foreground">
+              {translate('dashboardPopout.settings.showIdle', 'Show idle agents')}
+            </span>
+            <span className="block text-[11px] leading-4 text-muted-foreground">
+              {translate(
+                'dashboardPopout.settings.showIdleCopy',
+                'Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default.'
+              )}
+            </span>
+          </span>
+          <SettingsSwitch
+            checked={showIdle}
+            onChange={() => {
+              void updateSettings({ experimentalAgentDashboardShowIdle: !showIdle })
+            }}
+            ariaLabel={translate('dashboardPopout.settings.showIdle', 'Show idle agents')}
           />
         </div>
       </DropdownMenuContent>

@@ -280,15 +280,18 @@ function changeInputValue(input: HTMLInputElement, value: string): void {
 }
 
 function openRunTargetPicker(container: HTMLElement): void {
-  const runTargetButton = container.querySelector<HTMLButtonElement>('button[role="combobox"]')
-  expect(runTargetButton).toBeTruthy()
-  act(() => runTargetButton?.click())
+  // The field is the search box; clicking its shell focuses it and opens the list.
+  const runTargetShell = container.querySelector<HTMLElement>(
+    'div[data-run-target-combobox-root="true"]'
+  )
+  expect(runTargetShell).toBeTruthy()
+  act(() => runTargetShell?.click())
 }
 
 function findRunTargetItem(label: string): HTMLElement | undefined {
-  // Why: "Add host" is a pinned footer button (mirrors the Project combobox), not a cmdk row.
+  // Rows are listbox options; "Add host" is the pinned footer row (also an option).
   return [
-    ...document.body.querySelectorAll<HTMLElement>('[cmdk-item], [data-run-target-add-host]')
+    ...document.body.querySelectorAll<HTMLElement>('[role="option"], [data-run-target-add-host]')
   ].find((item) => item.textContent?.includes(label))
 }
 
@@ -579,11 +582,10 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
 
     const devboxItem = findRunTargetItem('Devbox')
     expect(devboxItem?.textContent).toContain('Project not set up on this host')
-    // Not-connected rows stay highlightable (not disabled) so they hover like the other
-    // items; a separator sets them off instead of a heading.
-    expect(devboxItem?.getAttribute('aria-disabled')).toBe('false')
-    expect(devboxItem?.getAttribute('data-disabled')).toBe('false')
-    expect(document.body.querySelector('[cmdk-separator]')).toBeTruthy()
+    // Not-connected rows stay highlightable (never `disabled`) so they hover like
+    // the other rows; they're quieted visually instead.
+    expect(devboxItem?.hasAttribute('data-disabled')).toBe(false)
+    expect(devboxItem?.getAttribute('role')).toBe('option')
   })
 
   it('shows the run target picker for one ready setup so hosts can be added', () => {
@@ -623,10 +625,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
 
     openRunTargetPicker(current.container)
     const devboxItem = findRunTargetItem('Devbox')
-    expect(
-      devboxItem?.getAttribute('aria-disabled') === 'true' ||
-        devboxItem?.hasAttribute('data-disabled')
-    ).toBe(true)
+    expect(devboxItem).toBeTruthy()
     const connectButton = [...(devboxItem?.querySelectorAll('button') ?? [])].find((button) =>
       button.textContent?.includes('Connect')
     )
@@ -723,10 +722,10 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     openRunTargetPicker(current.container)
     const addHost = findRunTargetItem('Add host')
     expect(addHost).toBeTruthy()
-    // Hovering the row (no click) opens its submenu so it feels like a menu. React derives
-    // onPointerEnter from a bubbling pointerover, which is what jsdom dispatches here.
+    // Hovering the row (no click) opens its submenu so it feels like a menu.
+    // Hover arms rows via mousemove, matching the project picker.
     act(() => {
-      addHost?.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }))
+      addHost?.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
     })
 
     expect(findRunTargetItem('Add SSH host')).toBeTruthy()
@@ -785,10 +784,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(current.container.textContent).toContain('Run on')
     expect(current.container.textContent).not.toContain('VM recipe')
 
-    const runTargetButton =
-      current.container.querySelector<HTMLButtonElement>('button[role="combobox"]')
-    expect(runTargetButton).toBeTruthy()
-    act(() => runTargetButton?.click())
+    openRunTargetPicker(current.container)
 
     expect(document.body.textContent).toContain('Per-Workspace Environment')
     const ephemeralVmItem = [
@@ -797,7 +793,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(ephemeralVmItem).toBeTruthy()
     act(() => ephemeralVmItem?.click())
 
-    const recipeItem = [...document.body.querySelectorAll<HTMLElement>('[cmdk-item]')].find(
+    const recipeItem = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (item) => item.textContent?.includes('Vercel Sandbox')
     )
     expect(recipeItem).toBeTruthy()
@@ -839,12 +835,13 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       onEphemeralVmRecipeChange: (recipeId) => recipeChanges.push(recipeId)
     })
 
-    const runTargetButton =
-      current.container.querySelector<HTMLButtonElement>('button[role="combobox"]')
-    expect(runTargetButton?.textContent).toContain('Per-Workspace Environment')
-    act(() => runTargetButton?.click())
+    const runTargetShell = current.container.querySelector<HTMLElement>(
+      'div[data-run-target-combobox-root="true"]'
+    )
+    expect(runTargetShell?.textContent).toContain('Per-Workspace Environment')
+    openRunTargetPicker(current.container)
 
-    const builderItem = [...document.body.querySelectorAll<HTMLElement>('[cmdk-item]')].find(
+    const builderItem = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (item) => item.textContent?.includes('Builder')
     )
     expect(builderItem).toBeTruthy()

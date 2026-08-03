@@ -1,7 +1,7 @@
 // Why: single boundary between raw RPC frames and OrcaRuntimeService; keeps schema, handler, and result type on one object.
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
@@ -9,6 +9,7 @@ import type {
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 
 export type PairingRpcContext = {
   getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
@@ -48,7 +49,17 @@ export type RpcRequest = {
   orchestrationCapability?: string
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
+  compatibilityInvocationId?: string
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
 }
+
+export type LegacyCoordinatorAuthorityProof = Readonly<{
+  runId: string
+  principalId: string | null
+  terminalHandle: string
+  paneKey: string
+  consumerGeneration: number
+}>
 
 export type RpcContext = {
   runtime: OrcaRuntimeService
@@ -77,6 +88,13 @@ export type RpcContext = {
     method: string
     payloadHash: string
   }
+  // Why: Run-scoped handlers must compare declared handles with request attestation.
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
+  // Why: only the compatibility authority router can set this trusted scope; user params cannot bypass Run consumer binding.
+  legacyCoordinatorRunId?: string
+  legacyCoordinatorAuthority?: LegacyCoordinatorAuthorityProof
+  revalidateLegacyCoordinator?: () => string
+  orchestrationCompatibilityCallerAuthority?: OrchestrationCompatibilityCallerAuthority
   // Why: federation pins the authenticated saved-environment caller without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext

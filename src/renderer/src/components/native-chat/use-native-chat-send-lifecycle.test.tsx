@@ -66,4 +66,30 @@ describe('useNativeChatSendLifecycle', () => {
     expect(settled.cancel).not.toHaveBeenCalled()
     expect(onPendingSendCanceled).not.toHaveBeenCalled()
   })
+
+  it('keeps a renderer-stalled send cancelable past its nominal schedule', async () => {
+    vi.useFakeTimers()
+    let resolveSettled!: () => void
+    const stalled = {
+      ...handle(640),
+      settled: new Promise<void>((resolve) => {
+        resolveSettled = resolve
+      })
+    }
+    const onPendingSendCanceled = vi.fn()
+    const { result, rerender } = renderHook(
+      ({ targetPtyId }) => useNativeChatSendLifecycle('tab-1', targetPtyId, onPendingSendCanceled),
+      { initialProps: { targetPtyId: 'pty-1' as string | null } }
+    )
+
+    act(() => result.current.trackPendingSend(stalled, 'pending-1'))
+    act(() => vi.advanceTimersByTime(stalled.settleAfterMs + 1_000))
+    rerender({ targetPtyId: 'pty-2' })
+
+    expect(stalled.cancel).toHaveBeenCalledOnce()
+    expect(onPendingSendCanceled).toHaveBeenCalledWith('pending-1')
+    await act(async () => {
+      resolveSettled()
+    })
+  })
 })

@@ -1,3 +1,4 @@
+import { remoteSessionContentLines } from './remote-session-content-lines'
 import { createReadStream } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
@@ -40,12 +41,13 @@ export async function parseGeminiSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ResumableParseFinalizeOptions = {}
+  options: ResumableParseFinalizeOptions = {},
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   if (file.path.endsWith('.jsonl')) {
     return parseGeminiJsonlSessionLines({
       file,
-      lines: content.split(/\r?\n/),
+      lines: remoteSessionContentLines(content, signal),
       platform,
       options
     })

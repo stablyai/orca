@@ -65,7 +65,10 @@ import { UsageRosterPanel, getTightestUsageSection } from './UsageRosterPanel'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
-import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
+import {
+  markLiveCodexSessionsForRestart,
+  resolveCodexRestartPromptAccountLabel
+} from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
 import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
@@ -166,16 +169,6 @@ type StatusSwitchGroupOptions = {
 
 function getHostRuntimeLabel(): string {
   return navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
-}
-
-function getCodexAccountLabel(
-  state: CodexRateLimitAccountsState,
-  accountId: string | null | undefined
-): string {
-  if (accountId == null) {
-    return 'System default'
-  }
-  return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
 }
 
 function getCodexAccountDisplayLabel(account: CodexStatusAccount): string {
@@ -975,7 +968,10 @@ function MiniBar({
   display: UsagePercentageDisplay
 }): React.JSX.Element {
   return (
-    <div className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0">
+    <div
+      data-usage-bar
+      className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0"
+    >
       <div
         className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
         style={{ width: `${getDisplayedUsagePercentage(usedPct, display)}%` }}
@@ -1175,11 +1171,9 @@ const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 function VerboseProviderUsage({
   p,
-  compact,
   display
 }: {
   p: ProviderRateLimits
-  compact: boolean
   display: UsagePercentageDisplay
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
@@ -1241,9 +1235,6 @@ function VerboseProviderUsage({
 
   return (
     <>
-      {p.session && !compact ? (
-        <MiniBar usedPct={clampUsedPercent(p.session.usedPercent)} display={display} />
-      ) : null}
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>
           {index > 0 ? <span className="text-muted-foreground">·</span> : null}
@@ -1317,22 +1308,20 @@ export function ProviderSegment({
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {mode === 'verbose' ? (
-        <VerboseProviderUsage p={p} compact={compact} display={display} />
-      ) : (
         <>
           {tightest && !compact ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
           ) : null}
-          {tightest ? (
-            <WindowLabel
-              w={tightest.window}
-              label={tightest.label}
-              display={display}
-              showLabel={!compact}
-            />
-          ) : null}
+          <VerboseProviderUsage p={p} display={display} />
         </>
-      )}
+      ) : tightest ? (
+        <WindowLabel
+          w={tightest.window}
+          label={tightest.label}
+          display={display}
+          showLabel={!compact}
+        />
+      ) : null}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
@@ -1466,8 +1455,18 @@ export function CodexSwitcherMenu({
       const nextActiveAccountId = getCodexStatusActiveId(next, target)
       if (previousActiveAccountId !== nextActiveAccountId) {
         await markLiveCodexSessionsForRestart({
-          previousAccountLabel: getCodexAccountLabel(accountState, previousActiveAccountId),
-          nextAccountLabel: getCodexAccountLabel(next, nextActiveAccountId),
+          previousAccountLabel: resolveCodexRestartPromptAccountLabel(
+            accountState.accounts,
+            previousActiveAccountId
+          ),
+          nextAccountLabel: resolveCodexRestartPromptAccountLabel(
+            next.accounts,
+            nextActiveAccountId
+          ),
+          // Why: two accounts can share an email, so the labels alone cannot
+          // tell the store whether this switch lands back on the launch account.
+          previousAccountId: previousActiveAccountId ?? null,
+          nextAccountId: nextActiveAccountId ?? null,
           // Why: the mutation wrote this row's slot only, so panes on any other
           // lane still launch under the account they already had.
           target,

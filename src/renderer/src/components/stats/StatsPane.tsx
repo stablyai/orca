@@ -43,7 +43,13 @@ function formatTrackingSince(timestamp: number | null): string {
     return ''
   }
   const date = new Date(timestamp)
-  return `Tracking since ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+  return translate('auto.components.stats.StatsPane.trackingSince', 'Tracking since {{value0}}', {
+    value0: date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+  })
 }
 
 type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'grok'

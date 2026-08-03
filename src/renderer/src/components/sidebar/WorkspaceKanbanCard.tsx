@@ -7,6 +7,9 @@ import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanCardProps = {
   worktree: Worktree
+  // Why: the lane virtualizes, so DOM order no longer implies list position.
+  // Drop-index math reads this instead of counting rendered siblings.
+  laneIndex: number
   repo: Repo | undefined
   isActive: boolean
   isSelected: boolean
@@ -23,6 +26,7 @@ type WorkspaceKanbanCardProps = {
 
 function WorkspaceKanbanCard({
   worktree,
+  laneIndex,
   repo,
   isActive,
   isSelected,
@@ -40,6 +44,7 @@ function WorkspaceKanbanCard({
     <div
       className="relative rounded-lg data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-worktree-sidebar-ring/40"
       data-workspace-board-card-id={worktree.id}
+      data-workspace-board-card-index={laneIndex}
       data-workspace-board-card-mode="detailed"
       data-workspace-board-card-selected={isSelected ? 'true' : 'false'}
       data-workspace-board-pointer-draggable={nativeDragEnabled ? undefined : 'true'}

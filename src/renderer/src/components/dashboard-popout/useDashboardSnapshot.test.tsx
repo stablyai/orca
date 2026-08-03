@@ -96,4 +96,48 @@ describe('useDashboardSnapshot', () => {
     expect(startViewTransition).not.toHaveBeenCalled()
     expect(result.current.cards[0].bucket).toBe('working')
   })
+
+  // Why: the bridge stops re-sending repoIconsByRepoId on throttled republishes
+  // once it is unchanged, so the icons would disappear from the board on the
+  // very next tick if this window did not hold on to the last map it was given.
+  it('retains the last repo icons when a republish omits them', () => {
+    const icons = {
+      r1: { type: 'image' as const, src: 'data:image/png;base64,AAAA', source: 'upload' as const }
+    }
+    const { result } = renderHook(() => useDashboardSnapshot())
+
+    act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: icons }))
+    expect(result.current.repoIconsByRepoId).toEqual(icons)
+
+    act(() => apply(snapshot([card({ task: 'moved on' })])))
+    expect(result.current.repoIconsByRepoId).toEqual(icons)
+    expect(result.current.cards[0].task).toBe('moved on')
+  })
+
+  it('replaces retained icons when the bridge sends a new map', () => {
+    const first = {
+      r1: { type: 'image' as const, src: 'data:image/png;base64,AAAA', source: 'upload' as const }
+    }
+    const second = { r1: { type: 'emoji' as const, emoji: '🦑' } }
+    const { result } = renderHook(() => useDashboardSnapshot())
+
+    act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: first }))
+    act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: second }))
+    expect(result.current.repoIconsByRepoId).toEqual(second)
+
+    // An omitted map must retain the NEW icons, not resurrect the old ones.
+    act(() => apply(snapshot([card({})])))
+    expect(result.current.repoIconsByRepoId).toEqual(second)
+  })
+
+  // A repo whose icon was cleared must actually lose it — retention applies to
+  // an OMITTED map, never to an empty one.
+  it('honours an explicitly empty icon map', () => {
+    const icons = { r1: { type: 'emoji' as const, emoji: '🦑' } }
+    const { result } = renderHook(() => useDashboardSnapshot())
+
+    act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: icons }))
+    act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: {} }))
+    expect(result.current.repoIconsByRepoId).toEqual({})
+  })
 })

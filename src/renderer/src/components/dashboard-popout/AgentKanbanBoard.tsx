@@ -11,7 +11,13 @@ import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { AgentKanbanCard } from './AgentKanbanCard'
+import { AgentDashboardToolbar } from './AgentDashboardToolbar'
 import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
+import {
+  EMPTY_DASHBOARD_FILTERS,
+  filterDashboardCards,
+  type DashboardFilters
+} from './agent-board-filtering'
 import './agent-board-transitions.css'
 import { translate } from '@/i18n/i18n'
 
@@ -35,6 +41,8 @@ function bucketLabel(bucket: DashboardBucket): string {
       return translate('dashboardPopout.bucket.attention', 'Needs You')
     case 'working':
       return translate('dashboardPopout.bucket.working', 'Working')
+    case 'done':
+      return translate('dashboardPopout.bucket.done', 'Done')
     case 'idle':
       return translate('dashboardPopout.bucket.idle', 'Idle')
   }
@@ -44,6 +52,7 @@ function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, Dashboar
   const grouped: Record<DashboardBucket, DashboardCard[]> = {
     attention: [],
     working: [],
+    done: [],
     idle: []
   }
   for (const card of cards) {
@@ -133,7 +142,22 @@ export function AgentKanbanBoard({
   onClose,
   headerActions
 }: AgentKanbanBoardProps): React.JSX.Element {
-  const grouped = useMemo(() => groupByBucket(snapshot.cards), [snapshot.cards])
+  const visibleBuckets = useMemo(
+    () =>
+      DASHBOARD_BUCKET_ORDER.filter((bucket) => bucket !== 'idle' || snapshot.showIdle === true),
+    [snapshot.showIdle]
+  )
+  const visibleCards = useMemo(
+    () => snapshot.cards.filter((card) => visibleBuckets.includes(card.bucket)),
+    [snapshot.cards, visibleBuckets]
+  )
+  const [query, setQuery] = useState('')
+  const [filters, setFilters] = useState<DashboardFilters>(EMPTY_DASHBOARD_FILTERS)
+  const filteredCards = useMemo(
+    () => filterDashboardCards(visibleCards, query, filters),
+    [filters, query, visibleCards]
+  )
+  const grouped = useMemo(() => groupByBucket(filteredCards), [filteredCards])
   const hasRelativeTimestamps = useMemo(
     () => snapshot.cards.some((card) => (card.finishedAt ?? card.startedAt) > 0),
     [snapshot.cards]
@@ -204,7 +228,7 @@ export function AgentKanbanBoard({
           </h1>
           <span className="text-[11px] text-muted-foreground">
             {translate('dashboardPopout.total', '{{count}} total', {
-              count: snapshot.cards.length
+              count: visibleCards.length
             })}
           </span>
           {headerActions || onClose ? (
@@ -223,13 +247,19 @@ export function AgentKanbanBoard({
             </div>
           ) : null}
         </div>
+        <AgentDashboardToolbar
+          cards={visibleCards}
+          filterOptions={snapshot.filterOptions}
+          filteredCount={filteredCards.length}
+          query={query}
+          onQueryChange={setQuery}
+          filters={filters}
+          onFiltersChange={setFilters}
+        />
         <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">
-          {/* Why: columns share the window width up to a readable cap; mx-auto
-            centers the capped board so leftover space splits evenly instead of
-            pooling on the right. In overflow the auto margins collapse to 0,
-            keeping the left edge reachable while scrolling. */}
+          {/* Auto margins center the capped board and collapse during horizontal overflow. */}
           <div className="mx-auto flex w-full max-w-[1280px] gap-3">
-            {DASHBOARD_BUCKET_ORDER.map((bucket) => (
+            {visibleBuckets.map((bucket) => (
               <KanbanColumn
                 key={bucket}
                 bucket={bucket}

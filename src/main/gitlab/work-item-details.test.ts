@@ -32,7 +32,7 @@ vi.mock('./gl-utils', () => ({
   glabRepoExecOptions: glabRepoExecOptionsMock
 }))
 
-import { getWorkItemDetails } from './work-item-details'
+import { countDiffLines, getWorkItemDetails } from './work-item-details'
 
 describe('getWorkItemDetails', () => {
   beforeEach(() => {
@@ -201,5 +201,86 @@ describe('getWorkItemDetails', () => {
     expect(glabExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
       true
     )
+  })
+})
+
+describe('countDiffLines', () => {
+  it('counts added and removed lines inside a hunk', () => {
+    expect(countDiffLines('@@ -1 +1 @@\n-old\n+new')).toEqual({ additions: 1, deletions: 1 })
+  })
+
+  it('counts a removed line whose original content began with `--` (SQL/Lua comment)', () => {
+    // Why: prefix `-` + content `-- old comment` = diff line `--- old comment`,
+    // which collides with the `--- a/file` header under a plain startsWith check.
+    expect(
+      countDiffLines('--- a/db.sql\n+++ b/db.sql\n@@ -1,2 +1,2 @@\n keep\n--- old comment\n+new')
+    ).toEqual({ additions: 1, deletions: 1 })
+  })
+
+  it('counts an added line whose original content began with `++`', () => {
+    // Why: prefix `+` + content `++ flag` = diff line `+++ flag`, colliding with `+++ b/file`.
+    expect(countDiffLines('--- a/f.lua\n+++ b/f.lua\n@@ -1 +1 @@\n-old\n+++ flag')).toEqual({
+      additions: 1,
+      deletions: 1
+    })
+  })
+
+  it('counts the collision on a header-less payload, the shape GitLab actually returns', () => {
+    // Why: the `/diffs` entity emits `json_safe_diff`, which starts at `@@` — the
+    // `--- a/file` form is opt-in via `unidiff=true`, which this call path never sends.
+    // So this, not the header-prefixed variant, is the reachable regression input.
+    expect(countDiffLines('@@ -1 +1 @@\n--- old comment\n+++ new comment')).toEqual({
+      additions: 1,
+      deletions: 1
+    })
+  })
+
+  it('counts an added line of `++i;` C-style increment content', () => {
+    expect(countDiffLines('@@ -1 +1 @@\n-i++;\n+++i;')).toEqual({ additions: 1, deletions: 1 })
+  })
+
+  it('yields zero for a binary-notice diff', () => {
+    expect(countDiffLines('Binary files a/logo.png and b/logo.png differ')).toEqual({
+      additions: 0,
+      deletions: 0
+    })
+  })
+
+  it('skips file headers before the first hunk and yields zero for a header-only diff', () => {
+    expect(countDiffLines('--- a/x\n+++ b/x')).toEqual({ additions: 0, deletions: 0 })
+  })
+
+  it('keeps additions and deletions distinct under an asymmetric hunk', () => {
+    expect(countDiffLines('@@ -1 +1,2 @@\n-old\n+a\n+b')).toEqual({ additions: 2, deletions: 1 })
+  })
+
+  it('accumulates counts across multiple hunks', () => {
+    expect(countDiffLines('@@ -1 +1 @@\n-a\n+b\n@@ -5 +5,2 @@\n-c\n+d\n+e')).toEqual({
+      additions: 3,
+      deletions: 2
+    })
+  })
+
+  it('yields zero for the empty diff that binary and rename-only files carry', () => {
+    // Why: mapMRFile passes `raw.diff ?? ''`, so binary/too_large/rename-only entries land here.
+    expect(countDiffLines('')).toEqual({ additions: 0, deletions: 0 })
+  })
+
+  it('yields zero when no hunk header is present, even with +/- lines', () => {
+    // Why: pins the deliberate behaviour change — without a `@@` there is no hunk, so
+    // leading +/- can only be file headers. Counting them is what caused the collision.
+    expect(countDiffLines('+added\n-removed')).toEqual({ additions: 0, deletions: 0 })
+  })
+
+  it('ignores the no-newline marker and a trailing newline', () => {
+    expect(countDiffLines('@@ -1 +1 @@\n-old\n+new\n\\ No newline at end of file\n')).toEqual({
+      additions: 1,
+      deletions: 1
+    })
+  })
+
+  it('counts hunk content whose own text begins with `@@`', () => {
+    // Why: the `@@` hunk check runs first, so it must not swallow `+`/`-` content.
+    expect(countDiffLines('@@ -1 +1 @@\n-@@ old\n+@@ new')).toEqual({ additions: 1, deletions: 1 })
   })
 })
