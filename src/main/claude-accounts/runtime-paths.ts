@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { ClaudeEnvPatch } from './environment'
@@ -13,8 +13,9 @@ export type ClaudeRuntimePaths = {
 export class ClaudeRuntimePathResolver {
   getRuntimePaths(): ClaudeRuntimePaths {
     const inheritedConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || null
+    // Why: resolving must stay side-effect free — background usage refreshes call
+    // this even when Claude is disabled. Writers create the directory themselves.
     const configDir = inheritedConfigDir || join(homedir(), '.claude')
-    mkdirSync(configDir, { recursive: true })
 
     return {
       configDir,
