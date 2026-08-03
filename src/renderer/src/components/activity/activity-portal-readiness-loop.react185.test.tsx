@@ -84,6 +84,33 @@ function installAnimationFrameController(): {
   }
 }
 
+function installMutationObserverController(): { notify: () => void } {
+  const callbacks = new Map<MutationObserver, MutationCallback>()
+  class ControlledMutationObserver implements MutationObserver {
+    constructor(callback: MutationCallback) {
+      callbacks.set(this, callback)
+    }
+
+    observe(): void {}
+
+    disconnect(): void {
+      callbacks.delete(this)
+    }
+
+    takeRecords(): MutationRecord[] {
+      return []
+    }
+  }
+  vi.stubGlobal('MutationObserver', ControlledMutationObserver)
+  return {
+    notify() {
+      for (const [observer, callback] of callbacks) {
+        callback([], observer)
+      }
+    }
+  }
+}
+
 async function flushPortalFramesUntil(
   frames: ReturnType<typeof installAnimationFrameController>,
   settled: () => boolean
@@ -347,6 +374,7 @@ describe('Activity portal pane switching', () => {
 
   it('releases a latched readiness once the terminal attaches', async () => {
     const frames = installAnimationFrameController()
+    const mutations = installMutationObserverController()
     const target = document.createElement('div')
     document.body.append(target)
     const buildRoot = (mode: 'hidden' | 'sibling' | 'ready'): void => {
@@ -402,7 +430,7 @@ describe('Activity portal pane switching', () => {
       const statusesBefore = statuses.length
       await act(async () => {
         buildRoot(mode)
-        await Promise.resolve()
+        mutations.notify()
       })
       expect(await flushPortalReadiness(frames)).toBe(true)
       if (mode !== 'sibling') {
@@ -426,7 +454,7 @@ describe('Activity portal pane switching', () => {
     for (let attempt = 0; attempt < PORTAL_READY_REAPPLY_ATTEMPTS && !sawReady; attempt += 1) {
       await act(async () => {
         buildRoot('ready')
-        await Promise.resolve()
+        mutations.notify()
       })
       expect(await flushPortalReadiness(frames)).toBe(true)
       await flushPortalFramesUntil(frames, () => statuses.at(-1) === 'ready')
