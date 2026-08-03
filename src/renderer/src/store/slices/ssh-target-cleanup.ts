@@ -215,6 +215,10 @@ export function buildRemovedSshTargetCleanupPatch(
     state.remoteWorkspaceSyncStatusByTargetId,
     targetId
   )
+  const removedLastSyncedRevision = Object.prototype.hasOwnProperty.call(
+    state.lastSyncedRemoteWorkspaceRevisionByTargetId,
+    targetId
+  )
   const removedPortForwards = Object.prototype.hasOwnProperty.call(
     state.portForwardsByConnection,
     targetId
@@ -225,6 +229,8 @@ export function buildRemovedSshTargetCleanupPatch(
   )
   const nextSyncStatus = { ...state.remoteWorkspaceSyncStatusByTargetId }
   delete nextSyncStatus[targetId]
+  const nextLastSyncedRevision = { ...state.lastSyncedRemoteWorkspaceRevisionByTargetId }
+  delete nextLastSyncedRevision[targetId]
   const nextPortForwards = { ...state.portForwardsByConnection }
   delete nextPortForwards[targetId]
   const nextDetectedPorts = { ...state.detectedPortsByConnection }
@@ -239,6 +245,7 @@ export function buildRemovedSshTargetCleanupPatch(
     removedLabel ||
     removedHydrated ||
     removedSyncStatus ||
+    removedLastSyncedRevision ||
     removedPortForwards ||
     removedDetectedPorts ||
     tabPtyState.changed ||
@@ -261,6 +268,9 @@ export function buildRemovedSshTargetCleanupPatch(
     ...(removedLabel ? { sshTargetLabels: nextLabels } : {}),
     ...(removedHydrated ? { remoteWorkspaceHydratedTargetIds: nextHydrated } : {}),
     ...(removedSyncStatus ? { remoteWorkspaceSyncStatusByTargetId: nextSyncStatus } : {}),
+    ...(removedLastSyncedRevision
+      ? { lastSyncedRemoteWorkspaceRevisionByTargetId: nextLastSyncedRevision }
+      : {}),
     ...(removedPortForwards ? { portForwardsByConnection: nextPortForwards } : {}),
     ...(removedDetectedPorts ? { detectedPortsByConnection: nextDetectedPorts } : {}),
     ...(tabPtyState.changed

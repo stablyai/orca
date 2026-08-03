@@ -173,6 +173,43 @@ export function createSessionWriteSubscriber({
   let prev: Record<string, unknown> | null = null
   const pendingChangedFields = new Set<SessionRelevantField>()
 
+  const scheduleFlush = (): void => {
+    if (timer !== null) {
+      clearTimeout(timer)
+    }
+    timer = setTimeout(() => {
+      timer = null
+      // Why: rebuild from the freshest store state rather than the snapshot
+      // captured when this timer was scheduled. Today this is equivalent
+      // because buildWorkspaceSessionPayload reads only SESSION_RELEVANT_FIELDS
+      // (the same fields gating the timer reset), so the captured `state` is
+      // already current for those fields. Calling getState() guards against a
+      // future refactor that adds a non-relevant field read to the payload
+      // builder — without this, such a change would silently start emitting
+      // stale values for that field.
+      const fresh = store.getState()
+      if (!shouldPersistWorkspaceSession(fresh)) {
+        pendingChangedFields.clear()
+        return
+      }
+      if (shouldSchedulePersist && !shouldSchedulePersist()) {
+        // Why: a remote workspace snapshot apply is in flight. Dropping the
+        // pending fields here would lose edits made during the apply window
+        // (e.g. a tab close) from both the local session file and the remote
+        // mirror — the next pull would resurrect them. Defer until it ends.
+        scheduleFlush()
+        return
+      }
+      const changed = new Set(pendingChangedFields)
+      pendingChangedFields.clear()
+      const patch = buildWorkspaceSessionPatch(fresh, changed)
+      if (Object.keys(patch).length === 0) {
+        return
+      }
+      persist({ patch })
+    }, debounceMs)
+  }
+
   const unsub = store.subscribe((state) => {
     if (!shouldPersistWorkspaceSession(state)) {
       return
@@ -198,44 +235,7 @@ export function createSessionWriteSubscriber({
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }
-    if (shouldSchedulePersist && !shouldSchedulePersist()) {
-      if (timer !== null) {
-        clearTimeout(timer)
-        timer = null
-      }
-      pendingChangedFields.clear()
-      return
-    }
-    if (timer !== null) {
-      clearTimeout(timer)
-    }
-    timer = setTimeout(() => {
-      timer = null
-      // Why: rebuild from the freshest store state rather than the snapshot
-      // captured when this timer was scheduled. Today this is equivalent
-      // because buildWorkspaceSessionPayload reads only SESSION_RELEVANT_FIELDS
-      // (the same fields gating the timer reset), so the captured `state` is
-      // already current for those fields. Calling getState() guards against a
-      // future refactor that adds a non-relevant field read to the payload
-      // builder — without this, such a change would silently start emitting
-      // stale values for that field.
-      const fresh = store.getState()
-      if (!shouldPersistWorkspaceSession(fresh)) {
-        pendingChangedFields.clear()
-        return
-      }
-      if (shouldSchedulePersist && !shouldSchedulePersist()) {
-        pendingChangedFields.clear()
-        return
-      }
-      const changed = new Set(pendingChangedFields)
-      pendingChangedFields.clear()
-      const patch = buildWorkspaceSessionPatch(fresh, changed)
-      if (Object.keys(patch).length === 0) {
-        return
-      }
-      persist({ patch })
-    }, debounceMs)
+    scheduleFlush()
   })
 
   return () => {

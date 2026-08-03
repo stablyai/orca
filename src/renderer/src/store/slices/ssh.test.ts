@@ -80,6 +80,10 @@ describe('createSshSlice', () => {
         [targetId]: { phase: 'offline' },
         [otherTargetId]: { phase: 'synced' }
       },
+      lastSyncedRemoteWorkspaceRevisionByTargetId: {
+        [targetId]: 7,
+        [otherTargetId]: 9
+      },
       portForwardsByConnection: {
         [targetId]: [
           {
@@ -172,6 +176,7 @@ describe('createSshSlice', () => {
     expect(state.sshTargetLabels.has(targetId)).toBe(false)
     expect(state.remoteWorkspaceHydratedTargetIds.has(targetId)).toBe(false)
     expect(state.remoteWorkspaceSyncStatusByTargetId[targetId]).toBeUndefined()
+    expect(state.lastSyncedRemoteWorkspaceRevisionByTargetId[targetId]).toBeUndefined()
     expect(state.portForwardsByConnection[targetId]).toBeUndefined()
     expect(state.detectedPortsByConnection[targetId]).toBeUndefined()
     expect(state.sshCredentialQueue.map((req) => req.targetId)).toEqual([otherTargetId])
@@ -205,6 +210,7 @@ describe('createSshSlice', () => {
     expect(state.sshTargetLabels.get(otherTargetId)).toBe('Other target')
     expect(state.remoteWorkspaceHydratedTargetIds.has(otherTargetId)).toBe(true)
     expect(state.remoteWorkspaceSyncStatusByTargetId[otherTargetId]).toEqual({ phase: 'synced' })
+    expect(state.lastSyncedRemoteWorkspaceRevisionByTargetId[otherTargetId]).toBe(9)
     expect(state.portForwardsByConnection[otherTargetId]).toHaveLength(1)
     expect(state.detectedPortsByConnection[otherTargetId]).toHaveLength(1)
     expect(state.tabsByWorktree[otherWorktreeId][0]?.ptyId).toBe(otherPtyId)
@@ -453,6 +459,31 @@ describe('createSshSlice', () => {
     store.getState().clearRemovedSshTargetState('ssh-1')
 
     expect(store.getState().transientClearedAgentStatusConnectionIds).toEqual({})
+  })
+
+  it('records the last synced remote workspace revision only on synced statuses', () => {
+    const store = createTestStore()
+
+    store.getState().setRemoteWorkspaceSyncStatus('ssh-1', {
+      phase: 'synced',
+      direction: 'push',
+      revision: 4
+    })
+    expect(store.getState().lastSyncedRemoteWorkspaceRevisionByTargetId['ssh-1']).toBe(4)
+
+    store.getState().setRemoteWorkspaceSyncStatus('ssh-1', {
+      phase: 'conflict',
+      direction: 'push',
+      revision: 9
+    })
+    expect(store.getState().lastSyncedRemoteWorkspaceRevisionByTargetId['ssh-1']).toBe(4)
+
+    store.getState().setRemoteWorkspaceSyncStatus('ssh-1', {
+      phase: 'synced',
+      direction: 'pull',
+      revision: 9
+    })
+    expect(store.getState().lastSyncedRemoteWorkspaceRevisionByTargetId['ssh-1']).toBe(9)
   })
 
   it('preserves untouched cleanup slice references while removing deferred target metadata', () => {

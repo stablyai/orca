@@ -44,6 +44,12 @@ export type SshSlice = {
   sshTargetsHydrated: boolean
   remoteWorkspaceHydratedTargetIds: Set<string>
   remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
+  /** Remote workspace snapshot revision this client last fully synced (push or
+   * pull) per target. Reconnect arbitration compares it against the remote's
+   * current revision to tell "remote unchanged while we were away" (local
+   * session is authoritative, e.g. tabs closed offline) from "another client
+   * wrote" (pull and merge). */
+  lastSyncedRemoteWorkspaceRevisionByTargetId: Record<string, number>
   sshCredentialQueue: SshCredentialRequest[]
   /** Incremented when an SSH target transitions to 'connected'. Allows
    * components like the file explorer to re-trigger data loads that failed
@@ -89,6 +95,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   sshTargetsHydrated: false,
   remoteWorkspaceHydratedTargetIds: new Set(),
   remoteWorkspaceSyncStatusByTargetId: {},
+  lastSyncedRemoteWorkspaceRevisionByTargetId: {},
   sshCredentialQueue: [],
   sshConnectedGeneration: 0,
   portForwardsByConnection: {},
@@ -152,7 +159,17 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
       remoteWorkspaceSyncStatusByTargetId: {
         ...s.remoteWorkspaceSyncStatusByTargetId,
         [targetId]: status
-      }
+      },
+      // Why: a 'synced' status is the receipt that local and remote agree at
+      // this revision; every push/pull success path reports through here.
+      ...(status.phase === 'synced' && typeof status.revision === 'number'
+        ? {
+            lastSyncedRemoteWorkspaceRevisionByTargetId: {
+              ...s.lastSyncedRemoteWorkspaceRevisionByTargetId,
+              [targetId]: status.revision
+            }
+          }
+        : {})
     })),
   enqueueSshCredentialRequest: (req) =>
     set((s) => ({ sshCredentialQueue: [...s.sshCredentialQueue, req] })),

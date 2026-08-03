@@ -521,7 +521,7 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('updates its baseline without scheduling when shouldSchedulePersist returns false', () => {
+  it('coalesces changes made while shouldSchedulePersist is false into the next flush', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = false
     const cleanup = createSessionWriteSubscriber({
@@ -541,7 +541,38 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('cancels a pending debounce when shouldSchedulePersist returns false', () => {
+  it('defers a blocked flush and persists it once shouldSchedulePersist reopens', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = true
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule
+    })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      ...makeTerminalSessionState('shell')
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    // Why: a tab closed while a remote snapshot apply is in flight must still
+    // persist after the apply ends, or the next pull resurrects the tab.
+    shouldSchedule = false
+    useAppStore.setState({ tabsByWorktree: { 'wt-1': [] } })
+    vi.advanceTimersByTime(1_000)
+    expect(persist).not.toHaveBeenCalled()
+
+    shouldSchedule = true
+    vi.advanceTimersByTime(200)
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.tabsByWorktree?.['wt-1']).toEqual([])
+    cleanup()
+  })
+
+  it('holds a pending debounce while shouldSchedulePersist returns false', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = true
     const cleanup = createSessionWriteSubscriber({
