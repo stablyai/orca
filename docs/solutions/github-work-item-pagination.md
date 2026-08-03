@@ -12,10 +12,10 @@ counts depend on renderer assumptions, and can drop rows between pages.
 
 Resolve every selected repository before searching. Group sources only when they
 share GitHub host, connection, and execution context. Each compatible group
-uses one Search API query with multiple `repo:` qualifiers, existing task
-filters, and `sort=created&order=desc`. Repository qualifiers are split only at
-repository boundaries when the encoded request exceeds the 7,500-byte safety
-budget.
+uses one Search API request plan with one or more queries. Each query uses
+multiple `repo:` qualifiers, existing task filters, and
+`sort=created&order=desc`. Repository qualifiers are split only at repository
+boundaries when the encoded request exceeds the 7,500-byte safety budget.
 
 The measured qualifier experiment on issue #12127 accepted 288 real public
 repositories before request-size failures appeared. The implementation uses

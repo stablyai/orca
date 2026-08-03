@@ -1480,13 +1480,18 @@ export type GitHubWorkItemsBatchInput = {
   localGitOptions?: LocalGitExecOptions
 }
 
+export type GitHubWorkItemResolutionFailure = {
+  repoId: string
+  reason: unknown
+}
+
 type ResolvedBatchRepo = GitHubWorkItemsBatchInput & {
   issueSource: GitHubApiRepository | null
   issueSourceFellBack: boolean
   prSource: GitHubApiRepository | null
   originCandidate: GitHubApiRepository | null
   upstreamCandidate: GitHubApiRepository | null
-  resolutionFailures: unknown[]
+  resolutionFailures: GitHubWorkItemResolutionFailure[]
 }
 
 type BatchSourceMember = {
@@ -1860,7 +1865,7 @@ export async function listWorkItemsAcrossRepos(
   query?: string,
   page?: number,
   noCache = false,
-  resolutionFailures: readonly unknown[] = []
+  resolutionFailures: readonly GitHubWorkItemResolutionFailure[] = []
 ): Promise<ListWorkItemsAcrossReposResult> {
   if (inputs.length > MAX_GITHUB_WORK_ITEMS_BATCH_REPOS) {
     throw new Error(
@@ -1909,24 +1914,31 @@ export async function listWorkItemsAcrossRepos(
         upstreamCandidate:
           prResolved.status === 'fulfilled' ? prResolved.value.upstreamCandidate : null,
         resolutionFailures: [
-          ...(issueResolved.status === 'rejected' ? [issueResolved.reason] : []),
-          ...(prResolved.status === 'rejected' ? [prResolved.reason] : [])
+          ...(issueResolved.status === 'rejected'
+            ? [{ repoId: input.repoId, reason: issueResolved.reason }]
+            : []),
+          ...(prResolved.status === 'rejected'
+            ? [{ repoId: input.repoId, reason: prResolved.reason }]
+            : [])
         ]
       }
     })
   )
   const resolvedRepos: ResolvedBatchRepo[] = []
   const allResolutionFailures = [...resolutionFailures]
-  for (const result of resolutionResults) {
+  for (const [index, result] of resolutionResults.entries()) {
     if (result.status === 'fulfilled') {
       resolvedRepos.push(result.value)
       allResolutionFailures.push(...result.value.resolutionFailures)
     } else {
-      allResolutionFailures.push(result.reason)
+      allResolutionFailures.push({
+        repoId: inputs[index]?.repoId ?? 'unknown',
+        reason: result.reason
+      })
     }
   }
-  const resolutionErrorTypes = allResolutionFailures.map((failure) =>
-    classifyListIssuesError(failure instanceof Error ? failure.message : String(failure))
+  const resolutionErrorTypes = allResolutionFailures.map(({ reason }) =>
+    classifyListIssuesError(reason instanceof Error ? reason.message : String(reason))
   )
   let failedCount = resolutionErrorTypes.length
   let unavailableCount = resolutionErrorTypes.filter((error) =>

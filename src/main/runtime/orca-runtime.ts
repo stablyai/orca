@@ -586,7 +586,8 @@ import {
   listAssignableUsers,
   type MainWorkItem,
   type GitHubPRBranchLookupOptions,
-  type GitHubWorkItemsBatchInput
+  type GitHubWorkItemsBatchInput,
+  type GitHubWorkItemResolutionFailure
 } from '../github/client'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import {
@@ -18532,7 +18533,7 @@ export class OrcaRuntimeService {
       )
     }
     const inputs: GitHubWorkItemsBatchInput[] = []
-    const resolutionFailures: unknown[] = []
+    const resolutionFailures: GitHubWorkItemResolutionFailure[] = []
     const resolved = await Promise.allSettled(
       selectors.map(async (selector) => {
         const repo = await this.resolveRepoSelector(selector.repo)
@@ -18546,13 +18547,13 @@ export class OrcaRuntimeService {
         }
       })
     )
-    for (const result of resolved) {
+    resolved.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         inputs.push(result.value)
       } else {
-        resolutionFailures.push(result.reason)
+        resolutionFailures.push({ repoId: selectors[index].repoId, reason: result.reason })
       }
-    }
+    })
     return listWorkItemsAcrossRepos(inputs, limit, query, page, noCache, resolutionFailures)
   }
 

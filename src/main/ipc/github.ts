@@ -55,7 +55,11 @@ import {
   checkOrcaStarred,
   starOrca
 } from '../github/client'
-import type { GitHubPRBranchLookupOptions, GitHubWorkItemsBatchInput } from '../github/client'
+import type {
+  GitHubPRBranchLookupOptions,
+  GitHubWorkItemResolutionFailure,
+  GitHubWorkItemsBatchInput
+} from '../github/client'
 import {
   clearVisiblePRRefreshWindow,
   enqueuePRRefresh,
@@ -476,7 +480,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         return listWorkItemsAcrossRepos([], args?.limit, args?.query, args?.page, false, [])
       }
       const inputs: GitHubWorkItemsBatchInput[] = []
-      const resolutionFailures: unknown[] = []
+      const resolutionFailures: GitHubWorkItemResolutionFailure[] = []
       for (const selector of repos) {
         try {
           const repo = assertRegisteredRepo(selector, store)
@@ -489,7 +493,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
             ...(localGitOptions ? { localGitOptions } : {})
           })
         } catch (err) {
-          resolutionFailures.push(err)
+          resolutionFailures.push({ repoId: selector.repoId, reason: err })
         }
       }
       return listWorkItemsAcrossRepos(
