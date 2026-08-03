@@ -32,17 +32,23 @@ describe('terminal IME e2e workflow', () => {
     expect(installRun).toContain('libglib2.0-bin')
   })
 
-  it('runs deterministic boundaries before the real IBus suite', () => {
-    const runs = workflow.jobs['linux-x11'].steps
-      .map((step) => step.run)
-      .filter((run) => typeof run === 'string')
-    const deterministicIndex = runs.findIndex((run) =>
-      run.includes('terminal-ime-exact-byte.spec.ts')
+  it('runs the real IBus suite before deterministic boundaries', () => {
+    const steps = workflow.jobs['linux-x11'].steps
+    const deterministicIndex = steps.findIndex((step) =>
+      step.run?.includes('terminal-ime-exact-byte.spec.ts')
     )
-    const nativeIndex = runs.findIndex((run) => run.includes('test:e2e:terminal-ime-native'))
+    const nativeIndex = steps.findIndex((step) =>
+      step.run?.includes('test:e2e:terminal-ime-native')
+    )
 
     expect(deterministicIndex).toBeGreaterThanOrEqual(0)
-    expect(nativeIndex).toBeGreaterThan(deterministicIndex)
+    expect(nativeIndex).toBeGreaterThanOrEqual(0)
+    expect(deterministicIndex).toBeGreaterThan(nativeIndex)
+    const nativeEvidenceIndex = steps.findIndex(
+      (step) => step.with?.name === 'terminal-ime-native-evidence'
+    )
+    expect(nativeEvidenceIndex).toBeGreaterThan(nativeIndex)
+    expect(nativeEvidenceIndex).toBeLessThan(deterministicIndex)
   })
 
   it('keeps IBus lifecycle scoped to owned processes', () => {

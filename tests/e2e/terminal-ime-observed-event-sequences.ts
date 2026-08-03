@@ -4,7 +4,7 @@ async function dispatchObservedIbusHangulSequence(
   page: Page,
   variant: 'mixed' | 'retained'
 ): Promise<void> {
-  await page.evaluate((selectedVariant) => {
+  await page.evaluate(async (selectedVariant) => {
     const textarea = document.activeElement
     if (!(textarea instanceof HTMLTextAreaElement)) {
       throw new Error('xterm helper textarea is not focused')
@@ -54,27 +54,33 @@ async function dispatchObservedIbusHangulSequence(
       end(prefix)
       replaceAndInput(`${prefix}${text}`, 'insertText', text)
     }
+    const settleComposition = (): Promise<void> =>
+      new Promise((resolve) => window.setTimeout(resolve, 0))
 
     if (selectedVariant === 'mixed') {
       let prefix = begin('한')
+      await settleComposition()
       commit(prefix, '한')
       for (const character of 'abc') {
         keydown(character, `Key${character.toUpperCase()}`, character.charCodeAt(0))
         replaceAndInput(`${textarea.value}${character}`, 'insertText', character)
       }
       prefix = begin('글')
+      await settleComposition()
       commit(prefix, '글')
       keydown('Enter', 'Enter', 13)
       return
     }
 
     const prefix = begin('테')
+    await settleComposition()
     composition('compositionend', '테')
     keydown('a', 'KeyA', 65)
     keydown('Process', 'KeyR', 229, true)
     textarea.setSelectionRange(prefix.length + 1, prefix.length + 1)
     composition('compositionstart')
     update(`${prefix}테`, '스')
+    await settleComposition()
     composition('compositionend', '스')
     keydown('Enter', 'Enter', 13)
   }, variant)

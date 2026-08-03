@@ -56,6 +56,20 @@ jobs:
       - name: Build Electron app for E2E
         run: pnpm exec electron-vite build --mode e2e
 
+      - name: Run native IBus Hangul exact-byte tests
+        env:
+          SKIP_BUILD: '1'
+        run: pnpm run test:e2e:terminal-ime-native
+
+      - name: Upload native IBus evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-ime-native-evidence
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Run deterministic terminal IME boundary tests
         run: >-
           xvfb-run --auto-servernum
@@ -63,11 +77,6 @@ jobs:
           pnpm run test:e2e --
           tests/e2e/terminal-ime-exact-byte.spec.ts
           --workers=1
-
-      - name: Run native IBus Hangul exact-byte tests
-        env:
-          SKIP_BUILD: '1'
-        run: pnpm run test:e2e:terminal-ime-native
 
       - name: Upload terminal IME evidence
         if: always()

@@ -124,7 +124,6 @@ const mocks = vi.hoisted(() => ({
   getFloatingMarkdownDirectory: vi.fn(),
   getFloatingTerminalCwd: vi.fn(),
   getInstallStatus: vi.fn(),
-  isTerminalImeInputContextRefreshing: vi.fn(),
   isWebRuntimeSessionActive: vi.fn(),
   markFileDirty: vi.fn(),
   makePreviewFilePermanent: vi.fn(),
@@ -216,10 +215,6 @@ vi.mock('@/components/terminal-pane/use-terminal-tab-cold-parking', () => ({
 
 vi.mock('@/components/terminal-pane/terminal-parked-tab-watchers', () => ({
   shouldDeferParkedPtyExitTabClose: mocks.shouldDeferParkedPtyExitTabClose
-}))
-
-vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
-  isTerminalImeInputContextRefreshing: mocks.isTerminalImeInputContextRefreshing
 }))
 
 // closeFloatingItemConfirmed routes terminals through closeTerminalTab (own pin guard + F9
@@ -827,7 +822,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.getFloatingMarkdownDirectory.mockResolvedValue('/tmp/orca/floating-notes')
     mocks.getFloatingTerminalCwd.mockResolvedValue('/tmp/orca')
     mocks.getInstallStatus.mockResolvedValue({ state: 'installed', pathConfigured: true })
-    mocks.isTerminalImeInputContextRefreshing.mockReturnValue(false)
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
     mocks.pickFloatingMarkdownDocument.mockResolvedValue(null)
     mocks.shouldDeferParkedPtyExitTabClose.mockReturnValue(false)
@@ -892,41 +886,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(getPanelClassName(element)).toContain('z-[45]')
   })
 
-  it('refreshes terminal native input focus when the floating panel opens', async () => {
-    setFloatingTabs([makeTab({ id: 'tab-1' })])
-
-    await renderPanel(true)
-    runEffects()
-
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith(
-      'tab-1',
-      null,
-      expect.objectContaining({
-        onImeRefocusSkipped: expect.any(Function),
-        refreshImeContext: true
-      })
-    )
-    mocks.setFloatingFocus.mockClear()
-    mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped()
-    // No refocus target: both bits false (atomic payload, F7).
-    expect(mocks.setFloatingFocus).toHaveBeenCalledWith({
-      panelFocused: false,
-      terminalFocused: false
-    })
-
-    const newerFloatingInput = {
-      classList: { contains: (token: string) => token === 'xterm-helper-textarea' },
-      closest: vi.fn().mockReturnValue({})
-    }
-    Object.setPrototypeOf(newerFloatingInput, HTMLElement.prototype)
-    mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped(newerFloatingInput)
-    // Relatched onto the floating xterm: panel ⊇ terminal, both true.
-    expect(mocks.setFloatingFocus).toHaveBeenLastCalledWith({
-      panelFocused: true,
-      terminalFocused: true
-    })
-  })
-
   it('preserves and reclaims terminal input ownership across window blur', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
     const element = await renderPanel(true)
@@ -950,13 +909,15 @@ describe('FloatingTerminalPanel close behavior', () => {
     Object.setPrototypeOf(panelElement, HTMLElement.prototype)
     Object.setPrototypeOf(terminalInput, HTMLElement.prototype)
     attachRef(panel.props.ref, panelElement)
-    mocks.isTerminalImeInputContextRefreshing.mockReturnValueOnce(true)
     const onBlurCapture = panel.props.onBlurCapture as (event: unknown) => void
     onBlurCapture({
       relatedTarget: null,
       target: terminalInput
     })
-    expect(mocks.setFloatingFocus).not.toHaveBeenCalled()
+    expect(mocks.setFloatingFocus).toHaveBeenCalledWith({
+      panelFocused: false,
+      terminalFocused: false
+    })
     const documentState = {
       activeElement: terminalInput as unknown as HTMLElement | null,
       addEventListener: vi.fn(),
@@ -1000,9 +961,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       'tab-1',
       'leaf-1',
       expect.objectContaining({
-        onlyIfFocusUnclaimed: true,
-        onImeRefocusSkipped: expect.any(Function),
-        refreshImeContext: true
+        onlyIfFocusUnclaimed: true
       })
     )
   })

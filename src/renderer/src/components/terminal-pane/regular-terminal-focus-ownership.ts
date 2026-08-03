@@ -1,13 +1,18 @@
-import {
-  isDocumentBodyOrNull,
-  refreshTerminalImeInputContext,
-  scheduleNextFrame,
-  type TerminalImeInputContextRefocusScheduler
-} from './terminal-ime-input-context-refresh'
-
 export type TerminalInputFocusSync = (focused: boolean) => void
-export type RefocusScheduler = TerminalImeInputContextRefocusScheduler
+export type RefocusScheduler = (callback: () => void) => void
 export const REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE = 'data-regular-terminal-input-focused'
+
+function isDocumentBodyOrNull(activeElement: Element | null, ownerDocument: Document): boolean {
+  return activeElement === null || activeElement === ownerDocument.body
+}
+
+function scheduleNextFrame(callback: () => void): void {
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(callback)
+  } else {
+    setTimeout(callback, 0)
+  }
+}
 
 export function isXtermHelperTextarea(target: EventTarget | null): target is HTMLElement {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -135,16 +140,6 @@ export function resyncTerminalFocusForWindowFocus(args: {
   }
 
   args.syncFocused(true)
-
-  // Why: macOS app reactivation leaves a stale NSTextInputContext on the
-  // still-focused helper (electron#32307/#34952); non-mac returns false inside.
-  refreshTerminalImeInputContext(reclaimedHelper, {
-    isMac: args.isMac,
-    // Why: if another control wins during the refresh frame, the terminal
-    // mirror must follow that owner instead of remaining latched true.
-    onRefocusSkipped: (active) => syncFocusAfterFailedReclaim(active, args.syncFocused),
-    scheduleRefocus: args.scheduleRefocus
-  })
 
   return true
 }

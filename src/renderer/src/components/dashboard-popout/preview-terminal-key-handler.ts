@@ -8,11 +8,12 @@ import {
   resolvePreviewShortcutAction,
   type PreviewShortcutContext
 } from './preview-terminal-shortcuts'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
 /**
  * Installs the preview terminal's ONE custom key handler (xterm allows a single
- * attachCustomKeyEventHandler) covering copy/paste chords, the IME native-text
- * bypass, and the full pane shortcut policy. Plain Mod+V is left to the
+ * attachCustomKeyEventHandler) covering copy/paste chords and the full pane
+ * shortcut policy. Plain Mod+V is left to the
  * Edit-menu accelerator, which reaches this window as ui:appMenuPaste — matching
  * it here too would paste twice.
  *
@@ -21,7 +22,6 @@ import {
  */
 export function installPreviewTerminalKeyHandler(args: {
   terminal: Terminal
-  claimImeKeyEvent: (event: KeyboardEvent) => boolean
   pasteClipboardText: (activeElement: Element | null, source: 'keyboard') => void
   sendInput: (data: string) => void
   /** Everything but optionKeyLocation, which this installer tracks itself. */
@@ -41,11 +41,17 @@ export function installPreviewTerminalKeyHandler(args: {
   // left-vs-right Option must be recorded from the modifier's own keydown.
   let optionKeyLocation = 0
   const onModifierDown = (event: KeyboardEvent): void => {
+    if (isImeOwnedKeyboardEvent(event)) {
+      return
+    }
     if (event.key === 'Alt') {
       optionKeyLocation = event.location
     }
   }
   const onModifierUp = (event: KeyboardEvent): void => {
+    if (isImeOwnedKeyboardEvent(event)) {
+      return
+    }
     if (event.key === 'Alt') {
       optionKeyLocation = 0
     }
@@ -55,6 +61,9 @@ export function installPreviewTerminalKeyHandler(args: {
     nativeOnlyShortcutTracker.clear()
   }
   const onNativeOnlyShortcutCompanion = (event: KeyboardEvent): void => {
+    if (isImeOwnedKeyboardEvent(event)) {
+      return
+    }
     if (!nativeOnlyShortcutTracker.consumeCompanion(event)) {
       return
     }
@@ -86,9 +95,8 @@ export function installPreviewTerminalKeyHandler(args: {
   window.addEventListener('blur', onWindowBlur)
 
   terminal.attachCustomKeyEventHandler((event) => {
-    if (args.claimImeKeyEvent(event)) {
-      // Why: bypass xterm's kitty encoder for native-text keydowns so the committed glyph survives via the input event.
-      return false
+    if (isImeOwnedKeyboardEvent(event)) {
+      return true
     }
     if (event.type !== 'keydown') {
       const keyIdentity = event.code || event.key

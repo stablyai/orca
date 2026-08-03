@@ -3680,6 +3680,29 @@ describe('connectPanePty', () => {
     expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
   })
 
+  it('sends only while the terminal still owns its PTY transport generation', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const deps = createDeps()
+    const pane = createPane(2)
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+    transport.sendInput.mockClear()
+
+    sendTerminalInputThroughPane(pane, 'ordinary')
+    expect(transport.sendInput).toHaveBeenCalledWith('ordinary')
+
+    transport.sendInput.mockClear()
+    const replacement = createMockTransport('pty-replacement')
+    deps.paneTransportsRef.current.set(2, replacement)
+    sendTerminalInputThroughPane(pane, 'stale')
+
+    expect(transport.sendInput).not.toHaveBeenCalled()
+    expect(replacement.sendInput).not.toHaveBeenCalled()
+  })
+
   it('keeps a fresh split pane mounted when its newborn PTY exits before output or input', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-pane-2')

@@ -3,7 +3,6 @@ import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IBuffer, IDisposable } from '@xterm/xterm'
 import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
-import { installTerminalImeCompositionRoute } from './terminal-ime-composition-route'
 import { detectAgentStatusFromTitle, agentTypeToIconAgent, isClaudeAgent } from '@/lib/agent-status'
 import { resolvePaneTitleDecision } from './terminal-title-evidence'
 import { blocksCodexPaneInput } from '../codex-restart-notice-state'
@@ -3981,6 +3980,9 @@ export function connectPanePty(
   )
 
   const onDataDisposable = pane.terminal.onData((data) => {
+    if (disposed || deps.paneTransportsRef.current.get(pane.id) !== transport) {
+      return
+    }
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
     // OSC 10/11, focus, CPR) via onData. When we replay recorded PTY bytes
     // into xterm for scrollback/cold-restore/snapshot, those queries would
@@ -4105,13 +4107,6 @@ export function connectPanePty(
       requestRecoveryForUndeliverableInput()
     }
   })
-  const imeCompositionRouteDisposable = installTerminalImeCompositionRoute({
-    terminalElement: pane.terminal.element,
-    terminal: pane.terminal,
-    capturedTransport: transport,
-    getCurrentTransport: () => deps.paneTransportsRef.current.get(pane.id)
-  })
-
   const shouldSuppressDesktopPtyResize = (): boolean => {
     const currentPtyId = transport.getPtyId()
     return Boolean(
@@ -9022,7 +9017,6 @@ export function connectPanePty(
         clearTimeout(connectFallbackTimer)
         connectFallbackTimer = null
       }
-      imeCompositionRouteDisposable.dispose()
       onDataDisposable.dispose()
       userInputActivityDisposable?.dispose()
       terminalCapabilityRepliesDisposable.dispose()

@@ -117,12 +117,13 @@ describe('xterm IME composition cancellation', () => {
     const { emitted, terminal, textarea } = openTerminal()
 
     dispatchCompositionEvent(textarea, 'compositionstart')
+    dispatchProcessKeydown(textarea)
     dispatchCompositionEvent(textarea, 'compositionupdate', '한')
     textarea.value = '한'
     await nextEventLoop()
-    // IBus clears the textarea at compositionend, then restores the commit
-    // through a bare insertText — evidence that this end was not a cancel.
+    dispatchCompositionEvent(textarea, 'compositionupdate')
     textarea.value = ''
+    dispatchComposedInput(textarea, { inputType: 'deleteContentBackward' })
     dispatchCompositionEvent(textarea, 'compositionend')
     textarea.value = '한'
     dispatchComposedInput(textarea, { data: '한', inputType: 'insertText' })

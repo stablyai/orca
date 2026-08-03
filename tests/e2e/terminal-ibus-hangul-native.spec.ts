@@ -22,9 +22,9 @@ import {
   waitForTerminalImeBytes
 } from './terminal-ime-byte-reader'
 
-const DEFAULT_REPETITIONS = 30
+const DEFAULT_REPETITIONS = 5
 const MAX_REPETITIONS = 30
-const DEFAULT_KEY_DELAY_MS = 1
+const DEFAULT_KEY_DELAY_MS = 20
 const MAX_KEY_DELAY_MS = 100
 const NATIVE_COMMAND_TIMEOUT_MS = 10_000
 
@@ -89,15 +89,12 @@ function typeExactByteSequence(repetitions: number): void {
 }
 
 function typeSentenceSequence(repetitions: number): void {
-  const delay = String(nativeKeyDelayMs())
+  const delaySeconds = String(nativeKeyDelayMs() / 1_000)
   for (let index = 0; index < repetitions; index += 1) {
-    runXdotool(
-      'type',
-      '--delay',
-      delay,
-      '--clearmodifiers',
-      'xptmxmfmf gkrh dlTsmsep duwjsgl rmfjsp'
-    )
+    for (const key of 'xptmxmfmf gkrh dlTsmsep duwjsgl rmfjsp') {
+      runXdotool('type', '--clearmodifiers', key)
+      runXdotool('sleep', delaySeconds)
+    }
     runXdotool('key', 'Return')
   }
 }
