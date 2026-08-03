@@ -32,6 +32,11 @@ import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesyste
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import type { Event as WatcherEvent } from '@parcel/watcher'
+import type { FsChangedPayload } from '../../shared/types'
+import {
+  WATCH_BATCH_MAX_WAIT_MS,
+  WATCH_BATCH_TRAILING_MS
+} from '../../shared/filesystem-watch-batch-window'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
 
@@ -108,6 +113,63 @@ describe('local filesystem watcher large batches', () => {
       worktreePath,
       events: [{ kind: 'overflow', absolutePath: worktreePath }]
     })
+    await closeAllWatchers()
+    vi.useRealTimers()
+  })
+
+  it('still coalesces a local burst on the shared trailing window', async () => {
+    vi.useFakeTimers()
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    let watcherCallback: ((err: Error | null, events: WatcherEvent[]) => void) | undefined
+    vi.mocked(subscribeParcelWatcher).mockImplementation(async (_root, callback) => {
+      watcherCallback = callback as typeof watcherCallback
+      return { unsubscribe: vi.fn() } as never
+    })
+    const worktreePath = resolve('/tmp/repo')
+    const filePath = join(worktreePath, 'a.ts')
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath })
+    watcherCallback?.(null, [{ type: 'update', path: filePath }])
+    watcherCallback?.(null, [{ type: 'update', path: filePath }])
+
+    await vi.advanceTimersByTimeAsync(WATCH_BATCH_TRAILING_MS - 1)
+    expect(sender.send).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(sender.send).toHaveBeenCalledTimes(1)
+    expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      worktreePath,
+      events: [{ kind: 'update', absolutePath: filePath, isDirectory: true }]
+    })
+    await closeAllWatchers()
+    vi.useRealTimers()
+  })
+
+  it('still flushes a sustained local stream at the shared max wait', async () => {
+    vi.useFakeTimers()
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    let watcherCallback: ((err: Error | null, events: WatcherEvent[]) => void) | undefined
+    vi.mocked(subscribeParcelWatcher).mockImplementation(async (_root, callback) => {
+      watcherCallback = callback as typeof watcherCallback
+      return { unsubscribe: vi.fn() } as never
+    })
+    const worktreePath = resolve('/tmp/repo')
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath })
+    // Step under the trailing window so only the max wait can force a flush.
+    const step = 100
+    for (let elapsed = 0; elapsed <= WATCH_BATCH_MAX_WAIT_MS; elapsed += step) {
+      watcherCallback?.(null, [{ type: 'update', path: join(worktreePath, `f-${elapsed}.ts`) }])
+      if (elapsed < WATCH_BATCH_MAX_WAIT_MS) {
+        expect(sender.send).not.toHaveBeenCalled()
+      }
+      await vi.advanceTimersByTimeAsync(step)
+    }
+
+    expect(sender.send).toHaveBeenCalledTimes(1)
+    expect((sender.send.mock.calls[0][1] as FsChangedPayload).events).toHaveLength(6)
     await closeAllWatchers()
     vi.useRealTimers()
   })

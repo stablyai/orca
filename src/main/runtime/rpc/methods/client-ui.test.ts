@@ -663,6 +663,27 @@ describe('client UI RPC methods', () => {
     })
   })
 
+  it('accepts the Jira issue card property across the runtime UI boundary', async () => {
+    const updated: PersistedUIState = {
+      ...getDefaultUIState(),
+      worktreeCardProperties: ['status', 'unread', 'jira-issue']
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => updated)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', { worktreeCardProperties: ['status', 'jira-issue'] })
+    )
+
+    expect(runtime.updateUIState).toHaveBeenCalledWith({
+      worktreeCardProperties: ['status', 'unread', 'jira-issue']
+    })
+    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+  })
+
   it('accepts every worktree card property the shared union defines', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

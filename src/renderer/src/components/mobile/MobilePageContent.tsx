@@ -13,6 +13,7 @@ import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 type MobilePageContentProps = {
   closeMobilePage: () => void
@@ -23,6 +24,10 @@ type MobilePageContentProps = {
   generatePairing: (rotate: boolean) => void
   canGeneratePairing: boolean
   handleAddressChange: (address: string) => void
+  customAddresses: readonly string[]
+  selectedAddressIsCustom: boolean
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
   beforeCustomAddressChange: (address: string) => Promise<boolean>
   handleBack: () => void
   handleContinue: () => void
@@ -39,7 +44,10 @@ type MobilePageContentProps = {
   pairQrDataUrl: string | null
   pairingUrl: string | null
   pairingQrError: boolean
-  relayDegraded: boolean
+  relayMintFailure: MobileRelayMintFailure | null
+  onUseLan: () => void
+  onRetryRelay: () => void
+  onCopyRelayDiagnostics: () => void
   platform: Platform
   refreshingNetworkInterfaces: boolean
   revokeDevice: (id: string) => void
@@ -62,6 +70,10 @@ export function MobilePageContent({
   generatePairing,
   canGeneratePairing,
   handleAddressChange,
+  customAddresses,
+  selectedAddressIsCustom,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
   beforeCustomAddressChange,
   handleBack,
   handleContinue,
@@ -78,7 +90,10 @@ export function MobilePageContent({
   pairQrDataUrl,
   pairingUrl,
   pairingQrError,
-  relayDegraded,
+  relayMintFailure,
+  onUseLan,
+  onRetryRelay,
+  onCopyRelayDiagnostics,
   platform,
   refreshingNetworkInterfaces,
   revokeDevice,
@@ -92,7 +107,7 @@ export function MobilePageContent({
   toggleMobileSidebarButton
 }: MobilePageContentProps): React.JSX.Element {
   return (
-    <div className="mobile-page-root">
+    <div className="mobile-page-root scrollbar-sleek">
       <MobilePageToolbar
         showMobileButton={showMobileButton}
         onClose={closeMobilePage}
@@ -123,7 +138,10 @@ export function MobilePageContent({
               pairQrDataUrl={pairQrDataUrl}
               pairingUrl={pairingUrl}
               pairingQrError={pairingQrError}
-              relayDegraded={relayDegraded}
+              relayMintFailure={relayMintFailure}
+              onUseLan={onUseLan}
+              onRetryRelay={onRetryRelay}
+              onCopyRelayDiagnostics={onCopyRelayDiagnostics}
               pairLoading={pairLoading}
               connectionMode={connectionMode}
               onConnectionModeChange={handleConnectionModeChange}
@@ -131,8 +149,12 @@ export function MobilePageContent({
               canGeneratePairing={canGeneratePairing}
               onCopyPairingCode={copyPairingCode}
               networkInterfaces={networkInterfaces}
+              customAddresses={customAddresses}
               selectedAddress={selectedAddress}
+              selectedAddressIsCustom={selectedAddressIsCustom}
               onSelectedAddressChange={handleAddressChange}
+              onCustomAddressSelect={onCustomAddressSelect}
+              onCustomAddressRemove={onCustomAddressRemove}
               beforeCustomAddressChange={beforeCustomAddressChange}
               onRefreshNetworkInterfaces={loadNetworkInterfaces}
               refreshingNetworkInterfaces={refreshingNetworkInterfaces}

@@ -8,10 +8,8 @@ import { createDroidSessionResumeState } from './session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
-import {
-  createCopilotSessionResumeState,
-  createCursorSessionResumeState
-} from './session-scanner-secondary-parsers'
+import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
+import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
 

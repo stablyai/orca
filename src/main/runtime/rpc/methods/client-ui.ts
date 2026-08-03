@@ -20,7 +20,9 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'settings.update',
     params: SettingsUpdate,
-    handler: (params, { runtime }) => ({ settings: runtime.updateClientSettings(params) })
+    handler: async (params, { runtime }) => ({
+      settings: await runtime.updateClientSettings(params)
+    })
   }),
   defineMethod({
     name: 'settings.getTerminalQuickCommands',

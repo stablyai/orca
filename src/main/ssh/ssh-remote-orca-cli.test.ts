@@ -24,7 +24,6 @@ const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
   userDataPath: '/host/user-data',
   entryExists: () => false
 }
-
 type FakeChild = EventEmitter & {
   stdout: EventEmitter
   stderr: EventEmitter
@@ -80,6 +79,7 @@ describe('runRemoteOrcaCli', () => {
           }
         }
       }),
+      getLegacyAdoption: vi.fn(() => undefined),
       getActiveDispatchForIdentity: vi.fn(() => undefined),
       getCurrentRunForPane: vi.fn(() => undefined),
       findActiveRemoteAttachmentForPane: vi.fn(() => undefined)
@@ -581,6 +581,69 @@ describe('runRemoteOrcaCli', () => {
     expect(result.stderr).toContain('orca serve')
     expect(result.stderr).toContain('SSH relay bridge')
     expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('rejects interactive account add but still bridges account list', async () => {
+    const { runtime } = createRuntime()
+    const spawn = vi.fn(() => createFakeChild())
+
+    const addResult = await runRemoteOrcaCli(
+      runtime,
+      { argv: ['account', 'add'], cwd: '/home/alice', env: {} },
+      { ...LEGACY_FALLBACK_OPTIONS, spawn: spawn as never }
+    )
+
+    expect(addResult.exitCode).toBe(1)
+    expect(addResult.stderr).toContain('interactive agent login')
+    expect(spawn).not.toHaveBeenCalled()
+
+    const child = createFakeChild()
+    spawn.mockReturnValueOnce(child)
+    const listPromise = runRemoteOrcaCli(
+      runtime,
+      { argv: ['account', 'list'], cwd: '/home/alice', env: {} },
+      {
+        ...LEGACY_FALLBACK_OPTIONS,
+        entryExists: () => true,
+        spawn: spawn as never
+      }
+    )
+    await Promise.resolve()
+    child.stdout.emit('data', Buffer.from('Managed Claude accounts\n'))
+    child.emit('close', 0)
+
+    await expect(listPromise).resolves.toEqual({
+      stdout: 'Managed Claude accounts\n',
+      stderr: '',
+      exitCode: 0
+    })
+    expect(spawn).toHaveBeenCalledOnce()
+  })
+
+  it('bridges account add help because it does not start an interactive login', async () => {
+    const { runtime } = createRuntime()
+    const child = createFakeChild()
+    const spawn = vi.fn(() => child)
+
+    const resultPromise = runRemoteOrcaCli(
+      runtime,
+      { argv: ['account', 'add', '--help'], cwd: '/home/alice', env: {} },
+      {
+        ...LEGACY_FALLBACK_OPTIONS,
+        entryExists: () => true,
+        spawn: spawn as never
+      }
+    )
+    await Promise.resolve()
+    child.stdout.emit('data', Buffer.from('Usage: orca account add\n'))
+    child.emit('close', 0)
+
+    await expect(resultPromise).resolves.toEqual({
+      stdout: 'Usage: orca account add\n',
+      stderr: '',
+      exitCode: 0
+    })
+    expect(spawn).toHaveBeenCalledOnce()
   })
 
   it('reports host-interactive command errors as JSON envelopes with --json', async () => {

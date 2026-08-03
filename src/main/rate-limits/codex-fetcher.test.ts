@@ -43,13 +43,25 @@ function makeRpcChild() {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter
     stderr: EventEmitter
-    stdin: { write: ReturnType<typeof vi.fn> }
+    stdin: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> }
     kill: ReturnType<typeof vi.fn>
+    exitCode: number | null
   }
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
-  child.stdin = { write: vi.fn() }
-  child.kill = vi.fn()
+  // Why: like the real app-server, the fake dies on stdin EOF or a signal —
+  // the graceful shutdown path resolves only once the child reports exit.
+  const exitNow = (): void => {
+    child.exitCode = 0
+    child.emit('exit', 0, null)
+    child.emit('close', 0, null)
+  }
+  child.stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn(exitNow) })
+  child.exitCode = null
+  child.kill = vi.fn(() => {
+    exitNow()
+    return true
+  })
   return child
 }
 
@@ -325,6 +337,7 @@ describe('fetchCodexRateLimits', () => {
       weekly: null,
       status: 'error'
     })
+    expect(rpcChild.stdin.listenerCount('error')).toBe(0)
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
@@ -333,7 +346,8 @@ describe('fetchCodexRateLimits', () => {
     childSpawnMock.mockReturnValue(rpcChild)
 
     const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
-    await vi.advanceTimersByTimeAsync(10_000)
+    // Why: without an initialize response only the 30s boot deadline fires.
+    await vi.advanceTimersByTimeAsync(30_000)
 
     await expect(resultPromise).resolves.toMatchObject({
       provider: 'codex',
@@ -383,6 +397,53 @@ describe('fetchCodexRateLimits', () => {
       session: null,
       weekly: { usedPercent: 22, windowMinutes: 10080 }
     })
+  })
+
+  it('fills a restored backend 5-hour window when RPC only reports weekly usage', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, {
+      primary: { usedPercent: 22, windowDurationMins: 10080 },
+      secondary: null
+    })
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: { access_token: 'access-token', account_id: 'account-id' }
+      })
+    )
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        plan_type: 'plus',
+        rate_limit: {
+          primary_window: {
+            used_percent: 7,
+            limit_window_seconds: 5 * 60 * 60,
+            reset_at: 1_800_000_000
+          },
+          secondary_window: {
+            used_percent: 23,
+            limit_window_seconds: 7 * 24 * 60 * 60,
+            reset_at: 1_800_100_000
+          }
+        },
+        rate_limit_reset_credits: {
+          available_count: 1,
+          credits: [{ status: 'available', expires_at: '2027-01-15T12:00:00Z' }]
+        }
+      })
+    } as Response)
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      session: { usedPercent: 7, windowMinutes: 300, resetsAt: 1_800_000_000_000 },
+      weekly: { usedPercent: 23, windowMinutes: 10080, resetsAt: 1_800_100_000_000 },
+      status: 'ok'
+    })
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('does not map a duplicate session-duration window into the weekly slot', async () => {

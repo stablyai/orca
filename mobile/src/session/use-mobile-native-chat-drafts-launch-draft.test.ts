@@ -38,6 +38,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
     sessionId = `session-${tabId}`,
     messages = [],
     launchDraft = null,
+    launchDraftCreatedAt = null,
     chatActive = true,
     transcriptLoading = false
   }: {
@@ -45,6 +46,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
     sessionId?: string | null
     messages?: NativeChatMessage[]
     launchDraft?: string | null
+    launchDraftCreatedAt?: number | null
     chatActive?: boolean
     transcriptLoading?: boolean
   }): null {
@@ -55,6 +57,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
       sessionId,
       messages,
       launchDraft,
+      launchDraftCreatedAt,
       chatActive,
       transcriptLoading
     })
@@ -95,6 +98,21 @@ describe('useMobileNativeChatDrafts launch draft', () => {
       )
     )
     expect(state?.composerText).toBe('')
+  })
+
+  it('captures the generation paired with the adopted text', async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          launchDraft: 'issue link',
+          launchDraftCreatedAt: 7
+        })
+      )
+    )
+
+    expect(state?.readSeededLaunchDraftSeed()).toEqual({ text: 'issue link', createdAt: 7 })
   })
 
   it('does not overwrite typed composer text with a launch draft', async () => {

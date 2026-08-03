@@ -1,17 +1,63 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from './types'
+import type * as Scanner from './scanner'
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: vi.fn(() => '/tmp/orca-test-userdata')
+const { getPathMock, writeOpens, writeGate } = vi.hoisted(() => ({
+  getPathMock: vi.fn(() => '/tmp/orca-test-userdata'),
+  // Why only mode 'w': the durable write also opens the directory read-only to fsync it, so counting
+  // every open would hide a regression back to multiple full-cache rewrites per scan.
+  writeOpens: { value: 0, inFlight: 0, maxConcurrent: 0 },
+  writeGate: {
+    blocked: false,
+    waiters: [] as (() => void)[]
   }
 }))
 
-import { ClaudeUsageStore } from './store'
+vi.mock('electron', () => ({
+  app: {
+    getPath: getPathMock
+  }
+}))
+
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
+  return {
+    ...actual,
+    open: (async (...args: Parameters<typeof actual.open>) => {
+      if (args[1] !== 'w') {
+        return actual.open(...args)
+      }
+      writeOpens.value += 1
+      writeOpens.inFlight += 1
+      writeOpens.maxConcurrent = Math.max(writeOpens.maxConcurrent, writeOpens.inFlight)
+      try {
+        if (writeGate.blocked) {
+          await new Promise<void>((resolve) => writeGate.waiters.push(resolve))
+        }
+        return await actual.open(...args)
+      } finally {
+        writeOpens.inFlight -= 1
+      }
+    }) as typeof actual.open
+  }
+})
+
+vi.mock('./scanner', async (importOriginal) => ({
+  ...(await importOriginal<typeof Scanner>()),
+  scanClaudeUsageFiles: vi.fn()
+}))
+
+import { ClaudeUsageStore, initClaudeUsagePath } from './store'
+import { scanClaudeUsageFiles } from './scanner'
 
 function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): ClaudeUsageStore {
   const store = new ClaudeUsageStore({
     getRepos: () => [],
+    getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined
   } as never)
 
@@ -34,9 +80,30 @@ function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): Claude
 }
 
 describe('ClaudeUsageStore', () => {
+  let tempUserData: string
+
   beforeEach(() => {
+    tempUserData = mkdtempSync(join(tmpdir(), 'orca-claude-usage-store-'))
+    getPathMock.mockReturnValue(tempUserData)
+    initClaudeUsagePath()
+    writeOpens.value = 0
+    writeOpens.inFlight = 0
+    writeOpens.maxConcurrent = 0
+    writeGate.blocked = false
+    writeGate.waiters = []
+    vi.mocked(scanClaudeUsageFiles).mockReset()
+    vi.mocked(scanClaudeUsageFiles).mockResolvedValue({
+      processedFiles: [],
+      sessions: [],
+      dailyAggregates: []
+    })
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-09T12:00:00.000-04:00'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    rmSync(tempUserData, { recursive: true, force: true })
   })
 
   it('reports no data for Orca scope when only non-Orca usage exists', async () => {
@@ -548,5 +615,97 @@ describe('ClaudeUsageStore', () => {
     await store.getAutomationRunUsage(request)
 
     expect(refreshMock).toHaveBeenCalledWith(false)
+  })
+
+  it('persists setEnabled via async durable write without leaving tmp files', async () => {
+    const store = createStoreWithState({
+      schemaVersion: 5,
+      scanState: {
+        enabled: false,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+
+    await store.setEnabled(true)
+
+    expect(writeOpens.value).toBe(1)
+    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
+    const persisted = JSON.parse(
+      readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')
+    )
+    expect(persisted.scanState.enabled).toBe(true)
+    // Pretty-print preserved for human inspection of the analytics cache.
+    expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
+  })
+
+  it('vetoes a stale concurrent async write so the newer snapshot wins', async () => {
+    const store = createStoreWithState({
+      schemaVersion: 5,
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+    const internals = store as unknown as {
+      writeToDisk: () => Promise<void>
+      state: ClaudeUsagePersistedState
+    }
+
+    writeGate.blocked = true
+    const first = internals.writeToDisk()
+    await vi.waitFor(() => expect(writeGate.waiters.length).toBe(1))
+
+    internals.state.scanState.enabled = false
+    writeGate.blocked = false
+    const second = internals.writeToDisk()
+    writeGate.waiters.splice(0).forEach((resolve) => resolve())
+    await Promise.all([first, second])
+
+    expect(
+      JSON.parse(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).scanState
+        .enabled
+    ).toBe(false)
+    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
+    // Serialized, so the superseded write can be skipped safely rather than racing the newer one.
+    expect(writeOpens.maxConcurrent).toBe(1)
+  })
+
+  it('persists a successful refresh with one full-cache write', async () => {
+    const store = createStoreWithState({
+      schemaVersion: 5,
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+
+    await store.refresh(true)
+
+    // Why exactly one: scan start used to rewrite the whole 20 MB cache before any result changed.
+    expect(writeOpens.value).toBe(1)
+    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
+    expect(
+      JSON.parse(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).scanState
+    ).toMatchObject({
+      lastScanStartedAt: new Date('2026-04-09T12:00:00.000-04:00').getTime(),
+      lastScanCompletedAt: new Date('2026-04-09T12:00:00.000-04:00').getTime(),
+      lastScanError: null
+    })
+  })
+
+  it('sweeps a usage temp file orphaned by a crash between write and rename', async () => {
+    const orphan = join(tempUserData, 'orca-claude-usage.json.999.1.abc.tmp')
+    writeFileSync(orphan, '{}')
+
+    createStoreWithState({})
+    await vi.waitFor(() =>
+      expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
+    )
   })
 })

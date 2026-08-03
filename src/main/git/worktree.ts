@@ -2,11 +2,11 @@
 import { readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, posix, resolve, win32 } from 'node:path'
 import {
-  branchHasNoUnmergedChangesOnAnyTarget,
-  getBranchCleanupTargetRefs,
-  refreshBranchCleanupTargetRefs
+  branchHasNoUnmergedChangesWithLazyTargetRefresh,
+  getBranchCleanupTargetRefs
 } from '../../shared/git-branch-cleanup'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { withSpan } from '../observability/tracer'
 import type {
   GitWorktreeInfo,
   LocalBaseRefRefreshResult,
@@ -682,10 +682,10 @@ export async function listWorktreeGraph(
   }
 }
 
-// Why: cold start triggers many concurrent `git worktree list` spawns per repo (expensive on Windows, #7225); share the in-flight promise to collapse duplicates.
+// Why: share concurrent `git worktree list` scans, which are expensive on Windows.
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
-// Why: a listing after a mutation must not join a scan that predates it; bumping the generation on mutation retires older in-flight scans from sharing.
+// Why: mutation generations prevent listings from joining stale scans.
 const worktreeScanGenerations = new Map<string, number>()
 
 function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
@@ -1157,6 +1157,19 @@ async function performRemoveWorktree(
     return {}
   }
 
+  // Why its own span: branch cleanup can reach the network (`fetch --prune`), so a stall here reads as
+  // `git worktree remove` being slow unless it is timed separately.
+  return withSpan('worktree.remove.branch_delete', () =>
+    deleteBranchAfterWorktreeRemoval(repoPath, branchName, branchHead, options)
+  )
+}
+
+async function deleteBranchAfterWorktreeRemoval(
+  repoPath: string,
+  branchName: string,
+  branchHead: string,
+  options: RemoveWorktreeOptions
+): Promise<RemoveWorktreeResult> {
   try {
     // Why: also drop the now-orphaned branch so delete-worktree leaves none; `-d` (not `-D`) preserves
     // unmerged work, and forceBranchDelete opts into `-D` for failed-creation rollback.
@@ -1253,10 +1266,9 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
       ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {})
     })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
-  await refreshBranchCleanupTargetRefs(runGit, targetRefs)
   // Why: squash merges rewrite commit IDs, so `branch -d` rejects already-merged branches; delete only when Git proves no unmerged tree changes.
   if (
-    !(await branchHasNoUnmergedChangesOnAnyTarget(
+    !(await branchHasNoUnmergedChangesWithLazyTargetRefresh(
       runGit,
       branchName,
       targetRefs,

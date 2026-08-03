@@ -8,6 +8,7 @@ import {
   submitNativeChatPrompt
 } from './native-chat-runtime-send'
 import type { NativeChatSendHandle } from './native-chat-runtime-send'
+import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
@@ -250,21 +251,29 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         return
       }
       const classification = classifySend(text)
+      // A parked launch draft must be cleared line-by-line before the body.
+      const { sendOptions } = resolveNativeChatLaunchDraftSend({
+        launchDraft,
+        launchDraftResolved,
+        agent,
+        readScreen: () => readTerminalScreen?.()
+      })
       let pendingHandle: NativeChatSendHandle | null = null
       // Why: image attachments take the attachment send path even for a
       // command/unknown send, otherwise `clearImageAttachments()` below drops
       // them silently when the text starts with the agent's slash/skill prefix.
       if (classification !== 'chat' && imagePaths.length === 0) {
-        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text)
+        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
       } else if (imagePaths.length > 0) {
         pendingHandle = sendNativeChatMessageWithImageAttachments(
           target.settings,
           target.ptyId,
           text,
-          imagePaths
+          imagePaths,
+          sendOptions
         )
       } else if (text.trim().length > 0) {
-        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text)
+        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
       } else {
         submitNativeChatPrompt(target.settings, target.ptyId)
       }
@@ -296,8 +305,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       clearSkillOrigin()
       clearImageAttachments()
       setNotice(null)
-      // Why: the send path pre-clears the TUI input line, so any launch-draft
-      // prefill still parked there is gone — retire the composer seed with it.
+      // The send cleared the TUI input line before its body, so retire the seed.
       useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
     }, [
       agent,
@@ -308,6 +316,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       imageAttachments,
       disabled,
       isDispatchingSessionOption,
+      launchDraft,
+      launchDraftResolved,
+      readTerminalScreen,
       resolveTarget,
       onOptimisticSend,
       onSlashCommand,
@@ -364,6 +375,17 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       setHistory
     })
 
+    const handleDraftChange = useCallback(
+      (value: string, element: HTMLTextAreaElement) => {
+        setDraft(value)
+        setHistory((prev) => ({ entries: prev.entries, index: null }))
+        syncCaret(element)
+        handleDraftOrCaretChange(value, element.selectionStart ?? value.length)
+        setActiveSuggestion(0)
+      },
+      [handleDraftOrCaretChange, setDraft, syncCaret]
+    )
+
     return (
       <NativeChatComposerField
         textareaRef={textareaRef}
@@ -381,13 +403,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         dictationDisabled={dictationDisabled}
         isDictating={isDictating}
         isDictationHoldMode={isDictationHoldMode}
-        onDraftChange={(value, element) => {
-          setDraft(value)
-          setHistory((prev) => ({ entries: prev.entries, index: null }))
-          syncCaret(element)
-          handleDraftOrCaretChange(value, element.selectionStart ?? value.length)
-          setActiveSuggestion(0)
-        }}
+        onDraftChange={handleDraftChange}
         onTextareaSelect={(element) => {
           syncCaret(element)
           handleDraftOrCaretChange(element.value, element.selectionStart ?? element.value.length)
@@ -397,8 +413,11 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         onCompositionStart={() => {
           isComposingRef.current = true
         }}
-        onCompositionEnd={() => {
+        onCompositionEnd={(event) => {
           isComposingRef.current = false
+          if (event.currentTarget.value !== draft) {
+            handleDraftChange(event.currentTarget.value, event.currentTarget)
+          }
         }}
         onPaste={handlePaste}
         pickerListboxId={picker.listboxId}

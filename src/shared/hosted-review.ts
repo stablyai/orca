@@ -50,6 +50,12 @@ export type HostedReviewForBranchArgs = {
   linkedGiteaPR?: number | null
   // The worktree's checked-out HEAD oid (GitHub merged-at-head visibility).
   currentHeadOid?: string | null
+  /**
+   * Set only by surfaces scoped to the selected worktree. That tier is O(1), so
+   * the host re-checks it per minute; the worktree list is O(N) and is paced far
+   * more slowly to stay inside the shared API budget (#11532).
+   */
+  active?: boolean
 }
 
 export type HostedReviewSummary = {
@@ -195,14 +201,6 @@ export type HostedReviewQueueSummary = {
   requestedReviewerLogins?: string[] | null
   draft?: boolean
 }
-
-export type HostedReviewQueueKey =
-  | 'mine'
-  | 'requested'
-  | 'agent'
-  | 'teammate'
-  | 'needs-response'
-  | 'ready-to-merge'
 
 export type HostedReviewQueueState = 'mine' | 'requested' | 'agent' | 'teammate'
 

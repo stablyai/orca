@@ -8,6 +8,8 @@ import {
   type UnconfirmedSend
 } from './mobile-native-chat-draft-reconcile'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 
 export type MobileNativeChatPendingMessage = {
   id: string
@@ -43,6 +45,7 @@ export function useMobileNativeChatDrafts(args: {
   messages: readonly NativeChatMessage[]
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string | null
+  launchDraftCreatedAt?: number | null
   /** Whether the tab is currently resolved to the chat view. Off-chat the
    *  launch-draft effects hold their state instead of acting on it. */
   chatActive?: boolean
@@ -55,6 +58,11 @@ export function useMobileNativeChatDrafts(args: {
   setComposerText: Dispatch<SetStateAction<string>>
   pending: MobileNativeChatPendingMessage[]
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  /** Launch-context text still believed to be parked on the agent's TUI input
+   *  line, or null once it has been declined or retired. Send paths size their
+   *  pre-clear from it, since one Ctrl+U clears only one logical line. */
+  readSeededLaunchDraft: () => string | null
+  readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   /** Clear the composer at send time, before the RPC settles. */
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   /** Put the text back after a definite rejection, unless newer edits exist. */
@@ -73,6 +81,7 @@ export function useMobileNativeChatDrafts(args: {
     sessionId,
     messages,
     launchDraft,
+    launchDraftCreatedAt,
     chatActive = true,
     transcriptLoading
   } = args
@@ -91,62 +100,15 @@ export function useMobileNativeChatDrafts(args: {
   activePendingKeyRef.current = pendingKey
   const mountedRef = useRef(false)
 
-  // Seeded launch-context text per tab; '' marks a permanent decline so a
-  // cleared composer never resurrects the prefill.
-  const seededLaunchDraftByKeyRef = useRef(new Map<string, string>())
-
-  // Why: launch context delivered as a TUI-input prefill is invisible in chat;
-  // adopt it once as the composer draft so mobile shows the same context.
-  useEffect(() => {
-    if (
-      !draftKey ||
-      !chatActive ||
-      !launchDraft?.trim() ||
-      seededLaunchDraftByKeyRef.current.has(draftKey)
-    ) {
-      return
-    }
-    // Why: `session.tabs` carries launchDraft before the transcript read settles,
-    // and an empty (or previous tab's) list would let the decline below misjudge
-    // an already-submitted prefill — long enough for a send to duplicate it.
-    if (transcriptLoading) {
-      return
-    }
-    // A user turn already in the transcript means the one-line TUI prefill was
-    // submitted or deliberately cleared; decline instead of resurrecting it.
-    if (messages.some((message) => normalizedUserText(message) !== null)) {
-      seededLaunchDraftByKeyRef.current.set(draftKey, '')
-      return
-    }
-    seededLaunchDraftByKeyRef.current.set(draftKey, launchDraft)
-    setDrafts((previous) =>
-      (previous[draftKey] ?? '') === '' ? { ...previous, [draftKey]: launchDraft } : previous
-    )
-  }, [chatActive, draftKey, launchDraft, messages, transcriptLoading])
-
-  // Drop an untouched adopted copy once the prefill is resolved elsewhere — a
-  // user turn landed (sent or cleared TUI-side) or the host stopped publishing
-  // it (desktop sent or reconciled it). User edits are always kept.
-  useEffect(() => {
-    // Same gates as the seed: off-chat there is no retraction to read (the tab
-    // publishes no draft to us), and an untrusted transcript would wipe an
-    // untouched copy on the strength of another tab's user turns.
-    if (!draftKey || !chatActive || transcriptLoading) {
-      return
-    }
-    const seeded = seededLaunchDraftByKeyRef.current.get(draftKey)
-    if (!seeded) {
-      return
-    }
-    const hasUserTurn = messages.some((message) => normalizedUserText(message) !== null)
-    if (!hasUserTurn && launchDraft?.trim()) {
-      return
-    }
-    seededLaunchDraftByKeyRef.current.set(draftKey, '')
-    setDrafts((previous) =>
-      (previous[draftKey] ?? '') === seeded ? { ...previous, [draftKey]: '' } : previous
-    )
-  }, [chatActive, draftKey, launchDraft, messages, transcriptLoading])
+  const { readSeededLaunchDraft, readSeededLaunchDraftSeed } = useMobileNativeChatLaunchDraftSeed({
+    draftKey,
+    messages,
+    launchDraft,
+    launchDraftCreatedAt,
+    chatActive,
+    transcriptLoading,
+    setDrafts
+  })
 
   const setComposerText: Dispatch<SetStateAction<string>> = useCallback(
     (value) => {
@@ -358,6 +320,8 @@ export function useMobileNativeChatDrafts(args: {
     setComposerText,
     pending,
     captureSendOrigin,
+    readSeededLaunchDraft,
+    readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,

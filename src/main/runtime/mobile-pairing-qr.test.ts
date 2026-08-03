@@ -3,6 +3,9 @@ import { encodePairingOffer } from '../../shared/pairing'
 import type { PairingOffer } from '../../shared/mobile-relay-pairing-offer'
 import { encodeMobilePairingQr } from './mobile-pairing-qr'
 
+// Keep every capacity probe in the same encoded payload family.
+const FIXED_INVITE_EXPIRES_AT = Date.now() + 5 * 60_000
+
 function pairingUrl(endpointLength: number, relay: boolean): string {
   const prefix = 'wss://pair.example/'
   const offer: PairingOffer = {
@@ -20,7 +23,7 @@ function pairingUrl(endpointLength: number, relay: boolean): string {
             assignmentEpoch: 1,
             relayHostId: 'a'.repeat(16),
             inviteToken: 'b'.repeat(43),
-            inviteExpiresAt: Date.now() + 60_000,
+            inviteExpiresAt: FIXED_INVITE_EXPIRES_AT,
             e2eeFraming: 2
           }
         }

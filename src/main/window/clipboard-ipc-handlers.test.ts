@@ -224,9 +224,17 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('registers normal and selection text clipboard IPC handlers', async () => {
-    clipboardReadTextMock.mockImplementation((clipboardType?: string) =>
-      clipboardType === 'selection' ? 'selection text' : 'standard text'
+    const values = { standard: 'standard text', selection: 'selection text' }
+    clipboardReadTextMock.mockImplementation((type?: string) =>
+      type === 'selection' ? values.selection : values.standard
     )
+    clipboardWriteTextMock.mockImplementation((text: string, type?: string) => {
+      if (type === 'selection') {
+        values.selection = text
+      } else {
+        values.standard = text
+      }
+    })
 
     registerClipboardHandlers({} as never)
 
@@ -489,6 +497,9 @@ describe('registerClipboardHandlers', () => {
   it('yields before writing large text clipboard IPC payloads', async () => {
     vi.useFakeTimers()
     const text = 'é'.repeat(300_000)
+    clipboardWriteTextMock.mockImplementation((value: string) => {
+      clipboardReadTextMock.mockReturnValue(value)
+    })
 
     registerClipboardHandlers({} as never)
 

@@ -256,7 +256,7 @@ describe('orchestration new-worktree workers', () => {
     const { result } = await startWorker({ setup })
 
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ setupDecision: setup, runHooks: setup === 'run' })
+      expect.objectContaining({ setupDecision: setup, runHooks: false, activate: false })
     )
     expect(result).toMatchObject({
       state: 'ready',

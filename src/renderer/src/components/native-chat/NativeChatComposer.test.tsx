@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   fieldProps: null as {
     onSend?: () => void
     onStop?: () => void
+    onCompositionStart?: () => void
+    onCompositionEnd?: (event: { currentTarget: HTMLTextAreaElement }) => void
     sessionOptionsSurface?: SessionOptionsSurface | null
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
   } | null,
@@ -249,6 +251,46 @@ describe('NativeChatComposer', () => {
     )
 
     expect(new Set(mocks.draftScopeKeys)).toEqual(new Set(['tab-1:leaf-1']))
+  })
+
+  it('adopts an IME deletion delivered only by compositionend', () => {
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+    const textarea = document.createElement('textarea')
+    textarea.value = ''
+    mocks.setDraft.mockClear()
+
+    act(() => {
+      mocks.fieldProps?.onCompositionStart?.()
+      mocks.fieldProps?.onCompositionEnd?.({ currentTarget: textarea })
+    })
+
+    expect(mocks.setDraft).toHaveBeenCalledOnce()
+    expect(mocks.setDraft).toHaveBeenCalledWith('')
+  })
+
+  it('does not duplicate a composition value already adopted by onChange', () => {
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+    const textarea = document.createElement('textarea')
+    textarea.value = 'hello'
+    mocks.setDraft.mockClear()
+
+    act(() => mocks.fieldProps?.onCompositionEnd?.({ currentTarget: textarea }))
+
+    expect(mocks.setDraft).not.toHaveBeenCalled()
   })
 
   it('shows the model already selected in the Claude TUI when chat opens', async () => {

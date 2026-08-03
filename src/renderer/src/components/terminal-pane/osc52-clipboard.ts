@@ -40,9 +40,18 @@ export type Osc52ClipboardRequestOptions = {
   allowClipboardWrite: boolean
   writeClipboardText: (text: string) => Promise<void>
   onBlockedWrite?: () => void
+  onWriteFailure?: () => void
 }
 
 const MAX_OSC52_BASE64_CHARS = 128 * 1024
+
+function reportOsc52ClipboardWriteFailure(notify?: () => void): void {
+  try {
+    notify?.()
+  } catch {
+    // A failed notifier must not escape an already-handled clipboard failure.
+  }
+}
 
 /** Resolves whether an incoming OSC 52 write may touch the clipboard, and whether a
  *  refusal is worth telling the user about. */
@@ -80,6 +89,7 @@ export function createOsc52OscHandler(deps: {
   getReplaying: () => boolean
   writeClipboardText: (text: string) => Promise<void>
   showBlockedWriteToast: () => void
+  showWriteFailedToast?: () => void
 }): (data: string) => boolean {
   // Why coalesce: each sequence is only ~15 bytes, so one hostile chunk can fire a
   // million parser callbacks — each a main-process clipboard write. Only the last of
@@ -99,16 +109,19 @@ export function createOsc52OscHandler(deps: {
           // Why try/catch and not just .catch(): the write moved out of the guarded
           // parser handler into a microtask, where a sync throw (or a preload that
           // never installed writeClipboardText) would surface as an uncaught error.
+          // Report the otherwise invisible host failure.
           try {
             void deps.writeClipboardText(next)?.catch(() => {
-              /* ignore clipboard write failures */
+              reportOsc52ClipboardWriteFailure(deps.showWriteFailedToast)
             })
           } catch {
-            /* ignore clipboard write failures */
+            reportOsc52ClipboardWriteFailure(deps.showWriteFailedToast)
           }
         }
       })
     }
+    // Always resolve here: failure toast is raised in the microtask above.
+    // Passing onWriteFailure to handleOsc52ClipboardRequest would be dead.
     return Promise.resolve()
   }
 
@@ -140,7 +153,7 @@ export function handleOsc52ClipboardRequest(
   }
 
   void options.writeClipboardText(parsed.text).catch(() => {
-    /* ignore clipboard write failures */
+    reportOsc52ClipboardWriteFailure(options.onWriteFailure)
   })
   return true
 }

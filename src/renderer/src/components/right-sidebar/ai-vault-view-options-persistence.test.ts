@@ -66,7 +66,7 @@ describe('AI Vault view option persistence', () => {
     expect(normalizeAiVaultViewOptions({ group: 'agent' }).group).toBe('agent')
   })
 
-  it('falls back to all enabled when stored state disables the whole catalog', () => {
+  it('preserves a fully cleared agent selection', () => {
     const normalized = normalizeAiVaultViewOptions({
       disabledAgents: [...AI_VAULT_AGENTS],
       sort: 'created',
@@ -74,8 +74,8 @@ describe('AI Vault view option persistence', () => {
       hideEmptySessions: true
     })
 
-    expect(normalized.disabledAgents).toEqual([])
-    expect(enabledAiVaultAgents(normalized.disabledAgents)).toEqual([...AI_VAULT_AGENTS])
+    expect(normalized.disabledAgents).toEqual([...AI_VAULT_AGENTS])
+    expect(enabledAiVaultAgents(normalized.disabledAgents)).toEqual([])
   })
 
   it('falls back safely when JSON or storage access is unavailable', () => {

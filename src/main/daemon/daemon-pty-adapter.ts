@@ -1,8 +1,13 @@
 /* oxlint-disable max-lines -- Why: history .catch() safety wiring spread across spawn/event-routing is tightly coupled to the adapter↔history lifecycle. */
 import { basename } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { DaemonClient } from './client'
-import { getMacDaemonSystemResolverHealth } from './daemon-health'
+import {
+  getMacDaemonSystemResolverHealth,
+  parseDaemonPidFile,
+  type ParsedDaemonPid
+} from './daemon-health'
 import {
   HistoryManager,
   type HistoryCheckpointResult,
@@ -63,6 +68,16 @@ import {
   TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS
 } from './terminal-history-seed-chunks'
 import { NdjsonLineTooLongError } from './ndjson'
+import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
+import {
+  classifyDaemonAuditFailure,
+  recordAuthenticatedInventory,
+  type DaemonAuditContext,
+  type DaemonAuditObservation,
+  type DaemonAuditTrigger
+} from './daemon-audit-classifier'
+import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
+import { createDaemonAuditEligibilityTracker } from './daemon-audit-eligibility-event'
 
 type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { incarnationId?: string }[]>
@@ -100,6 +115,8 @@ function providerSequenceForSpawn(
 export type DaemonPtyAdapterOptions = {
   socketPath: string
   tokenPath: string
+  pidPath?: string
+  profileScope?: string
   protocolVersion?: number
   /** Directory for disk-based terminal history; when set, raw PTY output is written to disk for cold restore on daemon crash. */
   historyPath?: string
@@ -108,6 +125,11 @@ export type DaemonPtyAdapterOptions = {
 }
 
 export type DaemonRespawnReason = 'daemon_died' | 'unhealthy_resolver'
+
+export type DaemonIdentityChangeEvent = {
+  previous: DaemonEndpointIdentity
+  current: DaemonEndpointIdentity
+}
 
 const MAX_TOMBSTONES = 1000
 const MAX_CONCURRENT_CHECKPOINTS = 4
@@ -130,7 +152,17 @@ export class DaemonPtyAdapter implements IPtyProvider {
   readonly protocolVersion: number
   private socketPath: string
   private tokenPath: string
+  private pidPath: string | null
+  private pidRecord: ParsedDaemonPid | null
   private client: DaemonClient
+  private auditContext: DaemonAuditContext
+  private lastAuthenticatedIdentity: DaemonEndpointIdentity | null = null
+  private exactDaemonIncarnation: ExactDaemonIncarnation | null = null
+  private lastAuditObservation: DaemonAuditObservation | null = null
+  // Why: every listProcesses call republishes the same observation; unthrottled it drains the shared per-session telemetry ceiling.
+  private readonly trackAuditEligibility = createDaemonAuditEligibilityTracker()
+  private auditObservationListeners: ((observation: DaemonAuditObservation) => void)[] = []
+  private identityChangeListeners: ((event: DaemonIdentityChangeEvent) => void)[] = []
   private historyManager: HistoryManager | null
   private historyReader: HistoryReader | null
   private respawnFn: DaemonPtyAdapterOptions['respawn'] | null
@@ -219,6 +251,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
     this.socketPath = opts.socketPath
     this.tokenPath = opts.tokenPath
+    this.pidPath = opts.pidPath ?? null
+    this.pidRecord = readDaemonPidRecord(this.pidPath)
+    this.auditContext = {
+      protocolGeneration: this.protocolVersion,
+      provider: 'local-daemon',
+      endpoint: opts.socketPath,
+      tokenPath: opts.tokenPath,
+      endpointKind: process.platform === 'win32' ? 'windows-named-pipe' : 'unix-socket',
+      profileScope: opts.profileScope ?? ''
+    }
     this.client = new DaemonClient({
       socketPath: opts.socketPath,
       tokenPath: opts.tokenPath,
@@ -247,11 +289,32 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.producerResumesOwedOnReconnect.add(id)
       }
       this.pausedProducerSessionIds.clear()
+      this.observeAuditFailure('transport_closed')
     })
   }
 
   getHistoryManager(): HistoryManager | null {
     return this.historyManager
+  }
+
+  getLastAuthenticatedDaemonIdentity(): DaemonEndpointIdentity | null {
+    return this.lastAuthenticatedIdentity ? { ...this.lastAuthenticatedIdentity } : null
+  }
+
+  getLastAuditObservation(): DaemonAuditObservation | null {
+    return this.lastAuditObservation
+  }
+
+  onDaemonIdentityChanged(listener: (event: DaemonIdentityChangeEvent) => void): () => void {
+    this.identityChangeListeners.push(listener)
+    return () => removeListener(this.identityChangeListeners, listener)
+  }
+
+  onAuditEligibilityObservation(
+    listener: (observation: DaemonAuditObservation) => void
+  ): () => void {
+    this.auditObservationListeners.push(listener)
+    return () => removeListener(this.auditObservationListeners, listener)
   }
 
   supportsAgentSessionClaims(): boolean {
@@ -813,6 +876,18 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.activeSessionIds.has(id)
   }
 
+  async probePtyLiveness(id: string): Promise<boolean | null> {
+    try {
+      const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
+        'getSize',
+        { sessionId: id }
+      )
+      return result.size !== null
+    } catch {
+      return null
+    }
+  }
+
   write(id: string, data: string): void {
     this.markSessionDirty(id)
     // Why recoverable and not just active: rejecting a write asks the pane to remount,
@@ -1250,36 +1325,57 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
-    // Why: connect + listSessions share the caller's one absolute deadline so a
-    // wedged handshake cannot burn the whole teardown budget before the list issues.
-    await this.ensureConnected(opts?.deadlineMs)
-    const result = await this.client.request<ListSessionsResult>(
-      'listSessions',
-      undefined,
-      remainingRequestTimeoutMs(opts?.deadlineMs)
-    )
-    const admission = new PtyProcessListAdmission()
-    const processes: PtyProcessInfo[] = []
-    for (const session of result.sessions) {
-      if (!session.isAlive) {
-        continue
-      }
-      const { worktreeId } = parsePtySessionId(session.sessionId)
-      processes.push(
-        admission.admit({
-          id: session.sessionId,
-          ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
-          // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
-          cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
-          title: 'shell',
-          ...(worktreeId ? { worktreeId } : {}),
-          ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
-          ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
-          ...this.validatedAgentSessionOwners(session.agentSessionOwners)
-        })
+    try {
+      // Why: connect + listSessions share the caller's one absolute deadline so a
+      // wedged handshake cannot burn the whole teardown budget before the list issues.
+      await this.ensureConnected(opts?.deadlineMs)
+      const result = await this.client.request<ListSessionsResult>(
+        'listSessions',
+        undefined,
+        remainingRequestTimeoutMs(opts?.deadlineMs)
       )
+      const admission = new PtyProcessListAdmission()
+      const processes: PtyProcessInfo[] = []
+      for (const session of result.sessions) {
+        if (!session.isAlive) {
+          continue
+        }
+        const { worktreeId } = parsePtySessionId(session.sessionId)
+        processes.push(
+          admission.admit({
+            id: session.sessionId,
+            ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
+            // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
+            cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
+            title: 'shell',
+            ...(worktreeId ? { worktreeId } : {}),
+            ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
+            ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+            ...this.validatedAgentSessionOwners(session.agentSessionOwners)
+          })
+        )
+      }
+      this.publishAuditObservation(
+        recordAuthenticatedInventory(this.auditContext, this.exactDaemonIncarnation)
+      )
+      return processes
+    } catch (error) {
+      const missingAuthenticatedToken =
+        isMissingTokenFileError(error) && this.client.hasObservedAuthenticatedDisconnect()
+      const missingNamedPipe = isMissingWindowsNamedPipeError(error)
+      this.observeAuditFailure(
+        missingAuthenticatedToken
+          ? 'token_missing_after_authenticated_disconnect'
+          : 'inventory_failed',
+        this.exactDaemonIncarnation,
+        [
+          ...(missingAuthenticatedToken ? (['token_file'] as const) : []),
+          ...(missingNamedPipe ? (['windows_named_pipe'] as const) : [])
+        ],
+        missingNamedPipe ? 'windows_named_pipe_missing' : undefined
+      )
+      throw error
     }
-    return processes
   }
 
   private validatedAgentSessionOwners(
@@ -1440,6 +1536,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.wslDistrosBySessionId.clear()
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
+    this.auditObservationListeners.length = 0
+    this.identityChangeListeners.length = 0
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side (TerminalHost.dispose); here the adapter only marks sessions
@@ -1458,6 +1556,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
     // Why: an authenticated pair cancels the adoption watchdog and lets a never-used adapter retire its empty daemon on quit.
     await this.client.ensureConnected()
+    this.recordAuthenticatedIdentity()
   }
 
   // Why: unlike dispose(), leave history files unclean (no endedAt) so the next launch treats them as crash-recoverable,
@@ -1520,6 +1619,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // Why: a respawn launcher holds a temporary pair until this adapter's permanent reconnect, preventing both gaps and leaks.
       this.releasePendingRespawnAdoptionLease()
     }
+    this.recordAuthenticatedIdentity()
     // Why sampled before setupEventRouting: "no listener yet" identifies a fresh connect — the only time the
     // daemon-side backgrounded set (process state lost with the old daemon) needs a resync.
     const isFreshConnection = this.removeEventListener === null
@@ -1529,6 +1629,104 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (isFreshConnection) {
       this.resyncBackgroundedSessions()
     }
+  }
+
+  private recordAuthenticatedIdentity(): void {
+    const current = this.client.getDaemonIdentity()
+    if (!current) {
+      return
+    }
+    const previous = this.lastAuthenticatedIdentity
+    if (previous && sameEndpointIdentity(previous, current)) {
+      return
+    }
+    this.lastAuthenticatedIdentity = { ...current }
+    this.exactDaemonIncarnation = exactDaemonIncarnationForPidRecord(current, this.pidRecord)
+    if (!previous) {
+      return
+    }
+    const event = { previous: { ...previous }, current: { ...current } }
+    notifyAuditListeners(this.identityChangeListeners, event)
+  }
+
+  private async resolveExactDaemonIncarnation(
+    exactIncarnation: ExactDaemonIncarnation | null
+  ): Promise<ExactDaemonIncarnation | null> {
+    if (
+      !exactIncarnation ||
+      process.platform !== 'linux' ||
+      (exactIncarnation.linuxStartTicks && exactIncarnation.bootId)
+    ) {
+      return exactIncarnation
+    }
+    const cachedIncarnation = exactDaemonIncarnationForPidRecord(
+      exactIncarnation.identity,
+      this.pidRecord
+    )
+    if (cachedIncarnation.linuxStartTicks && cachedIncarnation.bootId) {
+      return cachedIncarnation
+    }
+    const pidRecord = await this.readMatchingPidRecord(exactIncarnation.identity)
+    this.pidRecord = pidRecord ?? this.pidRecord
+    return pidRecord?.linuxStartTicks && pidRecord.bootId
+      ? {
+          identity: { ...exactIncarnation.identity },
+          linuxStartTicks: pidRecord.linuxStartTicks,
+          bootId: pidRecord.bootId
+        }
+      : exactIncarnation
+  }
+
+  private cacheExactDaemonIncarnation(exactIncarnation: ExactDaemonIncarnation | null): void {
+    if (
+      exactIncarnation &&
+      this.lastAuthenticatedIdentity &&
+      sameEndpointIdentity(exactIncarnation.identity, this.lastAuthenticatedIdentity)
+    ) {
+      this.exactDaemonIncarnation = exactIncarnation
+    }
+  }
+
+  private async readMatchingPidRecord(
+    identity: DaemonEndpointIdentity
+  ): Promise<ParsedDaemonPid | null> {
+    if (!this.pidPath) {
+      return null
+    }
+    try {
+      const parsed = parseDaemonPidFile(await readFile(this.pidPath, 'utf8'))
+      return parsed?.pid === identity.pid &&
+        parsed.startedAtMs === identity.startedAtMs &&
+        parsed.launchNonce === identity.launchNonce
+        ? parsed
+        : null
+    } catch {
+      return null
+    }
+  }
+
+  private observeAuditFailure(
+    trigger: Exclude<DaemonAuditTrigger, 'inventory_answered'>,
+    exactIncarnation = this.exactDaemonIncarnation,
+    additionalEvidenceSources: readonly DaemonEvidenceSource[] = [],
+    endpointGoneProof?: 'windows_named_pipe_missing'
+  ): void {
+    void this.resolveExactDaemonIncarnation(exactIncarnation)
+      .then((resolvedIncarnation) => {
+        this.cacheExactDaemonIncarnation(resolvedIncarnation)
+        return classifyDaemonAuditFailure(this.auditContext, trigger, resolvedIncarnation, {
+          additionalEvidenceSources,
+          endpointGoneProof
+        })
+      })
+      .then((observation) => this.publishAuditObservation(observation))
+      .catch(() => {})
+  }
+
+  private publishAuditObservation(observation: DaemonAuditObservation): void {
+    this.lastAuditObservation = observation
+    this.trackAuditEligibility(observation)
+    notifyAuditListeners(this.auditObservationListeners, observation)
   }
 
   private resyncBackgroundedSessions(): void {
@@ -1817,6 +2015,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // Why: the token is removed only after an authenticated drop; an initial missing token may still hide a live daemon.
       const missingRetiredEndpointToken =
         isMissingTokenFileError(err) && this.client.hasObservedAuthenticatedDisconnect()
+      if (missingRetiredEndpointToken) {
+        this.observeAuditFailure(
+          'token_missing_after_authenticated_disconnect',
+          this.exactDaemonIncarnation,
+          ['token_file']
+        )
+      }
       if (
         this.respawnAdoptionClosed ||
         !this.respawnFn ||
@@ -2123,6 +2328,65 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 }
 
+function sameEndpointIdentity(
+  left: DaemonEndpointIdentity,
+  right: DaemonEndpointIdentity
+): boolean {
+  return (
+    left.pid === right.pid &&
+    left.startedAtMs === right.startedAtMs &&
+    left.launchNonce === right.launchNonce
+  )
+}
+
+function exactDaemonIncarnationForPidRecord(
+  identity: DaemonEndpointIdentity,
+  pidRecord: ParsedDaemonPid | null
+): ExactDaemonIncarnation {
+  return {
+    identity: { ...identity },
+    ...(process.platform === 'linux' &&
+    pidRecord?.pid === identity.pid &&
+    pidRecord.startedAtMs === identity.startedAtMs &&
+    pidRecord.launchNonce === identity.launchNonce &&
+    pidRecord.linuxStartTicks &&
+    pidRecord.bootId
+      ? {
+          linuxStartTicks: pidRecord.linuxStartTicks,
+          bootId: pidRecord.bootId
+        }
+      : {})
+  }
+}
+
+function readDaemonPidRecord(pidPath: string | null): ParsedDaemonPid | null {
+  if (!pidPath) {
+    return null
+  }
+  try {
+    return parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+function removeListener<T>(listeners: T[], listener: T): void {
+  const index = listeners.indexOf(listener)
+  if (index !== -1) {
+    listeners.splice(index, 1)
+  }
+}
+
+function notifyAuditListeners<T>(listeners: readonly ((value: T) => void)[], value: T): void {
+  for (const listener of listeners.slice()) {
+    try {
+      listener(value)
+    } catch {
+      // Audit observers cannot affect daemon operations.
+    }
+  }
+}
+
 // Why: syscall='connect' distinguishes a dead-socket ENOENT/ECONNREFUSED from token-file ENOENT (no syscall);
 // message strings incl. wedged-daemon "Hello response timed out" (#8689) also warrant a respawn.
 function isDaemonGoneError(err: unknown): boolean {
@@ -2148,4 +2412,12 @@ function isMissingTokenFileError(err: unknown): boolean {
   }
   const errno = err as NodeJS.ErrnoException
   return errno.code === 'ENOENT' && errno.syscall === 'open'
+}
+
+function isMissingWindowsNamedPipeError(err: unknown): boolean {
+  if (process.platform !== 'win32' || !(err instanceof Error)) {
+    return false
+  }
+  const errno = err as NodeJS.ErrnoException
+  return errno.code === 'ENOENT' && errno.syscall === 'connect'
 }

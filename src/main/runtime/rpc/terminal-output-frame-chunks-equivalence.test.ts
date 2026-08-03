@@ -47,12 +47,13 @@ function* legacyIterateTerminalOutputFrameChunks(
     yield {
       opcode: TerminalStreamOpcode.OutputSpan,
       bytes: encodeTerminalStreamJson({ data, rawLength, transformed: true }),
+      displayLength: data.length,
       seq: meta?.seq
     }
     return
   }
   if (!legacyByteLengthExceeds(data, TERMINAL_STREAM_CHUNK_BYTES)) {
-    yield { bytes: encodeTerminalStreamText(data), seq: meta?.seq }
+    yield { bytes: encodeTerminalStreamText(data), displayLength: data.length, seq: meta?.seq }
     return
   }
   const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
@@ -83,11 +84,18 @@ function* legacyIterateTerminalOutputFrameChunks(
       if (nextChunk) {
         if (shouldDelayFinalSeq) {
           if (delayedChunk) {
-            yield { bytes: encodeTerminalStreamText(delayedChunk.text) }
+            yield {
+              bytes: encodeTerminalStreamText(delayedChunk.text),
+              displayLength: delayedChunk.text.length
+            }
           }
           delayedChunk = nextChunk
         } else {
-          yield { bytes: encodeTerminalStreamText(nextChunk.text), seq: nextChunk.seq }
+          yield {
+            bytes: encodeTerminalStreamText(nextChunk.text),
+            displayLength: nextChunk.text.length,
+            seq: nextChunk.seq
+          }
         }
       }
     }
@@ -99,17 +107,28 @@ function* legacyIterateTerminalOutputFrameChunks(
   if (shouldDelayFinalSeq) {
     if (finalChunk) {
       if (delayedChunk) {
-        yield { bytes: encodeTerminalStreamText(delayedChunk.text) }
+        yield {
+          bytes: encodeTerminalStreamText(delayedChunk.text),
+          displayLength: delayedChunk.text.length
+        }
       }
       delayedChunk = finalChunk
     }
     if (delayedChunk) {
-      yield { bytes: encodeTerminalStreamText(delayedChunk.text), seq: meta.seq }
+      yield {
+        bytes: encodeTerminalStreamText(delayedChunk.text),
+        displayLength: delayedChunk.text.length,
+        seq: meta.seq
+      }
     }
     return
   }
   if (finalChunk) {
-    yield { bytes: encodeTerminalStreamText(finalChunk.text), seq: finalChunk.seq }
+    yield {
+      bytes: encodeTerminalStreamText(finalChunk.text),
+      displayLength: finalChunk.text.length,
+      seq: finalChunk.seq
+    }
   }
 }
 

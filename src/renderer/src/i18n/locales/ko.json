@@ -148,7 +148,11 @@
         "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요."
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다."
+        "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다.",
+        "runtimeEnvironmentManuallyDisconnected": "런타임 환경이 수동으로 연결 해제되었습니다.",
+        "loopbackPairingBlocked": "이 액세스 링크는 이 기기 자체를 가리킵니다.",
+        "remotePairingUnreachable": "{{endpoint}}의 Orca에 연결할 수 없습니다.",
+        "remotePairingInvalidDetails": "이 액세스 링크에 잘못된 연결 정보가 포함되어 있습니다."
       },
       "web": {
         "preload": {
@@ -349,6 +353,18 @@
             }
           }
         }
+      },
+      "remotePairingCopy": {
+        "invalidInput": "Orca 액세스 링크 또는 페어링 코드를 입력하세요.",
+        "mobileOnly": "이 링크는 모바일 전용 액세스를 허용합니다. 다른 Orca 클라이언트용 링크를 생성하세요.",
+        "invalidDestination": "이 액세스 링크에 잘못된 대상이 포함되어 있습니다.",
+        "unsupportedDestination": "이 액세스 링크에 지원되지 않는 대상이 포함되어 있습니다.",
+        "nonConnectableDestination": "이 액세스 링크에 연결할 수 없는 대상이 포함되어 있습니다.",
+        "loopback": "루프백",
+        "tailscale": "Tailscale 주소",
+        "lan": "사설 LAN 주소",
+        "public": "공용 주소",
+        "custom": "사용자 지정 호스트 이름"
       },
       "ensure": {
         "simulator": {
@@ -600,7 +616,7 @@
             "readTicket": "Read the linked ticket",
             "postUpdate": "Post a progress update",
             "moveState": "Move the ticket forward",
-            "attachPr": "Attach the PR link",
+            "attachPr": "리뷰 링크 첨부",
             "triageFollowups": "Triage and create follow-ups",
             "readTicketSummary": "Pull the linked Linear issue's full context before starting work.",
             "readTicketPrompt": "Use {{value0}} to read the linked Linear issue for this worktree, then summarize the goal and acceptance criteria before you start.",
@@ -608,8 +624,8 @@
             "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Linear issue with what changed and how it was verified.",
             "moveStateSummary": "Advance the Linear workflow state as the work progresses.",
             "moveStatePrompt": "Use {{value0}} to move the linked Linear issue to In Review now that the change is ready.",
-            "attachPrSummary": "Link the pull request to the Linear issue when you open it.",
-            "attachPrPrompt": "Use {{value0}} to attach this PR to the linked Linear issue with a PR link.",
+            "attachPrSummary": "풀 또는 머지 리퀘스트를 만들 때 Linear 이슈에 연결하세요.",
+            "attachPrPrompt": "{{value0}}을 사용해 이 풀 또는 머지 리퀘스트를 연결된 Linear 이슈에 첨부하세요.",
             "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
             "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
           }
@@ -635,6 +651,20 @@
       },
       "pluginCommandKeybindings": {
         "group": "Plugins"
+      },
+      "feedback": {
+        "image": {
+          "attachments": {
+            "fallbackName": "Image attachment",
+            "unsupportedType": "{{fileName}} is not a supported image type.",
+            "empty": "{{fileName}} is empty.",
+            "tooLarge": "{{fileName}} is larger than {{maxSize}}.",
+            "tooMany": "You can attach up to {{maxCount}} images.",
+            "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
+            "invalidImage": "{{fileName}} is not a valid supported image.",
+            "additionalErrors": "{{count}} additional images could not be attached."
+          }
+        }
       }
     },
     "hooks": {
@@ -760,9 +790,10 @@
         "devSearchKeywordNotification": "notification",
         "projectHostsSummary": "호스트 {{value0}}개",
         "linearTitle": "Linear",
-        "linearDescription": "Give agents the skill to read and update your linked Linear tickets.",
+        "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
         "pluginsTitle": "플러그인",
-        "pluginsDescription": "실험적인 Orca 플러그인을 설치하고 관리합니다."
+        "pluginsDescription": "실험적인 Orca 플러그인을 설치하고 관리합니다.",
+        "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -771,8 +802,8 @@
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
       },
       "useMacosTccPromptNotice": {
-        "title": "반복되는 macOS 파일 접근 권한 요청 줄이기",
-        "description": "에이전트와 터미널 도구의 파일 접근은 macOS에서 Orca의 접근으로 표시됩니다. 전체 디스크 접근 권한을 허용하면 이러한 요청을 줄일 수 있습니다.",
+        "title": "“Orca에서 접근하려고 합니다…” 권한 요청이 표시되나요?",
+        "description": "Orca에서 실행 중인 에이전트나 터미널 도구가 보호된 파일에 접근하려고 하면 macOS 권한 메시지가 표시될 수 있습니다. 이러한 요청을 줄이려면 설정에서 전체 디스크 접근 권한을 허용하세요.",
         "openSettings": "설정 열기",
         "dismiss": "다시 표시하지 않기"
       }
@@ -838,11 +869,6 @@
         "83ac703dda": "담당자",
         "00ccdf9b5a": "상태",
         "2aa9acdf34": "GitHub에서 라벨 편집",
-        "d23bbb6416": "{{value0}} 건너뜀",
-        "18f80e1329": "{{value0}} 보류 중",
-        "b1ac991806": "{{value0}} 실패",
-        "checksNeedActionChip": "{{value0}}개 조치 필요",
-        "311d0cee55": "{{value0}} 통과",
         "e52bed9264": "아직 보고된 체크가 없습니다.",
         "90020cc1f3": "이 PR에는 아직 보고된 체크가 없습니다.",
         "ecffebc251": "체크를 찾을 수 없습니다.",
@@ -1332,11 +1358,6 @@
         "bc215fea4d": "+ 라벨",
         "b936cc51a4": "닫힘",
         "7b8f6bf6d8": "열림",
-        "e6ad0a8d06": "{{value0}} 건너뛰었습니다",
-        "88267924d5": "{{value0}} 보류 중",
-        "ae2a34c7b8": "{{value0}} 실패",
-        "checksNeedActionChip": "{{value0}}개 조치 필요",
-        "7c5035931a": "{{value0}} 통과",
         "a18d01cda3": "아직 보고된 체크가 없습니다.",
         "3912daf310": "이 PR에는 아직 보고된 체크가 없습니다.",
         "45877f5089": "체크를 찾을 수 없습니다.",
@@ -1834,7 +1855,11 @@
         "jiraToggleSortDirection": "{{value0}}으로 정렬",
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
-        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
+        "loadPageUnreachable": "{{value0}} 페이지는 GitHub 검색이 반환할 수 있는 범위를 벗어났습니다.",
+        "loadPageFailed": "GitHub에서 {{value0}} 페이지를 불러오지 못했습니다.",
+        "loadPageNoMoreResults": "{{value0}} 페이지에 더 이상 결과가 없습니다."
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -2695,6 +2720,12 @@
                     "description": "Zellij, tmux, Neovim 등 터미널 프로그램이 클립보드에 복사할 수 있습니다. Terminal 설정에서 끌 수 있습니다.",
                     "action": "설정 열기"
                   }
+                }
+              },
+              "failed": {
+                "toast": {
+                  "62a0af2cb4": "터미널 클립보드 복사를 확인할 수 없습니다",
+                  "fdd3e7e977": "터미널 앱이 복사를 요청했지만 Orca가 시스템 클립보드에 반영되었는지 확인하지 못했습니다."
                 }
               }
             }
@@ -3757,17 +3788,17 @@
           "b088e0785d": "베타",
           "f43ad6edf3": "스킬",
           "7e828fb2c6": "뒤로",
-          "ea72d6185b": "로컬 스킬을 스캔할 수 없습니다.",
+          "ea72d6185b": "스킬을 스캔할 수 없습니다.",
           "dc4c3328ee": "파일 표시",
           "9963dff6d3": "설명을 찾을 수 없습니다.",
           "995fde8337": "스킬 파일을 공개할 수 없습니다.",
-          "ab5b777350": "로컬 홈, repos, 번들, 플러그인 스킬 폴더를 확인했습니다.",
+          "ab5b777350": "홈, repos, 번들, 플러그인 스킬 폴더를 확인했습니다.",
           "08a321a984": "검색 또는 필터를 조정합니다.",
-          "4acd6d68ec": "로컬 스킬을 찾을 수 없습니다.",
+          "4acd6d68ec": "스킬을 찾을 수 없습니다.",
           "6a62a0168c": "일치하는 항목 없음",
           "cd7893fbc1": "스킬 스캔 중",
           "35b9a724a0": "사용 가능",
-          "0c74e7ff34": "로컬"
+          "0c74e7ff34": "설치됨"
         },
         "SkillFreshnessNudge": {
           "titleOne": "설치된 Orca 스킬이 오래되었습니다",
@@ -3857,7 +3888,7 @@
           "upToDate": "최신 상태",
           "installed": "설치됨",
           "details": "Details",
-          "needsAttention": "Needs attention"
+          "needsAttention": "Review skill"
         },
         "SkillUpdateResultRows": {
           "stillOutdated": "Still out of date after the update ran."
@@ -4156,7 +4187,10 @@
           "7a46c228b8": "피드백을 보내주셔서 감사합니다.",
           "a2fd890d9e": "제출하기 전에 피드백을 입력해 주세요.",
           "f2e42e1307": "보내기",
-          "69969ba364": "전송 중…"
+          "69969ba364": "전송 중…",
+          "imageReadFailed": "Could not read the attached images. Try attaching them again.",
+          "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
+          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed."
         },
         "SidebarFilter": {
           "e3b3898218": "프로젝트 추가",
@@ -4270,9 +4304,11 @@
           "26c71e536c": "메모",
           "b8dcc6f321": "PR/MR 링크",
           "ca4d3c522e": "Linear 이슈",
+          "jiraIssue": "Jira 이슈",
           "91dfc653e8": "GitHub 티켓",
           "bdd23b4e07": "GitHub 이슈",
           "44713a5d04": "Linear 이슈",
+          "jiraIssues": "Jira 이슈",
           "cc17bd443b": "상세한",
           "0f9b959b31": "PR",
           "e029a2d775": "상태",
@@ -4340,7 +4376,8 @@
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "비어 있음",
-          "3611d1ae7f": "워크스페이스 보드 열 크기 조정"
+          "3611d1ae7f": "워크스페이스 보드 열 크기 조정",
+          "2df01a03ff": "일치하는 항목 없음"
         },
         "WorkspaceStatusAppearancePopover": {
           "514be2f569": "{{value0}} 색상을 {{value1}}로 설정",
@@ -4421,7 +4458,10 @@
           "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
           "cliCreatedFromShell": "Created via `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
-          "cliCreated": "Created by Orca CLI"
+          "cliCreated": "Created by Orca CLI",
+          "jiraIssue": "Jira {{value0}}",
+          "viewOnJira": "Jira에서 보기",
+          "linkedJira": "연결된 Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",
@@ -4975,7 +5015,11 @@
           "importing": "가져오는 중...",
           "importSshConfig": "~/.ssh/config 가져오기",
           "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다.",
-          "advanced": "Advanced"
+          "advanced": "고급",
+          "linkDestination": "링크 대상",
+          "sshTunnel": "SSH 터널을 사용하고 있습니다",
+          "sshTunnelHelp": "그렇지 않으면 이 링크는 이 기기 자체를 가리키므로 다른 컴퓨터를 식별할 수 없습니다.",
+          "loopbackBlocked": "SSH 터널 재정의를 활성화하거나 다른 호스트의 Tailscale 또는 LAN 주소를 사용해 새 링크를 만드세요."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "재연결 실패",
@@ -4995,6 +5039,19 @@
         "WorktreeDeveloperMenu": {
           "developer": "Developer",
           "parkTerminal": "Park terminal"
+        },
+        "SidebarFeedbackImageAttachments": {
+          "screenshotsHint": "Attach up to {count} screenshots",
+          "attachImages": "Attach",
+          "removeImage": "Remove {{fileName}}"
+        },
+        "WorkspaceKanbanSearchField": {
+          "bdb753c78d": "일치하는 워크스페이스가 없습니다",
+          "4d96c209d6": "워크스페이스 {{value1}}개 중 {{value0}}개 일치",
+          "c0cd6bdf6c": "워크스페이스 검색",
+          "3b7ea51793": "검색 지우기",
+          "7f1c2e94a5": "검색어가 너무 깁니다 — 보드가 필터링되지 않았습니다",
+          "9a4d0f6b21": "너무 김"
         }
       },
       "shared": {
@@ -5210,7 +5267,9 @@
           "copyCommandAria": "명령 복사",
           "runCommandDescription": "Enter를 눌러 명령을 실행하세요.",
           "5f818f12ab": "준비 중...",
-          "4c05b9d7cb": "설정 터미널을 준비하고 있습니다."
+          "4c05b9d7cb": "설정 터미널을 준비하고 있습니다.",
+          "installLabel": "설치",
+          "updateLabel": "업데이트"
         },
         "AgentsPane": {
           "d83834f5e6": "설치된 agents 감지 중…",
@@ -5615,7 +5674,7 @@
           "e7bb06007c": "LAN",
           "4a73f5217a": "다른 로컬 앱을 제어하는 ​​스크립트를 위한 Apple 이벤트.",
           "e119f0d66b": "자동화",
-          "7ca17b62c8": "Orca가 실행하는 에이전트가 다른 앱의 데이터를 읽으면, macOS는 터미널 명령을 실행하는 프로세스인 Orca를 표시합니다. 이러한 요청을 줄이려면 Orca와 Orca Helper에 이 권한을 허용하세요. 그런 다음 Orca를 종료하고, 남아 있는 Orca Helper 프로세스도 모두 종료한 후 Orca를 다시 여세요.",
+          "7ca17b62c8": "Orca가 실행하는 에이전트가 다른 앱의 데이터를 읽으면, macOS는 터미널 명령을 실행하는 프로세스인 Orca를 표시합니다. 이러한 요청을 줄이려면 Orca에 이 권한을 허용하세요. 그런 다음 Orca를 종료했다가 다시 여세요.",
           "c566bca278": "전체 디스크 접근 권한",
           "9f35980756": "키 입력 주입, 창 제어 및 UI 자동화 도구입니다.",
           "5b2f22ca2d": "접근성",
@@ -6617,7 +6676,22 @@
           "orcaVersion": "Orca v{{value0}}",
           "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
           "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
-          "updatingServers": "Updating servers…"
+          "updatingServers": "Updating servers…",
+          "workflow": "원격 서버 워크플로",
+          "connectWorkflow": "호스트에 연결",
+          "connectWorkflowHelp": "이 앱을 다른 머신에 연결합니다",
+          "shareWorkflow": "이 호스트 공유",
+          "shareWorkflowHelp": "다른 기기를 이 머신에 연결합니다",
+          "troubleshootWorkflow": "연결 문제 해결",
+          "sshTunnelRequired": "SSH 터널 필요",
+          "troubleshootTitle": "다른 호스트에서 새 링크 만들기",
+          "troubleshootDescription": "127.0.0.1을 사용하는 링크는 링크를 만든 컴퓨터가 아니라 링크를 여는 기기 자체를 가리킵니다.",
+          "troubleshootStepShare": "다른 컴퓨터에서 ‘이 호스트 공유’를 엽니다.",
+          "troubleshootStepAddress": "‘다른 기기’를 선택하고 Tailscale 또는 LAN 주소를 선택합니다.",
+          "troubleshootStepRegenerate": "새 액세스 링크를 생성하고 여기에서는 가장 최신 링크만 사용합니다.",
+          "troubleshootTunnel": "SSH 로컬 포워딩을 사용하나요? ‘호스트에 연결’로 돌아가 루프백 링크를 붙여 넣은 다음 ‘고급’에서 ‘SSH 터널을 사용하고 있습니다’를 활성화하세요.",
+          "cloudVmWorkflow": "클라우드 VM",
+          "cloudVmWorkflowHelp": "레시피로 생성한 클라우드 머신 관리"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "{{value0}} 복사"
@@ -6656,7 +6730,20 @@
           "custom-description": "다른 기기가 연결할 수 있는 주소를 알립니다. LAN 또는 Tailscale 호스트, 또는 전체 ws(s):// URL입니다.",
           "custom-hint": "호스트, host:port 또는 ws(s):// URL을 입력하세요.",
           "custom-cancel": "취소",
-          "custom-use": "주소 사용"
+          "custom-use": "주소 사용",
+          "intentQuestion": "이 링크를 어디에서 열 예정인가요?",
+          "anotherDevice": "다른 기기",
+          "anotherDeviceHelp": "Tailscale, LAN 또는 연결 가능한 다른 주소",
+          "localOnly": "이 컴퓨터만",
+          "localOnlyHelp": "이 컴퓨터의 브라우저 또는 Orca 클라이언트",
+          "customAddress": "사용자 지정 주소",
+          "customAddressHelp": "SSH 터널, 리버스 프록시 또는 사용자 지정 호스트 이름",
+          "recommended": "권장",
+          "localLink": "로컬 전용 링크",
+          "localLinkHelp": "이 링크는 이 컴퓨터에서 실행 중인 브라우저 또는 Orca 클라이언트에서만 작동합니다.",
+          "noExternalAddress": "다른 기기용 주소를 찾지 못했습니다. 이 컴퓨터를 LAN 또는 Tailscale에 연결한 후 새로 고치거나 사용자 지정 주소를 선택하세요.",
+          "staleAddress": "연결 주소가 변경되었습니다. {{address}}용 새 링크를 생성하세요.",
+          "customInvalid": "올바른 호스트, 호스트:포트, IPv6 주소 또는 ws(s):// URL을 입력하세요."
         },
         "Settings": {
           "3bf149e873": "프로젝트 설정 > {{value0}}",
@@ -6733,7 +6820,8 @@
           "dev": "Dev Tools",
           "devDescription": "UI 상태를 시험해 보기 위한 개발 전용 도구입니다.",
           "linearTitle": "Linear",
-          "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
+          "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
+          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -6959,21 +7047,42 @@
           "4a342f44c1": "고급 연결",
           "e9609ddca6": "프록시, 점프 호스트, 연결 재사용",
           "8c922dffba": "더 빠른 설정을 위해 SSH 연결 재사용",
-          "53e9aabfc0": "사용 가능한 경우 OpenSSH 멀티플렉싱을 사용합니다. 사용자 지정 SSH 제한이 있는 호스트에서는 끄세요."
+          "53e9aabfc0": "사용 가능한 경우 OpenSSH 멀티플렉싱을 사용합니다. 사용자 지정 SSH 제한이 있는 호스트에서는 끄세요.",
+          "editTitle": "SSH 호스트 편집",
+          "addTitle": "SSH 호스트 추가",
+          "editDescription": "이 머신의 연결 세부 정보를 업데이트합니다. 변경 사항은 다음 연결 시 적용됩니다.",
+          "addDescription": "SSH로 로그인할 수 있는 영구 머신을 추가합니다.",
+          "editingPrefix": "편집 중"
         },
         "TasksPane": {
-          "3a72b9745e": "작업 페이지와 사이드바 바로가기에 표시할 작업 제공자를 선택합니다.",
           "f71d8a9dd3": "작업 제공자",
-          "71644aba56": "작업 페이지 소스 선택기 및 사이드바 바로가기에 표시할 작업 제공자를 선택합니다. 하나 이상의 제공업체가 계속 표시되어야 합니다.",
-          "93e72ef659": "작업 소스",
-          "8e1305fcc6": "작업 소스 선택기 및 사이드바 바로가기에 Jira를 표시합니다.",
           "6b23a34f6d": "Jira",
-          "e4170c9615": "작업 소스 선택기 및 사이드바 바로가기에 Linear를 표시합니다.",
           "09ae2d7c51": "Linear",
-          "dd67a1b6e1": "작업 소스 선택기 및 사이드바 바로가기에 GitLab을 표시합니다.",
           "7c5d7fdc20": "GitLab",
-          "1db47236cd": "작업 소스 선택기 및 사이드바 바로가기에 GitHub를 표시합니다.",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "connectProviderTitle": "{{provider}} 연결",
+          "connectCodeHostDescription": "Orca가 이슈를 불러올 수 있도록 연동에서 CLI를 설치하고 인증하세요.",
+          "connectionCheckUnavailable": "Orca가 이 연결을 확인하지 못했습니다. 다시 시도하거나 연동을 열어 설정 세부 정보를 확인하세요.",
+          "retryConnection": "다시 시도",
+          "openIntegrations": "연동",
+          "connectInIntegrations": "연동에서 설정",
+          "connectJiraTitle": "Jira 연결",
+          "connectJiraDescription": "API 토큰 또는 PAT로 Jira Cloud 사이트나 자체 호스팅 인스턴스를 추가하세요.",
+          "manageJira": "키 관리",
+          "addJira": "Jira 액세스 추가",
+          "githubDescription": "GitHub 이슈를 탐색하고 해당 이슈에서 워크스페이스를 시작하세요.",
+          "gitlabDescription": "GitLab 이슈를 탐색하고 해당 이슈에서 워크스페이스를 시작하세요.",
+          "linearDescription": "Linear를 연결하고 에이전트 스킬을 설치한 다음 작업에 표시하세요.",
+          "jiraDescription": "Jira Cloud 또는 자체 호스팅 Jira를 연결하고 작업에 표시하세요.",
+          "setupTitle": "작업 관리 설정",
+          "setupDescription": "각 제공업체의 연결과 표시 설정을 한곳에서 완료하세요. Linear에서는 에이전트가 이슈를 읽고 업데이트할 수 있도록 에이전트 스킬도 필요합니다. 제공업체는 하나 이상 표시되어야 합니다.",
+          "incompleteBannerTitle": "표시 중인 일부 제공업체에 설정이 필요합니다",
+          "incompleteBannerBody": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요.",
+          "providersDescription": "각 카드에서 연결, 작업 표시 여부, Linear의 경우 스킬 설정까지 진행할 수 있습니다.",
+          "integrationsHint": "모든 제공업체의 자격 증명은 다음에서도 관리할 수 있습니다:",
+          "integrationsLink": "연동",
+          "skillHint": ". Linear를 연결한 후 사용 예시는 설정 → Linear에서 확인할 수 있습니다.",
+          "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "창 구분선의 두께입니다.",
@@ -7628,6 +7737,12 @@
             "8dd4805991": "파일",
             "68d1db8929": "markdown",
             "90425d313c": "Shift",
+            "linkRoutingModifier": {
+              "routing": "라우팅",
+              "modifier": "수정자",
+              "invert": "반전",
+              "opposite": "반대"
+            },
             "72c58f7792": "웹뷰",
             "82ba1c80ea": "로컬호스트",
             "bea27bac4b": "링크",
@@ -8041,8 +8156,8 @@
             "4497e2e2bb": "리치 Markdown을 편집하는 동안 브라우저 맞춤법 밑줄과 제안을 표시합니다.",
             "e61157e926": "편집기 자동 줄 바꿈",
             "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다.",
-            "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamily": "편집기 글꼴",
+            "editorFontFamilyDesc": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다."
           }
         },
         "git": {
@@ -8612,8 +8727,12 @@
             "3d81c26d78": "소스",
             "cf0e3e0c2f": "공급자",
             "2ec54bee51": "작업",
-            "765f0c544d": "작업 페이지와 사이드바 바로가기에 표시할 작업 제공자를 선택합니다.",
-            "5b8e4aace5": "작업 제공자"
+            "5b8e4aace5": "작업 제공자",
+            "providersDescription": "작업 제공업체를 연결하고 Linear 에이전트 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
+            "setup": "설정",
+            "apiKey": "API 키",
+            "skill": "스킬",
+            "connect": "연결"
           }
         },
         "terminal": {
@@ -9090,7 +9209,8 @@
           }
         },
         "computerUseSummary": {
-          "permissionsRequired": "agents가 앱 창을 조작하려면 먼저 {{value0}} 권한{{value1}}이 필요합니다.",
+          "permissionsRequired_one": "agents가 앱 창을 조작하려면 먼저 1 권한이 필요합니다.",
+          "permissionsRequired_other": "agents가 앱 창을 조작하려면 먼저 {{value0}} 권한이 필요합니다.",
           "checkingTitle": "Computer Use 액세스 확인 중입니다.",
           "checkingDescription": "Orca가 Computer Use 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다.",
           "unavailableTitle": "Computer Use를 사용할 수 없습니다.",
@@ -9325,18 +9445,25 @@
           "empty": "임시 VM 런타임은 정리가 필요하지 않습니다.",
           "copyCleanup": "복사 명령",
           "retry": "정리 다시 시도",
-          "cleanup": "대청소"
+          "cleanup": "정리",
+          "cloudVmLoadFailed": "클라우드 VM 런타임을 불러올 수 없습니다.",
+          "cloudVmCleanupFailedToast": "클라우드 VM 런타임을 정리할 수 없습니다.",
+          "cloudVmMarkedCleaned": "클라우드 VM 런타임을 정리됨으로 표시했습니다.",
+          "cloudVmCleaned": "클라우드 VM 런타임을 정리했습니다.",
+          "cloudVmTitle": "클라우드 VM 런타임",
+          "cloudVmRefresh": "클라우드 VM 런타임 새로 고침",
+          "cloudVmLoading": "클라우드 VM 런타임 확인 중…",
+          "cloudVmEmptyWithSetup": "아직 클라우드 VM 런타임이 없습니다. 환경 레시피를 사용해 워크스페이스에서 생성하세요."
         },
         "ephemeralVms": {
           "search": {
-            "title": "워크스페이스별 환경",
-            "description": "repo 소유 레시피가 각 워크스페이스에 고유한 주문형 일회용 환경을 제공하는 방법을 알아보세요."
+            "description": "repo 소유 레시피가 각 워크스페이스에 고유한 주문형 일회용 환경을 제공하는 방법을 알아보세요.",
+            "cloudVmTitle": "클라우드 VM"
           }
         },
         "EphemeralVmsPane": {
           "loadError": "레시피를 로드할 수 없습니다.",
           "copyError": "프롬프트를 복사할 수 없습니다.",
-          "skillTitle": "워크스페이스별 환경 기술",
           "skillDescription": "repo 소유 환경 레시피를 설정, 빌드, 인증 및 검증합니다.",
           "whatTitle": "당신과 함께 기술이 하는 일",
           "whatScaffold": "Orca 서버 또는 SSH를 통해 연결된 공급자를 위한 레시피 및 스크립트를 작성합니다.",
@@ -9347,13 +9474,16 @@
           "copied": "복사됨",
           "recipes": "조리법",
           "recipesHelp": "orca.yaml과 활성화된 플러그인의 레시피가 여기에 표시되어 워크스페이스를 시작할 수 있습니다.",
-          "refresh": "임시 VM 레시피 새로 고침",
           "checking": "레시피 확인 중...",
-          "none": "아직 레시피를 찾을 수 없습니다."
+          "none": "아직 레시피를 찾을 수 없습니다.",
+          "cloudVmSkillTitle": "클라우드 VM 설정 스킬",
+          "cloudVmRefresh": "클라우드 VM 레시피 새로 고침",
+          "cloudVmTerminalTitle": "클라우드 VM 설정",
+          "cloudVmTerminalAriaLabel": "클라우드 VM 스킬 설치 터미널"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "repo 소유 온디맨드 환경에 대한 설정 제어 및 워크스페이스 실행 대상을 표시합니다.",
-          "toggleLabel": "워크스페이스별 환경 전환"
+          "cloudVmToggleLabel": "클라우드 VM 전환"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "에이전트",
@@ -9380,13 +9510,13 @@
                   "notInstalled": "설치되지 않음",
                   "recheck": "다시 확인",
                   "installedDescription": "에이전트 스킬이 설치되었습니다. 업데이트하려면 다음을 실행하세요:",
-                  "description": "에이전트가 Linear 작업을 읽고 편집할 수 있도록 합니다.",
+                  "description": "에이전트가 Linear 작업을 읽고 편집할 수 있도록 합니다. 전체 가이드 설정(연결 + 스킬 + 표시)은 설정 → 작업 소스에 있습니다.",
                   "copyCommand": "명령 복사"
                 }
               },
               "search": {
                 "title": "Linear",
-                "description": "Give agents the skill to read and update your linked Linear tickets."
+                "description": "Linear 스킬 상태, 사용 예시, 작업 소스 설정 링크입니다."
               }
             }
           }
@@ -9475,23 +9605,22 @@
         },
         "LinearAgentSkillPane": {
           "title": "Linear",
-          "description": "Give agents the skill to read and update your linked Linear tickets.",
-          "skillTitle": "Linear skill",
-          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
-          "howToUse": "How to use it",
-          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
-          "terminalTitle": "Linear skill setup",
-          "terminalAriaLabel": "Linear skill install terminal",
-          "manageConnectionHint": "Review connected Linear workspaces and API keys in",
-          "manageConnectionLink": "Integrations settings"
+          "description": "Orca에서 Linear 이슈를 탐색하고 연결된 워크스페이스를 시작하며 /orca-linear로 에이전트가 이슈를 업데이트할 수 있습니다.",
+          "skillTitle": "Linear 스킬",
+          "howToUse": "프롬프트 예시",
+          "howToUseDescription": "카드를 클릭해 프롬프트를 복사하세요. 스킬을 설치한 후 Linear에 연결된 워크스페이스에서 사용하세요.",
+          "terminalTitle": "Linear 스킬 설정",
+          "terminalAriaLabel": "Linear 스킬 설치 터미널",
+          "manageConnectionHint": "연결된 Linear 워크스페이스와 API 키는 다음에서 확인할 수 있습니다.",
+          "manageConnectionLink": "연동"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
         },
         "EditorFontFamilySetting": {
-          "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
-          "placeholder": "Same as terminal font"
+          "title": "편집기 글꼴",
+          "description": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다.",
+          "placeholder": "터미널 글꼴과 동일"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -9543,6 +9672,12 @@
           "serviceManagerHelp": "이 서버를 시작하는 서비스 관리자를 통해 Orca를 업데이트하세요.",
           "unpackedHelp": "개발 빌드는 소스 체크아웃에서 업데이트해야 합니다.",
           "legacyHelp": "원격 업데이트를 활성화하려면 이 서버를 수동으로 한 번 업데이트하세요."
+        },
+        "BrowserLinkRoutingModifierSetting": {
+          "titleSystem": "Hold Shift to open in your web browser",
+          "titleOrca": "Hold Shift to open in Orca",
+          "descriptionSystem": "Links open in Orca, so {{chord}}+click sends one to your system browser instead.",
+          "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
         "PluginConsentDialog": {
           "workerTrust": "백그라운드 워커 — 자체 프로세스 실행",
@@ -9793,6 +9928,113 @@
             "logs": "플러그인 로그",
             "development": "개발 플러그인"
           }
+        },
+        "LinearAgentSkillGuide": {
+          "setupConnectTitle": "1. Linear 연결",
+          "setupConnectBody": "Orca가 이슈를 나열하고 연결된 워크스페이스를 열 수 있도록 하는 개인 API 키입니다.",
+          "manageKeys": "키 관리",
+          "addAccess": "액세스 추가",
+          "setupSkillTitle": "2. 에이전트 스킬 설치",
+          "setupSkillBody": "에이전트가 /orca-linear로 이슈 읽기, 업데이트, 분류, 풀 또는 머지 리퀘스트 첨부를 할 수 있게 합니다.",
+          "setupVisibleTitle": "3. 작업에 Linear 표시",
+          "setupVisibleBody": "작업 소스 선택기와 사이드바 바로 가기에 Linear를 표시합니다.",
+          "openTaskSources": "작업 소스",
+          "setupTitle": "설정 체크리스트",
+          "setupBody": "작업과 에이전트의 전체 흐름에는 세 단계가 모두 필요합니다. 최초 설정은 작업 소스에서도 진행할 수 있습니다.",
+          "setupReady": "설정 완료",
+          "setupProgress": "{{total}}개 중 {{done}}개 완료",
+          "notesTitle": "알아두면 좋은 점",
+          "notesIntro": "Linear를 연결하고 스킬을 설치한 후 참고할 내용입니다.",
+          "noteLinkedTitle": "Linear 이슈에서 시작",
+          "noteLinkedBody": "작업에서 만든 워크스페이스는 이슈가 컨텍스트로 연결되어 있어 이슈 작업이 가장 원활합니다.",
+          "noteSlashTitle": "/orca-linear 언급",
+          "noteSlashBody": "채팅에서 /orca-linear를 사용하거나 자연어로 요청하면 해당 턴에 에이전트가 스킬을 불러옵니다.",
+          "noteKeysTitle": "키는 런타임별로 저장",
+          "noteKeysBody": "API 키와 워크스페이스는 활성 런타임에 저장됩니다.",
+          "noteVisibilityTitle": "숨겨도 연결은 유지",
+          "noteVisibilityBody": "작업 소스에서 Linear를 숨기면 선택기에서만 제거됩니다. 키나 스킬은 삭제되지 않습니다.",
+          "setupChecking": "확인 중…"
+        },
+        "TaskSourceLinearSetup": {
+          "connectTitle": "Linear 연결",
+          "connectDescription": "Orca가 이슈를 탐색하고 이슈 컨텍스트로 워크스페이스를 열 수 있도록 개인 API 키를 추가하세요.",
+          "manageAccess": "키 관리",
+          "addAccess": "Linear 액세스 추가",
+          "connectedHint": "워크스페이스와 키는 활성 런타임에 저장됩니다. 언제든 액세스를 더 추가할 수 있습니다.",
+          "recheck": "연결 다시 확인",
+          "skillTitle": "Linear 에이전트 스킬 설치",
+          "skillDescription": "에이전트가 /orca-linear로 이슈 읽기, 업데이트 게시, 상태 변경, 풀 또는 머지 리퀘스트 첨부를 할 수 있게 합니다.",
+          "skillBlocked": "먼저 Linear를 연결한 다음 에이전트용 스킬을 설치하세요.",
+          "skillPanelTitle": "Linear 스킬",
+          "terminalTitle": "Linear 스킬 설정",
+          "terminalAriaLabel": "Linear 스킬 설치 터미널",
+          "showDescription": "작업 소스 선택기와 사이드바 바로 가기에 Linear를 표시합니다."
+        },
+        "TaskSourceProviderCard": {
+          "statusChecking": "확인 중…",
+          "statusReady": "준비됨",
+          "statusConnectRequired": "연결 필요",
+          "statusSkillRequired": "스킬 필요",
+          "statusUnavailable": "상태를 확인할 수 없음",
+          "statusHidden": "작업에서 숨김",
+          "statusIncomplete": "설정 필요",
+          "collapseSetup": "{{provider}} 설정 단계 접기",
+          "expandSetup": "{{provider}} 설정 단계 표시"
+        },
+        "TaskSourceShowInTasksStep": {
+          "shown": "표시 중",
+          "show": "표시",
+          "hide": "숨기기",
+          "hideProviderAction": "작업에서 {{provider}} 숨기기",
+          "showProviderAction": "작업에 {{provider}} 표시",
+          "lastProviderAction": "작업에 표시된 제공업체는 {{provider}}입니다. 제공업체는 하나 이상 표시되어야 합니다.",
+          "lastProviderHint": "작업에는 제공업체가 하나 이상 표시되어야 합니다.",
+          "title": "작업에 표시",
+          "description": "이 제공업체를 작업 소스 선택기와 사이드바 바로 가기에 표시합니다."
+        },
+        "RuntimeHostAccessForm": {
+          "getLink": "다른 호스트에서 액세스 링크 가져오기",
+          "stepOpenShare": "설정 → 원격 Orca 서버 → 이 호스트 공유를 엽니다.",
+          "stepChooseAddress": "‘다른 기기’를 선택하고 연결 가능한 주소를 선택합니다.",
+          "stepCopyLink": "링크를 생성한 다음 “다른 Orca 클라이언트 페어링” 링크를 복사하세요.",
+          "name": "Orca에서 사용할 이름",
+          "namePlaceholder": "Linux 워크스테이션",
+          "nameHelp": "Orca에서 이 컴퓨터가 표시되는 이름만 변경합니다.",
+          "accessLink": "액세스 링크",
+          "accessLinkPlaceholder": "orca://pair?code=...",
+          "accessLinkHelp": "Orca는 연결하기 전에 대상을 표시하며 자격 증명은 숨겨 둡니다.",
+          "destination": "링크 대상",
+          "loopbackTitle": "이 링크는 이 기기 자체를 가리킵니다",
+          "loopbackDescription": "{{endpoint}}는 링크를 연 기기 자체를 가리키며, 링크를 만든 다른 컴퓨터에는 연결되지 않습니다.",
+          "loopbackRecovery": "다른 컴퓨터에서 ‘다른 기기’를 사용해 새 링크를 만들고 Tailscale 또는 LAN 주소를 선택하세요.",
+          "identityMismatch": "연결된 Orca 호스트가 이 액세스 링크와 일치하지 않습니다",
+          "identityMismatchHelp": "{{endpoint}}의 Orca에 연결했지만 해당 호스트가 이 링크와 일치하지 않습니다. 다른 호스트에서 새 링크를 생성하세요.",
+          "invalidLink": "이 액세스 링크는 더 이상 유효하지 않습니다",
+          "invalidLinkHelp": "다른 호스트에서 새 액세스 링크를 생성한 후 다시 시도하세요.",
+          "incompatible": "Orca 버전이 호환되지 않습니다",
+          "incompatibleHelp": "이 기기와 다른 호스트의 Orca를 업데이트한 후 다시 시도하세요.",
+          "interrupted": "연결이 중단되었습니다",
+          "interruptedHelp": "확인 중 연결이 중단되었습니다. 네트워크 또는 SSH 터널을 확인한 후 다시 시도하세요.",
+          "unavailable": "호스트를 사용할 수 없습니다",
+          "unavailableHelp": "다른 호스트에서 Orca가 실행 중이고 네트워크 또는 SSH 터널을 통해 {{endpoint}}에 연결할 수 있는지 확인하세요.",
+          "advanced": "고급",
+          "sshTunnel": "이 로컬 주소에 SSH 터널을 사용하고 있습니다",
+          "sshTunnelHelp": "이 연결을 사용하는 동안 터널을 유지하세요.",
+          "headlessHelp": "헤드리스 orca serve를 사용하나요? 다른 컴퓨터에서 orca serve --pairing-address <reachable-host>를 실행하세요.",
+          "cancel": "취소",
+          "addWithTunnel": "터널을 사용해 호스트 추가",
+          "addHost": "호스트 추가",
+          "connectionDetails": "연결 세부 정보",
+          "endpointKind": "대상 유형",
+          "networkConnection": "네트워크 연결",
+          "notAttempted": "시도하지 않음"
+        },
+        "CloudVmSetupGuide": {
+          "title": "클라우드 VM 만들기",
+          "description": "클라우드 VM은 워크스페이스를 만들 때 환경 레시피에서 생성됩니다.",
+          "setupRecipe": "클라우드 공급자를 위한 환경 레시피를 설정하세요.",
+          "createWorkspace": "워크스페이스를 만들고 실행 위치에서 해당 레시피를 선택하세요.",
+          "openSetup": "환경 레시피 설정"
         }
       },
       "right": {
@@ -10857,6 +11099,7 @@
             "transcriptsSkipped": "대화 기록 {{count}}개 건너뜀",
             "noAgentSessionsFound": "agent 세션을 찾을 수 없습니다",
             "noSessionsMatchFilters": "현재 필터와 일치하는 세션이 없습니다",
+            "noAgentsSelected": "선택된 에이전트가 없습니다",
             "sessionId": "세션 ID",
             "logPath": "로그 경로",
             "agents": "에이전트",
@@ -10882,6 +11125,8 @@
             "viewOptionsAriaLabel": "세션 기록 보기 옵션",
             "viewOptions": "보기 옵션",
             "agents": "에이전트",
+            "selectAllAgents": "모두 선택",
+            "clearAgents": "모두 해제",
             "sort": "정렬",
             "lastUpdated": "마지막 업데이트",
             "created": "생성됨",
@@ -10955,7 +11200,19 @@
             "recoverableEmptyOpenLogHint": "로그를 열어 복구하세요.",
             "emptyConversationDetail": "이 세션에는 저장된 대화가 없어 재개할 수 없습니다.",
             "queuedMessages": "대기 중인 메시지 {{value0}}개",
-            "subagentTranscripts": "서브에이전트 대화 기록 {{value0}}개"
+            "subagentTranscripts": "서브에이전트 대화 기록 {{value0}}개",
+            "prompt": "프롬프트",
+            "firstPrompt": "첫 프롬프트",
+            "recentPrompt": "최근 프롬프트",
+            "firstPromptCopied": "첫 프롬프트를 복사했습니다",
+            "recentPromptCopied": "최근 프롬프트를 복사했습니다",
+            "copyFirstPrompt": "첫 프롬프트 복사",
+            "copyRecentPrompt": "최근 프롬프트 복사",
+            "copyPrompt": "프롬프트 복사",
+            "copied": "복사됨",
+            "copy": "복사",
+            "noFirstPromptAvailable": "첫 프롬프트를 사용할 수 없습니다",
+            "loadingFirstPrompt": "첫 프롬프트를 불러오는 중…"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} 세션 재개",
@@ -11383,18 +11640,30 @@
             "switchTaskSourceTitle": "작업 소스를 전환할까요?",
             "differentTaskSource": ", 선택한 작업 소스와 다릅니다.",
             "currentTaskSource": "현재 작업 소스",
-            "placeholderNameOrLinearUrl": "이름 또는 Linear URL 입력",
+            "placeholderNameOrLinearUrl": "이름, Linear URL 또는 Jira URL 입력",
             "placeholderWorkspaceName": "워크스페이스 이름 입력",
-            "placeholderSmartWithBranchGitLabLinear": "이름, #1234, 브랜치, GitHub/GitLab 또는 Linear URL 입력",
-            "placeholderSmartGitLabLinear": "이름, #1234, GitHub/GitLab 또는 Linear URL 입력",
-            "placeholderSmartWithBranchGitLab": "이름, #1234, 브랜치, GitHub 또는 GitLab URL 입력",
-            "placeholderSmartGitLab": "이름, #1234, GitHub 또는 GitLab URL 입력",
+            "placeholderSmartWithBranchGitLabLinear": "이름, #1234, 브랜치, GitHub/GitLab, Linear 또는 Jira URL 입력",
+            "placeholderSmartGitLabLinear": "이름, #1234, GitHub/GitLab, Linear 또는 Jira URL 입력",
+            "placeholderSmartWithBranchGitLab": "이름, #1234, 브랜치, GitHub, GitLab 또는 Jira URL 입력",
+            "placeholderSmartGitLab": "이름, #1234, GitHub, GitLab 또는 Jira URL 입력",
             "unavailable": "사용할 수 없음",
             "searchGitHub": "GitHub PR 및 이슈 검색",
             "searchGitLab": "GitLab MR 및 이슈 검색",
             "searchBranches": "브랜치 검색",
             "searchLinear": "Linear 이슈 검색",
             "workspaceName": "워크스페이스 이름",
+            "loadingJira": "Jira 이슈 불러오는 중…",
+            "jiraDisconnected": "이 이슈를 연결하려면 설정에서 Jira를 연결하세요",
+            "jiraSiteNotConnected": "이 Jira 사이트는 연결되어 있지 않습니다",
+            "jiraRuntimeUpdate": "Jira를 연결하려면 원격 런타임을 업데이트하세요",
+            "jiraReadFailed": "이 Jira 이슈를 불러오지 못했습니다",
+            "chooseJiraAccount": "Jira 계정 선택",
+            "jiraLoaded": "Jira 이슈를 불러왔습니다",
+            "openSettings": "설정",
+            "retryJira": "다시 시도",
+            "searchJira": "Jira 이슈 검색 또는 이슈 URL 붙여넣기",
+            "jiraMode": "Jira",
+            "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {
@@ -11433,7 +11702,6 @@
           "2f077ef4eb": "을 클릭하고 코드를 스캔하세요.",
           "3aa7bb2d8b": "데스크탑 페어링",
           "d1495e5e64": "Orca Mobile을 열고",
-          "901c98bb93": "페어링",
           "3960f5c339": "2/2단계",
           "3241f3c26a": "QR 설치",
           "7af266b80d": "QR코드 설치",
@@ -14013,6 +14281,12 @@
           },
           "undo": "실행 취소",
           "widthOption": "{{value0}} px"
+        },
+        "grab": {
+          "errorNotReady": "이 페이지에서는 아직 요소를 선택할 수 없습니다.",
+          "errorNotAuthorized": "브라우저 접근이 거부되었습니다.",
+          "errorAlreadyActive": "요소 선택이 이미 활성화되어 있습니다.",
+          "errorInjectionFailed": "이 페이지에서 요소 선택을 시작할 수 없습니다."
         }
       },
       "pluginCatalog": {
@@ -14029,6 +14303,13 @@
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
         }
+      },
+      "pr-check-counts": {
+        "passingChip": "{{value0}} 통과",
+        "failingChip": "{{value0}} 실패",
+        "pendingChip": "{{value0}} 보류 중",
+        "needsActionChip": "{{value0}}개 조치 필요",
+        "unresolvedChip": "{{value0}}개 미해결"
       }
     },
     "i18n": {

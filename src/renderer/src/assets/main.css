@@ -1218,16 +1218,6 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
-/* Why: sidebar-accent sits too close to sidebar for this persistent prompt;
-   a foreground mix creates the requested light/dark separation without a new token. */
-.setup-script-prompt-card {
-  background: color-mix(in srgb, var(--sidebar-foreground) 5%, var(--sidebar));
-}
-
-.dark .setup-script-prompt-card {
-  background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar));
-}
-
 /* Why: one-shot sidebar education cards need stronger separation than
    worktree-sidebar-accent, which sits almost on top of the sidebar fill. */
 .worktree-sidebar-notice-card {

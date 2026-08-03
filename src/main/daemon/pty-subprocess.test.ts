@@ -196,6 +196,34 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('expands variables in PATH before spawning a Windows shell', () => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: {
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+          ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
+          PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe(
+      'C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows'
+    )
+  })
+
   it('appends Git prompt guards after the detached daemon inherited config', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -2057,8 +2085,10 @@ describe('createPtySubprocess', () => {
   it('preserves a daemon-owned custom Codex home while deleting a stale private marker', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     const previousCodexHome = process.env.CODEX_HOME
     const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    Object.defineProperty(process, 'platform', { value: 'linux' })
     process.env.CODEX_HOME = '/daemon/user/codex-home'
     process.env.ORCA_CODEX_HOME = '/daemon/stale/managed-home'
 
@@ -2071,6 +2101,9 @@ describe('createPtySubprocess', () => {
         envToDelete: ['ORCA_CODEX_HOME']
       })
     } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
       if (previousCodexHome === undefined) {
         delete process.env.CODEX_HOME
       } else {

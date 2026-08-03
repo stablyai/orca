@@ -34,6 +34,7 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { isMultiProfileUiEnabled } from '../orca-profiles/profile-ui-scope'
 import { transferOrcaProfileProject } from '../orca-profiles/profile-project-transfer'
 import { findOrcaProfileProjectsByPath } from '../orca-profiles/profile-project-presence'
+import { flushActiveProfileBeforeFileMutation } from '../orca-profiles/profile-persistence-deadline'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 import {
   createCloudLinkedOrcaProfile,
@@ -212,8 +213,8 @@ export function registerOrcaProfileHandlers(
       }
       // Why: the current profile must be persisted before the global index
       // points startup at the target profile.
+      await flushActiveProfileBeforeFileMutation(store)
       await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-      store.flush()
       setActiveOrcaProfile(profileId)
 
       scheduleProfileRelaunch('profile-switch')
@@ -236,10 +237,7 @@ export function registerOrcaProfileHandlers(
       if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
         // Why: transfer before any relaunch side effect so a duplicate-target
         // or validation failure cannot strand the app in a quitting state.
-        // flush→transfer→freeze runs synchronously with no interleaving, and
-        // the freeze keeps late sync saves from resurrecting the moved
-        // project from stale memory before the relaunch.
-        store.flush()
+        await flushActiveProfileBeforeFileMutation(store)
         const result = transferOrcaProfileProject(args, getProfileUserDataPath())
         if (result.status === 'transferred') {
           store.freezeWrites()
@@ -250,7 +248,7 @@ export function registerOrcaProfileHandlers(
         }
         return result
       }
-      store.flush()
+      await flushActiveProfileBeforeFileMutation(store)
       return transferOrcaProfileProject(args, getProfileUserDataPath())
     }
   )

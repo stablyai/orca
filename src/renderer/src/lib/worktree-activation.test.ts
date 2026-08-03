@@ -88,6 +88,29 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
   })
 
+  it('queues setup through returned POSIX shell metadata on native Windows paths', () => {
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({ createTab })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, {
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix' },
+      envVars: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
+      }
+    })
+
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
+      command: 'bash /c/repo/.git/orca/setup-runner.sh',
+      env: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
+      }
+    })
+  })
+
   it('creates a single tab without setup split when no setup is provided', () => {
     const store = createMockStore()
 
@@ -449,6 +472,29 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
   })
 
+  it('queues WSL setup launch commands with WSL path conversion on native Windows paths', () => {
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({ createTab })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, {
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix', executable: 'wsl.exe' },
+      envVars: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
+      }
+    })
+
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
+      command: 'bash /mnt/c/repo/.git/orca/setup-runner.sh',
+      env: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
+      }
+    })
+  })
+
   it('queues a startup command when agent launch is provided', () => {
     const store = createMockStore()
 
@@ -501,7 +547,11 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
-  it('keeps draft startup payloads in terminal mode even when native chat is configured', () => {
+  it.each([
+    ['mirrorable', 'https://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['unsupported-separator', 'Review this\u2028https://github.com/o/r/issues/12', {}]
+  ])('opens a %s draft startup payload accordingly', (_label, draftPrompt, expectedViewMode) => {
     const store = createMockStore({
       settings: {
         experimentalNativeChat: true,
@@ -515,7 +565,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       {
         command: 'claude',
         launchAgent: 'claude',
-        draftPrompt: 'Review before sending'
+        draftPrompt
       },
       undefined,
       undefined
@@ -523,9 +573,47 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
     expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       pendingActivationSpawn: true,
-      launchAgent: 'claude'
+      launchAgent: 'claude',
+      ...expectedViewMode
     })
   })
+
+  // An argv-prefill launch carries the draft inside `command` and sets NO
+  // draftPrompt, so gating on draftPrompt alone lets it open in chat with
+  // nothing mirrored — an empty composer beside a filled TUI input.
+  it.each([
+    ['mirrorable', 'https://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['unsupported-separator', 'Review this\u2028https://github.com/o/r/issues/12', {}]
+  ])(
+    'gates a %s argv-prefill draft on launchDraftText alone',
+    (_label, launchDraftText, expectedViewMode) => {
+      const store = createMockStore({
+        settings: {
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true
+        }
+      })
+
+      ensureWorktreeHasInitialTerminal(
+        store,
+        'wt-1',
+        {
+          command: `claude --prefill '${launchDraftText}'`,
+          launchAgent: 'claude',
+          launchDraftText
+        },
+        undefined,
+        undefined
+      )
+
+      expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+        pendingActivationSpawn: true,
+        launchAgent: 'claude',
+        ...expectedViewMode
+      })
+    }
+  )
 
   it('opens the startup default tab in native chat when configured', () => {
     let createdIndex = 0
@@ -555,32 +643,40 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
-  it('keeps a draft startup default tab in terminal mode even when native chat is configured', () => {
-    let createdIndex = 0
-    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
-    const store = createMockStore({
-      createTab,
-      settings: {
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true
-      }
-    })
+  it.each([
+    ['mirrorable', 'https://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['unsupported-separator', 'Review this\u2028https://github.com/o/r/issues/12', {}]
+  ])(
+    'opens a %s draft startup default tab accordingly',
+    (_label, draftPrompt, expectedViewMode) => {
+      let createdIndex = 0
+      const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+      const store = createMockStore({
+        createTab,
+        settings: {
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true
+        }
+      })
 
-    ensureWorktreeHasInitialTerminal(
-      store,
-      'wt-1',
-      { command: 'claude', launchAgent: 'claude', draftPrompt: 'Review before sending' },
-      undefined,
-      undefined,
-      { runCommands: true, tabs: [{ title: 'Claude', command: 'claude' }] }
-    )
+      ensureWorktreeHasInitialTerminal(
+        store,
+        'wt-1',
+        { command: 'claude', launchAgent: 'claude', draftPrompt },
+        undefined,
+        undefined,
+        { runCommands: true, tabs: [{ title: 'Claude', command: 'claude' }] }
+      )
 
-    expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
-      pendingActivationSpawn: true,
-      recordInteraction: false,
-      launchAgent: 'claude'
-    })
-  })
+      expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
+        pendingActivationSpawn: true,
+        recordInteraction: false,
+        launchAgent: 'claude',
+        ...expectedViewMode
+      })
+    }
+  )
 
   it('gates startup behind setup completion when both are provided in new-tab mode', () => {
     setSetupScriptLaunchMode('new-tab')
@@ -684,6 +780,35 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
+  it('keeps WSL setup shell metadata when gating startup behind setup completion', () => {
+    setSetupScriptLaunchMode('split-vertical')
+    const store = createMockStore()
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      { command: 'claude' },
+      {
+        runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+        shell: { family: 'posix', executable: 'wsl.exe' },
+        envVars: { ORCA_ROOT_PATH: 'C:\\repo' },
+        waitForAgentStartup: true
+      }
+    )
+
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command: expect.stringContaining('/mnt/c/repo/.git/orca/setup-runner.sh')
+      })
+    )
+    expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
+      command: expect.stringContaining('bash /mnt/c/repo/.git/orca/setup-runner.sh'),
+      env: { ORCA_ROOT_PATH: 'C:\\repo' },
+      direction: 'vertical'
+    })
+  })
+
   it('forwards telemetry on the queued startup so main can fire agent_started', () => {
     const store = createMockStore()
 
@@ -774,6 +899,21 @@ describe('ensureWorktreeHasInitialTerminal', () => {
         ORCA_ROOT_PATH: '/tmp/repo',
         ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1'
       }
+    })
+  })
+
+  it('queues an issue command split through returned WSL shell metadata', () => {
+    const store = createMockStore()
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, {
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\issue-command-runner.sh',
+      shell: { family: 'posix', executable: 'wsl.exe' },
+      envVars: { ORCA_ROOT_PATH: 'C:\\repo' }
+    })
+
+    expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {
+      command: 'bash /mnt/c/repo/.git/orca/issue-command-runner.sh',
+      env: { ORCA_ROOT_PATH: 'C:\\repo' }
     })
   })
 

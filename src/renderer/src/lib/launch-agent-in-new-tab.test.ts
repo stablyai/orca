@@ -117,10 +117,13 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 const mockCreateWebRuntimeSessionTerminal = vi.fn()
+const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft = vi.fn()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
+  createWebRuntimeAgentSessionTerminalWithLaunchDraft:
+    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft,
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive,
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
@@ -130,6 +133,7 @@ describe('launchAgentInNewTab', () => {
     vi.clearAllMocks()
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
+    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({ status: 'created' })
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
     store.settings = {
@@ -268,6 +272,72 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
+  it('mirrors an argv-prefill draft into chat and opens the tab there', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'https://github.com/o/r/issues/12',
+      promptDelivery: 'draft'
+    })
+
+    // Claude takes the draft on --prefill, so no paste runs and
+    // deliverLaunchPromptToAgentTab never fires — this is the only seed.
+    expect(result?.pasteDraftAfterLaunch).toBe(false)
+    expect(mockSeedNativeChatLaunchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-1',
+        agent: 'claude',
+        text: 'https://github.com/o/r/issues/12'
+      })
+    )
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ viewMode: 'chat' })
+    )
+  })
+
+  it('mirrors a multi-line draft into chat and opens the tab there', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const prompt = 'Reproduce first\n\nhttps://github.com/o/r/issues/12'
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt,
+      promptDelivery: 'draft'
+    })
+
+    expect(mockSeedNativeChatLaunchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-1', agent: 'claude', text: prompt })
+    )
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ viewMode: 'chat' })
+    )
+  })
+
   it('passes quick command labels only to locally-created agent tabs', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -308,15 +378,20 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(result).toEqual(expect.objectContaining({ tabId: null, pasteDraftAfterLaunch: false }))
-    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+    // The draft rides in on the launch command, so this host-class launch also
+    // carries the text that seeds the mirrored tab's chat composer.
+    expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         launchAgent: 'claude',
         prompt: 'review before sending',
         promptDelivery: 'draft',
         agentArgs: '--permission-mode plan',
-        launchPreferences: { model: 'opus', effort: 'high' }
+        launchPreferences: { model: 'opus', effort: 'high' },
+        agent: 'claude',
+        launchDraft: 'review before sending'
       })
     )
+    expect(mockCreateWebRuntimeSessionTerminal).not.toHaveBeenCalled()
     expect(mockCreateTab).not.toHaveBeenCalled()
   })
 

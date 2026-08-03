@@ -53,6 +53,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/store/selectors', () => ({
+  getAllWorktreesFromState: () => Array.from(mocks.state.worktreeMap.values()),
   getWorktreeMapFromState: () => mocks.state.worktreeMap
 }))
 
@@ -141,6 +142,16 @@ describe('runWorktreeBatchDelete', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', { worktreeId: 'wt-1' })
   })
 
+  it('treats duplicate selected ids as one delete target', () => {
+    setWorktrees([{ id: 'wt-1' }])
+
+    const started = runWorktreeBatchDelete(['wt-1', 'wt-1'])
+
+    expect(started).toBe(true)
+    expect(mocks.state.clearWorktreeDeleteState).toHaveBeenCalledTimes(1)
+    expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', { worktreeId: 'wt-1' })
+  })
+
   it('keeps batch deletes behind confirmation when confirmation is skipped', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
     setWorktrees([
@@ -198,7 +209,11 @@ describe('runWorktreeBatchDelete', () => {
     toastOptions?.onForceDelete()
 
     await vi.waitFor(() => {
-      expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-1', true)
+      // Why (#11960): clicking Force Delete on the failure toast is an explicit
+      // force, so it also waives the PTY-stop proof the first attempt failed.
+      expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-1', true, {
+        allowUnverifiedPtyStop: true
+      })
       expect(onDeleted).toHaveBeenCalledWith(['wt-1'])
     })
   })

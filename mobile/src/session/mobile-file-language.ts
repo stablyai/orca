@@ -10,6 +10,8 @@ function extname(filePath: string): string {
 const EXT_TO_LANGUAGE: Record<string, string> = {
   '.ts': 'typescript',
   '.tsx': 'typescript',
+  '.cts': 'typescript',
+  '.mts': 'typescript',
   '.js': 'javascript',
   '.jsx': 'javascript',
   '.mjs': 'javascript',

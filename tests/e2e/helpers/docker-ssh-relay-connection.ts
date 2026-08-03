@@ -37,7 +37,7 @@ export async function connectDockerSshRelayTarget(
           target: {
             label: `${viaProxyJump ? 'Docker SSH ProxyJump' : 'Docker SSH Relay'} E2E ${Date.now()}`,
             ...(viaProxyJump ? { configHost: 'orca-e2e-destination' } : {}),
-            host: '127.0.0.1',
+            host: target.host,
             port: viaProxyJump ? 22 : target.port,
             username: 'root',
             identityFile: target.identityFile,

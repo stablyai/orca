@@ -326,11 +326,13 @@ function buildUncapturedCrashReportText(
 // storm, #8260) can flush the whole fixed-size breadcrumb ring in seconds,
 // erasing the pre-crash trail. Coalesce repeats into one entry that carries a
 // suppressed count instead.
+const DUPLICATE_TAB_OWNER_BREADCRUMB = 'terminal_tab_id_owned_by_multiple_worktrees'
 const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'renderer_error',
   'renderer_unhandled_rejection',
   'terminal_park_verdict_churn',
   'terminal_safe_fit_retry_exhausted',
+  DUPLICATE_TAB_OWNER_BREADCRUMB,
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
 ])
 const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
@@ -361,6 +363,11 @@ function rendererBreadcrumbCoalesceKey(
   // live pane emits on a GPU death.
   if (name === TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB) {
     return `${name}:${String(data?.kind ?? '')}`
+  }
+  // Why: a stale map can emit once per tab-id/verdict; key by verdict so
+  // last-write coalescing cannot erase the other signal while remaining bounded.
+  if (name === DUPLICATE_TAB_OWNER_BREADCRUMB) {
+    return `${name}:${String(data?.resolvedToActiveWorktree ?? '')}`
   }
   const primaryMessage = name === 'renderer_error' ? data?.message : data?.reasonMessage
   const fallbackMessage = name === 'renderer_error' ? data?.errorMessage : undefined

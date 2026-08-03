@@ -1,4 +1,8 @@
 import { execFile, execFileSync } from 'node:child_process'
+import {
+  expandWindowsEnvironmentVariables,
+  expandWindowsPathEnvironmentVariables
+} from '../../shared/windows-environment-expansion'
 import { getRegExePath } from '../win32-utils'
 
 type ExecFile = typeof execFile
@@ -42,14 +46,6 @@ function parseRegistryPathValue(output: string, valueName: string): string | nul
     }
   }
   return null
-}
-
-function expandWindowsEnvironmentVariables(value: string, env: NodeJS.ProcessEnv): string {
-  return value.replace(/%([^%]+)%/g, (match, rawName: string) => {
-    const name = rawName.toLowerCase()
-    const envKey = Object.keys(env).find((key) => key.toLowerCase() === name)
-    return envKey && env[envKey] ? env[envKey] : match
-  })
 }
 
 function getPathDelimiter(platform: NodeJS.Platform): string {
@@ -246,6 +242,7 @@ function mergeWindowsPathSegments(
   platform: NodeJS.Platform,
   sourceEnv: NodeJS.ProcessEnv
 ): void {
+  expandWindowsPathEnvironmentVariables(env, platform)
   const pathKey = env.Path !== undefined ? 'Path' : env.PATH !== undefined ? 'PATH' : 'Path'
   const pathDelimiter = getPathDelimiter(platform)
   const currentPath = env[pathKey] ?? sourceEnv.PATH ?? sourceEnv.Path ?? ''

@@ -72,11 +72,6 @@ export function isBrowserAutomationVisible(browserPageId: string): boolean {
   return (leaseCountsByPageId.get(browserPageId) ?? 0) > 0
 }
 
-export function useBrowserAutomationVisibility(browserPageId: string | null | undefined): boolean {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return Boolean(browserPageId && isBrowserAutomationVisible(browserPageId))
-}
-
 export function useBrowserAutomationVisibilityForAny(
   browserPageIds: readonly (string | null | undefined)[]
 ): boolean {

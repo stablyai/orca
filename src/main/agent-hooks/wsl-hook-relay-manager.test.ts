@@ -3,7 +3,6 @@
 // the per-distro relay manager state machine with fault injection.
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,9 +33,13 @@ function createGuestHarness(): GuestHarness {
   const clientDataCallbacks: ((data: Buffer) => void)[] = []
   const closeCallbacks: (() => void)[] = []
   const transport: MultiplexerTransport = {
-    write: (data) => {
-      setImmediate(() => relayFeed?.(data))
+    write: (data, onSettled) => {
+      setImmediate(() => {
+        relayFeed?.(data)
+        onSettled?.({ ok: true })
+      })
     },
+    supportsWriteSettlement: true,
     onData: (cb) => {
       clientDataCallbacks.push(cb)
     },
@@ -44,21 +47,24 @@ function createGuestHarness(): GuestHarness {
       closeCallbacks.push(cb)
     }
   }
-  const guestDispatcher = new RelayDispatcher((data: Buffer) => {
-    setImmediate(() => {
-      for (const cb of clientDataCallbacks) {
-        cb(data)
-      }
-    })
-  })
+  const guestDispatcher = new RelayDispatcher(
+    (data: Buffer, onSettled) => {
+      setImmediate(() => {
+        for (const cb of clientDataCallbacks) {
+          cb(data)
+        }
+        onSettled({ ok: true })
+      })
+    },
+    { supportsWriteCallback: true }
+  )
   relayFeed = (data) => guestDispatcher.feed(data)
   const mux = new SshChannelMultiplexer(transport)
   return { transport, guestDispatcher, mux }
 }
 
-// Why skipIf: the fs bridge runs inside the Linux guest and is POSIX-only by
-// design (posix.resolve). On a Windows dev host tmpdir() yields C:\ paths the
-// bridge correctly refuses; Windows coverage comes from the live rig runs.
+// Why skipIf: the fs bridge runs inside the Linux guest and is POSIX-only;
+// Windows coverage comes from the live rig runs.
 describe.skipIf(process.platform === 'win32')(
   'createWslHookSftpAdapter over the guest fs bridge',
   () => {
@@ -66,7 +72,7 @@ describe.skipIf(process.platform === 'win32')(
     let harness: GuestHarness
 
     beforeEach(() => {
-      home = mkdtempSync(join(tmpdir(), 'wsl-guest-home-'))
+      home = mkdtempSync(join('/tmp', 'wsl-guest-home-'))
       harness = createGuestHarness()
       registerWslHookFsHandlers(harness.guestDispatcher, home)
     })
@@ -166,12 +172,18 @@ describe('WslHookRelayManager', () => {
     return child as unknown as ChildProcessWithoutNullStreams & { emitClose: () => void }
   }
 
-  function guestTransport(registerInstallPlugins = true): MultiplexerTransport {
+  function guestTransport(
+    options: { registerInstallPlugins?: boolean; detectedAgents?: string[] } = {}
+  ): MultiplexerTransport {
+    const { registerInstallPlugins = true, detectedAgents = ['codex'] } = options
     const harness = createGuestHarness()
     harnesses.push(harness)
     registerWslHookFsHandlers(harness.guestDispatcher, home)
     harness.guestDispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
       replayed: 0
+    }))
+    harness.guestDispatcher.onRequest('preflight.detectAgents', async () => ({
+      agents: detectedAgents
     }))
     // A guest bundle predating the plugin overlay omits this handler (-32601).
     if (registerInstallPlugins) {
@@ -212,6 +224,7 @@ describe('WslHookRelayManager', () => {
       waitForSentinel: vi.fn(async () => guestTransport()),
       ingest: vi.fn(),
       installHooks: vi.fn(async () => []),
+      managedHookSettings: () => null,
       pluginSources: () => ({ opencodePluginSource: '// opencode plugin source' }),
       warn: vi.fn(),
       transientRetryDelayMs: 1,
@@ -228,7 +241,8 @@ describe('WslHookRelayManager', () => {
     expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
     // Codex is the one agent whose home Orca redirects for WSL sessions.
     expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
-      codexHomeDir: `${home}/.local/share/orca/codex-runtime-home/home`
+      codexHomeDir: `${home}/.local/share/orca/codex-runtime-home/home`,
+      agents: ['codex']
     })
 
     expect(manager.getGuestEndpointFilePath('Ubuntu')).toBe(
@@ -261,7 +275,7 @@ describe('WslHookRelayManager', () => {
   })
 
   it('leaves the overlay dir null when the guest bundle lacks the installPlugins handler', async () => {
-    const waitForSentinel = vi.fn(async () => guestTransport(false))
+    const waitForSentinel = vi.fn(async () => guestTransport({ registerInstallPlugins: false }))
     const { manager, deps } = createManager({ waitForSentinel })
     manager.ensureForDistro('Ubuntu')
     // Connect still completes (hooks install); the -32601 is swallowed silently.
@@ -269,6 +283,17 @@ describe('WslHookRelayManager', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(manager.getOpenCodeOverlayDir('Ubuntu')).toBeNull()
     expect(deps.warn).not.toHaveBeenCalledWith(expect.stringContaining('installPlugins'))
+    manager.disposeAll()
+  })
+
+  it('does not mutate managed agent homes when no WSL agents are detected', async () => {
+    const waitForSentinel = vi.fn(async () => guestTransport({ detectedAgents: [] }))
+    const { manager, deps } = createManager({ waitForSentinel })
+
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(manager.getOpenCodeOverlayDir('Ubuntu')).toBe(opencodeOverlayDir))
+
+    expect(deps.installHooks).not.toHaveBeenCalled()
     manager.disposeAll()
   })
 

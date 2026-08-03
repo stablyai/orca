@@ -27,19 +27,21 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     syncHandlers.clear()
   })
 
-  it('commits every shutdown state mutation before flushing both stores', () => {
+  it('stages every shutdown mutation before queueing persistence', () => {
     const callOrder: string[] = []
     const store = {
-      setWorkspaceSession: vi.fn((_state, hostId?: string) => {
+      stageWorkspaceSessionBeforeUnload: vi.fn((_state, hostId?: string) => {
         callOrder.push(`session:${hostId ?? 'local'}`)
       }),
       updateUI: vi.fn(() => callOrder.push('ui')),
-      flushOrThrow: vi.fn(() => callOrder.push('flush')),
-      flushActiveViewPreferenceOrThrow: vi.fn(() => callOrder.push('active-view'))
+      flushPendingAsync: vi.fn(() => {
+        callOrder.push('persist')
+        return Promise.resolve()
+      })
     }
     registerRendererShutdownCheckpointHandler(store as never)
 
-    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const handler = syncHandlers.get('app:stage-before-unload-sync')
     expect(handler).toBeDefined()
     const event: { returnValue?: unknown } = {}
     const localSession = { activeWorktreeId: 'local-worktree' }
@@ -49,76 +51,75 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       ui: { activeView: 'settings' }
     })
 
-    expect(store.setWorkspaceSession).toHaveBeenNthCalledWith(1, localSession, undefined)
-    expect(store.setWorkspaceSession).toHaveBeenNthCalledWith(2, remoteSession, 'runtime:host-1')
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenNthCalledWith(
+      1,
+      localSession,
+      undefined
+    )
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenNthCalledWith(
+      2,
+      remoteSession,
+      'runtime:host-1'
+    )
     expect(store.updateUI).toHaveBeenCalledWith({ activeView: 'settings' })
-    expect(store.flushOrThrow).toHaveBeenCalledTimes(1)
-    expect(store.flushActiveViewPreferenceOrThrow).toHaveBeenCalledTimes(1)
-    expect(callOrder).toEqual([
-      'session:local',
-      'session:runtime:host-1',
-      'ui',
-      'flush',
-      'active-view'
-    ])
+    expect(store.flushPendingAsync).toHaveBeenCalledTimes(1)
+    expect(callOrder).toEqual(['session:local', 'session:runtime:host-1', 'ui', 'persist'])
     expect(event.returnValue).toEqual({ ok: true })
   })
 
-  it('reports a failed durable checkpoint so the renderer can retry', () => {
+  it('reports a staging failure so the renderer can retry', () => {
     const store = {
-      setWorkspaceSession: vi.fn(),
-      updateUI: vi.fn(),
-      flushOrThrow: vi.fn(() => {
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      updateUI: vi.fn(() => {
         throw new Error('disk full')
       }),
-      flushActiveViewPreferenceOrThrow: vi.fn()
+      flushPendingAsync: vi.fn(() => Promise.resolve())
     }
     registerRendererShutdownCheckpointHandler(store as never)
 
-    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const handler = syncHandlers.get('app:stage-before-unload-sync')
     const event: { returnValue?: unknown } = {}
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(event.returnValue).toEqual({ ok: false })
   })
 
-  it('still flushes the active-view sidecar when the durable flush throws', () => {
-    // Why: the two stores are independent; a durable-state failure must not drop
-    // the tiny active-view checkpoint (and vice versa).
+  it('does not queue persistence when staging is incomplete', () => {
     const store = {
-      setWorkspaceSession: vi.fn(),
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
       updateUI: vi.fn(),
-      flushOrThrow: vi.fn(() => {
-        throw new Error('disk full')
-      }),
-      flushActiveViewPreferenceOrThrow: vi.fn()
+      flushPendingAsync: vi.fn(() => Promise.resolve())
     }
     registerRendererShutdownCheckpointHandler(store as never)
 
-    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    store.updateUI.mockImplementation(() => {
+      throw new Error('invalid state')
+    })
+    const handler = syncHandlers.get('app:stage-before-unload-sync')
     const event: { returnValue?: unknown } = {}
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
-    expect(store.flushActiveViewPreferenceOrThrow).toHaveBeenCalledTimes(1)
+    expect(store.flushPendingAsync).not.toHaveBeenCalled()
     expect(event.returnValue).toEqual({ ok: false })
   })
 
-  it('flushes the durable store even when the active-view flush throws', () => {
+  it('returns before the asynchronous persistence settles', () => {
+    let resolve!: () => void
+    const pending = new Promise<void>((next) => {
+      resolve = next
+    })
     const store = {
-      setWorkspaceSession: vi.fn(),
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
       updateUI: vi.fn(),
-      flushOrThrow: vi.fn(),
-      flushActiveViewPreferenceOrThrow: vi.fn(() => {
-        throw new Error('disk full')
-      })
+      flushPendingAsync: vi.fn(() => pending)
     }
     registerRendererShutdownCheckpointHandler(store as never)
 
-    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const handler = syncHandlers.get('app:stage-before-unload-sync')
     const event: { returnValue?: unknown } = {}
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
-    expect(store.flushOrThrow).toHaveBeenCalledTimes(1)
-    expect(event.returnValue).toEqual({ ok: false })
+    expect(event.returnValue).toEqual({ ok: true })
+    resolve()
   })
 })

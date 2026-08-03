@@ -35,7 +35,12 @@ describe('groupSkillFreshness', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({ name: 'orca-cli', status: 'update-available' })
     expect(groups[0]?.locations).toEqual([
-      { id: expect.any(String), path: '/home/.agents/skills/orca-cli', chip: null }
+      {
+        id: expect.any(String),
+        path: '/home/.agents/skills/orca-cli',
+        chip: null,
+        participatesInGlobalFreshness: true
+      }
     ])
   })
 
@@ -75,7 +80,12 @@ describe('groupSkillFreshness', () => {
         name: 'dataviz',
         status: 'cannot-update',
         locations: [
-          { id: expect.any(String), path: '/home/.agents/skills/dataviz', chip: 'unrecognized' }
+          {
+            id: expect.any(String),
+            path: '/home/.agents/skills/dataviz',
+            chip: 'unrecognized',
+            participatesInGlobalFreshness: true
+          }
         ]
       },
       {
@@ -85,7 +95,8 @@ describe('groupSkillFreshness', () => {
           {
             id: expect.any(String),
             path: '/home/.agents/skills/linear-tickets',
-            chip: 'inaccessible'
+            chip: 'inaccessible',
+            participatesInGlobalFreshness: true
           }
         ]
       }
@@ -124,8 +135,18 @@ describe('groupSkillFreshness', () => {
     expect(groups[0]?.status).toBe('cannot-update')
     // Why: the out-of-date main copy is bare; only the poisoning copy carries a chip.
     expect(groups[0]?.locations).toEqual([
-      { id: expect.any(String), path: '/home/.agents/skills/orchestration', chip: null },
-      { id: expect.any(String), path: '/home/.claude/skills/orchestration', chip: 'unrecognized' }
+      {
+        id: expect.any(String),
+        path: '/home/.agents/skills/orchestration',
+        chip: null,
+        participatesInGlobalFreshness: true
+      },
+      {
+        id: expect.any(String),
+        path: '/home/.claude/skills/orchestration',
+        chip: 'unrecognized',
+        participatesInGlobalFreshness: true
+      }
     ])
   })
 
@@ -146,12 +167,22 @@ describe('groupSkillFreshness', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0]?.status).toBe('cannot-update')
     expect(groups[0]?.locations).toEqual([
-      { id: expect.any(String), path: '/home/.agents/skills/orchestration', chip: 'current' },
-      { id: expect.any(String), path: '/home/.factory/skills/orchestration', chip: 'duplicate' }
+      {
+        id: expect.any(String),
+        path: '/home/.agents/skills/orchestration',
+        chip: 'current',
+        participatesInGlobalFreshness: true
+      },
+      {
+        id: expect.any(String),
+        path: '/home/.factory/skills/orchestration',
+        chip: 'duplicate',
+        participatesInGlobalFreshness: true
+      }
     ])
   })
 
-  it('prefers a location status over its topology and maps every topology to a chip', () => {
+  it('ranks a read failure over ownership, ownership over byte status, and maps every topology', () => {
     const chipFor = (overrides: Partial<SkillFreshnessInstallation>): string | null =>
       groupSkillFreshness(
         [placement('s', { status: 'outdated' }), placement('s', overrides)],
@@ -178,5 +209,79 @@ describe('groupSkillFreshness', () => {
     expect(chipFor(at('j', { status: 'unrecognized', topology: 'plugin-cache' }))).toBe(
       'plugin-cache'
     )
+    // Ownership outranks byte status: a project copy whose bytes match nothing known is
+    // the repo's content, not the user's drift, so it must not read "may be modified".
+    expect(chipFor(at('l', { status: 'unrecognized', topology: 'repo-scope' }))).toBe('in-a-repo')
+    // But a read failure outranks ownership, or that same rule would hide a real fault.
+    expect(chipFor(at('m', { status: 'inaccessible', topology: 'repo-scope' }))).toBe(
+      'inaccessible'
+    )
+  })
+
+  it('raises no group when every finding is project-owned', () => {
+    // Orca's updater only passes --global, so a project copy has no remedy; a row here
+    // would claim Orca considered an update it could never perform.
+    expect(
+      groupSkillFreshness(
+        [placement('computer-use', { status: 'unrecognized', topology: 'repo-scope' })],
+        []
+      )
+    ).toEqual([])
+    expect(
+      groupSkillFreshness(
+        [placement('computer-use', { status: 'outdated', topology: 'repo-scope' })],
+        []
+      )
+    ).toEqual([])
+  })
+
+  it('still lists a project copy inside a group another placement earned', () => {
+    const groups = groupSkillFreshness(
+      [
+        placement('computer-use', { status: 'outdated', topology: 'read-only' }),
+        placement('computer-use', {
+          status: 'unrecognized',
+          topology: 'repo-scope',
+          unresolvedPath: '/home/projects/work/.agents/skills/computer-use'
+        })
+      ],
+      []
+    )
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.locations.map((location) => location.chip)).toContain('in-a-repo')
+  })
+
+  it('marks only the project copy as one the global update never judged', () => {
+    // Why the flag rather than the chip: the skip sentence reads this to keep a listed-only
+    // copy from explaining a skip it had no part in, and a plugin copy — which does earn
+    // groups of its own — has to stay on the judged side of that line.
+    const groups = groupSkillFreshness(
+      [
+        placement('computer-use', { status: 'outdated', topology: 'read-only' }),
+        placement('computer-use', {
+          status: 'outdated',
+          topology: 'plugin-cache',
+          unresolvedPath: '/home/.claude/plugins/cache/pack/skills/computer-use'
+        }),
+        placement('computer-use', {
+          status: 'unrecognized',
+          topology: 'repo-scope',
+          unresolvedPath: '/home/projects/work/.agents/skills/computer-use'
+        })
+      ],
+      []
+    )
+
+    expect(
+      groups[0]?.locations.map((location) => [
+        location.chip,
+        location.participatesInGlobalFreshness
+      ])
+    ).toEqual([
+      ['read-only', true],
+      ['plugin-cache', true],
+      ['in-a-repo', false]
+    ])
   })
 })

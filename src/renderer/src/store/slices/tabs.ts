@@ -120,7 +120,7 @@ export type TabsSlice = {
     entityId: string,
     contentType?: TabContentType
   ) => Tab | null
-  activateTab: (tabId: string, opts?: { preservePreview?: boolean }) => void
+  activateTab: (tabId: string, opts?: { preservePreview?: boolean; worktreeId?: string }) => void
   closeUnifiedTab: (
     tabId: string,
     opts?: { recordInteraction?: boolean; terminalRetirementHandled?: boolean }
@@ -826,7 +826,17 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   activateTab: (tabId, opts) => {
     set((state) => {
-      const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      const scopedWorktreeId = opts?.worktreeId
+      let found: ReturnType<typeof findTabAndWorktree>
+      if (scopedWorktreeId !== undefined) {
+        const scopedTabs = Object.hasOwn(state.unifiedTabsByWorktree, scopedWorktreeId)
+          ? state.unifiedTabsByWorktree[scopedWorktreeId]
+          : []
+        const scopedTab = scopedTabs.find((tab) => tab.id === tabId)
+        found = scopedTab ? { tab: scopedTab, worktreeId: scopedWorktreeId } : null
+      } else {
+        found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      }
       if (!found) {
         return {}
       }
@@ -974,6 +984,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ? {
               activeWorktreeId: null,
               activeWorkspaceKey: null,
+              activeWorkspaceExecutionHostId: null,
               activeTabId: null,
               activeBrowserTabId: null,
               activeFileId: null,

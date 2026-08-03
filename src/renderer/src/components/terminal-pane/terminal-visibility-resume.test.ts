@@ -117,65 +117,9 @@ describe('resumeTerminalVisibility reveal repaint', () => {
   it('schedules the repaint after rendering resumes on a heavy reveal', () => {
     const order: string[] = []
     const manager = createManager(order)
-    const recovery = resumeTerminalVisibility(resumeArgs(manager, false))
+    resumeTerminalVisibility(resumeArgs(manager, false))
 
-    expect(order).toEqual(['resume-rendering', 'fit-reveal'])
-
-    recovery?.run(manager as never as PaneManager)
     expect(order).toEqual(['resume-rendering', 'fit-reveal', 'reveal-repaint'])
-  })
-
-  it('defers backlog and shared atlas recovery until after resume and fit', async () => {
-    // On macOS resume before flush avoids DOM bold flash; fit before flush avoids
-    // writing TUI backlog onto the transient DOM↔WebGL one-column-off grid.
-    const order: string[] = []
-    const manager = createManager(order)
-    manager.getPanes.mockReturnValue([{ terminal: { name: 'pane' } }])
-    const { flushTerminalOutput, requestTerminalBacklogRecovery } = vi.mocked(
-      await import('@/lib/pane-manager/pane-terminal-output-scheduler')
-    )
-    const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
-      await import('@/lib/pane-manager/pane-manager-registry')
-    )
-    flushTerminalOutput.mockImplementation(() => {
-      order.push('flush')
-    })
-    requestTerminalBacklogRecovery.mockImplementation(() => {
-      order.push('backlog')
-    })
-
-    const recovery = resumeTerminalVisibility(resumeArgs(manager, false))
-
-    expect(order).toEqual(['resume-rendering', 'fit-reveal'])
-    expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
-    recovery?.run(manager as never as PaneManager)
-    expect(order.slice(0, 4)).toEqual(['resume-rendering', 'fit-reveal', 'backlog', 'flush'])
-    expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(1)
-    // Why: no flush may land between resume and the corrective reveal fit.
-    const resumeIdx = order.indexOf('resume-rendering')
-    const fitIdx = order.indexOf('fit-reveal')
-    const flushIdx = order.indexOf('flush')
-    expect(resumeIdx).toBeLessThan(fitIdx)
-    expect(fitIdx).toBeLessThan(flushIdx)
-  })
-
-  it('retargets post-paint recovery to a replacement manager', async () => {
-    const oldManager = createManager()
-    const newTerminal = { name: 'replacement' }
-    const newManager = createManager()
-    newManager.getPanes.mockReturnValue([{ terminal: newTerminal }])
-    const { flushTerminalOutput } = vi.mocked(
-      await import('@/lib/pane-manager/pane-terminal-output-scheduler')
-    )
-    const recovery = resumeTerminalVisibility(resumeArgs(oldManager, false))
-
-    recovery?.run(newManager as never as PaneManager)
-
-    expect(flushTerminalOutput).toHaveBeenCalledWith(newTerminal, {
-      maxChars: 256 * 1024
-    })
-    expect(newManager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
-    expect(oldManager.scheduleRevealRepaint).not.toHaveBeenCalled()
   })
 
   it('routes a heavy reveal through fitAllRevealedPanes, not the sync fit', () => {
@@ -207,14 +151,15 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
   })
 
-  it('latches viewport intent before WebGL resume on window wake', async () => {
-    // Why: resume/fit can move viewportY; syncing after reattach would re-latch
-    // a pinned viewport as followOutput and jump the user to the bottom.
-    const terminal = { name: 'pinned-wake' }
+  it('latches viewport intent before refocus recovery flushes streaming output', async () => {
+    const terminal = { name: 'streaming-terminal' }
     const manager = createManager()
     manager.getPanes.mockReturnValue([{ terminal }])
-    const { enforceTerminalCurrentScrollIntent, syncTerminalScrollIntentFromViewport } = vi.mocked(
+    const { syncTerminalScrollIntentFromViewport } = vi.mocked(
       await import('@/lib/pane-manager/terminal-scroll-intent')
+    )
+    const { flushTerminalOutput } = vi.mocked(
+      await import('@/lib/pane-manager/pane-terminal-output-scheduler')
     )
 
     recoverVisibleTerminalWindowWake({
@@ -223,36 +168,30 @@ describe('resumeTerminalVisibility reveal repaint', () => {
       clearGlyphAtlases: false
     })
 
-    expect(syncTerminalScrollIntentFromViewport).toHaveBeenCalledWith(terminal)
+    expect(flushTerminalOutput).toHaveBeenCalledOnce()
+    expect(syncTerminalScrollIntentFromViewport).toHaveBeenCalledOnce()
     expect(syncTerminalScrollIntentFromViewport.mock.invocationCallOrder[0]).toBeLessThan(
-      manager.resumeRendering.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
-    )
-    expect(manager.resumeRendering.mock.invocationCallOrder[0]).toBeLessThan(
-      manager.fitAllRevealedPanes.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
-    )
-    // One pre-resume latch only; no same-tick post-flush re-sync (flush is async).
-    expect(syncTerminalScrollIntentFromViewport).toHaveBeenCalledTimes(1)
-    expect(enforceTerminalCurrentScrollIntent.mock.invocationCallOrder[0]).toBeGreaterThan(
-      manager.fitAllRevealedPanes.mock.invocationCallOrder[0] ?? Number.NEGATIVE_INFINITY
+      flushTerminalOutput.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     )
   })
 
-  it('does not re-sync viewport intent after heavy resume reattaches WebGL', async () => {
-    // Outer resumeTerminalVisibility already latched intent pre-resume; a
-    // same-tick post-flush re-sync would read pre-parse geometry (flush only
-    // queues terminal.write) and could overwrite a pin with resume/fit wobble.
-    const terminal = { name: 'pinned-heavy' }
+  it('does not overwrite pre-reveal intent after queuing hidden output', async () => {
+    const terminal = { name: 'hidden-streaming-terminal' }
     const manager = createManager()
     manager.getPanes.mockReturnValue([{ terminal }])
     const { syncTerminalScrollIntentFromViewport } = vi.mocked(
       await import('@/lib/pane-manager/terminal-scroll-intent')
     )
+    const { flushTerminalOutput } = vi.mocked(
+      await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+    )
 
     resumeTerminalVisibility(resumeArgs(manager, false))
 
-    expect(syncTerminalScrollIntentFromViewport).toHaveBeenCalledTimes(1)
+    expect(flushTerminalOutput).toHaveBeenCalledOnce()
+    expect(syncTerminalScrollIntentFromViewport).toHaveBeenCalledOnce()
     expect(syncTerminalScrollIntentFromViewport.mock.invocationCallOrder[0]).toBeLessThan(
-      manager.resumeRendering.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+      flushTerminalOutput.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     )
   })
 

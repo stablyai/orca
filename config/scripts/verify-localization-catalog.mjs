@@ -227,44 +227,6 @@ function setCatalogEntry(catalog, key, value) {
   cursor[parts.at(-1)] = value
 }
 
-function deleteCatalogEntry(catalog, key) {
-  const parts = key.split('.')
-  const stack = []
-  let cursor = catalog
-
-  for (const part of parts.slice(0, -1)) {
-    if (
-      typeof cursor?.[part] !== 'object' ||
-      cursor[part] === null ||
-      Array.isArray(cursor[part])
-    ) {
-      return false
-    }
-    stack.push([cursor, part])
-    cursor = cursor[part]
-  }
-
-  const leafKey = parts.at(-1)
-  if (!Object.hasOwn(cursor, leafKey)) {
-    return false
-  }
-
-  delete cursor[leafKey]
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    const [parent, part] = stack[index]
-    const child = parent[part]
-    if (
-      typeof child === 'object' &&
-      child !== null &&
-      !Array.isArray(child) &&
-      Object.keys(child).length === 0
-    ) {
-      delete parent[part]
-    }
-  }
-  return true
-}
-
 function collectLocaleParityIssues(enCatalog, localeCatalog) {
   const enEntries = flattenCatalogEntries(enCatalog)
   const localeEntries = flattenCatalogEntries(localeCatalog)
@@ -284,30 +246,6 @@ function collectLocaleParityIssues(enCatalog, localeCatalog) {
   }
 
   return { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches }
-}
-
-function repairLocaleParity(enCatalog, localeCatalog) {
-  const { enEntries, missingInLocale, extraInLocale, interpolationMismatches } =
-    collectLocaleParityIssues(enCatalog, localeCatalog)
-  let changed = 0
-
-  for (const key of missingInLocale) {
-    setCatalogEntry(localeCatalog, key, enEntries.get(key))
-    changed += 1
-  }
-
-  for (const key of extraInLocale) {
-    if (deleteCatalogEntry(localeCatalog, key)) {
-      changed += 1
-    }
-  }
-
-  for (const key of interpolationMismatches) {
-    setCatalogEntry(localeCatalog, key, enEntries.get(key))
-    changed += 1
-  }
-
-  return changed
 }
 
 function referencesMissingFallbacks(missing) {
@@ -344,23 +282,18 @@ function applyMissingEnglishEntries(catalog, missing) {
   return changed
 }
 
-function verifyLocaleParity(enCatalog, localeName, localeCatalog) {
-  const { localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
+function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
+  const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
     collectLocaleParityIssues(enCatalog, localeCatalog)
 
-  if (
-    missingInLocale.length > 0 ||
-    extraInLocale.length > 0 ||
-    interpolationMismatches.length > 0
-  ) {
-    console.error(`Locale catalog parity failed for ${localeName}.json.`)
-    if (missingInLocale.length > 0) {
-      console.error('')
-      console.error(formatMissingKeys('missing', missingInLocale.slice(0, 20)))
-      if (missingInLocale.length > 20) {
-        console.error(`...and ${missingInLocale.length - 20} more missing keys`)
-      }
-    }
+  // Why: feature PRs own English declarations; absent target leaves deliberately
+  // use i18next's existing English fallback until a localization PR supplies them.
+  console.log(
+    `${localeName}.json coverage: ${enEntries.size - missingInLocale.length}/${enEntries.size} translated, ${missingInLocale.length} missing.`
+  )
+
+  if (extraInLocale.length > 0 || interpolationMismatches.length > 0) {
+    console.error(`Locale catalog validation failed for ${localeName}.json.`)
     if (extraInLocale.length > 0) {
       console.error('')
       console.error(formatMissingKeys('extra', extraInLocale.slice(0, 20)))
@@ -380,7 +313,7 @@ function verifyLocaleParity(enCatalog, localeName, localeCatalog) {
     return 1
   }
 
-  console.log(`Verified locale parity for ${localeName}.json (${localeEntries.size} keys).`)
+  console.log(`Verified ${localeEntries.size} existing ${localeName}.json entries.`)
   return 0
 }
 
@@ -527,19 +460,10 @@ export async function main(root = process.cwd(), options = parseArgs(process.arg
     const localeName = fileName.replace(/\.json$/, '')
     const localeCatalogPath = path.join(localesDir, fileName)
     const localeCatalog = JSON.parse(await fs.readFile(localeCatalogPath, 'utf8'))
-    if (options.fix) {
-      const repaired = repairLocaleParity(catalog, localeCatalog)
-      if (repaired > 0) {
-        await fs.writeFile(localeCatalogPath, `${JSON.stringify(localeCatalog, null, 2)}\n`, 'utf8')
-        console.log(`Repaired ${fileName} parity (${repaired} key update(s)).`)
-      }
-    }
-    const exitCode = verifyLocaleParity(catalog, localeName, localeCatalog)
+    const exitCode = verifyLocaleCatalog(catalog, localeName, localeCatalog)
     if (exitCode !== 0) {
-      if (!options.fix) {
-        console.error('')
-        console.error('Run `pnpm run sync:localization-catalog` to repair locale parity.')
-      }
+      console.error('')
+      console.error('Fix or retire the existing target entry in a localization PR.')
       return exitCode
     }
   }

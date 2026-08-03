@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines */
 // Why: single authority for all relay lifecycle state per SSH target (previously scattered across module Maps/Sets with duplicated paths).
 
+import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
@@ -8,13 +9,19 @@ import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import type { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider } from '../providers/ssh-pty-provider'
-import type { SshPtyExitCallback } from '../providers/ssh-pty-provider-contract'
+import type { SshPtyAttachResult } from '../providers/ssh-pty-session-reattach'
+import type { SshPtyDataCallback, SshPtyExitCallback } from '../providers/ssh-pty-provider-contract'
+import type { SshPtyRecoveryActivationLease } from '../providers/ssh-pty-notification-routing'
 import { isSshPtyIdentityMismatchError, isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import {
+  buildManagedHookDetectionCommands,
+  detectedManagedHookAgents
+} from '../agent-hooks/managed-hook-detection-commands'
 import {
   AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
@@ -37,10 +44,17 @@ import {
   isCurrentPtyExit
 } from '../ipc/pty'
 import {
-  recordHiddenRendererPtyDataDrop,
-  shouldDropHiddenRendererPtyData
-} from '../ipc/pty-hidden-delivery-gate'
-import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
+  acceptSshPtyOutputData,
+  acceptSshPtyOutputExit,
+  allocateSshPtyProviderGeneration,
+  applySshPtySourceCancellationProof,
+  applySshPtySourceRecoveryCancellationProof,
+  beginSshPtyOutputGenerationMigration,
+  closeSshPtyOutputGeneration,
+  getSshPtyAcceptedSourceCheckpoints,
+  installSshPtySourceAckPublisher,
+  installSshPtySourceCancellationPublisher
+} from '../ipc/ssh-pty-output-intake-registry'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider,
@@ -64,15 +78,65 @@ import {
 } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
+import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import {
+  acknowledgeRemoteOrcaCliPostOutput,
+  parseRemoteOrcaCliPostOutput
+} from './ssh-remote-orchestration-post-output'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import {
+  openSshPtyConsumerSession,
+  type SshPtyConsumerOwnerState,
+  type SshPtyConsumerSessionState
+} from './ssh-pty-consumer-session'
+import type {
+  PtySourceRecoveryComplete,
+  PtySourceRecoveryPending,
+  PtySourceRecoveryRequest
+} from '../../shared/pty-source-recovery-contract'
+import { SshPtyRecoveryRetentionBudget } from './ssh-pty-recovery-retention-budget'
+import { SshPtyRetiredSourceDeliveries } from './ssh-pty-retired-source-deliveries'
+import {
+  claimSshPtyConsumerRecovery,
+  detachSshPtyConsumerRecovery,
+  forgetSshPtyConsumerRecovery,
+  getSshPtyConsumerRecovery,
+  rememberSshPtyConsumerRecovery,
+  removeSshPtyConsumerOwnerRecovery
+} from './ssh-pty-consumer-recovery'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
 type SshPtyExitPayload = Parameters<SshPtyExitCallback>[0]
-type PendingPtyReattach = { exits: SshPtyExitPayload[] }
+type SshPtyDataPayload = Parameters<SshPtyDataCallback>[0]
+type SshPtyLease = ReturnType<Store['getSshRemotePtyLeases']>[number]
+const SSH_PTY_REATTACH_MAX_CONCURRENCY = 8
+const SSH_PTY_REATTACH_ATTEMPT_TIMEOUT_MS = 10_000
+const SSH_PTY_REATTACH_RETRY_MIN_DELAY_MS = 50
+const SSH_PTY_REATTACH_RETRY_JITTER_MS = 200
+const SSH_SOURCE_RECOVERY_CANCELLATION_FAILED = 'ssh_source_recovery_cancellation_failed'
+type PendingPtyReattach = {
+  mux: SshChannelMultiplexer
+  providerGeneration: number
+  retentionKey: string
+  exits: SshPtyExitPayload[]
+  queuedData: SshPtyDataPayload[]
+  recoveryData: SshPtyDataPayload[]
+  liveData: SshPtyDataPayload[]
+  recovery?: PtySourceRecoveryPending
+  recoveryComplete?: PtySourceRecoveryComplete
+  nextRecoverySourceSu?: number
+  highestRecoverySourceEndSu?: number
+  replacementDeliveryToken?: string
+  restoreRequired?: string
+  recoveryWaiters: Set<() => void>
+  livePassthrough: boolean
+  activated: boolean
+}
 
 type RemoteCliBridgeEnv = {
   remoteHome: string
@@ -80,6 +144,7 @@ type RemoteCliBridgeEnv = {
   relayDir: string
   nodePath: string
   sockPath: string
+  credentialFile?: string
   hostPlatform: RemoteHostPlatform
   pathDelimiter?: ':' | ';'
 }
@@ -105,9 +170,49 @@ function expectedIdentityForLease(lease: {
   }
 }
 
-type ForwardedReplayFingerprint = {
-  fingerprint: string
-  deliveredAt: number
+function parseRecoveryComplete(params: Record<string, unknown>): PtySourceRecoveryComplete | null {
+  if (
+    typeof params.id !== 'string' ||
+    typeof params.deliveryToken !== 'string' ||
+    params.deliveryToken.length === 0 ||
+    typeof params.ptyIncarnation !== 'string' ||
+    params.ptyIncarnation.length === 0 ||
+    !positiveSafeInteger(params.clientGeneration) ||
+    !positiveSafeInteger(params.ownerGeneration) ||
+    !nonNegativeSafeInteger(params.checkpointSourceEndSu) ||
+    !nonNegativeSafeInteger(params.recoveryEndSu) ||
+    Number(params.recoveryEndSu) < Number(params.checkpointSourceEndSu)
+  ) {
+    return null
+  }
+  return Object.freeze({
+    id: params.id,
+    deliveryToken: params.deliveryToken,
+    ptyIncarnation: params.ptyIncarnation,
+    clientGeneration: Number(params.clientGeneration),
+    ownerGeneration: Number(params.ownerGeneration),
+    checkpointSourceEndSu: Number(params.checkpointSourceEndSu),
+    recoveryEndSu: Number(params.recoveryEndSu)
+  })
+}
+
+function positiveSafeInteger(value: unknown): boolean {
+  return Number.isSafeInteger(value) && Number(value) > 0
+}
+
+function nonNegativeSafeInteger(value: unknown): boolean {
+  return Number.isSafeInteger(value) && Number(value) >= 0
+}
+
+function sourceRecoveryCancellationError(cause: unknown): Error {
+  return Object.assign(new Error(SSH_SOURCE_RECOVERY_CANCELLATION_FAILED), {
+    code: SSH_SOURCE_RECOVERY_CANCELLATION_FAILED,
+    cause
+  })
+}
+
+function isSourceRecoveryCancellationError(error: unknown): boolean {
+  return (error as { code?: unknown })?.code === SSH_SOURCE_RECOVERY_CANCELLATION_FAILED
 }
 
 export type SshRelayAiVaultHostInfo = {
@@ -116,9 +221,6 @@ export type SshRelayAiVaultHostInfo = {
   remoteHome: string
   hostPlatform: RemoteHostPlatform
 }
-
-const RECONNECT_REPLAY_DUPLICATE_WINDOW_MS = 1000
-const REPLAY_FINGERPRINT_EDGE_CHARS = 128
 
 function normalizeRelayGracePeriodSeconds(graceTimeSeconds: number | undefined): number {
   const raw = graceTimeSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -130,6 +232,27 @@ function normalizeRelayGracePeriodSeconds(graceTimeSeconds: number | undefined):
         Math.min(MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, requested)
       )
 }
+
+// Why: teardown barriers are independent, so one failing store write must not hide the others —
+// settle them all and aggregate, rather than rethrowing only whichever rejected first.
+async function settleSshSessionTeardown(
+  barriers: (Promise<void> | null | undefined)[]
+): Promise<void> {
+  const results = await Promise.allSettled(barriers.map((barrier) => barrier ?? Promise.resolve()))
+  const errors = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason as unknown] : []
+  )
+  if (errors.length === 1) {
+    throw errors[0]
+  }
+  if (errors.length > 1) {
+    throw new AggregateError(errors, 'SSH relay session teardown failed')
+  }
+}
+
+// Why: dispose is strictly more destructive than detach, so the mode records which teardown a
+// session has already committed to and lets dispose supersede an in-flight detach.
+type SshRelaySessionTeardownMode = 'detach' | 'dispose'
 
 export class SshRelaySession {
   private _state: RelaySessionState = 'idle'
@@ -149,8 +272,32 @@ export class SshRelaySession {
   private currentConnection: SshConnection | null = null
   private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
-  private forwardedReattachReplayByPty = new Map<string, ForwardedReplayFingerprint>()
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
+  private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
+  private activePtyProviderGeneration: number | null = null
+  private sourceAckPublisherCleanup: (() => void) | null = null
+  private sourceCancellationPublisherCleanup: (() => void) | null = null
+  private teardownMode: SshRelaySessionTeardownMode | null = null
+  private teardownCompletion: Promise<void> | null = null
+  // Why: detach's in-memory half is one-shot but its lease write is retryable, so they are tracked
+  // apart — a rejected write can be re-issued without re-running provider teardown.
+  private detachedInMemory = false
+  private detachFlushRejected = false
+  private ptyRecoveryNotificationCleanups: (() => void)[] = []
+  private readonly sourceIdentityByRelayPtyId = new Map<
+    string,
+    Readonly<{
+      deliveryToken: string
+      clientGeneration: number
+      ownerGeneration: number
+      ptyIncarnation: string
+      nextSourceSu?: number
+    }>
+  >()
+  private readonly retiredSourceDeliveries = new SshPtyRetiredSourceDeliveries()
+  private readonly ptyConsumerClientInstanceId: string
+  private ptyConsumerSessionState: SshPtyConsumerSessionState | null = null
+  private activeCompatibilityAttachmentIds = new Set<string>()
 
   constructor(
     readonly targetId: string,
@@ -163,7 +310,9 @@ export class SshRelaySession {
       ports: DetectedPort[],
       platform: string
     ) => void
-  ) {}
+  ) {
+    this.ptyConsumerClientInstanceId = claimSshPtyConsumerRecovery(targetId, store).clientInstanceId
+  }
 
   refreshEnvironment(
     getMainWindow: () => BrowserWindow | null,
@@ -249,8 +398,16 @@ export class SshRelaySession {
     this.currentConnection = conn
 
     try {
-      const { transport, remoteHome, remoteRelayDir, nodePath, sockPath, hostPlatform } =
-        await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      const {
+        transport,
+        serverBuildId,
+        remoteHome,
+        remoteRelayDir,
+        nodePath,
+        sockPath,
+        credentialFile,
+        hostPlatform
+      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -260,6 +417,7 @@ export class SshRelaySession {
               relayDir: remoteRelayDir,
               nodePath,
               sockPath,
+              ...(credentialFile ? { credentialFile } : {}),
               hostPlatform,
               pathDelimiter: hostPlatform.pathDelimiter
             }
@@ -274,12 +432,38 @@ export class SshRelaySession {
 
       const mux = new SshChannelMultiplexer(transport)
       this.mux = mux
-      const ownsAttempt = (): boolean => this.mux === mux && !this.isDisposed()
+      const ownsAttempt = (): boolean => this.mux === mux && !mux.isDisposed() && !this.isDisposed()
 
-      // Why: round-trip the relay before registering providers so a closed --connect bridge fails fast instead of leaving a 'ready' session on a dead mux.
+      const ptyConsumerSessionState = await this.openPtyConsumerSession(
+        mux,
+        serverBuildId,
+        ownsAttempt
+      )
+      if (!ownsAttempt()) {
+        if (!mux.isDisposed()) {
+          mux.dispose()
+        }
+        throw new Error('Session disposed during establish')
+      }
+      this.ptyConsumerSessionState = ptyConsumerSessionState
+      await this.rememberPtyConsumerRecovery(serverBuildId)
+      if (!ownsAttempt()) {
+        if (!mux.isDisposed()) {
+          mux.dispose()
+        }
+        throw new Error('Session disposed during establish')
+      }
+
       await mux.request('session.resolveHome', { path: '~' })
+      if (!ownsAttempt()) {
+        if (!mux.isDisposed()) {
+          mux.dispose()
+        }
+        throw new Error('Session disposed during establish')
+      }
+      const connectionIncarnation = randomUUID()
 
-      const registered = await this.registerProviders(mux, ownsAttempt)
+      const registered = await this.registerProviders(mux, ownsAttempt, connectionIncarnation)
       if (!registered) {
         if (!mux.isDisposed()) {
           mux.dispose()
@@ -298,7 +482,7 @@ export class SshRelaySession {
       }
 
       // Why: explicit disconnect keeps PTY ownership, so a later manual connect must reattach those remote PTYs.
-      await this.reattachKnownPtys(ownsAttempt)
+      await this.reattachKnownPtys(mux, ownsAttempt)
 
       if (!ownsAttempt()) {
         throw new Error('Session disposed during establish')
@@ -312,7 +496,12 @@ export class SshRelaySession {
     } catch (err) {
       // Why: registerProviders can throw with a live mux and partial registration — tear everything down so a retry starts clean.
       if (!this.isDisposed()) {
-        this.teardownProviders('connection_lost')
+        this.teardownProviders(
+          'connection_lost',
+          isSourceRecoveryCancellationError(err)
+            ? SSH_SOURCE_RECOVERY_CANCELLATION_FAILED
+            : 'connection_lost'
+        )
         this._state = 'idle'
       }
       // Why: a version mismatch on first connect is terminal (deployed binary vs. a still-running legacy daemon); notify the callback but still rethrow.
@@ -348,8 +537,16 @@ export class SshRelaySession {
     this.teardownProviders('connection_lost')
 
     try {
-      const { transport, remoteHome, remoteRelayDir, nodePath, sockPath, hostPlatform } =
-        await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      const {
+        transport,
+        serverBuildId,
+        remoteHome,
+        remoteRelayDir,
+        nodePath,
+        sockPath,
+        credentialFile,
+        hostPlatform
+      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -359,6 +556,7 @@ export class SshRelaySession {
               relayDir: remoteRelayDir,
               nodePath,
               sockPath,
+              ...(credentialFile ? { credentialFile } : {}),
               hostPlatform,
               pathDelimiter: hostPlatform.pathDelimiter
             }
@@ -375,12 +573,25 @@ export class SshRelaySession {
       this.mux = mux
 
       const ownsAttempt = (): boolean =>
+        this.mux === mux &&
+        !mux.isDisposed() &&
         this.abortController === abortController &&
         !abortController.signal.aborted &&
         !this.isDisposed()
 
-      // Why: same health check as establish() — round-trip the relay before registering providers so a dead --connect bridge fails fast.
-      await mux.request('session.resolveHome', { path: '~' })
+      const ptyConsumerSessionState = await this.openPtyConsumerSession(
+        mux,
+        serverBuildId,
+        ownsAttempt
+      )
+      if (!ownsAttempt()) {
+        if (!mux.isDisposed()) {
+          mux.dispose()
+        }
+        return
+      }
+      this.ptyConsumerSessionState = ptyConsumerSessionState
+      await this.rememberPtyConsumerRecovery(serverBuildId)
       if (!ownsAttempt()) {
         if (!mux.isDisposed()) {
           mux.dispose()
@@ -388,7 +599,16 @@ export class SshRelaySession {
         return
       }
 
-      const registered = await this.registerProviders(mux, ownsAttempt)
+      await mux.request('session.resolveHome', { path: '~' })
+      if (!ownsAttempt()) {
+        if (!mux.isDisposed()) {
+          mux.dispose()
+        }
+        return
+      }
+      const connectionIncarnation = randomUUID()
+
+      const registered = await this.registerProviders(mux, ownsAttempt, connectionIncarnation)
       if (!registered) {
         if (!mux.isDisposed()) {
           mux.dispose()
@@ -410,7 +630,7 @@ export class SshRelaySession {
         return
       }
 
-      await this.reattachKnownPtys(ownsAttempt)
+      await this.reattachKnownPtys(mux, ownsAttempt)
 
       if (!ownsAttempt()) {
         return
@@ -424,7 +644,12 @@ export class SshRelaySession {
     } catch (err) {
       // Why: tear down a partially-registered mux so its keepalive/timeout timers don't keep running on a half-initialized session.
       if (this.abortController === abortController && !this.isDisposed()) {
-        this.teardownProviders('connection_lost')
+        this.teardownProviders(
+          'connection_lost',
+          isSourceRecoveryCancellationError(err)
+            ? SSH_SOURCE_RECOVERY_CANCELLATION_FAILED
+            : 'connection_lost'
+        )
       }
       // Why: version-mismatch is terminal — fire the typed callback and drop out of 'reconnecting' since backoff retry can't reconcile it.
       if (isRelayVersionMismatchError(err)) {
@@ -452,33 +677,126 @@ export class SshRelaySession {
     }
   }
 
+  /** Fire-and-forget disposal; prefer {@link disposeAndPersist} when the caller can await durability. */
   dispose(): void {
-    if (this._state === 'disposed') {
-      return
-    }
-    this.abortController?.abort()
-    this.stopPortScanning()
-    // Why: fire-and-forget — nothing rebinds after dispose, so no need to await port release.
-    void this.portForwardManager.removeAllForwards(this.targetId)
-    this.broadcastEmptyLists()
-    this.teardownProviders('shutdown')
-    this.store.markSshRemotePtyLeases(this.targetId, 'terminated')
-    this.currentConnection = null
-    this._state = 'disposed'
+    void this.disposeAndPersist().catch((error) => {
+      console.warn(
+        `[ssh-relay-session] Failed to persist disposal for ${this.targetId}: ${error instanceof Error ? error.message : String(error)}`
+      )
+    })
   }
 
-  detach(): void {
-    if (this._state === 'disposed') {
-      return
+  /**
+   * Destructive teardown: forgets the consumer recovery record and terminates the leases.
+   * Repeat calls share one completion, and a dispose requested after a detach supersedes it —
+   * the destructive half re-runs so detach-then-dispose still forgets recovery and terminates
+   * leases. (The reverse, detach after dispose, is a no-op.)
+   */
+  disposeAndPersist(): Promise<void> {
+    if (this.teardownMode === 'dispose') {
+      return this.teardownCompletion ?? Promise.resolve()
     }
+    const pendingDetach = this.teardownCompletion
+    this.teardownMode = 'dispose'
+    try {
+      this.teardownCompletion = this.runDisposal(pendingDetach)
+    } catch (error) {
+      // Why: a synchronous failure in the in-memory half must ride the completion promise, or a later
+      // disposeAndPersist reports success on a null completion and detachAndPersist re-runs runDetach.
+      this.teardownCompletion = Promise.reject(error)
+    }
+    return this.teardownCompletion
+  }
+
+  private runDisposal(pendingDetach: Promise<void> | null): Promise<void> {
+    // Why: the whole in-memory half runs before any await so a concurrent connect can never observe
+    // a half-torn session; only the durability barriers below are deferred onto the returned promise.
     this.abortController?.abort()
     this.stopPortScanning()
     this.broadcastEmptyLists()
-    // Why: window disconnect is non-destructive — unregister local providers but keep PTY ownership so reattach works (relay owns the grace timer).
-    this.teardownProviders('connection_lost')
-    this.store.markSshRemotePtyLeases(this.targetId, 'detached')
+    this.teardownProviders('shutdown')
     this.currentConnection = null
     this._state = 'disposed'
+    const recoveryRemoval = forgetSshPtyConsumerRecovery(
+      this.targetId,
+      this.ptyConsumerClientInstanceId,
+      this.store
+    )
+    const leaseTermination = this.store.markSshRemotePtyLeasesAsync(this.targetId, 'terminated')
+    return settleSshSessionTeardown([
+      // Why: a superseded detach keeps its own rejection for its own caller; swallow it here so a
+      // failed detach write cannot fail the disposal that replaced it.
+      pendingDetach?.catch(() => undefined),
+      // Why: nothing rebinds after dispose, but direct callers (no IPC-side teardown) still need
+      // this session's local listeners released.
+      this.portForwardManager.removeAllForwards(this.targetId),
+      recoveryRemoval,
+      leaseTermination
+    ])
+  }
+
+  /** Fire-and-forget detach; prefer {@link detachAndPersist} when the caller can await durability. */
+  detach(): void {
+    void this.detachAndPersist().catch((error) => {
+      console.warn(
+        `[ssh-relay-session] Failed to persist detach for ${this.targetId}: ${error instanceof Error ? error.message : String(error)}`
+      )
+    })
+  }
+
+  /**
+   * Non-destructive teardown: keeps PTY ownership so a later connect reclaims this consumer
+   * identity. Once dispose has been requested this is a no-op — see {@link disposeAndPersist}.
+   */
+  async detachAndPersist(): Promise<void> {
+    // Why: a rejected lease write must not latch forever — re-issue just the write so the caller can
+    // retry. Never under 'dispose': that supersedes detach for good and re-issuing would resurrect
+    // the 'detached' state the disposal already replaced with 'terminated'.
+    if (!this.teardownCompletion || (this.teardownMode === 'detach' && this.detachFlushRejected)) {
+      this.teardownCompletion = this.runDetach()
+    }
+    this.teardownMode ??= 'detach'
+    let completion = this.teardownCompletion
+    while (completion) {
+      try {
+        await completion
+      } catch (error) {
+        if (completion === this.teardownCompletion) {
+          throw error
+        }
+      }
+      if (completion === this.teardownCompletion) {
+        return
+      }
+      completion = this.teardownCompletion
+    }
+  }
+
+  private runDetach(): Promise<void> {
+    if (!this.detachedInMemory) {
+      if (this._state === 'disposed') {
+        return Promise.resolve()
+      }
+      // Why first: same synchronous-half-first rule as runDisposal, and this is the highest-value
+      // step — a fast reconnect must reclaim this identity instead of minting one, even if a
+      // teardown call below throws unexpectedly.
+      detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
+      this.abortController?.abort()
+      this.stopPortScanning()
+      this.broadcastEmptyLists()
+      // Why: disconnect keeps PTY ownership so a later manual connect can reattach.
+      this.teardownProviders('connection_lost')
+      this.currentConnection = null
+      this._state = 'disposed'
+      this.detachedInMemory = true
+    }
+    this.detachFlushRejected = false
+    return settleSshSessionTeardown([
+      this.store.markSshRemotePtyLeasesAsync(this.targetId, 'detached')
+    ]).catch((error: unknown) => {
+      this.detachFlushRejected = true
+      throw error
+    })
   }
 
   // ── Private ───────────────────────────────────────────────────────
@@ -499,14 +817,10 @@ export class SshRelaySession {
   // Why: shared by establish() and reconnect() so both use the exact same registration sequence.
   private async registerProviders(
     mux: SshChannelMultiplexer,
-    shouldContinue?: () => boolean
+    shouldContinue: (() => boolean) | undefined,
+    connectionIncarnation: string
   ): Promise<boolean> {
     await this.registerRelayRoots(mux)
-    if (shouldContinue && !shouldContinue()) {
-      return false
-    }
-
-    await this.installManagedHooksOnRemote(mux)
     if (shouldContinue && !shouldContinue()) {
       return false
     }
@@ -530,10 +844,76 @@ export class SshRelaySession {
       return false
     }
 
-    this.wireUpRemoteOrcaCli(mux)
+    this.wireUpRemoteOrcaCli(mux, connectionIncarnation)
 
-    const ptyProvider = new SshPtyProvider(this.targetId, mux, this.remoteCliBridgeEnv ?? undefined)
+    const providerGeneration = allocateSshPtyProviderGeneration()
+    const ptyProvider = new SshPtyProvider(
+      this.targetId,
+      mux,
+      this.remoteCliBridgeEnv ?? undefined,
+      providerGeneration
+    )
+    const consumerOwnerState = this.activePtyConsumerOwner()
+    if (consumerOwnerState) {
+      ptyProvider.setPtyDeliveryPauseAdapter?.(({ id, providerGeneration: generation, paused }) => {
+        if (
+          generation !== providerGeneration ||
+          this.activePtyProviderGeneration !== providerGeneration ||
+          this.mux !== mux
+        ) {
+          return
+        }
+        const sourceIdentity = this.sourceIdentityByRelayPtyId.get(id)
+        if (consumerOwnerState.outputFlowControl && !sourceIdentity) {
+          return
+        }
+        mux.notify('pty.setDeliveryPaused', {
+          id,
+          paused,
+          clientGeneration: consumerOwnerState.clientGeneration,
+          ownerGeneration: consumerOwnerState.ownerGeneration,
+          ...(sourceIdentity ? { deliveryToken: sourceIdentity.deliveryToken } : {})
+        })
+      })
+    }
+    this.sourceAckPublisherCleanup?.()
+    this.sourceAckPublisherCleanup = null
+    this.sourceCancellationPublisherCleanup?.()
+    this.sourceCancellationPublisherCleanup = null
+    if (consumerOwnerState?.outputFlowControl) {
+      this.sourceAckPublisherCleanup = installSshPtySourceAckPublisher(
+        providerGeneration,
+        (batch, onSettled) =>
+          mux.notifyWithSettlement(
+            'pty.ackData',
+            batch as unknown as Record<string, unknown>,
+            onSettled
+          )
+      )
+      this.sourceCancellationPublisherCleanup = installSshPtySourceCancellationPublisher(
+        providerGeneration,
+        async (request) => {
+          const result = (await mux.request('pty.cancelDelivery', {
+            ...request,
+            id: toRelaySshPtyId(this.targetId, request.id)
+          })) as Record<string, unknown>
+          if (
+            result.canceled !== true ||
+            !Number.isSafeInteger(result.sentEndSu) ||
+            !Number.isSafeInteger(result.creditedEndSu)
+          ) {
+            throw new Error('ssh_source_cancellation_proof_invalid')
+          }
+          return {
+            sentEndSu: result.sentEndSu as number,
+            creditedEndSu: result.creditedEndSu as number
+          }
+        }
+      )
+    }
+    this.activePtyProviderGeneration = providerGeneration
     registerSshPtyProvider(this.targetId, ptyProvider)
+    this.installPtyRecoveryNotifications(mux)
 
     const connection = this.requireReadyConnection()
     const createSftp =
@@ -573,10 +953,103 @@ export class SshRelaySession {
     )
     registerSshGitProvider(this.targetId, gitProvider)
 
-    this.wireUpPtyEvents(ptyProvider)
+    this.wireUpPtyEvents(ptyProvider, mux, providerGeneration)
     this.wireUpAgentHookEvents(mux)
     this.wireUpRemoteWorkspaceEvents(mux)
+    void this.installManagedHooksOnRemote(mux, shouldContinue)
     return true
+  }
+
+  private activePtyConsumerOwner(): SshPtyConsumerOwnerState | null {
+    const state = this.ptyConsumerSessionState
+    return state && state.mode !== 'legacy-fallback' ? state : null
+  }
+
+  private recoverablePtyConsumerOwner(
+    serverBuildId: string | undefined
+  ): SshPtyConsumerOwnerState | null {
+    const active = this.activePtyConsumerOwner()
+    if (active) {
+      return active
+    }
+    const recovery = getSshPtyConsumerRecovery(this.targetId)
+    return serverBuildId && recovery?.serverBuildId === serverBuildId
+      ? (recovery?.owner ?? null)
+      : null
+  }
+
+  private async openPtyConsumerSession(
+    mux: SshChannelMultiplexer,
+    serverBuildId: string | undefined,
+    ownsAttempt: () => boolean
+  ): Promise<SshPtyConsumerSessionState> {
+    const previousOwner = this.recoverablePtyConsumerOwner(serverBuildId)
+    const options = {
+      clientInstanceId: this.ptyConsumerClientInstanceId,
+      expectedServerBuildId: serverBuildId,
+      allowSameBuildLegacyFallback: true,
+      outputFlowControl: { requestedWindowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
+    }
+    try {
+      return await openSshPtyConsumerSession(mux, {
+        ...options,
+        ...(previousOwner
+          ? {
+              resume: {
+                ownerGeneration: previousOwner.ownerGeneration,
+                ownerLease: previousOwner.ownerLease
+              }
+            }
+          : {})
+      })
+    } catch (error) {
+      if (
+        !previousOwner ||
+        (error as { code?: unknown }).code !== PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR
+      ) {
+        throw error
+      }
+      const recovery = getSshPtyConsumerRecovery(this.targetId)
+      if (recovery) {
+        delete recovery.owner
+        recovery.checkpointsByAppPtyId.clear()
+        for (const [ptyId, migration] of recovery.modelMigrationsByAppPtyId) {
+          recovery.modelMigrationsByAppPtyId.set(
+            ptyId,
+            migration.then(() =>
+              Object.freeze({
+                status: 'checkpoint-unavailable' as const,
+                reason: 'completion-failed' as const
+              })
+            )
+          )
+        }
+      }
+      await removeSshPtyConsumerOwnerRecovery(
+        this.targetId,
+        this.ptyConsumerClientInstanceId,
+        this.store
+      )
+      if (!ownsAttempt()) {
+        throw new Error('Session disposed during establish')
+      }
+      this.ptyConsumerSessionState = null
+      return openSshPtyConsumerSession(mux, options)
+    }
+  }
+
+  private async rememberPtyConsumerRecovery(serverBuildId: string | undefined): Promise<void> {
+    const owner = this.activePtyConsumerOwner()
+    if (!owner || !serverBuildId) {
+      return
+    }
+    await rememberSshPtyConsumerRecovery({
+      targetId: this.targetId,
+      clientInstanceId: this.ptyConsumerClientInstanceId,
+      serverBuildId,
+      owner,
+      store: this.store
+    })
   }
 
   private configureRelayGraceTime(
@@ -588,9 +1061,15 @@ export class SshRelaySession {
     })
   }
 
-  // Why: hooks must exist before PTY spawn; relay-local work keeps all managed installs to one SSH round trip.
-  private async installManagedHooksOnRemote(mux: SshChannelMultiplexer): Promise<void> {
-    if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
+  private async installManagedHooksOnRemote(
+    mux: SshChannelMultiplexer,
+    shouldContinue?: () => boolean
+  ): Promise<void> {
+    if (
+      !isRemoteAgentHooksEnabled() ||
+      !this.areAgentStatusHooksEnabled() ||
+      (shouldContinue && !shouldContinue())
+    ) {
       return
     }
     if (
@@ -602,8 +1081,19 @@ export class SshRelaySession {
     }
 
     try {
+      const store = this.store as { getSettings?: Store['getSettings'] }
+      const detected = (await mux.request('preflight.detectAgents', {
+        commands: buildManagedHookDetectionCommands(store.getSettings?.() ?? null, 'linux')
+      })) as { agents?: unknown }
+      const agents = detectedManagedHookAgents(detected?.agents)
+      if (agents.length === 0 || (shouldContinue && !shouldContinue())) {
+        return
+      }
       const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()
-      const params = hostKeyFingerprint ? { hostKeyFingerprint } : {}
+      const params = {
+        ...(hostKeyFingerprint ? { hostKeyFingerprint } : {}),
+        agents
+      }
       const result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, params)) as {
         errors?: unknown
       }
@@ -667,7 +1157,7 @@ export class SshRelaySession {
     }
   }
 
-  private wireUpRemoteOrcaCli(mux: SshChannelMultiplexer): void {
+  private wireUpRemoteOrcaCli(mux: SshChannelMultiplexer, connectionIncarnation: string): void {
     mux.onRequest('orca.cli', async (params) => {
       if (!this.runtime) {
         throw new Error('Orca runtime is unavailable')
@@ -687,12 +1177,54 @@ export class SshRelaySession {
             )
           : {}
       const stdin = typeof params.stdin === 'string' ? params.stdin : undefined
-      return await runRemoteOrcaCli(this.runtime, {
-        argv,
-        cwd,
-        env,
-        ...(stdin !== undefined ? { stdin } : {})
-      })
+      const runtimeAuthority = this.runtime.registerOrchestrationCompatibilitySshAttachment(
+        this.targetId,
+        connectionIncarnation
+      )
+      this.activeCompatibilityAttachmentIds.add(runtimeAuthority.attachmentId)
+      try {
+        return await runRemoteOrcaCli(this.runtime, {
+          argv,
+          cwd,
+          env,
+          ...(stdin !== undefined ? { stdin } : {}),
+          runtimeAuthority
+        })
+      } finally {
+        this.activeCompatibilityAttachmentIds.delete(runtimeAuthority.attachmentId)
+        this.runtime.releaseOrchestrationCompatibilitySshAttachment(runtimeAuthority.attachmentId)
+      }
+    })
+    mux.onRequest('orca.cli.postOutput', async (params) => {
+      if (!this.runtime) {
+        throw new Error('Orca runtime is unavailable')
+      }
+      const rawEnv = params.env
+      const env =
+        rawEnv && typeof rawEnv === 'object' && !Array.isArray(rawEnv)
+          ? Object.fromEntries(
+              Object.entries(rawEnv).filter(
+                (entry): entry is [string, string] =>
+                  typeof entry[0] === 'string' && typeof entry[1] === 'string'
+              )
+            )
+          : {}
+      const runtimeAuthority = this.runtime.registerOrchestrationCompatibilitySshAttachment(
+        this.targetId,
+        connectionIncarnation
+      )
+      this.activeCompatibilityAttachmentIds.add(runtimeAuthority.attachmentId)
+      try {
+        await acknowledgeRemoteOrcaCliPostOutput(this.runtime, {
+          postOutput: parseRemoteOrcaCliPostOutput(params.postOutput),
+          env,
+          runtimeAuthority
+        })
+        return { acknowledged: true }
+      } finally {
+        this.activeCompatibilityAttachmentIds.delete(runtimeAuthority.attachmentId)
+        this.runtime.releaseOrchestrationCompatibilitySshAttachment(runtimeAuthority.attachmentId)
+      }
     })
   }
 
@@ -762,6 +1294,8 @@ export class SshRelaySession {
         isReplay?: unknown
         providerSession?: unknown
         providerSessionOnly?: unknown
+        shedFields?: unknown
+        claudeRunningNonAgentTask?: unknown
         payload?: unknown
       }
       if (typeof envelope.paneKey !== 'string') {
@@ -790,6 +1324,12 @@ export class SshRelaySession {
           isReplay: envelope.isReplay === true ? true : undefined,
           providerSession: envelope.providerSession,
           providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
+          // Why: names the fields the relay dropped to fit the frame; ingestRemote restores them.
+          shedFields: envelope.shedFields,
+          claudeRunningNonAgentTask:
+            typeof envelope.claudeRunningNonAgentTask === 'boolean'
+              ? envelope.claudeRunningNonAgentTask
+              : undefined,
           payload: envelope.payload
         },
         this.targetId
@@ -817,15 +1357,39 @@ export class SshRelaySession {
     })
   }
 
-  private teardownProviders(reason: 'shutdown' | 'connection_lost'): void {
+  private teardownProviders(
+    reason: 'shutdown' | 'connection_lost',
+    outputGenerationReason: string = reason
+  ): void {
     this.muxDisposeCleanup?.()
     this.muxDisposeCleanup = null
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = null
+    for (const cleanup of this.ptyRecoveryNotificationCleanups) {
+      cleanup()
+    }
+    this.ptyRecoveryNotificationCleanups = []
+    if (this.activePtyProviderGeneration !== null) {
+      const providerGeneration = this.activePtyProviderGeneration
+      if (reason === 'connection_lost' && this.activePtyConsumerOwner()?.outputFlowControl) {
+        this.beginPtyModelMigration(providerGeneration, outputGenerationReason)
+      } else {
+        closeSshPtyOutputGeneration(providerGeneration, outputGenerationReason)
+      }
+      this.activePtyProviderGeneration = null
+    }
+    this.sourceAckPublisherCleanup?.()
+    this.sourceAckPublisherCleanup = null
+    this.sourceCancellationPublisherCleanup?.()
+    this.sourceCancellationPublisherCleanup = null
     if (this.mux && !this.mux.isDisposed()) {
       this.mux.dispose(reason)
     }
     this.mux = null
+    for (const attachmentId of this.activeCompatibilityAttachmentIds) {
+      this.runtime?.releaseOrchestrationCompatibilitySshAttachment(attachmentId)
+    }
+    this.activeCompatibilityAttachmentIds.clear()
 
     if (reason === 'shutdown') {
       clearPtyOwnershipForConnection(this.targetId)
@@ -846,6 +1410,15 @@ export class SshRelaySession {
     unregisterSshPtyProvider(this.targetId)
     unregisterSshFilesystemProvider(this.targetId)
     unregisterSshGitProvider(this.targetId)
+    this.sourceIdentityByRelayPtyId.clear()
+    this.retiredSourceDeliveries.clear()
+    for (const pending of this.pendingPtyReattaches.values()) {
+      for (const resolve of pending.recoveryWaiters) {
+        resolve()
+      }
+    }
+    this.pendingPtyReattaches.clear()
+    this.ptyRecoveryRetention.clear()
   }
 
   // Why: back-compat for old relays that gate FS ops on registered roots; removable post-cutover (docs/relay-fs-allowlist-removal.md).
@@ -917,68 +1490,344 @@ export class SshRelaySession {
     }
   }
 
-  private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
+  private wireUpPtyEvents(
+    ptyProvider: SshPtyProvider,
+    mux: SshChannelMultiplexer,
+    providerGeneration: number
+  ): void {
     ptyProvider.onData((payload) => {
-      const rawLength = payload.sequenceChars ?? payload.data.length
-      const seq = this.runtime?.onPtyData(
-        payload.id,
-        payload.data,
-        Date.now(),
-        rawLength,
-        payload.transformed
-      )
-      const win = this.getMainWindow()
-      if (!win || win.isDestroyed()) {
+      if (
+        this.mux !== mux ||
+        this.activePtyProviderGeneration !== providerGeneration ||
+        payload.providerGeneration !== providerGeneration
+      ) {
         return
       }
-      // Why: hidden-delivery gate parity with ipc/pty.ts — latch model-restore out-of-band, never an in-band pty:data sentinel (OSC-9999-only chunks strip to empty).
-      const store = this.store as { getSettings?: Store['getSettings'] }
-      if (shouldDropHiddenRendererPtyData(payload.id, store.getSettings?.())) {
-        const drop = recordHiddenRendererPtyDataDrop(payload.id, rawLength)
-        if (drop.shouldEmitRestoreMarker) {
-          win.webContents.send('pty:modelRestoreNeeded', {
-            id: payload.id,
-            reason: 'hidden-drop',
-            ...(typeof seq === 'number' ? { markerSeq: seq } : {})
-          } satisfies PtyModelRestoreNeededEvent)
+      const pending = this.pendingPtyReattaches.get(payload.id)
+      if (pending && this.activePtyConsumerOwner()?.outputFlowControl) {
+        if (pending.livePassthrough) {
+          void this.acceptPtyData(payload).catch(() => {})
+          return
         }
+        this.quarantineReattachData(pending, payload)
         return
       }
-      if (payload.data.length > 0 || payload.transformed) {
-        win.webContents.send('pty:data', {
-          ...payload,
-          ...(typeof seq === 'number' ? { seq } : {}),
-          rawLength,
-          ...(payload.transformed ? { transformed: true } : {})
-        })
-      }
+      void this.acceptPtyData(payload).catch(() => {})
     })
     ptyProvider.onReplay((payload) => {
+      if (this.mux !== mux || this.activePtyProviderGeneration !== providerGeneration) {
+        return
+      }
       const win = this.getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('pty:replay', payload)
       }
     })
     ptyProvider.onExit((payload) => {
+      if (
+        this.mux !== mux ||
+        this.activePtyProviderGeneration !== providerGeneration ||
+        payload.providerGeneration !== providerGeneration
+      ) {
+        return
+      }
       const pendingReattach = this.pendingPtyReattaches.get(payload.id)
-      if (pendingReattach) {
+      if (pendingReattach && !pendingReattach.activated) {
         // Why: attach response and exit can share one transport batch, before incarnation restoration runs.
         pendingReattach.exits.push(payload)
+        this.wakeRecovery(pendingReattach)
         return
       }
       if (!isCurrentPtyExit(payload)) {
         return
       }
-      this.retireExitedPty(payload)
+      void this.acceptPtyExit(payload).catch(() => {})
     })
   }
 
-  private retireExitedPty(payload: SshPtyExitPayload): void {
+  private acceptPtyData(payload: SshPtyDataPayload): Promise<unknown> {
+    const consumerOwner = this.activePtyConsumerOwner()
+    const offeredSource = payload.source
+    if (
+      offeredSource &&
+      this.retiredSourceDeliveries.has(payload.providerGeneration, offeredSource)
+    ) {
+      return Promise.resolve()
+    }
+    if (
+      consumerOwner?.outputFlowControl &&
+      (!offeredSource ||
+        payload.sourceMalformed ||
+        offeredSource.clientGeneration !== consumerOwner.clientGeneration ||
+        offeredSource.ownerGeneration !== consumerOwner.ownerGeneration)
+    ) {
+      closeSshPtyOutputGeneration(
+        payload.providerGeneration,
+        'ssh_source_frame_malformed_or_missing'
+      )
+      this.mux?.dispose('connection_lost')
+      return Promise.reject(new Error('ssh_source_frame_malformed_or_missing'))
+    }
+    const source = consumerOwner?.outputFlowControl ? offeredSource : undefined
+    if (source) {
+      const current = this.sourceIdentityByRelayPtyId.get(source.relayPtyId)
+      if (
+        source.sourceEndSu <= source.sourceStartSu ||
+        (current &&
+          (current.deliveryToken !== source.deliveryToken ||
+            current.clientGeneration !== source.clientGeneration ||
+            current.ownerGeneration !== source.ownerGeneration ||
+            current.ptyIncarnation !== payload.ptyIncarnation ||
+            (current.nextSourceSu !== undefined && current.nextSourceSu !== source.sourceStartSu)))
+      ) {
+        closeSshPtyOutputGeneration(
+          payload.providerGeneration,
+          'ssh_source_frame_stale_or_non_contiguous'
+        )
+        this.mux?.dispose('connection_lost')
+        return Promise.reject(new Error('ssh_source_frame_stale_or_non_contiguous'))
+      }
+      this.sourceIdentityByRelayPtyId.set(source.relayPtyId, {
+        deliveryToken: source.deliveryToken,
+        clientGeneration: source.clientGeneration,
+        ownerGeneration: source.ownerGeneration,
+        ptyIncarnation: payload.ptyIncarnation,
+        nextSourceSu: source.sourceEndSu
+      })
+    }
+    const rawLength = payload.sequenceChars ?? payload.data.length
+    return acceptSshPtyOutputData({
+      id: payload.id,
+      data: payload.data,
+      providerGeneration: payload.providerGeneration,
+      ptyIncarnation: payload.ptyIncarnation,
+      rawLength,
+      transformed: payload.transformed === true,
+      ...(typeof payload.seq === 'number' ? { sequence: payload.seq } : {}),
+      ...(source ? { source } : {})
+    })
+  }
+
+  private quarantineReattachData(pending: PendingPtyReattach, payload: SshPtyDataPayload): void {
+    this.observePrivateRecoveryFrame(pending, payload)
+    if (pending.restoreRequired) {
+      return
+    }
+    const sourceSu = payload.source
+      ? payload.source.sourceEndSu - payload.source.sourceStartSu
+      : (payload.sequenceChars ?? payload.data.length)
+    if (!this.ptyRecoveryRetention.tryRetain(pending.retentionKey, payload.data, sourceSu)) {
+      pending.restoreRequired = 'recoveryQuarantineCapacityExceeded'
+      this.wakeRecovery(pending)
+      return
+    }
+    this.routeQuarantinedReattachData(pending, payload)
+  }
+
+  private routeQuarantinedReattachData(
+    pending: PendingPtyReattach,
+    payload: SshPtyDataPayload
+  ): void {
+    this.observePrivateRecoveryFrame(pending, payload)
+    if (!pending.recovery) {
+      pending.queuedData.push(payload)
+      return
+    }
+    if (
+      pending.recoveryComplete &&
+      pending.nextRecoverySourceSu === pending.recovery.recoveryEndSu
+    ) {
+      pending.liveData.push(payload)
+      return
+    }
+    this.admitRecoveryData(pending, payload)
+  }
+
+  private observePrivateRecoveryFrame(
+    pending: PendingPtyReattach,
+    payload: SshPtyDataPayload
+  ): void {
+    const recovery = pending.recovery
+    if (
+      recovery &&
+      payload.source?.deliveryToken === recovery.deliveryToken &&
+      payload.source.clientGeneration === recovery.clientGeneration &&
+      payload.source.ownerGeneration === recovery.ownerGeneration &&
+      payload.ptyIncarnation === recovery.ptyIncarnation
+    ) {
+      pending.highestRecoverySourceEndSu = Math.max(
+        pending.highestRecoverySourceEndSu ?? recovery.checkpointSourceEndSu,
+        payload.source.sourceEndSu
+      )
+    }
+  }
+
+  private admitRecoveryData(pending: PendingPtyReattach, payload: SshPtyDataPayload): void {
+    if (pending.restoreRequired) {
+      return
+    }
+    const recovery = pending.recovery
+    const nextSourceSu = pending.nextRecoverySourceSu
+    if (
+      !recovery ||
+      !payload.source ||
+      nextSourceSu === undefined ||
+      payload.source.deliveryToken !== recovery.deliveryToken ||
+      payload.source.clientGeneration !== recovery.clientGeneration ||
+      payload.source.ownerGeneration !== recovery.ownerGeneration ||
+      payload.source.sourceStartSu !== nextSourceSu ||
+      payload.source.sourceEndSu <= payload.source.sourceStartSu ||
+      payload.source.sourceEndSu > recovery.recoveryEndSu ||
+      payload.ptyIncarnation !== recovery.ptyIncarnation
+    ) {
+      pending.restoreRequired = 'recoveryFrameIdentityMismatch'
+      this.wakeRecovery(pending)
+      return
+    }
+    pending.nextRecoverySourceSu = payload.source.sourceEndSu
+    pending.recoveryData.push(payload)
+  }
+
+  private installPtyRecoveryNotifications(mux: SshChannelMultiplexer): void {
+    for (const cleanup of this.ptyRecoveryNotificationCleanups) {
+      cleanup()
+    }
+    this.ptyRecoveryNotificationCleanups = [
+      mux.onNotificationByMethod('pty.recoveryComplete', (params) => {
+        if (this.mux !== mux) {
+          return
+        }
+        const id = typeof params.id === 'string' ? toAppSshPtyId(this.targetId, params.id) : ''
+        const pending = this.pendingPtyReattaches.get(id)
+        if (!pending || pending.mux !== mux) {
+          return
+        }
+        const complete = parseRecoveryComplete(params)
+        if (!complete) {
+          pending.restoreRequired = 'invalidRecoveryComplete'
+        } else {
+          pending.recoveryComplete = complete
+        }
+        this.wakeRecovery(pending)
+      }),
+      mux.onNotificationByMethod('pty.restoreRequired', (params) => {
+        if (this.mux !== mux) {
+          return
+        }
+        const id = typeof params.id === 'string' ? toAppSshPtyId(this.targetId, params.id) : ''
+        const pending = this.pendingPtyReattaches.get(id)
+        if (!pending || pending.mux !== mux) {
+          return
+        }
+        pending.restoreRequired =
+          typeof params.reason === 'string' ? params.reason : 'relayRestoreRequired'
+        this.wakeRecovery(pending)
+      }),
+      mux.onNotificationByMethod('pty.deliveryCanceled', (params) => {
+        if (this.mux !== mux) {
+          return
+        }
+        const id = typeof params.id === 'string' ? params.id : ''
+        const identity = this.sourceIdentityByRelayPtyId.get(id)
+        if (
+          !identity ||
+          params.deliveryToken !== identity.deliveryToken ||
+          params.clientGeneration !== identity.clientGeneration ||
+          params.ownerGeneration !== identity.ownerGeneration ||
+          params.ptyIncarnation !== identity.ptyIncarnation
+        ) {
+          return
+        }
+        const replacementDeliveryToken =
+          typeof params.replacementDeliveryToken === 'string' ? params.replacementDeliveryToken : ''
+        const pending = this.pendingPtyReattaches.get(toAppSshPtyId(this.targetId, id))
+        if (pending?.mux === mux) {
+          if (
+            replacementDeliveryToken.length === 0 ||
+            replacementDeliveryToken === identity.deliveryToken
+          ) {
+            pending.restoreRequired =
+              typeof params.reason === 'string'
+                ? `relayDeliveryCanceled:${params.reason}`
+                : 'relayDeliveryCanceled'
+            this.wakeRecovery(pending)
+            return
+          }
+          if (
+            pending.replacementDeliveryToken &&
+            pending.replacementDeliveryToken !== replacementDeliveryToken
+          ) {
+            pending.restoreRequired = 'recoveryReplacementTokenMismatch'
+            this.wakeRecovery(pending)
+            return
+          }
+          pending.replacementDeliveryToken = replacementDeliveryToken
+          return
+        }
+        const generation = this.activePtyProviderGeneration
+        if (
+          generation !== null &&
+          Number.isSafeInteger(params.sentEndSu) &&
+          Number.isSafeInteger(params.creditedEndSu)
+        ) {
+          try {
+            applySshPtySourceCancellationProof(
+              {
+                id: toAppSshPtyId(this.targetId, id),
+                code: -1,
+                providerGeneration: generation,
+                ptyIncarnation: identity.ptyIncarnation
+              },
+              {
+                sentEndSu: params.sentEndSu as number,
+                creditedEndSu: params.creditedEndSu as number
+              }
+            )
+            this.retiredSourceDeliveries.retire(generation, {
+              relayPtyId: id,
+              ...identity
+            })
+            this.sourceIdentityByRelayPtyId.delete(id)
+          } catch {
+            /* Invalid proof retains the active token identity. */
+          }
+        }
+      })
+    ]
+  }
+
+  private wakeRecovery(pending: PendingPtyReattach): void {
+    for (const resolve of pending.recoveryWaiters) {
+      resolve()
+    }
+    pending.recoveryWaiters.clear()
+  }
+
+  private async acceptPtyExit(payload: SshPtyExitPayload): Promise<void> {
+    await acceptSshPtyOutputExit({
+      id: payload.id,
+      code: payload.code,
+      providerGeneration: payload.providerGeneration,
+      ptyIncarnation: payload.ptyIncarnation
+    })
+    if (isCurrentPtyExit(payload)) {
+      this.retireExitedPty(payload, true)
+    }
+  }
+
+  private retireExitedPty(payload: SshPtyExitPayload, deliveryHandled = false): void {
     const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
+    this.retiredSourceDeliveries.activate(relayPtyId)
     clearProviderPtyState(payload.id)
     deletePtyOwnership(payload.id)
-    this.forwardedReattachReplayByPty.delete(payload.id)
+    getSshPtyConsumerRecovery(this.targetId)?.checkpointsByAppPtyId.delete(payload.id)
+    getSshPtyConsumerRecovery(this.targetId)?.checkpointsByAppPtyId.delete(
+      toRelaySshPtyId(this.targetId, payload.id)
+    )
     this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
+    if (deliveryHandled) {
+      return
+    }
     this.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
     const win = this.getMainWindow()
     if (win && !win.isDestroyed()) {
@@ -986,26 +1835,8 @@ export class SshRelaySession {
     }
   }
 
-  private replayFingerprint(data: string): string {
-    const head = data.slice(0, REPLAY_FINGERPRINT_EDGE_CHARS)
-    const tail = data.slice(-REPLAY_FINGERPRINT_EDGE_CHARS)
-    return `${data.length}:${head}:${tail}`
-  }
-
-  private shouldForwardReattachReplay(appPtyId: string, data: string): boolean {
-    const now = Date.now()
-    const fingerprint = this.replayFingerprint(data)
-    const previous = this.forwardedReattachReplayByPty.get(appPtyId)
-    this.forwardedReattachReplayByPty.set(appPtyId, { fingerprint, deliveredAt: now })
-    return (
-      !previous ||
-      previous.fingerprint !== fingerprint ||
-      now - previous.deliveredAt > RECONNECT_REPLAY_DUPLICATE_WINDOW_MS
-    )
-  }
-
   private forwardReattachReplay(appPtyId: string, data: string): void {
-    if (!data || !this.shouldForwardReattachReplay(appPtyId, data)) {
+    if (!data) {
       return
     }
     const win = this.getMainWindow()
@@ -1014,7 +1845,10 @@ export class SshRelaySession {
     }
   }
 
-  private async reattachKnownPtys(shouldContinue: () => boolean): Promise<void> {
+  private async reattachKnownPtys(
+    mux: SshChannelMultiplexer,
+    shouldContinue: () => boolean
+  ): Promise<void> {
     const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
       .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
@@ -1029,6 +1863,7 @@ export class SshRelaySession {
         })
         .filter((entry): entry is [string, ExpectedPtyIdentity] => entry !== null)
     )
+    const attachedLeaseIds = new Set<string>()
     // Why: after app restart ptyOwnership is empty, but durable SSH leases still describe grace-window survivors.
     const ptyIds = Array.from(
       new Set([
@@ -1039,101 +1874,735 @@ export class SshRelaySession {
       ])
     )
     const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
-    if (!ptyProvider) {
+    const providerGeneration = this.activePtyProviderGeneration
+    if (!ptyProvider || providerGeneration === null || this.mux !== mux) {
       return
     }
-    for (const ptyId of ptyIds) {
+    let nextPtyIndex = 0
+    const worker = async (): Promise<void> => {
+      while (shouldContinue()) {
+        const ptyId = ptyIds[nextPtyIndex++]
+        if (ptyId === undefined) {
+          return
+        }
+        try {
+          await this.reattachKnownPty({
+            ptyProvider,
+            ptyId,
+            activeLeaseByPtyId,
+            expectedIdentityByPtyId,
+            attachedLeaseIds,
+            mux,
+            providerGeneration,
+            shouldContinue
+          })
+        } catch (error) {
+          if (isSourceRecoveryCancellationError(error)) {
+            throw error
+          }
+          console.warn(
+            `[ssh-relay-session] PTY ${ptyId} reattach processing failed for ${this.targetId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          )
+        }
+      }
+    }
+    await Promise.all(
+      Array.from({ length: Math.min(SSH_PTY_REATTACH_MAX_CONCURRENCY, ptyIds.length) }, worker)
+    )
+    if (attachedLeaseIds.size > 0 && shouldContinue()) {
+      await this.store.markSshRemotePtyLeasesAttachedAsync(
+        this.targetId,
+        Array.from(attachedLeaseIds)
+      )
+    }
+  }
+
+  private async reattachKnownPty(args: {
+    ptyProvider: SshPtyProvider
+    ptyId: string
+    activeLeaseByPtyId: Map<string, SshPtyLease>
+    expectedIdentityByPtyId: Map<string, ExpectedPtyIdentity>
+    attachedLeaseIds: Set<string>
+    mux: SshChannelMultiplexer
+    providerGeneration: number
+    shouldContinue: () => boolean
+  }): Promise<void> {
+    const {
+      ptyProvider,
+      ptyId,
+      activeLeaseByPtyId,
+      expectedIdentityByPtyId,
+      attachedLeaseIds,
+      mux,
+      providerGeneration,
+      shouldContinue
+    } = args
+    const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+    const pendingReattach: PendingPtyReattach = {
+      mux,
+      providerGeneration,
+      retentionKey: `${providerGeneration}\0${appPtyId}\0${randomUUID()}`,
+      exits: [],
+      queuedData: [],
+      recoveryData: [],
+      liveData: [],
+      recoveryWaiters: new Set(),
+      livePassthrough: false,
+      activated: false
+    }
+    this.pendingPtyReattaches.set(appPtyId, pendingReattach)
+    let sourceActivationLease: SshPtyAttachResult['sourceActivationLease']
+    let recoveryActivationLease: SshPtyRecoveryActivationLease | undefined
+    try {
+      const recoveryRequest = await this.sourceRecoveryRequest(appPtyId)
+      const attachResult = await this.attachPtyWithRetry(
+        ptyProvider,
+        ptyId,
+        expectedIdentityByPtyId.get(ptyId),
+        recoveryRequest,
+        shouldContinue
+      )
+      sourceActivationLease = attachResult.sourceActivationLease
       if (!shouldContinue()) {
         return
       }
-      const appPtyId = toAppSshPtyId(this.targetId, ptyId)
-      const pendingReattach: PendingPtyReattach = { exits: [] }
-      this.pendingPtyReattaches.set(appPtyId, pendingReattach)
-      try {
-        const expectedIdentity = expectedIdentityByPtyId.get(ptyId)
-        const attachResult =
-          (expectedIdentity
-            ? await ptyProvider.attachForReconnect(ptyId, expectedIdentity)
-            : await ptyProvider.attachForReconnect(ptyId)) ?? {}
-        if (!shouldContinue()) {
-          return
-        }
-        const exitDuringAttach = pendingReattach.exits.find(
-          (exit) =>
-            !exit.incarnationId ||
-            !attachResult.incarnationId ||
-            exit.incarnationId === attachResult.incarnationId
-        )
-        if (exitDuringAttach) {
-          if (attachResult.incarnationId) {
-            restorePtyIncarnation(appPtyId, attachResult.incarnationId)
-            this.runtime?.acceptPtyIncarnationForExit(appPtyId, attachResult.incarnationId)
-          }
-          this.retireExitedPty(exitDuringAttach)
-          continue
-        }
-        setPtyOwnership(appPtyId, this.targetId)
+      const exitDuringAttach = pendingReattach.exits.find(
+        (exit) =>
+          !exit.incarnationId ||
+          !attachResult.incarnationId ||
+          exit.incarnationId === attachResult.incarnationId
+      )
+      if (exitDuringAttach && !recoveryRequest) {
         if (attachResult.incarnationId) {
           restorePtyIncarnation(appPtyId, attachResult.incarnationId)
-          const lease = activeLeaseByPtyId.get(ptyId)
-          if (lease?.worktreeId && lease.tabId && lease.leafId) {
-            this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
-              tabId: lease.tabId,
-              leafId: lease.leafId,
-              incarnationId: attachResult.incarnationId
-            })
-            // Why: reconnect may be the first new-relay response that can backfill exact exit fencing.
-            try {
-              this.store.persistPtyBinding({
-                worktreeId: lease.worktreeId,
-                tabId: lease.tabId,
-                leafId: lease.leafId,
-                ptyId: appPtyId,
-                incarnationId: attachResult.incarnationId
-              })
-            } catch (error) {
-              // Why: this backfill improves future fencing but must not disconnect an already-live relay PTY.
-              console.error('[ssh-relay-session] Failed to persist reconnect incarnation:', error)
+          this.runtime?.acceptPtyIncarnationForExit(appPtyId, attachResult.incarnationId)
+        }
+        await this.acceptPtyExit(exitDuringAttach)
+        return
+      }
+      if (recoveryRequest) {
+        const recovered = await this.finishSourceRecovery(
+          ptyId,
+          appPtyId,
+          attachResult,
+          recoveryRequest,
+          pendingReattach,
+          shouldContinue,
+          () => {
+            const lease = sourceActivationLease
+            if (!lease) {
+              return
             }
-          } else {
-            this.runtime?.onPtySpawned(appPtyId, attachResult.incarnationId, {
-              awaitsRegistration: false
-            })
+            recoveryActivationLease = lease.transferToRecovery((payload) =>
+              this.quarantineReattachData(pendingReattach, payload)
+            )
+            sourceActivationLease = undefined
           }
-        }
-        this.store.markSshRemotePtyLease(this.targetId, ptyId, 'attached')
-        this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
-      } catch (err) {
-        if (!isSshPtyNotFoundError(err)) {
-          throw err
-        }
-        if (isSshPtyIdentityMismatchError(err)) {
-          console.warn(
-            `[ssh-relay-session] Ignoring stale PTY ${ptyId} for ${this.targetId} after relay identity mismatch: ${
-              err instanceof Error ? err.message : String(err)
-            }`
-          )
-          continue
-        }
-        console.warn(
-          `[ssh-relay-session] Dropping stale PTY ${ptyId} for ${this.targetId} after relay reattach failed: ${
-            err instanceof Error ? err.message : String(err)
-          }`
         )
-        clearProviderPtyState(appPtyId)
-        deletePtyOwnership(appPtyId)
-        this.forwardedReattachReplayByPty.delete(appPtyId)
-        this.store.markSshRemotePtyLease(this.targetId, ptyId, 'expired')
-        // Why: reattach failure means the remote process is gone; tell the renderer to clear the stale pane.
-        const win = this.getMainWindow()
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('pty:exit', { id: appPtyId, code: -1 })
+        if (!recovered) {
+          const recoveryExit = this.findExactPendingExit(
+            pendingReattach,
+            attachResult.incarnationId
+          )
+          if (
+            recoveryExit &&
+            shouldContinue() &&
+            this.ownsPtyRecoveryAttempt(appPtyId, pendingReattach)
+          ) {
+            if (recoveryActivationLease) {
+              recoveryActivationLease.retire()
+              recoveryActivationLease = undefined
+            } else if (sourceActivationLease) {
+              const canceled = await sourceActivationLease.rollback()
+              sourceActivationLease = undefined
+              if (!canceled) {
+                throw sourceRecoveryCancellationError(
+                  new Error('ssh_source_activation_cancellation_unproven')
+                )
+              }
+            }
+            this.preparePtyIncarnationForExit(appPtyId, attachResult.incarnationId)
+            await this.acceptPtyExit(recoveryExit)
+          }
+          return
         }
-      } finally {
-        if (this.pendingPtyReattaches.get(appPtyId) === pendingReattach) {
-          this.pendingPtyReattaches.delete(appPtyId)
+        const recoveryExit = this.findExactPendingExit(pendingReattach, attachResult.incarnationId)
+        if (recoveryExit) {
+          this.preparePtyIncarnationForExit(appPtyId, attachResult.incarnationId)
+          pendingReattach.activated = true
+          recoveryActivationLease?.commit()
+          recoveryActivationLease = undefined
+          await this.acceptPtyExit(recoveryExit)
+          return
         }
       }
+      if (!shouldContinue() || !this.ownsPtyRecoveryAttempt(appPtyId, pendingReattach)) {
+        return
+      }
+      setPtyOwnership(appPtyId, this.targetId)
+      if (attachResult.incarnationId) {
+        restorePtyIncarnation(appPtyId, attachResult.incarnationId)
+        this.restoreReattachedPtyRuntime(
+          appPtyId,
+          attachResult.incarnationId,
+          activeLeaseByPtyId.get(ptyId)
+        )
+      }
+      attachedLeaseIds.add(ptyId)
+      pendingReattach.activated = true
+      recoveryActivationLease?.commit()
+      recoveryActivationLease = undefined
+      const exitAfterActivation = pendingReattach.exits.find(
+        (exit) =>
+          !exit.incarnationId ||
+          !attachResult.incarnationId ||
+          exit.incarnationId === attachResult.incarnationId
+      )
+      if (exitAfterActivation) {
+        await this.acceptPtyExit(exitAfterActivation)
+        return
+      }
+      if (!recoveryRequest) {
+        this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
+      }
+      sourceActivationLease?.commit()
+      sourceActivationLease = undefined
+    } catch (error) {
+      if (isSourceRecoveryCancellationError(error)) {
+        throw error
+      }
+      if (!shouldContinue()) {
+        return
+      }
+      this.handlePtyReattachFailure(ptyId, appPtyId, pendingReattach, error)
+    } finally {
+      recoveryActivationLease?.retire()
+      sourceActivationLease?.rollback()
+      if (this.pendingPtyReattaches.get(appPtyId) === pendingReattach) {
+        this.pendingPtyReattaches.delete(appPtyId)
+      }
+      this.ptyRecoveryRetention.release(pendingReattach.retentionKey)
     }
+  }
+
+  private findExactPendingExit(
+    pending: PendingPtyReattach,
+    ptyIncarnation: string | undefined
+  ): SshPtyExitPayload | undefined {
+    if (!ptyIncarnation) {
+      return undefined
+    }
+    return pending.exits.find(
+      (exit) =>
+        exit.providerGeneration === pending.providerGeneration &&
+        exit.ptyIncarnation === ptyIncarnation
+    )
+  }
+
+  private preparePtyIncarnationForExit(appPtyId: string, ptyIncarnation: string | undefined): void {
+    if (!ptyIncarnation) {
+      return
+    }
+    restorePtyIncarnation(appPtyId, ptyIncarnation)
+    this.runtime?.acceptPtyIncarnationForExit(appPtyId, ptyIncarnation)
+  }
+
+  private restoreReattachedPtyRuntime(
+    appPtyId: string,
+    incarnationId: string,
+    lease: SshPtyLease | undefined
+  ): void {
+    if (lease?.worktreeId && lease.tabId && lease.leafId) {
+      this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
+        tabId: lease.tabId,
+        leafId: lease.leafId,
+        incarnationId
+      })
+      try {
+        this.store.persistPtyBinding({
+          worktreeId: lease.worktreeId,
+          tabId: lease.tabId,
+          leafId: lease.leafId,
+          ptyId: appPtyId,
+          incarnationId
+        })
+      } catch (error) {
+        console.error('[ssh-relay-session] Failed to persist reconnect incarnation:', error)
+      }
+      return
+    }
+    this.runtime?.onPtySpawned(appPtyId, incarnationId, { awaitsRegistration: false })
+  }
+
+  private async attachPtyWithRetry(
+    ptyProvider: SshPtyProvider,
+    ptyId: string,
+    expectedIdentity: ExpectedPtyIdentity | undefined,
+    recoveryRequest: PtySourceRecoveryRequest | undefined,
+    shouldContinue: () => boolean
+  ): Promise<SshPtyAttachResult> {
+    let lastError: unknown
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (!shouldContinue()) {
+        throw lastError ?? new Error('PTY reattach attempt is no longer current')
+      }
+      try {
+        return await this.attachPtyWithDeadline(
+          ptyProvider,
+          ptyId,
+          expectedIdentity,
+          recoveryRequest
+        )
+      } catch (error) {
+        lastError = error
+        if (!shouldContinue() || isSshPtyNotFoundError(error) || attempt === 1) {
+          throw error
+        }
+        await this.waitForPtyReattachRetry()
+      }
+    }
+    throw lastError
+  }
+
+  private async attachPtyWithDeadline(
+    ptyProvider: SshPtyProvider,
+    ptyId: string,
+    expectedIdentity: ExpectedPtyIdentity | undefined,
+    recoveryRequest: PtySourceRecoveryRequest | undefined
+  ): Promise<SshPtyAttachResult> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let timedOut = false
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true
+        reject(
+          new Error(`PTY reattach attempt timed out after ${SSH_PTY_REATTACH_ATTEMPT_TIMEOUT_MS}ms`)
+        )
+      }, SSH_PTY_REATTACH_ATTEMPT_TIMEOUT_MS)
+      timer.unref?.()
+    })
+    try {
+      const attach = expectedIdentity
+        ? recoveryRequest
+          ? ptyProvider.attachForReconnect(ptyId, expectedIdentity, recoveryRequest)
+          : ptyProvider.attachForReconnect(ptyId, expectedIdentity)
+        : recoveryRequest
+          ? ptyProvider.attachForReconnect(ptyId, undefined, recoveryRequest)
+          : ptyProvider.attachForReconnect(ptyId)
+      const guardedAttach = attach.then((result) => {
+        if (timedOut) {
+          result.sourceActivationLease?.rollback()
+        }
+        return result
+      })
+      return (await Promise.race([guardedAttach, timeout])) ?? {}
+    } finally {
+      if (timer) {
+        clearTimeout(timer)
+      }
+    }
+  }
+
+  private async waitForPtyReattachRetry(): Promise<void> {
+    const delayMs =
+      SSH_PTY_REATTACH_RETRY_MIN_DELAY_MS +
+      Math.floor(Math.random() * (SSH_PTY_REATTACH_RETRY_JITTER_MS + 1))
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, delayMs)
+      timer.unref?.()
+    })
+  }
+
+  private handlePtyReattachFailure(
+    ptyId: string,
+    appPtyId: string,
+    pending: PendingPtyReattach,
+    error: unknown
+  ): void {
+    if (!isSshPtyNotFoundError(error)) {
+      pending.restoreRequired = 'reattachAttemptsExhausted'
+      this.wakeRecovery(pending)
+      console.warn(
+        `[ssh-relay-session] Leaving PTY ${ptyId} detached for ${this.targetId} after bounded reattach attempts failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+      return
+    }
+    if (isSshPtyIdentityMismatchError(error)) {
+      console.warn(
+        `[ssh-relay-session] Ignoring stale PTY ${ptyId} for ${this.targetId} after relay identity mismatch: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+      return
+    }
+    console.warn(
+      `[ssh-relay-session] Dropping stale PTY ${ptyId} for ${this.targetId} after relay reattach failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+    clearProviderPtyState(appPtyId)
+    deletePtyOwnership(appPtyId)
+    this.store.markSshRemotePtyLease(this.targetId, ptyId, 'expired')
+    const win = this.getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:exit', { id: appPtyId, code: -1 })
+    }
+  }
+
+  private async sourceRecoveryRequest(
+    appPtyId: string
+  ): Promise<PtySourceRecoveryRequest | undefined> {
+    if (!this.activePtyConsumerOwner()?.outputFlowControl) {
+      return undefined
+    }
+    const recovery = getSshPtyConsumerRecovery(this.targetId)
+    const migration = recovery?.modelMigrationsByAppPtyId.get(appPtyId)
+    if (migration) {
+      const outcome = await migration
+      if (recovery?.modelMigrationsByAppPtyId.get(appPtyId) === migration) {
+        recovery.modelMigrationsByAppPtyId.delete(appPtyId)
+      }
+      if (outcome.status !== 'settled') {
+        return Object.freeze({ status: 'checkpointUnavailable' })
+      }
+    }
+    const checkpoints = recovery?.checkpointsByAppPtyId
+    const relayPtyId = toRelaySshPtyId(this.targetId, appPtyId)
+    // Why: every checkpoint writer records app-id keys now, so the relay-id
+    // lookup (and its paired delete below) is a legacy guard only.
+    const checkpoint = checkpoints?.get(appPtyId) ?? checkpoints?.get(relayPtyId)
+    if (!checkpoint) {
+      return Object.freeze({ status: 'checkpointUnavailable' })
+    }
+    return Object.freeze({
+      status: 'checkpoint',
+      clientGeneration: checkpoint.clientGeneration,
+      ownerGeneration: checkpoint.ownerGeneration,
+      ptyIncarnation: checkpoint.ptyIncarnation,
+      deliveryToken: checkpoint.deliveryToken,
+      acceptedSourceEndSu: checkpoint.acceptedSourceEndSu
+    })
+  }
+
+  private beginPtyModelMigration(providerGeneration: number, closeReason: string): void {
+    const recovery = getSshPtyConsumerRecovery(this.targetId)
+    if (!recovery) {
+      closeSshPtyOutputGeneration(providerGeneration, closeReason)
+      return
+    }
+    for (const checkpoint of getSshPtyAcceptedSourceCheckpoints(providerGeneration)) {
+      recovery.checkpointsByAppPtyId.set(checkpoint.id, checkpoint)
+    }
+    const migration = beginSshPtyOutputGenerationMigration(providerGeneration)
+    for (const [ptyId, result] of migration.byPty) {
+      const previous = recovery.modelMigrationsByAppPtyId.get(ptyId)
+      const fence = previous ? previous.then(() => result) : result
+      recovery.modelMigrationsByAppPtyId.set(ptyId, fence)
+      void fence.then((outcome) => {
+        const current = getSshPtyConsumerRecovery(this.targetId)
+        if (current?.modelMigrationsByAppPtyId.get(ptyId) !== fence) {
+          return
+        }
+        if (outcome.status === 'settled') {
+          current.checkpointsByAppPtyId.set(ptyId, outcome.checkpoint)
+        } else {
+          current.checkpointsByAppPtyId.delete(ptyId)
+          current.checkpointsByAppPtyId.delete(toRelaySshPtyId(this.targetId, ptyId))
+        }
+        current.modelMigrationsByAppPtyId.delete(ptyId)
+      })
+    }
+    void migration.completion.then(() => {
+      closeSshPtyOutputGeneration(providerGeneration, closeReason)
+    })
+  }
+
+  private async finishSourceRecovery(
+    relayPtyId: string,
+    appPtyId: string,
+    attachResult: SshPtyAttachResult,
+    request: PtySourceRecoveryRequest,
+    pending: PendingPtyReattach,
+    shouldContinue: () => boolean,
+    activateRecoveryQuarantine: () => void
+  ): Promise<boolean> {
+    const recovery = attachResult.sourceRecovery
+    const pendingRecovery = recovery?.status === 'pending' ? recovery : undefined
+    const owner = this.activePtyConsumerOwner()
+    if (
+      !owner?.outputFlowControl ||
+      !pendingRecovery ||
+      request.status !== 'checkpoint' ||
+      pendingRecovery.clientGeneration !== owner.clientGeneration ||
+      pendingRecovery.ownerGeneration !== owner.ownerGeneration ||
+      pendingRecovery.ptyIncarnation !== attachResult.incarnationId ||
+      pendingRecovery.ptyIncarnation !== request.ptyIncarnation ||
+      pendingRecovery.checkpointSourceEndSu !== request.acceptedSourceEndSu ||
+      (pending.replacementDeliveryToken !== undefined &&
+        pending.replacementDeliveryToken !== pendingRecovery.deliveryToken)
+    ) {
+      if (!shouldContinue() || !this.ownsPtyRecoveryAttempt(appPtyId, pending)) {
+        return false
+      }
+      await this.abandonPtySourceRecovery(relayPtyId, appPtyId, pending)
+      return false
+    }
+    const acceptedRecovery = pendingRecovery
+    pending.recovery = acceptedRecovery
+    pending.nextRecoverySourceSu = acceptedRecovery.checkpointSourceEndSu
+    this.retiredSourceDeliveries.activate(relayPtyId)
+    this.sourceIdentityByRelayPtyId.set(relayPtyId, {
+      deliveryToken: acceptedRecovery.deliveryToken,
+      clientGeneration: acceptedRecovery.clientGeneration,
+      ownerGeneration: acceptedRecovery.ownerGeneration,
+      ptyIncarnation: acceptedRecovery.ptyIncarnation,
+      nextSourceSu: acceptedRecovery.checkpointSourceEndSu
+    })
+    activateRecoveryQuarantine()
+    for (const payload of pending.queuedData.splice(0)) {
+      this.routeQuarantinedReattachData(pending, payload)
+    }
+    await this.waitForRecoveryFence(pending, shouldContinue)
+    const exactExit = this.findExactPendingExit(pending, acceptedRecovery.ptyIncarnation)
+    const complete = pending.recoveryComplete ?? (exactExit ? acceptedRecovery : undefined)
+    if (
+      !shouldContinue() ||
+      pending.restoreRequired ||
+      !complete ||
+      complete.deliveryToken !== acceptedRecovery.deliveryToken ||
+      complete.clientGeneration !== acceptedRecovery.clientGeneration ||
+      complete.ownerGeneration !== acceptedRecovery.ownerGeneration ||
+      complete.ptyIncarnation !== acceptedRecovery.ptyIncarnation ||
+      complete.checkpointSourceEndSu !== acceptedRecovery.checkpointSourceEndSu ||
+      complete.recoveryEndSu !== acceptedRecovery.recoveryEndSu ||
+      pending.nextRecoverySourceSu !== acceptedRecovery.recoveryEndSu
+    ) {
+      if (!shouldContinue() || !this.ownsPtyRecoveryAttempt(appPtyId, pending)) {
+        return false
+      }
+      await this.abandonPtySourceRecovery(relayPtyId, appPtyId, pending)
+      return false
+    }
+    let nextLiveSourceSu = acceptedRecovery.recoveryEndSu
+    for (const payload of pending.liveData) {
+      if (
+        !payload.source ||
+        payload.source.deliveryToken !== acceptedRecovery.deliveryToken ||
+        payload.source.clientGeneration !== acceptedRecovery.clientGeneration ||
+        payload.source.ownerGeneration !== acceptedRecovery.ownerGeneration ||
+        payload.source.sourceStartSu !== nextLiveSourceSu ||
+        payload.source.sourceEndSu <= payload.source.sourceStartSu ||
+        payload.ptyIncarnation !== acceptedRecovery.ptyIncarnation
+      ) {
+        if (!shouldContinue() || !this.ownsPtyRecoveryAttempt(appPtyId, pending)) {
+          return false
+        }
+        await this.abandonPtySourceRecovery(relayPtyId, appPtyId, pending)
+        return false
+      }
+      nextLiveSourceSu = payload.source.sourceEndSu
+    }
+    try {
+      for (const payload of pending.recoveryData) {
+        await this.acceptPtyData(payload)
+      }
+      for (const payload of pending.liveData) {
+        await this.acceptPtyData(payload)
+      }
+      pending.livePassthrough = true
+    } catch {
+      if (!shouldContinue() || !this.ownsPtyRecoveryAttempt(appPtyId, pending)) {
+        return false
+      }
+      await this.abandonPtySourceRecovery(relayPtyId, appPtyId, pending)
+      return false
+    }
+    if (!shouldContinue() || !this.ownsPtyRecoveryAttempt(appPtyId, pending)) {
+      return false
+    }
+    const acceptedSourceEndSu = pending.liveData.reduce(
+      (endSu, payload) => Math.max(endSu, payload.source?.sourceEndSu ?? endSu),
+      acceptedRecovery.recoveryEndSu
+    )
+    // Why: checkpoints are app-id keyed; a relay-id entry here would be shadowed
+    // by a staler app-id entry on the next sourceRecoveryRequest lookup.
+    getSshPtyConsumerRecovery(this.targetId)?.checkpointsByAppPtyId.set(
+      appPtyId,
+      Object.freeze({
+        id: appPtyId,
+        providerGeneration: this.activePtyProviderGeneration!,
+        clientGeneration: acceptedRecovery.clientGeneration,
+        ownerGeneration: acceptedRecovery.ownerGeneration,
+        ptyIncarnation: acceptedRecovery.ptyIncarnation,
+        deliveryToken: acceptedRecovery.deliveryToken,
+        acceptedSourceEndSu
+      })
+    )
+    return true
+  }
+
+  private async waitForRecoveryFence(
+    pending: PendingPtyReattach,
+    shouldContinue: () => boolean
+  ): Promise<void> {
+    const deadline = Date.now() + SSH_PTY_REATTACH_ATTEMPT_TIMEOUT_MS
+    while (
+      shouldContinue() &&
+      !pending.recoveryComplete &&
+      !pending.restoreRequired &&
+      !this.findExactPendingExit(pending, pending.recovery?.ptyIncarnation) &&
+      Date.now() < deadline
+    ) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(
+          () => {
+            pending.recoveryWaiters.delete(settle)
+            resolve()
+          },
+          Math.max(1, deadline - Date.now())
+        )
+        timer.unref?.()
+        const settle = (): void => {
+          clearTimeout(timer)
+          resolve()
+        }
+        pending.recoveryWaiters.add(settle)
+      })
+    }
+    if (
+      !pending.recoveryComplete &&
+      !pending.restoreRequired &&
+      !this.findExactPendingExit(pending, pending.recovery?.ptyIncarnation)
+    ) {
+      pending.restoreRequired = 'recoveryFenceTimeout'
+    }
+  }
+
+  private async abandonPtySourceRecovery(
+    relayPtyId: string,
+    appPtyId: string,
+    pending: PendingPtyReattach
+  ): Promise<void> {
+    if (!this.ownsPtyRecoveryAttempt(appPtyId, pending)) {
+      return
+    }
+    const recovery = pending.recovery
+    const { mux, providerGeneration } = pending
+    if (recovery && !mux.isDisposed()) {
+      const cancellationRequest = {
+        id: relayPtyId,
+        clientGeneration: recovery.clientGeneration,
+        ownerGeneration: recovery.ownerGeneration,
+        deliveryToken: recovery.deliveryToken
+      }
+      this.retiredSourceDeliveries.retire(providerGeneration, {
+        relayPtyId,
+        deliveryToken: recovery.deliveryToken,
+        clientGeneration: recovery.clientGeneration,
+        ownerGeneration: recovery.ownerGeneration
+      })
+      try {
+        const result = (await mux.request('pty.cancelDelivery', cancellationRequest)) as Record<
+          string,
+          unknown
+        >
+        const highestPrivateSourceEndSu = pending.liveData.reduce(
+          (endSu, payload) => Math.max(endSu, payload.source?.sourceEndSu ?? endSu),
+          Math.max(
+            pending.nextRecoverySourceSu ?? recovery.checkpointSourceEndSu,
+            pending.highestRecoverySourceEndSu ?? recovery.checkpointSourceEndSu
+          )
+        )
+        if (
+          result.canceled !== true ||
+          !Number.isSafeInteger(result.sentEndSu) ||
+          (result.sentEndSu as number) < highestPrivateSourceEndSu ||
+          !Number.isSafeInteger(result.creditedEndSu) ||
+          result.creditedEndSu !== recovery.checkpointSourceEndSu ||
+          (result.creditedEndSu as number) > (result.sentEndSu as number)
+        ) {
+          throw new Error('ssh_source_cancellation_proof_invalid')
+        }
+        if (!this.ownsPtyRecoveryAttempt(appPtyId, pending)) {
+          return
+        }
+        const identity = this.sourceIdentityByRelayPtyId.get(relayPtyId)
+        if (identity && !this.sameSourceDelivery(identity, recovery)) {
+          return
+        }
+        if (identity) {
+          const applied = applySshPtySourceRecoveryCancellationProof(
+            {
+              id: appPtyId,
+              code: -1,
+              providerGeneration,
+              ptyIncarnation: recovery.ptyIncarnation
+            },
+            {
+              sentEndSu: result.sentEndSu as number,
+              creditedEndSu: result.creditedEndSu as number
+            }
+          )
+          if (!applied) {
+            throw new Error('ssh_source_cancellation_proof_rejected')
+          }
+        }
+      } catch (error) {
+        if (!this.ownsPtyRecoveryAttempt(appPtyId, pending)) {
+          return
+        }
+        console.warn(
+          `[ssh-relay-session] Failed to cancel replacement delivery for ${relayPtyId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+        throw sourceRecoveryCancellationError(error)
+      }
+    }
+    if (!this.ownsPtyRecoveryAttempt(appPtyId, pending)) {
+      return
+    }
+    const identity = this.sourceIdentityByRelayPtyId.get(relayPtyId)
+    if (!identity || !recovery || this.sameSourceDelivery(identity, recovery)) {
+      this.sourceIdentityByRelayPtyId.delete(relayPtyId)
+    }
+    getSshPtyConsumerRecovery(this.targetId)?.checkpointsByAppPtyId.delete(appPtyId)
+    getSshPtyConsumerRecovery(this.targetId)?.checkpointsByAppPtyId.delete(relayPtyId)
+    this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'detached')
+  }
+
+  private ownsPtyRecoveryAttempt(appPtyId: string, pending: PendingPtyReattach): boolean {
+    return (
+      this.pendingPtyReattaches.get(appPtyId) === pending &&
+      this.mux === pending.mux &&
+      this.activePtyProviderGeneration === pending.providerGeneration &&
+      !pending.mux.isDisposed()
+    )
+  }
+
+  private sameSourceDelivery(
+    left: Readonly<{
+      deliveryToken: string
+      clientGeneration: number
+      ownerGeneration: number
+      ptyIncarnation: string
+    }>,
+    right: Readonly<{
+      deliveryToken: string
+      clientGeneration: number
+      ownerGeneration: number
+      ptyIncarnation: string
+    }>
+  ): boolean {
+    return (
+      left.deliveryToken === right.deliveryToken &&
+      left.clientGeneration === right.clientGeneration &&
+      left.ownerGeneration === right.ownerGeneration &&
+      left.ptyIncarnation === right.ptyIncarnation
+    )
   }
 }

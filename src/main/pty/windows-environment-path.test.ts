@@ -242,6 +242,18 @@ describe('readPersistedWindowsPathSegments', () => {
 })
 
 describe('mergePersistedWindowsPath', () => {
+  it('expands variables already present in the inherited PATH', () => {
+    const execFileSync = vi.fn().mockReturnValue('    Path    REG_SZ    \r\n')
+    const env = {
+      ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
+      Path: '%orca_path_root%\\agy\\bin;C:\\Windows'
+    }
+
+    mergePersistedWindowsPath(env, { platform: 'win32', execFileSync, env })
+
+    expect(env.Path).toBe('C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows')
+  })
+
   it('appends missing persisted segments without reordering the inherited PATH', () => {
     const execFileSync = vi
       .fn()

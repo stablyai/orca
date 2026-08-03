@@ -15,14 +15,14 @@ function hasCode(error: unknown, code: string): boolean {
   return error instanceof Error && 'code' in error && error.code === code
 }
 
-function parseLinuxStartTicks(statLine: string): string | null {
-  const commandEnd = statLine.lastIndexOf(') ')
+export function parseLinuxStartTicks(statLine: string): string | null {
+  const commandEnd = statLine.lastIndexOf(')')
   if (commandEnd < 0) {
     return null
   }
   // Field 22 is index 19 after removing pid and the parenthesized command.
   const startTicks = statLine
-    .slice(commandEnd + 2)
+    .slice(commandEnd + 1)
     .trim()
     .split(/\s+/)[19]
   return startTicks ?? null
@@ -115,7 +115,7 @@ async function readHostIdentity(): Promise<string> {
   return runtimeHostIdentity
 }
 
-async function readBootIdentity(): Promise<string | undefined> {
+export async function readBootIdentity(): Promise<string | undefined> {
   if (process.platform === 'linux') {
     try {
       const bootId = (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim()
