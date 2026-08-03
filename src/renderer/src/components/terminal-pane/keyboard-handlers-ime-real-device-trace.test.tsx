@@ -407,66 +407,68 @@ describe('Windows Korean IME real-device captures', () => {
     // an injection with nothing visible on screen. Captured on the same probe:
     // the same physical key reports as Process/229 while a session is open and
     // as Control/17 once it has closed.
-    // A pty capture of one ~10s Ctrl hold mid-composition showed three
-    // `\x1b[13;5u` injections, not one, which the chord owner was expected to
-    // prevent — it refuses a second claim until the modifier's keyup releases it,
-    // and replaying the hold as auto-repeat keydowns gives exactly one send.
-    // Replaying it as repeated down/up pairs reproduces the amplification: each
-    // release hands the chord back, so the next press claims it again and the
-    // count tracks the number of pairs one-for-one. That makes the chord owner a
-    // weaker backstop than it looks, and leaves the `code` gate carrying the case
-    // on its own — which it does, since ControlLeft is not Enter.
-    it.each([3, 5])('sends nothing for a held Ctrl delivered as %i down/up pairs', (pairs) => {
+    // A pty capture of a ~9s modifier hold mid-composition showed repeated
+    // injections rather than the single one the chord owner appears to allow.
+    // The device event probe ruled out repeated down/up pairs: Windows delivers a
+    // hold as one keydown, a long auto-repeat run, and exactly one keyup. The
+    // amplifier is effect re-registration — modifiedEnterChordOwner.clear() also
+    // runs in the keyboard effect's cleanup, so every teardown/re-register drops
+    // the lock and the next auto-repeat keydown claims it again. The injection
+    // rate therefore follows the render rate: measured at three per hold in a
+    // quiet PowerShell pane and as a continuous stream in a repainting TUI.
+    // Source: stablyai/orca#12120.
+    it.each([
+      ['without a re-render', false],
+      ['with a re-render between each repeat', true]
+    ])('sends nothing for a held Shift across auto-repeats %s', (_label, reRender) => {
       const harness = createHarness()
       const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
       harness.startComposition()
 
-      let timeStamp = 100
-      const rows: Parameters<typeof replay>[1][number][] = []
-      for (let pair = 0; pair < pairs; pair += 1) {
-        rows.push(
-          {
-            t: 'keydown',
-            key: 'Process',
-            code: 'ControlLeft',
-            keyCode: 229,
-            ts: (timeStamp += 1),
-            shift: false,
-            ctrl: true,
-            comp: true
-          },
-          {
-            t: 'keydown',
-            key: 'Control',
-            code: 'ControlLeft',
-            keyCode: 17,
-            ts: (timeStamp += 1),
-            shift: false,
-            ctrl: true,
-            comp: true
-          },
-          {
-            t: 'keyup',
-            key: 'Process',
-            code: 'ControlLeft',
-            keyCode: 229,
-            ts: (timeStamp += 1),
-            shift: false,
-            comp: true
-          },
-          {
-            t: 'keyup',
-            key: 'Control',
-            code: 'ControlLeft',
-            keyCode: 17,
-            ts: (timeStamp += 1),
-            shift: false,
-            comp: true
-          }
+      const shiftRow = (ts: number, repeat: boolean) =>
+        keyboardEvent('keydown', {
+          key: 'Process',
+          code: 'ShiftLeft',
+          keyCode: 229,
+          timeStamp: ts,
+          isComposing: true,
+          shiftKey: true,
+          repeat
+        })
+
+      let timeStamp = 15503
+      harness.terminalInput.dispatchEvent(shiftRow(timeStamp, false))
+      harness.terminalInput.dispatchEvent(
+        keyboardEvent('keydown', {
+          key: 'Shift',
+          code: 'ShiftLeft',
+          keyCode: 16,
+          timeStamp,
+          isComposing: true,
+          shiftKey: true
+        })
+      )
+      for (let repeat = 0; repeat < 50; repeat += 1) {
+        timeStamp += 31
+        if (reRender) {
+          // Stands in for the app re-rendering mid-hold, which tears the keyboard
+          // effect down and back up and clears the chord lock on the way through.
+          hook.rerender()
+        }
+        harness.terminalInput.dispatchEvent(shiftRow(timeStamp, true))
+      }
+      timeStamp += 24
+      for (const [key, keyCode] of [
+        ['Process', 229],
+        ['Shift', 16]
+      ] as const) {
+        harness.terminalInput.dispatchEvent(
+          keyboardEvent('keyup', { key, code: 'ShiftLeft', keyCode, timeStamp, isComposing: true })
         )
       }
-      replay(harness, rows)
+      vi.runAllTimers()
 
+      // On main this is 1 without a re-render and 51 with one.
       expect(harness.sendInput).not.toHaveBeenCalled()
       hook.unmount()
       harness.dispose()
