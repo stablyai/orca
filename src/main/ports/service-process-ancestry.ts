@@ -1,0 +1,271 @@
+import { runBoundedCommand } from './port-scan-command-runner'
+
+const ANCESTRY_TIMEOUT_MS = 3_000
+const MAX_ANCESTOR_DEPTH = 16
+
+export type ProcessAncestryRow = {
+  pid: number
+  ppid: number
+  command: string
+}
+
+export type ProcessAncestryTable = Map<number, ProcessAncestryRow>
+
+/**
+ * Commands that end a launch chain. Walking past one would report the user's
+ * shell (or Orca itself) as the thing that opened the port.
+ */
+const SHELL_COMMANDS = new Set([
+  'sh',
+  'bash',
+  'zsh',
+  'fish',
+  'dash',
+  'ksh',
+  'csh',
+  'tcsh',
+  'login',
+  'tmux',
+  'screen',
+  'sshd',
+  'cmd.exe',
+  'powershell.exe',
+  'pwsh.exe',
+  'conhost.exe',
+  'wsl.exe',
+  'init',
+  'systemd',
+  'launchd'
+])
+
+/**
+ * Coding agents we can name from their executable. Deliberately a closed list:
+ * an unrecognized parent yields null rather than a guess, because "started by"
+ * is exactly the field a wrong answer would make harmful.
+ */
+const AGENT_COMMANDS = new Map<string, string>([
+  ['claude', 'Claude Code'],
+  ['codex', 'Codex'],
+  ['cursor-agent', 'Cursor'],
+  ['aider', 'Aider'],
+  ['gemini', 'Gemini CLI'],
+  ['opencode', 'OpenCode'],
+  ['goose', 'Goose'],
+  ['amp', 'Amp']
+])
+
+export type ServiceLaunchOrigin = {
+  /** Topmost non-shell ancestor, e.g. `pnpm dev` rather than `next-server`. */
+  launchCommand: string | null
+  /** Display name of the coding agent that owns the launching shell, when recognized. */
+  launchedByAgent: string | null
+}
+
+export function parseProcessAncestryOutput(stdout: string): ProcessAncestryRow[] {
+  const rows: ProcessAncestryRow[] = []
+  for (const line of stdout.split('\n')) {
+    const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/)
+    if (!match) {
+      continue
+    }
+    const pid = Number.parseInt(match[1], 10)
+    const ppid = Number.parseInt(match[2], 10)
+    const command = match[3].trim()
+    if (!Number.isFinite(pid) || !Number.isFinite(ppid) || !command) {
+      continue
+    }
+    rows.push({ pid, ppid, command })
+  }
+  return rows
+}
+
+export function buildProcessAncestryTable(
+  rows: readonly ProcessAncestryRow[]
+): ProcessAncestryTable {
+  const table: ProcessAncestryTable = new Map()
+  for (const row of rows) {
+    table.set(row.pid, row)
+  }
+  return table
+}
+
+/** Basename of a path token, preserving case for display. */
+export function basename(token: string): string {
+  const separator = Math.max(token.lastIndexOf('/'), token.lastIndexOf('\\'))
+  return separator === -1 ? token : token.slice(separator + 1)
+}
+
+/** Lowercased basename of the executable, for matching against the sets above. */
+export function executableName(command: string): string {
+  const firstToken = command.trim().split(/\s+/)[0] ?? ''
+  return basename(firstToken).toLowerCase()
+}
+
+function isShellCommand(command: string): boolean {
+  return SHELL_COMMANDS.has(executableName(command))
+}
+
+/**
+ * `node /path/to/.bin/pnpm dev` reads as `pnpm dev`. The interpreter and the
+ * absolute script path are noise: the user recognizes the tool and its task.
+ */
+export function condenseLaunchCommand(command: string): string {
+  const tokens = command.trim().split(/\s+/)
+  if (tokens.length === 0) {
+    return command.trim()
+  }
+  const runner = executableName(tokens[0])
+  const isInterpreter = runner === 'node' || runner === 'node.exe' || runner === 'bun'
+  if (!isInterpreter || tokens.length < 2) {
+    return tokens.map(shortenPathToken).join(' ')
+  }
+  return [basename(tokens[1]), ...tokens.slice(2).map(shortenPathToken)].filter(Boolean).join(' ')
+}
+
+function shortenPathToken(token: string): string {
+  // Keep flags and short values verbatim; only collapse long absolute paths.
+  // Case is preserved: this string is shown to the user, not matched on.
+  if (token.startsWith('-') || !token.includes('/') || token.length < 24) {
+    return token
+  }
+  return basename(token) || token
+}
+
+/**
+ * Walk from the listening process up to the shell that launched it.
+ *
+ * Returns the topmost non-shell ancestor as the launch command, plus the
+ * recognized agent owning the shell. Both fields are null when the chain
+ * cannot be followed — the caller renders an em dash rather than a guess.
+ */
+export function resolveServiceLaunchOrigin(
+  pid: number,
+  table: ProcessAncestryTable
+): ServiceLaunchOrigin {
+  const start = table.get(pid)
+  if (!start) {
+    return { launchCommand: null, launchedByAgent: null }
+  }
+
+  const visited = new Set<number>([pid])
+  let topmostNonShell = start
+  let current = start
+
+  for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
+    const parent = table.get(current.ppid)
+    // Why the visited guard: a pid table read while processes exit can contain
+    // a reparented row whose ppid points back into the chain, and an unguarded
+    // walk would spin until the depth cap on every scan.
+    if (!parent || visited.has(parent.pid) || parent.pid === parent.ppid) {
+      break
+    }
+    visited.add(parent.pid)
+
+    if (isShellCommand(parent.command)) {
+      return {
+        launchCommand: condenseLaunchCommand(topmostNonShell.command),
+        launchedByAgent: findAgentAbove(parent, table, visited)
+      }
+    }
+
+    topmostNonShell = parent
+    current = parent
+  }
+
+  return {
+    launchCommand: condenseLaunchCommand(topmostNonShell.command),
+    launchedByAgent: null
+  }
+}
+
+function findAgentAbove(
+  shell: ProcessAncestryRow,
+  table: ProcessAncestryTable,
+  visited: Set<number>
+): string | null {
+  let current = shell
+  for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
+    const parent = table.get(current.ppid)
+    if (!parent || visited.has(parent.pid) || parent.pid === parent.ppid) {
+      return null
+    }
+    visited.add(parent.pid)
+    const agent = AGENT_COMMANDS.get(executableName(parent.command))
+    if (agent) {
+      return agent
+    }
+    current = parent
+  }
+  return null
+}
+
+/**
+ * Snapshot the whole process table in one call. Per-pid lookups would mean one
+ * child process per listening port, which is the cost this scan cannot pay.
+ * Never throws: ancestry is enrichment, and its absence only costs a column.
+ */
+export async function readProcessAncestryTable(
+  runCommand: typeof runBoundedCommand = runBoundedCommand
+): Promise<ProcessAncestryTable> {
+  try {
+    if (process.platform === 'win32') {
+      return await readWindowsAncestryTable(runCommand)
+    }
+    const { stdout } = await runCommand('ps', ['-axo', 'pid=,ppid=,command='], ANCESTRY_TIMEOUT_MS)
+    return buildProcessAncestryTable(parseProcessAncestryOutput(stdout))
+  } catch {
+    return new Map()
+  }
+}
+
+async function readWindowsAncestryTable(
+  runCommand: typeof runBoundedCommand
+): Promise<ProcessAncestryTable> {
+  const { stdout } = await runCommand(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-Command',
+      'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine,Name | ConvertTo-Json -Compress'
+    ],
+    ANCESTRY_TIMEOUT_MS
+  )
+  return buildProcessAncestryTable(parseWindowsAncestryJson(stdout))
+}
+
+export function parseWindowsAncestryJson(stdout: string): ProcessAncestryRow[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(stdout)
+  } catch {
+    return []
+  }
+  const rows = Array.isArray(parsed) ? parsed : [parsed]
+  const result: ProcessAncestryRow[] = []
+  for (const entry of rows) {
+    if (!entry || typeof entry !== 'object') {
+      continue
+    }
+    const row = entry as {
+      ProcessId?: unknown
+      ParentProcessId?: unknown
+      CommandLine?: unknown
+      Name?: unknown
+    }
+    const pid = Number(row.ProcessId)
+    const ppid = Number(row.ParentProcessId)
+    // CommandLine is null for processes the session cannot open; the image
+    // name still identifies a shell boundary, which is what the walk needs.
+    const command =
+      typeof row.CommandLine === 'string' && row.CommandLine.trim()
+        ? row.CommandLine.trim()
+        : typeof row.Name === 'string'
+          ? row.Name.trim()
+          : ''
+    if (!Number.isFinite(pid) || !Number.isFinite(ppid) || !command) {
+      continue
+    }
+    result.push({ pid, ppid, command })
+  }
+  return result
+}
