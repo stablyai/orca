@@ -87,7 +87,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical two-file oracle (SHA-256 f6c13c1c964e15e758c70d1402f1c01742e3052995e407bb50667877de238a86 and a5e97014c38664987c69867733dca64b73a74d6c68f6375ce4633e0a34188951) is red on base e08eba674c, published 1bcfe3bcb0, previous candidate f92db196a1 (4 focused failures), and revert b3627461ab, while the correction passes 14/14. The base, published, and revert trees lack the migration action and fail structurally; the previous candidate reaches the stale-route and split-activation assertions and returns unsafe success or source projection."
+        "evidence": "The final2 verifier's byte-identical post-quiescence lifecycle scope passed 21/21 on 7890271160 and failed 7 tests on f92db196a1; base e08eba674c, published 1bcfe3bcb0, and revert b3627461ab were structurally red. The permanent collision oracle is in test blob ac62a89c671a0c8f081ebf06736715bd2150ce9f (SHA-256 a61970ace80be1cb56f781aee6f878a8446c6c4527f9eb0cd0c151d8df96bf50). The same byte-identical blob is structurally red on base, published, and revert, behaviorally red on rejected final2 candidate 7890271160 because pre-commit reconciliation removes the stale destination tab, and green on implementation b72a838cdc; the full permanent gate passes 20/20."
       },
       "performanceBudget": {
         "required": true,
