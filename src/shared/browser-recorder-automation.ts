@@ -76,6 +76,19 @@ export type BrowserRecorderAutomationAction = {
 
 export type BrowserRecorderInteractionKind = 'click' | 'keydown' | 'type' | 'scroll' | 'hover'
 
+/** Element properties captured for interacted elements (selector, classes, …). */
+export type BrowserRecorderElementProps = {
+  /** Full CSS path, e.g. body > form#urunForm > div.row > button.btn-save. */
+  selector: string
+  tagName: string
+  /** Up to 5 classes. */
+  classes: string[]
+  /** Visible text, truncated. */
+  text: string
+  /** Notable computed styles as 'prop:value' (display, visibility, position). */
+  styles: string[]
+}
+
 /** A manual page interaction observed while recording (in-page capture script). */
 export type BrowserRecorderInteraction = {
   id: string
@@ -88,6 +101,8 @@ export type BrowserRecorderInteraction = {
   /** Clicked/hovered/typed-into element: '#id', 'button.primary', or tag name. */
   target?: string
   tagName?: string
+  /** Element props for the interacted element (iframes included). */
+  element?: BrowserRecorderElementProps
   /** keydown (special key) or type (coalesced burst) */
   key?: string
   /** Coalesced typing burst text (kind 'type'). */
@@ -97,7 +112,7 @@ export type BrowserRecorderInteraction = {
   scrollY?: number
 }
 
-/** One page network request observed while recording (fetch/XHR hook). */
+/** One page network request observed while recording (fetch/XHR/frame hook). */
 export type BrowserRecorderNetworkRequest = {
   id: string
   page: { browserPageId: string; url: string; title: string }
@@ -109,6 +124,12 @@ export type BrowserRecorderNetworkRequest = {
   postData: string | null
   status: number | null
   durationMs: number | null
+  /** App function that initiated the request, e.g. 'stokKaydet@stok.php:142'. */
+  origin: string | null
+  /** Id of the interaction/action that triggered this request. */
+  triggeredBy: string | null
+  /** 'fetch' | 'xhr' | 'frame' (iframe navigation/form submit). */
+  kind: 'fetch' | 'xhr' | 'frame'
   /** DOM change kinds observed after the response landed. */
   screenChanged: BrowserRecorderDomChangeKind[]
 }
@@ -183,5 +204,11 @@ export const BROWSER_RECORDER_BUDGET = {
   /** Cap on network request records per session (oldest dropped). */
   networkRequestMaxPerSession: 300,
   /** Cap on a request body kept in an entry. */
-  requestBodyMaxLength: 300
+  requestBodyMaxLength: 300,
+  /** Cap on classes kept per element props. */
+  elementClassesMax: 5,
+  /** Cap on element visible text kept in props. */
+  elementTextMaxLength: 60,
+  /** Cap on the request origin string ('fn@file:line'). */
+  originMaxLength: 120
 } as const

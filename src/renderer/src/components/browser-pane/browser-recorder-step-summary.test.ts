@@ -132,6 +132,9 @@ describe('formatBrowserRecorderStepSummary', () => {
               postData: null,
               status: 200,
               durationMs: 30,
+              origin: null,
+              triggeredBy: null,
+              kind: 'xhr',
               screenChanged: []
             }
           }

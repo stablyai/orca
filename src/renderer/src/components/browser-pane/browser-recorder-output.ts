@@ -21,7 +21,8 @@ function elementLabel(element: BrowserRecorderElementSummary): string {
 /**
  * Formats the recorded session as a compact markdown log, one line per step,
  * so it fits more context when handed to an agent. Every line ends with the
- * page it happened on.
+ * page it happened on; network requests are indented under the interaction
+ * that triggered them (trigger → request tree).
  */
 export function formatBrowserRecorderStepsAsMarkdown(
   steps: BrowserRecorderStep[],
@@ -42,8 +43,19 @@ export function formatBrowserRecorderStepsAsMarkdown(
   }
   lines.push('')
 
+  let pendingTrigger = false
   steps.forEach((step, index) => {
-    lines.push(`${index + 1}. ${formatCompactStepLine(step)}`)
+    const kind = step.detail.kind
+    const branch = kind === 'network-request' && pendingTrigger ? '  └ ' : ''
+    lines.push(`${index + 1}. ${branch}${formatCompactStepLine(step)}`)
+    // Why: requests stream in after their click/type trigger; the tree keeps
+    // them grouped until the next user interaction breaks the chain. Console
+    // noise and later requests do not break it.
+    if (kind === 'interaction' || kind === 'automation-action' || kind === 'navigation') {
+      pendingTrigger = true
+    } else if (kind === 'element-selected' || kind === 'annotation-added') {
+      pendingTrigger = false
+    }
   })
 
   return lines.join('\n').trimEnd()

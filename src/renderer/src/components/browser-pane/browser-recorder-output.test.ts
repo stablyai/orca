@@ -253,13 +253,102 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
           postData: 'islem=stok_kaydet,ad=Test',
           status: 200,
           durationMs: 85,
+          origin: 'stokKaydet@stok.php:142',
+          triggeredBy: 'page-1:interaction:5',
+          kind: 'xhr',
           screenChanged: ['text', 'inputs']
         }
       }
     })
     expect(formatCompactStepLine(step)).toBe(
-      'request POST `https://example.com/api/stok` → 200 (85ms) · changed: text,inputs · islem=stok_kaydet,ad=Test @ example.com/checkout'
+      'request POST `https://example.com/api/stok` → 200 (85ms) · fn: stokKaydet@stok.php:142 · changed: text,inputs · islem=stok_kaydet,ad=Test @ example.com/checkout'
     )
+  })
+
+  it('renders an iframe navigation as a frame request', () => {
+    const step = makeStep({
+      detail: {
+        kind: 'network-request',
+        request: {
+          id: 'n-2',
+          page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+          startedAt: '2026-07-31T10:15:30.000Z',
+          method: 'GET',
+          url: 'https://example.com/panel/stok',
+          postData: null,
+          status: 200,
+          durationMs: null,
+          origin: null,
+          triggeredBy: 'page-1:interaction:5',
+          kind: 'frame',
+          screenChanged: []
+        }
+      }
+    })
+    expect(formatCompactStepLine(step)).toBe(
+      'frame GET `https://example.com/panel/stok` → 200 @ example.com/checkout'
+    )
+  })
+
+  it('indents network requests under their triggering interaction', () => {
+    const steps: BrowserRecorderStep[] = [
+      makeStep({
+        detail: {
+          kind: 'interaction',
+          interaction: {
+            id: 'i-1',
+            kind: 'click',
+            page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+            startedAt: '2026-07-31T10:15:30.000Z',
+            x: 620,
+            y: 480,
+            target: 'button.btn-save'
+          }
+        }
+      }),
+      makeStep({
+        id: 'step-2',
+        detail: {
+          kind: 'network-request',
+          request: {
+            id: 'r-1',
+            page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+            startedAt: '2026-07-31T10:15:31.000Z',
+            method: 'POST',
+            url: 'https://example.com/api/stok',
+            postData: 'islem=stok_kaydet',
+            status: 200,
+            durationMs: 85,
+            origin: 'stokKaydet@stok.php:142',
+            triggeredBy: 'i-1',
+            kind: 'xhr',
+            screenChanged: ['inputs']
+          }
+        }
+      }),
+      makeStep({
+        id: 'step-3',
+        detail: {
+          kind: 'console',
+          entry: {
+            id: 'c-1',
+            level: 'log',
+            message: 'ok',
+            source: 'a.js',
+            lineNumber: 1,
+            repeatCount: 1,
+            page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+            startedAt: '2026-07-31T10:15:32.000Z'
+          }
+        }
+      })
+    ]
+    const lines = formatBrowserRecorderStepsAsMarkdown(steps)
+      .split('\n')
+      .filter((line) => /^\d+\./.test(line))
+    expect(lines[0]).toBe('1. click button.btn-save (620,480) @ example.com/checkout')
+    expect(lines[1]).toContain('2.   └ request POST')
+    expect(lines[2]).toBe('3. console log "ok" (a.js) @ example.com/checkout')
   })
 
   it('renders a network summary with status buckets', () => {

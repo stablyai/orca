@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserActionRecorder } from './browser-action-recorder'
 import {
+  compactOriginStack,
   parseBrowserInteractionMessage,
   parseBrowserRequestMessage,
   redactPostData,
@@ -49,6 +50,47 @@ describe('recorder message parsers', () => {
     )
     expect(redactPostData('k=v'.repeat(200), 20)).toMatch(/…$/)
   })
+
+  it('parses element props from interaction payloads', () => {
+    const payload = parseBrowserInteractionMessage(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'click',
+        x: 10,
+        y: 20,
+        target: 'button.btn-save',
+        el: {
+          selector: 'body > form#urunForm > div.row > button.btn-save',
+          tagName: 'button',
+          classes: ['btn', 'btn-primary'],
+          text: 'Kaydet',
+          styles: ['position:fixed']
+        }
+      })}`
+    )
+    expect(payload?.el).toEqual({
+      selector: 'body > form#urunForm > div.row > button.btn-save',
+      tagName: 'button',
+      classes: ['btn', 'btn-primary'],
+      text: 'Kaydet',
+      styles: ['position:fixed']
+    })
+  })
+
+  it('compacts call stacks into the initiating function chain', () => {
+    const stack = [
+      'Error',
+      '    at originStack (<anonymous>:1:1)',
+      '    at report (<anonymous>:1:1)',
+      '    at XMLHttpRequest.send (browser-page-capture:1:1)',
+      '    at stokKaydet (https://example.com/stok.php:142:7)',
+      '    at HTMLButtonElement.onclick (https://example.com/urun.php:10:3)'
+    ].join('\n')
+    expect(compactOriginStack(stack)).toBe(
+      'stokKaydet@https://example.com/stok.php:142 ← HTMLButtonElement.onclick@https://example.com/urun.php:10'
+    )
+    expect(compactOriginStack(undefined)).toBeNull()
+    expect(compactOriginStack('Error\n    at <anonymous> (x:1:1)')).toBeNull()
+  })
 })
 
 describe('BrowserActionRecorder session observer', () => {
@@ -68,9 +110,11 @@ describe('BrowserActionRecorder session observer', () => {
       captureStop,
       networkLog
     }
-    const consoleListeners = new Map<string, (details: unknown) => void>()
+    const consoleListeners = new Map<string, (...args: unknown[]) => void>()
+    const executeJavaScript = vi.fn(() => Promise.resolve('installed'))
     const webContents = {
-      on: vi.fn((event: string, handler: (details: unknown) => void) => {
+      mainFrame: { executeJavaScript, frames: [] },
+      on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         consoleListeners.set(event, handler)
       }),
       removeListener: vi.fn((event: string) => {
@@ -98,32 +142,61 @@ describe('BrowserActionRecorder session observer', () => {
         lineNumber: 3,
         sourceId: 'a.js'
       } as never)
+    const fireFrameNavigate = (url: string, isMainFrame: boolean, status = 200) =>
+      consoleListeners.get('did-frame-navigate')?.('event', url, status, 'OK', isMainFrame)
     return {
       recorder,
       bridge,
       webContents,
       send,
       evaluate,
+      executeJavaScript,
       getPageWebContents,
       captureStart,
       captureStop,
       networkLog,
       enable,
-      fireConsole
+      fireConsole,
+      fireFrameNavigate
     }
   }
 
-  it('attaches the page listener, injects the capture script, and starts HAR on enable', () => {
-    const { recorder, webContents, evaluate, captureStart, enable } = makeObserverHarness()
+  it('attaches the page listener, injects the capture script into frames, and starts HAR', () => {
+    const { recorder, webContents, executeJavaScript, captureStart, enable } = makeObserverHarness()
     enable()
     expect(webContents.on).toHaveBeenCalledWith('console-message', expect.any(Function))
     expect(webContents.on).toHaveBeenCalledWith('did-navigate', expect.any(Function))
-    expect(evaluate).toHaveBeenCalledWith(
-      expect.stringContaining('__orca_recorder__'),
-      'wt-1',
-      'page-1'
-    )
+    expect(webContents.on).toHaveBeenCalledWith('frame-created', expect.any(Function))
+    expect(executeJavaScript).toHaveBeenCalledWith(expect.stringContaining('__orca_recorder__'))
     expect(captureStart).toHaveBeenCalledWith('wt-1', 'page-1')
+    recorder.setEnabled(false)
+  })
+
+  it('records iframe navigations as frame requests', async () => {
+    const { recorder, send, enable, fireFrameNavigate } = makeObserverHarness()
+    enable()
+    fireFrameNavigate('https://example.com/panel/stok', false, 200)
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'network-request',
+      request: {
+        kind: 'frame',
+        method: 'GET',
+        url: 'https://example.com/panel/stok',
+        status: 200
+      }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('ignores main-frame navigations in the frame hook', () => {
+    const { recorder, send, enable, fireFrameNavigate } = makeObserverHarness()
+    enable()
+    fireFrameNavigate('https://example.com/', true)
+    expect(send).not.toHaveBeenCalled()
     recorder.setEnabled(false)
   })
 
@@ -192,7 +265,8 @@ describe('BrowserActionRecorder session observer', () => {
         url: 'https://example.com/api/stok?key=***',
         postData: 'islem=stok_kaydet&sifre=***',
         status: 200,
-        durationMs: 85
+        durationMs: 85,
+        kind: 'xhr'
       }
     })
     recorder.setEnabled(false)
@@ -221,7 +295,12 @@ describe('BrowserActionRecorder session observer', () => {
   it('re-attaches the listener and capture script after a navigation action', async () => {
     const { recorder, bridge, getPageWebContents, evaluate, enable } = makeObserverHarness()
     enable()
-    const secondWebContents = { on: vi.fn(), removeListener: vi.fn() }
+    const secondExecute = vi.fn(() => Promise.resolve('installed'))
+    const secondWebContents = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      mainFrame: { executeJavaScript: secondExecute, frames: [] }
+    }
     getPageWebContents.mockReturnValue(secondWebContents)
     evaluate.mockResolvedValue({ result: '{}', origin: 'https://example.com/a' })
 
@@ -237,11 +316,7 @@ describe('BrowserActionRecorder session observer', () => {
 
     expect(secondWebContents.on).toHaveBeenCalledWith('console-message', expect.any(Function))
     // capture script re-injected into the new page
-    expect(evaluate).toHaveBeenCalledWith(
-      expect.stringContaining('__orca_recorder__'),
-      'wt-1',
-      'page-1'
-    )
+    expect(secondExecute).toHaveBeenCalledWith(expect.stringContaining('__orca_recorder__'))
     recorder.setEnabled(false)
   })
 

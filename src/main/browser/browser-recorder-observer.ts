@@ -53,6 +53,31 @@ export class BrowserRecorderSessionObserver {
   private readonly handleNavigation = (): void => {
     this.rearm()
   }
+  private readonly handleFrameCreated = (
+    _event: unknown,
+    details: { frame: Electron.WebFrameMain | null }
+  ): void => {
+    // Why: late-created iframes (SPA dialogs, lazy content) need the capture
+    // script too; cross-origin frames throw, which is expected and ignored.
+    const frame = details.frame
+    if (frame) {
+      void frame.executeJavaScript(INTERACTION_CAPTURE_EXPRESSION).catch(() => {})
+    }
+  }
+  private readonly handleFrameNavigate = (
+    _event: unknown,
+    url: string,
+    httpResponseCode: number,
+    _httpStatusText: string,
+    isMainFrame: boolean
+  ): void => {
+    // Why: iframe form submits (a common SPA save path) are navigations, not
+    // XHR — record them as requests so the flow stays complete.
+    if (isMainFrame || !url || url.startsWith('about:')) {
+      return
+    }
+    void this.events.recordFrameNavigation(url, httpResponseCode || null)
+  }
 
   constructor(hooks: BrowserRecorderObserverHooks, target: BrowserActionRecorderTarget) {
     this.bridge = hooks.getBridge()
@@ -120,6 +145,8 @@ export class BrowserRecorderSessionObserver {
     webContents.on('did-navigate', this.handleNavigation)
     webContents.on('did-navigate-in-page', this.handleNavigation)
     webContents.on('did-finish-load', this.handleNavigation)
+    webContents.on('frame-created', this.handleFrameCreated)
+    webContents.on('did-frame-navigate', this.handleFrameNavigate)
   }
 
   private detach(): void {
@@ -132,17 +159,24 @@ export class BrowserRecorderSessionObserver {
     webContents.removeListener('did-navigate', this.handleNavigation)
     webContents.removeListener('did-navigate-in-page', this.handleNavigation)
     webContents.removeListener('did-finish-load', this.handleNavigation)
+    webContents.removeListener('frame-created', this.handleFrameCreated)
+    webContents.removeListener('did-frame-navigate', this.handleFrameNavigate)
   }
 
   private async injectCaptureScript(): Promise<void> {
-    try {
-      await this.bridge?.evaluate(
-        INTERACTION_CAPTURE_EXPRESSION,
-        this.target.worktreeId,
-        this.target.browserPageId
-      )
-    } catch {
-      // Page mid-navigation or debugger busy — interaction capture is best-effort.
+    const webContents = this.attachedWebContents
+    if (!webContents || !webContents.mainFrame) {
+      return
+    }
+    // Why: the page can nest content in iframes (menu/content splits); inject
+    // into every frame so clicks/typing/requests inside them are captured too.
+    const frames = [webContents.mainFrame, ...webContents.mainFrame.frames]
+    for (const frame of frames) {
+      try {
+        await frame.executeJavaScript(INTERACTION_CAPTURE_EXPRESSION)
+      } catch {
+        // Cross-origin or mid-navigation frame — capture is best-effort.
+      }
     }
   }
 

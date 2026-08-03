@@ -7,7 +7,10 @@
 // ---------------------------------------------------------------------------
 
 import { BROWSER_RECORDER_INTERACTION_TAG } from '../../shared/browser-recorder-automation'
-import type { BrowserRecorderInteractionKind } from '../../shared/browser-recorder-automation'
+import type {
+  BrowserRecorderElementProps,
+  BrowserRecorderInteractionKind
+} from '../../shared/browser-recorder-automation'
 
 /** Raw payload carried inside a tagged console.debug line from the page. */
 export type BrowserRecorderInteractionPayload = {
@@ -19,6 +22,8 @@ export type BrowserRecorderInteractionPayload = {
   key?: string
   text?: string
   code?: string
+  /** Element props (selector/classes/text/styles) for the interacted element. */
+  el?: BrowserRecorderElementProps
 }
 
 /** Raw request payload carried inside a tagged console.debug line. */
@@ -29,6 +34,9 @@ export type BrowserRecorderRequestPayload = {
   body?: string
   status?: number | null
   durationMs?: number | null
+  /** App call stack captured at request time, e.g. 'Error\n at stokKaydet (stok.php:142)…'. */
+  origin?: string | null
+  kind?: 'fetch' | 'xhr'
 }
 
 /**
@@ -61,10 +69,38 @@ export function parseBrowserInteractionMessage(
       tagName: typeof parsed.tagName === 'string' ? parsed.tagName.slice(0, 40) : undefined,
       key: typeof parsed.key === 'string' ? parsed.key.slice(0, 40) : undefined,
       text: typeof parsed.text === 'string' ? parsed.text.slice(0, 200) : undefined,
-      code: typeof parsed.code === 'string' ? parsed.code.slice(0, 40) : undefined
+      code: typeof parsed.code === 'string' ? parsed.code.slice(0, 40) : undefined,
+      el: parseElementProps(parsed.el)
     }
   } catch {
     return null
+  }
+}
+
+function parseElementProps(value: unknown): BrowserRecorderElementProps | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const record = value as Record<string, unknown>
+  if (typeof record.selector !== 'string' && typeof record.tagName !== 'string') {
+    return undefined
+  }
+  return {
+    selector: typeof record.selector === 'string' ? record.selector.slice(0, 200) : '',
+    tagName: typeof record.tagName === 'string' ? record.tagName.slice(0, 40) : '',
+    classes: Array.isArray(record.classes)
+      ? record.classes
+          .filter((entry): entry is string => typeof entry === 'string')
+          .slice(0, 5)
+          .map((entry) => entry.slice(0, 40))
+      : [],
+    text: typeof record.text === 'string' ? record.text.slice(0, 60) : '',
+    styles: Array.isArray(record.styles)
+      ? record.styles
+          .filter((entry): entry is string => typeof entry === 'string')
+          .slice(0, 4)
+          .map((entry) => entry.slice(0, 40))
+      : []
   }
 }
 
@@ -88,11 +124,59 @@ export function parseBrowserRequestMessage(message: string): BrowserRecorderRequ
       url: typeof parsed.url === 'string' ? parsed.url.slice(0, 500) : '',
       body: typeof parsed.body === 'string' ? parsed.body : '',
       status: typeof parsed.status === 'number' ? parsed.status : null,
-      durationMs: typeof parsed.durationMs === 'number' ? Math.round(parsed.durationMs) : null
+      durationMs: typeof parsed.durationMs === 'number' ? Math.round(parsed.durationMs) : null,
+      origin: compactOriginStack(parsed.origin),
+      kind: parsed.kind === 'fetch' ? 'fetch' : 'xhr'
     }
   } catch {
     return null
   }
+}
+
+/**
+ * Reduces a captured call stack to the app frames that initiated the request:
+ * 'Error\n    at stokKaydet (stok.php:142)\n    at onclick (urun.php:10)' →
+ * 'stokKaydet@stok.php:142 ← onclick@urun.php:10'. Hook frames (the injected
+ * script) are skipped; eval/injected code frames are dropped.
+ */
+export function compactOriginStack(
+  stack: string | null | undefined,
+  maxLength = 120
+): string | null {
+  if (!stack) {
+    return null
+  }
+  const frames: string[] = []
+  for (const line of stack.split('\n')) {
+    const match = /^\s*at\s+(.+?)\s*\((.+?)\)\s*$/.exec(line.trim())
+    if (!match) {
+      continue
+    }
+    const fn = match[1].trim()
+    const location = match[2]
+    if (
+      fn.startsWith('<') ||
+      fn === 'report' ||
+      fn.startsWith('originStack') ||
+      fn.includes('__orcaRecorder') ||
+      location.includes('browser-page-capture') ||
+      location.startsWith('<anonymous>') ||
+      location.startsWith('eval at')
+    ) {
+      continue
+    }
+    // Chrome formats file:line; Firefox uses file:line:col — keep both.
+    const shortLocation = location.replace(/:(\d+):\d+$/, ':$1')
+    frames.push(fn.length > 40 ? `${fn.slice(0, 40)}…@${shortLocation}` : `${fn}@${shortLocation}`)
+    if (frames.length >= 2) {
+      break
+    }
+  }
+  if (frames.length === 0) {
+    return null
+  }
+  const joined = frames.join(' ← ')
+  return joined.length > maxLength ? `${joined.slice(0, maxLength)}…` : joined
 }
 
 const SECRET_QUERY_PATTERN =

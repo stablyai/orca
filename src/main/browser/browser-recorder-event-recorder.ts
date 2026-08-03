@@ -35,6 +35,8 @@ export class BrowserRecorderEventRecorder {
   private capWarned = false
   private interactionCapWarned = false
   private requestCapWarned = false
+  /** Id of the last interaction — requests triggered after it get linked. */
+  private lastTriggerId: string | null = null
 
   constructor(
     private readonly send: (event: BrowserRecorderStreamEvent) => void,
@@ -63,11 +65,13 @@ export class BrowserRecorderEventRecorder {
       y: payload.y,
       target: payload.target,
       tagName: payload.tagName,
+      element: payload.el,
       key: payload.type === 'keydown' ? payload.key : undefined,
       text: payload.type === 'type' ? payload.text : undefined,
       scrollX: payload.type === 'scroll' ? payload.x : undefined,
       scrollY: payload.type === 'scroll' ? payload.y : undefined
     }
+    this.lastTriggerId = interaction.id
     this.send({ kind: 'interaction', interaction })
   }
 
@@ -96,6 +100,33 @@ export class BrowserRecorderEventRecorder {
           : null,
       status: payload.status ?? null,
       durationMs: payload.durationMs ?? null,
+      origin: payload.origin ?? null,
+      triggeredBy: this.lastTriggerId,
+      kind: payload.kind ?? 'xhr',
+      screenChanged: await this.pageSource.screenChangedSinceLast()
+    }
+    this.send({ kind: 'network-request', request })
+  }
+
+  /** Records an iframe navigation (form submit / frame load) as a request. */
+  async recordFrameNavigation(url: string, status: number | null): Promise<void> {
+    if (this.requestCount >= BROWSER_RECORDER_BUDGET.networkRequestMaxPerSession) {
+      return
+    }
+    this.requestCount += 1
+    const page = this.pageSource.pageContext()
+    const request: BrowserRecorderNetworkRequest = {
+      id: `${page.browserPageId}:request:${this.requestCount}`,
+      page,
+      startedAt: new Date().toISOString(),
+      method: 'GET',
+      url: redactRequestUrl(url),
+      postData: null,
+      status,
+      durationMs: null,
+      origin: null,
+      triggeredBy: this.lastTriggerId,
+      kind: 'frame',
       screenChanged: await this.pageSource.screenChangedSinceLast()
     }
     this.send({ kind: 'network-request', request })

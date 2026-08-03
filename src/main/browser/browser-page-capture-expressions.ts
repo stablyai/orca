@@ -41,6 +41,48 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
   function report(type, payload) {
     try { console.debug(TAG, JSON.stringify(Object.assign({ type: type }, payload))) } catch (e) {}
   }
+  function cssPath(el) {
+    if (!el || !el.tagName) { return '' }
+    if (el.id) { return el.tagName.toLowerCase() + '#' + el.id }
+    var parts = []
+    var node = el
+    while (node && node.tagName && node !== document.body && node !== document.documentElement) {
+      var part = node.tagName.toLowerCase()
+      if (node.id) { part += '#' + node.id; parts.unshift(part); break }
+      if (typeof node.className === 'string' && node.className.trim()) {
+        part += '.' + node.className.trim().split(/\\s+/).slice(0, 3).join('.')
+      }
+      var parent = node.parentElement
+      if (parent) {
+        var siblings = Array.prototype.filter.call(parent.children, function (s) { return s.tagName === node.tagName })
+        if (siblings.length > 1) { part += ':nth-of-type(' + (Array.prototype.indexOf.call(siblings, node) + 1) + ')' }
+      }
+      parts.unshift(part)
+      node = parent
+    }
+    if (node === document.body) { parts.unshift('body') }
+    return parts.join(' > ')
+  }
+  function elementInfo(el) {
+    if (!el || !el.tagName) { return null }
+    var classes = typeof el.className === 'string' ? el.className.trim().split(/\\s+/).filter(Boolean).slice(0, 5) : []
+    var text = (el.innerText || el.value || '').trim().slice(0, 60)
+    var styles = []
+    try {
+      var cs = window.getComputedStyle(el)
+      if (cs.display === 'none') { styles.push('display:none') }
+      if (cs.visibility === 'hidden') { styles.push('visibility:hidden') }
+      if (cs.position === 'fixed' || cs.position === 'absolute') { styles.push('position:' + cs.position) }
+      if (cs.pointerEvents === 'none') { styles.push('pointer-events:none') }
+    } catch (e) {}
+    return {
+      selector: cssPath(el),
+      tagName: el.tagName.toLowerCase(),
+      classes: classes,
+      text: text,
+      styles: styles
+    }
+  }
   function summarize(el) {
     if (!el || !el.tagName) { return '' }
     if (el.id) { return '#' + el.id }
@@ -51,12 +93,12 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
     return el.tagName.toLowerCase()
   }
   // ── typing burst coalescing ──
-  var typing = { text: '', target: '', lastAt: 0, timer: null }
+  var typing = { text: '', target: '', element: null, lastAt: 0, timer: null }
   var TYPE_PAUSE_MS = 450
   function flushTyping() {
     if (typing.timer) { clearTimeout(typing.timer); typing.timer = null }
     if (typing.text.length > 0) {
-      report('type', { text: typing.text, target: typing.target })
+      report('type', { text: typing.text, target: typing.target, el: typing.element })
       typing.text = ''
     }
   }
@@ -75,29 +117,31 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
     return /password|passwd|sifre|parola/i.test(name)
   }
   document.addEventListener('keydown', function (e) {
-    var target = summarize(document.activeElement)
+    var active = document.activeElement
+    var target = summarize(active)
     if (isPrintableKey(e.key)) {
       // Why: never leak typed password content into the recording log; keep
       // the marker length so the burst still reads as "something typed here".
-      if (isPasswordField(document.activeElement)) {
+      if (isPasswordField(active)) {
         typing.text += '•'
       } else {
         typing.text += e.key
       }
       typing.target = target
+      typing.element = elementInfo(active)
       typing.lastAt = Date.now()
       scheduleFlush()
       return
     }
     flushTyping()
     if (e.key && e.key !== 'Shift' && e.key !== 'Control' && e.key !== 'Alt' && e.key !== 'Meta') {
-      report('keydown', { key: e.key, target: target })
+      report('keydown', { key: e.key, target: target, el: elementInfo(active) })
     }
   }, true)
   document.addEventListener('click', function (e) {
     flushTyping()
     var t = e.target
-    report('click', { x: e.clientX, y: e.clientY, target: summarize(t), tagName: t && t.tagName ? t.tagName.toLowerCase() : '' })
+    report('click', { x: e.clientX, y: e.clientY, target: summarize(t), tagName: t && t.tagName ? t.tagName.toLowerCase() : '', el: elementInfo(t) })
   }, true)
   // ── hover (element change, throttled) ──
   var lastHover = { target: '', at: 0 }
@@ -107,7 +151,7 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
     var target = summarize(e.target)
     if (target === lastHover.target) { return }
     lastHover = { target: target, at: now }
-    report('hover', { target: target, tagName: e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '' })
+    report('hover', { target: target, tagName: e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '', el: elementInfo(e.target) })
   }, true)
   // ── scroll (throttled) ──
   var lastScroll = 0
@@ -117,6 +161,9 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
     lastScroll = now
     report('scroll', { x: Math.round(window.scrollX || 0), y: Math.round(window.scrollY || 0) })
   }, true)
+  function originStack() {
+    try { return new Error().stack || '' } catch (e) { return '' }
+  }
   // ── network requests (fetch + XHR, report on completion) ──
   var nativeFetch = window.fetch
   if (typeof nativeFetch === 'function') {
@@ -125,11 +172,12 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
       var method = (init && init.method) || (input && input.method) || 'GET'
       var body = init && init.body ? String(init.body) : ''
       var started = Date.now()
+      var origin = originStack()
       return nativeFetch.apply(this, arguments).then(function (res) {
-        report('request', { method: method, url: url, body: body, status: res.status, durationMs: Date.now() - started })
+        report('request', { method: method, url: url, body: body, status: res.status, durationMs: Date.now() - started, origin: origin, kind: 'fetch' })
         return res
       }, function (err) {
-        report('request', { method: method, url: url, body: body, status: -1, durationMs: Date.now() - started })
+        report('request', { method: method, url: url, body: body, status: -1, durationMs: Date.now() - started, origin: origin, kind: 'fetch' })
         throw err
       })
     }
@@ -138,7 +186,7 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
   var nativeSend = XMLHttpRequest.prototype.send
   var pending = new WeakMap()
   XMLHttpRequest.prototype.open = function (method, url) {
-    pending.set(this, { method: String(method), url: String(url), body: '', started: Date.now() })
+    pending.set(this, { method: String(method), url: String(url), body: '', started: Date.now(), origin: originStack() })
     return nativeOpen.apply(this, arguments)
   }
   XMLHttpRequest.prototype.send = function (body) {
@@ -150,7 +198,7 @@ export const INTERACTION_CAPTURE_EXPRESSION = `(() => {
     var info = pending.get(this)
     if (!info) { return }
     pending.delete(this)
-    report('request', { method: info.method, url: info.url, body: info.body, status: this.status, durationMs: Date.now() - info.started })
+    report('request', { method: info.method, url: info.url, body: info.body, status: this.status, durationMs: Date.now() - info.started, origin: info.origin, kind: 'xhr' })
   })
   return 'installed'
 })()`
