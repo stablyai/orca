@@ -234,7 +234,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(22)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(23)
     expect(db.getDispatchContextById(dispatch.id)).toMatchObject({ assignee_handle: 'term_worker' })
     expect(
       sqlite
@@ -254,7 +254,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db.close()
     db = new OrchestrationDb(dbPath)
-    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(22)
+    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(23)
     expect(db.getDispatchContextById(dispatch.id)).toBeDefined()
   })
 })

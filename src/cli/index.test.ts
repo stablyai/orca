@@ -362,6 +362,15 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls[0][0]).toContain(
       'orchestration worker-abandon Fence an uncertain worker without claiming it stopped'
     )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      "orchestration worker-release Release a settled worker's terminal after archiving its output"
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration worker-retain Keep a worker terminal live for debugging'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orchestration worker-list Report worker terminal resource accounting'
+    )
     expect(callMock).not.toHaveBeenCalled()
   })
 

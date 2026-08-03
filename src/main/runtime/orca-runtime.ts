@@ -106,6 +106,7 @@ import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
+import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import {
   planLegacyWorkerTerminalRecovery,
@@ -4501,6 +4502,11 @@ export class OrcaRuntimeService {
       deferredDispatchIds: [...deferredDispatchIds]
     }
     this.updateLegacyWorkerTerminalRecoveryRetry(plan, deferredDispatchIds, options)
+    // Why: previously requested releases may only finish after the owning provider's terminals
+    // are rediscovered; this pass runs per scope (local and each reconnected provider).
+    void reconcileRequestedWorkerTerminalReleases(this).catch((error) => {
+      console.warn('[orchestration] worker terminal release reconciliation failed', { error })
+    })
     return result
   }
 
