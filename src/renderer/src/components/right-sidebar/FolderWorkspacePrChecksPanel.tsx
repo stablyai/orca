@@ -46,6 +46,7 @@ export default function FolderWorkspacePrChecksPanel({
         activeWorkspaceKey,
         activeWorktreeId,
         folderWorkspaces,
+        repos,
         workspaceLineageByChildKey,
         worktreeLineageById,
         worktreesByRepo
@@ -54,6 +55,7 @@ export default function FolderWorkspacePrChecksPanel({
       activeWorkspaceKey,
       activeWorktreeId,
       folderWorkspaces,
+      repos,
       workspaceLineageByChildKey,
       worktreeLineageById,
       worktreesByRepo

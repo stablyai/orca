@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type {
   FolderWorkspace,
+  Repo,
   Worktree,
   WorktreeLineage,
   WorkspaceLineage
@@ -24,6 +25,18 @@ function makeFolder(id = 'folder-1'): FolderWorkspace {
     lastActivityAt: 0,
     createdAt: 0,
     updatedAt: 0
+  }
+}
+
+function makeRepo(overrides: Partial<Repo> & { id: string }): Repo {
+  const { id, ...rest } = overrides
+  return {
+    id,
+    path: `/repos/${id}`,
+    displayName: id,
+    badgeColor: '#fff',
+    addedAt: 1,
+    ...rest
   }
 }
 
@@ -97,6 +110,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
+      repos: [],
       workspaceLineageByChildKey: {
         [alpha.id]: makeWorkspaceLineage(alpha),
         [beta.id]: makeWorkspaceLineage(beta),
@@ -128,6 +142,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
+      repos: [],
       workspaceLineageByChildKey: {
         [visible.id]: makeWorkspaceLineage(visible),
         [archived.id]: makeWorkspaceLineage(archived),
@@ -157,6 +172,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
+      repos: [],
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
       worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
       worktreesByRepo: { 'repo-1': [parent, nested] }
@@ -186,6 +202,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
+      repos: [],
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
       worktreeLineageById: {},
       worktreesByRepo: { 'repo-1': [parent, inlineNested] }
@@ -208,6 +225,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
+      repos: [],
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
       worktreeLineageById: {
         [nested.id]: {
@@ -243,6 +261,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
+      repos: [],
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
       worktreeLineageById: {
         [hostChild.id]: makeWorktreeLineage(hostChild, parent),
@@ -262,6 +281,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
       activeWorktreeId: null,
       folderWorkspaces: [makeFolder()],
+      repos: [],
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
       worktreeLineageById: {
         [parent.id]: makeWorktreeLineage(parent, nested),
@@ -272,5 +292,95 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
 
     expect(result.lineageChildrenByParentId.size).toBe(0)
     expect(result.rootChildWorktrees.map((worktree) => worktree.id)).toEqual([parent.id])
+  })
+
+  it('includes registered git repo worktrees nested under the active folder workspace', () => {
+    const nestedRepo = makeRepo({
+      id: 'repo-nested',
+      path: '/folder/gok-ai-handoff',
+      displayName: 'gok-ai-handoff',
+      kind: 'git'
+    })
+    const siblingNamedPrefix = makeRepo({
+      id: 'repo-prefix',
+      path: '/folder-tools/gok-ai-handoff',
+      displayName: 'prefix',
+      kind: 'git'
+    })
+    const folderRepo = makeRepo({
+      id: 'repo-folder',
+      path: '/folder/group',
+      displayName: 'group',
+      kind: 'folder'
+    })
+    const nestedWorktree = makeWorktree({
+      id: 'repo-nested::/folder/gok-ai-handoff',
+      repoId: nestedRepo.id,
+      path: nestedRepo.path,
+      displayName: 'gok-ai-handoff',
+      lastActivityAt: 20
+    })
+    const existingLineage = makeWorktree({
+      id: 'repo-1::/attached',
+      displayName: 'attached',
+      lastActivityAt: 10
+    })
+    const prefixWorktree = makeWorktree({
+      id: 'repo-prefix::/folder-tools/gok-ai-handoff',
+      repoId: siblingNamedPrefix.id,
+      path: siblingNamedPrefix.path
+    })
+    const folderRepoWorktree = makeWorktree({
+      id: 'repo-folder::/folder/group',
+      repoId: folderRepo.id,
+      path: folderRepo.path
+    })
+
+    const result = getAttachedWorktreesForFolderWorkspace({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      activeWorktreeId: null,
+      folderWorkspaces: [makeFolder()],
+      repos: [nestedRepo, siblingNamedPrefix, folderRepo],
+      workspaceLineageByChildKey: { [existingLineage.id]: makeWorkspaceLineage(existingLineage) },
+      worktreeLineageById: {},
+      worktreesByRepo: {
+        'repo-1': [existingLineage],
+        [nestedRepo.id]: [nestedWorktree],
+        [siblingNamedPrefix.id]: [prefixWorktree],
+        [folderRepo.id]: [folderRepoWorktree]
+      }
+    })
+
+    expect(result.childWorktrees.map((worktree) => worktree.id)).toEqual([
+      nestedWorktree.id,
+      existingLineage.id
+    ])
+  })
+
+  it('does not include nested repo worktrees from another folder workspace connection', () => {
+    const nestedRepo = makeRepo({
+      id: 'repo-ssh',
+      path: '/folder/remote-repo',
+      displayName: 'remote-repo',
+      kind: 'git',
+      connectionId: 'ssh-1'
+    })
+    const nestedWorktree = makeWorktree({
+      id: 'repo-ssh::/folder/remote-repo',
+      repoId: nestedRepo.id,
+      path: nestedRepo.path
+    })
+
+    const result = getAttachedWorktreesForFolderWorkspace({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      activeWorktreeId: null,
+      folderWorkspaces: [makeFolder()],
+      repos: [nestedRepo],
+      workspaceLineageByChildKey: {},
+      worktreeLineageById: {},
+      worktreesByRepo: { [nestedRepo.id]: [nestedWorktree] }
+    })
+
+    expect(result.childWorktrees).toEqual([])
   })
 })
