@@ -12,6 +12,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { getAzCliAzureDevOpsAccessToken } from './az-cli-access-token'
 import {
   azureDevOpsTokenConfigured,
   getAzureDevOpsAuthConfig,
@@ -135,8 +136,11 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
   const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
   const hasToken = azureDevOpsTokenConfigured(config)
   if (!baseUrl && !hasToken) {
+    // Why: an az CLI login authenticates hosted orgs without any env setup, so
+    // it counts as configured even before a repository supplies the base URL.
+    const azToken = await getAzCliAzureDevOpsAccessToken()
     return {
-      configured: false,
+      configured: azToken !== null,
       authenticated: false,
       account: null,
       baseUrl: null,

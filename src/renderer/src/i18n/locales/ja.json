@@ -9435,7 +9435,14 @@
                   "63a7f47392": "ORCA_BITBUCKET_EMAIL",
                   "24ac1c69dc": "このランタイムでは、Bitbucket の状態をまだ取得できません。",
                   "a924e8dcd1": "Bitbucket Cloud API トークン経由の PR とビルドステータス。",
-                  "0fa5629dad": "PR とビルドステータス"
+                  "0fa5629dad": "PR とビルドステータス",
+                  "az": {
+                    "run": "Run",
+                    "login": "az login",
+                    "or": {
+                      "set": " (Azure CLI), set"
+                    }
+                  }
                 }
               }
             }

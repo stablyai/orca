@@ -9470,7 +9470,14 @@
                   "63a7f47392": "ORCA_BITBUCKET_EMAIL",
                   "24ac1c69dc": "此运行时暂不支持 Bitbucket 状态。",
                   "a924e8dcd1": "通过 Bitbucket Cloud API token 获取 pull request 和构建状态。",
-                  "0fa5629dad": "pull request 和构建状态"
+                  "0fa5629dad": "pull request 和构建状态",
+                  "az": {
+                    "run": "Run",
+                    "login": "az login",
+                    "or": {
+                      "set": " (Azure CLI), set"
+                    }
+                  }
                 }
               }
             }

@@ -34,7 +34,7 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
                 )
           : translate(
               'auto.components.settings.token.source.control.integration.cards.0eb50d5593',
-              'Pull requests and build statuses via Azure DevOps REST API tokens.'
+              'Pull requests and build statuses via the az CLI or Azure DevOps REST API tokens.'
             )
       }
       checking={status === 'checking'}
@@ -56,8 +56,18 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
             ) : status === 'not-configured' ? (
               <>
                 {translate(
-                  'auto.components.settings.token.source.control.integration.cards.7bbc9c64f0',
-                  'Set'
+                  'auto.components.settings.token.source.control.integration.cards.az.run',
+                  'Run'
+                )}{' '}
+                <span className="font-mono text-[11px]">
+                  {translate(
+                    'auto.components.settings.token.source.control.integration.cards.az.login',
+                    'az login'
+                  )}
+                </span>
+                {translate(
+                  'auto.components.settings.token.source.control.integration.cards.az.or.set',
+                  ' (Azure CLI), set'
                 )}{' '}
                 <span className="font-mono text-[11px]">
                   {translate(

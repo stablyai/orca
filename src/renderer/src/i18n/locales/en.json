@@ -10463,7 +10463,14 @@
                   "statusNotConfigured": "Not configured",
                   "statusAuthFailed": "Auth failed",
                   "statusConfigured": "Configured",
-                  "statusOptionalSetup": "Optional setup"
+                  "statusOptionalSetup": "Optional setup",
+                  "az": {
+                    "run": "Run",
+                    "login": "az login",
+                    "or": {
+                      "set": " (Azure CLI), set"
+                    }
+                  }
                 }
               }
             }
