@@ -257,6 +257,7 @@ describe('Windows Korean IME real-device captures', () => {
         keyCode: number
         ts: number
         shift: boolean
+        ctrl?: boolean
         comp: boolean
       }[]
     ): void => {
@@ -268,6 +269,7 @@ describe('Windows Korean IME real-device captures', () => {
             keyCode: row.keyCode,
             timeStamp: row.ts,
             shiftKey: row.shift,
+            ctrlKey: row.ctrl ?? false,
             isComposing: row.comp
           })
         )
@@ -341,7 +343,8 @@ describe('Windows Korean IME real-device captures', () => {
       const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
       harness.startComposition()
 
-      // 갓: ㄱ and ㅏ are already composing by the time Shift comes down for ㅆ.
+      // 갔: ㄱ and ㅏ are already composing by the time Shift comes down for ㅆ
+      // (Shift+t). 갓 takes a plain ㅅ and never reaches this path.
       replay(harness, [
         {
           t: 'keydown',
@@ -390,6 +393,47 @@ describe('Windows Korean IME real-device captures', () => {
         harness,
         ISSS_DA_TRACE.filter((row) => row.code === 'ShiftLeft')
       )
+
+      expect(harness.sendInput).not.toHaveBeenCalled()
+      hook.unmount()
+      harness.dispose()
+    })
+
+    // The mechanism is not Shift-specific: Ctrl pressed mid-composition is
+    // reported as Process/229 the same way, and getTerminalImeModifiedEnterKind
+    // returns 'ctrl' for it, so the pre-fix predicate reached the Ctrl+Enter
+    // branch. That branch emits \x1b[13;5u unconditionally with no fallback, so
+    // a TUI that has not negotiated the Kitty protocol discards it silently —
+    // an injection with nothing visible on screen. Captured on the same probe:
+    // the same physical key reports as Process/229 while a session is open and
+    // as Control/17 once it has closed.
+    it('sends nothing for a bare Ctrl press mid-composition', () => {
+      const harness = createHarness()
+      const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+      harness.startComposition()
+
+      replay(harness, [
+        {
+          t: 'keydown',
+          key: 'Process',
+          code: 'ControlLeft',
+          keyCode: 229,
+          ts: 8526,
+          shift: false,
+          ctrl: true,
+          comp: true
+        },
+        {
+          t: 'keydown',
+          key: 'Control',
+          code: 'ControlLeft',
+          keyCode: 17,
+          ts: 8526,
+          shift: false,
+          ctrl: true,
+          comp: true
+        }
+      ])
 
       expect(harness.sendInput).not.toHaveBeenCalled()
       hook.unmount()
