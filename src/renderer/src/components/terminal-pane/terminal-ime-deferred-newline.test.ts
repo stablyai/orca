@@ -325,6 +325,7 @@ describe('isTerminalImeProcessEnter', () => {
   const event = (overrides: Partial<KeyboardEvent> = {}) =>
     ({
       key: 'Process',
+      code: 'Enter',
       keyCode: 229,
       metaKey: false,
       ctrlKey: false,
@@ -340,6 +341,10 @@ describe('isTerminalImeProcessEnter', () => {
     }
   )
 
+  it('recognizes the numpad Enter while composing', () => {
+    expect(isTerminalImeProcessEnter(event({ code: 'NumpadEnter' }))).toBe(true)
+  })
+
   it.each([
     { key: 'Enter' },
     { keyCode: 13 },
@@ -348,6 +353,19 @@ describe('isTerminalImeProcessEnter', () => {
     { altKey: true }
   ])('rejects a non-IME or ambiguous Process key', (override) => {
     expect(isTerminalImeProcessEnter(event(override))).toBe(false)
+  })
+
+  // Regression: while an IME composes, Windows reports key 'Process' + keyCode 229 for
+  // every key. Shift+<jamo> on 2-beolsik produces the double consonants ㄸ/ㄲ/ㅆ/ㅉ and
+  // used to be rewritten into Shift+Enter, injecting a newline mid-word.
+  it.each([
+    { code: 'KeyE', jamo: 'ㄸ' },
+    { code: 'KeyR', jamo: 'ㄲ' },
+    { code: 'KeyT', jamo: 'ㅆ' },
+    { code: 'KeyW', jamo: 'ㅉ' },
+    { code: 'KeyQ', jamo: 'ㅃ' }
+  ])('rejects Shift+$jamo composed on 2-beolsik ($code)', ({ code }) => {
+    expect(isTerminalImeProcessEnter(event({ code }))).toBe(false)
   })
 })
 

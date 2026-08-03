@@ -107,11 +107,19 @@ export function getTerminalImeModifiedEnterKind(
 }
 
 export function isTerminalImeProcessEnter(
-  event: Pick<KeyboardEvent, 'key' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'code' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+  >
 ): boolean {
   return (
     event.key === 'Process' &&
     event.keyCode === 229 &&
+    // Why: while an IME composes, Windows reports key 'Process' and keyCode 229 for
+    // every key, not just Enter. Without the physical key, Shift+<jamo> (the 2-beolsik
+    // double consonants ㄸ/ㄲ/ㅆ/ㅉ) is indistinguishable from Shift+Enter and gets
+    // rewritten into a newline. `code` survives composition and identifies the key.
+    (event.code === 'Enter' || event.code === 'NumpadEnter') &&
     getTerminalImeModifiedEnterKind(event) !== null
   )
 }
