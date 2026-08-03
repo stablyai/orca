@@ -68,11 +68,14 @@ export async function resolveProjectRoot(startDir: string): Promise<string | nul
       return dir
     }
     if (!manifestRoot) {
-      for (const manifest of ROOT_MANIFESTS) {
-        if (await pathExists(path.join(dir, manifest))) {
-          manifestRoot = dir
-          break
-        }
+      // Probe the manifests together: the walk can run to the filesystem root
+      // because a .git may still appear above, and serialising five stat calls
+      // per ancestor is the difference between one round of IO and dozens.
+      const found = await Promise.all(
+        ROOT_MANIFESTS.map((manifest) => pathExists(path.join(dir, manifest)))
+      )
+      if (found.some(Boolean)) {
+        manifestRoot = dir
       }
     }
   }

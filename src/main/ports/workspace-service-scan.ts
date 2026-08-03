@@ -42,11 +42,12 @@ export async function scanWorkspaceServices(
   // docker backends the published port is held by a proxy the scan attributes
   // elsewhere, and dropping it would hide the container entirely.
   const seenPorts = new Set(portScan.ports.map((port) => port.port))
-  for (const [port, container] of containersByPort) {
-    if (!seenPorts.has(port)) {
-      services.push(await composeContainerOnlyService(port, container, worktrees))
-    }
-  }
+  const containerOnly = await Promise.all(
+    [...containersByPort]
+      .filter(([port]) => !seenPorts.has(port))
+      .map(([port, container]) => composeContainerOnlyService(port, container, worktrees))
+  )
+  services.push(...containerOnly)
 
   return {
     platform: portScan.platform,

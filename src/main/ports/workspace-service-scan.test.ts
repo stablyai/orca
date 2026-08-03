@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -198,6 +198,10 @@ describe('scanWorkspaceServices', () => {
   })
 
   it('attributes a container to the worktree its compose file lives in', async () => {
+    // The directory must exist: otherwise the service is also flagged as an
+    // orphan and the test passes for the wrong reason.
+    const composeDir = path.join(liveDir, 'apps/api')
+    await mkdir(composeDir, { recursive: true })
     scanDockerContainerServicesMock.mockResolvedValue({
       available: true,
       containers: [
@@ -206,7 +210,7 @@ describe('scanWorkspaceServices', () => {
           containerName: 'app-db-1',
           image: 'postgres:16',
           composeProject: 'app',
-          composeWorkingDir: path.join(liveDir, 'apps/api'),
+          composeWorkingDir: composeDir,
           hostPorts: [5544],
           state: 'running'
         }
@@ -220,6 +224,7 @@ describe('scanWorkspaceServices', () => {
     ).services
 
     expect(service.owner?.worktreeId).toBe('wt-1')
+    expect(service.isOrphan).toBe(false)
   })
 
   it('sorts processes before containers, then by port', async () => {

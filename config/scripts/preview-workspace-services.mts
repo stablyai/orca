@@ -5,6 +5,7 @@
  * (and independently of) the renderer wiring. Run with:
  *   npx tsx config/scripts/preview-workspace-services.mts
  */
+import process from 'node:process'
 import { scanWorkspaceServices } from '../../src/main/ports/workspace-service-scan'
 import type { WorkspaceService } from '../../src/shared/workspace-services'
 
@@ -61,4 +62,7 @@ async function main(): Promise<void> {
   }
 }
 
-void main()
+void main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exitCode = 1
+})

@@ -195,6 +195,9 @@ export async function scanDockerContainerServices(
     )
     return { available: true, containers: parseDockerPsOutput(stdout) }
   } catch (error) {
+    // Why log here: the reason handed to the panel is deliberately short, so
+    // without this a failing daemon would leave no diagnostic trace anywhere.
+    console.warn('[workspace-services] docker scan failed', error)
     return {
       available: false,
       containers: [],
@@ -212,6 +215,6 @@ function dockerUnavailableReason(error: unknown): string {
     return 'Docker did not respond.'
   }
   // The daemon-down message is long and shell-shaped; the panel only needs the
-  // fact, and the detail stays available in the main-process log.
+  // fact. The caller logs the original error for diagnosis.
   return 'Docker is not running.'
 }

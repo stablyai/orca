@@ -11516,7 +11516,8 @@
             "0dce278f78": "Services",
             "cd70c78d76": "Scanning...",
             "e187c588bf": "No services running for this workspace",
-            "72da684658": "{{value0}} orphaned, workspace deleted"
+            "d051e26f35": "1 orphaned, workspace deleted",
+            "29db55fd54": "{{value0}} orphaned, workspaces deleted"
           }
         }
       },

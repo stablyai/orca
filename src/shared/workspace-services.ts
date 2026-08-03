@@ -50,7 +50,11 @@ export type WorkspaceServiceStopRequest =
       projectName?: string | null
     }
 
-/** Whether the panel can actually stop this service, and why not when it cannot. */
+/**
+ * The request needed to stop this service, or null when the panel cannot stop
+ * it. Null carries no reason: the caller's only use for it is hiding the
+ * action, and a reason nobody renders would rot.
+ */
 export function resolveServiceStopRequest(
   service: WorkspaceService,
   repoId: string | null

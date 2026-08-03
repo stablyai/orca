@@ -108,11 +108,16 @@ export function ServicesSection({
         >
           <TriangleAlert size={12} className="shrink-0" />
           <span className="truncate">
-            {translate(
-              'auto.components.right.sidebar.ServicesSection.72da684658',
-              '{{value0}} orphaned, workspace deleted',
-              { value0: orphanCount }
-            )}
+            {orphanCount === 1
+              ? translate(
+                  'auto.components.right.sidebar.ServicesSection.d051e26f35',
+                  '1 orphaned, workspace deleted'
+                )
+              : translate(
+                  'auto.components.right.sidebar.ServicesSection.29db55fd54',
+                  '{{value0}} orphaned, workspaces deleted',
+                  { value0: orphanCount }
+                )}
           </span>
         </button>
       )}
