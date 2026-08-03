@@ -13135,6 +13135,46 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('does not treat a shell command wrapper as Agent Teams setup sequencing', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        claudeAgentTeamsMode: 'in-process' as const,
+        shellCommandWrapper: 'devenv shell -- $CMD'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: "claude 'hello'",
+      launchAgent: 'claude',
+      launchConfig: {
+        agentCommand: 'claude',
+        agentArgs: '',
+        agentEnv: {}
+      }
+    })
+
+    const launched = spawn.mock.calls[0]?.[0] as {
+      command?: string
+      env?: Record<string, string>
+    }
+
+    // Why: wrapper alone must not queue SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
+    // (which would spawn the unenhanced source command and drop teammate mode).
+    expect(launched.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]).toBeUndefined()
+    expect(launched.command).toBe("devenv shell -- claude --teammate-mode in-process 'hello'")
+    expect(launched.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBe('1')
+  })
+
   it('restores captured native Claude Agent Teams mode with fresh service env', async () => {
     setPlatform('linux')
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })

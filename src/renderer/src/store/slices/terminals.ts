@@ -49,6 +49,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
+import { applyShellCommandWrapper } from '../../../../shared/shell-command-wrapper'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -3693,11 +3694,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const launchToken = startup.launchConfig
       ? (startup.launchToken ?? createBrowserUuid())
       : undefined
+    // Why: wrap agent/bare launch commands through the opt-in shell template (e.g. devenv) at the shared queue choke point.
+    const command = applyShellCommandWrapper(get().settings?.shellCommandWrapper, startup.command)
     set((s) => ({
       pendingStartupByTabId: {
         ...s.pendingStartupByTabId,
         [tabId]: {
           ...startup,
+          command,
           ...(launchToken ? { launchToken } : {})
         }
       }

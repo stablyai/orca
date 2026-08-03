@@ -132,6 +132,33 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getTerminalShellCommandWrapperSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.shellCommandWrapperTitle',
+      'Command Wrapper'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.shellCommandWrapperDescription',
+      'Optional template that wraps agent and terminal launch commands (for example devenv shell -- $CMD).'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.shellKw', 'shell'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.wrapperKw', 'wrapper'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.commandKw', 'command'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.devenvKw', 'devenv'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.nixKw', 'nix'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.environmentKw',
+        'environment'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.agentKw', 'agent'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.cmdKw', '$CMD'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.launchKw2', 'launch')
+    ]
+  }
+])
+
 export const getTerminalSetupScriptSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(

@@ -59,7 +59,8 @@ export {
 export {
   getManageSessionsSearchEntries,
   getTerminalWindowSearchEntries,
-  getTerminalSetupScriptSearchEntries
+  getTerminalSetupScriptSearchEntries,
+  getTerminalShellCommandWrapperSearchEntries
 } from './terminal-window-setup-search'
 
 type TerminalAppearanceSearchOptions = {

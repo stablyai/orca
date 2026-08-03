@@ -388,6 +388,7 @@ import {
   buildAgentResumeStartupPlan,
   buildAgentStartupPlan
 } from '../../shared/tui-agent-startup'
+import { applyShellCommandWrapper } from '../../shared/shell-command-wrapper'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import {
   isAgentForegroundWrapperProcess,
@@ -1116,6 +1117,7 @@ type RuntimeStore = {
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
+    shellCommandWrapper?: GlobalSettings['shellCommandWrapper']
   }
   // Why: narrow to `unknown` return so test mocks can return void without
   // a cast. The runtime never reads the return value — the persisted value
@@ -24337,7 +24339,21 @@ export class OrcaRuntimeService {
         throw new Error('runtime_unavailable')
       }
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
-      const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const resolvedLaunchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const shellCommandWrapper = this.store?.getSettings?.().shellCommandWrapper
+      // Why: keep command unwrapped through Agent Teams planning/sequencing so a shell
+      // wrapper alone cannot look like setup sequencing (source !== command). Wrap only
+      // the final spawn command. claudeAgentTeamsSourceCommand stays on the bare agent
+      // line so teammate-mode inference still sees `claude`, not `devenv shell -- claude`.
+      const launchOpts = {
+        ...resolvedLaunchOpts,
+        ...(resolvedLaunchOpts.command
+          ? {
+              claudeAgentTeamsSourceCommand:
+                resolvedLaunchOpts.claudeAgentTeamsSourceCommand ?? resolvedLaunchOpts.command
+            }
+          : {})
+      }
       let ptySpawnCommitReported = false
       const reportPtySpawnCommitted = (): void => {
         if (ptySpawnCommitReported) {
@@ -24444,9 +24460,14 @@ export class OrcaRuntimeService {
         cols: 120,
         rows: 40,
         cwd,
-        command: sequencedStartupCommand
-          ? launchOpts.command
-          : (agentTeamsPlan?.command ?? launchOpts.command),
+        // Why: wrap after teams/sequencing so setup-vs-agent distinction stays real and
+        // teammate-enhanced commands still go through the opt-in shell template.
+        command: applyShellCommandWrapper(
+          shellCommandWrapper,
+          sequencedStartupCommand
+            ? launchOpts.command
+            : (agentTeamsPlan?.command ?? launchOpts.command)
+        ),
         launchAgent: launchOpts.launchAgent,
         commandDelivery: 'provider',
         startupCommandDelivery: launchOpts.startupCommandDelivery,

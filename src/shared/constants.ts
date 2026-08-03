@@ -332,6 +332,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     minimaxUsageModels: 'general',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
+    // Why: empty keeps launches direct; users opt into devenv/nix wrappers via $CMD.
+    shellCommandWrapper: '',
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
     agentYoloDefaultsMigrated: true,
