@@ -2718,7 +2718,12 @@ function normalizeClaudeEvent(
     return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
-  if (isTurnBoundary && eventAgentId === undefined) {
+  if (eventName === 'SessionEnd' && eventAgentId === undefined) {
+    // Why: no later child/task event is guaranteed after session teardown, so stale session-scoped work must not gate the terminal done state.
+    state.claudeSubagentRosterByPaneKey.delete(paneKey)
+    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+  } else if (isTurnBoundary && eventAgentId === undefined) {
     // Why: background_tasks is trusted only where unambiguous (see foldClaudeBackgroundTasksIntoRoster) — teammates report "running" here even while idle.
     // Older Claude builds without the field keep the incrementally tracked roster.
     if (backgroundTasks.present) {

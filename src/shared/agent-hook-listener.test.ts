@@ -1393,6 +1393,76 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('normalizes Claude SessionEnd to done from a working turn', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'finish the task' }
+      },
+      'production'
+    )
+
+    const ended = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionEnd', reason: 'prompt_input_exit' }
+      },
+      'production'
+    )
+
+    expect(ended?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'finish the task',
+      agentType: 'claude'
+    })
+  })
+
+  it('clears working Claude subagents when SessionEnd terminates the session', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'delegate the task' }
+      },
+      'production'
+    )
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SubagentStart',
+          agent_id: 'worker-1',
+          agent_type: 'general-purpose'
+        }
+      },
+      'production'
+    )
+
+    const ended = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionEnd', reason: 'prompt_input_exit' }
+      },
+      'production'
+    )
+
+    expect(ended?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'delegate the task',
+      agentType: 'claude'
+    })
+    expect(ended?.payload.subagents).toBeUndefined()
+  })
+
   it('normalizes Devin documented lifecycle events', () => {
     const started = normalizeHookPayload(
       state,
