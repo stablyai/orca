@@ -102,6 +102,57 @@ describe('getAzCliAzureDevOpsAccessToken', () => {
     )
     await expect(getAzCliAzureDevOpsAccessToken()).resolves.toBe('recovered-jwt')
   })
+
+  it('shares one az invocation across concurrent callers', async () => {
+    let resolveAz: (value: string) => void = () => {}
+    runAzAccessTokenCommandMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveAz = resolve
+      })
+    )
+
+    const first = getAzCliAzureDevOpsAccessToken()
+    const second = getAzCliAzureDevOpsAccessToken()
+    resolveAz(JSON.stringify({ accessToken: 'shared-jwt', expires_on: 32472144000 }))
+
+    await expect(first).resolves.toBe('shared-jwt')
+    await expect(second).resolves.toBe('shared-jwt')
+    expect(runAzAccessTokenCommandMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('expires tokens from older az versions that only report a local-time expiresOn', async () => {
+    vi.useFakeTimers()
+    // Why: az's expiresOn has no timezone and Date.parse reads it as local
+    // time, so the test clock uses the same zone-less form.
+    vi.setSystemTime(new Date('2026-08-03T00:00:00'))
+    runAzAccessTokenCommandMock.mockResolvedValueOnce(
+      JSON.stringify({ accessToken: 'old-az-jwt', expiresOn: '2026-08-03 01:00:00.000000' })
+    )
+    runAzAccessTokenCommandMock.mockResolvedValueOnce(
+      JSON.stringify({ accessToken: 'renewed-jwt', expiresOn: '2026-08-03 02:00:00.000000' })
+    )
+
+    await expect(getAzCliAzureDevOpsAccessToken()).resolves.toBe('old-az-jwt')
+    vi.setSystemTime(new Date('2026-08-03T00:56:00'))
+    await expect(getAzCliAzureDevOpsAccessToken()).resolves.toBe('renewed-jwt')
+  })
+
+  it('caps the cache lifetime when az reports no parseable expiry at all', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-03T00:00:00Z'))
+    runAzAccessTokenCommandMock.mockResolvedValueOnce(
+      JSON.stringify({ accessToken: 'unknown-expiry-jwt' })
+    )
+    runAzAccessTokenCommandMock.mockResolvedValueOnce(
+      JSON.stringify({ accessToken: 'refetched-jwt' })
+    )
+
+    await expect(getAzCliAzureDevOpsAccessToken()).resolves.toBe('unknown-expiry-jwt')
+    // Why: without an expiry a stale token would otherwise be served forever
+    // and every request after Entra's ~1h lifetime would 401 until restart.
+    vi.setSystemTime(new Date('2026-08-03T00:31:00Z'))
+    await expect(getAzCliAzureDevOpsAccessToken()).resolves.toBe('refetched-jwt')
+  })
 })
 
 describe('isEntraEligibleAzureDevOpsBaseUrl', () => {
