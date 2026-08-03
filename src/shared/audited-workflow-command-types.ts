@@ -15,6 +15,7 @@ import type {
   TriageReasonCode
 } from './audited-workflow-types'
 import type { WorktreeReasonCode } from './audited-worktree-types'
+import type { ExecutionReasonCode } from './audited-execution-types'
 
 export type AuditedWorkflowListTasksParams = { repoId?: string }
 export type AuditedWorkflowGetTaskParams = { taskId: string }
@@ -64,6 +65,37 @@ export type AuditedWorkflowStartTriageResult = AuditedCommandResult
 
 export type AuditedWorkflowRetryTriageParams = { taskId: string }
 export type AuditedWorkflowRetryTriageResult = AuditedCommandResult
+
+// Phase 4 execution commands. The `worktree` arm carries an explicit `persisted`
+// discriminator because the two execution entry points fail in genuinely
+// different ways, and conflating them would make the renderer lie:
+//
+//  - `persisted: true` — startExecution's ensureWorktreeForTask failure. That
+//    function BLOCKED the task and wrote worktree_reason_code, so the reason IS
+//    a durable column the projection already carries. The renderer's existing
+//    persisted-reason block renders it, and worktree recovery may be admissible
+//    for it (audited-worktree-recovery.ts decides).
+//
+//  - `persisted: false` — retryExecution's verifyWorktreeForTask preflight
+//    failure. Read-only: nothing was written, the task keeps its existing
+//    execution block, and worktree_reason_code stays null. Display-only and NOT
+//    admissible to worktree recovery; the sole action it may lead to is Retry.
+// The two worktree arms are spelled out as LITERAL types rather than
+// `persisted: boolean` so `persisted` is a real discriminant: narrowing on it
+// selects one arm, and a consumer that forgets to branch on it is a type error
+// rather than a silently-wrong render.
+export type ExecutionCommandResult =
+  | { ok: true }
+  | { ok: false; kind: 'execution'; reasonCode: ExecutionReasonCode }
+  | { ok: false; kind: 'worktree'; reasonCode: WorktreeReasonCode; persisted: true }
+  | { ok: false; kind: 'worktree'; reasonCode: WorktreeReasonCode; persisted: false }
+
+export type AuditedWorkflowStartExecutionParams = { taskId: string }
+export type AuditedWorkflowStartExecutionResult = ExecutionCommandResult
+export type AuditedWorkflowCancelExecutionParams = { taskId: string }
+export type AuditedWorkflowCancelExecutionResult = ExecutionCommandResult
+export type AuditedWorkflowRetryExecutionParams = { taskId: string }
+export type AuditedWorkflowRetryExecutionResult = ExecutionCommandResult
 
 export type AuditedWorkflowProvisionWorktreeParams = { taskId: string }
 export type AuditedWorkflowProvisionWorktreeResult = AuditedCommandResult

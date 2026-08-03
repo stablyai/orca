@@ -14,6 +14,8 @@ import {
   requireAuditedWorktreeRegistry
 } from './audited-worktree-registry'
 import { ensureAuditedWorktree } from './audited-worktree-provisioning'
+import { verifyAuditedWorktree } from './audited-worktree-drift-verifier'
+import { deriveManagedRootLayout } from './audited-worktree-managed-root'
 import {
   reconcileAuditedWorktrees,
   type ReconciledWorktreeTask
@@ -127,6 +129,69 @@ function blockAndReport(
     return { ok: false, contended: true }
   }
   return { ok: false, reasonCode }
+}
+
+export type VerifyWorktreeOutcome = { ok: true } | { ok: false; reasonCode: WorktreeReasonCode }
+
+/**
+ * Read-only verification of an ALREADY-provisioned worktree. Unlike
+ * ensureWorktreeForTask this never provisions, never blocks, and never writes to
+ * any table — so an already-blocked task keeps its existing block and the caller
+ * receives the ACTUAL drift reason instead of `contended`.
+ *
+ * Why this exists as a separate entry point: ensureWorktreeForTask's failure
+ * path routes through blockAndReport, which on an already-blocked task with a
+ * null worktree_reason_code (i.e. one blocked by execution rather than by a
+ * worktree failure) can only report contention — it has no truthful persisted
+ * reason to return. Execution retry needs the real reason, and must not mutate
+ * a task it is only inspecting.
+ *
+ * There is deliberately no `contended` arm: nothing is claimed and no CAS is
+ * attempted, so contention is not a possible outcome.
+ *
+ * The returned reason is NOT persisted anywhere. Callers must not describe it as
+ * such, and it is not admissible to worktree recovery.
+ */
+export async function verifyWorktreeForTask(taskId: string): Promise<VerifyWorktreeOutcome> {
+  const repo = getAuditedTaskRepository()
+  const task = repo.getTask(taskId)
+  if (!task) {
+    return { ok: false, reasonCode: 'worktree_never_provisioned' }
+  }
+
+  const workspaceRoot = resolveWorkspaceRoot(task)
+  if (!workspaceRoot) {
+    return { ok: false, reasonCode: 'managed_root_unavailable' }
+  }
+
+  // deriveManagedRootLayout, NOT prepareManagedRoot: the latter mkdirs, which
+  // would make this function a writer.
+  const layout = deriveManagedRootLayout({
+    workspaceRoot,
+    sourceRepoPath: task.sourceRepoPath,
+    repoId: task.repoId,
+    taskId: task.id
+  })
+  if (!layout.ok) {
+    return { ok: false, reasonCode: layout.reasonCode }
+  }
+
+  if (!task.worktreePath || !task.branchName || !task.worktreeProvenance) {
+    return { ok: false, reasonCode: 'worktree_never_provisioned' }
+  }
+
+  const verification = await verifyAuditedWorktree({
+    worktreePath: task.worktreePath,
+    expectedWorktreePath: task.worktreePath,
+    managedRoot: layout.layout.managedRoot,
+    branchName: task.branchName,
+    baseCommit: task.baseCommit,
+    sourceRepoCommonDir: task.sourceRepoCommonDir ?? ''
+  })
+  if (!verification.ok) {
+    return { ok: false, reasonCode: verification.reasonCode }
+  }
+  return { ok: true }
 }
 
 export async function recoverWorktreeForTask(taskId: string): Promise<WorktreeRecoveryResult> {

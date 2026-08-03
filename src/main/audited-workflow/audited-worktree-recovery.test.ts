@@ -356,3 +356,92 @@ describe('startup reconciliation is read-only', () => {
     expect(listRefs(testRepo.repoPath)).toEqual(refsBefore)
   })
 })
+
+// Phase 4 §2. Pins that an EXECUTION-blocked task is not admissible to worktree
+// recovery, which is why the failed-retry-preflight path renders no recovery
+// button: offering one would promise an action that always returns
+// notAdmissible. Also pins that the admission contract itself was NOT widened.
+describe('execution-blocked tasks stay inadmissible to worktree recovery', () => {
+  function blockByExecution(taskId: string, preBlockState: 'implementing' | 'planning'): void {
+    repository
+      .getDatabase()
+      .prepare(
+        `UPDATE audited_tasks
+            SET state = 'blocked', pre_block_state = ?,
+                blocked_reason_code = 'implement_process_failed',
+                blocked_phase = 'execution', worktree_reason_code = NULL
+          WHERE id = ?`
+      )
+      .run(preBlockState, taskId)
+  }
+
+  it.each(['implementing', 'planning'] as const)(
+    'refuses admission for pre_block_state=%s with a null worktree reason',
+    async (preBlockState) => {
+      const task = makeTask()
+      await ensureWorktreeForTask(task.id)
+      blockByExecution(task.id, preBlockState)
+
+      const admission = resolveRecoveryAdmission(repository.getDatabase(), reload(task.id))
+      expect(admission).toEqual({ admissible: false })
+
+      const recovered = await recoverWorktreeForTask(task.id)
+      expect(recovered).toEqual({ ok: false, notAdmissible: true })
+    }
+  )
+
+  it('still refuses when a drift reason is present but pre_block_state is implementing', async () => {
+    const task = makeTask()
+    await ensureWorktreeForTask(task.id)
+    // Even with a persisted worktree reason, the implementing pre-block state is
+    // outside both admission shapes — and drift codes are never retry-safe.
+    repository
+      .getDatabase()
+      .prepare(
+        `UPDATE audited_tasks
+            SET state = 'blocked', pre_block_state = 'implementing',
+                worktree_reason_code = 'head_moved_from_base_commit'
+          WHERE id = ?`
+      )
+      .run(task.id)
+
+    expect(resolveRecoveryAdmission(repository.getDatabase(), reload(task.id))).toEqual({
+      admissible: false
+    })
+  })
+
+  it('leaves the two existing admission shapes exactly as admissible as before', async () => {
+    // Shape 1: provisioning retry from `selected` with a retry-safe reason and
+    // no surviving attempt evidence.
+    const provisioning = makeTask()
+    repository
+      .getDatabase()
+      .prepare(
+        `UPDATE audited_tasks
+            SET state = 'blocked', pre_block_state = 'selected',
+                worktree_reason_code = 'managed_root_unavailable'
+          WHERE id = ?`
+      )
+      .run(provisioning.id)
+    expect(resolveRecoveryAdmission(repository.getDatabase(), reload(provisioning.id))).toEqual({
+      admissible: true,
+      restoreTo: 'selected'
+    })
+
+    // Shape 2: legacy, never-provisioned task in a post-triage state.
+    const legacy = makeTask()
+    repository
+      .getDatabase()
+      .prepare(
+        `UPDATE audited_tasks
+            SET state = 'blocked', pre_block_state = 'ready_to_implement',
+                worktree_reason_code = 'worktree_never_provisioned'
+          WHERE id = ?`
+      )
+      .run(legacy.id)
+    expect(resolveRecoveryAdmission(repository.getDatabase(), reload(legacy.id))).toEqual({
+      admissible: true,
+      restoreTo: 'ready_to_implement'
+    })
+  })
+})

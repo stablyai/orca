@@ -21,6 +21,7 @@ export type AuditedTransitionCommand =
   | 'implement'
   | 'implementComplete'
   | 'implementBlock'
+  | 'cancelImplementation'
   | 'codeAuditApprove'
   | 'codeAuditFixesRequested'
   | 'codeAuditBlock'
@@ -83,6 +84,18 @@ const TRANSITION_RULES: readonly AuditedTransitionRule[] = [
     actor: 'claude'
   },
   { command: 'implementBlock', from: ['implementing'], to: 'blocked', actor: 'control' },
+  // Human cancellation of a running direct implementation. UNDOES `implement`
+  // rather than advancing: `implementing` is reserved for a live run and for
+  // pre_block_state, never a resting state. Without this rule a cancelled direct
+  // run would strand — startExecution admits only ready_to_implement, so Start
+  // would be refused forever. Plan-mode cancel needs no rule (planning ->
+  // planning is a no-op on the state column).
+  {
+    command: 'cancelImplementation',
+    from: ['implementing'],
+    to: 'ready_to_implement',
+    actor: 'human'
+  },
   {
     command: 'codeAuditApprove',
     from: ['awaiting_code_audit'],

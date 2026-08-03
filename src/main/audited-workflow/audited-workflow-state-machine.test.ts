@@ -29,6 +29,7 @@ const LEGAL_TRANSITIONS: {
   { command: 'implement', from: 'ready_to_implement', to: 'implementing' },
   { command: 'implementComplete', from: 'implementing', to: 'awaiting_code_audit' },
   { command: 'implementBlock', from: 'implementing', to: 'blocked' },
+  { command: 'cancelImplementation', from: 'implementing', to: 'ready_to_implement' },
   { command: 'codeAuditApprove', from: 'awaiting_code_audit', to: 'awaiting_human_approval' },
   { command: 'codeAuditFixesRequested', from: 'awaiting_code_audit', to: 'code_fixes_requested' },
   { command: 'codeAuditBlock', from: 'awaiting_code_audit', to: 'blocked' },
@@ -93,6 +94,43 @@ describe('validateAuditedTransition', () => {
       const result = validateAuditedTransition('cancel', terminal)
       expect(result).toEqual({ ok: false, reasonCode: 'terminal_state' })
     }
+  })
+})
+
+// Phase 4 §1. The exhaustive negative matrix above already proves this command
+// is illegal from every other state; these cases pin the specific regressions
+// the rule exists to prevent.
+describe('cancelImplementation', () => {
+  it('is a human-actor transition back to the pre-launch state', () => {
+    const result = validateAuditedTransition('cancelImplementation', 'implementing')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.rule.to).toBe('ready_to_implement')
+      expect(result.rule.actor).toBe('human')
+    }
+  })
+
+  it('refuses a double cancel from the state it restores to', () => {
+    expect(validateAuditedTransition('cancelImplementation', 'ready_to_implement')).toEqual({
+      ok: false,
+      reasonCode: 'illegal_transition'
+    })
+  })
+
+  it('refuses from a terminal state', () => {
+    for (const terminal of TERMINAL_STATES) {
+      expect(validateAuditedTransition('cancelImplementation', terminal)).toEqual({
+        ok: false,
+        reasonCode: 'terminal_state'
+      })
+    }
+  })
+
+  it('refuses from planning — plan-mode cancel is a same-state no-op, not this rule', () => {
+    expect(validateAuditedTransition('cancelImplementation', 'planning')).toEqual({
+      ok: false,
+      reasonCode: 'illegal_transition'
+    })
   })
 })
 

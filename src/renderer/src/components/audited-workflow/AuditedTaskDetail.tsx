@@ -21,6 +21,7 @@ import {
   needsExplicitWorktreeProvisioning
 } from './audited-workflow-error-messages'
 import { getWorktreeErrorMessage } from './audited-worktree-error-messages'
+import { AuditedExecutionControls } from './AuditedExecutionControls'
 import { AuditedTriageApiKeyDialog } from './AuditedTriageApiKeyDialog'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -243,6 +244,8 @@ export function AuditedTaskDetail({ task }: AuditedTaskDetailProps): React.JSX.E
           <span className="font-medium capitalize">{task.triageDecision}</span>
         </div>
       ) : null}
+
+      <AuditedExecutionControls task={task} />
 
       {task.state === 'blocked' && task.worktreeReasonCode ? (
         <div className="mt-4 flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">

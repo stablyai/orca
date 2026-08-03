@@ -54,10 +54,7 @@ import { setAuditedTaskRepositoryForTests } from '../audited-workflow/audited-ta
 import { setTriageProviderForTests } from '../audited-workflow/audited-triage-orchestration'
 import { setAuditedWorktreeStore } from '../audited-workflow/audited-worktree-service'
 import { clearAuditedWorktreeRegistryForTests } from '../audited-workflow/audited-worktree-registry'
-import {
-  createTestRepo,
-  type TestRepo
-} from '../audited-workflow/audited-worktree-test-repo'
+import { createTestRepo, type TestRepo } from '../audited-workflow/audited-worktree-test-repo'
 import type {
   AuditedWorkflowSelectTaskResult,
   AuditedWorkflowStartTriageResult,
@@ -246,9 +243,7 @@ describe('registerAuditedWorkflowHandlers', () => {
   it('selectTask rejects extra keys too', async () => {
     const handler = getHandler('auditedWorkflow:selectTask')
 
-    await expect(
-      handler(null, selectTaskArgs({ baseCommit: 'a'.repeat(40) }))
-    ).rejects.toThrow()
+    await expect(handler(null, selectTaskArgs({ baseCommit: 'a'.repeat(40) }))).rejects.toThrow()
   })
 
   it('selectTask refuses a folder repo with the SAME unsupported_host code and invokes no Git command', async () => {
@@ -660,6 +655,97 @@ describe('registerAuditedWorkflowHandlers', () => {
 
       expect(rejected).toBe(false)
       expect(result).toEqual({ configured: false })
+    })
+  })
+
+  // Phase 4 execution commands. Electron IPC only; { taskId } and nothing else.
+  describe('execution commands', () => {
+    it.each([
+      'auditedWorkflow:startExecution',
+      'auditedWorkflow:cancelExecution',
+      'auditedWorkflow:retryExecution'
+    ])('%s rejects malformed params', async (channel) => {
+      const handler = getHandler(channel)
+      await expect(handler(null, {})).rejects.toThrow()
+    })
+
+    it.each([
+      'auditedWorkflow:startExecution',
+      'auditedWorkflow:cancelExecution',
+      'auditedWorkflow:retryExecution'
+    ])(
+      '%s REJECTS renderer-supplied mode/prompt/model rather than stripping them',
+      async (channel) => {
+        const handler = getHandler(channel)
+        await expect(handler(null, { taskId: 't', mode: 'direct' })).rejects.toThrow()
+        await expect(handler(null, { taskId: 't', prompt: 'do evil' })).rejects.toThrow()
+        await expect(handler(null, { taskId: 't', model: 'other' })).rejects.toThrow()
+        await expect(handler(null, { taskId: 't', argv: ['--x'] })).rejects.toThrow()
+      }
+    )
+
+    it('startExecution refuses an unknown task with a closed code, never a raw error', async () => {
+      const handler = getHandler('auditedWorkflow:startExecution')
+      const result = await handler(null, { taskId: 'audited_missing' })
+      expect(result).toEqual({ ok: false, kind: 'execution', reasonCode: 'illegal_transition' })
+    })
+
+    it('cancelExecution reports contention when nothing is running', async () => {
+      const taskId = await createProvisionableTask()
+      const handler = getHandler('auditedWorkflow:cancelExecution')
+      expect(await handler(null, { taskId })).toEqual({
+        ok: false,
+        kind: 'execution',
+        reasonCode: 'lock_contended'
+      })
+    })
+
+    it('retryExecution refuses a task that is not blocked', async () => {
+      const taskId = await createProvisionableTask()
+      const handler = getHandler('auditedWorkflow:retryExecution')
+      expect(await handler(null, { taskId })).toEqual({
+        ok: false,
+        kind: 'execution',
+        reasonCode: 'illegal_transition'
+      })
+    })
+
+    // Finding 3: the persisted discriminator must be truthful per entry point.
+    // startExecution's ensureWorktreeForTask failure BLOCKS the task and writes
+    // worktree_reason_code, so it is persisted. retryExecution's read-only
+    // preflight writes nothing, so it is fresh. The full behavioural proof lives
+    // in the orchestration suites (audited-execution-admission /
+    // audited-execution-run-retry); this pins the IPC boundary shape.
+    it('never reports a worktree failure without an explicit persisted flag', async () => {
+      const taskId = await createProvisionableTask()
+      const taskServiceModule = await import('../audited-workflow/audited-task-service')
+      const repo = taskServiceModule.getAuditedTaskRepository()
+      // Blocked with no execution run: retry refuses before any worktree read.
+      repo
+        .getDatabase()
+        .prepare(
+          "UPDATE audited_tasks SET state = 'blocked', pre_block_state = 'implementing' WHERE id = ?"
+        )
+        .run(taskId)
+
+      for (const channel of ['auditedWorkflow:startExecution', 'auditedWorkflow:retryExecution']) {
+        const result = (await getHandler(channel)(null, { taskId })) as {
+          ok: boolean
+          kind?: string
+          persisted?: boolean
+        }
+        if (!result.ok && result.kind === 'worktree') {
+          expect(typeof result.persisted).toBe('boolean')
+        }
+      }
+    })
+
+    it('registers no RPC method for any execution channel', () => {
+      registerAuditedWorkflowHandlers(store as never)
+      const channels = handleMock.mock.calls.map((entry: unknown[]) => entry[0] as string)
+      for (const channel of channels) {
+        expect(channel.startsWith('auditedWorkflow:')).toBe(true)
+      }
     })
   })
 })

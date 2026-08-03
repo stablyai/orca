@@ -16,14 +16,23 @@ import {
   WORKTREE_PROVENANCE_KINDS,
   WORKTREE_REASON_CODES
 } from '../../shared/audited-worktree-types'
+import {
+  EXECUTION_MODES,
+  EXECUTION_REASON_CODES,
+  EXECUTION_RUN_STATUSES
+} from '../../shared/audited-execution-types'
 import type Database from '../sqlite/sync-database'
 
 // Schema versions: v1 initial (audited_tasks, audited_transitions). v2 (Phase 2)
 // adds audited_triage_runs plus triage status columns on audited_tasks. v3
 // (Phase 3) adds audited_worktree_attempts plus worktree identity/provenance
-// columns — FULLY ADDITIVE: Phase 3 introduces no new task state, so
-// audited_tasks' state CHECK is unchanged and no table rebuild is needed.
-export const SCHEMA_VERSION = 3
+// columns. v4 (Phase 4) adds audited_execution_runs — ALSO FULLY ADDITIVE:
+// Phase 4 introduces no new task state (its one new transition rule,
+// cancelImplementation, is TypeScript in audited-workflow-state-machine.ts and
+// the database has no notion of transition legality), so audited_tasks' state
+// CHECK is unchanged and no table rebuild is needed. audited_transitions.event_type
+// is unconstrained TEXT, so the new execution_* event types need no migration.
+export const SCHEMA_VERSION = 4
 
 export function createAuditedWorkflowTables(db: Database.Database): void {
   const stateList = AUDITED_TASK_STATES.map((s) => `'${s}'`).join(', ')
@@ -144,7 +153,10 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
     -- duplicate Start Triage a CAS-detectable no-op rather than a second worktree.
     CREATE UNIQUE INDEX IF NOT EXISTS idx_audited_worktree_attempts_live
       ON audited_worktree_attempts(task_id) WHERE status IN ('claimed','created','verified');
+
   `)
+
+  createExecutionRunsTable(db)
 }
 
 // Phase 3 columns added to a pre-existing audited_tasks table, with their
@@ -156,6 +168,49 @@ const PHASE_3_TASK_COLUMNS: readonly [string, string][] = [
   ['worktree_reason_code', 'TEXT'],
   ['worktree_verified_at_ms', 'INTEGER']
 ]
+
+/**
+ * Phase 4: one row per Claude Code execution. Output CONTENT is never stored
+ * here — only byte counters and a truncation flag; the bounded head+tail logs
+ * live on disk and are never projected to the renderer.
+ *
+ * Shared by fresh-DB creation and the v3->v4 migration so both paths produce an
+ * identical table, including its CHECK constraints.
+ */
+function createExecutionRunsTable(db: Database.Database): void {
+  const modeList = EXECUTION_MODES.map((m) => `'${m}'`).join(', ')
+  const statusList = EXECUTION_RUN_STATUSES.map((s) => `'${s}'`).join(', ')
+  const reasonList = EXECUTION_REASON_CODES.map((r) => `'${r}'`).join(', ')
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS audited_execution_runs (
+      id                TEXT PRIMARY KEY,
+      task_id           TEXT NOT NULL,
+      mode              TEXT NOT NULL CHECK(mode IN (${modeList})),
+      status            TEXT NOT NULL CHECK(status IN (${statusList})),
+      -- The state the task held BEFORE this run's start transition. Recorded at
+      -- start so cancel restores the exact pre-launch state instead of guessing:
+      -- 'planning' for plan mode, 'ready_to_implement' for direct. Never inferred.
+      pre_launch_state  TEXT NOT NULL CHECK(pre_launch_state IN ('planning','ready_to_implement')),
+      -- The state the run LIVES in. Distinct from pre_launch_state for direct
+      -- runs; this is the value written to pre_block_state on failure.
+      active_run_state  TEXT NOT NULL CHECK(active_run_state IN ('planning','implementing')),
+      reason_code       TEXT CHECK(reason_code IS NULL OR reason_code IN (${reasonList})),
+      exit_code         INTEGER,
+      stdout_bytes      INTEGER NOT NULL DEFAULT 0,
+      stderr_bytes      INTEGER NOT NULL DEFAULT 0,
+      output_truncated  INTEGER NOT NULL DEFAULT 0,
+      worktree_verified_at_ms INTEGER NOT NULL,
+      started_at_ms     INTEGER NOT NULL,
+      ended_at_ms       INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_audited_execution_runs_task
+      ON audited_execution_runs(task_id);
+    -- At most one live run per task: the CAS primitive that makes a duplicate
+    -- Start click a no-op rather than a second Claude process.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_audited_execution_runs_running
+      ON audited_execution_runs(task_id) WHERE status = 'running';
+  `)
+}
 
 function columnExists(db: Database.Database, table: string, column: string): boolean {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
@@ -198,6 +253,15 @@ export function migrateAuditedWorkflowSchema(db: Database.Database): void {
           db.exec(`ALTER TABLE audited_tasks ADD COLUMN ${column} ${type}`)
         }
       }
+    }
+    if (current < 4) {
+      // Phase 4 is a pure table addition — no audited_tasks column, no CHECK
+      // change, no rebuild. Created here rather than relying on
+      // createAuditedWorkflowTables having run: this function is also called
+      // directly against a legacy DB (see audited-task-schema.test.ts), and a
+      // migration that silently depends on another call having happened first
+      // would leave that path without the table.
+      createExecutionRunsTable(db)
     }
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     db.exec('COMMIT')

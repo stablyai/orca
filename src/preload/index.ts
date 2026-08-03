@@ -20,6 +20,12 @@ import type {
   AuditedWorkflowProvisionWorktreeResult,
   AuditedWorkflowVerifyWorktreeParams,
   AuditedWorkflowVerifyWorktreeResult,
+  AuditedWorkflowStartExecutionParams,
+  AuditedWorkflowStartExecutionResult,
+  AuditedWorkflowCancelExecutionParams,
+  AuditedWorkflowCancelExecutionResult,
+  AuditedWorkflowRetryExecutionParams,
+  AuditedWorkflowRetryExecutionResult,
   AuditedWorkflowTriageProviderStatus,
   AuditedWorkflowSaveTriageApiKeyParams
 } from '../shared/audited-workflow-types'
@@ -2368,6 +2374,18 @@ const api = {
       params: AuditedWorkflowVerifyWorktreeParams
     ): Promise<AuditedWorkflowVerifyWorktreeResult> =>
       ipcRenderer.invoke('auditedWorkflow:verifyWorktree', params),
+    startExecution: (
+      params: AuditedWorkflowStartExecutionParams
+    ): Promise<AuditedWorkflowStartExecutionResult> =>
+      ipcRenderer.invoke('auditedWorkflow:startExecution', params),
+    cancelExecution: (
+      params: AuditedWorkflowCancelExecutionParams
+    ): Promise<AuditedWorkflowCancelExecutionResult> =>
+      ipcRenderer.invoke('auditedWorkflow:cancelExecution', params),
+    retryExecution: (
+      params: AuditedWorkflowRetryExecutionParams
+    ): Promise<AuditedWorkflowRetryExecutionResult> =>
+      ipcRenderer.invoke('auditedWorkflow:retryExecution', params),
     getTriageProviderStatus: (): Promise<AuditedWorkflowTriageProviderStatus> =>
       ipcRenderer.invoke('auditedWorkflow:getTriageProviderStatus'),
     saveTriageApiKey: (

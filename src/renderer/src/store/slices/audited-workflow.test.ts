@@ -50,6 +50,11 @@ function makeTask(taskId: string): AuditedTaskStatusProjection {
     acceptanceCriteria: [],
     timings: [],
     createdAt: 1,
+    worktreeReady: false,
+    worktreeReasonCode: null,
+    executionRunStatus: null,
+    executionReasonCode: null,
+    executionOutputTruncated: false,
     updatedAt: 1
   }
 }

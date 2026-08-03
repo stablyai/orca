@@ -25,6 +25,12 @@ import type {
   AuditedWorkflowProvisionWorktreeResult,
   AuditedWorkflowVerifyWorktreeParams,
   AuditedWorkflowVerifyWorktreeResult,
+  AuditedWorkflowStartExecutionParams,
+  AuditedWorkflowStartExecutionResult,
+  AuditedWorkflowCancelExecutionParams,
+  AuditedWorkflowCancelExecutionResult,
+  AuditedWorkflowRetryExecutionParams,
+  AuditedWorkflowRetryExecutionResult,
   AuditedWorkflowTriageProviderStatus,
   AuditedWorkflowSaveTriageApiKeyParams
 } from '../shared/audited-workflow-types'
@@ -2496,6 +2502,15 @@ export type PreloadApi = {
     verifyWorktree: (
       params: AuditedWorkflowVerifyWorktreeParams
     ) => Promise<AuditedWorkflowVerifyWorktreeResult>
+    startExecution: (
+      params: AuditedWorkflowStartExecutionParams
+    ) => Promise<AuditedWorkflowStartExecutionResult>
+    cancelExecution: (
+      params: AuditedWorkflowCancelExecutionParams
+    ) => Promise<AuditedWorkflowCancelExecutionResult>
+    retryExecution: (
+      params: AuditedWorkflowRetryExecutionParams
+    ) => Promise<AuditedWorkflowRetryExecutionResult>
     getTriageProviderStatus: () => Promise<AuditedWorkflowTriageProviderStatus>
     saveTriageApiKey: (
       params: AuditedWorkflowSaveTriageApiKeyParams

@@ -134,6 +134,11 @@ describe('AuditedWorkflowPage', () => {
       acceptanceCriteria: [],
       timings: [],
       createdAt: 1,
+      worktreeReady: false,
+      worktreeReasonCode: null,
+      executionRunStatus: null,
+      executionReasonCode: null,
+      executionOutputTruncated: false,
       updatedAt: 1
     }
     // Error takes precedence in this component's branch order — a genuinely

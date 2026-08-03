@@ -32,6 +32,8 @@ import {
   recoverWorktreeForTask,
   setAuditedWorktreeStore
 } from '../audited-workflow/audited-worktree-service'
+import { recoverInterruptedExecutionsOnStartup } from '../audited-workflow/audited-execution-orchestration'
+import { registerAuditedExecutionHandlers } from './audited-workflow-execution'
 import { broadcastAuditedTaskChanged } from '../audited-workflow/audited-workflow-broadcast'
 import { RISK_LEVELS, TASK_SOURCES } from '../../shared/audited-workflow-types'
 import type {
@@ -62,19 +64,21 @@ const RetryTriageParams = z.object({ taskId: z.string().min(1) }).strict()
 const ProvisionWorktreeParams = z.object({ taskId: z.string().min(1) }).strict()
 const VerifyWorktreeParams = z.object({ taskId: z.string().min(1) }).strict()
 const SaveTriageApiKeyParams = z.object({ apiKey: z.string().min(1) }).strict()
-const SelectTaskParams = z.object({
-  repoId: z.string().min(1),
-  source: z.enum(TASK_SOURCES),
-  roadmapId: z.string().optional(),
-  title: z
-    .string()
-    .trim()
-    .min(1, 'Title is required')
-    .max(200, 'Title is too long')
-    .refine((v) => !/[\r\n]/.test(v), 'Title must be a single line'),
-  description: z.string().max(20_000, 'Description is too long'),
-  risk: z.enum(RISK_LEVELS)
-}).strict()
+const SelectTaskParams = z
+  .object({
+    repoId: z.string().min(1),
+    source: z.enum(TASK_SOURCES),
+    roadmapId: z.string().optional(),
+    title: z
+      .string()
+      .trim()
+      .min(1, 'Title is required')
+      .max(200, 'Title is too long')
+      .refine((v) => !/[\r\n]/.test(v), 'Title must be a single line'),
+    description: z.string().max(20_000, 'Description is too long'),
+    risk: z.enum(RISK_LEVELS)
+  })
+  .strict()
 
 async function resolveHeadCommit(repoPath: string): Promise<string> {
   const { stdout } = await gitExecFileAsync(['rev-parse', 'HEAD'], { cwd: repoPath })
@@ -118,6 +122,11 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
   // (e.g. in a test that re-registers handlers) is harmless — a second pass
   // finds nothing left in 'running' state to recover.
   recoverInterruptedTriageRunsOnStartup()
+
+  // Same rationale, for execution runs: a `running` row cannot be assumed alive
+  // after a restart, so every one is marked `interrupted` and its task blocked
+  // with pre_block_state set. Idempotent and CAS-safe.
+  recoverInterruptedExecutionsOnStartup()
 
   // Read-only, network-free, Git-mutation-free. Fire-and-forget so handler
   // registration is never blocked on filesystem/Git probes; failures are logged
@@ -319,6 +328,8 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
       }
     }
   )
+
+  registerAuditedExecutionHandlers()
 
   // Why: exposes ONLY whether a key is configured — never the key, a masked
   // form, encrypted bytes, or a filesystem path. See

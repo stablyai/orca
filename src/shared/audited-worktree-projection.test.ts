@@ -35,6 +35,9 @@ function source(overrides: Partial<ProjectionSourceTask> = {}): ProjectionSource
     worktreeProvenance: null,
     worktreeVerifiedAt: null,
     worktreeReasonCode: null,
+    executionRunStatus: null,
+    executionReasonCode: null,
+    executionOutputTruncated: false,
     acceptanceCriteria: [],
     timings: [],
     createdAt: 1,
@@ -104,7 +107,6 @@ describe('worktreeReady requires all three conditions', () => {
 })
 
 describe('worktree projection', () => {
-
   it('exposes the closed reason code and nothing else about the worktree', () => {
     const projection = buildAuditedTaskProjection(
       source({ worktreeReasonCode: 'head_moved_from_base_commit' })

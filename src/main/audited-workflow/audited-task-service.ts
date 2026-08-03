@@ -23,6 +23,7 @@ import {
   buildAuditedTaskProjection,
   type ProjectionSourceTask
 } from '../../shared/audited-workflow-projection'
+import { getLatestExecutionRun } from './audited-execution-run-repository'
 import type {
   AuditedTaskState,
   AuditedTaskStatusProjection
@@ -47,6 +48,10 @@ export function setAuditedTaskRepositoryForTests(repo: AuditedTaskRepository | u
 }
 
 function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
+  // Phase 4: the latest run supplies the three projected execution facts. Only
+  // status, reason code, and the truncation flag — never counters' content,
+  // paths, or argv.
+  const run = getLatestExecutionRun(getAuditedTaskRepository().getDatabase(), row.id)
   return {
     taskId: row.id,
     repoId: row.repoId,
@@ -72,6 +77,9 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
     worktreeProvenance: row.worktreeProvenance,
     worktreeVerifiedAt: row.worktreeVerifiedAt,
     worktreeReasonCode: row.worktreeReasonCode,
+    executionRunStatus: run?.status ?? null,
+    executionReasonCode: run?.reasonCode ?? null,
+    executionOutputTruncated: run?.outputTruncated ?? false,
     acceptanceCriteria: [],
     timings: [],
     createdAt: row.createdAt,

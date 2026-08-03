@@ -2,6 +2,7 @@
 // No free text crosses any IPC/renderer/notification boundary through these types —
 // see docs/audited-workflow.md for the trust-boundary rationale.
 import type { WorktreeReasonCode } from './audited-worktree-types'
+import type { ExecutionReasonCode, ExecutionRunStatus } from './audited-execution-types'
 
 export const AUDITED_TASK_STATES = [
   'selected',
@@ -269,6 +270,11 @@ export type AuditedTaskStatusProjection = {
   // branch name, worktree id, provenance id, or common dir.
   worktreeReady: boolean
   worktreeReasonCode: WorktreeReasonCode | null
+  // Phase 4: the ONLY execution facts that cross the boundary. Never output
+  // content, a log path, argv, a pid, the model, or the prompt.
+  executionRunStatus: ExecutionRunStatus | null
+  executionReasonCode: ExecutionReasonCode | null
+  executionOutputTruncated: boolean
   acceptanceCriteria: AuditedAcceptanceCriterion[]
   timings: AuditedPhaseTiming[]
   createdAt: number

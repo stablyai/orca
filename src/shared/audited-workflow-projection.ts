@@ -22,6 +22,7 @@ import type {
   AuditedPhaseTiming
 } from './audited-workflow-types'
 import type { WorktreeReasonCode } from './audited-worktree-types'
+import type { ExecutionReasonCode, ExecutionRunStatus } from './audited-execution-types'
 
 // Truncates a full identity value (tree OID / SHA) to a short, non-authorizing
 // display form. Never accepted back as input anywhere — see plan §5.
@@ -60,6 +61,11 @@ export type ProjectionSourceTask = {
   worktreeProvenance: string | null
   worktreeVerifiedAt: number | null
   worktreeReasonCode: WorktreeReasonCode | null
+  // Phase 4 execution state. Three fields only — never output content, a log
+  // path, argv, a pid, the model, or the prompt.
+  executionRunStatus: ExecutionRunStatus | null
+  executionReasonCode: ExecutionReasonCode | null
+  executionOutputTruncated: boolean
   acceptanceCriteria: AuditedAcceptanceCriterion[]
   timings: AuditedPhaseTiming[]
   createdAt: number
@@ -100,6 +106,9 @@ export function buildAuditedTaskProjection(
       source.worktreeVerifiedAt !== null &&
       source.worktreeReasonCode === null,
     worktreeReasonCode: source.worktreeReasonCode,
+    executionRunStatus: source.executionRunStatus,
+    executionReasonCode: source.executionReasonCode,
+    executionOutputTruncated: source.executionOutputTruncated,
     acceptanceCriteria: source.acceptanceCriteria,
     timings: source.timings,
     createdAt: source.createdAt,
@@ -133,5 +142,16 @@ export const AUDITED_PROJECTION_FORBIDDEN_KEYS = [
   'worktreeProvenanceId',
   'sourceRepoCommonDir',
   'intendedPath',
-  'intendedBranch'
+  'intendedBranch',
+  // Phase 4 execution internals — only the three execution* fields may cross.
+  // Agent output is the highest-risk field for embedded secrets and absolute
+  // paths, so not even a path to the log directory is projected.
+  'executionLogPath',
+  'stdoutLog',
+  'stderrLog',
+  'argv',
+  'settingsPath',
+  'pid',
+  'model',
+  'nextStepPrompt'
 ] as const
