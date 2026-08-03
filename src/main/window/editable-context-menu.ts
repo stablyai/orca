@@ -3,6 +3,9 @@ import {
   type RichMarkdownContextMenuCommand,
   type RichMarkdownContextMenuCommandPayload
 } from '../../shared/rich-markdown-context-menu'
+import { translateMain } from '../i18n/main-i18n'
+
+const TABLE_TARGET_QUERY_TIMEOUT_MS = 120
 
 type EditableContextMenuWebContents = Pick<
   Electron.WebContents,
@@ -88,15 +91,64 @@ function buildMarkdownMenuTemplate(
     ...(includeTableActions
       ? [
           {
-            label: 'Table',
+            label: translateMain('auto.main.window.editableContextMenu.table', 'Table'),
             submenu: [
-              markdownCommandItem('Insert row above', 'insert-row-above', webContents, point),
-              markdownCommandItem('Insert row below', 'insert-row-below', webContents, point),
-              markdownCommandItem('Delete current row', 'delete-row', webContents, point),
+              markdownCommandItem(
+                translateMain(
+                  'auto.main.window.editableContextMenu.insertRowAbove',
+                  'Insert row above'
+                ),
+                'insert-row-above',
+                webContents,
+                point
+              ),
+              markdownCommandItem(
+                translateMain(
+                  'auto.main.window.editableContextMenu.insertRowBelow',
+                  'Insert row below'
+                ),
+                'insert-row-below',
+                webContents,
+                point
+              ),
+              markdownCommandItem(
+                translateMain('auto.main.window.editableContextMenu.deleteRow', 'Delete row'),
+                'delete-row',
+                webContents,
+                point
+              ),
               { type: 'separator' as const },
-              markdownCommandItem('Insert column left', 'insert-column-left', webContents, point),
-              markdownCommandItem('Insert column right', 'insert-column-right', webContents, point),
-              markdownCommandItem('Delete current column', 'delete-column', webContents, point)
+              markdownCommandItem(
+                translateMain(
+                  'auto.main.window.editableContextMenu.insertColumnLeft',
+                  'Insert column left'
+                ),
+                'insert-column-left',
+                webContents,
+                point
+              ),
+              markdownCommandItem(
+                translateMain(
+                  'auto.main.window.editableContextMenu.insertColumnRight',
+                  'Insert column right'
+                ),
+                'insert-column-right',
+                webContents,
+                point
+              ),
+              markdownCommandItem(
+                translateMain('auto.main.window.editableContextMenu.deleteColumn', 'Delete column'),
+                'delete-column',
+                webContents,
+                point
+              ),
+              { type: 'separator' as const },
+              markdownCommandItem(
+                translateMain('auto.main.window.editableContextMenu.deleteTable', 'Delete table'),
+                'delete-table',
+                webContents,
+                point
+              )
             ]
           }
         ]
@@ -174,13 +226,32 @@ export function buildRichMarkdownTableTargetExpression(x: number, y: number): st
 
 export async function isRichMarkdownTableContextTarget(
   params: Electron.ContextMenuParams,
-  webContents: Pick<Electron.WebContents, 'executeJavaScript'>
+  webContents: Pick<Electron.WebContents, 'executeJavaScript'>,
+  timeoutMs = TABLE_TARGET_QUERY_TIMEOUT_MS
 ): Promise<boolean> {
   if (!params.isEditable || params.formControlType !== 'none') {
     return false
   }
-  return webContents
-    .executeJavaScript(buildRichMarkdownTableTargetExpression(params.x, params.y))
-    .then((result) => result === true)
-    .catch(() => false)
+  return new Promise((resolve) => {
+    let finished = false
+    const finish = (result: boolean): void => {
+      if (finished) {
+        return
+      }
+      finished = true
+      clearTimeout(timer)
+      resolve(result)
+    }
+    const timer = setTimeout(() => finish(false), Math.max(0, timeoutMs))
+    try {
+      void webContents
+        .executeJavaScript(buildRichMarkdownTableTargetExpression(params.x, params.y))
+        .then(
+          (result) => finish(result === true),
+          () => finish(false)
+        )
+    } catch {
+      finish(false)
+    }
+  })
 }

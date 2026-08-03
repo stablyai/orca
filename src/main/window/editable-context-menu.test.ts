@@ -150,11 +150,13 @@ describe('buildEditableContextMenuTemplate', () => {
     expect(tableMenu.map((item) => item.label ?? item.type)).toEqual([
       'Insert row above',
       'Insert row below',
-      'Delete current row',
+      'Delete row',
       'separator',
       'Insert column left',
       'Insert column right',
-      'Delete current column'
+      'Delete column',
+      'separator',
+      'Delete table'
     ])
     tableMenu[0].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
     expect(send).toHaveBeenLastCalledWith(richMarkdownContextMenuCommandChannel, {
@@ -294,5 +296,23 @@ describe('isRichMarkdownTableContextTarget', () => {
       })
     ).resolves.toBe(false)
     expect(executeJavaScript).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds a hung renderer query so the native menu can still open', async () => {
+    const executeJavaScript = vi.fn(() => new Promise<never>(() => {}))
+
+    await expect(
+      isRichMarkdownTableContextTarget(contextParams(), { executeJavaScript }, 1)
+    ).resolves.toBe(false)
+  })
+
+  it('fails closed when executeJavaScript throws synchronously', async () => {
+    const executeJavaScript = vi.fn(() => {
+      throw new Error('renderer destroyed')
+    })
+
+    await expect(
+      isRichMarkdownTableContextTarget(contextParams(), { executeJavaScript })
+    ).resolves.toBe(false)
   })
 })

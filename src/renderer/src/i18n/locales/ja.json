@@ -12926,6 +12926,20 @@
           "6bbf827ef5": "見出し 5",
           "d1bbf9a835": "折りたたみ可能なセクション"
         },
+        "RichMarkdownTableControls": {
+          "deleteTable": "テーブルを削除",
+          "tableActions": "テーブル操作",
+          "addColumn": "列を追加",
+          "addRow": "行を追加",
+          "rowActions": "行の操作",
+          "columnActions": "列の操作",
+          "insertRowAbove": "上に行を挿入",
+          "insertColumnLeft": "左に列を挿入",
+          "insertRowBelow": "下に行を挿入",
+          "insertColumnRight": "右に列を挿入",
+          "deleteRow": "行を削除",
+          "deleteColumn": "列を削除"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "保存",
           "949711deb4": "キャンセル",
@@ -14316,6 +14330,20 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      }
+    },
+    "main": {
+      "window": {
+        "editableContextMenu": {
+          "table": "テーブル",
+          "insertRowAbove": "上に行を挿入",
+          "insertRowBelow": "下に行を挿入",
+          "deleteRow": "行を削除",
+          "insertColumnLeft": "左に列を挿入",
+          "insertColumnRight": "右に列を挿入",
+          "deleteColumn": "列を削除",
+          "deleteTable": "テーブルを削除"
+        }
       }
     }
   },

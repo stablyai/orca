@@ -328,7 +328,7 @@ export default function RichMarkdownEditor({
       }
 
       runRichMarkdownContextCommand({
-        command: payload.command,
+        payload,
         editor: ed,
         toggleLink: toggleLinkFromToolbar,
         pickImage: handleLocalImagePick

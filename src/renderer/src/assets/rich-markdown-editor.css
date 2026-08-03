@@ -830,6 +830,31 @@
   background: color-mix(in srgb, var(--foreground) 1.5%, transparent);
 }
 
+.rich-markdown-table-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  pointer-events: none;
+}
+
+.rich-markdown-table-control {
+  position: absolute;
+  z-index: 1;
+  border-color: color-mix(in srgb, var(--border) 76%, transparent);
+  background: color-mix(in srgb, var(--background) 88%, transparent);
+  color: var(--muted-foreground);
+  opacity: 0.76;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+}
+
+.rich-markdown-table-control:hover,
+.rich-markdown-table-control:focus-visible,
+.rich-markdown-table-control[data-state='open'] {
+  color: var(--foreground);
+  opacity: 1;
+}
+
 .rich-markdown-editor code {
   padding: 0.2em 0.4em;
   border-radius: 5px;
