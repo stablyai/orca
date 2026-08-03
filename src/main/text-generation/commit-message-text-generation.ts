@@ -55,7 +55,10 @@ import {
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { wslAwareSpawn } from '../git/runner'
 
-const GENERATION_TIMEOUT_MS = 60_000
+const DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS = 60_000
+const MIN_SOURCE_CONTROL_GENERATION_TIMEOUT_MS = 30_000
+const MAX_SOURCE_CONTROL_GENERATION_TIMEOUT_MS = 300_000
+const SOURCE_CONTROL_GENERATION_TIMEOUT_ENV = 'ORCA_SOURCE_CONTROL_AI_TIMEOUT_MS'
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
 
 export type GenerateCommitMessageParams = ResolvedSourceControlAiGenerationParams
@@ -129,6 +132,27 @@ export type CommitMessageModelDiscoveryLocalOptions = {
 
 export function trimGeneratedCommitMessage(message: string): string {
   return message.replace(/\s+$/, '')
+}
+
+export function resolveSourceControlGenerationTimeoutMs(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const raw = env[SOURCE_CONTROL_GENERATION_TIMEOUT_ENV]?.trim()
+  if (!raw) {
+    return DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS
+  }
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS
+  }
+  return Math.min(
+    MAX_SOURCE_CONTROL_GENERATION_TIMEOUT_MS,
+    Math.max(MIN_SOURCE_CONTROL_GENERATION_TIMEOUT_MS, Math.round(parsed))
+  )
+}
+
+function formatTimeoutSeconds(timeoutMs: number): number {
+  return Math.round(timeoutMs / 1000)
 }
 
 export function resolveCommitMessageSettings(
@@ -314,6 +338,7 @@ export async function discoverCommitMessageModelsLocal(
 
   return new Promise((resolve) => {
     let child: ChildProcess
+    const timeoutMs = resolveSourceControlGenerationTimeoutMs()
     const spawnEnv = env ?? process.env
     try {
       const planned = planModelDiscovery(spec, agentCommandOverride)
@@ -375,9 +400,9 @@ export async function discoverCommitMessageModelsLocal(
       killProcessTree(child)
       finish({
         success: false,
-        error: `${spec.label} model discovery timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`
+        error: `${spec.label} model discovery timed out after ${formatTimeoutSeconds(timeoutMs)}s.`
       })
-    }, GENERATION_TIMEOUT_MS)
+    }, timeoutMs)
 
     const onData = (chunk: Buffer, append: (text: string) => void): void => {
       if (stdout.length + stderr.length + chunk.byteLength > MAX_AGENT_OUTPUT_BYTES) {
@@ -450,9 +475,10 @@ export async function discoverCommitMessageModelsRemote(
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
+  const timeoutMs = resolveSourceControlGenerationTimeoutMs()
   let result: RemoteCommitMessageExecResult
   try {
-    result = await execute(planned.plan, cwd, GENERATION_TIMEOUT_MS)
+    result = await execute(planned.plan, cwd, timeoutMs)
   } catch (error) {
     console.error('[commit-message] Remote model discovery request failed:', error)
     return {
@@ -482,7 +508,7 @@ export async function discoverCommitMessageModelsRemote(
   if (result.timedOut) {
     return {
       success: false,
-      error: `${spec.label} model discovery timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`
+      error: `${spec.label} model discovery timed out after ${formatTimeoutSeconds(timeoutMs)}s.`
     }
   }
   return finalizeModelDiscoveryOutput(spec, result.stdout, result.stderr, result.exitCode)
@@ -609,6 +635,7 @@ async function runLocalPlan(
     let outputLimitExceeded = false
     let settled = false
     let canceledByUser = false
+    const timeoutMs = resolveSourceControlGenerationTimeoutMs()
     const laneKey = localLaneKey(operation, cwd)
     let cancelToken: (() => void) | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -642,9 +669,9 @@ async function runLocalPlan(
       killProcessTree(child)
       finalize({
         success: false,
-        error: `Generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`
+        error: `Generation timed out after ${formatTimeoutSeconds(timeoutMs)}s.`
       })
-    }, GENERATION_TIMEOUT_MS)
+    }, timeoutMs)
 
     const onStdoutData = (chunk: Buffer): void => {
       stdoutBytes += chunk.byteLength
@@ -790,9 +817,10 @@ async function runRemotePlan(
   operation: TextGenerationOperation = 'commit-message'
 ): Promise<InternalTextGenerationResult> {
   const { binary, label } = plan
+  const timeoutMs = resolveSourceControlGenerationTimeoutMs()
   let result: RemoteCommitMessageExecResult
   try {
-    result = await target.execute(plan, target.cwd, GENERATION_TIMEOUT_MS, operation)
+    result = await target.execute(plan, target.cwd, timeoutMs, operation)
   } catch (error) {
     console.error('[commit-message] Remote generator request failed:', error)
     return {
@@ -825,7 +853,7 @@ async function runRemotePlan(
   if (result.timedOut) {
     return {
       success: false,
-      error: `Generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`
+      error: `Generation timed out after ${formatTimeoutSeconds(timeoutMs)}s.`
     }
   }
 
