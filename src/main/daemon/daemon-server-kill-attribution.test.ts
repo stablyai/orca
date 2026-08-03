@@ -31,7 +31,9 @@ describe('daemon kill attribution', () => {
       }
     })
     const daemon = server as unknown as DaemonServerPrivate
-    vi.spyOn(daemon.host, 'kill').mockResolvedValue()
+    vi.spyOn(daemon.host, 'kill').mockImplementation(async () => {
+      expect(killLog.log).not.toHaveBeenCalledWith('session-killed', expect.anything())
+    })
 
     await daemon.routeRequest('control-42', {
       id: 'kill-1',
@@ -44,5 +46,35 @@ describe('daemon kill attribution', () => {
       immediate: true,
       clientId: 'control-42'
     })
+  })
+
+  it('attributes a failed kill without claiming the session was killed', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'daemon-kill-attribution-'))
+    const killLog = { log: vi.fn(), close: vi.fn() }
+    server = new DaemonServer({
+      socketPath: join(dir, 'daemon.sock'),
+      tokenPath: join(dir, 'daemon.token'),
+      log: killLog,
+      spawnSubprocess: () => {
+        throw new Error('not used')
+      }
+    })
+    const daemon = server as unknown as DaemonServerPrivate
+    vi.spyOn(daemon.host, 'kill').mockRejectedValue(new Error('kill refused'))
+
+    await expect(
+      daemon.routeRequest('control-42', {
+        id: 'kill-1',
+        type: 'kill',
+        payload: { sessionId: 'agent-session', immediate: true }
+      })
+    ).rejects.toThrow('kill refused')
+
+    expect(killLog.log).toHaveBeenCalledWith('session-kill-failed', {
+      sessionId: 'agent-session',
+      immediate: true,
+      clientId: 'control-42'
+    })
+    expect(killLog.log).not.toHaveBeenCalledWith('session-killed', expect.anything())
   })
 })
