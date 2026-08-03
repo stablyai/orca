@@ -118,7 +118,9 @@ export async function subscribeWithInProcessWatcher(
     unsubscribe: async (): Promise<void> => {
       active = false
       eventDelivery.close()
-      await subscription.unsubscribe()
+      // Why: Parcel rejects when the watch root was already deleted (tests often
+      // rm temp dirs while releasing). Surface no error for in-process teardown.
+      await subscription.unsubscribe().catch(() => undefined)
     }
   }
 }
