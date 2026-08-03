@@ -535,6 +535,7 @@ function PendingBrowserAnnotationCard({
   const submitModifierLabel = getScreenSubmitModifierLabel()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const caretRef = useRef(0)
+  const caretEndRef = useRef(0)
   const restoreCaretRef = useRef<number | null>(null)
   const referenceCountRef = useRef(references.length)
   const commentRef = useRef(comment)
@@ -556,15 +557,17 @@ function PendingBrowserAnnotationCard({
     const insertion = insertBrowserAnnotationReferenceToken(
       commentRef.current,
       caretRef.current,
-      caretRef.current,
+      caretEndRef.current,
       browserAnnotationReferenceToken(added.index)
     )
     caretRef.current = insertion.caret
+    caretEndRef.current = insertion.caret
     restoreCaretRef.current = insertion.caret
     setComment(insertion.comment)
   }, [references])
 
-  // Why: picking moves focus into the guest page, so bring it back to the caret.
+  // Why: keyed on comment, not every render — the caret can only be placed once
+  // the inserted token has rendered, and picking left focus in the guest page.
   useEffect(() => {
     const caret = restoreCaretRef.current
     const textarea = textareaRef.current
@@ -574,7 +577,7 @@ function PendingBrowserAnnotationCard({
     restoreCaretRef.current = null
     textarea.focus()
     textarea.setSelectionRange(caret, caret)
-  })
+  }, [comment])
 
   return (
     <Popover
@@ -642,10 +645,12 @@ function PendingBrowserAnnotationCard({
           value={comment}
           onChange={(event) => {
             caretRef.current = event.target.selectionStart
+            caretEndRef.current = event.target.selectionEnd
             setComment(event.target.value)
           }}
           onSelect={(event) => {
             caretRef.current = event.currentTarget.selectionStart
+            caretEndRef.current = event.currentTarget.selectionEnd
           }}
           placeholder={translate(
             'auto.components.browser.pane.BrowserPane.532bac48c5',
@@ -4855,6 +4860,15 @@ function BrowserPagePane({
     grab.rearm()
   }, [grab, recordFeatureInteraction, showGrabToast])
 
+  // Why: a pick still in flight must end with the composer, or its result is
+  // routed into references belonging to a composer that no longer exists.
+  const closePendingAnnotationComposer = useCallback((): void => {
+    referencePickActiveRef.current = false
+    setIsPickingAnnotationReference(false)
+    setPendingAnnotationPayload(null)
+    setPendingAnnotationReferences([])
+  }, [])
+
   const handleAddBrowserAnnotation = useCallback(
     (comment: string, intent: BrowserAnnotationIntent): void => {
       const payload = pendingAnnotationPayload
@@ -4873,8 +4887,7 @@ function BrowserPagePane({
         ...(references.length > 0 ? { references } : {})
       })
       recordFeatureInteraction('browser-annotations')
-      setPendingAnnotationPayload(null)
-      setPendingAnnotationReferences([])
+      closePendingAnnotationComposer()
       setBrowserAnnotationTrayOpen(true)
       recordFeatureInteraction('browser-annotations')
       showGrabToast('Annotation added', 'success', payload)
@@ -4883,6 +4896,7 @@ function BrowserPagePane({
     [
       addBrowserPageAnnotation,
       browserTab.id,
+      closePendingAnnotationComposer,
       grab,
       pendingAnnotationPayload,
       pendingAnnotationReferences,
@@ -4892,12 +4906,11 @@ function BrowserPagePane({
   )
 
   const handleCancelPendingBrowserAnnotation = useCallback((): void => {
-    setPendingAnnotationPayload(null)
-    setPendingAnnotationReferences([])
+    closePendingAnnotationComposer()
     if (grabIntent === 'annotate' && grab.state === 'confirming') {
       grab.rearm()
     }
-  }, [grab, grabIntent])
+  }, [closePendingAnnotationComposer, grab, grabIntent])
 
   // Why: reuses the guest picker; `referencePickActiveRef` routes the result to a reference.
   const handlePickAnnotationReference = useCallback((): void => {
