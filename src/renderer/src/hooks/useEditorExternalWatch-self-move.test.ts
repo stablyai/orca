@@ -30,8 +30,8 @@ import { getDiskBaselineSignature } from '@/components/editor/diff-content-signa
 
 const findTarget = (worktreePath: string, runtimeEnvironmentId: string | null = null) =>
   worktreePath === '/repo'
-    ? { worktreeId: 'wt-1', worktreePath: '/repo', connectionId: undefined, runtimeEnvironmentId }
-    : undefined
+    ? [{ worktreeId: 'wt-1', worktreePath: '/repo', connectionId: undefined, runtimeEnvironmentId }]
+    : []
 
 function payload(events: FsChangedPayload['events']): FsChangedPayload {
   return { worktreePath: '/repo', events }

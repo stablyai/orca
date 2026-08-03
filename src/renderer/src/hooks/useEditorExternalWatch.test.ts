@@ -186,22 +186,22 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
   const findTarget = (
     worktreePath: string,
     runtimeEnvironmentId: string | null = null
-  ):
-    | {
-        worktreeId: string
-        worktreePath: string
-        connectionId: string | undefined
-        runtimeEnvironmentId: string | null
-      }
-    | undefined =>
+  ): {
+    worktreeId: string
+    worktreePath: string
+    connectionId: string | undefined
+    runtimeEnvironmentId: string | null
+  }[] =>
     worktreePath === '/repo'
-      ? {
-          worktreeId: 'wt-1',
-          worktreePath: '/repo',
-          connectionId: undefined,
-          runtimeEnvironmentId
-        }
-      : undefined
+      ? [
+          {
+            worktreeId: 'wt-1',
+            worktreePath: '/repo',
+            connectionId: undefined,
+            runtimeEnvironmentId
+          }
+        ]
+      : []
 
   const fileNotes = {
     id: 'file-notes',
@@ -294,12 +294,14 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       setExternalMutation
     } as never)
     vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file] as never)
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
-      worktreeId: 'wt-win',
-      worktreePath: 'C:\\Repo',
-      connectionId: undefined,
-      runtimeEnvironmentId: 'env-1'
-    }))
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => [
+      {
+        worktreeId: 'wt-win',
+        worktreePath: 'C:\\Repo',
+        connectionId: undefined,
+        runtimeEnvironmentId: 'env-1'
+      }
+    ])
 
     handleFsChanged({
       worktreePath: 'c:\\repo',
@@ -331,12 +333,14 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       setExternalMutation
     } as never)
     vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file] as never)
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
-      worktreeId: 'wt-unc',
-      worktreePath: '//Server/Share/Repo',
-      connectionId: undefined,
-      runtimeEnvironmentId: 'env-1'
-    }))
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => [
+      {
+        worktreeId: 'wt-unc',
+        worktreePath: '//Server/Share/Repo',
+        connectionId: undefined,
+        runtimeEnvironmentId: 'env-1'
+      }
+    ])
 
     handleFsChanged({
       worktreePath: '//server/share/repo',

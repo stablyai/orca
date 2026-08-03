@@ -133,13 +133,15 @@ describe('executeOpenEditorPathMove', () => {
     // The delayed destination create/update event finally arrives.
     const { handleFsChanged, dispose } = createExternalWatchEventHandler((worktreePath) =>
       worktreePath === '/repo'
-        ? {
-            worktreeId: 'wt-1',
-            worktreePath: '/repo',
-            connectionId: undefined,
-            runtimeEnvironmentId: null
-          }
-        : undefined
+        ? [
+            {
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              connectionId: undefined,
+              runtimeEnvironmentId: null
+            }
+          ]
+        : []
     )
     handleFsChanged({
       worktreePath: '/repo',
