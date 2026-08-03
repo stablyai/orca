@@ -30020,31 +30020,29 @@ export class OrcaRuntimeService {
             displayName: task.display_name
           })
         : { taskTitle: '', displayName: '' }
-    const activeRun =
-      dispatch.status === 'pending' || dispatch.status === 'dispatched'
+    const owningRun = task?.run_id ? db?.getRun?.(task.run_id) : undefined
+    const runCoordinatorHandle = owningRun?.coordinator_handle ?? undefined
+    const legacyActiveRun =
+      owningRun?.legacy !== 0 && (dispatch.status === 'pending' || dispatch.status === 'dispatched')
         ? db?.getActiveCoordinatorRun?.()
-    // Why: coordinator_runs has no session/worktree scoping — it's a legacy
-    // singleton table that only tracks the most recently started run app-wide
-    // (#getActiveCoordinatorRun). With two orchestration flows running in
-    // different worktrees at once, blindly trusting it here would attribute
-    // one worktree's dispatch to another worktree's coordinator. Only use it
-    // when the coordinator's own terminal lives in this same worktree.
-    const handleWorktreeId = this.getWorktreeIdForTerminalHandle(handle)
-    const coordinatorWorktreeId = activeRun
-      ? this.getWorktreeIdForTerminalHandle(activeRun.coordinator_handle)
-      : null
-    const scopedActiveRun =
-      activeRun &&
-      handleWorktreeId &&
-      coordinatorWorktreeId &&
-      runtimeWorktreeIdsEqual(coordinatorWorktreeId, handleWorktreeId)
-        ? activeRun
         : undefined
+    // Why: legacy coordinator runs have no durable task ownership, so fail closed across worktrees.
+    const handleWorktreeId = legacyActiveRun ? this.getWorktreeIdForTerminalHandle(handle) : null
+    const legacyCoordinatorWorktreeId = legacyActiveRun
+      ? this.getWorktreeIdForTerminalHandle(legacyActiveRun.coordinator_handle)
+      : null
+    const scopedLegacyActiveRun =
+      legacyActiveRun &&
+      handleWorktreeId &&
+      legacyCoordinatorWorktreeId &&
+      runtimeWorktreeIdsEqual(legacyCoordinatorWorktreeId, handleWorktreeId)
+        ? legacyActiveRun
+        : undefined
+    const coordinatorHandle = runCoordinatorHandle ?? scopedLegacyActiveRun?.coordinator_handle
+    const orchestrationRunId = owningRun?.legacy === 0 ? owningRun.id : scopedLegacyActiveRun?.id
     const parentTerminalHandle =
       task?.created_by_terminal_handle ??
-      (scopedActiveRun?.coordinator_handle && scopedActiveRun.coordinator_handle !== handle
-        ? scopedActiveRun.coordinator_handle
-        : undefined)
+      (coordinatorHandle && coordinatorHandle !== handle ? coordinatorHandle : undefined)
     const parentPaneKey = parentTerminalHandle
       ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
       : undefined
@@ -30057,10 +30055,8 @@ export class OrcaRuntimeService {
       ...(display.displayName ? { displayName: display.displayName } : {}),
       ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
       ...(parentPaneKey ? { parentPaneKey } : {}),
-      ...(scopedActiveRun?.coordinator_handle
-        ? { coordinatorHandle: scopedActiveRun.coordinator_handle }
-        : {}),
-      ...(scopedActiveRun?.id ? { orchestrationRunId: scopedActiveRun.id } : {})
+      ...(coordinatorHandle ? { coordinatorHandle } : {}),
+      ...(orchestrationRunId ? { orchestrationRunId } : {})
     }
   }
 

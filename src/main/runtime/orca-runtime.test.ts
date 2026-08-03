@@ -38023,89 +38023,149 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('does not attribute a dispatch to an active coordinator run from a different worktree', () => {
-    const otherWorktreeId = `${TEST_REPO_ID}::/tmp/workspaces/other-session`
-    const runtimeStore = {
-      ...store,
-      getAllWorktreeMeta: () => ({
-        ...store.getAllWorktreeMeta(),
-        [otherWorktreeId]: store.getAllWorktreeMeta()[TEST_WORKTREE_ID]
-      }),
-      getWorktreeMeta: (worktreeId: string) =>
-        worktreeId === otherWorktreeId
-          ? store.getAllWorktreeMeta()[TEST_WORKTREE_ID]
-          : store.getWorktreeMeta(worktreeId)
+  it('uses durable Run ownership before worktree-scoped legacy attribution', () => {
+    const childWorktreeId = `${TEST_REPO_ID}::${join(tmpdir(), 'workspaces', 'run-a-worker')}`
+    const folderWorktreeId = `${TEST_REPO_ID}::${join(tmpdir(), 'folder')}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
+    const meta = store.getAllWorktreeMeta()[TEST_WORKTREE_ID]
+    const metaById = {
+      ...store.getAllWorktreeMeta(),
+      [childWorktreeId]: meta,
+      [folderWorktreeId]: meta
     }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const workerLeafId = '66666666-6666-4666-8666-666666666666'
-    const otherCoordinatorLeafId = '99999999-9999-4999-8999-999999999999'
-    const workerPaneKey = makePaneKey('tab-worker', workerLeafId)
-    const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
-    const otherCoordinatorHandle = runtime.preAllocateHandleForPty('pty-other-coordinator')
-    runtime.setOrchestrationDb({
-      getActiveDispatchForTerminal: vi.fn((handle: string) =>
-        handle === workerHandle
-          ? {
-              id: 'ctx-1',
-              task_id: 'task-1',
-              assignee_handle: workerHandle,
-              status: 'dispatched'
-            }
-          : undefined
-      ),
-      getLatestDispatchForTerminal: vi.fn(() => undefined),
-      // Why: reproduces a task dispatched without lineage capture — the code
-      // must not fall back to whichever coordinator run happens to be most
-      // recently active app-wide when it lives in a different worktree.
-      getTask: vi.fn(() => ({ id: 'task-1' })),
-      getActiveCoordinatorRun: vi.fn(() => ({
-        id: 'run-other',
-        coordinator_handle: otherCoordinatorHandle
-      }))
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
     } as never)
-    runtime.attachWindow(1)
+    const terminals = [
+      {
+        name: 'coordinator-a',
+        worktreeId: TEST_WORKTREE_ID,
+        leafId: '11111111-1111-4111-8111-111111111111'
+      },
+      {
+        name: 'coordinator-b',
+        worktreeId: TEST_WORKTREE_ID,
+        leafId: '22222222-2222-4222-8222-222222222222'
+      },
+      {
+        name: 'worker-cross-worktree',
+        worktreeId: childWorktreeId,
+        leafId: '33333333-3333-4333-8333-333333333333'
+      },
+      {
+        name: 'worker-same-worktree',
+        worktreeId: TEST_WORKTREE_ID,
+        leafId: '44444444-4444-4444-8444-444444444444'
+      },
+      {
+        name: 'worker-folder',
+        worktreeId: folderWorktreeId,
+        leafId: '55555555-5555-4555-8555-555555555555'
+      },
+      {
+        name: 'legacy-worker',
+        worktreeId: childWorktreeId,
+        leafId: '66666666-6666-4666-8666-666666666666'
+      }
+    ].map((terminal, index) => ({
+      ...terminal,
+      tabId: `tab-${terminal.name}`,
+      ptyId: `pty-${terminal.name}`,
+      paneRuntimeId: index + 1
+    }))
+    const terminalByName = Object.fromEntries(
+      terminals.map((terminal) => [terminal.name, terminal])
+    )
+    const handles = Object.fromEntries(
+      terminals.map((terminal) => [terminal.name, runtime.preAllocateHandleForPty(terminal.ptyId)])
+    )
+    const paneKey = (name: string): string => {
+      const terminal = terminalByName[name]
+      return makePaneKey(terminal.tabId, terminal.leafId)
+    }
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const runA = db.createRun({
+        objective: 'coordinate run A',
+        coordinatorHandle: handles['coordinator-a'],
+        coordinatorPaneKey: paneKey('coordinator-a')
+      })
+      const runB = db.createRun({
+        objective: 'coordinate run B',
+        coordinatorHandle: handles['coordinator-b'],
+        coordinatorPaneKey: paneKey('coordinator-b')
+      })
+      const dispatches = Object.fromEntries(
+        [
+          ['worker-cross-worktree', runA.id],
+          ['worker-same-worktree', runA.id],
+          ['worker-folder', runB.id]
+        ].map(([name, runId]) => {
+          const task = db.createTask({ spec: name, runId })
+          return [name, db.createDispatchContext(task.id, handles[name], paneKey(name))]
+        })
+      )
+      const legacyTask = db.createTask({ spec: 'legacy worker' })
+      const legacyDispatch = db.createDispatchContext(
+        legacyTask.id,
+        handles['legacy-worker'],
+        paneKey('legacy-worker')
+      )
+      db.createCoordinatorRun({
+        spec: 'unrelated legacy coordinator',
+        coordinatorHandle: handles['coordinator-b']
+      })
+      const getActiveCoordinatorRun = vi.spyOn(db, 'getActiveCoordinatorRun')
+      runtime.setOrchestrationDb(db)
+      runtime.attachWindow(1)
 
-    const result = runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-worker',
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Claude Code',
-          activeLeafId: workerLeafId,
+      const result = runtime.syncWindowGraph(1, {
+        tabs: terminals.map((terminal) => ({
+          tabId: terminal.tabId,
+          worktreeId: terminal.worktreeId,
+          title: terminal.name,
+          activeLeafId: terminal.leafId,
           layout: null
-        },
-        {
-          tabId: 'tab-other-coordinator',
-          worktreeId: otherWorktreeId,
-          title: 'Codex',
-          activeLeafId: otherCoordinatorLeafId,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-worker',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: workerLeafId,
-          paneRuntimeId: 1,
-          ptyId: 'pty-worker',
+        })),
+        leaves: terminals.map((terminal) => ({
+          tabId: terminal.tabId,
+          worktreeId: terminal.worktreeId,
+          leafId: terminal.leafId,
+          paneRuntimeId: terminal.paneRuntimeId,
+          ptyId: terminal.ptyId,
           paneTitle: null
-        },
-        {
-          tabId: 'tab-other-coordinator',
-          worktreeId: otherWorktreeId,
-          leafId: otherCoordinatorLeafId,
-          paneRuntimeId: 2,
-          ptyId: 'pty-other-coordinator',
-          paneTitle: null
-        }
-      ]
-    })
+        }))
+      })
 
-    expect(result.agentOrchestrationByPaneKey?.[workerPaneKey]).toEqual({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1'
-    })
+      for (const [name, run, coordinator] of [
+        ['worker-cross-worktree', runA, 'coordinator-a'],
+        ['worker-same-worktree', runA, 'coordinator-a'],
+        ['worker-folder', runB, 'coordinator-b']
+      ] as const) {
+        expect(result.agentOrchestrationByPaneKey?.[paneKey(name)]).toMatchObject({
+          taskId: dispatches[name].task_id,
+          dispatchId: dispatches[name].id,
+          dispatchStatus: 'dispatched',
+          parentTerminalHandle: handles[coordinator],
+          parentPaneKey: paneKey(coordinator),
+          coordinatorHandle: handles[coordinator],
+          orchestrationRunId: run.id
+        })
+      }
+      const legacyContext = result.agentOrchestrationByPaneKey?.[paneKey('legacy-worker')]
+      expect(legacyContext).toMatchObject({
+        taskId: legacyTask.id,
+        dispatchId: legacyDispatch.id,
+        dispatchStatus: 'dispatched'
+      })
+      expect(legacyContext).not.toHaveProperty('parentTerminalHandle')
+      expect(legacyContext).not.toHaveProperty('coordinatorHandle')
+      expect(legacyContext).not.toHaveProperty('orchestrationRunId')
+      expect(getActiveCoordinatorRun).toHaveBeenCalledOnce()
+    } finally {
+      db.close()
+    }
   })
 
   it('returns completed orchestration context for renderer-synced terminal leaves', () => {
