@@ -644,6 +644,16 @@ export class AgentBrowserBridge {
     }
   }
 
+  /** Resolves a page to its live webContents, or null when unavailable. */
+  getPageWebContents(worktreeId?: string, browserPageId?: string): Electron.WebContents | null {
+    try {
+      const target = this.resolveCommandTarget(worktreeId, browserPageId)
+      return this.getWebContents(target.webContentsId)
+    } catch {
+      return null
+    }
+  }
+
   onTabChanged(webContentsId: number, worktreeId?: string): void {
     this.activeWebContentsId = webContentsId
     if (worktreeId) {

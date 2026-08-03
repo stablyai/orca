@@ -27,6 +27,10 @@ function StepIcon({ step }: { step: BrowserRecorderStep }): React.JSX.Element {
       return <MessageSquarePlus className={className} />
     case 'automation-action':
       return <MousePointerClick className={className} />
+    case 'interaction':
+    case 'console':
+    case 'network-summary':
+      return <CircleDot className={className} />
     case 'recording-started':
       return <CircleDot className={className} />
   }

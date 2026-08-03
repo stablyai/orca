@@ -2246,7 +2246,7 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
     onGrabModeToggle: () => noopUnsubscribe,
     onGrabActionShortcut: () => noopUnsubscribe,
     setRecorderEnabled: () => Promise.resolve(false),
-    onRecorderAction: () => noopUnsubscribe,
+    onRecorderEvent: () => noopUnsubscribe,
     sessionListProfiles: () => Promise.resolve([]),
     sessionCreateProfile: () => Promise.resolve(null),
     sessionDeleteProfile: () => Promise.resolve(false),

@@ -120,7 +120,9 @@ import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
 import { useBrowserRecorder } from './useBrowserRecorder'
 import { formatBrowserRecorderStepsAsMarkdown } from './browser-recorder-output'
-import { summarizeBrowserGrabTarget } from './browser-recorder-types'
+import { summarizeBrowserGrabTarget, recorderEventPage } from './browser-recorder-types'
+import type { BrowserRecorderStepDetail } from './browser-recorder-types'
+import type { BrowserRecorderStreamEvent } from '../../../../shared/browser-recorder-automation'
 import { BrowserRecorderTray } from './BrowserRecorderTray'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
@@ -193,6 +195,20 @@ import { MarkupOverlay } from './markup/MarkupOverlay'
 import { MarkupDrawButton } from './markup/MarkupDrawButton'
 import { deliverMarkupToClipboard } from './markup/markup-clipboard-delivery'
 import { BrowserLoadFailureOverlay } from './browser-load-failure-overlay'
+
+/** Maps a main-process recorder stream event onto a session log step. */
+function toRecorderStepDetail(event: BrowserRecorderStreamEvent): BrowserRecorderStepDetail {
+  switch (event.kind) {
+    case 'action':
+      return { kind: 'automation-action', action: event.action }
+    case 'interaction':
+      return { kind: 'interaction', interaction: event.interaction }
+    case 'console':
+      return { kind: 'console', entry: event.entry }
+    case 'network-summary':
+      return { kind: 'network-summary', summary: event.summary }
+  }
+}
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -4491,10 +4507,13 @@ function BrowserPagePane({
     recordFeatureInteraction('browser-recorder')
     const nextRecording = !recorder.recording
     recorder.toggle({ pageUrl: browserTab.url, pageTitle: browserTab.title })
-    // Why: main only captures automation actions while enabled; the renderer
-    // toggle is the single source of truth for the session.
-    void window.api.browser.setRecorderEnabled({ enabled: nextRecording })
-  }, [browserTab.title, browserTab.url, recordFeatureInteraction, recorder])
+    // Why: main only captures while enabled; the renderer toggle is the single
+    // source of truth for the session, and the page id scopes the observer.
+    void window.api.browser.setRecorderEnabled({
+      enabled: nextRecording,
+      browserPageId: browserTab.id
+    })
+  }, [browserTab.id, browserTab.title, browserTab.url, recordFeatureInteraction, recorder])
 
   const handleCopyBrowserRecorderLog = useCallback((): void => {
     if (!recorderPrompt) {
@@ -4517,17 +4536,16 @@ function BrowserPagePane({
     recorder.clear()
   }, [recordFeatureInteraction, recorder])
 
-  // Why: fold main-process automation actions (click/type/goto/scroll/keypress/
-  // select/mouse*) into the session log; main only emits while recording is on.
+  // Why: fold main-process recorder events (automation actions, manual
+  // interactions, console output, network summary) into the session log; main
+  // only emits while recording is on.
   useEffect(() => {
-    return window.api.browser.onRecorderAction((action) => {
-      if (action.page.browserPageId !== browserTab.id) {
+    return window.api.browser.onRecorderEvent((event) => {
+      const page = recorderEventPage(event)
+      if (page.browserPageId !== browserTab.id) {
         return
       }
-      recordRecorderStep(
-        { kind: 'automation-action', action },
-        { pageUrl: action.page.url, pageTitle: action.page.title }
-      )
+      recordRecorderStep(toRecorderStepDetail(event), { pageUrl: page.url, pageTitle: page.title })
     })
   }, [browserTab.id, recordRecorderStep])
 
@@ -4538,7 +4556,10 @@ function BrowserPagePane({
   useEffect(() => {
     return () => {
       if (recorderRecordingRef.current) {
-        void window.api.browser.setRecorderEnabled({ enabled: false })
+        void window.api.browser.setRecorderEnabled({
+          enabled: false,
+          browserPageId: browserTab.id
+        })
       }
     }
   }, [browserTab.id])

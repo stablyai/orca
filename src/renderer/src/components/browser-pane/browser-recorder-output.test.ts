@@ -118,6 +118,7 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
             textLengthDelta: 280,
             interactiveDelta: 2,
             inputsChanged: true,
+            inputChanges: [{ label: '#email', before: '', after: 'user@example.com' }],
             changed: ['url', 'title', 'text', 'inputs', 'interactive']
           }
         }
@@ -166,6 +167,112 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
     const step = makeStep({ detail: { kind: 'element-selected', element: elementWithBackticks } })
     const output = formatBrowserRecorderStepsAsMarkdown([step])
     expect(output).toContain('**Selector:** ``` code `x` and ``y`` ```')
+  })
+
+  it('renders per-field input changes with before/after values', () => {
+    const step = makeStep({
+      detail: {
+        kind: 'automation-action',
+        action: {
+          id: 'act-fields',
+          method: 'browser.type',
+          target: { kind: 'selector', value: '#email' },
+          params: { input: 'user@example.com' },
+          page: { browserPageId: 'page-1', url: 'https://example.com/login', title: 'Login' },
+          startedAt: '2026-07-31T10:15:30.000Z',
+          durationMs: 5,
+          ok: true,
+          error: null,
+          urlAfter: null,
+          titleAfter: null,
+          domDiff: {
+            urlChanged: false,
+            titleChanged: false,
+            textLengthDelta: 0,
+            interactiveDelta: 0,
+            inputsChanged: true,
+            inputChanges: [
+              { label: '#email', before: '', after: 'user@example.com' },
+              { label: '#qty', before: '1', after: '3' }
+            ],
+            changed: ['inputs']
+          }
+        }
+      }
+    })
+    const output = formatBrowserRecorderStepsAsMarkdown([step])
+    expect(output).toContain('**Fields:**')
+    expect(output).toContain('- `#email`: "" → "user@example.com"')
+    expect(output).toContain('- `#qty`: "1" → "3"')
+  })
+
+  it('renders a manual click interaction with position and target', () => {
+    const step = makeStep({
+      detail: {
+        kind: 'interaction',
+        interaction: {
+          id: 'i-1',
+          kind: 'click',
+          page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+          startedAt: '2026-07-31T10:15:30.000Z',
+          x: 340,
+          y: 215,
+          target: '#login-btn',
+          tagName: 'button'
+        }
+      }
+    })
+    const output = formatBrowserRecorderStepsAsMarkdown([step])
+    expect(output).toContain('### 1. Clicked element')
+    expect(output).toContain('**At:** 340,215 (`#login-btn`)')
+    expect(output).toContain('**Element:** `button`')
+  })
+
+  it('renders a console entry with level, message, and source', () => {
+    const step = makeStep({
+      detail: {
+        kind: 'console',
+        entry: {
+          id: 'c-1',
+          level: 'error',
+          message: 'Uncaught TypeError: x is not a function',
+          source: 'a.js',
+          lineNumber: 12,
+          page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+          startedAt: '2026-07-31T10:15:30.000Z'
+        }
+      }
+    })
+    const output = formatBrowserRecorderStepsAsMarkdown([step])
+    expect(output).toContain('### 1. Console error')
+    expect(output).toContain('**Message:** `Uncaught TypeError: x is not a function`')
+    expect(output).toContain('**Source:** `a.js`:12')
+  })
+
+  it('renders a network summary with counts, bytes, and status buckets', () => {
+    const step = makeStep({
+      detail: {
+        kind: 'network-summary',
+        summary: {
+          id: 'n-1',
+          page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+          startedAt: '2026-07-31T10:15:30.000Z',
+          total: 3,
+          failed: 1,
+          totalBytes: 1536,
+          byStatus: [
+            { status: 200, count: 2 },
+            { status: 404, count: 1 }
+          ]
+        }
+      }
+    })
+    const output = formatBrowserRecorderStepsAsMarkdown([step])
+    expect(output).toContain('### 1. Network summary')
+    expect(output).toContain('**Requests:** 3')
+    expect(output).toContain('**Failed:** 1')
+    expect(output).toContain('**Transferred:** 1.5 KB')
+    expect(output).toContain('**By status:** 200×2, 404×1')
   })
 })
 
@@ -218,6 +325,7 @@ describe('formatBrowserRecorderStepSummary', () => {
                 textLengthDelta: 0,
                 interactiveDelta: 0,
                 inputsChanged: true,
+                inputChanges: [{ label: '#email', before: '', after: 'user@example.com' }],
                 changed: ['inputs']
               }
             }
@@ -225,5 +333,60 @@ describe('formatBrowserRecorderStepSummary', () => {
         })
       )
     ).toBe('type #email ✓ (12ms) · inputs')
+    expect(
+      formatBrowserRecorderStepSummary(
+        makeStep({
+          detail: {
+            kind: 'interaction',
+            interaction: {
+              id: 'i-1',
+              kind: 'click',
+              page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+              startedAt: '2026-07-31T10:15:30.000Z',
+              x: 10,
+              y: 20,
+              target: '#save',
+              tagName: 'button'
+            }
+          }
+        })
+      )
+    ).toBe('Clicked #save')
+    expect(
+      formatBrowserRecorderStepSummary(
+        makeStep({
+          detail: {
+            kind: 'console',
+            entry: {
+              id: 'c-1',
+              level: 'warning',
+              message: 'Slow network detected',
+              source: 'x.js',
+              lineNumber: 1,
+              page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+              startedAt: '2026-07-31T10:15:30.000Z'
+            }
+          }
+        })
+      )
+    ).toBe('Console warning: Slow network detected')
+    expect(
+      formatBrowserRecorderStepSummary(
+        makeStep({
+          detail: {
+            kind: 'network-summary',
+            summary: {
+              id: 'n-1',
+              page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+              startedAt: '2026-07-31T10:15:30.000Z',
+              total: 5,
+              failed: 2,
+              totalBytes: 0,
+              byStatus: []
+            }
+          }
+        })
+      )
+    ).toBe('Network: 5 requests, 2 failed')
   })
 })

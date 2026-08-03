@@ -336,7 +336,7 @@ import type {
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult
 } from '../shared/browser-grab-types'
-import type { BrowserRecorderAutomationAction } from '../shared/browser-recorder-automation'
+import type { BrowserRecorderStreamEvent } from '../shared/browser-recorder-automation'
 import type {
   BrowserContextMenuDismissedEvent,
   BrowserContextMenuRequestedEvent,
@@ -602,8 +602,12 @@ export type BrowserApi = {
   onGrabActionShortcut: (
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
-  setRecorderEnabled: (args: { enabled: boolean }) => Promise<boolean>
-  onRecorderAction: (callback: (action: BrowserRecorderAutomationAction) => void) => () => void
+  setRecorderEnabled: (args: {
+    enabled: boolean
+    browserPageId?: string
+    worktreeId?: string
+  }) => Promise<boolean>
+  onRecorderEvent: (callback: (event: BrowserRecorderStreamEvent) => void) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
   sessionCreateProfile: (args: {
     scope: BrowserSessionProfileScope

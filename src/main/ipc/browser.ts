@@ -215,10 +215,20 @@ export function registerBrowserHandlers(): void {
 
   // Why: the renderer's recorder toggle owns the session; main only captures
   // while enabled and streams action records back over browser:recorder-action.
-  ipcMain.handle('browser:setRecorderEnabled', (_event, args: { enabled?: boolean }) => {
-    browserActionRecorder.setEnabled(args?.enabled === true)
-    return true
-  })
+  ipcMain.handle(
+    'browser:setRecorderEnabled',
+    (_event, args: { enabled?: boolean; browserPageId?: string; worktreeId?: string }) => {
+      browserActionRecorder.setEnabled(
+        args?.enabled === true,
+        { worktreeId: args?.worktreeId, browserPageId: args?.browserPageId },
+        {
+          getBridge: () => agentBrowserBridgeRef,
+          getWindow: () => BrowserWindow.fromWebContents(_event.sender) ?? undefined
+        }
+      )
+      return true
+    }
+  )
 
   ipcMain.handle(
     'browser:registerGuest',

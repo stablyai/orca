@@ -3,8 +3,10 @@
 //
 // The main process records browser automation actions (click/type/goto/scroll/
 // keypress/select/mouse…*) as they execute, together with the page they ran on
-// and the DOM change they caused. Records stream to the renderer over IPC so
-// the browser pane can fold them into its session log.
+// and the DOM change they caused. While a recording session is active it also
+// observes manual page interactions (clicks/keys/scroll) and page console
+// output, and summarizes network traffic on session stop. Records stream to
+// the renderer over IPC so the browser pane can fold them into its session log.
 // ---------------------------------------------------------------------------
 
 /** Compact page/DOM state captured before and after an action via in-page eval. */
@@ -13,11 +15,23 @@ export type BrowserRecorderDomFingerprint = {
   title: string
   textLength: number
   interactive: number
-  /** Joined label=value snapshot of form fields (password values excluded). */
-  inputs: string
+  /** Structured form-field snapshot (password values excluded, capped). */
+  inputsDetail: BrowserRecorderInputState[]
+}
+
+export type BrowserRecorderInputState = {
+  label: string
+  value: string
 }
 
 export type BrowserRecorderDomChangeKind = 'url' | 'title' | 'text' | 'inputs' | 'interactive'
+
+/** One form field whose value changed as a result of an action. */
+export type BrowserRecorderInputChange = {
+  label: string
+  before: string
+  after: string
+}
 
 /** What changed on the page as a result of an action. */
 export type BrowserRecorderDomDiff = {
@@ -26,6 +40,8 @@ export type BrowserRecorderDomDiff = {
   textLengthDelta: number
   interactiveDelta: number
   inputsChanged: boolean
+  /** Only fields whose value changed (capped). */
+  inputChanges: BrowserRecorderInputChange[]
   changed: BrowserRecorderDomChangeKind[]
 }
 
@@ -58,14 +74,89 @@ export type BrowserRecorderAutomationAction = {
   domDiff: BrowserRecorderDomDiff | null
 }
 
+export type BrowserRecorderInteractionKind = 'click' | 'keydown' | 'scroll'
+
+/** A manual page interaction observed while recording (in-page capture script). */
+export type BrowserRecorderInteraction = {
+  id: string
+  kind: BrowserRecorderInteractionKind
+  page: { browserPageId: string; url: string; title: string }
+  startedAt: string
+  /** click */
+  x?: number
+  y?: number
+  /** Clicked element: '#id', 'button.primary', or tag name. */
+  target?: string
+  tagName?: string
+  /** keydown */
+  key?: string
+  /** scroll */
+  scrollX?: number
+  scrollY?: number
+}
+
+export type BrowserRecorderConsoleLevel = 'log' | 'warning' | 'error' | 'debug'
+
+/** One page console message observed while recording. */
+export type BrowserRecorderConsoleEntry = {
+  id: string
+  level: BrowserRecorderConsoleLevel
+  message: string
+  source: string
+  lineNumber: number
+  page: { browserPageId: string; url: string; title: string }
+  startedAt: string
+}
+
+export type BrowserRecorderNetworkStatusBucket = {
+  status: number
+  count: number
+}
+
+/** Traffic summary computed from the page network log when recording stops. */
+export type BrowserRecorderNetworkSummary = {
+  id: string
+  page: { browserPageId: string; url: string; title: string }
+  startedAt: string
+  total: number
+  failed: number
+  totalBytes: number
+  byStatus: BrowserRecorderNetworkStatusBucket[]
+}
+
+/** Everything the main process streams into the browser pane session log. */
+export type BrowserRecorderStreamEvent =
+  | { kind: 'action'; action: BrowserRecorderAutomationAction }
+  | { kind: 'interaction'; interaction: BrowserRecorderInteraction }
+  | { kind: 'console'; entry: BrowserRecorderConsoleEntry }
+  | { kind: 'network-summary'; summary: BrowserRecorderNetworkSummary }
+
 export const BROWSER_RECORDER_ACTION_CHANNEL = 'browser:recorder-action'
 export const BROWSER_RECORDER_SET_CHANNEL = 'browser:setRecorderEnabled'
 
+/**
+ * Prefix used by the in-page interaction capture script. Tagged console.debug
+ * messages are interactions; every other page console message is a console
+ * entry. The tag itself is unique enough that a real page log line starting
+ * with it would be indistinguishable — acceptable for a debug-only recorder.
+ */
+export const BROWSER_RECORDER_INTERACTION_TAG = '__orca_recorder__'
+
 export const BROWSER_RECORDER_BUDGET = {
-  /** Cap on the joined form-field snapshot kept per fingerprint. */
-  fingerprintInputsMaxLength: 2000,
+  /** Cap on form fields kept per fingerprint. */
+  fingerprintInputsMaxFields: 50,
+  /** Cap on a single form-field value kept in a fingerprint. */
+  inputValueMaxLength: 60,
+  /** Cap on changed-field entries kept in a DOM diff. */
+  inputChangesMaxEntries: 20,
   /** Cap on a recorded param string value. */
   paramValueMaxLength: 200,
   /** Cap on the recorded error message. */
-  errorMaxLength: 500
+  errorMaxLength: 500,
+  /** Cap on manual interaction records per session (oldest dropped). */
+  interactionMaxPerSession: 200,
+  /** Cap on console entries per session (oldest dropped). */
+  consoleMaxPerSession: 100,
+  /** Cap on a console message text kept in an entry. */
+  consoleMessageMaxLength: 300
 } as const

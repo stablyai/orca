@@ -12,7 +12,13 @@ import type {
   BrowserGrabRect,
   BrowserGrabTarget
 } from '../../../../shared/browser-grab-types'
-import type { BrowserRecorderAutomationAction } from '../../../../shared/browser-recorder-automation'
+import type {
+  BrowserRecorderAutomationAction,
+  BrowserRecorderConsoleEntry,
+  BrowserRecorderInteraction,
+  BrowserRecorderNetworkSummary,
+  BrowserRecorderStreamEvent
+} from '../../../../shared/browser-recorder-automation'
 
 /** Compact element snapshot kept in the log (no screenshots, no full payloads). */
 export type BrowserRecorderElementSummary = {
@@ -31,6 +37,9 @@ export type BrowserRecorderStepKind =
   | 'element-selected'
   | 'annotation-added'
   | 'automation-action'
+  | 'interaction'
+  | 'console'
+  | 'network-summary'
 
 export type BrowserRecorderStepDetail =
   | { kind: 'recording-started' }
@@ -43,6 +52,9 @@ export type BrowserRecorderStepDetail =
       intent: BrowserAnnotationIntent
     }
   | { kind: 'automation-action'; action: BrowserRecorderAutomationAction }
+  | { kind: 'interaction'; interaction: BrowserRecorderInteraction }
+  | { kind: 'console'; entry: BrowserRecorderConsoleEntry }
+  | { kind: 'network-summary'; summary: BrowserRecorderNetworkSummary }
 
 export type BrowserRecorderStep = {
   id: string
@@ -71,5 +83,23 @@ export function summarizeBrowserGrabTarget(
     accessibleName: target.accessibility.accessibleName,
     textSnippet: target.textSnippet,
     rectViewport: target.rectViewport
+  }
+}
+
+/** The page a streamed recorder event happened on (all variants carry one). */
+export function recorderEventPage(event: BrowserRecorderStreamEvent): {
+  browserPageId: string
+  url: string
+  title: string
+} {
+  switch (event.kind) {
+    case 'action':
+      return event.action.page
+    case 'interaction':
+      return event.interaction.page
+    case 'console':
+      return event.entry.page
+    case 'network-summary':
+      return event.summary.page
   }
 }

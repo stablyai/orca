@@ -4,50 +4,14 @@ import type {
   BrowserRecorderStepDetail
 } from './browser-recorder-types'
 import type { BrowserRecorderAutomationAction } from '../../../../shared/browser-recorder-automation'
-
-// Why: log text comes from page DOM; avoid spreading every backtick run into
-// Math.max when generated markdown contains many fence characters.
-function maxBacktickRunLength(content: string, floor: number): number {
-  let maxRun = floor
-  let currentRun = 0
-
-  for (let index = 0; index < content.length; index += 1) {
-    if (content.charCodeAt(index) !== 96) {
-      currentRun = 0
-      continue
-    }
-
-    currentRun += 1
-    if (currentRun > maxRun) {
-      maxRun = currentRun
-    }
-  }
-  return maxRun
-}
-
-function inlineCode(content: string): string {
-  const maxRun = maxBacktickRunLength(content, 0)
-  const marker = '`'.repeat(maxRun + 1)
-  const padding = content.startsWith('`') || content.endsWith('`') ? ' ' : ''
-  return `${marker}${padding}${content}${padding}${marker}`
-}
-
-function formatTime(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) {
-    return iso
-  }
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-
-function formatPageUrl(url: string): string {
-  try {
-    const parsed = new URL(url)
-    return `${parsed.hostname}${parsed.pathname}${parsed.search}`
-  } catch {
-    return url || 'blank page'
-  }
-}
+import {
+  formatConsoleEntryLines,
+  formatInteractionLines,
+  formatInteractionSummary,
+  formatNetworkSummaryLines,
+  interactionDetailHeading
+} from './browser-recorder-stream-output'
+import { formatPageUrl, formatTime, inlineCode, inlineText } from './browser-recorder-text'
 
 function elementLabel(element: BrowserRecorderElementSummary): string {
   const accessibleName = element.accessibleName?.trim()
@@ -57,59 +21,6 @@ function elementLabel(element: BrowserRecorderElementSummary): string {
       ? `${element.tagName} "${inlineText(element.textSnippet).slice(0, 60)}"`
       : element.tagName
   return base
-}
-
-export const BROWSER_RECORDER_INLINE_TEXT_MAX_LENGTH = 2048
-
-function inlineText(content: string, maxLength = BROWSER_RECORDER_INLINE_TEXT_MAX_LENGTH): string {
-  // Why: page-controlled DOM text can include paste-sized content; collapse
-  // whitespace while scanning only the bounded text we will actually retain.
-  let normalized = ''
-  let pendingSpace = false
-  for (let index = 0; index < content.length && normalized.length < maxLength; ) {
-    const code = content.charCodeAt(index)
-    if (isInlineWhitespaceCode(code)) {
-      if (code === 13 && content.charCodeAt(index + 1) === 10) {
-        index += 1
-      }
-      pendingSpace = normalized.length > 0
-      index += 1
-      continue
-    }
-
-    const codePoint = content.codePointAt(index)
-    if (codePoint === undefined) {
-      break
-    }
-    const char = String.fromCodePoint(codePoint)
-    const extraSpaceLength = pendingSpace ? 1 : 0
-    if (normalized.length + extraSpaceLength + char.length > maxLength) {
-      break
-    }
-    if (pendingSpace) {
-      normalized += ' '
-      pendingSpace = false
-    }
-    normalized += char
-    index += char.length
-  }
-  return normalized
-}
-
-function isInlineWhitespaceCode(code: number): boolean {
-  return (
-    code === 0x20 ||
-    (code >= 0x09 && code <= 0x0d) ||
-    code === 0xa0 ||
-    code === 0x1680 ||
-    (code >= 0x2000 && code <= 0x200a) ||
-    code === 0x2028 ||
-    code === 0x2029 ||
-    code === 0x202f ||
-    code === 0x205f ||
-    code === 0x3000 ||
-    code === 0xfeff
-  )
 }
 
 function formatElementLines(element: BrowserRecorderElementSummary): string[] {
@@ -163,6 +74,15 @@ export function formatBrowserRecorderStepDetail(
     case 'automation-action':
       lines.push(...formatAutomationActionLines(detail.action))
       break
+    case 'interaction':
+      lines.push(...formatInteractionLines(detail.interaction))
+      break
+    case 'console':
+      lines.push(...formatConsoleEntryLines(detail.entry))
+      break
+    case 'network-summary':
+      lines.push(...formatNetworkSummaryLines(detail.summary))
+      break
   }
   return lines
 }
@@ -215,6 +135,19 @@ function formatAutomationActionLines(action: BrowserRecorderAutomationAction): s
     if (parts.length > 0) {
       lines.push(`**DOM changed:** ${parts.join(', ')}`)
     }
+    const shownChanges = diff.inputChanges.slice(0, 5)
+    if (shownChanges.length > 0) {
+      const changeLines = shownChanges.map(
+        (change) =>
+          `${inlineCode(change.label)}: "${inlineText(change.before)}" → "${inlineText(change.after)}"`
+      )
+      const hidden = diff.inputChanges.length - shownChanges.length
+      if (hidden > 0) {
+        changeLines.push(`+${hidden} more`)
+      }
+      lines.push('**Fields:**')
+      lines.push(...changeLines.map((line) => `- ${line}`))
+    }
   } else if (action.ok && action.domDiff) {
     lines.push('**DOM changed:** none')
   }
@@ -233,6 +166,12 @@ function detailHeading(detail: BrowserRecorderStepDetail): string {
       return 'Added annotation'
     case 'automation-action':
       return 'Browser automation action'
+    case 'interaction':
+      return interactionDetailHeading(detail.interaction)
+    case 'console':
+      return `Console ${detail.entry.level}`
+    case 'network-summary':
+      return 'Network summary'
   }
 }
 
@@ -277,6 +216,12 @@ export function formatBrowserRecorderStepSummary(step: BrowserRecorderStep): str
       return `Annotated ${elementLabel(step.detail.element)}`
     case 'automation-action':
       return formatAutomationActionSummary(step.detail.action)
+    case 'interaction':
+      return formatInteractionSummary(step.detail.interaction)
+    case 'console':
+      return `Console ${step.detail.entry.level}: ${inlineText(step.detail.entry.message, 60)}`
+    case 'network-summary':
+      return `Network: ${step.detail.summary.total} requests, ${step.detail.summary.failed} failed`
   }
 }
 

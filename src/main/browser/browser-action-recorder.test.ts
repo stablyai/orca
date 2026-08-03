@@ -14,7 +14,7 @@ function makeFingerprintResult(overrides: Record<string, unknown> = {}): string 
     title: 'Login',
     textLength: 120,
     interactive: 14,
-    inputs: 'email=user@example.com',
+    inputsDetail: [{ label: 'email', value: 'user@example.com' }],
     ...overrides
   })
 }
@@ -150,7 +150,7 @@ describe('BrowserActionRecorder.capture', () => {
           url: 'https://example.com/dashboard',
           title: 'Dashboard',
           textLength: 400,
-          inputs: ''
+          inputsDetail: []
         }),
         origin: 'https://example.com/dashboard'
       })
@@ -170,9 +170,13 @@ describe('BrowserActionRecorder.capture', () => {
     expect(result).toEqual({ ok: true })
     expect(evaluate).toHaveBeenCalledTimes(2)
     expect(send).toHaveBeenCalledTimes(1)
-    const [channel, action] = send.mock.calls[0] as [string, Record<string, unknown>]
+    const [channel, event] = send.mock.calls[0] as [
+      string,
+      { kind: string; action: Record<string, unknown> }
+    ]
     expect(channel).toBe(BROWSER_RECORDER_ACTION_CHANNEL)
-    expect(action).toMatchObject({
+    expect(event.kind).toBe('action')
+    expect(event.action).toMatchObject({
       method: 'browser.click',
       target: { kind: 'selector', value: '#login-btn' },
       params: { element: '#login-btn' },
@@ -187,6 +191,7 @@ describe('BrowserActionRecorder.capture', () => {
         textLengthDelta: 280,
         interactiveDelta: 0,
         inputsChanged: true,
+        inputChanges: [{ label: 'email', before: 'user@example.com', after: '' }],
         changed: ['url', 'title', 'text', 'inputs']
       }
     })
@@ -212,16 +217,20 @@ describe('BrowserActionRecorder.capture', () => {
     ).rejects.toThrow('element not found: #missing')
 
     expect(send).toHaveBeenCalledTimes(1)
-    const [, action] = send.mock.calls[0] as [string, Record<string, unknown>]
-    expect(action.ok).toBe(false)
-    expect(action.error).toBe('element not found: #missing')
+    const [, event] = send.mock.calls[0] as [
+      string,
+      { kind: string; action: Record<string, unknown> }
+    ]
+    expect(event.action.ok).toBe(false)
+    expect(event.action.error).toBe('element not found: #missing')
     // Why: both fingerprints succeed (same page state), so the diff is empty, not null.
-    expect(action.domDiff).toEqual({
+    expect(event.action.domDiff).toEqual({
       urlChanged: false,
       titleChanged: false,
       textLengthDelta: 0,
       interactiveDelta: 0,
       inputsChanged: false,
+      inputChanges: [],
       changed: []
     })
     recorder.setEnabled(false)
@@ -241,9 +250,12 @@ describe('BrowserActionRecorder.capture', () => {
     })
 
     expect(send).toHaveBeenCalledTimes(1)
-    const [, action] = send.mock.calls[0] as [string, Record<string, unknown>]
-    expect(action.ok).toBe(true)
-    expect(action.domDiff).toBeNull()
+    const [, event] = send.mock.calls[0] as [
+      string,
+      { kind: string; action: Record<string, unknown> }
+    ]
+    expect(event.action.ok).toBe(true)
+    expect(event.action.domDiff).toBeNull()
     recorder.setEnabled(false)
   })
 })

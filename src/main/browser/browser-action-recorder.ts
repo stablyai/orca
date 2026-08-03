@@ -3,8 +3,10 @@
 //
 // When enabled, every browser automation action routed through
 // RuntimeBrowserCommands is wrapped with a before/after DOM fingerprint and
-// page context, then streamed to the renderer as a BrowserRecorderAutomationAction
-// so the browser pane can log "what was done, what changed, where".
+// page context, then streamed to the renderer as a BrowserRecorderStreamEvent
+// so the browser pane can log "what was done, what changed, where". While the
+// session is active, a BrowserRecorderSessionObserver also captures manual
+// page interactions, console output, and a stop-time network summary.
 // ---------------------------------------------------------------------------
 
 import { randomUUID } from 'node:crypto'
@@ -14,16 +16,24 @@ import {
   BROWSER_RECORDER_ACTION_CHANNEL,
   BROWSER_RECORDER_BUDGET,
   type BrowserRecorderAutomationAction,
-  type BrowserRecorderDomFingerprint
+  type BrowserRecorderDomFingerprint,
+  type BrowserRecorderInputState,
+  type BrowserRecorderStreamEvent
 } from '../../shared/browser-recorder-automation'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
 import {
   DOM_FINGERPRINT_EXPRESSION,
+  NAVIGATION_METHODS,
   capText,
   diffFingerprints,
   extractBrowserActionTarget,
   sanitizeBrowserActionParams
 } from './browser-action-recorder-utils'
+import {
+  BrowserRecorderSessionObserver,
+  type BrowserActionRecorderTarget,
+  type BrowserRecorderObserverHookInput
+} from './browser-recorder-observer'
 
 export type BrowserActionRecorderCaptureOptions = {
   method: string
@@ -37,13 +47,43 @@ export type BrowserActionRecorderCaptureOptions = {
 
 export class BrowserActionRecorder {
   private enabled = false
+  private observer: BrowserRecorderSessionObserver | null = null
+  private observerWindowGetter: (() => BrowserWindow | undefined) | null = null
 
   isEnabled(): boolean {
     return this.enabled
   }
 
-  setEnabled(enabled: boolean): void {
+  /**
+   * Enables or disables the recorder. When enabling with a target, a session
+   * observer is started (interactions/console/network); disabling stops it.
+   * Hooks are only required when a session observer should run.
+   */
+  setEnabled(
+    enabled: boolean,
+    target: BrowserActionRecorderTarget = {},
+    hooks?: BrowserRecorderObserverHookInput
+  ): void {
+    if (this.enabled === enabled) {
+      return
+    }
     this.enabled = enabled
+    if (enabled) {
+      this.observerWindowGetter = hooks?.getWindow ?? null
+      this.observer = new BrowserRecorderSessionObserver(
+        {
+          getBridge: hooks?.getBridge ?? (() => null),
+          getWindow: hooks?.getWindow ?? (() => undefined),
+          send: (event) => this.sendEvent(event)
+        },
+        target
+      )
+      this.observer.start()
+    } else {
+      const observer = this.observer
+      this.observer = null
+      void observer?.stop()
+    }
   }
 
   /**
@@ -158,8 +198,19 @@ export class BrowserActionRecorder {
           ? diffFingerprints(fingerprintBefore, fingerprintAfter)
           : null
     }
+    this.sendEvent({ kind: 'action', action }, getWindow)
+
+    // Why: navigation replaces the page, so the interaction listener/script
+    // must re-attach to the new document (and possibly new webContents).
+    if (NAVIGATION_METHODS.has(method)) {
+      this.observer?.rearm()
+    }
+  }
+
+  private sendEvent(event: BrowserRecorderStreamEvent, getWindow?: () => BrowserWindow): void {
     try {
-      getWindow().webContents.send(BROWSER_RECORDER_ACTION_CHANNEL, action)
+      const window = getWindow?.() ?? this.observerWindowGetter?.()
+      window?.webContents.send(BROWSER_RECORDER_ACTION_CHANNEL, event)
     } catch {
       // Window may be gone during shutdown — the log entry is simply not shown.
     }
@@ -182,16 +233,41 @@ export class BrowserActionRecorder {
         title: typeof parsed.title === 'string' ? parsed.title : '',
         textLength: typeof parsed.textLength === 'number' ? parsed.textLength : 0,
         interactive: typeof parsed.interactive === 'number' ? parsed.interactive : 0,
-        inputs:
-          typeof parsed.inputs === 'string'
-            ? parsed.inputs.slice(0, BROWSER_RECORDER_BUDGET.fingerprintInputsMaxLength)
-            : ''
+        inputsDetail: parseInputsDetail(parsed.inputsDetail)
       }
     } catch {
       // Page mid-navigation or debugger busy — fingerprint is best-effort.
       return null
     }
   }
+}
+
+function parseInputsDetail(value: unknown): BrowserRecorderInputState[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const states: BrowserRecorderInputState[] = []
+  for (const field of value) {
+    if (!field || typeof field !== 'object') {
+      continue
+    }
+    const label = (field as Record<string, unknown>).label
+    const fieldValue = (field as Record<string, unknown>).value
+    if (typeof label !== 'string') {
+      continue
+    }
+    states.push({
+      label: label.slice(0, BROWSER_RECORDER_BUDGET.paramValueMaxLength),
+      value:
+        typeof fieldValue === 'string'
+          ? fieldValue.slice(0, BROWSER_RECORDER_BUDGET.inputValueMaxLength)
+          : ''
+    })
+    if (states.length >= BROWSER_RECORDER_BUDGET.fingerprintInputsMaxFields) {
+      break
+    }
+  }
+  return states
 }
 
 /** App-wide recorder instance; enabled/disabled from the renderer via IPC. */
