@@ -24,6 +24,11 @@ import {
   type ProjectionSourceTask
 } from '../../shared/audited-workflow-projection'
 import { getLatestExecutionRun } from './audited-execution-run-repository'
+import { getPlanArtifact } from './audited-plan-artifact-repository'
+import {
+  getLatestPlanReviewRun,
+  hasApprovedVerdictForCurrentArtifact
+} from './audited-plan-review-run-repository'
 import type {
   AuditedTaskState,
   AuditedTaskStatusProjection
@@ -51,7 +56,14 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
   // Phase 4: the latest run supplies the three projected execution facts. Only
   // status, reason code, and the truncation flag — never counters' content,
   // paths, or argv.
-  const run = getLatestExecutionRun(getAuditedTaskRepository().getDatabase(), row.id)
+  const db = getAuditedTaskRepository().getDatabase()
+  const run = getLatestExecutionRun(db, row.id)
+  // Phase 5: the artifact supplies only display metadata (never its hash or
+  // path), and the latest review run supplies the verdict facts. The approval
+  // authority is the SAME query approvePlan uses, so what the UI offers and what
+  // the transaction permits cannot diverge.
+  const artifact = row.currentPlanArtifactId ? getPlanArtifact(db, row.currentPlanArtifactId) : null
+  const review = getLatestPlanReviewRun(db, row.id)
   return {
     taskId: row.id,
     repoId: row.repoId,
@@ -65,7 +77,8 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
     triageBlockedReasonCode: row.triageBlockedReasonCode,
     planRound: row.planRound,
     fixRound: row.fixRound,
-    lastVerdict: null,
+    // Phase 5 is the first writer of this long-declared field.
+    lastVerdict: row.lastVerdict,
     blockedReasonCode: row.blockedReasonCode,
     approvalState: 'none',
     approvalExpiresAt: null,
@@ -80,6 +93,16 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
     executionRunStatus: run?.status ?? null,
     executionReasonCode: run?.reasonCode ?? null,
     executionOutputTruncated: run?.outputTruncated ?? false,
+    planArtifactId: artifact?.id ?? null,
+    planArtifactStatus: artifact?.status ?? null,
+    planArtifactTruncated: artifact?.truncated ?? false,
+    planArtifactRedactionCount: artifact?.redactionCount ?? 0,
+    planReviewRunStatus: review?.status ?? null,
+    planReviewVerdict: review?.verdict ?? null,
+    planReviewReasonCode: review?.reasonCode ?? null,
+    planReviewSummary: review?.summary ?? null,
+    planReviewFindingCount: review?.findingCount ?? null,
+    planReviewApprovedForCurrentArtifact: hasApprovedVerdictForCurrentArtifact(db, row.id),
     acceptanceCriteria: [],
     timings: [],
     createdAt: row.createdAt,

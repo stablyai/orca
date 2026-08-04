@@ -16,6 +16,12 @@ import type {
 } from './audited-workflow-types'
 import type { WorktreeReasonCode } from './audited-worktree-types'
 import type { ExecutionReasonCode } from './audited-execution-types'
+import type {
+  PlanApprovalReasonCode,
+  PlanArtifactStatus,
+  PlanReviewReasonCode,
+  PlanRevisionReasonCode
+} from './audited-plan-artifact-types'
 
 export type AuditedWorkflowListTasksParams = { repoId?: string }
 export type AuditedWorkflowGetTaskParams = { taskId: string }
@@ -97,6 +103,49 @@ export type AuditedWorkflowCancelExecutionResult = ExecutionCommandResult
 export type AuditedWorkflowRetryExecutionParams = { taskId: string }
 export type AuditedWorkflowRetryExecutionResult = ExecutionCommandResult
 
+// Phase 5 plan-review commands. Like the execution commands, the ONLY renderer
+// input is a taskId (plus an opaque artifactId for the read, which the handler
+// re-verifies belongs to that task). Prompt, model, argv, cwd, output path, and
+// config are all main-derived.
+export type PlanReviewCommandResult =
+  | { ok: true }
+  | { ok: false; kind: 'planReview'; reasonCode: PlanReviewReasonCode }
+  // A read-only worktree verification failure. Nothing was written and nothing
+  // spawned; display-only, exactly like retryExecution's fresh preflight arm.
+  | { ok: false; kind: 'worktree'; reasonCode: WorktreeReasonCode }
+
+export type AuditedWorkflowStartPlanAuditParams = { taskId: string }
+export type AuditedWorkflowStartPlanAuditResult = PlanReviewCommandResult
+export type AuditedWorkflowCancelPlanAuditParams = { taskId: string }
+export type AuditedWorkflowCancelPlanAuditResult = PlanReviewCommandResult
+export type AuditedWorkflowRetryPlanAuditParams = { taskId: string }
+export type AuditedWorkflowRetryPlanAuditResult = PlanReviewCommandResult
+
+export type AuditedWorkflowApprovePlanParams = { taskId: string }
+export type AuditedWorkflowApprovePlanResult =
+  | { ok: true }
+  | { ok: false; reasonCode: PlanApprovalReasonCode }
+
+export type AuditedWorkflowRequestPlanRevisionParams = { taskId: string }
+export type AuditedWorkflowRequestPlanRevisionResult =
+  | { ok: true }
+  | { ok: false; reasonCode: PlanRevisionReasonCode }
+
+// The plan BODY, fetched on demand. Deliberately NOT on the task projection:
+// it is the largest and highest-risk field in the feature, so it crosses only
+// when a human explicitly opens it, and only for the task that owns it.
+export type AuditedWorkflowGetPlanArtifactParams = { taskId: string; artifactId: string }
+export type AuditedWorkflowGetPlanArtifactResult =
+  | {
+      ok: true
+      text: string
+      truncated: boolean
+      redactionCount: number
+      round: number
+      status: PlanArtifactStatus
+    }
+  | { ok: false; reasonCode: 'artifact_unavailable' }
+
 export type AuditedWorkflowProvisionWorktreeParams = { taskId: string }
 export type AuditedWorkflowProvisionWorktreeResult = AuditedCommandResult
 
@@ -108,6 +157,11 @@ export type AuditedWorkflowVerifyWorktreeResult = AuditedCommandResult
 // bytes, or a filesystem path. See audited-triage-api-key-store.ts.
 export type AuditedWorkflowTriageProviderStatus = { configured: boolean }
 export type AuditedWorkflowSaveTriageApiKeyParams = { apiKey: string }
+
+// Audited Codex provider key. `{ apiKey }` and nothing else — the renderer never
+// names a provider, an endpoint, or an env var; main derives the selection from
+// its code-owned registry.
+export type AuditedWorkflowSaveCodexProviderKeyParams = { apiKey: string }
 
 export type AuditedWorkflowApproveParams = {
   taskId: string

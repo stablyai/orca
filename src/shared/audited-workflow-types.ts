@@ -3,6 +3,7 @@
 // see docs/audited-workflow.md for the trust-boundary rationale.
 import type { WorktreeReasonCode } from './audited-worktree-types'
 import type { ExecutionReasonCode, ExecutionRunStatus } from './audited-execution-types'
+import type { PlanReviewReasonCode, PlanReviewRunStatus } from './audited-plan-artifact-types'
 
 export const AUDITED_TASK_STATES = [
   'selected',
@@ -275,6 +276,32 @@ export type AuditedTaskStatusProjection = {
   executionRunStatus: ExecutionRunStatus | null
   executionReasonCode: ExecutionReasonCode | null
   executionOutputTruncated: boolean
+  // Phase 5 plan artifact + Codex plan review. Metadata ONLY — never the plan
+  // body, the artifact file path, the content hash, the Codex prompt, argv, or
+  // raw review output. The body is fetched on demand through
+  // auditedWorkflow:getPlanArtifact, never carried on this projection.
+  //
+  // planArtifactId is an opaque row id, safe to echo back as a getPlanArtifact
+  // argument (the handler re-verifies it belongs to the task).
+  planArtifactId: string | null
+  planArtifactAvailable: boolean
+  planArtifactTruncated: boolean
+  planArtifactRedactionCount: number
+  planReviewRunStatus: PlanReviewRunStatus | null
+  // Same closed union as lastVerdict — there is exactly one verdict vocabulary.
+  planReviewVerdict: ReviewVerdict | null
+  planReviewReasonCode: PlanReviewReasonCode | null
+  // THE ONLY free-text field on this projection, and a deliberate exception to
+  // the no-free-text rule: the human approval gate is meaningless without the
+  // reviewer's reasoning. It is model-authored, so it passes through the same
+  // sanitizePlanText redaction pipeline and is bounded to 4KB BEFORE storage
+  // (see audited-plan-review-run-finalize.ts). Never raw model output.
+  planReviewSummary: string | null
+  planReviewFindingCount: number | null
+  // Server-computed authorities. The renderer renders these; it never derives
+  // them, so a renderer bug cannot manufacture an approve affordance.
+  planApprovalReady: boolean
+  planRevisionAvailable: boolean
   acceptanceCriteria: AuditedAcceptanceCriterion[]
   timings: AuditedPhaseTiming[]
   createdAt: number

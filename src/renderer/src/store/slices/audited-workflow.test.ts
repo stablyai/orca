@@ -55,6 +55,17 @@ function makeTask(taskId: string): AuditedTaskStatusProjection {
     executionRunStatus: null,
     executionReasonCode: null,
     executionOutputTruncated: false,
+    planArtifactId: null,
+    planArtifactAvailable: false,
+    planArtifactTruncated: false,
+    planArtifactRedactionCount: 0,
+    planReviewRunStatus: null,
+    planReviewVerdict: null,
+    planReviewReasonCode: null,
+    planReviewSummary: null,
+    planReviewFindingCount: null,
+    planApprovalReady: false,
+    planRevisionAvailable: false,
     updatedAt: 1
   }
 }

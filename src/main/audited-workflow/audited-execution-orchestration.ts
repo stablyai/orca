@@ -27,6 +27,7 @@ import { resolveNextStepPrompt } from './audited-execution-prompt'
 import { decideExecutionOutcome } from './audited-execution-outcome'
 import { hasMeaningfulOutput, writeExecutionOutput } from './audited-execution-output-store'
 import { runAuditedClaude, type ExecutionLaunchContext } from './audited-execution-launcher'
+import { completePlanRun } from './audited-plan-run-completion'
 import type { ExecutionCommandResult } from '../../shared/audited-workflow-command-types'
 
 function broadcastIfProjectable(taskId: string): void {
@@ -327,6 +328,35 @@ async function launchAndFinalize(context: ExecutionLaunchContext): Promise<void>
     driftReasonCode: verified.ok ? null : verified.reasonCode,
     hasStdout: hasMeaningfulOutput(stdout)
   })
+
+  // Phase 5: a SUCCESSFUL plan run does not simply move the task — it must first
+  // produce a durable artifact, and the task advances only inside that
+  // artifact's guarded transaction. completePlanRun finalizes the run in every
+  // branch, so nothing below runs for this path.
+  if (decision.status === 'succeeded' && decision.toState === 'awaiting_plan_review') {
+    const task = repo.getTask(context.taskId)
+    if (task) {
+      completePlanRun(
+        repo.getDatabase(),
+        {
+          runId: context.runId,
+          taskId: context.taskId,
+          task,
+          rawPlanText: stdout,
+          userDataPath: app.getPath('userData'),
+          counters: {
+            stdoutBytes: counters.stdoutBytes,
+            stderrBytes: counters.stderrBytes,
+            outputTruncated: counters.outputTruncated,
+            exitCode: outcome.kind === 'exit' ? outcome.exitCode : null
+          }
+        },
+        Date.now()
+      )
+      broadcastIfProjectable(context.taskId)
+      return
+    }
+  }
 
   finalizeExecutionRun(
     repo.getDatabase(),

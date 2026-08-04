@@ -41,6 +41,13 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   // writes must pass the dedicated reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
+  // Audited Codex provider selection is main-owned authority state: it decides
+  // which endpoint an audited launch would target. Keeping any part of it
+  // renderer-writable would let a settings write select a provider outside the
+  // approved main-process path, so the whole field is dropped rather than
+  // narrowed. A renderer-writable subset arrives with the future picker, under
+  // its own reviewed contract.
+  delete sanitizedArgs.auditedCodexProvider
   return sanitizedArgs
 }
 

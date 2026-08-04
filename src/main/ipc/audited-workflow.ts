@@ -3,7 +3,7 @@
 // projection. No RPC methods are registered anywhere for this feature —
 // Audited Workflow is deliberately Electron-IPC-only, so it can never reach
 // mobile/remote clients (see plan §10.2 and mobile-rpc-allowlist.test.ts).
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { z } from 'zod'
 import type { Store } from '../persistence'
 import { getGitRepoRoot } from '../git/repo'
@@ -13,8 +13,13 @@ import { parseWslPath } from '../wsl'
 import {
   selectTask,
   getTaskProjection,
-  listTaskProjections
+  listTaskProjections,
+  getAuditedTaskRepository
 } from '../audited-workflow/audited-task-service'
+import { recoverInterruptedPlanReviewsOnStartup } from '../audited-workflow/audited-plan-review-orchestration'
+import { reconcilePlanArtifactFilesOnStartup } from '../audited-workflow/audited-plan-artifact-gc'
+import { registerAuditedPlanReviewHandlers } from './audited-workflow-plan-review'
+import { registerAuditedCodexProviderHandlers } from './audited-workflow-codex-provider'
 import {
   startTriage,
   retryTriage,
@@ -127,6 +132,22 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
   // after a restart, so every one is marked `interrupted` and its task blocked
   // with pre_block_state set. Idempotent and CAS-safe.
   recoverInterruptedExecutionsOnStartup()
+
+  // Same rationale for plan-review runs: a `running` Codex review cannot be
+  // assumed alive after a restart. Idempotent and CAS-safe.
+  recoverInterruptedPlanReviewsOnStartup()
+
+  // Reclaims artifact files whose DB row never committed (a crash or a lost
+  // ownership race between the atomic rename and the attach transaction).
+  // Conservative: only well-formed ids with no row in ANY status are removed.
+  try {
+    reconcilePlanArtifactFilesOnStartup(
+      getAuditedTaskRepository().getDatabase(),
+      app.getPath('userData')
+    )
+  } catch (error) {
+    console.error('[auditedWorkflow] Plan artifact reconciliation failed to start:', error)
+  }
 
   // Read-only, network-free, Git-mutation-free. Fire-and-forget so handler
   // registration is never blocked on filesystem/Git probes; failures are logged
@@ -330,6 +351,7 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
   )
 
   registerAuditedExecutionHandlers()
+  registerAuditedPlanReviewHandlers()
 
   // Why: exposes ONLY whether a key is configured — never the key, a masked
   // form, encrypted bytes, or a filesystem path. See
@@ -368,6 +390,8 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
     }
     return { configured: safeHasAuditedTriageApiKey() }
   })
+
+  registerAuditedCodexProviderHandlers()
 }
 
 // Why: hasAuditedTriageApiKey is a plain existsSync check today but is not

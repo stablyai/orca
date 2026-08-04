@@ -107,7 +107,9 @@ export function AuditedExecutionControls({ task }: Props): React.JSX.Element | n
     )
   }
 
-  if (task.state === 'awaiting_plan_review' || task.state === 'awaiting_code_audit') {
+  // awaiting_plan_review is now owned by AuditedPlanReviewPanel (Phase 5).
+  // The code-audit placeholder stays until Phase 6 builds that lane.
+  if (task.state === 'awaiting_code_audit') {
     return (
       <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3 text-sm">
         {translate(

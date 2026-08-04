@@ -10,7 +10,13 @@ import type {
 import type {
   AuditedWorkflowStartExecutionResult,
   AuditedWorkflowCancelExecutionResult,
-  AuditedWorkflowRetryExecutionResult
+  AuditedWorkflowRetryExecutionResult,
+  AuditedWorkflowStartPlanAuditResult,
+  AuditedWorkflowCancelPlanAuditResult,
+  AuditedWorkflowRetryPlanAuditResult,
+  AuditedWorkflowApprovePlanResult,
+  AuditedWorkflowRequestPlanRevisionResult,
+  AuditedWorkflowGetPlanArtifactResult
 } from '../../../../shared/audited-workflow-command-types'
 import type { AppState } from '../types'
 import { getTaskListErrorMessage } from '../../components/audited-workflow/audited-workflow-error-messages'
@@ -34,6 +40,21 @@ export type AuditedWorkflowSlice = {
   cancelAuditedTaskExecution: (taskId: string) => Promise<AuditedWorkflowCancelExecutionResult>
   retryAuditedTaskExecution: (taskId: string) => Promise<AuditedWorkflowRetryExecutionResult>
   applyAuditedTaskChanged: (projection: AuditedTaskStatusProjection) => void
+  // Phase 5 plan review. One pending id for the whole block, matching the
+  // execution-controls idiom: the panel shows a single busy state.
+  auditedPlanReviewPendingTaskId: string | null
+  startAuditedPlanAudit: (taskId: string) => Promise<AuditedWorkflowStartPlanAuditResult>
+  cancelAuditedPlanAudit: (taskId: string) => Promise<AuditedWorkflowCancelPlanAuditResult>
+  retryAuditedPlanAudit: (taskId: string) => Promise<AuditedWorkflowRetryPlanAuditResult>
+  approveAuditedPlan: (taskId: string) => Promise<AuditedWorkflowApprovePlanResult>
+  requestAuditedPlanRevision: (taskId: string) => Promise<AuditedWorkflowRequestPlanRevisionResult>
+  // Cached by artifactId, NOT by taskId: a new round produces a new artifact id,
+  // so a stale body can never be shown next to a newer round's metadata.
+  auditedPlanArtifactBodies: Record<string, string>
+  loadAuditedPlanArtifact: (
+    taskId: string,
+    artifactId: string
+  ) => Promise<AuditedWorkflowGetPlanArtifactResult>
 }
 
 function upsertTask(
@@ -168,7 +189,80 @@ export const createAuditedWorkflowSlice: StateCreator<AppState, [], [], AuditedW
   },
 
   applyAuditedTaskChanged: (projection) =>
-    set((state) => ({ auditedTasks: upsertTask(state.auditedTasks, projection) }))
+    set((state) => ({ auditedTasks: upsertTask(state.auditedTasks, projection) })),
+
+  auditedPlanReviewPendingTaskId: null,
+  auditedPlanArtifactBodies: {},
+
+  startAuditedPlanAudit: async (taskId) => {
+    set({ auditedPlanReviewPendingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.startPlanAudit({ taskId })
+      await refreshOneTask(set, taskId)
+      return result
+    } finally {
+      set({ auditedPlanReviewPendingTaskId: null })
+    }
+  },
+
+  cancelAuditedPlanAudit: async (taskId) => {
+    set({ auditedPlanReviewPendingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.cancelPlanAudit({ taskId })
+      await refreshOneTask(set, taskId)
+      return result
+    } finally {
+      set({ auditedPlanReviewPendingTaskId: null })
+    }
+  },
+
+  retryAuditedPlanAudit: async (taskId) => {
+    set({ auditedPlanReviewPendingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.retryPlanAudit({ taskId })
+      await refreshOneTask(set, taskId)
+      return result
+    } finally {
+      set({ auditedPlanReviewPendingTaskId: null })
+    }
+  },
+
+  approveAuditedPlan: async (taskId) => {
+    set({ auditedPlanReviewPendingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.approvePlan({ taskId })
+      await refreshOneTask(set, taskId)
+      return result
+    } finally {
+      set({ auditedPlanReviewPendingTaskId: null })
+    }
+  },
+
+  // Deliberately does NOT chain into anything on failure: a refused revision
+  // leaves the task exactly where it was, and the panel renders the closed code.
+  requestAuditedPlanRevision: async (taskId) => {
+    set({ auditedPlanReviewPendingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.requestPlanRevision({ taskId })
+      await refreshOneTask(set, taskId)
+      return result
+    } finally {
+      set({ auditedPlanReviewPendingTaskId: null })
+    }
+  },
+
+  loadAuditedPlanArtifact: async (taskId, artifactId) => {
+    const result = await window.api.auditedWorkflow.getPlanArtifact({ taskId, artifactId })
+    if (result.ok) {
+      set((state) => ({
+        auditedPlanArtifactBodies: {
+          ...state.auditedPlanArtifactBodies,
+          [artifactId]: result.text
+        }
+      }))
+    }
+    return result
+  }
 })
 
 async function refreshOneTask(

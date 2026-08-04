@@ -23,6 +23,8 @@ import type {
 } from './audited-workflow-types'
 import type { WorktreeReasonCode } from './audited-worktree-types'
 import type { ExecutionReasonCode, ExecutionRunStatus } from './audited-execution-types'
+import { MAX_PLAN_ROUNDS } from './audited-plan-artifact-types'
+import type { PlanReviewReasonCode, PlanReviewRunStatus } from './audited-plan-artifact-types'
 
 // Truncates a full identity value (tree OID / SHA) to a short, non-authorizing
 // display form. Never accepted back as input anywhere — see plan §5.
@@ -66,6 +68,22 @@ export type ProjectionSourceTask = {
   executionRunStatus: ExecutionRunStatus | null
   executionReasonCode: ExecutionReasonCode | null
   executionOutputTruncated: boolean
+  // Phase 5. The source carries the artifact's content hash and the task's
+  // plan_round so this builder can compute the two server-side authorities;
+  // NEITHER the hash nor any path is copied onto the projection.
+  planArtifactId: string | null
+  planArtifactStatus: string | null
+  planArtifactTruncated: boolean
+  planArtifactRedactionCount: number
+  planReviewRunStatus: PlanReviewRunStatus | null
+  planReviewVerdict: ReviewVerdict | null
+  planReviewReasonCode: PlanReviewReasonCode | null
+  planReviewSummary: string | null
+  planReviewFindingCount: number | null
+  // True only when a SUCCEEDED review run carries verdict 'approved' AND is
+  // bound to the task's current artifact by both id and hash. Computed by the
+  // repository inside its read, not re-derived here.
+  planReviewApprovedForCurrentArtifact: boolean
   acceptanceCriteria: AuditedAcceptanceCriterion[]
   timings: AuditedPhaseTiming[]
   createdAt: number
@@ -109,6 +127,30 @@ export function buildAuditedTaskProjection(
     executionRunStatus: source.executionRunStatus,
     executionReasonCode: source.executionReasonCode,
     executionOutputTruncated: source.executionOutputTruncated,
+    planArtifactId: source.planArtifactId,
+    // Available requires BOTH an id and 'current' status: a superseded artifact
+    // is still readable by id (history), but it is not the plan under review.
+    planArtifactAvailable:
+      source.planArtifactId !== null && source.planArtifactStatus === 'current',
+    planArtifactTruncated: source.planArtifactTruncated,
+    planArtifactRedactionCount: source.planArtifactRedactionCount,
+    planReviewRunStatus: source.planReviewRunStatus,
+    planReviewVerdict: source.planReviewVerdict,
+    planReviewReasonCode: source.planReviewReasonCode,
+    planReviewSummary: source.planReviewSummary,
+    planReviewFindingCount: source.planReviewFindingCount,
+    // Approve is offered ONLY for a task resting in awaiting_plan_review whose
+    // CURRENT artifact carries a durable 'approved' verdict. Deliberately not a
+    // function of planRound — a round-3 plan stays approvable.
+    planApprovalReady:
+      source.state === 'awaiting_plan_review' &&
+      source.planArtifactId !== null &&
+      source.planArtifactStatus === 'current' &&
+      source.planReviewApprovedForCurrentArtifact,
+    // Revision is offered only from plan_fixes_requested and only below the
+    // round cap — the cap binds when STARTING a revision, nowhere else.
+    planRevisionAvailable:
+      source.state === 'plan_fixes_requested' && source.planRound < MAX_PLAN_ROUNDS,
     acceptanceCriteria: source.acceptanceCriteria,
     timings: source.timings,
     createdAt: source.createdAt,
@@ -153,5 +195,21 @@ export const AUDITED_PROJECTION_FORBIDDEN_KEYS = [
   'settingsPath',
   'pid',
   'model',
-  'nextStepPrompt'
+  'nextStepPrompt',
+  // Phase 5 plan-artifact / Codex-review internals. Only the metadata fields
+  // and the bounded, sanitized planReviewSummary may cross. The plan BODY is
+  // fetched on demand and is never attached to a projection; not even the
+  // artifact's content hash crosses, since it is an authorization input.
+  'planText',
+  'planBody',
+  'planArtifactPath',
+  'artifactPath',
+  'planArtifactSha256',
+  'contentSha256',
+  'codexArgv',
+  'codexPrompt',
+  'auditPrompt',
+  'lastMessagePath',
+  'reviewStdout',
+  'reviewStderr'
 ] as const

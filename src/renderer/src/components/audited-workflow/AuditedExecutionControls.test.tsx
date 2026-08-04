@@ -60,6 +60,17 @@ function task(overrides: Partial<AuditedTaskStatusProjection> = {}): AuditedTask
     executionRunStatus: null,
     executionReasonCode: null,
     executionOutputTruncated: false,
+    planArtifactId: null,
+    planArtifactAvailable: false,
+    planArtifactTruncated: false,
+    planArtifactRedactionCount: 0,
+    planReviewRunStatus: null,
+    planReviewVerdict: null,
+    planReviewReasonCode: null,
+    planReviewSummary: null,
+    planReviewFindingCount: null,
+    planApprovalReady: false,
+    planRevisionAvailable: false,
     acceptanceCriteria: [],
     timings: [],
     createdAt: 1,
@@ -257,12 +268,19 @@ describe('failed retry preflight', () => {
 })
 
 describe('parked review states', () => {
-  it.each(['awaiting_plan_review', 'awaiting_code_audit'] as const)(
-    'shows an informational note with no affordance in %s',
-    (state) => {
-      render(<AuditedExecutionControls task={task({ state })} />)
-      expect(screen.getByText('Review is not yet available.')).toBeInTheDocument()
-      expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    }
-  )
+  // Only the CODE audit is still a placeholder. Phase 5 gave
+  // awaiting_plan_review a real UI, owned by AuditedPlanReviewPanel — these
+  // controls deliberately render nothing for it so the two cannot both draw.
+  it('shows an informational note with no affordance in awaiting_code_audit', () => {
+    render(<AuditedExecutionControls task={task({ state: 'awaiting_code_audit' })} />)
+    expect(screen.getByText('Review is not yet available.')).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('renders nothing in awaiting_plan_review, which the plan-review panel owns', () => {
+    const { container } = render(
+      <AuditedExecutionControls task={task({ state: 'awaiting_plan_review' })} />
+    )
+    expect(container).toBeEmptyDOMElement()
+  })
 })

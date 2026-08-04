@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import type { AuditedCodexProviderStatus } from '../shared/audited-codex-provider-types'
 import type { AppIdentity } from '../shared/app-identity'
 import type {
   AuditedTaskStatusProjection,
@@ -26,6 +27,19 @@ import type {
   AuditedWorkflowCancelExecutionResult,
   AuditedWorkflowRetryExecutionParams,
   AuditedWorkflowRetryExecutionResult,
+  AuditedWorkflowStartPlanAuditParams,
+  AuditedWorkflowStartPlanAuditResult,
+  AuditedWorkflowCancelPlanAuditParams,
+  AuditedWorkflowCancelPlanAuditResult,
+  AuditedWorkflowRetryPlanAuditParams,
+  AuditedWorkflowRetryPlanAuditResult,
+  AuditedWorkflowApprovePlanParams,
+  AuditedWorkflowApprovePlanResult,
+  AuditedWorkflowRequestPlanRevisionParams,
+  AuditedWorkflowRequestPlanRevisionResult,
+  AuditedWorkflowGetPlanArtifactParams,
+  AuditedWorkflowSaveCodexProviderKeyParams,
+  AuditedWorkflowGetPlanArtifactResult,
   AuditedWorkflowTriageProviderStatus,
   AuditedWorkflowSaveTriageApiKeyParams
 } from '../shared/audited-workflow-types'
@@ -2386,6 +2400,30 @@ const api = {
       params: AuditedWorkflowRetryExecutionParams
     ): Promise<AuditedWorkflowRetryExecutionResult> =>
       ipcRenderer.invoke('auditedWorkflow:retryExecution', params),
+    startPlanAudit: (
+      params: AuditedWorkflowStartPlanAuditParams
+    ): Promise<AuditedWorkflowStartPlanAuditResult> =>
+      ipcRenderer.invoke('auditedWorkflow:startPlanAudit', params),
+    cancelPlanAudit: (
+      params: AuditedWorkflowCancelPlanAuditParams
+    ): Promise<AuditedWorkflowCancelPlanAuditResult> =>
+      ipcRenderer.invoke('auditedWorkflow:cancelPlanAudit', params),
+    retryPlanAudit: (
+      params: AuditedWorkflowRetryPlanAuditParams
+    ): Promise<AuditedWorkflowRetryPlanAuditResult> =>
+      ipcRenderer.invoke('auditedWorkflow:retryPlanAudit', params),
+    approvePlan: (
+      params: AuditedWorkflowApprovePlanParams
+    ): Promise<AuditedWorkflowApprovePlanResult> =>
+      ipcRenderer.invoke('auditedWorkflow:approvePlan', params),
+    requestPlanRevision: (
+      params: AuditedWorkflowRequestPlanRevisionParams
+    ): Promise<AuditedWorkflowRequestPlanRevisionResult> =>
+      ipcRenderer.invoke('auditedWorkflow:requestPlanRevision', params),
+    getPlanArtifact: (
+      params: AuditedWorkflowGetPlanArtifactParams
+    ): Promise<AuditedWorkflowGetPlanArtifactResult> =>
+      ipcRenderer.invoke('auditedWorkflow:getPlanArtifact', params),
     getTriageProviderStatus: (): Promise<AuditedWorkflowTriageProviderStatus> =>
       ipcRenderer.invoke('auditedWorkflow:getTriageProviderStatus'),
     saveTriageApiKey: (
@@ -2394,6 +2432,14 @@ const api = {
       ipcRenderer.invoke('auditedWorkflow:saveTriageApiKey', params),
     clearTriageApiKey: (): Promise<AuditedWorkflowTriageProviderStatus> =>
       ipcRenderer.invoke('auditedWorkflow:clearTriageApiKey'),
+    getCodexProviderStatus: (): Promise<AuditedCodexProviderStatus> =>
+      ipcRenderer.invoke('auditedWorkflow:getCodexProviderStatus'),
+    saveCodexProviderKey: (
+      params: AuditedWorkflowSaveCodexProviderKeyParams
+    ): Promise<AuditedCodexProviderStatus> =>
+      ipcRenderer.invoke('auditedWorkflow:saveCodexProviderKey', params),
+    clearCodexProviderKey: (): Promise<AuditedCodexProviderStatus> =>
+      ipcRenderer.invoke('auditedWorkflow:clearCodexProviderKey'),
     onTaskChanged: (callback: (projection: AuditedTaskStatusProjection) => void): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,

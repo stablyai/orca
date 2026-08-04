@@ -57,11 +57,15 @@ const TRANSITION_RULES: readonly AuditedTransitionRule[] = [
   { command: 'triageAutoDirect', from: ['triaging'], to: 'ready_to_implement', actor: 'triage' },
   { command: 'triageBlock', from: ['triaging'], to: 'blocked', actor: 'control' },
   { command: 'planComplete', from: ['planning'], to: 'awaiting_plan_review', actor: 'claude' },
+  // Phase 5: actor is `human`, not `codex`. Codex AUTHORIZES via a durable
+  // `approved` verdict bound to the current artifact; the human ACTS. The
+  // transition row must name who clicked, and the verdict check lives in
+  // approvePlan (audited-plan-review-approval.ts), not here.
   {
     command: 'planReviewApprove',
     from: ['awaiting_plan_review'],
     to: 'ready_to_implement',
-    actor: 'codex'
+    actor: 'human'
   },
   {
     command: 'planReviewFixesRequested',
@@ -70,11 +74,18 @@ const TRANSITION_RULES: readonly AuditedTransitionRule[] = [
     actor: 'codex'
   },
   { command: 'planReviewBlock', from: ['awaiting_plan_review'], to: 'blocked', actor: 'control' },
+  // Phase 5: a revision is a Claude EXECUTION, not a review outcome, so it
+  // targets `planning` — the same state, lane, and completion path as an
+  // original plan run. Landing directly in awaiting_plan_review would advertise
+  // "there is a plan to review" before Claude has written one, the same
+  // falsehood decideExecutionOutcome already refuses for an empty plan run.
+  // planComplete (via attachPlanArtifact) stays the ONLY route into
+  // awaiting_plan_review. Actor is `human` because the click IS the transition.
   {
     command: 'revisePlan',
     from: ['plan_fixes_requested'],
-    to: 'awaiting_plan_review',
-    actor: 'claude'
+    to: 'planning',
+    actor: 'human'
   },
   { command: 'implement', from: ['ready_to_implement'], to: 'implementing', actor: 'control' },
   {

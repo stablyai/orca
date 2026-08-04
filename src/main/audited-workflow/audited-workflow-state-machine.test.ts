@@ -25,7 +25,9 @@ const LEGAL_TRANSITIONS: {
   { command: 'planReviewApprove', from: 'awaiting_plan_review', to: 'ready_to_implement' },
   { command: 'planReviewFixesRequested', from: 'awaiting_plan_review', to: 'plan_fixes_requested' },
   { command: 'planReviewBlock', from: 'awaiting_plan_review', to: 'blocked' },
-  { command: 'revisePlan', from: 'plan_fixes_requested', to: 'awaiting_plan_review' },
+  // Phase 5: a revision is an EXECUTION, so it re-enters `planning`; only
+  // planComplete may reach awaiting_plan_review.
+  { command: 'revisePlan', from: 'plan_fixes_requested', to: 'planning' },
   { command: 'implement', from: 'ready_to_implement', to: 'implementing' },
   { command: 'implementComplete', from: 'implementing', to: 'awaiting_code_audit' },
   { command: 'implementBlock', from: 'implementing', to: 'blocked' },

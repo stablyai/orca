@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
+import type { AuditedCodexProviderSettings } from './audited-codex-provider-types'
 import type { RemovedSshTargetTombstone, SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
@@ -2969,6 +2970,15 @@ export type GlobalSettings = {
    *  Off never provisions its worktree/DB state or surfaces its nav entry;
    *  does not affect the normal agent-session workflow. */
   experimentalAuditedWorkflow?: boolean
+  /** Audited Codex plan-audit provider selection.
+   *
+   *  MAIN-OWNED. sanitizeRendererSettingsUpdate drops this field from every
+   *  renderer-originated update, so the only writer is the main-process
+   *  provider path. Present so this and preload can be typed ahead of the
+   *  future picker; in the current tranche NOTHING writes it and the resolver
+   *  does not read it — provider selection is derived from the presence of the
+   *  encrypted key record. */
+  auditedCodexProvider?: AuditedCodexProviderSettings | null
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
   /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */

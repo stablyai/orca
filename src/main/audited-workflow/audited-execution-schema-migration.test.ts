@@ -31,10 +31,14 @@ function tableSql(db: SyncDatabase.Database, table: string): string {
 }
 
 describe('v4 schema', () => {
-  it('bumps the schema version to 4', () => {
-    expect(SCHEMA_VERSION).toBe(4)
+  // Asserts the CURRENT version rather than a literal 4: this suite owns the
+  // Phase 4 tables, not the version number, and later phases legitimately bump
+  // it (v5 added the plan-review tables). Pinning a literal here would make
+  // every future phase edit an unrelated Phase 4 test.
+  it('stamps a fresh database with the current schema version', () => {
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(4)
     const db = freshDb()
-    expect(db.pragma('user_version', { simple: true })).toBe(4)
+    expect(db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     db.close()
   })
 
@@ -141,7 +145,7 @@ describe('v3 -> v4 is additive', () => {
   it('is a no-op when re-run', () => {
     const db = freshDb()
     expect(() => migrateAuditedWorkflowSchema(db)).not.toThrow()
-    expect(db.pragma('user_version', { simple: true })).toBe(4)
+    expect(db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     db.close()
   })
 

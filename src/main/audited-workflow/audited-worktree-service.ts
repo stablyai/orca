@@ -22,6 +22,7 @@ import {
 } from './audited-worktree-reconciliation'
 import { recoverAuditedWorktree, type WorktreeRecoveryResult } from './audited-worktree-recovery'
 import { blockTaskForWorktreeFailure } from './audited-worktree-task-writes'
+import { hasLivePlanReviewRun } from './audited-plan-review-run-repository'
 
 let storeRef: Store | undefined
 
@@ -61,6 +62,24 @@ export async function ensureWorktreeForTask(taskId: string): Promise<EnsureWorkt
   const task = repo.getTask(taskId)
   if (!task) {
     return { ok: false, reasonCode: 'worktree_never_provisioned' }
+  }
+
+  // REFUSE while an agent run owns this task's worktree.
+  //
+  // This is the ONLY supported writer that can change a task's worktree identity
+  // (path, branch, provenance, verification marker) after provisioning, and it
+  // is reachable from the renderer through auditedWorkflow:verifyWorktree with
+  // nothing but a taskId. A live Codex plan review has already had that identity
+  // admitted into its run row and is executing with it as its cwd; re-pointing
+  // the row underneath would strand the running process in a directory the task
+  // no longer claims.
+  //
+  // Refusing preserves the same admission invariant startPlanReviewRun enforces,
+  // without a new task state: `awaiting_plan_review` with a live review row is
+  // already a distinct, queryable condition. Cancel the review first — that path
+  // kills the process and finalizes the row, after which this returns to normal.
+  if (hasLivePlanReviewRun(repo.getDatabase(), taskId)) {
+    return { ok: false, contended: true }
   }
 
   // Why block rather than just report: an unresolvable workspace root is a

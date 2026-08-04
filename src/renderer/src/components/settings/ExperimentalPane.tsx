@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import { AuditedCodexProviderSection } from '../audited-workflow/AuditedCodexProviderSection'
 import { Label } from '../ui/label'
 import { useAppStore } from '../../store'
 import { SearchableSetting } from './SearchableSetting'
@@ -207,6 +208,9 @@ export function ExperimentalPane({
               />
             </button>
           </div>
+          {/* Provider key only appears once the feature is on — configuring a
+              credential for a disabled feature would be noise. */}
+          {settings.experimentalAuditedWorkflow ? <AuditedCodexProviderSection /> : null}
         </SearchableSetting>
       ) : null}
 

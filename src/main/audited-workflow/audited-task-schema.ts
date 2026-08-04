@@ -16,11 +16,11 @@ import {
   WORKTREE_PROVENANCE_KINDS,
   WORKTREE_REASON_CODES
 } from '../../shared/audited-worktree-types'
-import {
-  EXECUTION_MODES,
-  EXECUTION_REASON_CODES,
-  EXECUTION_RUN_STATUSES
-} from '../../shared/audited-execution-types'
+import { REVIEW_VERDICTS } from '../../shared/audited-workflow-types'
+// Per-phase DDL lives in its own module so this file stays within its line
+// budget and each phase's schema reviews as its own unit.
+import { createExecutionRunsTable } from './audited-execution-schema'
+import { PHASE_5_TASK_COLUMNS, createPlanReviewTables } from './audited-plan-review-schema'
 import type Database from '../sqlite/sync-database'
 
 // Schema versions: v1 initial (audited_tasks, audited_transitions). v2 (Phase 2)
@@ -32,7 +32,14 @@ import type Database from '../sqlite/sync-database'
 // the database has no notion of transition legality), so audited_tasks' state
 // CHECK is unchanged and no table rebuild is needed. audited_transitions.event_type
 // is unconstrained TEXT, so the new execution_* event types need no migration.
-export const SCHEMA_VERSION = 4
+// v5 (Phase 5) adds audited_plan_artifacts + audited_plan_review_runs plus two
+// audited_tasks columns (current_plan_artifact_id, last_verdict) — ALSO FULLY
+// ADDITIVE. Phase 5 introduces no new task state (its only state-machine change
+// retargets the EXISTING `revisePlan` rule, which is TypeScript, not schema), so
+// audited_tasks' state CHECK is unchanged. Artifact-file write failures reuse the
+// EXISTING `spawn_failed` execution reason rather than adding a code, so
+// audited_execution_runs' CHECK is untouched and v5 needs no table rebuild.
+export const SCHEMA_VERSION = 5
 
 export function createAuditedWorkflowTables(db: Database.Database): void {
   const stateList = AUDITED_TASK_STATES.map((s) => `'${s}'`).join(', ')
@@ -45,6 +52,7 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
   const attemptStatusList = WORKTREE_ATTEMPT_STATUSES.map((s) => `'${s}'`).join(', ')
   const provenanceList = WORKTREE_PROVENANCE_KINDS.map((p) => `'${p}'`).join(', ')
   const worktreeReasonList = WORKTREE_REASON_CODES.map((r) => `'${r}'`).join(', ')
+  const verdictList = REVIEW_VERDICTS.map((v) => `'${v}'`).join(', ')
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS audited_tasks (
@@ -85,6 +93,14 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
       source_repo_common_dir      TEXT,
       worktree_reason_code        TEXT CHECK(worktree_reason_code IS NULL OR worktree_reason_code IN (${worktreeReasonList})),
       worktree_verified_at_ms     INTEGER,
+      -- Phase 5. Denormalized pointer to the task's single 'current' plan
+      -- artifact, written in the SAME transaction as the artifact row so the two
+      -- can never disagree; audited_plan_artifacts stays the source of truth.
+      current_plan_artifact_id    TEXT,
+      -- Phase 5. The column behind the long-declared lastVerdict projection
+      -- field, which audited-task-service.ts hardcoded to null until now. Uses
+      -- the EXISTING ReviewVerdict vocabulary — there is no second verdict union.
+      last_verdict                TEXT CHECK(last_verdict IS NULL OR last_verdict IN (${verdictList})),
       created_at_ms                INTEGER NOT NULL,
       updated_at_ms                INTEGER NOT NULL
     );
@@ -157,6 +173,7 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
   `)
 
   createExecutionRunsTable(db)
+  createPlanReviewTables(db)
 }
 
 // Phase 3 columns added to a pre-existing audited_tasks table, with their
@@ -168,49 +185,6 @@ const PHASE_3_TASK_COLUMNS: readonly [string, string][] = [
   ['worktree_reason_code', 'TEXT'],
   ['worktree_verified_at_ms', 'INTEGER']
 ]
-
-/**
- * Phase 4: one row per Claude Code execution. Output CONTENT is never stored
- * here — only byte counters and a truncation flag; the bounded head+tail logs
- * live on disk and are never projected to the renderer.
- *
- * Shared by fresh-DB creation and the v3->v4 migration so both paths produce an
- * identical table, including its CHECK constraints.
- */
-function createExecutionRunsTable(db: Database.Database): void {
-  const modeList = EXECUTION_MODES.map((m) => `'${m}'`).join(', ')
-  const statusList = EXECUTION_RUN_STATUSES.map((s) => `'${s}'`).join(', ')
-  const reasonList = EXECUTION_REASON_CODES.map((r) => `'${r}'`).join(', ')
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS audited_execution_runs (
-      id                TEXT PRIMARY KEY,
-      task_id           TEXT NOT NULL,
-      mode              TEXT NOT NULL CHECK(mode IN (${modeList})),
-      status            TEXT NOT NULL CHECK(status IN (${statusList})),
-      -- The state the task held BEFORE this run's start transition. Recorded at
-      -- start so cancel restores the exact pre-launch state instead of guessing:
-      -- 'planning' for plan mode, 'ready_to_implement' for direct. Never inferred.
-      pre_launch_state  TEXT NOT NULL CHECK(pre_launch_state IN ('planning','ready_to_implement')),
-      -- The state the run LIVES in. Distinct from pre_launch_state for direct
-      -- runs; this is the value written to pre_block_state on failure.
-      active_run_state  TEXT NOT NULL CHECK(active_run_state IN ('planning','implementing')),
-      reason_code       TEXT CHECK(reason_code IS NULL OR reason_code IN (${reasonList})),
-      exit_code         INTEGER,
-      stdout_bytes      INTEGER NOT NULL DEFAULT 0,
-      stderr_bytes      INTEGER NOT NULL DEFAULT 0,
-      output_truncated  INTEGER NOT NULL DEFAULT 0,
-      worktree_verified_at_ms INTEGER NOT NULL,
-      started_at_ms     INTEGER NOT NULL,
-      ended_at_ms       INTEGER
-    );
-    CREATE INDEX IF NOT EXISTS idx_audited_execution_runs_task
-      ON audited_execution_runs(task_id);
-    -- At most one live run per task: the CAS primitive that makes a duplicate
-    -- Start click a no-op rather than a second Claude process.
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_audited_execution_runs_running
-      ON audited_execution_runs(task_id) WHERE status = 'running';
-  `)
-}
 
 function columnExists(db: Database.Database, table: string, column: string): boolean {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
@@ -262,6 +236,21 @@ export function migrateAuditedWorkflowSchema(db: Database.Database): void {
       // migration that silently depends on another call having happened first
       // would leave that path without the table.
       createExecutionRunsTable(db)
+    }
+    if (current < 5) {
+      // Phase 5: two new tables plus two additive task columns. No CHECK change
+      // on any existing table and no rebuild — artifact write failures reuse the
+      // existing `spawn_failed` execution reason precisely so that stays true.
+      // Created here rather than relying on createAuditedWorkflowTables having
+      // run: this function is also called directly against a legacy DB, and a
+      // migration that silently depends on another call would leave that path
+      // without the tables.
+      for (const [column, type] of PHASE_5_TASK_COLUMNS) {
+        if (!columnExists(db, 'audited_tasks', column)) {
+          db.exec(`ALTER TABLE audited_tasks ADD COLUMN ${column} ${type}`)
+        }
+      }
+      createPlanReviewTables(db)
     }
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     db.exec('COMMIT')

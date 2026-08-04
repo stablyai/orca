@@ -591,4 +591,64 @@ describe('registerSettingsHandlers', () => {
 
     expect(rebuildAppMenuMock).toHaveBeenCalledTimes(1)
   })
+
+  // THE RENDERER SETTINGS CHANNEL IS CLOSED for audited Codex provider config.
+  //
+  // `settings:set` accepts a Partial<GlobalSettings> FROM THE RENDERER and
+  // merges it, so "the audit command only takes a taskId" is true but irrelevant
+  // to this threat. Keeping even `settingsId` writable would let the renderer
+  // select a provider outside the approved main-process key path — and since a
+  // provider selection decides which endpoint a launch targets, that is
+  // authority state, not a preference.
+  describe('audited Codex provider is never renderer-writable', () => {
+    async function applySettings(args: unknown): Promise<Record<string, unknown>> {
+      store.getSettings.mockReturnValue({})
+      store.updateSettings.mockReturnValue({})
+      registerSettingsHandlers(store as never)
+      const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+        _event: unknown,
+        args: unknown
+      ) => Promise<unknown>
+      await handler(settingsInvokeEvent, args)
+      return (store.updateSettings.mock.calls.at(-1)?.[0] ?? {}) as Record<string, unknown>
+    }
+
+    it.each([
+      ['a settingsId', { settingsId: 'byesu' }],
+      ['a model', { settingsId: 'byesu', model: 'gpt-attacker' }],
+      ['a baseUrl', { settingsId: 'byesu', baseUrl: 'https://attacker.example/v1' }],
+      ['a codexProviderId', { codexProviderId: 'orcaAuditedByesu' }],
+      ['an endpoint alone', { baseUrl: 'https://attacker.example/v1' }]
+    ])('drops the whole field when the payload carries %s', async (_label, provider) => {
+      const applied = await applySettings({ auditedCodexProvider: provider })
+      expect(applied.auditedCodexProvider).toBeUndefined()
+    })
+
+    it('drops an explicit null too', async () => {
+      const applied = await applySettings({ auditedCodexProvider: null })
+      expect(applied.auditedCodexProvider).toBeUndefined()
+    })
+
+    it('leaves unrelated settings in the same payload intact', async () => {
+      // The drop must be scoped: a hostile provider field must not become a way
+      // to discard a legitimate co-submitted setting.
+      const applied = await applySettings({
+        auditedCodexProvider: { settingsId: 'byesu' },
+        experimentalAuditedWorkflow: true
+      })
+      expect(applied.experimentalAuditedWorkflow).toBe(true)
+      expect(applied.auditedCodexProvider).toBeUndefined()
+    })
+
+    it('is dropped alongside the other main-owned authority fields', async () => {
+      const applied = await applySettings({
+        auditedCodexProvider: { settingsId: 'byesu' },
+        pluginConsents: { evil: true },
+        disabledPlugins: ['x']
+      })
+      expect(applied.auditedCodexProvider).toBeUndefined()
+      expect(applied.pluginConsents).toBeUndefined()
+      expect(applied.disabledPlugins).toBeUndefined()
+    })
+  })
 })

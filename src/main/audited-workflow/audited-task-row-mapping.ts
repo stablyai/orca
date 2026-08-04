@@ -6,6 +6,7 @@ import type {
   AuditedTaskState,
   AuditedTaskTransitionRecord,
   BlockReasonCode,
+  ReviewVerdict,
   RiskLevel,
   TriageDecision,
   TriageReasonCode,
@@ -62,6 +63,11 @@ export type AuditedTaskRow = {
   sourceRepoCommonDir: string | null
   worktreeReasonCode: WorktreeReasonCode | null
   worktreeVerifiedAt: number | null
+  // Phase 5. currentPlanArtifactId points at the single 'current' artifact row;
+  // lastVerdict is the durable home of the long-declared `lastVerdict`
+  // projection field and uses the EXISTING ReviewVerdict vocabulary.
+  currentPlanArtifactId: string | null
+  lastVerdict: ReviewVerdict | null
   createdAt: number
   updatedAt: number
 }
@@ -104,6 +110,8 @@ export function sqliteRowToTask(row: Record<string, unknown>): AuditedTaskRow {
     sourceRepoCommonDir: (row.source_repo_common_dir as string | null) ?? null,
     worktreeReasonCode: (row.worktree_reason_code as WorktreeReasonCode | null) ?? null,
     worktreeVerifiedAt: (row.worktree_verified_at_ms as number | null) ?? null,
+    currentPlanArtifactId: (row.current_plan_artifact_id as string | null) ?? null,
+    lastVerdict: (row.last_verdict as ReviewVerdict | null) ?? null,
     createdAt: row.created_at_ms as number,
     updatedAt: row.updated_at_ms as number
   }

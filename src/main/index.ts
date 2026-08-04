@@ -218,6 +218,8 @@ import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headles
 import { AgentAwakeService } from './agent-awake-service'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
+import { createQuitTeardown as createAuditedExecutionQuitTeardown } from './audited-workflow/audited-claude-process'
+import { createCodexQuitTeardown as createAuditedPlanReviewQuitTeardown } from './audited-workflow/audited-codex-process'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -2792,12 +2794,18 @@ app.on('will-quit', (e) => {
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
     // Why: a wedged transport (half-open post-sleep socket) can leave one
     // member unsettled forever and block app.quit() until Force Quit (#9447).
+    // Why: audited-workflow agents are children of this process, so an
+    // un-killed Claude/Codex run would outlive quit and keep writing into a
+    // worktree no longer under supervision. Each module owns its own live-process
+    // map, so both are torn down explicitly.
     settleTeardownWithinDeadline([
       { name: 'daemon', promise: daemonTeardown },
       { name: 'runtime-rpc', promise: rpcStopAndClear },
       { name: 'watchers', promise: watcherShutdown },
       { name: 'emulator', promise: emulatorShutdown },
-      { name: 'plugin-hosts', promise: pluginHostShutdown }
+      { name: 'plugin-hosts', promise: pluginHostShutdown },
+      createAuditedExecutionQuitTeardown(),
+      createAuditedPlanReviewQuitTeardown()
     ])
       .then((pendingTeardowns) => {
         if (pendingTeardowns.length > 0) {

@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: the preload contract is intentionally centralized in one declaration file so renderer and preload stay in lockstep when IPC surfaces change. */
+import type { AuditedCodexProviderStatus } from '../shared/audited-codex-provider-types'
 import type {
   CreateHostedReviewArgs,
   CreateHostedReviewResult,
@@ -31,6 +32,19 @@ import type {
   AuditedWorkflowCancelExecutionResult,
   AuditedWorkflowRetryExecutionParams,
   AuditedWorkflowRetryExecutionResult,
+  AuditedWorkflowStartPlanAuditParams,
+  AuditedWorkflowStartPlanAuditResult,
+  AuditedWorkflowCancelPlanAuditParams,
+  AuditedWorkflowCancelPlanAuditResult,
+  AuditedWorkflowRetryPlanAuditParams,
+  AuditedWorkflowRetryPlanAuditResult,
+  AuditedWorkflowApprovePlanParams,
+  AuditedWorkflowApprovePlanResult,
+  AuditedWorkflowRequestPlanRevisionParams,
+  AuditedWorkflowRequestPlanRevisionResult,
+  AuditedWorkflowGetPlanArtifactParams,
+  AuditedWorkflowSaveCodexProviderKeyParams,
+  AuditedWorkflowGetPlanArtifactResult,
   AuditedWorkflowTriageProviderStatus,
   AuditedWorkflowSaveTriageApiKeyParams
 } from '../shared/audited-workflow-types'
@@ -2511,11 +2525,39 @@ export type PreloadApi = {
     retryExecution: (
       params: AuditedWorkflowRetryExecutionParams
     ) => Promise<AuditedWorkflowRetryExecutionResult>
+    startPlanAudit: (
+      params: AuditedWorkflowStartPlanAuditParams
+    ) => Promise<AuditedWorkflowStartPlanAuditResult>
+    cancelPlanAudit: (
+      params: AuditedWorkflowCancelPlanAuditParams
+    ) => Promise<AuditedWorkflowCancelPlanAuditResult>
+    retryPlanAudit: (
+      params: AuditedWorkflowRetryPlanAuditParams
+    ) => Promise<AuditedWorkflowRetryPlanAuditResult>
+    approvePlan: (
+      params: AuditedWorkflowApprovePlanParams
+    ) => Promise<AuditedWorkflowApprovePlanResult>
+    requestPlanRevision: (
+      params: AuditedWorkflowRequestPlanRevisionParams
+    ) => Promise<AuditedWorkflowRequestPlanRevisionResult>
+    // The plan BODY. Fetched on demand rather than projected — it is the
+    // largest, highest-risk field in the feature, and the handler re-verifies
+    // that artifactId belongs to taskId before any read.
+    getPlanArtifact: (
+      params: AuditedWorkflowGetPlanArtifactParams
+    ) => Promise<AuditedWorkflowGetPlanArtifactResult>
     getTriageProviderStatus: () => Promise<AuditedWorkflowTriageProviderStatus>
     saveTriageApiKey: (
       params: AuditedWorkflowSaveTriageApiKeyParams
     ) => Promise<AuditedWorkflowTriageProviderStatus>
     clearTriageApiKey: () => Promise<AuditedWorkflowTriageProviderStatus>
+    // Audited Codex provider. Status carries only a settings-id selector and a
+    // boolean — never the key, and never the endpoint.
+    getCodexProviderStatus: () => Promise<AuditedCodexProviderStatus>
+    saveCodexProviderKey: (
+      params: AuditedWorkflowSaveCodexProviderKeyParams
+    ) => Promise<AuditedCodexProviderStatus>
+    clearCodexProviderKey: () => Promise<AuditedCodexProviderStatus>
     onTaskChanged: (callback: (projection: AuditedTaskStatusProjection) => void) => () => void
     // Dev-build-only; undefined in a packaged build (see ipc/audited-workflow-dev-transitions.ts).
     devTransition?: (
