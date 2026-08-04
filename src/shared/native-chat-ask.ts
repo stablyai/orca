@@ -4,7 +4,7 @@ import type {
   AskQuestion,
   InteractiveQuestionParser
 } from './native-chat-ask-types'
-import type { NativeChatMessage } from './native-chat-types'
+import { isInterruptedStatusMessage, type NativeChatMessage } from './native-chat-types'
 
 export type { AskOption, AskPrompt, AskQuestion, InteractiveQuestionParser }
 
@@ -98,6 +98,16 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
   let pending: AskPrompt | null = null
   const outstanding: (AskPrompt | null)[] = []
   for (const message of messages) {
+    // A new user turn (or an interrupt row) ends the turn that owns whatever
+    // calls are still in flight: their results never arrive, and `tool_use_id`
+    // is dropped at decode time so those orphans can never be matched by id.
+    // Without this reset one orphan shifts the result FIFO for the rest of the
+    // transcript and strands an answered ask as a permanent card over the
+    // composer (#11761). Claude's tool-result turns decode as role 'tool'.
+    if (message.role === 'user' || isInterruptedStatusMessage(message)) {
+      outstanding.length = 0
+      pending = null
+    }
     for (const block of message.blocks) {
       if (block.type === 'tool-call') {
         const parsed = parseToolInput(block.name, block.input)

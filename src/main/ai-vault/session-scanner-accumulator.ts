@@ -1,11 +1,11 @@
 import { basename, extname } from 'node:path'
 import {
   aiVaultAgentLabel,
-  buildAiVaultResumeCommand,
   type AiVaultAgent,
   type AiVaultSession,
   type AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault-types'
+import { buildAiVaultResumeCommand } from '../../shared/ai-vault-resume-command'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type {
   FileWithMtime,
@@ -46,6 +46,7 @@ export function createAccumulator(args: {
     messageCount: 0,
     totalTokens: 0,
     previewMessages: [],
+    previewMessagesTruncated: false,
     firstUserPrompt: null,
     lastUserPrompt: null,
     queuedMessageCount: 0,
@@ -119,6 +120,7 @@ export function finalizeSession(
     messageCount: accumulator.messageCount,
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
+    ...(accumulator.previewMessagesTruncated ? { previewMessagesTruncated: true } : {}),
     ...(accumulator.firstUserPrompt ? { firstUserPrompt: accumulator.firstUserPrompt } : {}),
     ...(accumulator.lastUserPrompt ? { lastUserPrompt: accumulator.lastUserPrompt } : {}),
     queuedMessageCount: accumulator.queuedMessageCount,
@@ -161,6 +163,14 @@ export function addPreviewMessage(
     seedFirstUserPrompt?: boolean
   }
 ): void {
+  // Seeded before the preview-empty return so the copy body never depends on
+  // preview-only normalization rules.
+  seedFullFirstUserPrompt(
+    accumulator,
+    args.role,
+    () => (args.text ? normalizeFullFirstUserPromptText(args.text) : null),
+    args.seedFirstUserPrompt
+  )
   const text = normalizePreviewText(args.text ?? '')
   if (!text) {
     return
@@ -172,17 +182,7 @@ export function addPreviewMessage(
   })
   if (accumulator.previewMessages.length > SESSION_PREVIEW_MESSAGE_LIMIT) {
     accumulator.previewMessages.shift()
-  }
-  // Why: list scans never store firstUserPrompt (payload/perf). Only the
-  // on-demand full-capture path seeds the untruncated copy body.
-  if (
-    args.role === 'user' &&
-    args.seedFirstUserPrompt !== false &&
-    !accumulator.firstUserPrompt &&
-    shouldCaptureFullFirstUserPrompt() &&
-    args.text
-  ) {
-    accumulator.firstUserPrompt = normalizeFullFirstUserPromptText(args.text)
+    accumulator.previewMessagesTruncated = true
   }
 }
 
@@ -193,14 +193,12 @@ export function addPreviewContent(
   timestamp?: unknown,
   options?: { seedFirstUserPrompt?: boolean }
 ): void {
-  if (
-    role === 'user' &&
-    options?.seedFirstUserPrompt !== false &&
-    !accumulator.firstUserPrompt &&
-    shouldCaptureFullFirstUserPrompt()
-  ) {
-    accumulator.firstUserPrompt = extractFullFirstUserPromptText(content)
-  }
+  seedFullFirstUserPrompt(
+    accumulator,
+    role,
+    () => extractFullFirstUserPromptText(content),
+    options?.seedFirstUserPrompt
+  )
   addPreviewMessage(accumulator, {
     role,
     text: extractPreviewContentText(content),
@@ -208,6 +206,28 @@ export function addPreviewContent(
     // Content path already seeded above when capture is enabled.
     seedFirstUserPrompt: false
   })
+}
+
+/**
+ * Seed the copyable first prompt from the first real user turn. `fullText` is a
+ * thunk so list scans (capture mode `none`) never pay the extraction cost.
+ */
+export function seedFullFirstUserPrompt(
+  accumulator: SessionAccumulator,
+  role: AiVaultSessionPreviewMessage['role'],
+  fullText: () => string | null,
+  seedFirstUserPrompt?: boolean
+): void {
+  // Why: list scans never store firstUserPrompt (payload/perf). Only the
+  // on-demand full-capture path seeds the untruncated copy body.
+  if (
+    role === 'user' &&
+    seedFirstUserPrompt !== false &&
+    !accumulator.firstUserPrompt &&
+    shouldCaptureFullFirstUserPrompt()
+  ) {
+    accumulator.firstUserPrompt = fullText()
+  }
 }
 
 export function timestampIso(value: unknown): string | null {

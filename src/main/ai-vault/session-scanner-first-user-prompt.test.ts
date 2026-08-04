@@ -16,6 +16,21 @@ describe('AI Vault full first-user-prompt normalization', () => {
   it('keeps a prompt shorter than the safety limit intact', () => {
     expect(normalizeFullFirstUserPromptText('ship it 😀')).toBe('ship it 😀')
   })
+
+  // Why this matters: the bootstrap probe runs on the bounded slice. That is only
+  // safe because the envelope strip is unbounded, so a query past the cap is still
+  // unwrapped and never reaches the probe as a bare user_info dump.
+  it('unwraps a user_query that lands past the safety limit', () => {
+    const raw = `<user_info>\n${'context '.repeat(SAFETY_LIMIT / 4)}\n<user_query>ship it</user_query>`
+
+    expect(normalizeFullFirstUserPromptText(raw)).toBe('ship it')
+  })
+
+  it('still rejects a user_info dump with no user_query anywhere', () => {
+    const raw = `<user_info>\n${'context '.repeat(SAFETY_LIMIT / 4)}`
+
+    expect(normalizeFullFirstUserPromptText(raw)).toBeNull()
+  })
 })
 
 function hasUnpairedSurrogate(value: string): boolean {

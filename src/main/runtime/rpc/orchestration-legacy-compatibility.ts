@@ -65,11 +65,14 @@ export class OrchestrationLegacyCompatibility {
       return { handled: false }
     }
     const values = params as Record<string, unknown>
-    if (
-      CURRENT_AUTHORITY_PREFLIGHT_METHODS.has(request.method) &&
-      this.usesCurrentAuthority(request, values)
-    ) {
-      return { handled: false }
+    if (CURRENT_AUTHORITY_PREFLIGHT_METHODS.has(request.method)) {
+      const callerAuthority = this.resolveCurrentAuthority(request, values)
+      if (callerAuthority) {
+        return {
+          handled: false,
+          orchestrationCompatibilityCallerAuthority: callerAuthority
+        }
+      }
     }
     const result = await this.route(request, params, signal)
     if (result !== undefined) {
@@ -122,45 +125,48 @@ export class OrchestrationLegacyCompatibility {
       : undefined
   }
 
-  private usesCurrentAuthority(request: RpcRequest, params: Record<string, unknown>): boolean {
+  private resolveCurrentAuthority(
+    request: RpcRequest,
+    params: Record<string, unknown>
+  ): OrchestrationCompatibilityCallerAuthority | undefined {
     const db = this.runtime.getOrchestrationDb()
     const adoption = db.getLegacyAdoption()
     if (!adoption || stringValue(params.run) || request.method === 'orchestration.runUse') {
-      return false
+      return undefined
     }
     const evidence = request.orchestrationCompatibilityEvidence
     if (!evidence?.terminalHandle || !evidence.paneKey) {
-      return false
+      return undefined
     }
     const claimedHandle = currentCallerHandle(request.method, params)
     if (claimedHandle && claimedHandle !== evidence.terminalHandle) {
-      return false
+      return undefined
     }
     const dispatch = db.getActiveDispatchForIdentity(evidence.terminalHandle, evidence.paneKey)
     if (dispatch) {
       if (dispatch.contract_version !== CURRENT_CONTRACT_VERSION) {
-        return false
+        return undefined
       }
       const caller = this.runtime.verifyOrchestrationCompatibilityCaller(evidence)
-      return Boolean(
-        caller &&
+      return caller &&
         caller.terminalHandle === evidence.terminalHandle &&
         db.getActiveDispatchForIdentity(caller.terminalHandle, caller.paneKey)?.id === dispatch.id
-      )
+        ? caller
+        : undefined
     }
     const remoteAttachment = db.findActiveRemoteAttachmentForPane(evidence.paneKey)
     if (remoteAttachment) {
       const caller = this.runtime.verifyOrchestrationCompatibilityCaller(evidence)
-      return Boolean(
-        caller &&
+      return caller &&
         caller.terminalHandle === evidence.terminalHandle &&
         db.findActiveRemoteAttachmentForPane(caller.paneKey)?.dispatch_id ===
           remoteAttachment.dispatch_id
-      )
+        ? caller
+        : undefined
     }
     const boundRun = db.getCurrentRunForPane(evidence.paneKey)
     if (!boundRun) {
-      return false
+      return undefined
     }
     const legacyCandidate =
       boundRun.id === adoption.adopted_run_id
@@ -171,7 +177,7 @@ export class OrchestrationLegacyCompatibility {
           })
         : undefined
     if (legacyCandidate) {
-      return false
+      return undefined
     }
     const caller = this.runtime.verifyOrchestrationCompatibilityCaller(evidence)
     if (
@@ -179,16 +185,18 @@ export class OrchestrationLegacyCompatibility {
       caller.terminalHandle !== evidence.terminalHandle ||
       db.getCurrentRunForPane(caller.paneKey)?.id !== boundRun.id
     ) {
-      return false
+      return undefined
     }
     if (boundRun.id !== adoption.adopted_run_id) {
-      return true
+      return caller
     }
     return !db.resolveLegacyCoordinatorCandidate({
       runId: adoption.adopted_run_id,
       terminalHandle: caller.terminalHandle,
       paneKey: caller.paneKey
     })
+      ? caller
+      : undefined
   }
 
   private async route(

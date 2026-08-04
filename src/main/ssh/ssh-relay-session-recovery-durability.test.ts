@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR,
+  PTY_CONSUMER_OWNER_RECOVERY_SUPERSEDED_ERROR
+} from '../../shared/pty-consumer-session'
 import { SshRelaySession } from './ssh-relay-session'
 import {
   createMismatchedOwnerRecoveryError,
@@ -154,6 +158,82 @@ describe('SshRelaySession consumer recovery durability', () => {
     session.dispose()
   })
 
+  it('retries a pending incumbent publication before recovering its persisted lease', async () => {
+    vi.useFakeTimers()
+    try {
+      const targetId = 'target-owner-publication-pending'
+      const deps = createMockDeps()
+      vi.mocked(deps.mockStore.getSshPtyConsumerRecovery).mockReturnValue({
+        targetId,
+        clientInstanceId: 'persisted-client',
+        serverBuildId: 'test-relay-build',
+        clientGeneration: 1,
+        ownerGeneration: 1,
+        ownerLease: 'persisted-owner'
+      })
+      openConsumerSessionMock.mockRejectedValueOnce(
+        Object.assign(new Error('Owner grant publication is still pending'), {
+          code: PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR
+        })
+      )
+      const session = new SshRelaySession(
+        targetId,
+        deps.getMainWindow,
+        deps.mockStore,
+        deps.mockPortForward
+      )
+
+      const establishing = session.establish(deps.mockConn)
+      await vi.advanceTimersByTimeAsync(25)
+      await establishing
+
+      expect(openConsumerSessionMock).toHaveBeenCalledTimes(2)
+      expect(openConsumerSessionMock.mock.calls[0]?.[1]).toMatchObject({
+        clientInstanceId: 'persisted-client',
+        resume: { ownerGeneration: 1, ownerLease: 'persisted-owner' }
+      })
+      session.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves persisted recovery while a superseding transport is still live', async () => {
+    vi.useFakeTimers()
+    try {
+      const targetId = 'target-owner-generation-superseded'
+      const deps = createMockDeps()
+      vi.mocked(deps.mockStore.getSshPtyConsumerRecovery).mockReturnValue({
+        targetId,
+        clientInstanceId: 'persisted-client',
+        serverBuildId: 'test-relay-build',
+        clientGeneration: 1,
+        ownerGeneration: 1,
+        ownerLease: 'persisted-owner'
+      })
+      const superseded = Object.assign(new Error('Owner recovery generation was superseded'), {
+        code: PTY_CONSUMER_OWNER_RECOVERY_SUPERSEDED_ERROR
+      })
+      openConsumerSessionMock.mockRejectedValue(superseded)
+      const session = new SshRelaySession(
+        targetId,
+        deps.getMainWindow,
+        deps.mockStore,
+        deps.mockPortForward
+      )
+
+      const failed = expect(session.establish(deps.mockConn)).rejects.toBe(superseded)
+      await vi.advanceTimersByTimeAsync(3_000)
+      await failed
+
+      expect(openConsumerSessionMock.mock.calls.length).toBeGreaterThan(1)
+      expect(deps.mockStore.removeSshPtyConsumerRecovery).not.toHaveBeenCalled()
+      session.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps destructive disposal pending until consumer recovery is removed', async () => {
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     vi.mocked(mockStore.getSshPtyConsumerRecovery).mockReturnValue({
@@ -230,6 +310,46 @@ describe('SshRelaySession consumer recovery durability', () => {
     await Promise.all([failed, disposal])
 
     expect(openConsumerSessionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves recovery state alone when a newer owner already claimed the target record', async () => {
+    const targetId = 'target-stale-owner-loser'
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    vi.mocked(mockStore.getSshPtyConsumerRecovery).mockReturnValue({
+      targetId,
+      clientInstanceId: 'persisted-client',
+      serverBuildId: 'test-relay-build',
+      clientGeneration: 1,
+      ownerGeneration: 1,
+      ownerLease: 'stale-owner'
+    })
+    const winner = {
+      mode: 'negotiated' as const,
+      clientInstanceId: 'persisted-client',
+      clientGeneration: 2,
+      ownerGeneration: 5,
+      ownerLease: 'winner-owner'
+    }
+    openConsumerSessionMock.mockImplementationOnce(() => {
+      // Why inside the rejection: the record is target-scoped, so the winner can land while this
+      // attempt is still unwinding its own resume.
+      const record = getSshPtyConsumerRecovery(targetId)!
+      record.owner = winner
+      record.checkpointsByAppPtyId.set('pty-1', {
+        id: 'pty-1'
+      } as unknown as never)
+      return Promise.reject(createMismatchedOwnerRecoveryError())
+    })
+    openConsumerSessionMock.mockRejectedValueOnce(new Error('fresh open failed'))
+    const session = new SshRelaySession(targetId, getMainWindow, mockStore, mockPortForward)
+
+    await expect(session.establish(mockConn)).rejects.toThrow('fresh open failed')
+
+    const record = getSshPtyConsumerRecovery(targetId)!
+    expect(record.owner).toBe(winner)
+    expect(record.checkpointsByAppPtyId.has('pty-1')).toBe(true)
+    expect(mockStore.removeSshPtyConsumerRecovery).not.toHaveBeenCalled()
+    session.dispose()
   })
 
   it('does not remember a consumer opened after establish was disposed', async () => {

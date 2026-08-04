@@ -191,7 +191,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           } else {
             failedStage = 'terminal_create'
             const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
-              command: agent,
+              // Why: agent ids are not shell commands (`cursor` is the desktop app,
+              // its CLI is `cursor-agent`); resolve through the TUI agent config.
+              startupAgent: agent as TuiAgent,
               title: `worker-${params.taskId}`,
               presentation: 'background'
             })

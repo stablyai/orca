@@ -3,6 +3,13 @@ import { scanAiVaultSessions } from './session-scanner'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
+import {
+  aiVaultSessionDepthCovers,
+  requestedAiVaultSessionDepth,
+  truncateAiVaultListResult,
+  type AiVaultSessionDepth
+} from '../../shared/ai-vault-session-depth'
 
 // Why: ONE module owns the scan cache so the desktop IPC handler AND the runtime
 // RPC method share a single cache instance — opening the desktop panel and the
@@ -19,65 +26,77 @@ export type AiVaultSessionSources = {
 
 type CachedAiVaultList = {
   key: string
+  depth: AiVaultSessionDepth
   result: AiVaultListResult
   expiresAt: number
 }
 
 let cachedList: CachedAiVaultList | null = null
-let inflightList: Promise<AiVaultListResult> | null = null
-let inflightKey: string | null = null
+let scanCoordinator = new AiVaultScanCoordinator()
 let sources: AiVaultSessionSources = {}
 
 export function configureAiVaultSessionSources(next: AiVaultSessionSources): void {
   sources = next
 }
 
-export async function listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListResult> {
+export async function listAiVaultSessions(
+  args?: AiVaultListArgs,
+  options: { signal?: AbortSignal } = {}
+): Promise<AiVaultListResult> {
   // Scope paths change the result set, so they must be part of the cache key.
-  const key = JSON.stringify({
-    limit: args?.limit ?? 'default',
-    scopePaths: args?.scopePaths ?? []
-  })
+  const key = JSON.stringify({ scopePaths: [...new Set(args?.scopePaths ?? [])].sort() })
+  const depth = requestedAiVaultSessionDepth(args)
+  const scanKey = JSON.stringify({ key, depth })
   const now = Date.now()
   // Why: opening this panel repeatedly should not re-parse hundreds of JSONL
-  // transcripts; explicit refreshes bypass the cache but not an active scan.
-  if (args?.force !== true && cachedList?.key === key && cachedList.expiresAt > now) {
-    return cachedList.result
+  // transcripts; explicit refreshes bypass the cache and preempt stale scans.
+  if (
+    args?.force !== true &&
+    cachedList?.key === key &&
+    cachedList.expiresAt > now &&
+    aiVaultSessionDepthCovers(cachedList.depth, depth)
+  ) {
+    return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
   }
-  if (inflightList && inflightKey === key) {
-    return inflightList
-  }
-
-  inflightKey = key
-  const additionalCodexSessionsDirs =
-    sources.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ?? []
-  inflightList = (async () =>
-    scanAiVaultSessions({
-      limit: args?.limit,
-      scopePaths: args?.scopePaths,
-      additionalCodexSessionsDirs,
-      wslHomeDirs: await getAiVaultWslHomeDirs(),
-      // Why: this scan is always host-local; callers addressing this host by a
-      // runtime id get the result restamped at the RPC edge, never rescanned.
-      executionHostId: LOCAL_EXECUTION_HOST_ID
-    }))()
-    .then((result) => {
-      cachedList = {
-        key,
-        result,
-        expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
+  return scanCoordinator.run({
+    key: scanKey,
+    force: args?.force,
+    signal: options.signal,
+    start: async (scanSignal) => {
+      const additionalCodexSessionsDirs =
+        sources.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ?? []
+      const result = await scanAiVaultSessions({
+        limit: args?.limit,
+        unlimited: args?.unlimited,
+        scopePaths: args?.scopePaths,
+        additionalCodexSessionsDirs,
+        wslHomeDirs: await getAiVaultWslHomeDirs(),
+        // Cancelled/superseded callers must stop the parse, not just stop
+        // waiting for it — the scan owns hundreds of transcript reads.
+        signal: scanSignal,
+        // Why: this scan is always host-local; callers addressing this host by a
+        // runtime id get the result restamped at the RPC edge, never rescanned.
+        executionHostId: LOCAL_EXECUTION_HOST_ID
+      })
+      if (!scanSignal.aborted) {
+        const current = cachedList
+        if (
+          args?.force === true ||
+          current?.key !== key ||
+          current.expiresAt <= Date.now() ||
+          !aiVaultSessionDepthCovers(current.depth, depth)
+        ) {
+          cachedList = {
+            key,
+            depth,
+            result,
+            expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
+          }
+        }
       }
       return result
-    })
-    .finally(() => {
-      // Only clear tracking if it still refers to this request: a concurrent
-      // different-key scan may have replaced it and must stay dedupable.
-      if (inflightKey === key) {
-        inflightKey = null
-        inflightList = null
-      }
-    })
-  return inflightList
+    }
+  })
 }
 
 // Exported for the subagent-transcript IPC path, which validates
@@ -95,7 +114,6 @@ export async function getAiVaultWslHomeDirs(): Promise<string[]> {
 // Why: tests reset module-level cache/source state between cases.
 export function resetAiVaultSessionListCacheForTests(): void {
   cachedList = null
-  inflightList = null
-  inflightKey = null
+  scanCoordinator = new AiVaultScanCoordinator()
   sources = {}
 }

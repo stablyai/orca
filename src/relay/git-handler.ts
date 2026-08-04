@@ -383,7 +383,7 @@ export class GitHandler {
     // Why: pointer/range probes are part of the same SSH request and must not outlive its cancellation.
     const requestGit: GitExec = (args, cwd, options) =>
       this.git(args, cwd, { ...options, signal: context.signal })
-  // Why: moved clean gitlinks need committed changes surfaced.
+    // Why: moved clean gitlinks need committed changes surfaced.
     const { fromOid, toOid } = await resolveSubmoduleCommitRange(
       requestGit,
       worktreePath,
@@ -775,7 +775,7 @@ export class GitHandler {
   private async branchCompare(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const baseRef = params.baseRef as string
-      // Why: reject flag-like base refs to prevent rev-parse option injection.
+    // Why: reject flag-like base refs to prevent rev-parse option injection.
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }

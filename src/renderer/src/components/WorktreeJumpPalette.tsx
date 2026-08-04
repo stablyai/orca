@@ -31,7 +31,8 @@ import {
   isAutomationGeneratedWorkspace,
   isCliCreatedWorkspace,
   isDetachedHeadWorkspace,
-  isDefaultBranchWorkspace
+  isDefaultBranchWorkspace,
+  isSleepingSweepExemptWorkspace
 } from '@/components/sidebar/visible-worktrees'
 import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
@@ -404,6 +405,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
   const workspacePortScan = useAppStore((s) => s.workspacePortScan?.result ?? null)
   const openNewBrowserTabInActiveWorkspace = useAppStore(
@@ -501,6 +503,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
         if (
           !showSleepingWorkspaces &&
+          // Why the exemption here too: Cmd+J re-implements the sidebar's
+          // filter pass, so the shared predicate is what keeps them in step.
+          !isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace) &&
           isInactiveWorkspace(
             worktree.id,
             tabsByWorktree,
@@ -515,6 +520,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }),
     [
       allWorktrees,
+      alwaysShowDefaultBranchWorkspace,
       browserTabsByWorktree,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
@@ -1838,7 +1844,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
-                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5">
+                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start">
                       <StatusIndicator status={status} aria-hidden="true" />
                       <span className="sr-only">{statusLabel}</span>
                     </div>
@@ -1966,7 +1972,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
-                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <FolderTree className="size-3.5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -2013,7 +2019,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
-                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <Icon className="size-3.5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -2054,7 +2060,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
-                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <WorkspaceTabIcon className="size-3.5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -2135,7 +2141,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
-                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <Smartphone className="size-3.5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -2213,7 +2219,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                   )}
                 >
-                  <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                  <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                     <Globe className="size-3.5" aria-hidden="true" />
                   </div>
                   <div className="min-w-0 flex-1">

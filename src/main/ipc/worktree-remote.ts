@@ -54,6 +54,7 @@ import {
   getSetupRunnerEnvVars,
   loadHooks,
   parseOrcaYaml,
+  resolveSetupRunnerShell,
   shouldRunSetupForCreate
 } from '../hooks'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -178,6 +179,13 @@ function appendWorktreeCreateWarning(current: string | undefined, next: string):
   return current ? `${current} Also ${next[0]?.toLowerCase() ?? ''}${next.slice(1)}` : next
 }
 
+function getSetupRunnerCommandPlatformForLaunch(
+  setup: CreateWorktreeResult['setup'],
+  fallbackPlatform: 'windows' | 'posix'
+): 'windows' | 'posix' {
+  return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallbackPlatform)
+}
+
 function validateWorkspaceLineageParentBeforeCreate(
   store: Store,
   parentWorkspace: CreateWorktreeArgs['parentWorkspace'],
@@ -266,14 +274,15 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   let sequencedStartup = startup
   let wrappedSetupCommandStr: string | undefined
   if (startup && setup?.waitForAgentStartup === true) {
-    const platform = getSetupRunnerCommandPlatformForPath(
-      setup.runnerScriptPath,
+    const platform = getSetupRunnerCommandPlatformForLaunch(
+      setup,
       process.platform === 'win32' ? 'windows' : 'posix'
     )
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: setup.runnerScriptPath,
       startupCommand: startup.command,
-      platform
+      platform,
+      shell: setup.shell
     })
     sequencedStartup = {
       ...startup,
@@ -329,10 +338,11 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         wrappedSetupCommandStr ??
         buildSetupRunnerCommand(
           setup.runnerScriptPath,
-          getSetupRunnerCommandPlatformForPath(
-            setup.runnerScriptPath,
+          getSetupRunnerCommandPlatformForLaunch(
+            setup,
             process.platform === 'win32' ? 'windows' : 'posix'
-          )
+          ),
+          setup.shell
         )
       const setupLaunchMode =
         (settings as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
@@ -1144,6 +1154,8 @@ async function createRemoteSetupRunnerScript(
   fsProvider: IFilesystemProvider
 ): Promise<CreateWorktreeResult['setup']> {
   const useWindowsFormat = isWindowsAbsolutePathLike(worktreePath)
+  // Why: SSH terminals choose their shell on the remote host; local Windows
+  // preferences cannot safely select a remote runner format or launch command.
   const runnerRelativePath = useWindowsFormat ? 'orca/setup-runner.cmd' : 'orca/setup-runner.sh'
   const { stdout } = await gitProvider.exec(
     ['rev-parse', '--git-path', runnerRelativePath],
@@ -2504,11 +2516,13 @@ export async function createLocalWorktree(
       try {
         // Why: main only writes the runner script and must not execute setup itself, or we reintroduce the old hidden background-hook behavior.
         // Why: worktree already exists, so a runner-gen failure degrades to "created without setup launch" rather than failing creation.
+        // Why: both trailing args are optional — the shell is undefined off Windows.
         setup = createSetupRunnerScript(
           repo,
           worktreePath,
           setupScript,
-          ...localWorktreeGitOptionArgs
+          localWorktreeGitOptionArgs[0],
+          resolveSetupRunnerShell(settings)
         )
       } catch (error) {
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)

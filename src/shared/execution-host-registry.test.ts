@@ -57,6 +57,41 @@ describe('execution host registry', () => {
     ])
   })
 
+  it('excludes repository references from configured-only registries', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [
+        { connectionId: 'removed-ssh' },
+        { connectionId: null, executionHostId: 'runtime:removed-runtime' }
+      ],
+      settings: { activeRuntimeEnvironmentId: 'removed-focused-runtime' },
+      hostSource: 'configured-only',
+      sshTargetLabels: new Map([['saved-ssh', 'Saved SSH']]),
+      runtimeEnvironments: [{ id: 'saved-runtime', name: 'Saved Runtime' }]
+    })
+
+    expect(hosts.map((host) => host.id)).toEqual([
+      'local',
+      'runtime:saved-runtime',
+      'ssh:saved-ssh'
+    ])
+  })
+
+  it('keeps repository references in the default reference-inclusive registry', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [
+        { connectionId: 'removed-ssh' },
+        { connectionId: null, executionHostId: 'runtime:removed-runtime' }
+      ],
+      settings: { activeRuntimeEnvironmentId: null }
+    })
+
+    expect(hosts.map((host) => host.id)).toEqual([
+      'local',
+      'runtime:removed-runtime',
+      'ssh:removed-ssh'
+    ])
+  })
+
   it('hides runtime-owned (ephemeral VM) SSH targets from repo-derived hosts', () => {
     const hosts = buildExecutionHostRegistry({
       // A VM-backed repo carries the hidden runtime-owned target on both fields.

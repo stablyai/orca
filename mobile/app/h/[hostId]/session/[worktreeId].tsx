@@ -107,6 +107,7 @@ import type {
   TerminalWebViewHandle
 } from '../../../../src/terminal/terminal-webview-contract'
 import { isTerminalOscLinkRanges } from '../../../../src/terminal/terminal-osc-link-ranges'
+import { computeActiveTerminalKeyboardLift } from '../../../../src/terminal/terminal-keyboard-avoidance-lift'
 import { useTerminalViewportRefit } from '../../../../src/terminal/terminal-viewport-refit'
 import {
   getDefaultTerminalAccessoryBuiltInIds,
@@ -235,6 +236,11 @@ import {
 } from '../../../../src/session/mobile-terminal-prune-decision'
 import { useMobileNativeChatTerminalStream } from '../../../../src/session/use-mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from '../../../../src/session/mobile-terminal-stream-subscribe'
+import {
+  TerminalViewportResubscribeBudget,
+  readTerminalViewportDims,
+  runTerminalViewportFitPass
+} from '../../../../src/session/mobile-terminal-viewport-resubscribe'
 import { activateMobileSessionTab } from '../../../../src/session/mobile-session-tab-activation'
 import { MobileTerminalDiagnostics } from '../../../../src/session/mobile-terminal-diagnostics'
 import { runAcceptedMobileSessionTabsEffects } from '../../../../src/session/mobile-session-tabs-accepted-effects'
@@ -267,8 +273,8 @@ import {
   reconcileMobileSessionCreateWarningState
 } from '../../../../src/session/mobile-session-create-warning-state'
 import { colors, spacing } from '../../../../src/theme/mobile-theme'
-import { styles } from './mobile-session-styles'
-import { QuickCommandsTabButton } from './QuickCommandsTabButton'
+import { QuickCommandsTabButton } from '../../../../src/session/QuickCommandsTabButton'
+import { styles } from '../../../../src/session/mobile-session-styles'
 import type { DiffComment, TerminalQuickCommand } from '../../../../../src/shared/types'
 import type {
   DiffCommentActions,
@@ -289,7 +295,7 @@ import type {
   TerminalCreateResult,
   TerminalGestureInputBucket,
   TerminalGestureInputQueue
-} from './mobile-session-route-types'
+} from '../../../../src/session/mobile-session-route-types'
 
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
@@ -1030,6 +1036,8 @@ export default function SessionScreen() {
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
   const terminalDiagnosticsRef = useRef(new MobileTerminalDiagnostics())
+  // Why: bounds the scrollback→resubscribe fit loop per handle (STA-3337).
+  const viewportResubscribeBudgetRef = useRef(new TerminalViewportResubscribeBudget())
   // Why: don't subscribe until the WebView fires web-ready — iOS may defer JS in hidden WebViews and init() messages would queue unrendered.
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
@@ -1376,6 +1384,7 @@ export default function SessionScreen() {
     subscribingHandlesRef.current.clear()
     initializedHandlesRef.current.clear()
     terminalDiagnosticsRef.current.clearTerminalCache()
+    viewportResubscribeBudgetRef.current.clear()
     webReadyHandlesRef.current.clear()
     subscribeSeqRef.current.clear()
     layoutSeqRef.current.clear()
@@ -1505,10 +1514,11 @@ export default function SessionScreen() {
               return
             }
             updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
-            const cols = (data.cols as number) || 80
-            const rows = (data.rows as number) || 24
-            const scrollbackCols = cols
-            const scrollbackRows = rows
+            const { hostCols, hostRows } = readTerminalViewportDims(data)
+            // Why: absent host dims must not be coerced into a comparable size — 80x24
+            // never equals a phone viewport and armed a zero-delay resubscribe loop (STA-3337).
+            const cols = hostCols ?? viewportRef.current?.cols ?? 80
+            const rows = hostRows ?? viewportRef.current?.rows ?? 24
             const initialData =
               typeof data.serialized === 'string' && data.serialized.length > 0
                 ? data.serialized
@@ -1527,46 +1537,36 @@ export default function SessionScreen() {
             ref.init(cols, rows, initialData, false, oscLinks)
             initializedHandlesRef.current.add(handle)
             if (data.displayMode) {
+              const displayMode = data.displayMode as MobileDisplayMode
+              // Why: same-mode frames must keep the Map identity, or every stream pass re-renders the whole route.
               setTerminalModes((prev) =>
-                new Map(prev).set(handle, data.displayMode as MobileDisplayMode)
+                prev.get(handle) === displayMode ? prev : new Map(prev).set(handle, displayMode)
               )
             }
             // Why: cold-start refit — init()'s fit can run against a transient scrollWidth, so re-fire against a settled DOM.
             scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
-            // Why: first subscribe has no viewport (xterm not loaded yet), so measure after init and resubscribe so the server can phone-fit.
-            const needsResubscribe =
-              !viewportMeasuredRef.current ||
-              (viewportRef.current != null &&
-                (scrollbackCols !== viewportRef.current.cols ||
-                  scrollbackRows !== viewportRef.current.rows))
-            if (needsResubscribe) {
-              void (async () => {
-                // Why: wait for init()'s rAF chain before measuring, else the measure races ahead and returns null (log dump 2026-05-06).
-                await getTerminalRef(handle)?.awaitReady()
-                if (subscribeSeqRef.current.get(handle) !== seq) {
-                  return
-                }
-                const dims = await getTerminalRef(handle)?.measureFitDimensions(
-                  terminalFrameHeightRef.current || undefined
-                )
-                // Why: re-check seq — the awaits may have let a newer subscribe cycle arm; tearing it down would resubscribe a stale generation.
-                if (subscribeSeqRef.current.get(handle) !== seq) {
-                  return
-                }
-                if (!getTerminalRef(handle)) {
-                  return
-                }
-                // Why: scrollback came back at cols=80 (server's null-viewport fallback), so this subscriber record has no viewport — resubscribe so the server stores it.
-                if (dims) {
-                  diagnostics.streamResubscribing(handle, seq, dims)
-                  viewportRef.current = dims
-                  viewportMeasuredRef.current = true
-                  unsubscribeTerminal(handle)
-                  initializedHandlesRef.current.delete(handle)
-                  subscribeToTerminal(handle)
-                }
-              })()
-            }
+            // Why: first subscribe has no viewport (xterm not loaded yet), so measure after init
+            // and resubscribe so the server can phone-fit — bounded per handle so a
+            // non-converging host degrades visibly instead of hot-looping (STA-3337).
+            runTerminalViewportFitPass({
+              handle,
+              seq,
+              hostCols,
+              hostRows,
+              budget: viewportResubscribeBudgetRef.current,
+              diagnostics,
+              viewportRef,
+              viewportMeasuredRef,
+              subscribeSeqRef,
+              initializedHandlesRef,
+              terminalUnsubsRef,
+              terminalFrameHeightRef,
+              getTerminalRef,
+              unsubscribeTerminal,
+              subscribeToTerminal,
+              scheduleDelayedAction,
+              showToast
+            })
           } else if (data.type === 'metadata') {
             updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
           } else if (data.type === 'data') {
@@ -1591,8 +1591,12 @@ export default function SessionScreen() {
           } else if (data.type === 'resized') {
             updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
             // Server resize: reinit xterm on a full-buffer snapshot (width reflow rewraps scrollback), else just resize geometry.
-            const cols = (data.cols as number) || 80
-            const rows = (data.rows as number) || 24
+            const viewport = viewportMeasuredRef.current ? viewportRef.current : null
+            const [cols, rows] = viewportResubscribeBudgetRef.current.observeResize(
+              handle,
+              data,
+              viewport
+            )
             const serialized = typeof data.serialized === 'string' ? data.serialized : null
             diagnostics.streamResized(handle, seq, eventSeq, data, getTerminalRef(handle) != null)
             const oscLinks = isTerminalOscLinkRanges(data.oscLinks) ? data.oscLinks : undefined
@@ -1602,8 +1606,10 @@ export default function SessionScreen() {
               getTerminalRef(handle)?.resize(cols, rows)
             }
             if (data.displayMode) {
+              const displayMode = data.displayMode as MobileDisplayMode
+              // Why: same-mode frames must keep the Map identity, or every stream pass re-renders the whole route.
               setTerminalModes((prev) =>
-                new Map(prev).set(handle, data.displayMode as MobileDisplayMode)
+                prev.get(handle) === displayMode ? prev : new Map(prev).set(handle, displayMode)
               )
             }
             scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
@@ -1619,7 +1625,7 @@ export default function SessionScreen() {
       }
       subscribingHandlesRef.current.delete(handle)
     },
-    [client, getTerminalRef, markNativeChatInputLeaseReady, scheduleDelayedAction]
+    [client, getTerminalRef, markNativeChatInputLeaseReady, scheduleDelayedAction, showToast]
   )
 
   const nativeChatStream = useMobileNativeChatTerminalStream({
@@ -1720,12 +1726,16 @@ export default function SessionScreen() {
             unsubscribeTerminal(handle)
             terminalRefs.current.delete(handle)
             initializedHandlesRef.current.delete(handle)
+            viewportResubscribeBudgetRef.current.forget(handle)
             clearTerminalLiveInputDefault(handle)
           }
           setTerminalKeyboardMetrics((prev) => pruneTerminalKeyboardMetrics(prev, shouldPrune))
           // Why: a chat-covered handle the host reports again refills its rearm budget,
           // so an exhausted rearm can't lock the composer until leave-chat.
           nativeChatStream.notifyListedHandles(liveHandles)
+          // Why: same absence-gated refill for the viewport-fit budget — a handle that
+          // left the list and returned may converge now, so it earns fresh attempts.
+          viewportResubscribeBudgetRef.current.notifyListedHandles(liveHandles)
           lastKnownTerminalCountRef.current = result.terminals.length
           // Why: dedupe duplicate handles (rename/split race) to avoid a React duplicate-key throw; keep first for tab-strip order.
           const seen = new Set<string>()
@@ -3590,6 +3600,7 @@ export default function SessionScreen() {
         if (
           current &&
           current.cursorY === metrics.cursorY &&
+          current.contentBottomRow === metrics.contentBottomRow &&
           current.rows === metrics.rows &&
           current.altScreen === metrics.altScreen
         ) {
@@ -4271,24 +4282,11 @@ export default function SessionScreen() {
         ? Math.max(0, keyboardHeight - insets.bottom)
         : keyboardHeight
       : 0
-  const activeTerminalKeyboardLift = (() => {
-    if (keyboardLift <= 0 || !activeHandle) {
-      return 0
-    }
-    const metrics = terminalKeyboardMetrics.get(activeHandle)
-    if (!metrics || metrics.rows <= 0 || terminalFrameHeightRef.current <= 0) {
-      return keyboardLift
-    }
-    if (metrics.altScreen) {
-      return keyboardLift
-    }
-    const rowHeight = terminalFrameHeightRef.current / metrics.rows
-    const cursorBottom = (metrics.cursorY + 1) * rowHeight
-    const dockTop = terminalFrameHeightRef.current - keyboardLift
-    const margin = rowHeight
-    // Why: only move the terminal when the cursor would sit under the raised input dock; short top output stays put.
-    return Math.min(keyboardLift, Math.max(0, cursorBottom + margin - dockTop))
-  })()
+  const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
+    keyboardLift,
+    metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
+    terminalFrameHeight: terminalFrameHeightRef.current
+  })
   const toastAnimatedStyle = {
     opacity: toastOpacityRef.current,
     transform: [{ translateY: -keyboardLift }]

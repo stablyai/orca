@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
   RELEASE_CHANNELS,
+  RELEASE_CHANNEL_LABELS,
   getVersionChannel,
   hasDedicatedReleaseRepo,
   isChannelSupportedOnPlatform,
@@ -18,13 +19,6 @@ import {
   type ReleaseBuild,
   type ReleaseChannel
 } from '../../../../shared/release-channel'
-
-const CHANNEL_LABELS: Record<ReleaseChannel, string> = {
-  stable: 'Stable',
-  rc: 'RC',
-  hourly: 'Hourly',
-  adhoc: 'Adhoc'
-}
 
 const CHANNEL_DESCRIPTIONS: Record<ReleaseChannel, string> = {
   stable: 'Shipped releases. What everyone else is running.',
@@ -200,10 +194,10 @@ export function ReleaseChannelSection(): React.JSX.Element {
             return {
               value: channel,
               label: supported ? (
-                CHANNEL_LABELS[channel]
+                RELEASE_CHANNEL_LABELS[channel]
               ) : (
                 <span className="inline-flex items-center gap-1">
-                  {CHANNEL_LABELS[channel]}
+                  {RELEASE_CHANNEL_LABELS[channel]}
                   <Apple className="size-3" aria-hidden="true" />
                 </span>
               ),
@@ -213,14 +207,14 @@ export function ReleaseChannelSection(): React.JSX.Element {
                 : translate(
                     'auto.components.settings.ReleaseChannelSection.devChannelMacOnlyAria',
                     '{{value0}} (macOS only)',
-                    { value0: CHANNEL_LABELS[channel] }
+                    { value0: RELEASE_CHANNEL_LABELS[channel] }
                   ),
               tooltip: supported
                 ? undefined
                 : translate(
                     'auto.components.settings.ReleaseChannelSection.devChannelMacOnly',
                     '{{value0}} builds are produced only for macOS. Linux and Windows stay on Stable or RC.',
-                    { value0: CHANNEL_LABELS[channel] }
+                    { value0: RELEASE_CHANNEL_LABELS[channel] }
                   )
             }
           })}

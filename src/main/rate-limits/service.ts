@@ -90,6 +90,10 @@ const RATE_LIMITED_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
 // Why: statusline posts arrive on every turn; skip renderer pushes for identical windows so streaming sessions don't spam state updates.
 const LIVE_CLAUDE_INGEST_DEDUPE_MS = 30 * 1000
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
+// Why: each inactive Codex probe spawns a real codex process inside that
+// account's live credential home; pace them out instead of bursting every
+// account the moment the switcher opens.
+const INACTIVE_CODEX_PROBE_STAGGER_MS = 2_000
 const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 
 // Why: inactive account arrays are derived from provider caches on demand in getState()/pushToRenderer().
@@ -130,6 +134,23 @@ function normalizeClaudeConfigDir(dir: string | null | undefined): string | null
   // Why: normalize mixed Windows separators for path attribution; preserve Linux case sensitivity.
   const trimmed = dir?.trim().replace(/\\/g, '/').replace(/\/+$/, '')
   return trimmed || null
+}
+
+function delayUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function isSameUsageWindow(
@@ -393,7 +414,10 @@ export class RateLimitService {
     this.activeFailureStreakByProvider.codex = 0
     this.inactiveCodexAccountsGeneration += 1
     this.pruneInactiveCodexState()
-    this.lastInactiveCodexFetchAt = 0
+    // Why: the switch must NOT reset the inactive-fetch debounce — re-probing
+    // every inactive account per switch spawns codex in each credential home
+    // and endangers rotating refresh tokens; the switcher shows the cached
+    // snapshot (seeded above for the outgoing account) until the debounce ends.
     // Why: clear the old Codex view immediately, else the previous account's limits show under the newly selected identity until the next poll.
     this.updateState({
       ...this.state,
@@ -611,6 +635,7 @@ export class RateLimitService {
     }
     this.pushToRenderer()
 
+    let staggerNextProbe = false
     try {
       for (const account of accounts) {
         if (
@@ -625,6 +650,23 @@ export class RateLimitService {
           this.pushToRenderer()
           continue
         }
+        if (staggerNextProbe) {
+          await delayUnlessAborted(INACTIVE_CODEX_PROBE_STAGGER_MS, signal)
+          // Why: the account set can change while the stagger delay runs.
+          if (
+            signal.aborted ||
+            fetchGeneration !== this.inactiveCodexAccountsGeneration ||
+            !this.isCurrentInactiveCodexAccount(account.id)
+          ) {
+            this.inactiveCodexFetching.delete(account.id)
+            if (!this.isCurrentInactiveCodexAccount(account.id)) {
+              this.inactiveCodexCache.delete(account.id)
+            }
+            this.pushToRenderer()
+            continue
+          }
+        }
+        staggerNextProbe = true
         try {
           // Why: point fetchCodexRateLimits at the managed home directly, avoiding materializing credentials into the shared runtime location.
           // Why: no PTY fallback — the switcher preview shouldn't spawn hidden PTYs per account (can crash ConPTY on Windows); RPC-only is enough.

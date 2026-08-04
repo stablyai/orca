@@ -265,6 +265,42 @@ describe('agent status runtime orchestration metadata', () => {
     })
   })
 
+  it('clears stale lineage when the authoritative runtime snapshot loses its Run binding', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+    store.getState().setAgentStatus(childPaneKey, {
+      state: 'working',
+      prompt: 'child agent',
+      agentType: 'codex',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'dispatched',
+        parentTerminalHandle: 'term-old-coordinator',
+        parentPaneKey: 'tab-parent:22222222-2222-4222-8222-222222222222',
+        coordinatorHandle: 'term-old-coordinator',
+        orchestrationRunId: 'run-1'
+      }
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [childPaneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'dispatched',
+        orchestrationRunId: 'run-1'
+      }
+    })
+
+    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      dispatchStatus: 'dispatched',
+      orchestrationRunId: 'run-1'
+    })
+  })
+
   it('updates runtime status for the same dispatch', () => {
     vi.useFakeTimers()
     const store = createTestStore()
@@ -601,6 +637,38 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
     expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenCalledTimes(1)
     expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenLastCalledWith('tab-1:1', 'parent codex')
+  })
+
+  it('does not let restored-unconfirmed identity suppress a live terminal status', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'working',
+        prompt: 'stale codex turn',
+        agentType: 'codex',
+        restoredUnconfirmed: true
+      },
+      'codex',
+      { updatedAt: 1_000, stateStartedAt: 1_000 }
+    )
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'done', prompt: 'live claude turn', agentType: 'claude' },
+        'claude',
+        { updatedAt: 1_100, stateStartedAt: 1_100 }
+      )
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:1']).toMatchObject({
+      state: 'done',
+      prompt: 'live claude turn',
+      agentType: 'claude'
+    })
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].restoredUnconfirmed).toBeUndefined()
   })
 
   it('allows pane agentType to change after the prior turn is done', () => {
