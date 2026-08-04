@@ -60,14 +60,14 @@ type BuildProjectHostSetupOptionsInput = {
   projectId: string | null
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
-  hosts?: readonly ExecutionHostRegistryEntry[]
+  hosts: readonly ExecutionHostRegistryEntry[]
 }
 
 export function buildProjectHostSetupOptions({
   projectId,
   projectHostSetups,
   eligibleRepos,
-  hosts = []
+  hosts
 }: BuildProjectHostSetupOptionsInput): ProjectHostSetupOption[] {
   if (!projectId) {
     return []
@@ -122,6 +122,7 @@ function buildReadySetupOptions({
         setup.projectId === projectId &&
         setup.setupState === 'ready' &&
         eligibleRepoIds.has(setup.repoId) &&
+        Boolean(host) &&
         !isEphemeralVmProjectHost(host) &&
         !isRuntimeOwnedSshSetupHost(setup.hostId)
       )
@@ -181,7 +182,7 @@ function buildNeedsSetupOptions({
         detail: availability.isAvailable
           ? pendingSetup
             ? getPendingSetupDetail(pendingSetup)
-            : 'Project not set up on this host'
+            : 'Project location not set'
           : availability.detail,
         isAvailable: availability.isAvailable,
         attention: host.health === 'error',

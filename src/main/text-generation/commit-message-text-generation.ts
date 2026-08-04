@@ -452,6 +452,10 @@ export async function discoverCommitMessageModelsLocal(
       if (agentId === 'codex') {
         // Result publication stays prompt while the home lock follows the
         // process lifetime after asynchronous timeout/output-limit kills.
+        // Why: 'close' also waits on descendants that inherited this child's
+        // stdio, so a surviving MCP helper would hold the home forever; at
+        // 'exit' the codex process is gone and can no longer rotate auth.json.
+        child.once('exit', markClosedAfterTermination)
         child.once('close', markClosedAfterTermination)
       }
       child.on('error', onError)
@@ -604,7 +608,7 @@ function runLocalPlan(
   emptyResultName = 'message',
   operation: TextGenerationOperation = 'commit-message',
   wslDistro?: string,
-  holdHomeLockUntilClose = false
+  holdHomeLockUntilExit = false
 ): LocalProcessExecution<InternalTextGenerationResult> {
   const { binary, args, stdinPayload, label } = plan
   let markProcessClosed!: () => void
@@ -685,7 +689,7 @@ function runLocalPlan(
       if (cancelToken && cancelTokensByLane.get(laneKey) === cancelToken) {
         cancelTokensByLane.delete(laneKey)
       }
-      if (!holdHomeLockUntilClose) {
+      if (!holdHomeLockUntilExit) {
         markProcessClosed()
       }
       resolve(result)
@@ -769,7 +773,11 @@ function runLocalPlan(
     }
     child.stdout?.on('data', onStdoutData)
     child.stderr?.on('data', onStderrData)
-    if (holdHomeLockUntilClose) {
+    if (holdHomeLockUntilExit) {
+      // Why: 'close' also waits on descendants that inherited this child's
+      // stdio, so a surviving MCP helper would hold the home forever; at 'exit'
+      // the codex process is gone and can no longer rotate auth.json.
+      child.once('exit', markClosedAfterTermination)
       child.once('close', markClosedAfterTermination)
     }
     child.on('error', onError)
@@ -801,7 +809,7 @@ function runLocalPlanForAgent(
   operation: TextGenerationOperation
 ): Promise<InternalTextGenerationResult> {
   const start = (
-    holdHomeLockUntilClose = false
+    holdHomeLockUntilExit = false
   ): LocalProcessExecution<InternalTextGenerationResult> =>
     runLocalPlan(
       plan,
@@ -810,7 +818,7 @@ function runLocalPlanForAgent(
       emptyResultName,
       operation,
       target.wslDistro,
-      holdHomeLockUntilClose
+      holdHomeLockUntilExit
     )
   if (agentId !== 'codex') {
     // Why: no extra promise hops here — cancellation timing for non-codex

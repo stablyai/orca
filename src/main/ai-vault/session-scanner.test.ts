@@ -154,7 +154,9 @@ describe('scanAiVaultSessions', () => {
 
     const result = await scanAiVaultSessions({
       ...roots,
-      platform: 'darwin'
+      platform: 'darwin',
+      limit: 1,
+      unlimited: true
     })
 
     expect(result.issues).toEqual([])

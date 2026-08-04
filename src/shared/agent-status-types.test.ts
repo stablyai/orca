@@ -1,6 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   agentSubagentsEqual,
+  isFreshNonDoneAgentStatus,
   parseAgentStatusPayload,
   normalizeAgentStatusPayload,
   AGENT_STATUS_JSON_STRUCTURE_LIMITS,
@@ -16,6 +17,26 @@ import {
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+describe('isFreshNonDoneAgentStatus', () => {
+  it('treats a within-TTL working entry as fresh', () => {
+    expect(isFreshNonDoneAgentStatus({ state: 'working', updatedAt: 1_000 }, 2_000)).toBe(true)
+  })
+
+  it('never treats a restored-unconfirmed entry as fresh, regardless of age', () => {
+    expect(
+      isFreshNonDoneAgentStatus(
+        { state: 'working', updatedAt: 1_999, restoredUnconfirmed: true },
+        2_000
+      )
+    ).toBe(false)
+  })
+
+  it('stays false for done and for stale entries', () => {
+    expect(isFreshNonDoneAgentStatus({ state: 'done', updatedAt: 2_000 }, 2_000)).toBe(false)
+    expect(isFreshNonDoneAgentStatus({ state: 'working', updatedAt: 0 }, 10_000, 5_000)).toBe(false)
+  })
 })
 
 describe('parseAgentStatusPayload', () => {

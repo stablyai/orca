@@ -137,6 +137,10 @@ export type AgentStatusEntry = {
   providerSession?: AgentProviderSessionMetadata
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** True for a nonterminal state hydrated from last-status.json with no live hook since:
+   *  the transition may have been missed while no receiver was up, so freshness gates
+   *  treat the row as stale immediately. Cleared by any accepted live event. */
+  restoredUnconfirmed?: boolean
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -200,6 +204,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
+  restoredUnconfirmed?: boolean
 }
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
@@ -228,11 +234,17 @@ export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 
 export function isFreshNonDoneAgentStatus(
-  entry: Pick<AgentStatusEntry, 'state' | 'updatedAt'> | undefined,
+  entry: Pick<AgentStatusEntry, 'state' | 'updatedAt' | 'restoredUnconfirmed'> | undefined,
   now = Date.now(),
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
-  return Boolean(entry && entry.state !== 'done' && now - entry.updatedAt <= staleAfterMs)
+  // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
+  return Boolean(
+    entry &&
+    entry.state !== 'done' &&
+    entry.restoredUnconfirmed !== true &&
+    now - entry.updatedAt <= staleAfterMs
+  )
 }
 
 // Why: ReadonlySet<string> so .has() accepts any string without a cast here; the narrowing cast stays on the return line where it's proven safe.

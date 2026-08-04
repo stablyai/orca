@@ -4,8 +4,10 @@ import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
+  shouldActivateDesktopForSecondInstance,
   shouldBypassSingleInstanceLock,
   shouldSkipSingleInstanceLock,
+  SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE,
   SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE,
   SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE
 } from './single-instance-lock'
@@ -56,11 +58,11 @@ describe('acquireSingleInstanceLock', () => {
     expect(acquired).toBe(true)
     expect(fake.requestSingleInstanceLock).toHaveBeenCalledTimes(1)
     expect(fake.on).toHaveBeenCalledTimes(1)
-    expect(fake.on).toHaveBeenCalledWith('second-instance', onSecondInstance)
+    expect(fake.on).toHaveBeenCalledWith('second-instance', expect.any(Function))
     expect(fake.listeners['second-instance']).toHaveLength(1)
   })
 
-  it('fires the registered callback when second-instance dispatches', () => {
+  it('forwards the second launch argv so the owner can decide whether to activate', () => {
     const onSecondInstance = vi.fn()
     const fake = makeFakeApp(true)
 
@@ -68,9 +70,30 @@ describe('acquireSingleInstanceLock', () => {
 
     const [registered] = fake.listeners['second-instance'] ?? []
     expect(registered).toBeDefined()
-    registered?.()
+    registered?.({}, ['/opt/orca/orca-linux.AppImage', '--serve'], '/home/orca')
 
     expect(onSecondInstance).toHaveBeenCalledTimes(1)
+    expect(onSecondInstance).toHaveBeenCalledWith(['/opt/orca/orca-linux.AppImage', '--serve'])
+  })
+})
+
+describe('shouldActivateDesktopForSecondInstance', () => {
+  it('ignores a duplicate serve launch but still activates for a desktop launch', () => {
+    // Why: a supervisor respawning `orca serve` must not open a window on a display-less host (#11935).
+    const serveArgv = ['/opt/orca/orca-linux.AppImage', '--serve']
+    expect(shouldActivateDesktopForSecondInstance(serveArgv)).toBe(false)
+    expect(shouldActivateDesktopForSecondInstance(['/Applications/Orca.app/orca'])).toBe(true)
+  })
+
+  it('fails open when no argv is available', () => {
+    expect(shouldActivateDesktopForSecondInstance([])).toBe(true)
+    expect(shouldActivateDesktopForSecondInstance()).toBe(true)
+  })
+})
+
+describe('SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE', () => {
+  it('stays 3 because the documented systemd unit keys RestartPreventExitStatus off it', () => {
+    expect(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE).toBe(3)
   })
 })
 
