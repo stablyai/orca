@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connect } from './rpc-client'
+import { connect, type RpcClient } from './rpc-client'
 import {
   createStableLogicalRpcClient,
-  type MobileConnectionPath
+  type MobileConnectionPath,
+  type StableLogicalRpcClient
 } from './stable-logical-rpc-client'
-import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
@@ -13,7 +13,6 @@ import {
   MobileEndpointSupervisor,
   type MobileEndpointSupervisorDependencies
 } from './mobile-endpoint-supervisor'
-import type { RpcClient } from './rpc-client'
 import type { ConnectionState, HostProfile, RpcResponse } from './types'
 
 // Regression suite for the 2026-08 field failure: a phone paired over the
