@@ -2,14 +2,54 @@
 // by a fixed constructor and screened by a STRUCTURAL parser — not a substring
 // blacklist, which would wrongly reject a repo path containing "remote".
 //
-// Network-free by construction: the sole mutating shape is `worktree add` with a
-// full 40-hex base OID (never a ref name, so no ref resolution or implicit
-// prefetch) and --no-track (so no upstream is configured to later pull from).
+// Network-free by construction.
+//
+// WHAT MUTATES WHAT (Phase 7 correction). `worktree add` remains the only command
+// that mutates the user's repository. Candidate derivation (read-tree/add/
+// write-tree) writes objects too, but ONLY into a per-run temporary object
+// directory selected by GIT_OBJECT_DIRECTORY; the real object store is attached
+// read-only as a single alternate so the base commit still resolves. No ref is
+// created, the real index is never opened, and the temp directory is deleted when
+// derivation ends.
+//
+// That isolation is enforced HERE, at the spawn boundary, not merely arranged by
+// the caller: runAuditedGitCandidateWrite refuses to spawn unless the env proves
+// it. A missing GIT_OBJECT_DIRECTORY is precisely the bug that would silently
+// persist uncommitted and untracked file bytes into .git/objects, so it is a hard
+// refusal rather than a default.
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../git/runner'
 import { FULL_OID } from './audited-worktree-identity'
+import { canonicalizeAllowingMissing, isPathInside } from './audited-worktree-managed-root'
 
-const ALLOWED_SUBCOMMANDS = new Set(['worktree', 'rev-parse', 'symbolic-ref', 'show-ref', 'cat-file'])
+const ALLOWED_SUBCOMMANDS = new Set([
+  'worktree',
+  'rev-parse',
+  'symbolic-ref',
+  'show-ref',
+  'cat-file',
+  // Phase 7 candidate identity. Admissible ONLY through
+  // runAuditedGitCandidateWrite, which enforces the temp-index + temp-object-dir
+  // isolation; runAuditedGitRead rejects them via isReadOnlyAuditedArgv.
+  'read-tree',
+  'add',
+  'write-tree'
+])
 const ALLOWED_WORKTREE_VERBS = new Set(['add', 'list'])
+
+// The three subcommands that may create Git objects. Kept separate from the
+// allowlist so the read path and the candidate path can be told apart
+// structurally rather than by convention.
+const CANDIDATE_SUBCOMMANDS = new Set(['read-tree', 'add', 'write-tree'])
+
+// Options that would let an argv re-point Git at a different index, object store,
+// worktree, or repository — defeating the env-based isolation.
+const CANDIDATE_FORBIDDEN_OPTIONS = [
+  '--index-file',
+  '-C',
+  '--work-tree',
+  '--git-dir',
+  '--namespace'
+]
 
 // Global options that consume a following operand, so the parser can find the
 // real subcommand by arity rather than by guessing.
@@ -70,7 +110,37 @@ export function isReadOnlyAuditedArgv(argv: readonly string[]): boolean {
   if (subcommand === 'worktree') {
     return argv[argv.indexOf('worktree') + 1] === 'list'
   }
+  if (subcommand !== null && CANDIDATE_SUBCOMMANDS.has(subcommand)) {
+    // These create objects. They are admissible, but never through the read path.
+    return false
+  }
   return subcommand !== null && ALLOWED_SUBCOMMANDS.has(subcommand)
+}
+
+export function buildReadTreeArgv(baseCommit: string): string[] {
+  if (!FULL_OID.test(baseCommit)) {
+    throw new AuditedGitCommandShapeError('base commit must be a full 40-hex OID')
+  }
+  return ['read-tree', baseCommit]
+}
+
+/**
+ * Exactly `add -A --`: stage the whole worktree, no pathspec.
+ *
+ * The absent pathspec is deliberate — it is what removes the path-traversal
+ * surface entirely rather than trying to validate one.
+ */
+export function buildCandidateAddArgv(): string[] {
+  return ['add', '-A', '--']
+}
+
+export function buildWriteTreeArgv(): string[] {
+  return ['write-tree']
+}
+
+/** `<base>^{tree}`, used to detect an empty change set. */
+export function buildRevParseTreeArgv(rev: string): string[] {
+  return ['rev-parse', '--verify', '--quiet', `${rev}^{tree}`]
 }
 
 // Suppress auto-maintenance so provisioning cannot trigger background gc/prefetch.
@@ -85,7 +155,16 @@ export function buildWorktreeAddArgv(
   if (!FULL_OID.test(baseCommit)) {
     throw new AuditedGitCommandShapeError('base commit must be a full 40-hex OID')
   }
-  return [...NO_MAINTENANCE, 'worktree', 'add', '--no-track', '-b', branch, worktreePath, baseCommit]
+  return [
+    ...NO_MAINTENANCE,
+    'worktree',
+    'add',
+    '--no-track',
+    '-b',
+    branch,
+    worktreePath,
+    baseCommit
+  ]
 }
 
 export function buildRevParseCommitArgv(rev: string): string[] {
@@ -123,6 +202,14 @@ export async function runAuditedGitRead(
   cwd: string
 ): Promise<AuditedGitResult> {
   assertAuditedGitArgvShape(argv)
+  // A candidate command routed through the READ path would run with no
+  // GIT_OBJECT_DIRECTORY and write straight into the real object store — the
+  // exact failure this phase exists to prevent. Refuse structurally.
+  if (!isReadOnlyAuditedArgv(argv)) {
+    throw new AuditedGitCommandShapeError(
+      'candidate commands must use runAuditedGitCandidateWrite, not the read path'
+    )
+  }
   try {
     const { stdout } = await gitExecFileAsync([...argv], {
       cwd,
@@ -135,8 +222,142 @@ export async function runAuditedGitRead(
 }
 
 /**
- * The single mutating command in the feature. Returns a result rather than
- * throwing: a non-zero exit is NOT proof Git made no durable change, so the
+ * The complete env a candidate-write command must run under. Every field is
+ * required: the isolation is only sound if all three are present together.
+ */
+export type CandidateIsolationEnv = {
+  /** Per-run temp index. The real .git/index is never opened. */
+  gitIndexFile: string
+  /** Per-run temp object dir. ALL newly created objects land here. */
+  gitObjectDirectory: string
+  /** Exactly one entry: the real common object dir, attached read-only. */
+  gitAlternateObjectDirectories: string
+}
+
+export type CandidateIsolationBounds = {
+  /** The per-run directory both temp paths must live inside. */
+  candidateDir: string
+  /** The audited worktree — neither temp path may be inside it. */
+  worktreePath: string
+  /** The real common object dir — the ONLY legal alternate value. */
+  commonObjectDir: string
+}
+
+/**
+ * Screens a candidate-write spawn. Throws rather than returning a result: a
+ * violation here is a programming error that must never reach Git, not a runtime
+ * condition a caller could sensibly recover from.
+ */
+export function assertCandidateIsolation(
+  argv: readonly string[],
+  env: CandidateIsolationEnv,
+  bounds: CandidateIsolationBounds
+): void {
+  for (const option of CANDIDATE_FORBIDDEN_OPTIONS) {
+    if (argv.some((token) => token === option || token.startsWith(`${option}=`))) {
+      throw new AuditedGitCommandShapeError(
+        `${option} is never permitted on a candidate command: it would defeat the env isolation`
+      )
+    }
+  }
+
+  const subcommand = findGitSubcommand(argv)
+  if (subcommand === 'add') {
+    // Exactly `add -A --`. Any extra token would be a pathspec.
+    const addIndex = argv.indexOf('add')
+    const rest = argv.slice(addIndex)
+    if (rest.length !== 3 || rest[1] !== '-A' || rest[2] !== '--') {
+      throw new AuditedGitCommandShapeError('candidate add must be exactly `add -A --`')
+    }
+  }
+
+  if (!env.gitIndexFile || !env.gitObjectDirectory || !env.gitAlternateObjectDirectories) {
+    throw new AuditedGitCommandShapeError(
+      'candidate commands require GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY, and GIT_ALTERNATE_OBJECT_DIRECTORIES'
+    )
+  }
+
+  // Both temp paths must be inside the per-run directory and outside the
+  // worktree. Checking containment in the candidate dir is the positive form;
+  // the worktree check catches a candidate dir that was itself misconfigured.
+  for (const [label, value] of [
+    ['GIT_INDEX_FILE', env.gitIndexFile],
+    ['GIT_OBJECT_DIRECTORY', env.gitObjectDirectory]
+  ] as const) {
+    const canonical = canonicalizeAllowingMissing(value)
+    if (!isPathInside(canonical, canonicalizeAllowingMissing(bounds.candidateDir))) {
+      throw new AuditedGitCommandShapeError(`${label} must live inside the per-run candidate dir`)
+    }
+    if (isPathInside(canonical, canonicalizeAllowingMissing(bounds.worktreePath))) {
+      throw new AuditedGitCommandShapeError(`${label} must not live inside the audited worktree`)
+    }
+  }
+
+  // The alternate names the real object store and nothing else. A list would let
+  // an unexpected store satisfy a read, and GIT_ALTERNATE_OBJECT_DIRECTORIES is
+  // PATH-separator-delimited, so a path containing the separator is ambiguous.
+  const alternate = env.gitAlternateObjectDirectories
+  const separator = process.platform === 'win32' ? ';' : ':'
+  const withoutDriveColon =
+    process.platform === 'win32' ? alternate.replace(/^[A-Za-z]:/, '') : alternate
+  if (withoutDriveColon.includes(separator)) {
+    throw new AuditedGitCommandShapeError(
+      'GIT_ALTERNATE_OBJECT_DIRECTORIES must be exactly one entry'
+    )
+  }
+  if (
+    !isPathInside(
+      canonicalizeAllowingMissing(alternate),
+      canonicalizeAllowingMissing(bounds.commonObjectDir)
+    )
+  ) {
+    throw new AuditedGitCommandShapeError(
+      'GIT_ALTERNATE_OBJECT_DIRECTORIES must be the repository common object dir'
+    )
+  }
+}
+
+/**
+ * Runs one candidate-identity command under enforced isolation.
+ *
+ * Optional-lock suppression is kept so nothing rewrites .git/index, and the three
+ * isolation variables are applied LAST so a caller-supplied env can never
+ * override them.
+ */
+export async function runAuditedGitCandidateWrite(
+  argv: readonly string[],
+  cwd: string,
+  env: CandidateIsolationEnv,
+  bounds: CandidateIsolationBounds
+): Promise<AuditedGitResult> {
+  assertAuditedGitArgvShape(argv)
+  const subcommand = findGitSubcommand(argv)
+  if (subcommand === null || !CANDIDATE_SUBCOMMANDS.has(subcommand)) {
+    throw new AuditedGitCommandShapeError(
+      `runAuditedGitCandidateWrite is only for candidate commands, got: ${subcommand ?? '<none>'}`
+    )
+  }
+  assertCandidateIsolation(argv, env, bounds)
+
+  try {
+    const { stdout } = await gitExecFileAsync([...argv], {
+      cwd,
+      env: {
+        ...gitOptionalLocksDisabledEnv(),
+        GIT_INDEX_FILE: env.gitIndexFile,
+        GIT_OBJECT_DIRECTORY: env.gitObjectDirectory,
+        GIT_ALTERNATE_OBJECT_DIRECTORIES: env.gitAlternateObjectDirectories
+      }
+    })
+    return { ok: true, stdout }
+  } catch (error) {
+    return { ok: false, error }
+  }
+}
+
+/**
+ * The single command that mutates the user's repository. Returns a result rather
+ * than throwing: a non-zero exit is NOT proof Git made no durable change, so the
  * caller must run full evidence classification before choosing a status.
  */
 export async function runAuditedWorktreeAdd(

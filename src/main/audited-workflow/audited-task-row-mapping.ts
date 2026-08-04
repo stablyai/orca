@@ -68,6 +68,11 @@ export type AuditedTaskRow = {
   // projection field and uses the EXISTING ReviewVerdict vocabulary.
   currentPlanArtifactId: string | null
   lastVerdict: ReviewVerdict | null
+  // Phase 7. currentCandidateId points at the single 'current' candidate row;
+  // codeAuditVerdict is the code-audit lane's own verdict, kept separate from
+  // lastVerdict so neither lane can overwrite the other's record.
+  currentCandidateId: string | null
+  codeAuditVerdict: ReviewVerdict | null
   createdAt: number
   updatedAt: number
 }
@@ -112,6 +117,8 @@ export function sqliteRowToTask(row: Record<string, unknown>): AuditedTaskRow {
     worktreeVerifiedAt: (row.worktree_verified_at_ms as number | null) ?? null,
     currentPlanArtifactId: (row.current_plan_artifact_id as string | null) ?? null,
     lastVerdict: (row.last_verdict as ReviewVerdict | null) ?? null,
+    currentCandidateId: (row.current_candidate_id as string | null) ?? null,
+    codeAuditVerdict: (row.code_audit_verdict as ReviewVerdict | null) ?? null,
     createdAt: row.created_at_ms as number,
     updatedAt: row.updated_at_ms as number
   }

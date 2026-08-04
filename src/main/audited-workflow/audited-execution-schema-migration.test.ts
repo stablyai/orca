@@ -47,7 +47,10 @@ describe('v4 schema', () => {
     const sql = tableSql(db, 'audited_execution_runs')
     expect(sql).toContain('pre_launch_state')
     expect(sql).toContain('active_run_state')
-    expect(sql).toContain("mode IN ('plan', 'direct')")
+    // Asserts the Phase 4 modes are constrained, not the exact list: Phase 7
+    // legitimately widens this to include 'fix'. The exact vocabulary is owned by
+    // EXECUTION_MODES and covered by audited-code-audit-schema-migration.test.ts.
+    expect(sql).toMatch(/mode\s+TEXT NOT NULL CHECK\(mode IN \([^)]*'plan'[^)]*'direct'[^)]*\)\)/)
     db.close()
   })
 

@@ -31,6 +31,9 @@ import {
 } from './audited-plan-review-run-repository'
 import { resolveAcceptanceCriteria } from './audited-plan-audit-criteria'
 import { getCurrentCoverage } from './audited-plan-coverage-repository'
+import { getCandidate } from './audited-candidate-repository'
+import { getLatestCodeAuditRun } from './audited-code-audit-run-repository'
+import { MAX_FIX_ROUNDS } from '../../shared/audited-code-audit-types'
 import type Database from '../sqlite/sync-database'
 import type {
   AuditedAcceptanceCriterion,
@@ -107,6 +110,9 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
   // Phase 6: the first writer of the long-declared acceptanceCriteria field,
   // which was hardcoded to [] from Phase 1 until now.
   const coverage = resolveProjectedCriteria(db, row.id)
+  // Phase 7: the first readers of the code-audit lane's durable state.
+  const candidate = row.currentCandidateId ? getCandidate(db, row.currentCandidateId) : null
+  const codeAudit = getLatestCodeAuditRun(db, row.id)
   return {
     taskId: row.id,
     repoId: row.repoId,
@@ -147,6 +153,15 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
     planReviewFindingCount: review?.findingCount ?? null,
     planReviewApprovedForCurrentArtifact: hasApprovedVerdictForCurrentArtifact(db, row.id),
     coverageAvailable: coverage.coverageAvailable,
+    // Phase 7: the candidate supplies only its STATUS — never its tree OID, which
+    // is authorization identity. The latest audit run supplies the verdict facts.
+    candidateStatus: candidate?.status ?? null,
+    codeAuditRunStatus: codeAudit?.status ?? null,
+    codeAuditVerdict: codeAudit?.verdict ?? null,
+    codeAuditReasonCode: codeAudit?.reasonCode ?? null,
+    codeAuditSummary: codeAudit?.summary ?? null,
+    codeAuditFindingCount: codeAudit?.findingCount ?? null,
+    fixRoundLimit: MAX_FIX_ROUNDS,
     acceptanceCriteria: coverage.criteria,
     timings: [],
     createdAt: row.createdAt,

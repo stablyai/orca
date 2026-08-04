@@ -268,12 +268,24 @@ describe('failed retry preflight', () => {
 })
 
 describe('parked review states', () => {
-  // Only the CODE audit is still a placeholder. Phase 5 gave
-  // awaiting_plan_review a real UI, owned by AuditedPlanReviewPanel — these
-  // controls deliberately render nothing for it so the two cannot both draw.
-  it('shows an informational note with no affordance in awaiting_code_audit', () => {
-    render(<AuditedExecutionControls task={task({ state: 'awaiting_code_audit' })} />)
-    expect(screen.getByText('Review is not yet available.')).toBeInTheDocument()
+  // Phase 7 moved the dead-end forward: awaiting_code_audit now has a real UI
+  // owned by AuditedCodeAuditPanel, so these controls render nothing for it —
+  // the same relationship they already had with awaiting_plan_review. The note
+  // now sits at awaiting_human_approval, the lane's new resting point.
+  it('renders nothing in awaiting_code_audit, which the code-audit panel owns', () => {
+    const { container } = render(
+      <AuditedExecutionControls task={task({ state: 'awaiting_code_audit' })} />
+    )
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('shows an informational note with no affordance in awaiting_human_approval', () => {
+    render(<AuditedExecutionControls task={task({ state: 'awaiting_human_approval' })} />)
+    expect(
+      screen.getByText(
+        /Approved by code review\. The approval and commit step is not available yet\./
+      )
+    ).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 

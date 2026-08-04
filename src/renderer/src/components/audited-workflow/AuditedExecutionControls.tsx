@@ -107,14 +107,19 @@ export function AuditedExecutionControls({ task }: Props): React.JSX.Element | n
     )
   }
 
-  // awaiting_plan_review is now owned by AuditedPlanReviewPanel (Phase 5).
-  // The code-audit placeholder stays until Phase 6 builds that lane.
-  if (task.state === 'awaiting_code_audit') {
+  // awaiting_plan_review is owned by AuditedPlanReviewPanel (Phase 5), and
+  // awaiting_code_audit / code_fixes_requested by AuditedCodeAuditPanel
+  // (Phase 7). Both self-gate, so this component renders nothing for them.
+  //
+  // awaiting_human_approval is the lane's new resting point: Codex approved the
+  // change set, and the approval + commit step arrives in a later phase. Saying
+  // so is more honest than the old blanket "Review is not yet available."
+  if (task.state === 'awaiting_human_approval') {
     return (
       <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3 text-sm">
         {translate(
-          'auto.components.auditedWorkflow.AuditedTaskDetail.reviewUnavailable',
-          'Review is not yet available.'
+          'auto.components.auditedWorkflow.AuditedTaskDetail.awaitingApproval',
+          'Approved by code review. The approval and commit step is not available yet.'
         )}
       </div>
     )

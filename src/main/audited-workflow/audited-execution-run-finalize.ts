@@ -72,12 +72,17 @@ function validateFinalizeTransition(
   if (toState === 'blocked') {
     return validateBlockTransition(fromState).ok
   }
+  // Phase 7: a fix run's active state IS awaiting_code_audit, so a same-state
+  // finalization there needs no rule — it is handled by the toState === null
+  // branch, exactly like plan-mode. Only genuine state MOVES are listed here.
   const command: AuditedTransitionCommand | null =
     fromState === 'planning' && toState === 'awaiting_plan_review'
       ? 'planComplete'
       : fromState === 'implementing' && toState === 'awaiting_code_audit'
         ? 'implementComplete'
-        : null
+        : fromState === 'code_fixes_requested' && toState === 'awaiting_code_audit'
+          ? 'fix'
+          : null
   if (command === null) {
     return false
   }

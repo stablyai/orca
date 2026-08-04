@@ -57,6 +57,28 @@ export function getRunningExecutionRun(
   return row ? sqliteRowToExecutionRun(row) : null
 }
 
+/**
+ * Whether a Claude execution is live for this task (Phase 7).
+ *
+ * THE FIX-LANE GUARD. A `fix` run lives in awaiting_code_audit — the same state a
+ * code audit is admitted from — while Claude actively edits the worktree. Without
+ * this check, "task is awaiting_code_audit and a current candidate exists" is
+ * satisfied DURING a running fix, and an audit would be spawned against a tree
+ * that is changing underneath it.
+ *
+ * A plain existence check, so it is safe to call from inside a transaction —
+ * which is where it must be called to be sound. Mirrors hasLivePlanReviewRun.
+ */
+export function hasLiveExecutionRun(db: Database.Database, taskId: string): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 as live FROM audited_execution_runs
+        WHERE task_id = ? AND status = 'running' LIMIT 1`
+    )
+    .get(taskId) as { live: number } | undefined
+  return row !== undefined
+}
+
 export function getLatestExecutionRun(
   db: Database.Database,
   taskId: string

@@ -29,11 +29,15 @@ export function createExecutionRunsTable(db: Database.Database): void {
       status            TEXT NOT NULL CHECK(status IN (${statusList})),
       -- The state the task held BEFORE this run's start transition. Recorded at
       -- start so cancel restores the exact pre-launch state instead of guessing:
-      -- 'planning' for plan mode, 'ready_to_implement' for direct. Never inferred.
-      pre_launch_state  TEXT NOT NULL CHECK(pre_launch_state IN ('planning','ready_to_implement')),
-      -- The state the run LIVES in. Distinct from pre_launch_state for direct
-      -- runs; this is the value written to pre_block_state on failure.
-      active_run_state  TEXT NOT NULL CHECK(active_run_state IN ('planning','implementing')),
+      -- 'planning' for plan mode, 'ready_to_implement' for direct,
+      -- 'code_fixes_requested' for a Phase 7 fix. Never inferred.
+      pre_launch_state  TEXT NOT NULL CHECK(pre_launch_state IN ('planning','ready_to_implement','code_fixes_requested')),
+      -- The state the run LIVES in. Distinct from pre_launch_state for direct and
+      -- fix runs; this is the value written to pre_block_state on failure.
+      -- NOTE 'awaiting_code_audit' is an ACTIVE run state for a fix: the task sits
+      -- there while Claude edits, which is why the code-audit lane must refuse to
+      -- admit an audit while an execution run is live.
+      active_run_state  TEXT NOT NULL CHECK(active_run_state IN ('planning','implementing','awaiting_code_audit')),
       reason_code       TEXT CHECK(reason_code IS NULL OR reason_code IN (${reasonList})),
       exit_code         INTEGER,
       stdout_bytes      INTEGER NOT NULL DEFAULT 0,

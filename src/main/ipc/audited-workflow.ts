@@ -17,8 +17,10 @@ import {
   getAuditedTaskRepository
 } from '../audited-workflow/audited-task-service'
 import { recoverInterruptedPlanReviewsOnStartup } from '../audited-workflow/audited-plan-review-orchestration'
+import { recoverInterruptedCodeAuditsOnStartup } from '../audited-workflow/audited-code-audit-orchestration'
 import { reconcilePlanArtifactFilesOnStartup } from '../audited-workflow/audited-plan-artifact-gc'
 import { registerAuditedPlanReviewHandlers } from './audited-workflow-plan-review'
+import { registerAuditedCodeAuditHandlers } from './audited-workflow-code-audit'
 import { registerAuditedCodexProviderHandlers } from './audited-workflow-codex-provider'
 import {
   startTriage,
@@ -136,6 +138,11 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
   // Same rationale for plan-review runs: a `running` Codex review cannot be
   // assumed alive after a restart. Idempotent and CAS-safe.
   recoverInterruptedPlanReviewsOnStartup()
+
+  // Same rationale for code-audit runs. Note candidate DERIVATION needs no
+  // recovery sweep: its objects live only in a per-run temp directory, so an
+  // interrupted derivation leaves nothing in the repository to reclaim.
+  recoverInterruptedCodeAuditsOnStartup()
 
   // Reclaims artifact files whose DB row never committed (a crash or a lost
   // ownership race between the atomic rename and the attach transaction).
@@ -352,6 +359,7 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
 
   registerAuditedExecutionHandlers()
   registerAuditedPlanReviewHandlers()
+  registerAuditedCodeAuditHandlers()
 
   // Why: exposes ONLY whether a key is configured — never the key, a masked
   // form, encrypted bytes, or a filesystem path. See

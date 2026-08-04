@@ -4,7 +4,10 @@
 // switches (lint:switch-exhaustiveness).
 import type { AuditedTaskState } from './audited-workflow-types'
 
-export const EXECUTION_MODES = ['plan', 'direct'] as const
+// `fix` (Phase 7) is a Claude run in the code-audit lane: it starts from
+// code_fixes_requested and lives in awaiting_code_audit, so unlike plan/direct it
+// re-enters a state the task already passed through.
+export const EXECUTION_MODES = ['plan', 'direct', 'fix'] as const
 export type ExecutionMode = (typeof EXECUTION_MODES)[number]
 
 // `running` is the only non-terminal status. `blocked` is distinct from

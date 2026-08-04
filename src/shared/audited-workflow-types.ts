@@ -4,6 +4,10 @@
 import type { WorktreeReasonCode } from './audited-worktree-types'
 import type { ExecutionReasonCode, ExecutionRunStatus } from './audited-execution-types'
 import type { PlanReviewReasonCode, PlanReviewRunStatus } from './audited-plan-artifact-types'
+// Type-only, so the cycle with audited-code-audit-types.ts (which imports
+// ReviewVerdict from here) is erased at compile time — the same shape the plan
+// and execution type modules already use.
+import type { CodeAuditReasonCode, CodeAuditRunStatus } from './audited-code-audit-types'
 
 export const AUDITED_TASK_STATES = [
   'selected',
@@ -317,6 +321,19 @@ export type AuditedTaskStatusProjection = {
   // per-criterion `covered` flag alone cannot express. Server-computed; a false
   // here means the UI must not present any coverage count as a judgement.
   coverageAvailable: boolean
+  // Phase 7 code-audit lane. Whether a 'current' candidate exists — the audit
+  // affordance is gated on this, never on the tree OID, which never crosses.
+  candidateAvailable: boolean
+  codeAuditRunStatus: CodeAuditRunStatus | null
+  // Same closed union as lastVerdict — there is exactly one verdict vocabulary.
+  codeAuditVerdict: ReviewVerdict | null
+  codeAuditReasonCode: CodeAuditReasonCode | null
+  // Model-authored, sanitized and bounded BEFORE storage — the same treatment as
+  // planReviewSummary, and the only free text this lane projects.
+  codeAuditSummary: string | null
+  codeAuditFindingCount: number | null
+  // Server-computed: a fix round is legal from here and the cap is not reached.
+  codeFixAvailable: boolean
   acceptanceCriteria: AuditedAcceptanceCriterion[]
   timings: AuditedPhaseTiming[]
   createdAt: number

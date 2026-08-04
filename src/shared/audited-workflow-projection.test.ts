@@ -46,6 +46,13 @@ function baseSource(overrides: Partial<ProjectionSourceTask> = {}): ProjectionSo
     executionReasonCode: null,
     executionOutputTruncated: false,
     coverageAvailable: false,
+    candidateStatus: null,
+    codeAuditRunStatus: null,
+    codeAuditVerdict: null,
+    codeAuditReasonCode: null,
+    codeAuditSummary: null,
+    codeAuditFindingCount: null,
+    fixRoundLimit: 3,
     acceptanceCriteria: [],
     timings: [],
     createdAt: 1000,
@@ -159,5 +166,93 @@ describe('coverage never gates approval', () => {
     expect(
       buildAuditedTaskProjection(baseSource({ coverageAvailable: false })).coverageAvailable
     ).toBe(false)
+  })
+})
+
+// P1 / P2 — Phase 7. The candidate tree OID is AUTHORIZATION identity: the full
+// value must never cross, and a PENDING candidate's identity must not cross at
+// all. Only the approved tree reaches the renderer, as candidateIdShort.
+describe('code-audit projection never leaks candidate identity', () => {
+  const TREE_OID = `${'ab12cd34ef56'.repeat(3)}abcd`
+
+  it('never exposes the full approved tree OID, only the 12-char short form', () => {
+    const projection = buildAuditedTaskProjection(
+      baseSource({ auditApprovedTreeOid: TREE_OID, candidateStatus: 'current' })
+    )
+
+    expect(projection.candidateIdShort).toBe(TREE_OID.slice(0, 12))
+    expect(JSON.stringify(projection)).not.toContain(TREE_OID)
+  })
+
+  it('exposes no candidate identity at all before approval', () => {
+    const projection = buildAuditedTaskProjection(
+      baseSource({ auditApprovedTreeOid: null, candidateStatus: 'current' })
+    )
+
+    // The candidate exists and is auditable, but nothing identifies it.
+    expect(projection.candidateAvailable).toBe(true)
+    expect(projection.candidateIdShort).toBeNull()
+  })
+
+  it('reports candidateAvailable only for a current candidate', () => {
+    expect(
+      buildAuditedTaskProjection(baseSource({ candidateStatus: 'current' })).candidateAvailable
+    ).toBe(true)
+    expect(
+      buildAuditedTaskProjection(baseSource({ candidateStatus: 'superseded' })).candidateAvailable
+    ).toBe(false)
+    expect(
+      buildAuditedTaskProjection(baseSource({ candidateStatus: null })).candidateAvailable
+    ).toBe(false)
+  })
+
+  it('gates codeFixAvailable on the state AND the round cap', () => {
+    const inFixState = { state: 'code_fixes_requested' as const, fixRoundLimit: 3 }
+    expect(
+      buildAuditedTaskProjection(baseSource({ ...inFixState, fixRound: 2 })).codeFixAvailable
+    ).toBe(true)
+    expect(
+      buildAuditedTaskProjection(baseSource({ ...inFixState, fixRound: 3 })).codeFixAvailable
+    ).toBe(false)
+    // Not offered outside the fix state, whatever the round.
+    expect(
+      buildAuditedTaskProjection(
+        baseSource({ state: 'awaiting_code_audit', fixRound: 0, fixRoundLimit: 3 })
+      ).codeFixAvailable
+    ).toBe(false)
+  })
+
+  it('passes the audit verdict facts through untouched', () => {
+    const projection = buildAuditedTaskProjection(
+      baseSource({
+        codeAuditRunStatus: 'succeeded',
+        codeAuditVerdict: 'fixes_requested',
+        codeAuditReasonCode: null,
+        codeAuditSummary: 'Two defects.',
+        codeAuditFindingCount: 2
+      })
+    )
+
+    expect(projection).toMatchObject({
+      codeAuditRunStatus: 'succeeded',
+      codeAuditVerdict: 'fixes_requested',
+      codeAuditSummary: 'Two defects.',
+      codeAuditFindingCount: 2
+    })
+  })
+
+  // Phase 7 does not touch the plan lane's approval authority.
+  it('leaves planApprovalReady unaffected by code-audit state', () => {
+    const projection = buildAuditedTaskProjection(
+      baseSource({
+        state: 'awaiting_plan_review',
+        planArtifactId: 'plan_1',
+        planArtifactStatus: 'current',
+        planReviewApprovedForCurrentArtifact: true,
+        candidateStatus: 'current',
+        codeAuditVerdict: 'blocked'
+      })
+    )
+    expect(projection.planApprovalReady).toBe(true)
   })
 })

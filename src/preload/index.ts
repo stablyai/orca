@@ -37,6 +37,8 @@ import type {
   AuditedWorkflowApprovePlanResult,
   AuditedWorkflowRequestPlanRevisionParams,
   AuditedWorkflowRequestPlanRevisionResult,
+  AuditedWorkflowCodeAuditParams,
+  AuditedWorkflowCodeAuditResult,
   AuditedWorkflowGetPlanArtifactParams,
   AuditedWorkflowSaveCodexProviderKeyParams,
   AuditedWorkflowGetPlanArtifactResult,
@@ -2420,6 +2422,22 @@ const api = {
       params: AuditedWorkflowRequestPlanRevisionParams
     ): Promise<AuditedWorkflowRequestPlanRevisionResult> =>
       ipcRenderer.invoke('auditedWorkflow:requestPlanRevision', params),
+    startCodeAudit: (
+      params: AuditedWorkflowCodeAuditParams
+    ): Promise<AuditedWorkflowCodeAuditResult> =>
+      ipcRenderer.invoke('auditedWorkflow:startCodeAudit', params),
+    cancelCodeAudit: (
+      params: AuditedWorkflowCodeAuditParams
+    ): Promise<AuditedWorkflowCodeAuditResult> =>
+      ipcRenderer.invoke('auditedWorkflow:cancelCodeAudit', params),
+    retryCodeAudit: (
+      params: AuditedWorkflowCodeAuditParams
+    ): Promise<AuditedWorkflowCodeAuditResult> =>
+      ipcRenderer.invoke('auditedWorkflow:retryCodeAudit', params),
+    requestCodeFix: (
+      params: AuditedWorkflowCodeAuditParams
+    ): Promise<AuditedWorkflowCodeAuditResult> =>
+      ipcRenderer.invoke('auditedWorkflow:requestCodeFix', params),
     getPlanArtifact: (
       params: AuditedWorkflowGetPlanArtifactParams
     ): Promise<AuditedWorkflowGetPlanArtifactResult> =>

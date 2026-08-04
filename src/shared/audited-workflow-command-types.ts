@@ -22,6 +22,7 @@ import type {
   PlanReviewReasonCode,
   PlanRevisionReasonCode
 } from './audited-plan-artifact-types'
+import type { CodeAuditReasonCode } from './audited-code-audit-types'
 
 export type AuditedWorkflowListTasksParams = { repoId?: string }
 export type AuditedWorkflowGetTaskParams = { taskId: string }
@@ -198,6 +199,17 @@ export type AuditedWorkflowReconcileResult = {
   classification: ReconcileClass
   reasonCode: ReconcileReasonCode
 }
+
+// Phase 7 code-audit lane. One params/result pair for all four commands: each
+// takes only a taskId, and each fails with the same two closed vocabularies.
+export type AuditedWorkflowCodeAuditParams = { taskId: string }
+export type AuditedWorkflowCodeAuditResult =
+  | { ok: true }
+  | { ok: false; kind: 'codeAudit'; reasonCode: CodeAuditReasonCode }
+  // The closed worktree vocabulary, not a bare string: the renderer narrows on
+  // `kind` and hands this to getWorktreeErrorMessage, whose exhaustive switch is
+  // what keeps a widened union from silently falling through.
+  | { ok: false; kind: 'worktree'; reasonCode: WorktreeReasonCode }
 
 export type AuditedWorkflowOpenArtifactParams = {
   taskId: string

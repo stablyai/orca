@@ -7,16 +7,13 @@
 //    with a null worktree_reason_code, where ensureWorktreeForTask could only
 //    report `contended` — never the real drift reason — and would mutate a task
 //    this path must leave untouched.
-import { app } from 'electron'
 import type { ExecutionMode } from '../../shared/audited-execution-types'
-import type { WorktreeReasonCode } from '../../shared/audited-worktree-types'
 import type { AuditedTaskState } from '../../shared/audited-workflow-types'
 import { getAuditedTaskRepository, getTaskProjection } from './audited-task-service'
 import { broadcastAuditedTaskChanged } from './audited-workflow-broadcast'
 import { ensureWorktreeForTask, verifyWorktreeForTask } from './audited-worktree-service'
 import {
   finalizeExecutionRun,
-  getExecutionRun,
   getRunningExecutionRun,
   startExecutionRun
 } from './audited-execution-run-repository'
@@ -24,10 +21,14 @@ import { retryExecutionRun } from './audited-execution-run-retry'
 import { cancelExecutionRun } from './audited-execution-run-cancel'
 import { recoverInterruptedExecutionRuns } from './audited-execution-run-recovery'
 import { resolveNextStepPrompt } from './audited-execution-prompt'
-import { decideExecutionOutcome } from './audited-execution-outcome'
-import { hasMeaningfulOutput, writeExecutionOutput } from './audited-execution-output-store'
-import { runAuditedClaude, type ExecutionLaunchContext } from './audited-execution-launcher'
-import { completePlanRun } from './audited-plan-run-completion'
+import { launchAndFinalize } from './audited-execution-launch'
+import {
+  executionFailure,
+  freshWorktreeFailure,
+  modeStates,
+  persistedWorktreeFailure,
+  resolveExecutionMode
+} from './audited-execution-lane-shapes'
 import type { ExecutionCommandResult } from '../../shared/audited-workflow-command-types'
 
 function broadcastIfProjectable(taskId: string): void {
@@ -35,47 +36,6 @@ function broadcastIfProjectable(taskId: string): void {
   if (projection) {
     broadcastAuditedTaskChanged(projection)
   }
-}
-
-function executionFailure(
-  reasonCode: Parameters<typeof executionFailureShape>[0]
-): ExecutionCommandResult {
-  return executionFailureShape(reasonCode)
-}
-
-function executionFailureShape(
-  reasonCode:
-    | 'illegal_transition'
-    | 'lock_contended'
-    | 'prompt_unavailable'
-    | 'worktree_not_verified'
-): ExecutionCommandResult {
-  return { ok: false, kind: 'execution', reasonCode }
-}
-
-/**
- * A PERSISTED worktree block: ensureWorktreeForTask already blocked the task and
- * wrote worktree_reason_code, so the projection carries this reason durably.
- */
-function persistedWorktreeFailure(reasonCode: WorktreeReasonCode): ExecutionCommandResult {
-  return { ok: false, kind: 'worktree', reasonCode, persisted: true }
-}
-
-/**
- * A FRESH read-only verification result — never a stored column. Reserved for
- * retryExecution's verifyWorktreeForTask preflight, which writes nothing.
- */
-function freshWorktreeFailure(reasonCode: WorktreeReasonCode): ExecutionCommandResult {
-  return { ok: false, kind: 'worktree', reasonCode, persisted: false }
-}
-
-function modeStates(mode: ExecutionMode): {
-  preLaunchState: AuditedTaskState
-  activeRunState: AuditedTaskState
-} {
-  return mode === 'plan'
-    ? { preLaunchState: 'planning', activeRunState: 'planning' }
-    : { preLaunchState: 'ready_to_implement', activeRunState: 'implementing' }
 }
 
 /**
@@ -90,7 +50,7 @@ export async function startExecution(taskId: string): Promise<ExecutionCommandRe
     return executionFailure('illegal_transition')
   }
 
-  const mode: ExecutionMode = task.triageDecision === 'plan' ? 'plan' : 'direct'
+  const mode: ExecutionMode = resolveExecutionMode(task.state, task.triageDecision)
   const { preLaunchState, activeRunState } = modeStates(mode)
   if (task.state !== preLaunchState) {
     return executionFailure('illegal_transition')
@@ -297,87 +257,4 @@ async function finalizeUnlaunchable(
     Date.now()
   )
   broadcastIfProjectable(taskId)
-}
-
-/**
- * Spawns, then on EVERY terminal outcome, in this order: bound+write logs ->
- * re-verify the worktree -> apply the mode-specific success rule -> CAS-finalize
- * -> broadcast.
- */
-async function launchAndFinalize(context: ExecutionLaunchContext): Promise<void> {
-  const repo = getAuditedTaskRepository()
-  const outcome = await runAuditedClaude(context)
-
-  const stdout = 'stdout' in outcome ? outcome.stdout : ''
-  const stderr = 'stderr' in outcome ? outcome.stderr : ''
-  const counters = writeExecutionOutput(app.getPath('userData'), context.runId, stdout, stderr)
-
-  // A cancel that already finalized this run must not be overwritten.
-  const current = getExecutionRun(repo.getDatabase(), context.runId)
-  if (!current || current.status !== 'running') {
-    broadcastIfProjectable(context.taskId)
-    return
-  }
-
-  // Verification BEFORE the success decision, so drift always wins.
-  const verified = await verifyWorktreeForTask(context.taskId)
-  const decision = decideExecutionOutcome({
-    mode: context.mode,
-    activeRunState: context.activeRunState,
-    outcome,
-    driftReasonCode: verified.ok ? null : verified.reasonCode,
-    hasStdout: hasMeaningfulOutput(stdout)
-  })
-
-  // Phase 5: a SUCCESSFUL plan run does not simply move the task — it must first
-  // produce a durable artifact, and the task advances only inside that
-  // artifact's guarded transaction. completePlanRun finalizes the run in every
-  // branch, so nothing below runs for this path.
-  if (decision.status === 'succeeded' && decision.toState === 'awaiting_plan_review') {
-    const task = repo.getTask(context.taskId)
-    if (task) {
-      completePlanRun(
-        repo.getDatabase(),
-        {
-          runId: context.runId,
-          taskId: context.taskId,
-          task,
-          rawPlanText: stdout,
-          userDataPath: app.getPath('userData'),
-          counters: {
-            stdoutBytes: counters.stdoutBytes,
-            stderrBytes: counters.stderrBytes,
-            outputTruncated: counters.outputTruncated,
-            exitCode: outcome.kind === 'exit' ? outcome.exitCode : null
-          }
-        },
-        Date.now()
-      )
-      broadcastIfProjectable(context.taskId)
-      return
-    }
-  }
-
-  finalizeExecutionRun(
-    repo.getDatabase(),
-    {
-      runId: context.runId,
-      taskId: context.taskId,
-      status: decision.status,
-      reasonCode: decision.reasonCode,
-      toState: decision.toState,
-      blockedReasonCode: decision.blockedReasonCode,
-      preBlockState: decision.preBlockState,
-      blockedPhase: decision.blockedPhase,
-      eventType: decision.eventType,
-      counters: {
-        stdoutBytes: counters.stdoutBytes,
-        stderrBytes: counters.stderrBytes,
-        outputTruncated: counters.outputTruncated,
-        exitCode: outcome.kind === 'exit' ? outcome.exitCode : null
-      }
-    },
-    Date.now()
-  )
-  broadcastIfProjectable(context.taskId)
 }

@@ -22,6 +22,11 @@ import { REVIEW_VERDICTS } from '../../shared/audited-workflow-types'
 import { createExecutionRunsTable } from './audited-execution-schema'
 import { PHASE_5_TASK_COLUMNS, createPlanReviewTables } from './audited-plan-review-schema'
 import { createPlanCoverageTable } from './audited-plan-coverage-schema'
+import {
+  PHASE_7_TASK_COLUMNS,
+  createCodeAuditTables,
+  rebuildExecutionRunsForFixMode
+} from './audited-code-audit-schema'
 import type Database from '../sqlite/sync-database'
 
 // Schema versions: v1 initial (audited_tasks, audited_transitions). v2 (Phase 2)
@@ -49,7 +54,15 @@ import type Database from '../sqlite/sync-database'
 // CHECK and audited_plan_review_runs' reason_code CHECK are both unchanged. It
 // also adds no transition event type: coverage rides in the EXISTING finalization
 // transition's previously-unused detail_json as a {covered,total} count.
-export const SCHEMA_VERSION = 6
+// v7 (Phase 7) adds audited_candidates + audited_code_audit_runs plus two
+// audited_tasks columns (current_candidate_id, code_audit_verdict) — and is the
+// FIRST version that is NOT purely additive. A Phase 7 `fix` run lives in
+// code_fixes_requested -> awaiting_code_audit, which audited_execution_runs'
+// pre_launch_state / active_run_state CHECKs exclude; SQLite cannot ALTER a
+// CHECK, so v7 rebuilds THAT ONE TABLE (see rebuildExecutionRunsForFixMode).
+// audited_tasks' state CHECK is still unchanged — Phase 7 introduces no task
+// state, only writers for states declared since Phase 1.
+export const SCHEMA_VERSION = 7
 
 export function createAuditedWorkflowTables(db: Database.Database): void {
   const stateList = AUDITED_TASK_STATES.map((s) => `'${s}'`).join(', ')
@@ -111,6 +124,14 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
       -- field, which audited-task-service.ts hardcoded to null until now. Uses
       -- the EXISTING ReviewVerdict vocabulary — there is no second verdict union.
       last_verdict                TEXT CHECK(last_verdict IS NULL OR last_verdict IN (${verdictList})),
+      -- Phase 7. Denormalized pointer to the task's single 'current' candidate,
+      -- written in the SAME transaction as the candidate row so the two can never
+      -- disagree; audited_candidates stays the source of truth.
+      current_candidate_id        TEXT,
+      -- Phase 7. The code-audit lane's own verdict, kept separate from
+      -- last_verdict (which the plan lane owns) so one lane cannot overwrite the
+      -- other's record. Same ReviewVerdict vocabulary.
+      code_audit_verdict          TEXT CHECK(code_audit_verdict IS NULL OR code_audit_verdict IN (${verdictList})),
       created_at_ms                INTEGER NOT NULL,
       updated_at_ms                INTEGER NOT NULL
     );
@@ -185,6 +206,7 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
   createExecutionRunsTable(db)
   createPlanReviewTables(db)
   createPlanCoverageTable(db)
+  createCodeAuditTables(db)
 }
 
 // Phase 3 columns added to a pre-existing audited_tasks table, with their
@@ -200,6 +222,22 @@ const PHASE_3_TASK_COLUMNS: readonly [string, string][] = [
 function columnExists(db: Database.Database, table: string, column: string): boolean {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
   return rows.some((row) => row.name === column)
+}
+
+/**
+ * Whether audited_execution_runs already carries the widened Phase 7 CHECKs.
+ *
+ * Read from the stored DDL rather than attempted-insert probing: a probe would
+ * have to write and roll back a row, and this runs inside the migration
+ * transaction where a rollback would discard the whole migration.
+ */
+function executionRunsAcceptsFixStates(db: Database.Database): boolean {
+  const row = db
+    .prepare(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'audited_execution_runs'`
+    )
+    .get() as { sql: string } | undefined
+  return row?.sql.includes('code_fixes_requested') ?? false
 }
 
 // Why: CREATE TABLE IF NOT EXISTS never alters an existing table's columns —
@@ -270,6 +308,24 @@ export function migrateAuditedWorkflowSchema(db: Database.Database): void {
       // directly against a legacy DB, and a migration that silently depends on
       // another call would leave that path without the table.
       createPlanCoverageTable(db)
+    }
+    if (current < 7) {
+      // Phase 7: two new tables plus two additive task columns, AND the one
+      // non-additive step in this feature's history — a rebuild of
+      // audited_execution_runs to widen its two state CHECKs for `fix` runs.
+      // The rebuild runs inside THIS transaction, so a failure anywhere leaves a
+      // v6 database completely untouched.
+      for (const [column, type] of PHASE_7_TASK_COLUMNS) {
+        if (!columnExists(db, 'audited_tasks', column)) {
+          db.exec(`ALTER TABLE audited_tasks ADD COLUMN ${column} ${type}`)
+        }
+      }
+      createCodeAuditTables(db)
+      // Guarded so a fresh DB (already created with the widened CHECKs) is not
+      // rebuilt pointlessly, and so a legacy-DB-direct migration still works.
+      if (!executionRunsAcceptsFixStates(db)) {
+        rebuildExecutionRunsForFixMode(db)
+      }
     }
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     db.exec('COMMIT')

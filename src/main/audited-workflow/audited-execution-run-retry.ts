@@ -27,7 +27,14 @@ export type RetryExecutionRunResult =
 
 // The states an execution block can be resumed to. A task blocked by any other
 // phase (triage, provisioning) is refused here and must use its own retry path.
-const EXECUTION_PRE_BLOCK_STATES: readonly AuditedTaskState[] = ['planning', 'implementing']
+// 'awaiting_code_audit' (Phase 7) is a fix run's ACTIVE state, so a fix blocked
+// mid-run records it as pre_block_state and must be retryable like any other
+// execution block.
+const EXECUTION_PRE_BLOCK_STATES: readonly AuditedTaskState[] = [
+  'planning',
+  'implementing',
+  'awaiting_code_audit'
+]
 
 export function isExecutionBlockedTask(task: AuditedTaskRow): boolean {
   return (

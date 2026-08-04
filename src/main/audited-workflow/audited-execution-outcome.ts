@@ -1,7 +1,7 @@
 // Turns a process outcome plus a post-run worktree verification into the
 // finalize arguments. Pure decision logic — no I/O, no DB — so the mode-specific
 // success rules are testable in isolation.
-import type { AuditedTaskState } from '../../shared/audited-workflow-types'
+import type { AuditedTaskState, BlockReasonCode } from '../../shared/audited-workflow-types'
 import type {
   ExecutionMode,
   ExecutionReasonCode,
@@ -58,6 +58,18 @@ function blocked(
  * artifacts: plan's only product is the stdout text, while direct's product is
  * the worktree diff and its stdout is incidental commentary.
  */
+/**
+ * The lane-specific process-failure reason, so a blocked fix never reports itself
+ * as a failed implement (and vice versa). Phase 7 gives `fix_process_failed` —
+ * declared since Phase 1 — its first producer.
+ */
+function processFailedReason(mode: ExecutionMode): BlockReasonCode {
+  if (mode === 'plan') {
+    return 'plan_process_failed'
+  }
+  return mode === 'fix' ? 'fix_process_failed' : 'implement_process_failed'
+}
+
 export function decideExecutionOutcome(args: DecideOutcomeArgs): ExecutionOutcomeDecision {
   const { activeRunState, mode, outcome } = args
 
@@ -65,7 +77,7 @@ export function decideExecutionOutcome(args: DecideOutcomeArgs): ExecutionOutcom
     case 'not_found':
       return blocked('claude_not_found', 'claude_not_found', activeRunState)
     case 'spawn_failed':
-      return blocked('spawn_failed', 'implement_process_failed', activeRunState)
+      return blocked('spawn_failed', processFailedReason(mode), activeRunState)
     case 'timeout':
       return blocked('timeout', 'agent_timeout', activeRunState)
     case 'output_too_large':
@@ -98,11 +110,7 @@ export function decideExecutionOutcome(args: DecideOutcomeArgs): ExecutionOutcom
   }
 
   if (outcome.exitCode !== 0) {
-    return blocked(
-      'exit_nonzero',
-      mode === 'plan' ? 'plan_process_failed' : 'implement_process_failed',
-      activeRunState
-    )
+    return blocked('exit_nonzero', processFailedReason(mode), activeRunState)
   }
 
   // plan mode is read-only; blank stdout means it produced nothing at all, and

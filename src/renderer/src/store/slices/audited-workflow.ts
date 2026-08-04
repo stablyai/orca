@@ -16,6 +16,7 @@ import type {
   AuditedWorkflowRetryPlanAuditResult,
   AuditedWorkflowApprovePlanResult,
   AuditedWorkflowRequestPlanRevisionResult,
+  AuditedWorkflowCodeAuditResult,
   AuditedWorkflowGetPlanArtifactResult
 } from '../../../../shared/audited-workflow-command-types'
 import type { AppState } from '../types'
@@ -48,6 +49,11 @@ export type AuditedWorkflowSlice = {
   retryAuditedPlanAudit: (taskId: string) => Promise<AuditedWorkflowRetryPlanAuditResult>
   approveAuditedPlan: (taskId: string) => Promise<AuditedWorkflowApprovePlanResult>
   requestAuditedPlanRevision: (taskId: string) => Promise<AuditedWorkflowRequestPlanRevisionResult>
+  auditedCodeAuditPendingTaskId: string | null
+  startAuditedCodeAudit: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
+  cancelAuditedCodeAudit: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
+  retryAuditedCodeAudit: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
+  requestAuditedCodeFix: (taskId: string) => Promise<AuditedWorkflowCodeAuditResult>
   // Cached by artifactId, NOT by taskId: a new round produces a new artifact id,
   // so a stale body can never be shown next to a newer round's metadata.
   auditedPlanArtifactBodies: Record<string, string>
@@ -193,6 +199,55 @@ export const createAuditedWorkflowSlice: StateCreator<AppState, [], [], AuditedW
 
   auditedPlanReviewPendingTaskId: null,
   auditedPlanArtifactBodies: {},
+
+  // Phase 7. A separate pending id from the plan lane: the two lanes are never
+  // active for the same task, but sharing one id would make a code-audit click
+  // disable a plan-lane button on a DIFFERENT task in the list.
+  auditedCodeAuditPendingTaskId: null,
+
+  startAuditedCodeAudit: async (taskId) => {
+    set({ auditedCodeAuditPendingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.startCodeAudit({ taskId })
+      await refreshOneTask(set, taskId)
+      return result
+    } finally {
+      set({ auditedCodeAuditPendingTaskId: null })
+    }
+  },
+
+  cancelAuditedCodeAudit: async (taskId) => {
+    set({ auditedCodeAuditPendingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.cancelCodeAudit({ taskId })
+      await refreshOneTask(set, taskId)
+      return result
+    } finally {
+      set({ auditedCodeAuditPendingTaskId: null })
+    }
+  },
+
+  retryAuditedCodeAudit: async (taskId) => {
+    set({ auditedCodeAuditPendingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.retryCodeAudit({ taskId })
+      await refreshOneTask(set, taskId)
+      return result
+    } finally {
+      set({ auditedCodeAuditPendingTaskId: null })
+    }
+  },
+
+  requestAuditedCodeFix: async (taskId) => {
+    set({ auditedCodeAuditPendingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.requestCodeFix({ taskId })
+      await refreshOneTask(set, taskId)
+      return result
+    } finally {
+      set({ auditedCodeAuditPendingTaskId: null })
+    }
+  },
 
   startAuditedPlanAudit: async (taskId) => {
     set({ auditedPlanReviewPendingTaskId: taskId })

@@ -23,6 +23,7 @@ import type {
 } from './audited-workflow-types'
 import type { WorktreeReasonCode } from './audited-worktree-types'
 import type { ExecutionReasonCode, ExecutionRunStatus } from './audited-execution-types'
+import type { CodeAuditReasonCode, CodeAuditRunStatus } from './audited-code-audit-types'
 import { MAX_PLAN_ROUNDS } from './audited-plan-artifact-types'
 import type { PlanReviewReasonCode, PlanReviewRunStatus } from './audited-plan-artifact-types'
 
@@ -88,6 +89,16 @@ export type ProjectionSourceTask = {
   // exists. Resolved by the repository in the SAME call that produced the
   // criteria's covered flags, so the two can never describe different runs.
   coverageAvailable: boolean
+  // Phase 7. The candidate's own tree OID is deliberately NOT a source field:
+  // only the APPROVED one reaches this builder, via auditApprovedTreeOid, and
+  // even that is shortened. A pending candidate's identity never crosses.
+  candidateStatus: string | null
+  codeAuditRunStatus: CodeAuditRunStatus | null
+  codeAuditVerdict: ReviewVerdict | null
+  codeAuditReasonCode: CodeAuditReasonCode | null
+  codeAuditSummary: string | null
+  codeAuditFindingCount: number | null
+  fixRoundLimit: number
   acceptanceCriteria: AuditedAcceptanceCriterion[]
   timings: AuditedPhaseTiming[]
   createdAt: number
@@ -158,6 +169,19 @@ export function buildAuditedTaskProjection(
     // Deliberately NOT folded into planApprovalReady: Phase 6 is bookkeeping, so
     // an incomplete matrix must not withhold an approval Codex already granted.
     coverageAvailable: source.coverageAvailable,
+    // Available requires 'current' status: a superseded candidate still exists as
+    // history, but it is not the work under audit.
+    candidateAvailable: source.candidateStatus === 'current',
+    codeAuditRunStatus: source.codeAuditRunStatus,
+    codeAuditVerdict: source.codeAuditVerdict,
+    codeAuditReasonCode: source.codeAuditReasonCode,
+    codeAuditSummary: source.codeAuditSummary,
+    codeAuditFindingCount: source.codeAuditFindingCount,
+    // Request Fix is offered only from code_fixes_requested and only below the
+    // round cap — the cap binds when STARTING a fix, nowhere else. Deliberately
+    // NOT a function of the verdict: a task parked here already has one.
+    codeFixAvailable:
+      source.state === 'code_fixes_requested' && source.fixRound < source.fixRoundLimit,
     acceptanceCriteria: source.acceptanceCriteria,
     timings: source.timings,
     createdAt: source.createdAt,
@@ -225,5 +249,15 @@ export const AUDITED_PROJECTION_FORBIDDEN_KEYS = [
   // not a projection contract.
   'coverageJson',
   'coverageRunId',
-  'criterionRunId'
+  'criterionRunId',
+  // Phase 7 candidate internals. The tree OID is AUTHORIZATION identity — the
+  // full value must never cross, and only the approved one crosses at all, as
+  // the 12-char candidateIdShort. The temp index/object paths and the audit
+  // prompt are internal to derivation and the launcher.
+  'treeOid',
+  'candidateTreeOid',
+  'candidateId',
+  'tempIndexPath',
+  'gitObjectDirectory',
+  'auditPromptText'
 ] as const

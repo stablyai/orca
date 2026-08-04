@@ -42,6 +42,8 @@ import type {
   AuditedWorkflowApprovePlanResult,
   AuditedWorkflowRequestPlanRevisionParams,
   AuditedWorkflowRequestPlanRevisionResult,
+  AuditedWorkflowCodeAuditParams,
+  AuditedWorkflowCodeAuditResult,
   AuditedWorkflowGetPlanArtifactParams,
   AuditedWorkflowSaveCodexProviderKeyParams,
   AuditedWorkflowGetPlanArtifactResult,
@@ -2540,6 +2542,20 @@ export type PreloadApi = {
     requestPlanRevision: (
       params: AuditedWorkflowRequestPlanRevisionParams
     ) => Promise<AuditedWorkflowRequestPlanRevisionResult>
+    // Phase 7 code-audit lane. Each takes ONLY a taskId — the candidate identity
+    // is read from durable state in main and is never accepted from here.
+    startCodeAudit: (
+      params: AuditedWorkflowCodeAuditParams
+    ) => Promise<AuditedWorkflowCodeAuditResult>
+    cancelCodeAudit: (
+      params: AuditedWorkflowCodeAuditParams
+    ) => Promise<AuditedWorkflowCodeAuditResult>
+    retryCodeAudit: (
+      params: AuditedWorkflowCodeAuditParams
+    ) => Promise<AuditedWorkflowCodeAuditResult>
+    requestCodeFix: (
+      params: AuditedWorkflowCodeAuditParams
+    ) => Promise<AuditedWorkflowCodeAuditResult>
     // The plan BODY. Fetched on demand rather than projected — it is the
     // largest, highest-risk field in the feature, and the handler re-verifies
     // that artifactId belongs to taskId before any read.
