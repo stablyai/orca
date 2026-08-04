@@ -95,4 +95,21 @@ describe('listSystemFontFamilies', () => {
   ])('keeps the %s font command timeout short', async (platform, timeoutMs) => {
     await expectFontCommandTimeout(platform, timeoutMs)
   })
+
+  it('requests UTF-8 output for Windows font family names', async () => {
+    execFileMock.mockImplementation((_command, args, _options, callback) => {
+      expect(args.at(-1)).toContain(
+        '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
+      )
+      callback(null, '굴림\r\nG마켓 산스 Medium\r\n')
+      return { kill: killMock }
+    })
+
+    const fonts = await withPlatform('win32', async () => {
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      return listSystemFontFamilies()
+    })
+
+    expect(fonts).toEqual(['굴림', 'G마켓 산스 Medium'])
+  })
 })

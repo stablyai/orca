@@ -78,6 +78,7 @@ function listLinuxFonts(): Promise<string[]> {
 
 function listWindowsFonts(): Promise<string[]> {
   const script = `
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.Drawing
 $fonts = New-Object System.Drawing.Text.InstalledFontCollection
 $fonts.Families | ForEach-Object { $_.Name }
