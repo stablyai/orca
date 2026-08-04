@@ -20,6 +20,11 @@
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../git/runner'
 import { FULL_OID } from './audited-worktree-identity'
 import { canonicalizeAllowingMissing, isPathInside } from './audited-worktree-managed-root'
+import {
+  assertReadProbeShape,
+  isRevListCountArgv,
+  LAND_READ_SUBCOMMANDS
+} from './audited-read-probe-shapes'
 
 const ALLOWED_SUBCOMMANDS = new Set([
   'worktree',
@@ -50,7 +55,12 @@ const ALLOWED_SUBCOMMANDS = new Set([
   'ls-remote',
   // Read-only remote topology, needed to resolve the push target truthfully.
   'config',
-  'remote'
+  'remote',
+  // Phase 10. Read-only source-repo readiness probes, admitted ONLY in the exact
+  // canonical forms screened by arity below. Both are network-free and neither
+  // writes: `status --porcelain` reports, and `diff-index --quiet` compares.
+  'status',
+  'diff-index'
 ])
 const ALLOWED_WORKTREE_VERBS = new Set(['add', 'list'])
 
@@ -149,22 +159,10 @@ export function assertAuditedGitArgvShape(argv: readonly string[]): void {
       throw new AuditedGitCommandShapeError(`disallowed worktree verb: ${verb ?? '<none>'}`)
     }
   }
-  if (subcommand === 'config') {
-    // Exactly `config --get <key>`. Any other form could write configuration.
-    const configIndex = argv.indexOf('config')
-    const rest = argv.slice(configIndex)
-    if (rest.length !== 3 || rest[1] !== '--get') {
-      throw new AuditedGitCommandShapeError('audited config must be exactly `config --get <key>`')
-    }
-  }
-  if (subcommand === 'remote') {
-    // Exactly the bare listing form. `remote update` reaches the network and
-    // `remote add|set-url|remove` mutates configuration.
-    const remoteIndex = argv.indexOf('remote')
-    if (argv.slice(remoteIndex).length !== 1) {
-      throw new AuditedGitCommandShapeError('audited remote must be the bare listing form')
-    }
-  }
+  // Every remaining arity screen — Phase 9's read-only remote topology and Phase
+  // 10's readiness probes — lives in audited-read-probe-shapes.ts so this file
+  // stays within its max-lines budget.
+  assertReadProbeShape(argv, subcommand)
   if (argv.includes('-B')) {
     throw new AuditedGitCommandShapeError('-B is never permitted: it resets an existing branch')
   }
@@ -188,7 +186,14 @@ export function isReadOnlyAuditedArgv(argv: readonly string[]): boolean {
     return false
   }
   if (subcommand !== null && CANDIDATE_STORE_READ_SUBCOMMANDS.has(subcommand)) {
-    return false
+    // EXCEPT `rev-list --count <a>..<b>`, which is a pure ancestry probe: it
+    // creates nothing, enumerates no object contents, and resolves entirely from
+    // the REAL store, so it needs no GIT_OBJECT_DIRECTORY. The candidate-store
+    // form is `rev-list --objects`, which does. Phase 8's commit evidence and
+    // Phase 10's tip classification both depend on the counting form reaching the
+    // read path; screening by the flag rather than the subcommand is what keeps
+    // the enumerating form off it.
+    return isRevListCountArgv(argv)
   }
   // Phase 9: `push` mutates a remote ref and `ls-remote` reaches the network, so
   // neither may reach the read path, which applies no lease screen and no
@@ -199,6 +204,13 @@ export function isReadOnlyAuditedArgv(argv: readonly string[]): boolean {
   // `config --get` / bare `remote` genuinely are read-only and network-free once
   // screened above, so they stay on the read path.
   if (subcommand !== null && REMOTE_TOPOLOGY_SUBCOMMANDS.has(subcommand)) {
+    return true
+  }
+  // Phase 10: `status --porcelain` and `diff-index --quiet` genuinely are
+  // read-only once screened by arity above, so they stay on the read path. The
+  // land WRITE subcommands (update-ref/read-tree) are already excluded by the
+  // COMMIT_WRITE_SUBCOMMANDS check above, which covers both.
+  if (subcommand !== null && LAND_READ_SUBCOMMANDS.has(subcommand)) {
     return true
   }
   return subcommand !== null && ALLOWED_SUBCOMMANDS.has(subcommand)
@@ -466,3 +478,5 @@ export async function runAuditedWorktreeAdd(
 export * from './audited-commit-commands'
 // Phase 9's builders and the single network spawn policy, likewise.
 export * from './audited-publish-commands'
+// Phase 10's builders and the single source-repo spawn policy, likewise.
+export * from './audited-land-commands'

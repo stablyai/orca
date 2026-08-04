@@ -30,7 +30,12 @@ import {
   type PublishAdvisoryCode,
   type PublishReasonCode
 } from './audited-publish-types'
-import type { PublishAttemptStatus } from './audited-workflow-types'
+import type { LandingReasonCode, PublishAttemptStatus } from './audited-workflow-types'
+import {
+  isRetryableLandingReasonCode,
+  type LandAttemptStatus,
+  type LandingAdvisoryCode
+} from './audited-landing-types'
 import type { HostedReviewProvider } from './hosted-review'
 import { MAX_PLAN_ROUNDS } from './audited-plan-artifact-types'
 import type { PlanReviewReasonCode, PlanReviewRunStatus } from './audited-plan-artifact-types'
@@ -81,6 +86,20 @@ export type ProjectionSourceTask = {
   // same query authorizePublishAttempt uses, so what the UI offers and what the
   // transaction permits cannot diverge.
   commitAttemptPublishable: boolean
+  // Phase 10 landing lane. landedSha is the FULL sha and is shortened here; it
+  // never crosses in full, exactly like committedSha and publishedSha.
+  landAttemptStatus: LandAttemptStatus | null
+  landedSha: string | null
+  landingReasonCode: LandingReasonCode | null
+  landingAdvisoryCode: LandingAdvisoryCode | null
+  // THE PHASE 9 PUBLICATION GATE, resolved by the repository in the SAME query
+  // authorizeLandAttempt uses, so what the UI offers and what the transaction
+  // permits cannot diverge. True only when the task's LATEST publish attempt is
+  // `completed` AND both its intended_sha and pushed_sha equal committed_sha.
+  publishAttemptLandable: boolean
+  // Whether the host can land at all. WSL/SSH landing is out of scope, so a
+  // non-local task must never be offered the affordance.
+  landHostSupported: boolean
   // True only when the task's CURRENT candidate is the one the code audit
   // approved, by both id and tree OID. Resolved by the repository in the same
   // query grantApproval uses, so the UI and the transaction cannot diverge.
@@ -201,6 +220,38 @@ export function buildAuditedTaskProjection(
     reviewRequestRetryAvailable:
       source.publishAttemptStatus === 'completed' &&
       canRetryReviewRequest(source.publishAdvisoryCode),
+    landAttemptStatus: source.landAttemptStatus,
+    landedShaShort: shortenCandidateId(source.landedSha),
+    landingReasonCode: source.landingReasonCode,
+    landingAdvisoryCode: source.landingAdvisoryCode,
+    // Land requires a durable Phase 8 commit AND a CONFIRMED Phase 9
+    // publication bound to the same sha. Deliberately excludes `authorized` for
+    // BOTH lanes: while either outcome is unconfirmed, offering Land would risk
+    // integrating work whose publication state is unknown.
+    //
+    // Deliberately IGNORES publishAdvisoryCode: every review-request outcome is
+    // advisory-only, and gating on one would refuse to land genuinely published
+    // work — the precise error Phase 9's advisory/reason split exists to prevent.
+    landReady:
+      source.state === 'committed' &&
+      source.committedSha !== null &&
+      source.commitAttemptPublishable &&
+      source.publishAttemptLandable &&
+      source.landHostSupported &&
+      source.publishAttemptStatus !== 'authorized' &&
+      source.landAttemptStatus !== 'authorized',
+    // The ONLY action offered while a land outcome is unknown. Mutually exclusive
+    // with landReady by construction — both test landAttemptStatus against
+    // 'authorized' in opposite directions.
+    landRecheckAvailable: source.landAttemptStatus === 'authorized',
+    // Whether the Land button should be offered again after a failure is a SERVER
+    // decision: an ambiguous or diverged outcome offers none, and a stale renderer
+    // cannot invent one.
+    landRetryAvailable:
+      source.state === 'committed' &&
+      source.landAttemptStatus !== 'authorized' &&
+      source.landingReasonCode !== null &&
+      isRetryableLandingReasonCode(source.landingReasonCode),
     reconcileClass: source.reconcileClass,
     reconcileReasonCode: source.reconcileReasonCode,
     // Ready requires ALL THREE: provenance (a worktree was finalized), a
@@ -365,5 +416,17 @@ export const AUDITED_PROJECTION_FORBIDDEN_KEYS = [
   'leaseValue',
   'pushStderr',
   'providerPayload',
-  'providerError'
+  'providerError',
+  // Phase 10 landing internals. The source repo path and its common dir name a
+  // location on the user's disk outside the managed tree — the single most
+  // sensitive path this feature touches, since it is the user's own workspace.
+  // landed_sha / landed_base_sha are full 40-hex identity values; only
+  // landedShaShort crosses. The intended base is the CAS operand and is
+  // authorization identity, exactly like intendedParent.
+  'landedSha',
+  'landedBaseSha',
+  'intendedBaseSha',
+  'sourceRepoWorktreePath',
+  'landAttemptId',
+  'landStderr'
 ] as const

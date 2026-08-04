@@ -12,6 +12,9 @@ import type { CodeAuditReasonCode, CodeAuditRunStatus } from './audited-code-aud
 import type { CommitAdvisoryCode, CommitReasonCode } from './audited-commit-types'
 // Type-only, so the cycle with audited-publish-types.ts is erased at compile time.
 import type { PublishAdvisoryCode, PublishReasonCode } from './audited-publish-types'
+// Type-only. audited-landing-types.ts now OWNS the landing vocabularies and is
+// re-exported from this file's tail, so nothing here imports back into it.
+import type { AuditedTaskLandingProjection } from './audited-landing-types'
 import type { HostedReviewProvider } from './hosted-review'
 
 export const AUDITED_TASK_STATES = [
@@ -142,6 +145,10 @@ export const BLOCK_REASON_CODES = [
   // push evidence. The detailed PublishReasonCode is persisted separately on the
   // attempt row — blockedReasonCode stays narrow, as every other lane's does.
   'publish_process_failed',
+  // Phase 10: the landing lane's generic block code, reached ONLY by ambiguous
+  // land evidence. The detailed LandingReasonCode is persisted separately on the
+  // attempt row — one generic code per lane, as every lane before it.
+  'land_attempt_evidence_ambiguous',
   'claude_not_found',
   'codex_not_found',
   'agent_timeout',
@@ -199,22 +206,9 @@ export const APPROVAL_REASON_CODES = [
 ] as const
 export type ApprovalReasonCode = (typeof APPROVAL_REASON_CODES)[number]
 
-export const LANDING_REASON_CODES = [
-  'landed',
-  'landed_recovered',
-  'integration_required',
-  'task_not_committed',
-  'committed_candidate_invalid',
-  'source_repo_mismatch',
-  'source_repo_missing',
-  'source_repo_dirty',
-  'source_repo_detached_or_invalid_branch',
-  'source_repo_not_at_base_commit',
-  'source_repo_already_at_candidate',
-  'fast_forward_failed',
-  'lock_contended'
-] as const
-export type LandingReasonCode = (typeof LANDING_REASON_CODES)[number]
+// Phase 10's LANDING_REASON_CODES lives in audited-landing-types.ts alongside the
+// lane's other vocabularies, and is re-exported from this file's tail so every
+// existing import keeps working.
 
 // Closed reason codes for starting/running triage (Phase 2). Every expected
 // failure — illegal/stale state, a concurrent CAS loss, no provider
@@ -293,7 +287,7 @@ export type AuditedPhaseTiming = {
 // The ONLY shape crossing IPC/renderer/notification boundaries for a task.
 // Never present here: raw prompts, agent stdout/stderr, diffs, absolute paths,
 // command lines, env values, session IDs, full tree OIDs / SHAs, exception text.
-export type AuditedTaskStatusProjection = {
+export type AuditedTaskStatusProjection = AuditedTaskLandingProjection & {
   taskId: string
   repoId: string
   title: string
@@ -349,6 +343,9 @@ export type AuditedTaskStatusProjection = {
   publishReady: boolean
   publishRecheckAvailable: boolean
   reviewRequestRetryAvailable: boolean
+  // Phase 10 local-landing lane. The seven fields are declared as their own
+  // composable block in audited-landing-types.ts, so that lane's contract reviews
+  // as one unit and this file stays within its max-lines budget.
   reconcileClass: ReconcileClass | null
   reconcileReasonCode: ReconcileReasonCode | null
   // Phase 3: the ONLY worktree facts that cross the boundary. Never a path,
@@ -430,3 +427,17 @@ export type RoadmapEntry = {
 // audited-workflow-command-types.ts, split out to stay under the max-lines
 // budget — re-exported here so existing imports from this file keep working.
 export * from './audited-workflow-command-types'
+// Phase 10's landing vocabularies, split out for the same reason. Re-exported so
+// `LandingReasonCode` still resolves from this file, as it has since Phase 1.
+export {
+  LANDING_REASON_CODES,
+  LANDING_ADVISORY_CODES,
+  LAND_ATTEMPT_STATUSES,
+  LANDING_CLASSIFICATIONS,
+  RETRYABLE_LANDING_REASON_CODES,
+  isRetryableLandingReasonCode,
+  type LandingReasonCode,
+  type LandingAdvisoryCode,
+  type LandAttemptStatus,
+  type LandingClassification
+} from './audited-landing-types'

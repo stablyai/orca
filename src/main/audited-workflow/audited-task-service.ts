@@ -44,6 +44,10 @@ import {
   getLatestPublishAttempt,
   resolvePublishableCommitAttempt
 } from './audited-publish-attempt-repository'
+import {
+  getLatestLandAttempt,
+  resolveLandablePublishAttempt
+} from './audited-land-attempt-repository'
 import { MAX_FIX_ROUNDS } from '../../shared/audited-code-audit-types'
 import type Database from '../sqlite/sync-database'
 import type {
@@ -130,6 +134,8 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
   const commitAttempt = getLatestCommitAttempt(db, row.id)
   // Phase 9: the publish lane's latest attempt.
   const publishAttempt = getLatestPublishAttempt(db, row.id)
+  // Phase 10: the landing lane's latest attempt.
+  const landAttempt = getLatestLandAttempt(db, row.id)
   return {
     taskId: row.id,
     repoId: row.repoId,
@@ -171,6 +177,18 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
     // the transaction permits cannot diverge.
     commitAttemptPublishable:
       resolvePublishableCommitAttempt(db, row.id, row.committedSha) !== null,
+    // Phase 10: the landing lane's durable state. landedSha is the FULL sha and
+    // is shortened by the builder; the source repo path, its common dir, and the
+    // base sha never reach the source at all.
+    landAttemptStatus: landAttempt?.status ?? null,
+    landedSha: row.landedSha,
+    landingReasonCode: row.landingReasonCode,
+    landingAdvisoryCode: row.landingAdvisory,
+    // THE PHASE 9 PUBLICATION GATE, via the SAME query authorizeLandAttempt uses,
+    // so a task that is committed but unpublished is never offered Land.
+    publishAttemptLandable: resolveLandablePublishAttempt(db, row.id, row.committedSha).ok,
+    // WSL/SSH landing is out of scope, so a non-local task is never offered it.
+    landHostSupported: row.wslDistro === null && row.hostId === 'local',
     auditApprovedForCurrentCandidate: isAuditApprovedForCurrentCandidate(db, row.id),
     approvalPendingAndValid: hasValidPendingApproval(db, row.id, nowMs),
     reconcileClass: null,

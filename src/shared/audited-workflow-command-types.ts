@@ -29,6 +29,7 @@ import type {
   PublishReasonCode
 } from './audited-publish-types'
 import type { CommitReasonCode } from './audited-commit-types'
+import type { LandingAdvisoryCode, LandingClassification } from './audited-landing-types'
 
 export type AuditedWorkflowListTasksParams = { repoId?: string }
 export type AuditedWorkflowGetTaskParams = { taskId: string }
@@ -241,8 +242,31 @@ export type AuditedWorkflowResumeAttemptResult = { resumed: boolean; reasonCode:
 export type AuditedWorkflowFinalizeAttemptParams = { taskId: string }
 export type AuditedWorkflowFinalizeAttemptResult = { finalized: boolean; reasonCode: string }
 
+// Phase 10 local-landing lane. The renderer supplies ONLY a taskId: no sha,
+// branch, path, or base commit crosses inward, so a client can never influence
+// landing identity or dictate an outcome.
 export type AuditedWorkflowLandParams = { taskId: string }
-export type AuditedWorkflowLandResult = { landed: boolean; reasonCode: LandingReasonCode }
+/**
+ * `advisory` describes the INDEX/WORKTREE update on a durable land; the
+ * fast-forward itself succeeded whenever ok is true. A land carrying
+ * `worktree_update_failed` is still a completed land — the source branch moved.
+ */
+export type AuditedWorkflowLandResult =
+  | { ok: true; advisory: LandingAdvisoryCode | null }
+  | { ok: false; kind: 'landing'; reasonCode: LandingReasonCode }
+  // A read-only worktree verification failure on the AUDITED worktree. Nothing
+  // was written and nothing spawned; display-only, exactly like the commit lane's.
+  | { ok: false; kind: 'worktree'; reasonCode: WorktreeReasonCode }
+
+export type AuditedWorkflowRecheckLandParams = { taskId: string }
+/**
+ * The READ-ONLY recovery command. It constructs only reads and can never move a
+ * ref or touch the index, so `ok: true` reports what the source repo actually
+ * shows — including `ambiguous`, which leaves the attempt guarded.
+ */
+export type AuditedWorkflowRecheckLandResult =
+  | { ok: true; classification: LandingClassification; advisory: LandingAdvisoryCode | null }
+  | { ok: false; kind: 'landing'; reasonCode: LandingReasonCode }
 
 export type AuditedWorkflowCancelParams = { taskId: string }
 export type AuditedWorkflowRetryParams = { taskId: string }

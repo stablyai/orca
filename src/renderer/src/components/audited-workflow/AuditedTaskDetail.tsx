@@ -26,6 +26,7 @@ import { AuditedPlanReviewPanel } from './AuditedPlanReviewPanel'
 import { AuditedCodeAuditPanel } from './AuditedCodeAuditPanel'
 import { AuditedCommitPanel } from './AuditedCommitPanel'
 import { AuditedPublishPanel } from './AuditedPublishPanel'
+import { AuditedLandPanel } from './AuditedLandPanel'
 import { AuditedTriageApiKeyDialog } from './AuditedTriageApiKeyDialog'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -256,6 +257,7 @@ export function AuditedTaskDetail({ task }: AuditedTaskDetailProps): React.JSX.E
       <AuditedCodeAuditPanel task={task} />
       <AuditedCommitPanel task={task} />
       <AuditedPublishPanel task={task} />
+      <AuditedLandPanel task={task} />
 
       {task.state === 'blocked' && task.worktreeReasonCode ? (
         <div className="mt-4 flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">

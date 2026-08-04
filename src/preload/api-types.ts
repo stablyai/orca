@@ -49,6 +49,10 @@ import type {
   AuditedWorkflowCommitResult,
   AuditedWorkflowPublishParams,
   AuditedWorkflowPublishResult,
+  AuditedWorkflowLandParams,
+  AuditedWorkflowLandResult,
+  AuditedWorkflowRecheckLandParams,
+  AuditedWorkflowRecheckLandResult,
   AuditedWorkflowRecheckPublishParams,
   AuditedWorkflowRecheckPublishResult,
   AuditedWorkflowCreateReviewRequestParams,
@@ -2585,6 +2589,13 @@ export type PreloadApi = {
     createReviewRequest: (
       params: AuditedWorkflowCreateReviewRequestParams
     ) => Promise<AuditedWorkflowCreateReviewRequestResult>
+    // Phase 10 landing lane. `land` is the only one that can mutate the user's
+    // source repository; `recheckLand` is strictly read-only. NEITHER touches a
+    // remote — landing is local integration only.
+    land: (params: AuditedWorkflowLandParams) => Promise<AuditedWorkflowLandResult>
+    recheckLand: (
+      params: AuditedWorkflowRecheckLandParams
+    ) => Promise<AuditedWorkflowRecheckLandResult>
     // The plan BODY. Fetched on demand rather than projected — it is the
     // largest, highest-risk field in the feature, and the handler re-verifies
     // that artifactId belongs to taskId before any read.

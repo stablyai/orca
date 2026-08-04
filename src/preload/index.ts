@@ -44,6 +44,10 @@ import type {
   AuditedWorkflowCommitResult,
   AuditedWorkflowPublishParams,
   AuditedWorkflowPublishResult,
+  AuditedWorkflowLandParams,
+  AuditedWorkflowLandResult,
+  AuditedWorkflowRecheckLandParams,
+  AuditedWorkflowRecheckLandResult,
   AuditedWorkflowRecheckPublishParams,
   AuditedWorkflowRecheckPublishResult,
   AuditedWorkflowCreateReviewRequestParams,
@@ -2468,6 +2472,12 @@ const api = {
       params: AuditedWorkflowCreateReviewRequestParams
     ): Promise<AuditedWorkflowCreateReviewRequestResult> =>
       ipcRenderer.invoke('auditedWorkflow:createReviewRequest', params),
+    land: (params: AuditedWorkflowLandParams): Promise<AuditedWorkflowLandResult> =>
+      ipcRenderer.invoke('auditedWorkflow:land', params),
+    recheckLand: (
+      params: AuditedWorkflowRecheckLandParams
+    ): Promise<AuditedWorkflowRecheckLandResult> =>
+      ipcRenderer.invoke('auditedWorkflow:recheckLand', params),
     getPlanArtifact: (
       params: AuditedWorkflowGetPlanArtifactParams
     ): Promise<AuditedWorkflowGetPlanArtifactResult> =>

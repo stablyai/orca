@@ -2,6 +2,7 @@
 // separate from the repository class so schema evolution reviews as its own
 // unit — see plan §6 for the full multi-phase schema; Phase 1 creates only
 // audited_tasks and audited_transitions.
+import { LAND_ATTEMPT_STATUSES } from '../../shared/audited-landing-types'
 import {
   AUDITED_TASK_STATES,
   COMMIT_ATTEMPT_STATUSES,
@@ -35,6 +36,7 @@ import {
   createCommitTables
 } from './audited-commit-schema'
 import { PHASE_9_TASK_COLUMNS, createPublishTables } from './audited-publish-schema'
+import { createLandTables, migrateToV10 } from './audited-land-schema'
 import type Database from '../sqlite/sync-database'
 
 // Schema versions: v1 initial (audited_tasks, audited_transitions). v2 (Phase 2)
@@ -85,7 +87,15 @@ import type Database from '../sqlite/sync-database'
 // can never make the local commit look undone. audited_tasks' state CHECK is
 // therefore unchanged and no table rebuild is required, and the landing/landed
 // states plus landed_sha stay unwritten for a future local-integration phase.
-export const SCHEMA_VERSION = 9
+// v10 (Phase 10) adds audited_land_attempts plus two audited_tasks columns
+// (land_attempt_status, landing_advisory) — FULLY ADDITIVE, like v8 and v9. This
+// is the phase that finally WRITES the landing/landed states and the
+// landed_sha / landed_base_sha / landing_reason_code columns reserved since
+// Phase 1, but it introduces no NEW state: both have been in audited_tasks' state
+// CHECK from the beginning, so that CHECK is unchanged and no table rebuild is
+// required. audited_transitions.event_type is unconstrained TEXT, so the new
+// land_* event types need no migration either.
+export const SCHEMA_VERSION = 10
 
 export function createAuditedWorkflowTables(db: Database.Database): void {
   const stateList = AUDITED_TASK_STATES.map((s) => `'${s}'`).join(', ')
@@ -172,6 +182,13 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
       published_sha               TEXT,
       review_provider             TEXT,
       review_number               INTEGER,
+      -- Phase 10. The latest land attempt's status, projected as-is, and the
+      -- advisory recorded on a DURABLE land. The detailed LandingReasonCode lives
+      -- in landing_reason_code above (declared since Phase 1); landing_advisory
+      -- NEVER holds one, exactly as commit_attempt_status and
+      -- post_commit_advisory stay separate.
+      land_attempt_status         TEXT CHECK(land_attempt_status IS NULL OR land_attempt_status IN (${LAND_ATTEMPT_STATUSES.map((s) => `'${s}'`).join(', ')})),
+      landing_advisory            TEXT,
       created_at_ms                INTEGER NOT NULL,
       updated_at_ms                INTEGER NOT NULL
     );
@@ -249,6 +266,7 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
   createCodeAuditTables(db)
   createCommitTables(db)
   createPublishTables(db)
+  createLandTables(db)
 }
 
 // Phase 3 columns added to a pre-existing audited_tasks table, with their
@@ -405,6 +423,9 @@ export function migrateAuditedWorkflowSchema(db: Database.Database): void {
         }
       }
       createPublishTables(db)
+    }
+    if (current < 10) {
+      migrateToV10(db, columnExists)
     }
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     db.exec('COMMIT')

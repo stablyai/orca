@@ -19,6 +19,7 @@ import { reconcileAuditedWorktreesOnStartup } from '../audited-workflow/audited-
 import { sweepCandidateStoresOnStartup } from '../audited-workflow/audited-candidate-store-gc'
 import { recoverInterruptedCommitAttempts } from '../audited-workflow/audited-commit-run-recovery'
 import { recoverInterruptedPublishAttempts } from '../audited-workflow/audited-publish-run-recovery'
+import { recoverInterruptedLandAttempts } from '../audited-workflow/audited-land-run-recovery'
 
 export function runAuditedWorkflowStartupRecovery(): void {
   // Why: runs once per registration (i.e. once per app process lifetime —
@@ -120,6 +121,36 @@ export function runAuditedWorkflowStartupRecovery(): void {
       })
   } catch (error) {
     console.error('[auditedWorkflow] Publish attempt recovery failed to start:', error)
+  }
+
+  // Phase 10 land-attempt recovery. Reads the user's SOURCE repository and NEVER
+  // moves a ref or touches an index: recovery classifies, it does not act,
+  // because re-applying a mutation to a workspace Orca does not own would have no
+  // human intent behind it. An attempt whose evidence is unreadable is left
+  // guarded on purpose.
+  //
+  // The publication gate is NOT re-evaluated here — it is an admission
+  // precondition, and re-litigating it would let a later publish failure strand a
+  // durable, already-applied land.
+  //
+  // The try/catch wraps the SYNCHRONOUS setup too, not just the promise:
+  // resolving the repository can itself throw, and a bare `.catch()` would not
+  // see that.
+  try {
+    void recoverInterruptedLandAttempts(getAuditedTaskRepository().getDatabase(), Date.now())
+      .then((recovered) => {
+        for (const { taskId } of recovered) {
+          const projection = getTaskProjection(taskId)
+          if (projection) {
+            broadcastAuditedTaskChanged(projection)
+          }
+        }
+      })
+      .catch((error) => {
+        console.error('[auditedWorkflow] Land attempt recovery failed:', error)
+      })
+  } catch (error) {
+    console.error('[auditedWorkflow] Land attempt recovery failed to start:', error)
   }
 
   // Read-only, network-free, Git-mutation-free. Fire-and-forget so handler

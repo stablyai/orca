@@ -19,6 +19,7 @@ import { registerAuditedPlanReviewHandlers } from './audited-workflow-plan-revie
 import { registerAuditedCodeAuditHandlers } from './audited-workflow-code-audit'
 import { registerAuditedWorkflowCommitHandlers } from './audited-workflow-commit'
 import { registerAuditedWorkflowPublishHandlers } from './audited-workflow-publish'
+import { registerAuditedWorkflowLandHandlers } from './audited-workflow-land'
 import { runAuditedWorkflowStartupRecovery } from './audited-workflow-startup-recovery'
 import { registerAuditedCodexProviderHandlers } from './audited-workflow-codex-provider'
 import { startTriage, retryTriage } from '../audited-workflow/audited-triage-orchestration'
@@ -317,6 +318,7 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
   registerAuditedCodeAuditHandlers()
   registerAuditedWorkflowCommitHandlers()
   registerAuditedWorkflowPublishHandlers()
+  registerAuditedWorkflowLandHandlers()
 
   // Why: exposes ONLY whether a key is configured — never the key, a masked
   // form, encrypted bytes, or a filesystem path. See

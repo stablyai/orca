@@ -7,6 +7,7 @@ import type {
   AuditedTaskTransitionRecord,
   BlockReasonCode,
   CommitAttemptStatus,
+  LandingReasonCode,
   ReviewVerdict,
   RiskLevel,
   TriageDecision,
@@ -17,6 +18,7 @@ import type {
   WorktreeProvenanceKind,
   WorktreeReasonCode
 } from '../../shared/audited-worktree-types'
+import type { LandingAdvisoryCode } from '../../shared/audited-landing-types'
 
 export type AuditedTaskRow = {
   id: string
@@ -51,9 +53,14 @@ export type AuditedTaskRow = {
   fixRound: number
   auditApprovedTreeOid: string | null
   committedSha: string | null
+  // Phase 10 is the first WRITER of these three long-declared columns. The reason
+  // code is narrowed to its closed union here rather than left as bare string,
+  // so a widened vocabulary breaks the exhaustive switches instead of falling
+  // through. landingAdvisory NEVER holds a LandingReasonCode.
   landedSha: string | null
   landedBaseSha: string | null
-  landingReasonCode: string | null
+  landingReasonCode: LandingReasonCode | null
+  landingAdvisory: LandingAdvisoryCode | null
   triageDecision: TriageDecision | null
   triageRunStatus: TriageRunStatus | null
   triageBlockedReasonCode: TriageReasonCode | null
@@ -112,7 +119,8 @@ export function sqliteRowToTask(row: Record<string, unknown>): AuditedTaskRow {
     committedSha: (row.committed_sha as string | null) ?? null,
     landedSha: (row.landed_sha as string | null) ?? null,
     landedBaseSha: (row.landed_base_sha as string | null) ?? null,
-    landingReasonCode: (row.landing_reason_code as string | null) ?? null,
+    landingReasonCode: (row.landing_reason_code as LandingReasonCode | null) ?? null,
+    landingAdvisory: (row.landing_advisory as LandingAdvisoryCode | null) ?? null,
     triageDecision: (row.triage_decision as TriageDecision | null) ?? null,
     triageRunStatus: (row.triage_run_status as TriageRunStatus | null) ?? null,
     triageBlockedReasonCode: (row.triage_blocked_reason_code as TriageReasonCode | null) ?? null,
