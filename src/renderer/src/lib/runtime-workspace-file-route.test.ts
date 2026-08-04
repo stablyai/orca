@@ -177,6 +177,81 @@ describe('findRuntimeWorkspaceFileRoute', () => {
     ).toBeNull()
   })
 
+  it('fails closed when paired duplicate ids share a runtime host alias', () => {
+    const duplicateState = state()
+    duplicateState.repos = [
+      {
+        id: 'repo-a',
+        connectionId: 'builder-a',
+        executionHostId: 'runtime:runtime-a'
+      },
+      {
+        id: 'repo-b',
+        connectionId: 'builder-b',
+        executionHostId: 'runtime:runtime-a'
+      }
+    ] as never
+    duplicateState.worktreesByRepo = {
+      shared: [
+        {
+          id: 'shared-worktree',
+          repoId: 'repo-a',
+          path: '/srv/repo-a',
+          hostId: 'ssh:builder-a',
+          runtimeOwnerEnvironmentId: 'runtime-a'
+        },
+        {
+          id: 'shared-worktree',
+          repoId: 'repo-b',
+          path: '/srv/repo-b',
+          hostId: 'ssh:builder-b',
+          runtimeOwnerEnvironmentId: 'runtime-a'
+        }
+      ]
+    } as never
+    duplicateState.folderWorkspaces = []
+
+    expect(
+      findRuntimeWorkspaceFileRoute(duplicateState, 'runtime-a', '/srv/repo-a/src/a.ts')
+    ).toBeNull()
+    expect(
+      findRuntimeWorkspaceFileRoute(duplicateState, 'runtime-a', '/srv/repo-b/src/b.ts')
+    ).toBeNull()
+  })
+
+  it('fails closed when direct and paired duplicate ids share an SSH host alias', () => {
+    const duplicateState = state()
+    duplicateState.repos = [
+      { id: 'direct-repo', connectionId: 'builder', executionHostId: 'ssh:builder' },
+      { id: 'paired-repo', connectionId: 'builder', executionHostId: 'runtime:runtime-a' }
+    ] as never
+    duplicateState.worktreesByRepo = {
+      shared: [
+        {
+          id: 'shared-worktree',
+          repoId: 'direct-repo',
+          path: '/srv/direct',
+          hostId: 'ssh:builder'
+        },
+        {
+          id: 'shared-worktree',
+          repoId: 'paired-repo',
+          path: '/srv/paired',
+          hostId: 'ssh:builder',
+          runtimeOwnerEnvironmentId: 'runtime-a'
+        }
+      ]
+    } as never
+    duplicateState.folderWorkspaces = []
+
+    expect(
+      findWorkspaceFileRoute(duplicateState, 'ssh:builder', '/srv/direct/src/direct.ts')
+    ).toBeNull()
+    expect(
+      findWorkspaceFileRoute(duplicateState, 'ssh:builder', '/srv/paired/src/paired.ts')
+    ).toBeNull()
+  })
+
   it('routes direct SSH siblings only on the exact SSH host', () => {
     const sshState = state()
     sshState.repos = [

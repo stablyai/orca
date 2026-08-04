@@ -56,6 +56,14 @@ function worktreeMatchesExecutionHost(
   return !hasDuplicateId && workspaceMatchesExecutionHost(state, worktree.id, executionHostId)
 }
 
+function workspaceFileOwnerIdentity(worktree: AppState['worktreesByRepo'][string][number]): string {
+  return JSON.stringify([
+    worktree.repoId,
+    worktree.hostId ?? null,
+    worktree.runtimeOwnerEnvironmentId?.trim() || null
+  ])
+}
+
 export function findWorkspaceFileRoute(
   state: AppState,
   executionHostId: ExecutionHostId,
@@ -66,24 +74,31 @@ export function findWorkspaceFileRoute(
   for (const worktree of worktrees) {
     idCounts.set(worktree.id, (idCounts.get(worktree.id) ?? 0) + 1)
   }
-  const matchingWorktrees = new Map<string, (typeof worktrees)[number]>()
+  const matchingWorktrees = new Map<string, (typeof worktrees)[number] | null>()
   for (const worktree of worktrees) {
     if (
-      worktreeMatchesExecutionHost(
+      !worktreeMatchesExecutionHost(
         state,
         worktree,
         executionHostId,
         (idCounts.get(worktree.id) ?? 0) > 1
       )
     ) {
+      continue
+    }
+    const current = matchingWorktrees.get(worktree.id)
+    if (current === undefined) {
       matchingWorktrees.set(worktree.id, worktree)
+    } else if (
+      current &&
+      workspaceFileOwnerIdentity(current) !== workspaceFileOwnerIdentity(worktree)
+    ) {
+      matchingWorktrees.set(worktree.id, null)
     }
   }
-  const roots = Array.from(matchingWorktrees.values()).map((worktree) => ({
-    workspaceId: worktree.id,
-    rootPath: worktree.path,
-    executionHostId
-  }))
+  const roots = Array.from(matchingWorktrees.values()).flatMap((worktree) =>
+    worktree ? [{ workspaceId: worktree.id, rootPath: worktree.path, executionHostId }] : []
+  )
   for (const workspace of state.folderWorkspaces) {
     const workspaceId = folderWorkspaceKey(workspace.id)
     if (workspaceMatchesExecutionHost(state, workspaceId, executionHostId)) {
