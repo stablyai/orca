@@ -750,12 +750,14 @@ describe('registerPtyHandlers', () => {
     spawn: (args: Record<string, unknown>) => Promise<unknown>
     write: (ptyId: string, data: string) => boolean
     resize: (ptyId: string, cols: number, rows: number) => boolean
+    probePtyLiveness: (ptyId: string) => Promise<boolean | null>
   } {
     let controller:
       | {
           spawn: (args: Record<string, unknown>) => Promise<unknown>
           write: (ptyId: string, data: string) => boolean
           resize: (ptyId: string, cols: number, rows: number) => boolean
+          probePtyLiveness: (ptyId: string) => Promise<boolean | null>
         }
       | undefined
     const runtime = {
@@ -799,6 +801,78 @@ describe('registerPtyHandlers', () => {
 
     unregisterSshPtyProvider(connectionId)
     clearProviderPtyState(ptyId)
+  })
+
+  describe('controller probePtyLiveness routing', () => {
+    it('proves absence for an id the in-process local provider never owned', async () => {
+      setLocalPtyProvider(new LocalPtyProvider())
+      const controller = registerAgentClaimController()
+
+      await expect(controller.probePtyLiveness('pty-from-prior-run')).resolves.toBe(false)
+    })
+
+    it('delegates to a provider-exposed probe and preserves its answer', async () => {
+      const provider = {
+        ...createAgentClaimProvider({}),
+        probePtyLiveness: vi.fn(async () => true)
+      }
+      setLocalPtyProvider(provider as never)
+      const controller = registerAgentClaimController()
+
+      await expect(controller.probePtyLiveness('daemon-owned')).resolves.toBe(true)
+      expect(provider.probePtyLiveness).toHaveBeenCalledWith('daemon-owned')
+    })
+
+    it('answers unknown for a probe-less provider that is not the in-process one', async () => {
+      // Why: only the in-process provider is its own sole owner; any other
+      // probe-less provider's ignorance is doubt, not absence.
+      setLocalPtyProvider(createAgentClaimProvider({}) as never)
+      const controller = registerAgentClaimController()
+
+      await expect(controller.probePtyLiveness('pty-unknown')).resolves.toBeNull()
+    })
+
+    it('answers unknown for SSH-owned ids whose provider has no probe', async () => {
+      const connectionId = 'ssh-probe-1'
+      const ptyId = `ssh:${connectionId}@@remote-pty`
+      setLocalPtyProvider(new LocalPtyProvider())
+      registerSshPtyProvider(connectionId, createAgentClaimProvider({}) as never)
+      setPtyOwnership(ptyId, connectionId)
+      const controller = registerAgentClaimController()
+      try {
+        await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
+
+        unregisterSshPtyProvider(connectionId)
+        // A disconnected SSH provider is an error path, and errors never prove absence.
+        await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
+      } finally {
+        unregisterSshPtyProvider(connectionId)
+        clearPtyOwnershipForConnection(connectionId)
+        clearProviderPtyState(ptyId)
+      }
+    })
+
+    it('answers unknown for remote-scoped ids without consulting local providers', async () => {
+      // Why: a locally routed provider would answer confidently — and wrongly —
+      // for a PTY that lives on a remote Orca host.
+      setLocalPtyProvider(new LocalPtyProvider())
+      const controller = registerAgentClaimController()
+
+      await expect(controller.probePtyLiveness('remote:some-remote-pty')).resolves.toBeNull()
+    })
+
+    it('answers unknown when the provider probe throws', async () => {
+      const provider = {
+        ...createAgentClaimProvider({}),
+        probePtyLiveness: vi.fn(async () => {
+          throw new Error('probe transport down')
+        })
+      }
+      setLocalPtyProvider(provider as never)
+      const controller = registerAgentClaimController()
+
+      await expect(controller.probePtyLiveness('daemon-owned')).resolves.toBeNull()
+    })
   })
 
   it('does not dispatch a runtime PTY spawn after its client disconnects', async () => {
