@@ -27,6 +27,7 @@ export type RichMarkdownTableControlLayout = {
 }
 
 const CONTROL_SIZE = 24
+const AXIS_CONTROL_THICKNESS = 14
 const EDGE_GAP = 4
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -52,19 +53,19 @@ export function getRichMarkdownTableControlLayout({
 
   return {
     rowMenu: {
-      left: visibleLeft(table.left - CONTROL_SIZE - EDGE_GAP),
+      left: visibleLeft(table.left - AXIS_CONTROL_THICKNESS - EDGE_GAP),
       top: visibleTop(center(row.top, row.bottom))
     },
     columnMenu: {
       left: visibleLeft(center(cell.left, cell.right)),
-      top: visibleTop(table.top - CONTROL_SIZE - EDGE_GAP)
+      top: visibleTop(table.top - AXIS_CONTROL_THICKNESS - EDGE_GAP)
     },
     addColumn: {
       left: visibleLeft(table.right + EDGE_GAP),
-      top: visibleTop(center(table.top, table.bottom))
+      top: visibleTop(table.top)
     },
     addRow: {
-      left: visibleLeft(center(table.left, table.right)),
+      left: visibleLeft(table.left),
       top: visibleTop(table.bottom + EDGE_GAP)
     }
   }

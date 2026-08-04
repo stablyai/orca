@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/react'
-import { selectionCell } from '@tiptap/pm/tables'
 import {
   ArrowDown,
   ArrowLeft,
@@ -24,25 +23,16 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { getRichMarkdownTableControlLayout } from './rich-markdown-table-control-layout'
+import { useRichMarkdownTableContextMenu } from './use-rich-markdown-table-context-menu'
+import {
+  useRichMarkdownTableControlTarget,
+  type TableAxis
+} from './use-rich-markdown-table-control-target'
 import {
   richMarkdownTableCellPositionAtElement,
   runRichMarkdownTableAction,
   type RichMarkdownTableAction
 } from './rich-markdown-table-actions'
-
-type ActiveTableCell = { cell: HTMLTableCellElement; table: HTMLTableElement }
-
-function tableCellFromTarget(target: EventTarget | null): HTMLTableCellElement | null {
-  return target instanceof Element ? target.closest<HTMLTableCellElement>('td, th') : null
-}
-
-function selectionTableCell(editor: Editor): HTMLTableCellElement | null {
-  if (!editor.isActive('table')) {
-    return null
-  }
-  const node = editor.view.nodeDOM(selectionCell(editor.state).pos)
-  return node instanceof HTMLTableCellElement ? node : null
-}
 
 function contentRect(element: Element, container: HTMLElement) {
   const elementRect = element.getBoundingClientRect()
@@ -56,11 +46,15 @@ function contentRect(element: Element, container: HTMLElement) {
 }
 
 function TableControlButton({
+  axis,
+  className,
   icon,
   label,
   onClick,
   style
 }: {
+  axis: 'column' | 'row'
+  className: string
   icon: React.ReactNode
   label: string
   onClick: () => void
@@ -73,10 +67,11 @@ function TableControlButton({
           type="button"
           variant="outline"
           size="icon-xs"
-          className="rich-markdown-table-control"
+          className={`rich-markdown-table-control ${className}`}
           style={style}
           aria-label={label}
           onClick={onClick}
+          data-axis={axis}
         >
           {icon}
         </Button>
@@ -93,12 +88,14 @@ function TableActionMenu({
   cellPosition,
   editor,
   isHeader,
+  onOpenChange,
   style
 }: {
   axis: 'column' | 'row'
   cellPosition: number
   editor: Editor
   isHeader: boolean
+  onOpenChange: (open: boolean) => void
   style: React.CSSProperties
 }): React.JSX.Element {
   const isRow = axis === 'row'
@@ -130,7 +127,7 @@ function TableActionMenu({
     runRichMarkdownTableAction(editor, action, { cellPosition })
   }
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={onOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -138,9 +135,10 @@ function TableActionMenu({
               type="button"
               variant="outline"
               size="icon-xs"
-              className="rich-markdown-table-control"
+              className="rich-markdown-table-axis-control rich-markdown-table-control"
               style={style}
               aria-label={label}
+              data-axis={axis}
             >
               {isRow ? <GripVertical /> : <GripHorizontal />}
             </Button>
@@ -192,58 +190,27 @@ export function RichMarkdownTableControls({
   editor: Editor | null
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element | null {
-  const [active, setActive] = useState<ActiveTableCell | null>(null)
-  const [, setLayoutVersion] = useState(0)
+  const { active, hoveredAddAxis, hoveredAxis } = useRichMarkdownTableControlTarget(
+    editor,
+    scrollContainerRef
+  )
+  const [openAxis, setOpenAxis] = useState<TableAxis | null>(null)
+  useRichMarkdownTableContextMenu(editor)
 
   useEffect(() => {
-    const scrollContainer = scrollContainerRef.current
-    if (!editor || !scrollContainer) {
+    if (!active || !openAxis || !(active.cell.parentElement instanceof HTMLTableRowElement)) {
       return
     }
-    const activate = (cell: HTMLTableCellElement | null): void => {
-      const table = cell?.closest('table')
-      setActive(cell && table instanceof HTMLTableElement ? { cell, table } : null)
-    }
-    const activateSelection = (): void => activate(selectionTableCell(editor))
-    const onPointerMove = (event: PointerEvent): void => {
-      const cell = tableCellFromTarget(event.target)
-      if (cell && editor.view.dom.contains(cell)) {
-        activate(cell)
-        return
-      }
-      if (
-        !(event.target instanceof Element) ||
-        !event.target.closest('.rich-markdown-table-controls')
-      ) {
-        activateSelection()
-      }
-    }
-    scrollContainer.addEventListener('pointermove', onPointerMove)
-    editor.on('selectionUpdate', activateSelection)
-    editor.on('update', activateSelection)
-    activateSelection()
-    return () => {
-      scrollContainer.removeEventListener('pointermove', onPointerMove)
-      editor.off('selectionUpdate', activateSelection)
-      editor.off('update', activateSelection)
-    }
-  }, [editor, scrollContainerRef])
-
-  useEffect(() => {
-    const scrollContainer = scrollContainerRef.current
-    if (!active || !scrollContainer) {
-      return
-    }
-    const update = (): void => setLayoutVersion((version) => version + 1)
-    const observer = new ResizeObserver(update)
-    observer.observe(active.table)
-    observer.observe(scrollContainer)
-    window.addEventListener('resize', update)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', update)
-    }
-  }, [active, scrollContainerRef])
+    const cells =
+      openAxis === 'row'
+        ? Array.from(active.cell.parentElement.cells)
+        : Array.from(active.table.rows, (tableRow) =>
+            tableRow.cells.item(active.cell.cellIndex)
+          ).filter((cell): cell is HTMLTableCellElement => cell !== null)
+    cells.forEach((cell) => cell.classList.add('rich-markdown-table-control-active'))
+    return () =>
+      cells.forEach((cell) => cell.classList.remove('rich-markdown-table-control-active'))
+  }, [active, openAxis])
 
   const scrollContainer = scrollContainerRef.current
   if (
@@ -271,16 +238,29 @@ export function RichMarkdownTableControls({
   if (!(row instanceof HTMLTableRowElement) || cellPosition === null) {
     return null
   }
+  const tableRect = contentRect(active.table, scrollContainer)
   const layout = getRichMarkdownTableControlLayout({
     cell: contentRect(active.cell, scrollContainer),
     container: scrollContainer,
     row: contentRect(row, scrollContainer),
-    table: contentRect(active.table, scrollContainer)
+    table: tableRect
   })
   const style = (point: { left: number; top: number }): React.CSSProperties => ({
     left: point.left,
     top: point.top
   })
+  const viewportRight = scrollContainer.scrollLeft + scrollContainer.clientWidth - 4
+  const viewportBottom = scrollContainer.scrollTop + scrollContainer.clientHeight - 4
+  const visibleTableWidth = Math.max(
+    0,
+    Math.min(tableRect.right, viewportRight) -
+      Math.max(tableRect.left, scrollContainer.scrollLeft + 4)
+  )
+  const visibleTableHeight = Math.max(
+    0,
+    Math.min(tableRect.bottom, viewportBottom) -
+      Math.max(tableRect.top, scrollContainer.scrollTop + 4)
+  )
   return (
     <div
       className="rich-markdown-table-controls"
@@ -290,28 +270,36 @@ export function RichMarkdownTableControls({
         'Table actions'
       )}
     >
-      <TableActionMenu
-        axis="row"
-        cellPosition={cellPosition}
-        editor={editor}
-        isHeader={active.cell.tagName === 'TH'}
-        style={style(layout.rowMenu)}
-      />
-      <TableActionMenu
-        axis="column"
-        cellPosition={cellPosition}
-        editor={editor}
-        isHeader={false}
-        style={style(layout.columnMenu)}
-      />
-      {addColumnPosition !== null ? (
+      {hoveredAxis === 'row' ? (
+        <TableActionMenu
+          axis="row"
+          cellPosition={cellPosition}
+          editor={editor}
+          isHeader={active.cell.tagName === 'TH'}
+          onOpenChange={(open) => setOpenAxis(open ? 'row' : null)}
+          style={style(layout.rowMenu)}
+        />
+      ) : null}
+      {hoveredAxis === 'column' ? (
+        <TableActionMenu
+          axis="column"
+          cellPosition={cellPosition}
+          editor={editor}
+          isHeader={false}
+          onOpenChange={(open) => setOpenAxis(open ? 'column' : null)}
+          style={style(layout.columnMenu)}
+        />
+      ) : null}
+      {hoveredAddAxis === 'column' && addColumnPosition !== null ? (
         <TableControlButton
+          axis="column"
+          className="rich-markdown-table-add-control"
           icon={<Plus />}
           label={translate(
             'auto.components.editor.RichMarkdownTableControls.addColumn',
             'Add column'
           )}
-          style={style(layout.addColumn)}
+          style={{ ...style(layout.addColumn), height: visibleTableHeight }}
           onClick={() =>
             runRichMarkdownTableAction(editor, 'insert-column-right', {
               cellPosition: addColumnPosition
@@ -319,11 +307,13 @@ export function RichMarkdownTableControls({
           }
         />
       ) : null}
-      {addRowPosition !== null ? (
+      {hoveredAddAxis === 'row' && addRowPosition !== null ? (
         <TableControlButton
+          axis="row"
+          className="rich-markdown-table-add-control"
           icon={<Plus />}
           label={translate('auto.components.editor.RichMarkdownTableControls.addRow', 'Add row')}
-          style={style(layout.addRow)}
+          style={{ ...style(layout.addRow), width: visibleTableWidth }}
           onClick={() =>
             runRichMarkdownTableAction(editor, 'insert-row-below', {
               cellPosition: addRowPosition

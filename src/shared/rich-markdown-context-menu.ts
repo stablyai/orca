@@ -27,8 +27,17 @@ export type RichMarkdownContextMenuCommand =
 
 export type RichMarkdownContextMenuCommandPayload = {
   command: RichMarkdownContextMenuCommand
+  tableTargetId?: string
+  x: number
+  y: number
+}
+
+export type RichMarkdownContextMenuTableTarget = {
+  cellType: 'body' | 'header'
+  targetId: string
   x: number
   y: number
 }
 
 export const richMarkdownContextMenuCommandChannel = 'rich-markdown:context-command'
+export const richMarkdownContextMenuTargetChannel = 'rich-markdown:context-target'

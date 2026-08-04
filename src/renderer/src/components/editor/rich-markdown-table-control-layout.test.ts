@@ -11,10 +11,10 @@ describe('rich markdown table control layout', () => {
         container: { clientHeight: 400, clientWidth: 500, scrollLeft: 0, scrollTop: 0 }
       })
     ).toEqual({
-      rowMenu: { left: 22, top: 108 },
-      columnMenu: { left: 188, top: 32 },
-      addColumn: { left: 354, top: 128 },
-      addRow: { left: 188, top: 224 }
+      rowMenu: { left: 32, top: 108 },
+      columnMenu: { left: 188, top: 42 },
+      addColumn: { left: 354, top: 60 },
+      addRow: { left: 50, top: 224 }
     })
   })
 

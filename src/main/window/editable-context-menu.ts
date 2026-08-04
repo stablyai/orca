@@ -1,11 +1,10 @@
 import {
   richMarkdownContextMenuCommandChannel,
   type RichMarkdownContextMenuCommand,
-  type RichMarkdownContextMenuCommandPayload
+  type RichMarkdownContextMenuCommandPayload,
+  type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import { translateMain } from '../i18n/main-i18n'
-
-const TABLE_TARGET_QUERY_TIMEOUT_MS = 120
 
 type EditableContextMenuWebContents = Pick<
   Electron.WebContents,
@@ -16,12 +15,17 @@ function markdownCommandItem(
   label: string,
   command: RichMarkdownContextMenuCommand,
   webContents: EditableContextMenuWebContents,
-  point: { x: number; y: number }
+  point: { x: number; y: number },
+  tableTargetId?: string
 ): Electron.MenuItemConstructorOptions {
   return {
     label,
     click: () => {
-      const payload: RichMarkdownContextMenuCommandPayload = { command, ...point }
+      const payload: RichMarkdownContextMenuCommandPayload = {
+        command,
+        ...point,
+        ...(tableTargetId ? { tableTargetId } : {})
+      }
       webContents.send(richMarkdownContextMenuCommandChannel, payload)
     }
   }
@@ -48,7 +52,7 @@ function editableContextPasteItem(
 function buildMarkdownMenuTemplate(
   webContents: EditableContextMenuWebContents,
   point: { x: number; y: number },
-  includeTableActions: boolean
+  tableTarget: RichMarkdownContextMenuTableTarget | null
 ): Electron.MenuItemConstructorOptions[] {
   return [
     markdownCommandItem('Add link', 'add-link', webContents, point),
@@ -88,20 +92,24 @@ function buildMarkdownMenuTemplate(
         markdownCommandItem('Code block', 'code-block', webContents, point)
       ]
     },
-    ...(includeTableActions
+    ...(tableTarget
       ? [
           {
             label: translateMain('auto.main.window.editableContextMenu.table', 'Table'),
             submenu: [
-              markdownCommandItem(
-                translateMain(
-                  'auto.main.window.editableContextMenu.insertRowAbove',
-                  'Insert row above'
+              {
+                ...markdownCommandItem(
+                  translateMain(
+                    'auto.main.window.editableContextMenu.insertRowAbove',
+                    'Insert row above'
+                  ),
+                  'insert-row-above',
+                  webContents,
+                  point,
+                  tableTarget.targetId
                 ),
-                'insert-row-above',
-                webContents,
-                point
-              ),
+                enabled: tableTarget.cellType !== 'header'
+              },
               markdownCommandItem(
                 translateMain(
                   'auto.main.window.editableContextMenu.insertRowBelow',
@@ -109,14 +117,19 @@ function buildMarkdownMenuTemplate(
                 ),
                 'insert-row-below',
                 webContents,
-                point
+                point,
+                tableTarget.targetId
               ),
-              markdownCommandItem(
-                translateMain('auto.main.window.editableContextMenu.deleteRow', 'Delete row'),
-                'delete-row',
-                webContents,
-                point
-              ),
+              {
+                ...markdownCommandItem(
+                  translateMain('auto.main.window.editableContextMenu.deleteRow', 'Delete row'),
+                  'delete-row',
+                  webContents,
+                  point,
+                  tableTarget.targetId
+                ),
+                enabled: tableTarget.cellType !== 'header'
+              },
               { type: 'separator' as const },
               markdownCommandItem(
                 translateMain(
@@ -125,7 +138,8 @@ function buildMarkdownMenuTemplate(
                 ),
                 'insert-column-left',
                 webContents,
-                point
+                point,
+                tableTarget.targetId
               ),
               markdownCommandItem(
                 translateMain(
@@ -134,20 +148,23 @@ function buildMarkdownMenuTemplate(
                 ),
                 'insert-column-right',
                 webContents,
-                point
+                point,
+                tableTarget.targetId
               ),
               markdownCommandItem(
                 translateMain('auto.main.window.editableContextMenu.deleteColumn', 'Delete column'),
                 'delete-column',
                 webContents,
-                point
+                point,
+                tableTarget.targetId
               ),
               { type: 'separator' as const },
               markdownCommandItem(
                 translateMain('auto.main.window.editableContextMenu.deleteTable', 'Delete table'),
                 'delete-table',
                 webContents,
-                point
+                point,
+                tableTarget.targetId
               )
             ]
           }
@@ -177,7 +194,7 @@ function buildNativeEditMenuTemplate(
 export function buildEditableContextMenuTemplate(
   params: Electron.ContextMenuParams,
   webContents: EditableContextMenuWebContents,
-  options?: { includeTableActions?: boolean }
+  options?: { tableTarget?: RichMarkdownContextMenuTableTarget | null }
 ): Electron.MenuItemConstructorOptions[] {
   if (!params.isEditable) {
     return []
@@ -210,7 +227,7 @@ export function buildEditableContextMenuTemplate(
       ? buildMarkdownMenuTemplate(
           webContents,
           { x: params.x, y: params.y },
-          options?.includeTableActions === true
+          options?.tableTarget ?? null
         )
       : buildNativeEditMenuTemplate(webContents))
   )
@@ -218,40 +235,44 @@ export function buildEditableContextMenuTemplate(
   return template
 }
 
-export function buildRichMarkdownTableTargetExpression(x: number, y: number): string {
-  const clientX = Number.isFinite(x) ? x : -1
-  const clientY = Number.isFinite(y) ? y : -1
-  return `Boolean(document.elementFromPoint(${clientX}, ${clientY})?.closest('.rich-markdown-editor-shell td, .rich-markdown-editor-shell th'))`
+export function parseRichMarkdownContextMenuTableTarget(
+  value: unknown
+): RichMarkdownContextMenuTableTarget | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const target = value as Partial<RichMarkdownContextMenuTableTarget>
+  if (
+    (target.cellType !== 'body' && target.cellType !== 'header') ||
+    typeof target.targetId !== 'string' ||
+    target.targetId.length === 0 ||
+    typeof target.x !== 'number' ||
+    !Number.isFinite(target.x) ||
+    typeof target.y !== 'number' ||
+    !Number.isFinite(target.y)
+  ) {
+    return null
+  }
+  return {
+    cellType: target.cellType,
+    targetId: target.targetId,
+    x: target.x,
+    y: target.y
+  }
 }
 
-export async function isRichMarkdownTableContextTarget(
+export function matchingRichMarkdownContextMenuTableTarget(
   params: Electron.ContextMenuParams,
-  webContents: Pick<Electron.WebContents, 'executeJavaScript'>,
-  timeoutMs = TABLE_TARGET_QUERY_TIMEOUT_MS
-): Promise<boolean> {
-  if (!params.isEditable || params.formControlType !== 'none') {
-    return false
+  target: RichMarkdownContextMenuTableTarget | null
+): RichMarkdownContextMenuTableTarget | null {
+  if (
+    !target ||
+    !params.isEditable ||
+    params.formControlType !== 'none' ||
+    params.x !== target.x ||
+    params.y !== target.y
+  ) {
+    return null
   }
-  return new Promise((resolve) => {
-    let finished = false
-    const finish = (result: boolean): void => {
-      if (finished) {
-        return
-      }
-      finished = true
-      clearTimeout(timer)
-      resolve(result)
-    }
-    const timer = setTimeout(() => finish(false), Math.max(0, timeoutMs))
-    try {
-      void webContents
-        .executeJavaScript(buildRichMarkdownTableTargetExpression(params.x, params.y))
-        .then(
-          (result) => finish(result === true),
-          () => finish(false)
-        )
-    } catch {
-      finish(false)
-    }
-  })
+  return target
 }

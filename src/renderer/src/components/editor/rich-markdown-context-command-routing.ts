@@ -1,7 +1,24 @@
 import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
 import type { RichMarkdownContextMenuCommandPayload } from '../../../../shared/rich-markdown-context-menu'
-import { runRichMarkdownTableAction } from './rich-markdown-table-actions'
+import {
+  runRichMarkdownTableAction,
+  type RichMarkdownTableAction
+} from './rich-markdown-table-actions'
+
+export function isRichMarkdownTableContextCommand(
+  command: RichMarkdownContextMenuCommandPayload['command']
+): command is RichMarkdownTableAction {
+  return (
+    command === 'insert-row-above' ||
+    command === 'insert-row-below' ||
+    command === 'delete-row' ||
+    command === 'insert-column-left' ||
+    command === 'insert-column-right' ||
+    command === 'delete-column' ||
+    command === 'delete-table'
+  )
+}
 
 export function runRichMarkdownContextCommand({
   payload,
@@ -93,10 +110,7 @@ export function runRichMarkdownContextCommand({
     case 'insert-column-right':
     case 'delete-column':
     case 'delete-table':
-      runRichMarkdownTableAction(editor, command, {
-        clientX: payload.x,
-        clientY: payload.y
-      })
+      runRichMarkdownTableAction(editor, command, { clientX: payload.x, clientY: payload.y })
   }
 }
 

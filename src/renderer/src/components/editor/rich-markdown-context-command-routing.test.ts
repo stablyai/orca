@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
-import { runRichMarkdownContextCommand } from './rich-markdown-context-command-routing'
+import {
+  isRichMarkdownTableContextCommand,
+  runRichMarkdownContextCommand
+} from './rich-markdown-context-command-routing'
 
 const TABLE = `| A | B |
 | --- | --- |
@@ -28,6 +31,11 @@ function textPosition(editor: Editor, text: string): number {
 }
 
 describe('rich markdown context command routing', () => {
+  it('separates table commands for the shared rich-editor table owner', () => {
+    expect(isRichMarkdownTableContextCommand('delete-row')).toBe(true)
+    expect(isRichMarkdownTableContextCommand('bold')).toBe(false)
+  })
+
   it('runs table actions against the clicked cell coordinates', () => {
     const editor = new Editor({
       element: document.createElement('div'),

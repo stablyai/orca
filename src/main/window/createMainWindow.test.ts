@@ -2753,7 +2753,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:toggleLeftSidebar')
   })
 
-  it('shows spellcheck context menu for editable text without relying on markdown focus mirror', async () => {
+  it('opens a table-aware context menu synchronously without a renderer query', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -2789,12 +2789,22 @@ describe('createMainWindow', () => {
 
     createMainWindow(null)
 
-    await windowHandlers['context-menu'](
+    const tableTargetListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'rich-markdown:context-target')?.[1]
+    tableTargetListener?.({ sender: webContents } as never, {
+      cellType: 'body',
+      targetId: 'table-target',
+      x: 42,
+      y: 84
+    })
+    windowHandlers['context-menu'](
       {} as never,
       {
         x: 42,
         y: 84,
         isEditable: true,
+        formControlType: 'none',
         spellcheckEnabled: true,
         dictionarySuggestions: ['reference'],
         misspelledWord: 'refrence'
@@ -2802,7 +2812,10 @@ describe('createMainWindow', () => {
     )
 
     expect(buildFromTemplateMock).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ label: 'reference' })])
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'reference' }),
+        expect.objectContaining({ label: 'Table' })
+      ])
     )
     expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance, x: 42, y: 84 })
   })

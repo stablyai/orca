@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
-import { CellSelection } from '@tiptap/pm/tables'
+import { CellSelection, TableMap } from '@tiptap/pm/tables'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import {
@@ -51,15 +51,43 @@ function cellAtText(editor: Editor, text: string): number {
 }
 
 function tableDimensions(editor: Editor): { rows: number; columns: number } {
-  let rows = 0
-  let columns = 0
+  let dimensions = { rows: 0, columns: 0 }
   editor.state.doc.descendants((node) => {
-    if (node.type.name === 'tableRow') {
-      rows += 1
-      columns = Math.max(columns, node.childCount)
+    if (node.type.spec.tableRole === 'table') {
+      const tableMap = TableMap.get(node)
+      dimensions = { rows: tableMap.height, columns: tableMap.width }
+      return false
     }
+    return true
   })
-  return { rows, columns }
+  return dimensions
+}
+
+function setFirstRowColumnWidths(editor: Editor, widths: number[]): void {
+  const table = editor.state.doc.firstChild
+  const row = table?.firstChild
+  if (!table || table.type.name !== 'table' || !row) {
+    throw new Error('Expected a table with a first row')
+  }
+  const transaction = editor.state.tr
+  row.forEach((cell, offset, index) => {
+    transaction.setNodeMarkup(2 + offset, undefined, {
+      ...cell.attrs,
+      colwidth: [widths[index]]
+    })
+  })
+  editor.view.dispatch(transaction)
+}
+
+function firstRowColumnWidths(editor: Editor): number[] {
+  const table = editor.state.doc.firstChild
+  const row = table?.firstChild
+  if (!row) {
+    throw new Error('Expected a table with a first row')
+  }
+  const widths: number[] = []
+  row.forEach((cell) => widths.push(cell.attrs.colwidth?.[0] ?? 0))
+  return widths
 }
 
 function runAction(action: RichMarkdownTableAction, cellText: string): Editor {
@@ -108,12 +136,48 @@ describe('rich markdown table actions', () => {
     }
   })
 
+  it('gives a new column an equal share of the locked table width', () => {
+    const editor = createEditor()
+    try {
+      setFirstRowColumnWidths(editor, [200, 100])
+      editor.commands.setTextSelection(caretAtText(editor, 'a1'))
+      expect(runRichMarkdownTableAction(editor, 'insert-column-right')).toBe(true)
+      expect(firstRowColumnWidths(editor)).toEqual([133, 100, 67])
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('keeps a two-column table when one column is deleted', () => {
     const editor = createEditor()
     try {
       editor.commands.setTextSelection(caretAtText(editor, 'b1'))
       expect(runRichMarkdownTableAction(editor, 'delete-column')).toBe(true)
       expect(tableDimensions(editor)).toEqual({ rows: 3, columns: 1 })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('keeps a merged-cell table when one logical column is deleted', () => {
+    const editor = createEditor()
+    try {
+      const firstHeader = cellAtText(editor, 'A')
+      const lastHeader = cellAtText(editor, 'B')
+      editor.view.dispatch(
+        editor.state.tr.setSelection(
+          CellSelection.create(editor.state.doc, firstHeader, lastHeader)
+        )
+      )
+      expect(editor.chain().mergeCells().run()).toBe(true)
+      const table = editor.view.dom.querySelector('table')
+      expect(table?.rows.item(0)?.cells).toHaveLength(1)
+
+      editor.commands.setTextSelection(caretAtText(editor, 'b1'))
+      expect(runRichMarkdownTableAction(editor, 'delete-column')).toBe(true)
+      expect(editor.isActive('table')).toBe(true)
+      expect(tableDimensions(editor)).toEqual({ rows: 3, columns: 1 })
+      expect(editor.state.doc.textContent).toContain('a1')
     } finally {
       editor.destroy()
     }

@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
-import { CellSelection, selectionCell } from '@tiptap/pm/tables'
+import { CellSelection, selectionCell, TableMap } from '@tiptap/pm/tables'
 
 export type RichMarkdownTableAction =
   | 'insert-row-above'
@@ -131,6 +131,7 @@ function tableContext(editor: Editor, targetCellPosition: number): TableContext 
   if (!table) {
     return null
   }
+  const tableMap = TableMap.get(table)
   const selectedCellPositions = new Set<number>()
   const selection = editor.state.selection
   if (selection instanceof CellSelection) {
@@ -139,12 +140,18 @@ function tableContext(editor: Editor, targetCellPosition: number): TableContext 
     selectedCellPositions.add(targetCellPosition)
   }
   return {
-    columnCount: table.firstChild?.childCount ?? 0,
+    columnCount: tableMap.width,
     hasHeaderRow: table.firstChild?.firstChild?.type.spec.tableRole === 'header_cell',
-    rowCount: table.childCount,
+    rowCount: tableMap.height,
     selectedCellPositions,
     tablePosition
   }
+}
+
+function columnIndexAtCellPosition(editor: Editor, cellPosition: number): number | null {
+  const $cell = editor.state.doc.resolve(cellPosition)
+  const role = $cell.nodeAfter?.type.spec.tableRole
+  return role === 'cell' || role === 'header_cell' ? $cell.index($cell.depth) : null
 }
 
 function selectedTableCoverage(
@@ -159,18 +166,67 @@ function selectedTableCoverage(
   const columns = new Set<number>()
   const rows = new Set<number>()
   let includesHeader = false
-  table?.forEach((row, rowOffset, rowIndex) => {
-    row.forEach((cell, cellOffset, columnIndex) => {
-      const position = context.tablePosition + 2 + rowOffset + cellOffset
-      if (!context.selectedCellPositions.has(position)) {
-        return
-      }
-      rows.add(rowIndex)
-      columns.add(columnIndex)
-      includesHeader ||= cell.type.spec.tableRole === 'header_cell'
-    })
+  if (!table) {
+    return { columns, rows, includesHeader }
+  }
+  const tableMap = TableMap.get(table)
+  const tableStart = context.tablePosition + 1
+  tableMap.map.forEach((cellOffset, index) => {
+    const position = tableStart + cellOffset
+    if (!context.selectedCellPositions.has(position)) {
+      return
+    }
+    rows.add(Math.floor(index / tableMap.width))
+    columns.add(index % tableMap.width)
+    includesHeader ||= editor.state.doc.nodeAt(position)?.type.spec.tableRole === 'header_cell'
   })
   return { columns, rows, includesHeader }
+}
+
+function rebalanceAddedColumn(editor: Editor, tablePosition: number, insertedColumnIndex: number): void {
+  const table = editor.state.doc.nodeAt(tablePosition)
+  const row = table?.firstChild
+  if (!table || !row) {
+    return
+  }
+  const cells: { width: number | null }[] = []
+  let hasSpans = false
+  row.forEach((cell, _offset, index) => {
+    if (cell.attrs.colspan && cell.attrs.colspan !== 1) {
+      hasSpans = true
+      return
+    }
+    const width = index === insertedColumnIndex ? null : cell.attrs.colwidth?.[0]
+    cells.push({ width: typeof width === 'number' ? width : null })
+  })
+  table.forEach((tableRow) => {
+    tableRow.forEach((cell) => {
+      hasSpans ||= Boolean(cell.attrs.colspan && cell.attrs.colspan !== 1)
+    })
+  })
+  const newColumns = cells.filter((cell) => cell.width === null)
+  const existingWidth = cells.reduce((total, cell) => total + (cell.width ?? 0), 0)
+  if (hasSpans || cells.length === 0 || newColumns.length === 0 || existingWidth <= 0) {
+    return
+  }
+  const newWidth = existingWidth / cells.length
+  const existingScale = (existingWidth - newWidth * newColumns.length) / existingWidth
+  const widths = cells.map((cell) => {
+    const width = cell.width === null ? newWidth : cell.width * existingScale
+    return Math.max(1, Math.round(width))
+  })
+  const transaction = editor.state.tr
+  table.forEach((tableRow, rowOffset) => {
+    tableRow.forEach((cell, cellOffset, columnIndex) => {
+      transaction.setNodeMarkup(tablePosition + 2 + rowOffset + cellOffset, undefined, {
+        ...cell.attrs,
+        colwidth: [widths[columnIndex]]
+      })
+    })
+  })
+  if (transaction.docChanged) {
+    editor.view.dispatch(transaction)
+  }
 }
 
 export function runRichMarkdownTableAction(
@@ -189,6 +245,7 @@ export function runRichMarkdownTableAction(
   if (!context) {
     return false
   }
+  const targetColumnIndex = columnIndexAtCellPosition(editor, targetCellPosition)
   const coverage = selectedTableCoverage(editor, context)
   const chain = editor.chain().focus()
 
@@ -209,9 +266,17 @@ export function runRichMarkdownTableAction(
       }
       return chain.deleteRow().run()
     case 'insert-column-left':
-      return chain.addColumnBefore().run()
+      if (targetColumnIndex === null || !chain.addColumnBefore().run()) {
+        return false
+      }
+      rebalanceAddedColumn(editor, context.tablePosition, targetColumnIndex)
+      return true
     case 'insert-column-right':
-      return chain.addColumnAfter().run()
+      if (targetColumnIndex === null || !chain.addColumnAfter().run()) {
+        return false
+      }
+      rebalanceAddedColumn(editor, context.tablePosition, targetColumnIndex + 1)
+      return true
     case 'delete-column':
       if (coverage.columns.size >= context.columnCount) {
         return chain.deleteTable().run()
