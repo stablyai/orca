@@ -156,13 +156,33 @@ function worktreeOwnerIdentity(owner: WorktreeOwnerRecord): string {
   ])
 }
 
-function worktreeOwnerHostId(owner: WorktreeOwnerRecord): ExecutionHostId {
-  return (
-    parseExecutionHostId(owner.hostId)?.id ??
-    (owner.runtimeOwnerEnvironmentId
-      ? toRuntimeExecutionHostId(owner.runtimeOwnerEnvironmentId)
-      : 'local')
-  )
+function addWorktreeOwnerIndexEntry(
+  index: Map<string, IndexedWorktreeOwnerResolution>,
+  key: string,
+  owner: WorktreeOwnerRecord
+): void {
+  const current = index.get(key)
+  if (!current) {
+    index.set(key, { kind: 'resolved', owner })
+  } else if (
+    current.kind === 'resolved' &&
+    worktreeOwnerIdentity(current.owner) !== worktreeOwnerIdentity(owner)
+  ) {
+    index.set(key, { kind: 'ambiguous' })
+  }
+}
+
+function worktreeOwnerHostIds(owner: WorktreeOwnerRecord): ExecutionHostId[] {
+  const physicalHostId = parseExecutionHostId(owner.hostId)?.id
+  const runtimeEnvironmentId = owner.runtimeOwnerEnvironmentId?.trim()
+  if (!runtimeEnvironmentId) {
+    return [physicalHostId ?? 'local']
+  }
+  const runtimeHostId = toRuntimeExecutionHostId(runtimeEnvironmentId)
+  // Why: paired HUB worktrees need logical-runtime lookup without losing their physical SSH route.
+  return physicalHostId && physicalHostId !== runtimeHostId
+    ? [physicalHostId, runtimeHostId]
+    : [runtimeHostId]
 }
 
 export function resolveIndexedWorktreeOwner(
@@ -178,19 +198,10 @@ export function resolveIndexedWorktreeOwner(
     for (const worktrees of Object.values(worktreesByRepo)) {
       for (const worktree of worktrees) {
         const id = worktree.id
-        const current = next.get(id)
-        if (!current) {
-          next.set(id, { kind: 'resolved', owner: worktree })
-        } else if (
-          current.kind === 'resolved' &&
-          worktreeOwnerIdentity(current.owner) !== worktreeOwnerIdentity(worktree)
-        ) {
-          next.set(id, { kind: 'ambiguous' })
+        addWorktreeOwnerIndexEntry(next, id, worktree)
+        for (const hostId of worktreeOwnerHostIds(worktree)) {
+          addWorktreeOwnerIndexEntry(next, `${id}\0${hostId}`, worktree)
         }
-        next.set(`${id}\0${worktreeOwnerHostId(worktree)}`, {
-          kind: 'resolved',
-          owner: worktree
-        })
       }
     }
     index = next

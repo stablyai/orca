@@ -42,12 +42,18 @@ export function pairingAuthorizationForContext(
     : null
 }
 
+// Why: a broker that died without arming a retry (sleep past token expiry,
+// transient auth read) must not stay dead until the user clicks Retry. The
+// cadence is slow because it is a safety net, not the primary retry path.
+const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
+
 export class DesktopRelayService {
   private readonly coordinator: RelayAuthCoordinator
   private readonly revokeOutbox: RelayRevokeOutbox
   private readonly runtimeRpc: OrcaRuntimeRpcServer
   private readonly demandLedger: RelayDemandLedger
   private demandExpiryTimer: ReturnType<typeof setTimeout> | null = null
+  private livenessTimer: ReturnType<typeof setInterval> | null = null
   private stopped = false
 
   constructor(options: DesktopRelayServiceOptions) {
@@ -90,6 +96,16 @@ export class DesktopRelayService {
 
   start(): void {
     this.refreshDemand()
+    if (!this.livenessTimer) {
+      this.livenessTimer = setInterval(() => this.ensureLive(), RELAY_LIVENESS_INTERVAL_MS)
+    }
+  }
+
+  // Safe to call from any wake signal (power resume, network change).
+  ensureLive(): void {
+    if (!this.stopped) {
+      this.coordinator.ensureLive()
+    }
   }
 
   authMutated(): void {
@@ -216,6 +232,10 @@ export class DesktopRelayService {
     if (this.demandExpiryTimer) {
       clearTimeout(this.demandExpiryTimer)
       this.demandExpiryTimer = null
+    }
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer)
+      this.livenessTimer = null
     }
     this.coordinator.stop()
   }

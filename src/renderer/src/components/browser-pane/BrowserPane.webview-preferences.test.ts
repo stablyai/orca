@@ -5,12 +5,14 @@ import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared
 const registryMocks = vi.hoisted(() => ({
   destroyPersistentWebview: vi.fn(),
   registerPersistentWebview: vi.fn(),
+  replacePersistentWebview: vi.fn(),
   webviewRegistry: new Map<string, Electron.WebviewTag>()
 }))
 
 vi.mock('./webview-registry', () => ({
   destroyPersistentWebview: registryMocks.destroyPersistentWebview,
   registerPersistentWebview: registryMocks.registerPersistentWebview,
+  replacePersistentWebview: registryMocks.replacePersistentWebview,
   webviewRegistry: registryMocks.webviewRegistry
 }))
 
@@ -27,6 +29,7 @@ describe('BrowserPane webview preferences', () => {
   beforeEach(() => {
     registryMocks.destroyPersistentWebview.mockReset()
     registryMocks.registerPersistentWebview.mockReset()
+    registryMocks.replacePersistentWebview.mockReset()
     registryMocks.webviewRegistry.clear()
     document.body.innerHTML = ''
   })
@@ -110,9 +113,10 @@ describe('BrowserPane webview preferences', () => {
     staleWebview.setAttribute('partition', 'persist:orca-browser')
     staleContainer.appendChild(staleWebview)
     registryMocks.webviewRegistry.set('browser-page-1', staleWebview)
+    const requestedContainer = createContainer('requested')
     const replacementContainer = createContainer('replacement')
     const resolveContainer = vi.fn(() => replacementContainer)
-    registryMocks.destroyPersistentWebview.mockImplementation(() => {
+    registryMocks.replacePersistentWebview.mockImplementation(() => {
       staleWebview.remove()
       staleContainer.remove()
       registryMocks.webviewRegistry.delete('browser-page-1')
@@ -120,15 +124,16 @@ describe('BrowserPane webview preferences', () => {
 
     const ensuredWebview = ensureBrowserPageWebview({
       browserTabId: 'browser-page-1',
-      container: replacementContainer,
+      container: requestedContainer,
       inputLocked: false,
       webviewPartition: 'persist:orca-browser',
       resolveContainer
     })
 
-    expect(registryMocks.destroyPersistentWebview).toHaveBeenCalledWith('browser-page-1', {
+    expect(registryMocks.replacePersistentWebview).toHaveBeenCalledWith('browser-page-1', {
       preserveViewport: true
     })
+    expect(resolveContainer).toHaveBeenCalledTimes(1)
     expect(ensuredWebview?.container).toBe(replacementContainer)
     expect(replacementContainer.isConnected).toBe(true)
     expect(replacementContainer.lastElementChild).toBe(

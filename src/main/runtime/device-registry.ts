@@ -10,6 +10,7 @@ import type { DeviceScope } from '../../shared/runtime-types'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 
 export type { DeviceScope }
 
@@ -22,6 +23,9 @@ export type DeviceEntry = {
   lastSeenAt: number
   relayBinding?: RelayDeviceBinding
   mobilePairingConnectionMode?: MobilePairingConnectionMode
+  // Why: STA-2370 — a grant minted for "This computer only" proves nothing about off-host reach when its
+  // client connects, so the bind decision must be able to tell it apart from a LAN/phone grant.
+  pairingReach?: RuntimePairingReach
 }
 
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
@@ -52,14 +56,19 @@ export class DeviceRegistry {
     this.load()
   }
 
-  addDevice(name: string, scope: DeviceScope = 'mobile'): DeviceEntry {
-    return this.createAndPersistDevice(this.devices, name, scope)
+  addDevice(
+    name: string,
+    scope: DeviceScope = 'mobile',
+    pairingReach: RuntimePairingReach = 'network'
+  ): DeviceEntry {
+    return this.createAndPersistDevice(this.devices, name, scope, pairingReach)
   }
 
   private createAndPersistDevice(
     existingDevices: DeviceEntry[],
     name: string,
-    scope: DeviceScope
+    scope: DeviceScope,
+    pairingReach: RuntimePairingReach
   ): DeviceEntry {
     const entry: DeviceEntry = {
       deviceId: randomUUID(),
@@ -67,7 +76,8 @@ export class DeviceRegistry {
       token: randomBytes(24).toString('hex'),
       scope,
       pairedAt: Date.now(),
-      lastSeenAt: 0
+      lastSeenAt: 0,
+      pairingReach
     }
     const nextDevices = [...existingDevices, entry]
     // Why: a credential is not valid until its durable registry write succeeds.
@@ -82,12 +92,32 @@ export class DeviceRegistry {
   // copy-button flow that encourages regeneration) leaves an orphaned token
   // forever. Returns an existing never-scanned entry if present; otherwise
   // mints a new one and drops any stale pending entries.
-  getOrCreatePendingDevice(name: string, scope: DeviceScope = 'mobile'): DeviceEntry {
+  getOrCreatePendingDevice(
+    name: string,
+    scope: DeviceScope = 'mobile',
+    pairingReach: RuntimePairingReach = 'network'
+  ): DeviceEntry {
     const existing = this.devices.find((d) => d.lastSeenAt === 0 && d.scope === scope)
     if (existing) {
-      return existing
+      // Why: the same pending token can be re-advertised at a broader reach; widen it but never narrow it,
+      // or a link already handed out for off-host use would stop being served after the next launch.
+      return pairingReach === 'network' && existing.pairingReach === 'this-computer'
+        ? this.setPairingReach(existing, 'network')
+        : existing
     }
-    return this.addDevice(name, scope)
+    return this.addDevice(name, scope, pairingReach)
+  }
+
+  private setPairingReach(existing: DeviceEntry, pairingReach: RuntimePairingReach): DeviceEntry {
+    const updated: DeviceEntry = { ...existing, pairingReach }
+    const nextDevices = this.devices.map((device) =>
+      device.deviceId === existing.deviceId ? updated : device
+    )
+    // Why: persist before the memory swap so a failed write cannot leave the bind decision reading a
+    // reach that never reached disk.
+    this.save(nextDevices)
+    this.devices = nextDevices
+    return updated
   }
 
   // Why: explicit rotation path for "Regenerate QR" — invalidates any
@@ -96,9 +126,13 @@ export class DeviceRegistry {
   // this, getOrCreatePendingDevice keeps returning the same token forever
   // until a phone actually pairs, so users have no way to revoke a leaked
   // pre-pairing token.
-  rotatePendingDevice(name: string, scope: DeviceScope = 'mobile'): DeviceEntry {
+  rotatePendingDevice(
+    name: string,
+    scope: DeviceScope = 'mobile',
+    pairingReach: RuntimePairingReach = 'network'
+  ): DeviceEntry {
     const retainedDevices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
-    return this.createAndPersistDevice(retainedDevices, name, scope)
+    return this.createAndPersistDevice(retainedDevices, name, scope, pairingReach)
   }
 
   removeDevice(deviceId: string): boolean {
@@ -197,7 +231,10 @@ export class DeviceRegistry {
         scope: device.scope === 'runtime' ? 'runtime' : 'mobile',
         relayBinding: validRelayBinding(device.relayBinding, device.deviceId),
         mobilePairingConnectionMode:
-          device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
+          device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic',
+        // Why: registries written before this field existed only ever held network-reach grants (phones and
+        // LAN links), so a missing value must keep binding every interface on reconnect.
+        pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network'
       }))
     } catch {
       this.devices = []

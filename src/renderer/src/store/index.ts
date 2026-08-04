@@ -49,6 +49,7 @@ import {
   registerRendererMemoryProfileContributor,
   summarizeStateCollectionSizes
 } from '@/lib/renderer-memory-profile'
+import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
 
 export const useAppStore = create<AppState>()((...a) => {
   // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
@@ -104,6 +105,12 @@ registerHttpLinkStoreAccessor(() => useAppStore.getState())
 // so OOM crash reports identify what grew without a local repro.
 registerRendererMemoryProfileContributor('store', () =>
   summarizeStateCollectionSizes(useAppStore.getState(), 20)
+)
+
+// Why bytes too: counts miss value-weight growth (97b9e86d leaked ~700MB while
+// its biggest slice grew by 4 entries); sampled KB names what got FAT.
+registerRendererMemoryProfileContributor('storeKB', () =>
+  estimateStateCollectionKB(useAppStore.getState(), 16)
 )
 
 export type { AppState } from './types'

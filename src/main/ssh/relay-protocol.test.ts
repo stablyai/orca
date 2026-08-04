@@ -84,9 +84,14 @@ describe('frame encoding', () => {
 })
 
 describe('FrameDecoder', () => {
+  // Framing correctness should not depend on wall-clock turn budgeting; the
+  // default 4ms maxTurnMs can defer later frames via setImmediate under CI load.
+  // Time-sliced drain is covered by relay-protocol-backpressure.test.ts.
+  const frozenClock = { now: () => 0 }
+
   it('decodes a complete frame', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     const payload = Buffer.from('test')
     const encoded = encodeFrame(MessageType.Regular, 1, 0, payload)
@@ -101,7 +106,7 @@ describe('FrameDecoder', () => {
 
   it('handles partial frames across multiple feeds', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     const payload = Buffer.from('hello world')
     const encoded = encodeFrame(MessageType.Regular, 2, 1, payload)
@@ -117,7 +122,7 @@ describe('FrameDecoder', () => {
 
   it('decodes multiple frames from a single chunk', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     const frame1 = encodeFrame(MessageType.Regular, 1, 0, Buffer.from('a'))
     const frame2 = encodeFrame(MessageType.Regular, 2, 1, Buffer.from('b'))
@@ -131,7 +136,7 @@ describe('FrameDecoder', () => {
 
   it('decodes keepalive frames', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     decoder.feed(encodeKeepAliveFrame(5, 3))
     expect(frames).toHaveLength(1)
@@ -144,7 +149,8 @@ describe('FrameDecoder', () => {
     const frames: DecodedFrame[] = []
     const decoder = new FrameDecoder(
       (f) => frames.push(f),
-      (err) => errors.push(err)
+      (err) => errors.push(err),
+      frozenClock
     )
 
     const oversizedLength = 17 * 1024 * 1024
@@ -165,7 +171,7 @@ describe('FrameDecoder', () => {
 
   it('reset clears internal buffer', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     // Feed a partial frame
     const encoded = encodeFrame(MessageType.Regular, 1, 0, Buffer.from('test'))
@@ -180,7 +186,7 @@ describe('FrameDecoder', () => {
 
   it('decodes frames fed one byte at a time (worst-case boundary straddling)', () => {
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
 
     const frame1 = encodeFrame(MessageType.Regular, 1, 0, Buffer.from('first payload'))
     const frame2 = encodeFrame(MessageType.Regular, 2, 1, Buffer.from('second'))
@@ -201,7 +207,8 @@ describe('FrameDecoder', () => {
     const frames: DecodedFrame[] = []
     const decoder = new FrameDecoder(
       (f) => frames.push(f),
-      (err) => errors.push(err)
+      (err) => errors.push(err),
+      frozenClock
     )
 
     const oversizedLength = 17 * 1024 * 1024
@@ -229,7 +236,7 @@ describe('FrameDecoder', () => {
     // re-copying the whole backlog for every TCP chunk — O(n²) memcpy on the
     // Electron main thread while fs.streamChunk frames arrive (SSH typing lag).
     const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f))
+    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
     const frame = encodeFrame(MessageType.Regular, 1, 0, Buffer.alloc(512 * 1024, 0x61))
 
     const concatSpy = vi.spyOn(Buffer, 'concat')

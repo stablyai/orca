@@ -2,8 +2,12 @@ import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { networkInterfaces } from 'node:os'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
+import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
+import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
+import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
 import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
@@ -74,6 +78,18 @@ function rankAddress(address: string): number {
 function getDefaultPairingAddress(): string | null {
   const ifaces = getNetworkInterfaces()
   return ifaces.length > 0 ? ifaces[0]!.address : null
+}
+
+// Why: only an explicit "This computer only" pick skips the one-way widen, and only when the address it
+// advertises really is loopback — a mismatch (a LAN address under a this-computer reach) would otherwise
+// mint a link with no listener behind it. Every other reach, including a loopback-looking Custom address
+// that fronts an SSH tunnel or reverse proxy, still opts in.
+function servesThisComputerOnly(reach: RuntimePairingReach | undefined, address: string): boolean {
+  if (reach !== 'this-computer') {
+    return false
+  }
+  const hostname = resolveAdvertisedPairingHostname(address)
+  return hostname !== null && classifyRemotePairingHostname(hostname) === 'loopback'
 }
 
 function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
@@ -174,10 +190,34 @@ export function registerMobileHandlers(
 
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
-    async (_event, args?: { address?: string; rotate?: boolean }) => {
+    async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
       const ip = args?.address ?? getDefaultPairingAddress()
       if (!ip) {
         return { available: false as const }
+      }
+
+      // Why: STA-2370 — generating a runtime pairing offer is the user's explicit opt-in to remote
+      // reach, so widen the loopback listener before advertising its LAN endpoint. If the widen fails the
+      // listener stays on loopback, so report unavailable rather than advertise a dead LAN endpoint.
+      // "This computer only" is the opposite opt-in: the loopback listener already serves it, and the widen
+      // never narrows back, so that pick alone must not expose the runtime off-host.
+      const thisComputerOnly = servesThisComputerOnly(args?.reach, ip)
+      if (!thisComputerOnly) {
+        try {
+          await rpcServer.ensureNetworkExposure()
+        } catch (error) {
+          console.error(
+            '[mobile] Network exposure failed while creating a runtime pairing offer:',
+            error
+          )
+          // Why: STA-2370 — carry the specific reason/guidance to the renderer (mirrors the mobile-QR path) so
+          // a widen failure is distinguishable from a missing address, not collapsed into a bare unavailable.
+          return {
+            available: false as const,
+            reason: 'network_exposure_failed' as const,
+            guidance: NETWORK_EXPOSURE_FAILED_GUIDANCE
+          }
+        }
       }
 
       // Why: web/desktop runtime clients need full runtime access, not the
@@ -186,7 +226,10 @@ export function registerMobileHandlers(
         address: ip,
         rotate: args?.rotate,
         name: `Runtime ${new Date().toLocaleDateString()}`,
-        scope: 'runtime'
+        scope: 'runtime',
+        // Why: a grant that only ever pointed at loopback must not make the next launch bind every
+        // interface when its local client reconnects (that would restore the exposure one restart later).
+        reach: thisComputerOnly ? 'this-computer' : 'network'
       })
       if (!offer.available) {
         return { available: false as const }

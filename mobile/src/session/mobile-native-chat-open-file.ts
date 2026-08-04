@@ -1,12 +1,17 @@
 import type { RuntimeTerminalPathResolution } from '../../../src/shared/runtime-types'
 import type { RpcClient } from '../transport/rpc-client'
 
-export async function resolveMobileNativeChatWorktreePath(args: {
+type MobileNativeChatWorktreeTarget = {
+  worktreeId: string
+  relativePath: string
+}
+
+async function resolveMobileNativeChatWorktreeTarget(args: {
   client: RpcClient
   worktreeId: string
   pathText: string
   terminal: string | null
-}): Promise<string | null> {
+}): Promise<MobileNativeChatWorktreeTarget | null> {
   try {
     const response = await args.client.sendRequest('files.resolveTerminalPath', {
       worktree: `id:${args.worktreeId}`,
@@ -20,14 +25,25 @@ export async function resolveMobileNativeChatWorktreePath(args: {
     if (!resolved.exists || resolved.isDirectory) {
       return null
     }
-    return resolved.openTarget?.kind === 'worktree-file'
-      ? resolved.openTarget.relativePath
-      : (resolved.relativePath ?? null)
+    const relativePath =
+      resolved.openTarget?.kind === 'worktree-file'
+        ? resolved.openTarget.relativePath
+        : (resolved.relativePath ?? null)
+    return relativePath
+      ? { worktreeId: resolved.worktree?.trim() || args.worktreeId, relativePath }
+      : null
   } catch {
-    // Callers fire-and-forget file opens; a disconnect/timeout must not become
-    // an unhandled rejection.
     return null
   }
+}
+
+export async function resolveMobileNativeChatWorktreePath(args: {
+  client: RpcClient
+  worktreeId: string
+  pathText: string
+  terminal: string | null
+}): Promise<string | null> {
+  return (await resolveMobileNativeChatWorktreeTarget(args))?.relativePath ?? null
 }
 
 export async function openMobileNativeChatFile(args: {
@@ -36,12 +52,12 @@ export async function openMobileNativeChatFile(args: {
   pathText: string
   terminal: string | null
 }): Promise<void> {
-  const relativePath = await resolveMobileNativeChatWorktreePath(args)
-  if (relativePath) {
+  const target = await resolveMobileNativeChatWorktreeTarget(args)
+  if (target) {
     try {
       await args.client.sendRequest('files.open', {
-        worktree: `id:${args.worktreeId}`,
-        relativePath
+        worktree: `id:${target.worktreeId}`,
+        relativePath: target.relativePath
       })
     } catch {
       // Best-effort open; failures surface as a no-op rather than an

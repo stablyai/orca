@@ -56,22 +56,21 @@ function getTerminalTabActivityFlags(
   const now = Date.now()
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey ?? {})) {
     const identity = parseAgentStatusPaneKey(entry.paneKey || paneKey)
+    if (!identity) {
+      continue
+    }
+    if (entry.restoredUnconfirmed) {
+      const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
+      flags.paneIds.add(identity.paneId)
+      continue
+    }
     // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
     // must not keep a tab spinning. Same freshness gate as the sidebar.
-    if (!identity || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       continue
     }
 
-    let flags = flagsByTabId.get(identity.tabId)
-    if (!flags) {
-      flags = {
-        hasPermission: false,
-        hasLiveWorking: false,
-        hasLiveDone: false,
-        paneIds: new Set()
-      }
-      flagsByTabId.set(identity.tabId, flags)
-    }
+    const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
     flags.paneIds.add(identity.paneId)
     if (entry.state === 'blocked' || entry.state === 'waiting') {
       flags.hasPermission = true
@@ -87,6 +86,23 @@ function getTerminalTabActivityFlags(
 
   flagsCache = { agentStatusByPaneKey, agentStatusEpoch, flagsByTabId }
   return flagsByTabId
+}
+
+function getOrCreateTerminalTabActivityFlags(
+  flagsByTabId: Map<string, TerminalTabActivityFlags>,
+  tabId: string
+): TerminalTabActivityFlags {
+  let flags = flagsByTabId.get(tabId)
+  if (!flags) {
+    flags = {
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      paneIds: new Set()
+    }
+    flagsByTabId.set(tabId, flags)
+  }
+  return flags
 }
 
 // Why: mirror the sidebar summary's parse — live entries on restored/imported

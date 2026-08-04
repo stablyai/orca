@@ -4227,7 +4227,9 @@
           "ee240a39eb": "Editar filtros",
           "automationCreated": "Ocultar creados por automatizaciones",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Ocultar HEAD desacoplado"
+          "detachedHead": "Ocultar HEAD desacoplado",
+          "keepDefaultBranch": "Excepto la rama predeterminada",
+          "keepDefaultBranchAria": "Mantener visible la rama predeterminada al ocultar los espacios de trabajo en reposo"
         },
         "SidebarHeader": {
           "92154beb7e": "Nuevo espacio de trabajo",
@@ -4292,7 +4294,9 @@
           "82594419ba": "Filtros",
           "automationCreated": "Ocultar creados por automatizaciones",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Ocultar HEAD desacoplado"
+          "detachedHead": "Ocultar HEAD desacoplado",
+          "keepDefaultBranch": "Excepto la rama predeterminada",
+          "keepDefaultBranchAria": "Mantener visible la rama predeterminada al ocultar los espacios de trabajo en reposo"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Diseño de actividad del Agent",
@@ -4944,7 +4948,8 @@
           "failedSetParent": "No se pudo establecer el worktree padre",
           "current": "Actual",
           "searchPlaceholder": "Buscar worktrees...",
-          "empty": "No hay worktrees elegibles que coincidan."
+          "empty": "No hay worktrees elegibles que coincidan.",
+          "setParentFor": "Establecer padre para"
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Rama"
@@ -5012,8 +5017,6 @@
           "sshImportAlreadySynced": "~/.ssh/config ya está sincronizado.",
           "sshImportSynced": "Se sincronizó {{value0}} host{{value1}}.",
           "sshImportFailed": "No se pudo importar la configuración SSH.",
-          "importing": "Importando...",
-          "importSshConfig": "Importar ~/.ssh/config",
           "sshPersistenceDefault": "Los terminales remotos en este host seguirán activos hasta que los cierres o restablezcas el relay.",
           "advanced": "Advanced",
           "linkDestination": "Destino del enlace",
@@ -6480,7 +6483,10 @@
           "f79972271a": "No se encontró ningún control remoto de GitHub para este repositorio.",
           "4d039317f4": "Favicon del sitio web",
           "acf31559a0": "Ingresa una URL de sitio web válida.",
-          "868c5c9b56": "No se pudo importar el icono del repositorio"
+          "868c5c9b56": "No se pudo importar el icono del repositorio",
+          "emojiTooLongForRepoIcon": "Este emoji no se puede usar como icono del repositorio.",
+          "currentEmojiSelection": "Actual: {{value0}}",
+          "searchEmojiPlaceholder": "Buscar emoji"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Las rutas relativas se resuelven desde la raíz de este proyecto.",
@@ -10078,10 +10084,10 @@
             "653c105ecc": "Más acciones de PR",
             "f316a8ca2b": "No hay comentarios sin resolver seleccionados.",
             "d00ebdc402": "Resolver comentarios de {{value0}} con IA",
-            "ed3f79c031": "Revisa el prompt antes de iniciar un agente. Los hilos seleccionados se marcarán como resueltos después del inicio.",
-            "f273f2271c": "Agente iniciado. Marcados como resueltos: {{value0}}; omitidos: {{value1}}; con error: {{value2}}.",
-            "aa95b81a3a": "Agente iniciado. Marcados como resueltos: {{value0}}; omitidos: {{value1}}; con error: {{value2}}.",
-            "495b2f8c4b": "Agente iniciado, pero no se pudieron marcar los comentarios seleccionados como resueltos.",
+            "ed3f79c031": "Revisa el prompt antes de iniciar un agente. Una vez entregado el prompt, Orca responde a los comentarios seleccionados y resuelve los hilos en el host cuando es posible.",
+            "f273f2271c": "Agente iniciado. Marcados como resueltos: {{value0}}; respondidos: {{value1}}; omitidos: {{value2}}; con error: {{value3}}.{{value4}}",
+            "aa95b81a3a": "Agente iniciado. Marcados como resueltos: {{value0}}; respondidos: {{value1}}; omitidos: {{value2}}; con error: {{value3}}.",
+            "495b2f8c4b": "Agente iniciado, pero no se pudieron resolver ni responder los comentarios seleccionados.",
             "3c3ad3a1d2": "Agente iniciado. No se puede marcar ningún comentario seleccionado como resuelto en el host.",
             "review": {
               "auto_retry": "Orca reintentará a las {{time}}.",
@@ -10091,7 +10097,8 @@
             "sync": {
               "pending": "Syncing…",
               "branch": "Sync Branch"
-            }
+            },
+            "7e4b2a19c0": "No se pudo resolver el PR de GitHub para responder."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancelar",
@@ -10636,7 +10643,6 @@
                 "fd46a70f1a": "Iniciado",
                 "a54ae21c6f": "Estado:",
                 "e4e3af15ee": "Ver detalles completos",
-                "2524d1fb83": "Cola del log disponible en los detalles completos.",
                 "a2fb3f4408": "Mostrando los primeros 100 jobs",
                 "df137989b3": "Mostrando las primeras 20 anotaciones",
                 "1f2b980522": "Cargando detalles del check…",
@@ -10689,7 +10695,8 @@
                 "5e6e5a13fa": "Vista",
                 "actionRequiredHint": "Este check requiere una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que el merge quede desbloqueado.",
                 "b3195cba33": "Desmarcar autor como bot",
-                "f588b46a6c": "Marcar autor como bot"
+                "f588b46a6c": "Marcar autor como bot",
+                "checkDetailsLoadFailed": "No se pudieron cargar los detalles del check."
               },
               "empty": {
                 "state": {
@@ -11333,6 +11340,14 @@
           },
           "activityBar": {
             "error": "Error"
+          },
+          "AiVaultSessionLimitMenu": {
+            "historyDepth": "Profundidad del historial: {{value0}}",
+            "performanceWarning": "Los historiales más extensos pueden ralentizar toda la aplicación, especialmente en hosts remotos. Sin límite escanea todo el historial disponible.",
+            "recommended": "Recomendado",
+            "mayBeSlower": "Puede ser más lento",
+            "slowest": "Más lento",
+            "unlimited": "Sin límite"
           }
         }
       },
@@ -14340,6 +14355,11 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+      },
+      "gitlabJobTraceClient": {
+        "loadFailed": "No se pudo cargar el registro del job de GitLab.",
+        "emptyTrace": "No hay ningún registro disponible para este job de GitLab.",
+        "timedOut": "Se agotó el tiempo de espera al cargar el registro del job de GitLab."
       }
     }
   },

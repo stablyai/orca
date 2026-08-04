@@ -9,6 +9,7 @@ const {
   getTrackedLinuxPackageArtifactMock,
   recordUpdaterLifecycleMock,
   resolveLinuxPackageInstallInstructionsMock,
+  revalidateLinuxPackageForInstallMock,
   revealLinuxPackageMock,
   resetHandlers
 } = vi.hoisted(() => {
@@ -42,6 +43,7 @@ const {
     getTrackedLinuxPackageArtifactMock: vi.fn(),
     recordUpdaterLifecycleMock: vi.fn(),
     resolveLinuxPackageInstallInstructionsMock: vi.fn(),
+    revalidateLinuxPackageForInstallMock: vi.fn(),
     revealLinuxPackageMock: vi.fn(),
     resetHandlers: () => updaterHandlers.clear()
   }
@@ -82,6 +84,7 @@ vi.mock('./linux-package-update-recovery', () => ({
   clearTrackedLinuxPackageArtifactForOtherVersion: vi.fn(),
   getTrackedLinuxPackageArtifact: getTrackedLinuxPackageArtifactMock,
   resolveLinuxPackageInstallInstructions: resolveLinuxPackageInstallInstructionsMock,
+  revalidateLinuxPackageForInstall: revalidateLinuxPackageForInstallMock,
   revealLinuxPackage: revealLinuxPackageMock
 }))
 
@@ -113,6 +116,7 @@ describe('linux package recovery actions', () => {
     resolveLinuxPackageInstallInstructionsMock
       .mockReset()
       .mockResolvedValue({ ok: true, command: "sudo apt install -- '<pkg>'", packageFileName: 'p' })
+    revalidateLinuxPackageForInstallMock.mockReset().mockResolvedValue({ ok: true })
     revealLinuxPackageMock.mockReset().mockResolvedValue({ ok: true })
   })
 

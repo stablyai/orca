@@ -2,6 +2,10 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { formatReleaseTitleTimestamp } from './release-title-timestamp.mjs'
+import {
+  readPublishedVersionsFromEnv,
+  resolveDevChannelBaseVersion
+} from './dev-channel-base-version.mjs'
 
 /** `1.4.160-hourly.202607281400` — UTC to the minute, so tags sort chronologically
  *  by semver and every build is uniquely versioned. */
@@ -45,18 +49,19 @@ export function formatHourlyReleaseName(version, buildNumber, commit, date) {
   ].join(' • ')
 }
 
-export function getHourlyBuildIdentity(now = new Date(), buildNumber = 1) {
+export function getHourlyBuildIdentity(now = new Date(), buildNumber = 1, publishedVersions = []) {
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
   const commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
     encoding: 'utf8'
   }).trim()
-  const version = createHourlyBuildVersion(packageJson.version, now)
+  const base = resolveDevChannelBaseVersion(packageJson.version, publishedVersions)
+  const version = createHourlyBuildVersion(base, now)
   return { commit, version, name: formatHourlyReleaseName(version, buildNumber, commit, now) }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
   const buildNumber = Number(process.env.ORCA_HOURLY_BUILD_NUMBER ?? '1')
-  const identity = getHourlyBuildIdentity(new Date(), buildNumber)
+  const identity = getHourlyBuildIdentity(new Date(), buildNumber, readPublishedVersionsFromEnv())
   // Consumed by the workflow via $GITHUB_OUTPUT.
   process.stdout.write(
     `version=${identity.version}\ncommit=${identity.commit}\nname=${identity.name}\n`

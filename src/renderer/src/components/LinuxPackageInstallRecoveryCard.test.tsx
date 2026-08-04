@@ -484,6 +484,9 @@ describe('LinuxPackageInstallRecoveryCard retry', () => {
     fireEvent.click(button('Try Automatic Install Again'))
     await flushActions()
 
+    // Why: the retry now re-proves the package digest before quitting, so the click must report
+    // progress instead of leaving three inert buttons for the length of the hash.
+    expect(isAriaDisabled(button('Checking package...'))).toBe(true)
     // Why: quitAndInstall resolves as soon as main schedules the install, so a resolved promise is
     // not an outcome — the slot stays held until a real status arrives.
     expect(isAriaDisabled(button('Copy Install Command'))).toBe(true)
